@@ -112,18 +112,21 @@ export default {
               }),
             ],
           },
-        ], [
-          // else: tool approval (Write, Edit, Bash, ExitPlanMode, etc.)
-          action("CC: Approve Tool", {
-            label: "approve-tool",
-            map: {
-              threadId: "$.steps[label=route-response].result.threadId",
-              requestId: "$.steps[label=route-response].result.requestId",
-              toolName: "$.steps[label=route-response].result.toolName",
-              originalInput: "$.steps[label=route-response].result.originalInput",
-              response: "$.steps[label=route-response].result.response",
-            },
-          }),
+          {
+            if: "$.lastStep.result.success == true",
+            steps: [
+              action("CC: Approve Tool", {
+                label: "approve-tool",
+                map: {
+                  threadId: "$.steps[label=route-response].result.threadId",
+                  requestId: "$.steps[label=route-response].result.requestId",
+                  toolName: "$.steps[label=route-response].result.toolName",
+                  originalInput: "$.steps[label=route-response].result.originalInput",
+                  response: "$.steps[label=route-response].result.response",
+                },
+              }),
+            ],
+          },
         ]),
       ]],
       "Permission response",
