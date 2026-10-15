@@ -119,31 +119,8 @@ export function buildChildEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   delete env.ANTHROPIC_API_KEY
   delete env.NODE_ENV
 
-  // Disable the CLI's tool-search / deferred-tool feature. Claude Code's
-  // tool-search mode ships enabled by default — see leaked source at
-  //   packages/claude-code/src/utils/toolSearch.ts:197
-  //     `return 'tst' // default: always defer MCP and shouldDefer tools`
-  // — and it hides every tool tagged `shouldDefer: true` from Claude's
-  // initial tool list until ToolSearchTool has already emitted a prior
-  // `tool_reference` block discovering it. On the first turn of a fresh
-  // plan-mode session no such prior discoveries exist, so `ExitPlanMode`
-  // (which has `shouldDefer: true` at
-  //   packages/claude-code/src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts:166
-  // ) never appears in Claude's tools list. Claude reads the plan-mode
-  // system reminder telling it to call ExitPlanMode but can't, falls
-  // back to prose — "Would you like me to proceed with the
-  // implementation?" — and bypasses our plan-approval flow in chat.ts's
-  // onPermissionRequest closure entirely.
-  //
-  // apack doesn't have the monster MCP tool counts tool search was
-  // designed to optimise, so the feature is pure downside for us.
-  // Setting `ENABLE_TOOL_SEARCH=0` hits the `isEnvDefinedFalsy` branch
-  // at `toolSearch.ts:196` → forces mode to `'standard'` → makes
-  // `useToolSearch = false` at `claude.ts:1120` → the `!useToolSearch`
-  // path at `claude.ts:1168-1171` includes every tool (ExitPlanMode,
-  // NotebookEdit, LSPTool, …) in Claude's effective tools list from
-  // turn 1. Plan approval flow then works on the first try.
-  env.ENABLE_TOOL_SEARCH = '0'
+  // Let the CLI and explicit caller environment own deferred tool discovery.
+  // Current native ToolSearch can load ExitPlanMode before its approval request.
 
   // Enable Claude Code's file-history checkpointing in SDK / non-interactive
   // mode. Without this, `fileHistoryEnabled()` in

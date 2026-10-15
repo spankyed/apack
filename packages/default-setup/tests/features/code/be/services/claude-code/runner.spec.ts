@@ -43,22 +43,12 @@ describe('buildChildEnv', () => {
     expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-dev-placeholder')
   })
 
-  it('sets ENABLE_TOOL_SEARCH=0 so deferred tools (ExitPlanMode, …) are always in Claude\'s initial tools list', () => {
-    // Regression guard for the plan-mode UX breakage: Claude Code's
-    // tool-search mode defaults to enabled, which hides every tool
-    // tagged `shouldDefer: true` (including ExitPlanMode) from Claude
-    // on the first turn. Without this env var, plan-mode sessions
-    // never fire our ExitPlanMode approval flow because Claude can't
-    // actually call the tool. See the leaked-source comment in
-    // runner.ts's `buildChildEnv` for the full chain.
-    const env = buildChildEnv()
-    expect(env.ENABLE_TOOL_SEARCH).toBe('0')
+  it('preserves the native default instead of forcing tool search off', () => {
+    const env = buildChildEnv({ ENABLE_TOOL_SEARCH: undefined })
+    expect(env.ENABLE_TOOL_SEARCH).toBeUndefined()
   })
 
-  it('sets ENABLE_TOOL_SEARCH=0 even when caller passes an override', () => {
-    const override = { FOO: 'bar' }
-    const env = buildChildEnv(override)
-    expect(env.FOO).toBe('bar')
-    expect(env.ENABLE_TOOL_SEARCH).toBe('0')
+  it.each(['true', '0', 'auto:10'])('honors explicit native tool-search configuration %s', setting => {
+    expect(buildChildEnv({ ENABLE_TOOL_SEARCH: setting }).ENABLE_TOOL_SEARCH).toBe(setting)
   })
 })
