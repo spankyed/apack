@@ -14,6 +14,7 @@
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
+import type { ContextUsageData } from './context-usage.ts';
 import { resolvePlanDraft } from './plan-artifact.ts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ export interface ClaudeCodeThreadState {
   /** Threshold percentages that have already fired an alert (avoids re-alerting). */
   alertedThresholds?: number[];
   /** Full context usage breakdown from CLI `/context` query. */
-  contextUsage?: any;
+  contextUsage?: ContextUsageData;
 
   // ─── Ephemeral coordination state ──────────────────────────────────
   /** True while a chat action invocation is actively running on this thread. */
@@ -380,6 +381,18 @@ export function dequeueMessage(services: Services, threadId: string): QueuedMess
     persistClaudeState(services, threadId, { queuedMessage: undefined });
   }
   return msg;
+}
+
+/** Retire only the approval named by a native cancellation; other requests may still be live. */
+export function cancelPendingControlRequest(services: Services, threadId: string, requestId: string): boolean {
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (!pending || pending.requestId !== requestId) return false;
+  services.chat.updateMessageState(pending.approvalMessageId as any, {
+    responseTimestamp: Date.now(), blockResponse: { cancelled: true },
+  } as any);
+  if (pending.toolName === 'ExitPlanMode') resolvePlanDraft(services, threadId as EntityId, 'rejected');
+  persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+  return true;
 }
 
 /**

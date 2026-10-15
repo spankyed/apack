@@ -27,8 +27,8 @@ import { createThinkingWriter } from './thinking-writer.ts';
 import { createPlanDraft } from './plan-artifact.ts';
 import { parseExitPlanModeInput, buildPlanApprovalContext } from './plan-approval.ts';
 import { parseAskUserQuestionInput } from './ask-user-question.ts';
-import { getClaudeState, persistClaudeState, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
-import { parseContextMarkdown } from './context-parser.ts';
+import { getClaudeState, persistClaudeState, cancelPendingControlRequest, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
+import { refreshThreadContextUsage } from './context-usage.ts';
 
 /** Tools whose execution mutates files and should roll up into a diff artifact. */
 const FILE_MUTATION_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
@@ -492,8 +492,7 @@ export async function consumeStream(
 
       // ─── Control cancellation (surfaced by pump) ───────────────────
       if (line.type === 'control_cancel_request') {
-        log.debug('control_cancel_request received, clearing pending state');
-        persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+        if (stillCurrent()) cancelPendingControlRequest(services, threadId, line.request_id);
         continue;
       }
 
@@ -650,12 +649,13 @@ export async function consumeStream(
       },
     });
 
-    // Fire-and-forget: query /context in the background AFTER all turn
+    // Fire-and-forget: read native context in the background AFTER all turn
     // cleanup (clearHandle, setRunning, queued replay, cc.stream.completed)
     // so a concurrent new turn doesn't race with this instance for the
     // same session JSONL.
     if (!isErrorResult && result.sessionId) {
-      queryContextInBackground(services, threadId, result.sessionId, ctx.sessionCwd, log);
+      void refreshThreadContextUsage(services, threadId, { sessionId: result.sessionId, cwd: ctx.sessionCwd })
+        .catch(err => log.debug('native context summary failed (non-critical)', { message: err?.message }));
     }
 
   } catch (err: any) {
@@ -858,71 +858,4 @@ function extractToolResultText(content: unknown): string {
 function stripToolUseErrorEnvelope(raw: string): string {
   const m = raw.match(/^\s*<tool_use_error>([\s\S]*?)<\/tool_use_error>\s*$/);
   return m ? m[1].trim() : raw.trim();
-}
-
-// ─── Background /context query ──────────────────────────────────────────────
-
-const CONTEXT_THRESHOLDS = [25, 50, 75, 90];
-
-/**
- * Query /context in a separate non-persisted CLI instance and update the
- * thread context directly when done. Fire-and-forget — never blocks
- * the turn completion flow.
- */
-function queryContextInBackground(
-  services: Services,
-  threadId: EntityId,
-  sessionId: string,
-  sessionCwd: string | undefined,
-  log: any,
-): void {
-  (async () => {
-    const ctxHandle = await services.cli.claudeCode.query({
-      ...(sessionCwd && { cwd: sessionCwd }),
-      prompt: '/context',
-      resume: sessionId,
-      maxTurns: 1,
-      permissionMode: 'plan',
-      noSessionPersistence: true,
-    });
-    const ctxResult = await ctxHandle.result;
-    const contextUsage = parseContextMarkdown(ctxResult.text || '');
-    if (!contextUsage) return;
-
-    // Check which thresholds are newly crossed.
-    const prev = getClaudeState(services, threadId as string);
-    const alerted: number[] = prev?.alertedThresholds ?? [];
-    const pct = contextUsage.percentage;
-    const newAlerts = CONTEXT_THRESHOLDS.filter(t => pct >= t && !alerted.includes(t));
-
-    updateClaudeState(services, threadId, (prevContent) => ({
-      contextUsage,
-      ...(newAlerts.length > 0
-        ? { alertedThresholds: [...(prevContent.alertedThresholds ?? []), ...newAlerts] }
-        : {}),
-    }));
-
-    if (newAlerts.length > 0) {
-      const highest = Math.max(...newAlerts);
-      const variant = highest >= 90 ? 'error' : highest >= 75 ? 'warning' : 'info';
-      const label = highest >= 90 ? 'Context Critical' : 'Context Usage';
-      let message = `Context window is ${contextUsage.percentage}% full (${fmtTokens(contextUsage.totalTokens)} / ${fmtTokens(contextUsage.maxTokens)} tokens).`;
-      if (highest >= 90) message += ' Consider starting a new session soon.';
-
-      services.chat.sendBlockMessage({
-        threadId: threadId as any,
-        text: message,
-        blocks: [{ type: 'note', props: { content: message, variant, label } }],
-        forkable: false,
-      });
-    }
-  })().catch(err => {
-    log.debug('/context background query failed (non-critical)', { message: err?.message });
-  });
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
 }

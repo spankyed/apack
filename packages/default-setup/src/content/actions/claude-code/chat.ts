@@ -356,6 +356,8 @@ export async function action(
       forkFrom: forkFrom?.cliUuid ?? null,
       forkSession: !!(forkFrom || revertTo),
       permissionMode: effectivePermissionMode,
+      // Make the user's live bypass toggle available; this does not select bypass mode.
+      allowDangerouslySkipPermissions: true,
       hasSystemPrompt: !!composedSystemPrompt,
       imageCount: resolved.imageBlocks.filter((b: any) => b.type === 'image').length,
       fileCount: references?.files?.length ?? 0,
@@ -439,6 +441,8 @@ export async function action(
       model,
       includePartialMessages: true,
       permissionMode: effectivePermissionMode,
+      // Make the user's live bypass toggle available; this does not select bypass mode.
+      allowDangerouslySkipPermissions: true,
       allowedTools: allowedTools ?? DEFAULT_ALLOWED_TOOLS,
       disallowedTools,
       appendSystemPrompt: composedSystemPrompt,

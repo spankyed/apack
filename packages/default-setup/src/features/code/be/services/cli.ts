@@ -3,6 +3,8 @@ import { featureSettings } from '#generated/settings.ts';
 import { GitRepository } from '#features/code/be/services/git.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
+import { getSessionContextUsage, type ClaudeSessionContextOptions } from './claude-code/context.ts'
+import type { ClaudeContextUsage } from './claude-code/host-controls.ts'
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
@@ -43,6 +45,8 @@ export interface CliServiceType {
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
+    /** Read a saved session's native context summary without a prompt or transcript writes. */
+    getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & { cwd?: string }): Promise<ClaudeContextUsage>
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -176,6 +180,9 @@ function createCliService(): CliServiceType {
         // || UDS_INBOX feature). Callers can still override by passing
         // `replayUserMessages: false` explicitly (spread order honors it).
         return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
+      },
+      getContextUsage(opts) {
+        return getSessionContextUsage({ ...opts, cwd: opts.cwd ?? resolveCwd() })
       },
       version() {
         return claudeCode.system.version()

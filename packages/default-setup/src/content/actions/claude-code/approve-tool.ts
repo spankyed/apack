@@ -5,7 +5,7 @@
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import { getClaudeState, persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
 import { resolvePlanDraft } from './_helpers/plan-artifact.ts';
 
 export const meta: ActionMeta = {
@@ -34,6 +34,11 @@ export async function action(
   };
 
   if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
+
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (pending?.requestId !== requestId || (toolName && pending.toolName !== toolName)) {
+    return { success: false, reason: 'approval is no longer pending' };
+  }
 
   const handle = (services.cli as any).claudeCode.getHandle(threadId);
 

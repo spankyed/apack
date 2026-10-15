@@ -556,6 +556,357 @@ interface Category {
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
+type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>;
+
+declare const ClaudeContextUsageSchema: z.ZodObject<{
+    model: z.ZodString;
+    totalTokens: z.ZodNumber;
+    maxTokens: z.ZodNumber;
+    percentage: z.ZodNumber;
+    memoryFiles: z.ZodArray<z.ZodObject<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    skills: z.ZodOptional<z.ZodObject<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">>>;
+    categories: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    model: z.ZodString;
+    totalTokens: z.ZodNumber;
+    maxTokens: z.ZodNumber;
+    percentage: z.ZodNumber;
+    memoryFiles: z.ZodArray<z.ZodObject<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    skills: z.ZodOptional<z.ZodObject<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">>>;
+    categories: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    model: z.ZodString;
+    totalTokens: z.ZodNumber;
+    maxTokens: z.ZodNumber;
+    percentage: z.ZodNumber;
+    memoryFiles: z.ZodArray<z.ZodObject<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        path: z.ZodString;
+        type: z.ZodString;
+        tokens: z.ZodNumber;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    skills: z.ZodOptional<z.ZodObject<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        skillFrontmatter: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            source: z.ZodString;
+            tokens: z.ZodNumber;
+        }, z.ZodTypeAny, "passthrough">>, "many">;
+    }, z.ZodTypeAny, "passthrough">>>;
+    categories: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        tokens: z.ZodNumber;
+        kind: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">>;
+
+interface ClaudeHookRegistration {
+    matcher?: string;
+    timeout?: number;
+    callbacks: Array<(input: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>;
+}
+
+type ClaudeHooks = Record<string, ClaudeHookRegistration[]>;
+
+type ClaudeInitialization = z.infer<typeof ClaudeInitializationSchema>;
+
+/** Metadata returned by the initialize exchange in Claude Code 2.1.299–2.1.301. */
+declare const ClaudeInitializationSchema: z.ZodObject<{
+    commands: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    agents: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    claude_code_version: z.ZodOptional<z.ZodString>;
+    current_permission_mode: z.ZodOptional<z.ZodString>;
+    capabilities: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    commands: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    agents: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    claude_code_version: z.ZodOptional<z.ZodString>;
+    current_permission_mode: z.ZodOptional<z.ZodString>;
+    capabilities: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    commands: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    agents: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    claude_code_version: z.ZodOptional<z.ZodString>;
+    current_permission_mode: z.ZodOptional<z.ZodString>;
+    capabilities: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, z.ZodTypeAny, "passthrough">>;
+
+type ClaudeInterruptReceipt = z.infer<typeof ClaudeInterruptReceiptSchema>;
+
+/** Native acknowledgement distinguishes cancelled inputs from inputs still queued. */
+declare const ClaudeInterruptReceiptSchema: z.ZodObject<{
+    still_queued: z.ZodArray<z.ZodString, "many">;
+    cancelled: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    still_queued: z.ZodArray<z.ZodString, "many">;
+    cancelled: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    still_queued: z.ZodArray<z.ZodString, "many">;
+    cancelled: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, z.ZodTypeAny, "passthrough">>;
+
+interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    cwd: string;
+}
+
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
@@ -600,6 +951,10 @@ interface CliServiceType {
         query(opts: Omit<QueryOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<QueryHandle>;
+        /** Read a saved session's native context summary without a prompt or transcript writes. */
+        getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeContextUsage>;
         version(): Promise<string>;
         authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
@@ -815,6 +1170,37 @@ interface CollectionDTO {
     updatedAt: string;
     symlinkPath?: string;
 }
+
+interface CommandItem {
+    name: string;
+    placeholder: string;
+}
+
+type CommandLifecycleLine = z.infer<typeof CommandLifecycleLineSchema>;
+
+/** Native input queue lifecycle; command_uuid identifies the submitted user message. */
+declare const CommandLifecycleLineSchema: z.ZodObject<{
+    type: z.ZodLiteral<"command_lifecycle">;
+    command_uuid: z.ZodString;
+    state: z.ZodEnum<["queued", "started", "completed", "cancelled", "discarded", "refused"]>;
+    ran_ahead: z.ZodOptional<z.ZodLiteral<true>>;
+    uuid: z.ZodString;
+    session_id: z.ZodString;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    type: z.ZodLiteral<"command_lifecycle">;
+    command_uuid: z.ZodString;
+    state: z.ZodEnum<["queued", "started", "completed", "cancelled", "discarded", "refused"]>;
+    ran_ahead: z.ZodOptional<z.ZodLiteral<true>>;
+    uuid: z.ZodString;
+    session_id: z.ZodString;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    type: z.ZodLiteral<"command_lifecycle">;
+    command_uuid: z.ZodString;
+    state: z.ZodEnum<["queued", "started", "completed", "cancelled", "discarded", "refused"]>;
+    ran_ahead: z.ZodOptional<z.ZodLiteral<true>>;
+    uuid: z.ZodString;
+    session_id: z.ZodString;
+}, z.ZodTypeAny, "passthrough">>;
 
 interface CommitLogEntry {
     hash: string;
@@ -1355,7 +1741,7 @@ type EdgeEntity = FlowEdge;
 
 type Effort = z.infer<typeof EffortSchema>;
 
-declare const EffortSchema: z.ZodEnum<["low", "medium", "high", "max"]>;
+declare const EffortSchema: z.ZodEnum<["low", "medium", "high", "xhigh", "max"]>;
 
 type EmbeddingModel = SearchEmbeddingModelId;
 
@@ -2671,7 +3057,7 @@ interface KillNode extends NodeBase {
     nodeType: 'kill';
 }
 
-type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | ParseErrorLine;
+type KnownStreamLine = UserStreamLine | AssistantStreamLine | StreamEventLine | ToolProgressLine | SystemLine | RateLimitLine | ToolUseSummaryLine | ResultLine | ControlRequestLine | ControlResponseLine | ControlCancelLine | KeepAliveLine | CommandLifecycleLine | ParseErrorLine;
 
 interface LLMNode extends NodeBase {
     nodeType: 'llm';
@@ -4329,18 +4715,6 @@ type PermissionHandler = (request: CanUseToolRequest) => PermissionDecision | Pr
 type PermissionMode = z.infer<typeof PermissionModeSchema>;
 
 /**
- * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
- *
- * The CLI is fast-moving and routinely adds fields; every object schema uses
- * `.passthrough()` so unknown fields survive round-trips and we only validate
- * the bits we actually read. Inferred TS types are exported next to each schema.
- *
- * Source of truth for field shapes: the stream-json writer at
- * `src/cli/structuredIO.ts` and the SDK Zod schemas at
- * `src/entrypoints/sdk/coreSchemas.ts` in the leaked Claude Code source.
- */
-
-/**
  * Permission modes accepted by `claude --permission-mode`. Names match the
  * CLI's Commander validator exactly (see the leaked source at
  * `src/types/permissions.ts` or the error message the CLI prints when you
@@ -4484,36 +4858,9 @@ type QualifiedSurfaceEvents = Qualified<'default-setup', OwnSurfaceEvents> & Hos
 /** Every system this pack's code can send to, by ref: its own, its dependencies' and the host's. */
 type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & HostSystemEvents;
 
-/**
- * High-level streaming conversation API.
- *
- * `query()` spawns `claude -p` in stream-json mode, drives the control loop,
- * and exposes two things to the caller:
- *
- *   - an async iterable of parsed stream events (everything except the
- *     control-request traffic, which is handled internally)
- *   - a `result` promise that resolves with the final normalised result
- *
- * Two modes, picked by whether an initial `prompt` is provided:
- *
- *  1. **Single-turn (default)**: pass `{ prompt }`. The wrapper writes the
- *     turn, immediately EOFs stdin, and the CLI runs once + exits. Drain
- *     `handle.events` in a `for await` and then `await handle.result`.
- *     No cleanup needed — the child unwinds itself.
- *
- *  2. **Multi-turn (opt-in)**: pass `{ keepStdinOpen: true, prompt }` OR
- *     pass no prompt. The wrapper leaves stdin open; the caller drives
- *     follow-up turns via `handle.send(text)` and MUST call `handle.close()`
- *     when done. Forgetting to close hangs the child until process exit.
- *
- * The implementation uses a fan-out: the raw NDJSON stream from the child is
- * consumed once by an internal pump that (a) routes control requests to the
- * control router and (b) pushes everything else into an async queue the
- * public iterable reads from. This is the only way to share a single Readable
- * between "internal logic" and "caller" without races.
- */
-
 interface QueryHandle {
+    /** Native commands, models and capabilities, available before a model turn. */
+    readonly initialized: Promise<ClaudeInitialization>;
     /** Resolves with the session id as soon as the CLI emits `system/init`. */
     readonly sessionId: Promise<string>;
     /** Every non-control stream line, in order, until the child exits. */
@@ -4542,8 +4889,14 @@ interface QueryHandle {
         message?: string;
         updatedInput?: unknown;
     }): void;
-    /** Ask the CLI to cancel the current turn (interrupt control request). */
-    interrupt(): void;
+    /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
+    interrupt(options?: {
+        cancelQueued?: boolean;
+    }): Promise<ClaudeInterruptReceipt>;
+    /** Read structured context usage; summary avoids per-category token-count API calls. */
+    getContextUsage(): Promise<ClaudeContextUsage>;
+    /** Change the running CLI policy and return its acknowledged permission mode. */
+    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     /** Close stdin and wait for the child to exit. */
     close(): Promise<void>;
     /** Force-terminate the child process. */
@@ -4558,12 +4911,14 @@ interface QueryNode extends NodeBase {
 }
 
 /**
- * Every option supported by `claude --print`. Grouped by concern.
+ * Typed launch options exposed by this wrapper. Grouped by concern.
  *
  * These translate 1:1 to CLI flags via `argsFromOptions()` — if you add a
  * field here, add the mapping there and a unit test covering it.
  */
 interface QueryOptions {
+    /** Native hook callbacks registered during initialization. */
+    hooks?: ClaudeHooks;
     prompt?: string | UserInputMessage;
     cwd?: string;
     env?: NodeJS.ProcessEnv;
@@ -4583,6 +4938,8 @@ interface QueryOptions {
         prompt: string;
     }>;
     permissionMode?: PermissionMode;
+    /** Make a later user-requested bypass switch available without starting in bypass mode. */
+    allowDangerouslySkipPermissions?: boolean;
     dangerouslySkipPermissions?: boolean;
     allowedTools?: string[];
     disallowedTools?: string[];
@@ -5444,6 +5801,8 @@ type UpdateOnMissing = 'create' | 'fail' | 'ignore';
 /** User message written to stdin during a stream-json conversation. */
 interface UserInputMessage {
     type: 'user';
+    /** Stable native command identity for lifecycle tracking and queued-message cancellation. */
+    uuid?: string;
     message: {
         role: 'user';
         content: string | Array<Record<string, unknown>>;

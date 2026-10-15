@@ -1,24 +1,15 @@
-/**
- * `claude agents` — list configured agent definitions.
- *
- * Custom agents are defined via settings / `--agents` JSON / `.claude/agents`
- * directories. This namespace just exposes what the CLI already knows about.
- */
+/** Native agent/session listing. Configured agent definitions come from query initialization. */
+import { z } from 'zod'
+import { runJson, type SubcommandOptions } from './subcommand.ts'
 
-import { run, type SubcommandOptions } from './subcommand.ts'
-
-export interface AgentInfo {
-  name: string
-  description?: string
-  source?: string
-  [key: string]: unknown
-}
-
-/** List configured agents. Returns raw stdout (CLI has no --json). */
+/** List active interactive/background sessions, optionally including completed sessions. */
 export async function list(
-  opts: { settingSources?: string } & SubcommandOptions = {},
-): Promise<string> {
-  const args = ['agents']
-  if (opts.settingSources) args.push('--setting-sources', opts.settingSources)
-  return run(args, opts)
+  opts: { settingSources?: string; all?: boolean; sessionCwd?: string } & SubcommandOptions = {},
+): Promise<Array<Record<string, unknown>>> {
+  const args = ['agents', '--json']
+  if (opts.all) args.push('--all')
+  if (opts.sessionCwd !== undefined) args.push('--cwd', opts.sessionCwd)
+  if (opts.settingSources !== undefined) args.push('--setting-sources', opts.settingSources)
+  // Populated fields remain opaque until verified against a real background session.
+  return z.array(z.record(z.unknown())).parse(await runJson<unknown>(args, opts))
 }

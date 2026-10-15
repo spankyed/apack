@@ -222,6 +222,188 @@ function makeMockStream() {
   }
 }
 
+describe('query() native control replies', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('retrieves metadata and context without draining the public iterator or sending a user prompt', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'system', subtype: 'ui_invalidate' })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [{ name: 'context' }], agents: [], models: [], claude_code_version: '2.1.300' },
+    } })
+    await expect(handle.initialized).resolves.toMatchObject({ commands: [{ name: 'context' }] })
+    const context = handle.getContextUsage()
+    await Promise.resolve()
+    const request = mock.writes[1] as { request_id: string; request: unknown }
+    expect(request.request).toEqual({ subtype: 'get_context_usage', detail: 'summary' })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { memoryFiles: [], model: 'test', totalTokens: 10, maxTokens: 100, percentage: 10,
+        categories: [{ name: 'Messages', tokens: 10 }], extraField: true },
+    } })
+    await expect(context).resolves.toMatchObject({ totalTokens: 10, extraField: true })
+    expect(mock.writes.some(value => (value as { type: string }).type === 'user')).toBe(false)
+    await handle.close()
+  })
+
+  it('preserves user command UUIDs and forwards native queue lifecycle frames in order', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    handle.send({ type: 'user', uuid: '22222222-2222-4222-8222-222222222222',
+      message: { role: 'user', content: 'Synthetic lifecycle fixture' } })
+    expect(mock.writes[1]).toMatchObject({ uuid: '22222222-2222-4222-8222-222222222222' })
+    for (const state of ['queued', 'started', 'completed']) {
+      mock.pushEvent({ type: 'command_lifecycle', command_uuid: '22222222-2222-4222-8222-222222222222',
+        state, uuid: `event-${state}`, session_id: 'session-fixture' })
+    }
+    mock.forceExit()
+    const states: unknown[] = []
+    for await (const event of handle.events) {
+      if (event.type === 'command_lifecycle') states.push(event.state)
+    }
+    expect(states).toEqual(['queued', 'started', 'completed'])
+    await handle.close()
+  })
+
+  it('routes owned hook callbacks internally while permissions are surfaced', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const callback = vi.fn(async () => ({}))
+    const handle = await query({ surfaceControlRequests: true,
+      hooks: { PreToolUse: [{ matcher: 'Bash', callbacks: [callback] }] } })
+    const init = mock.writes[0] as { request: { hooks: { PreToolUse: Array<{ hookCallbackIds: string[] }> } } }
+    const callbackId = init.request.hooks.PreToolUse[0]!.hookCallbackIds[0]!
+    mock.pushEvent({ type: 'control_request', request_id: 'native-hook',
+      request: { subtype: 'hook_callback', callback_id: callbackId, input: { hook_event_name: 'PreToolUse' } } })
+    await vi.waitFor(() => expect(mock.writes).toHaveLength(2))
+    expect(callback).toHaveBeenCalledWith({ hook_event_name: 'PreToolUse' })
+    expect(mock.writes[1]).toEqual({ type: 'control_response', response: {
+      subtype: 'success', request_id: 'native-hook', response: {},
+    } })
+    await handle.close()
+  })
+
+  it('awaits correlated interrupt receipts, validates options and propagates rejection', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    const interrupted = handle.interrupt({ cancelQueued: true })
+    await Promise.resolve()
+    const request = mock.writes[1] as { request_id: string; request: unknown }
+    expect(request.request).toEqual({ subtype: 'interrupt', cancel_queued: true })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { still_queued: [], cancelled: ['queued-input'] },
+    } })
+    await expect(interrupted).resolves.toMatchObject({ cancelled: ['queued-input'], still_queued: [] })
+    const rejected = handle.interrupt()
+    const assertion = expect(rejected).rejects.toThrow('interrupt refused')
+    await Promise.resolve()
+    const next = mock.writes[2] as { request_id: string; request: unknown }
+    expect(next.request).toEqual({ subtype: 'interrupt' })
+    expect(next.request_id).not.toBe(request.request_id)
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'error', request_id: next.request_id,
+      error: 'interrupt refused',
+    } })
+    await assertion
+    await expect(handle.interrupt({ cancelQueued: 'yes' } as never)).rejects.toThrow()
+    expect(mock.writes).toHaveLength(3)
+    await handle.close()
+  })
+
+  it('correlates permission-mode acknowledgements and propagates CLI rejection', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    const change = handle.setPermissionMode('plan')
+    await Promise.resolve()
+    const request = mock.writes[1] as { request_id: string; request: unknown }
+    expect(request.request).toEqual({ subtype: 'set_permission_mode', mode: 'plan' })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { mode: 'plan' },
+    } })
+    await expect(change).resolves.toBe('plan')
+    const rejected = handle.setPermissionMode('bypassPermissions')
+    const assertion = expect(rejected).rejects.toThrow('disabled by policy')
+    await Promise.resolve()
+    const denied = mock.writes[2] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'error', request_id: denied.request_id,
+      error: 'disabled by policy',
+    } })
+    await assertion
+    await expect(handle.setPermissionMode('invalid' as never)).rejects.toThrow()
+    expect(mock.writes).toHaveLength(3)
+    await handle.close()
+  })
+
+
+  it('receives native context while a tool permission callback is waiting', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    let callbackCompleted = false
+    const handle = await query({ onPermissionRequest: async request => {
+      await handle.getContextUsage()
+      callbackCompleted = true
+      return { behavior: 'allow', updatedInput: request.input }
+    } })
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    mock.pushEvent({ type: 'control_request', request_id: 'permission-with-context', request: {
+      subtype: 'can_use_tool', tool_name: 'Bash', tool_use_id: 'tool-fixture', input: { command: 'fixture' },
+    } })
+    await vi.waitFor(() => expect(mock.writes).toHaveLength(2))
+    const request = mock.writes[1] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { memoryFiles: [], model: 'fixture', totalTokens: 1, maxTokens: 100, percentage: 1, categories: [] },
+    } })
+    await vi.waitFor(() => expect(callbackCompleted).toBe(true))
+    expect(mock.writes).toContainEqual(expect.objectContaining({ type: 'control_response', response:
+      expect.objectContaining({ request_id: 'permission-with-context', subtype: 'success' }),
+    }))
+    await handle.close()
+  })
+
+  it.each(['cancel', 'exit'])('suppresses a late permission reply after %s without waiting for the callback', async ending => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    let decide!: (value: { behavior: 'allow'; updatedInput: Record<string, unknown> }) => void
+    const permission = vi.fn(() => new Promise<{ behavior: 'allow'; updatedInput: Record<string, unknown> }>(resolve => { decide = resolve }))
+    const handle = await query({ onPermissionRequest: permission })
+    mock.pushEvent({ type: 'control_request', request_id: 'withdrawn', request: {
+      subtype: 'can_use_tool', tool_name: 'Bash', tool_use_id: 'tool-fixture', input: {},
+    } })
+    await vi.waitFor(() => expect(permission).toHaveBeenCalledOnce())
+    if (ending === 'cancel') {
+      mock.pushEvent({ type: 'control_cancel_request', request_id: 'withdrawn' })
+      mock.pushEvent({ type: 'system', subtype: 'init', session_id: 'after-cancel' })
+      await expect(handle.sessionId).resolves.toBe('after-cancel')
+    } else {
+      mock.forceExit()
+      await expect(handle.result).rejects.toThrow('without a result')
+    }
+    decide({ behavior: 'allow', updatedInput: {} })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(mock.writes.filter(value => (value as { type: string }).type === 'control_response')).toHaveLength(0)
+    await handle.close()
+  })
+
+})
+
 describe('query() — stdin EOF handling (single-turn default)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()

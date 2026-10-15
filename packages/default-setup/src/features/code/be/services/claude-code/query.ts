@@ -1,3 +1,4 @@
+import { createHookRegistry } from './hooks.ts'
 /**
  * High-level streaming conversation API.
  *
@@ -29,7 +30,11 @@
 
 import { createLogger } from '@apackdev/sdk/logger'
 import { argsFromOptions } from './args.ts'
+import { PermissionModeSchema, type PermissionMode } from './types.ts'
+import { z } from 'zod'
 import { createControlRouter } from './control.ts'
+import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema } from './host-controls.ts'
+import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt } from './host-controls.ts'
 import {
   ClaudeAbortError,
   type ClaudeCodeError,
@@ -43,6 +48,7 @@ import type { StreamHandle } from './runner.ts'
 const logger = createLogger('claude-code-query')
 import type {
   KnownStreamLine,
+  ControlRequestLine,
   QueryOptions,
   QueryResult,
   ResultLine,
@@ -51,6 +57,8 @@ import type {
 } from './types.ts'
 
 export interface QueryHandle {
+  /** Native commands, models and capabilities, available before a model turn. */
+  readonly initialized: Promise<ClaudeInitialization>
   /** Resolves with the session id as soon as the CLI emits `system/init`. */
   readonly sessionId: Promise<string>
   /** Every non-control stream line, in order, until the child exits. */
@@ -75,8 +83,12 @@ export interface QueryHandle {
    * tool-activity row having never run. That happened once and took a while to find.
    */
   respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void
-  /** Ask the CLI to cancel the current turn (interrupt control request). */
-  interrupt(): void
+  /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
+  interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
+  /** Read structured context usage; summary avoids per-category token-count API calls. */
+  getContextUsage(): Promise<ClaudeContextUsage>
+  /** Change the running CLI policy and return its acknowledged permission mode. */
+  setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   /** Close stdin and wait for the child to exit. */
   close(): Promise<void>
   /** Force-terminate the child process. */
@@ -90,6 +102,7 @@ export interface QueryHandle {
  * on the returned handle drive the rest of the lifecycle.
  */
 export async function query(opts: QueryOptions): Promise<QueryHandle> {
+  const hooks = createHookRegistry(opts.hooks)
   const args = argsFromOptions(opts)
   const stream = await runner.spawnStream(args, {
     cwd: opts.cwd,
@@ -100,7 +113,9 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
 
   const router = createControlRouter({
     onPermissionRequest: opts.onPermissionRequest,
-    onControlRequest: opts.onControlRequest,
+    onControlRequest: request => request.subtype === 'hook_callback' && hooks.callbackIds.has(String(request.callback_id))
+      ? hooks.handle(request)
+      : opts.onControlRequest ? opts.onControlRequest(request) : Promise.reject(new Error(`Unhandled control request ${request.subtype}`)),
   })
 
   // ─── Fan-out plumbing ─────────────────────────────────────────────────────
@@ -121,36 +136,20 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // `stream.done()` handler below is the single source of truth for
   // "what happened at child exit".
   const surfaceControlRequests = opts.surfaceControlRequests ?? false
-  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests)
+  const hostControls = createHostControls(value => stream.write(value))
+  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds)
     .catch(err => {
+      hostControls.close(err)
       sessionId.reject(err)
       resultPromise.reject(err)
       eventQueue.fail(err)
     })
 
-  // SDK handshake. The CLI auto-initializes on the first user message
-  // (see leaked src/cli/print.ts:4059 — "First prompt message implicitly
-  // initializes if not already done"), so this line is technically
-  // redundant for the basic flow. But the canonical SDK host sends an
-  // explicit `initialize` control_request first, and doing the same
-  // closes any subtle code path where the CLI's stdio permission
-  // emission might depend on seeing an explicit init. It's cheap (one
-  // NDJSON line), idempotent (the CLI ignores subsequent initialize
-  // requests once its main loop has flipped `initialized = true`), and
-  // the response comes back as a `control_response` which our pump
-  // swallows silently via the existing `control_response` branch.
-  //
-  // Minimum viable payload: just the subtype. We don't declare hooks,
-  // SDK MCP servers, prompt suggestions, or agent progress summaries
-  // because we don't use those features. Future work may populate them.
-  stream.write({
-    type: 'control_request',
-    request_id: `wrapper-initialize-${Date.now()}`,
-    request: {
-      subtype: 'initialize',
-      hooks: {},
-    },
-  })
+  // Verified against pinned 2.1.299/2.1.300 binaries: initialization returns native metadata
+  // without a user prompt. Route the response independently from the public event consumer.
+  const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations })
+    .then(value => ClaudeInitializationSchema.parse(value))
+  initialized.catch(() => {})
   logger.debug('initialize control_request sent')
 
   // Push the initial user turn, if any.
@@ -183,6 +182,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     writeUserTurn(stream, opts.prompt)
     if (!opts.keepStdinOpen && !surfaceControlRequests) {
       const autoClose = () => {
+        hostControls.close()
         try { stream.endInput() } catch { /* already closed or child gone */ }
       }
       resultPromise.promise.then(autoClose, autoClose)
@@ -196,6 +196,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     // Drain pump before deciding final state — avoids racing stdout 'end'
     // (which finishes pump) against child 'close' (which fires stream.done).
     await pumpPromise
+    hostControls.close()
     eventQueue.close()
 
     if (resultPromise.settled) return
@@ -208,6 +209,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     sessionId.reject(err)
     resultPromise.reject(err)
   }).catch(err => {
+    hostControls.close(err)
     // Defensive: stream.done() itself shouldn't throw, but if it does, route
     // the error into the same rejection channels so nothing is left dangling.
     sessionId.reject(err)
@@ -218,6 +220,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // ─── Public handle ────────────────────────────────────────────────────────
 
   return {
+    initialized,
     sessionId: sessionId.promise,
     events: eventQueue,
     result: resultPromise.promise,
@@ -233,21 +236,36 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       })
     },
 
-    interrupt(): void {
-      stream.write({
-        type: 'control_request',
-        request_id: `wrapper-interrupt-${Date.now()}`,
-        request: { subtype: 'interrupt' },
-      })
+    async interrupt(options: { cancelQueued?: boolean } = {}): Promise<ClaudeInterruptReceipt> {
+      const valid = z.object({ cancelQueued: z.boolean().optional() }).strict().parse(options)
+      await initialized
+      return ClaudeInterruptReceiptSchema.parse(await hostControls.request({
+        subtype: 'interrupt',
+        ...(valid.cancelQueued === undefined ? {} : { cancel_queued: valid.cancelQueued }),
+      }))
+    },
+
+    async getContextUsage(): Promise<ClaudeContextUsage> {
+      await initialized
+      return ClaudeContextUsageSchema.parse(await hostControls.request({ subtype: 'get_context_usage', detail: 'summary' }))
+    },
+
+    async setPermissionMode(mode: PermissionMode): Promise<PermissionMode> {
+      const validMode = PermissionModeSchema.parse(mode)
+      await initialized
+      const response = await hostControls.request({ subtype: 'set_permission_mode', mode: validMode })
+      return z.object({ mode: PermissionModeSchema }).parse(response).mode
     },
 
     async close(): Promise<void> {
+      hostControls.close()
       stream.endInput()
       await stream.done()
       await pumpPromise
     },
 
     kill(): void {
+      hostControls.close()
       stream.kill('SIGTERM')
     },
   }
@@ -285,72 +303,102 @@ async function pump(
   sessionId: Deferred<string>,
   resultPromise: Deferred<QueryResult>,
   surfaceControlRequests: boolean,
+  hostControls: ReturnType<typeof createHostControls>,
+  hookCallbackIds: ReadonlySet<string>,
 ): Promise<void> {
-  for await (const decoded of stream.lines) {
-    if (!decoded.ok) {
-      // Keep the conversation alive on a single malformed line — emit a
-      // protocol error event that callers can observe if they want to.
-      eventQueue.push({
-        type: '__parse_error',
-        raw: decoded.raw,
-        error: decoded.error.message,
-      } as StreamLine)
-      continue
-    }
-
-    const line = decoded.value as KnownStreamLine
-
-    switch (line.type) {
-      case 'control_request': {
-        const req = (line as unknown as { request?: { subtype?: string }; request_id?: string })
-        logger.debug('control_request received', {
-          subtype: req.request?.subtype,
-          request_id: req.request_id,
-          surfaced: surfaceControlRequests,
-        })
-        if (surfaceControlRequests && req.request?.subtype !== 'initialize') {
-          // Push to the event queue so the consumer handles it inline via
-          // handle.respond(). The pump does NOT await a callback — the CLI
-          // blocks on its own until it receives the control_response, so the
-          // consumer's for-await naturally pauses on the next iteration.
-          // `initialize` is always handled internally — it's a handshake,
-          // not a user-facing permission prompt.
-          break // fall through to eventQueue.push below
-        }
-        // The caller isn't surfacing control requests, so the router answers this one.
-        const response = await router.handle(line)
-        stream.write(response)
+  const pendingCallbacks = new Set<string>()
+  let reading = true
+  function dispatchControl(line: ControlRequestLine): void {
+    if (pendingCallbacks.has(line.request_id)) return
+    pendingCallbacks.add(line.request_id)
+    // A user decision can wait indefinitely. Keep reading control responses and cancellation
+    // while it waits, and suppress its eventual response if the CLI withdrew it or exited.
+    void router.handle(line).then(response => {
+      if (reading && pendingCallbacks.delete(line.request_id)) stream.write(response)
+    }).catch(error => {
+      pendingCallbacks.delete(line.request_id)
+      if (!reading) return
+      hostControls.close(error)
+      sessionId.reject(error)
+      resultPromise.reject(error)
+      eventQueue.fail(error)
+    })
+  }
+  try {
+    for await (const decoded of stream.lines) {
+      if (!decoded.ok) {
+        // Keep the conversation alive on a single malformed line — emit a
+        // protocol error event that callers can observe if they want to.
+        eventQueue.push({
+          type: '__parse_error',
+          raw: decoded.raw,
+          error: decoded.error.message,
+        } as StreamLine)
         continue
       }
 
-      case 'control_cancel_request':
-        if (surfaceControlRequests) break // surface to consumer
-        continue
+      const line = decoded.value as KnownStreamLine
 
-      case 'control_response':
-      case 'keep_alive':
-        // Swallowed — not interesting to the public event iterator.
-        continue
-
-      case 'system':
-        // First `system/init` gives us the session id. Resolve once.
-        if (line.subtype === 'init' && line.session_id && !sessionId.settled) {
-          sessionId.resolve(line.session_id)
+      switch (line.type) {
+        case 'control_request': {
+          const req = (line as unknown as { request?: { subtype?: string }; request_id?: string })
+          logger.debug('control_request received', {
+            subtype: req.request?.subtype,
+            request_id: req.request_id,
+            surfaced: surfaceControlRequests,
+          })
+          if (surfaceControlRequests && req.request?.subtype !== 'initialize'
+            && !(line.request.subtype === 'hook_callback' && hookCallbackIds.has(String(line.request.callback_id)))) {
+            // Push to the event queue so the consumer handles it inline via
+            // handle.respond(). The pump does NOT await a callback — the CLI
+            // blocks on its own until it receives the control_response, so the
+            // consumer's for-await naturally pauses on the next iteration.
+            // `initialize` is always handled internally — it's a handshake,
+            // not a user-facing permission prompt.
+            break // fall through to eventQueue.push below
+          }
+          // The caller isn't surfacing control requests, so the router answers this one.
+          dispatchControl(line)
+          continue
         }
-        break
 
-      case 'result':
-        handleResult(line, resultPromise)
-        break
+        case 'control_cancel_request':
+          pendingCallbacks.delete(line.request_id)
+          if (surfaceControlRequests) break // surface to consumer
+          continue
 
-      default:
-        // user / assistant / stream_event / tool_progress / rate_limit_event
-        // / tool_use_summary / unknown passthrough. Nothing special to do;
-        // fall through to the queue push below.
-        break
+        case 'control_response':
+          hostControls.receive(line)
+          continue
+
+        case 'keep_alive':
+          // Swallowed — not interesting to the public event iterator.
+          continue
+
+        case 'system':
+          // First `system/init` gives us the session id. Resolve once.
+          if (line.subtype === 'init' && line.session_id && !sessionId.settled) {
+            sessionId.resolve(line.session_id)
+          }
+          break
+
+        case 'result':
+          handleResult(line, resultPromise)
+          break
+
+        default:
+          // user / assistant / stream_event / tool_progress / rate_limit_event
+          // / tool_use_summary / unknown passthrough. Nothing special to do;
+          // fall through to the queue push below.
+          break
+      }
+
+      eventQueue.push(line)
     }
 
-    eventQueue.push(line)
+  } finally {
+    reading = false
+    pendingCallbacks.clear()
   }
 
   // Note: we intentionally do NOT reject the result promise here. The
