@@ -100,6 +100,8 @@ export async function consumeStream(
   let toolActivity = initialWriters.toolActivity;
   let thinking = initialWriters.thinking;
   let currentMessageHasCliUuid = false;
+  let priorSegmentToolCount = 0;
+  let priorSegmentsHadToolErrors = false;
 
   /** Idempotent — safe to call from every finalization path. */
   const finaliseThinking = () => { if (thinking.isStreaming) thinking.finalise(); };
@@ -126,6 +128,8 @@ export async function consumeStream(
     finaliseThinking();
     services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
     const segmentHadErrors = toolActivity.entries.some(e => e.status === 'error');
+    priorSegmentToolCount += toolActivity.entries.length;
+    priorSegmentsHadToolErrors ||= segmentHadErrors;
     toolActivity.finalise(segmentHadErrors ? 'error' : 'done');
 
     const msg = services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false });
@@ -529,7 +533,10 @@ export async function consumeStream(
           errors: (line as any).errors,
         };
         // Native background completion can trigger another assistant turn after this result.
-        if ((line as any).subtype === 'success' && handle.hasPendingBackgroundTasks(line)) continue;
+        if ((line as any).subtype === 'success' && handle.hasPendingBackgroundTasks(line)) {
+          splitOnNextMessageStart = true;
+          continue;
+        }
         break;
       }
     }
@@ -561,7 +568,7 @@ export async function consumeStream(
     // to a permanently un-resumable session.
     const isErrorResult = result.subtype != null && result.subtype !== 'success';
 
-    const hadToolErrors = toolActivity.entries.some(e => e.status === 'error');
+    const hadToolErrors = priorSegmentsHadToolErrors || toolActivity.entries.some(e => e.status === 'error');
 
     if (isErrorResult) {
       const errorText = Array.isArray(result.errors) ? result.errors.join('; ') : `CLI error: ${result.subtype}`;
@@ -643,7 +650,7 @@ export async function consumeStream(
         sessionId: result.sessionId,
         costUsd: result.totalCostUsd,
         durationMs: result.durationMs,
-        toolCallCount: toolActivity.entries.length,
+        toolCallCount: priorSegmentToolCount + toolActivity.entries.length,
         mutatedFileCount: mutatedPaths.length,
         mutatedPaths,
         hadErrors: !!hadToolErrors || !!isErrorResult,
@@ -713,7 +720,7 @@ export async function consumeStream(
           sessionId: resultFromLine?.sessionId || state?.sessionId || '',
           costUsd: resultFromLine?.totalCostUsd ?? 0,
           durationMs: resultFromLine?.durationMs ?? 0,
-          toolCallCount: toolActivity.entries.length,
+          toolCallCount: priorSegmentToolCount + toolActivity.entries.length,
           mutatedFileCount: mutatedPaths.length,
           mutatedPaths,
           hadErrors: !!segmentHadErrors,
