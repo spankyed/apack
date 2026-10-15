@@ -85,6 +85,8 @@ export interface QueryHandle {
   respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void
   /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
   interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
+  /** Rename the native session; an explicit ID protects against renaming a different session. */
+  renameSession(title: string, sessionId?: string): Promise<void>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
   getContextUsage(): Promise<ClaudeContextUsage>
   /** Change the running CLI policy and return its acknowledged permission mode. */
@@ -243,6 +245,13 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
         subtype: 'interrupt',
         ...(valid.cancelQueued === undefined ? {} : { cancel_queued: valid.cancelQueued }),
       }))
+    },
+
+    async renameSession(title: string, sessionId?: string): Promise<void> {
+      const validTitle = z.string().trim().min(1).parse(title)
+      await initialized
+      await hostControls.request({ subtype: 'rename_session', title: validTitle, source: 'host',
+        ...(sessionId === undefined ? {} : { session_id: sessionId }) })
     },
 
     async getContextUsage(): Promise<ClaudeContextUsage> {

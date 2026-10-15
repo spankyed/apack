@@ -4893,6 +4893,8 @@ interface QueryHandle {
     interrupt(options?: {
         cancelQueued?: boolean;
     }): Promise<ClaudeInterruptReceipt>;
+    /** Rename the native session; an explicit ID protects against renaming a different session. */
+    renameSession(title: string, sessionId?: string): Promise<void>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */
     getContextUsage(): Promise<ClaudeContextUsage>;
     /** Change the running CLI policy and return its acknowledged permission mode. */

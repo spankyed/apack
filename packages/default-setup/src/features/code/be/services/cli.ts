@@ -1,3 +1,4 @@
+import { renameSession } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 
 import { GitRepository } from '#features/code/be/services/git.ts'
@@ -293,7 +294,7 @@ function createCliService(): CliServiceType {
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        await claudeCode.sessions._experimental_rename(id, title, { cwd })
+        await renameSession({ sessionId: id, title, cwd })
       },
       async sessionExists(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
