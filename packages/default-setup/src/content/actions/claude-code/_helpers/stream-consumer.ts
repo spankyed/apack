@@ -528,6 +528,8 @@ export async function consumeStream(
           subtype: (line as any).subtype,
           errors: (line as any).errors,
         };
+        // Native background completion can trigger another assistant turn after this result.
+        if ((line as any).subtype === 'success' && handle.hasPendingBackgroundTasks(line)) continue;
         break;
       }
     }

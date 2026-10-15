@@ -5056,6 +5056,8 @@ interface QueryHandle {
     readonly sessionId: Promise<string>;
     /** Every non-control stream line, in order, until the child exits. */
     readonly events: AsyncIterable<StreamLine>;
+    /** Pending native task state when this result was emitted, independent of later buffered events. */
+    hasPendingBackgroundTasks(result: StreamLine): boolean;
     /** Final normalised result. Rejects on error result or non-zero exit. */
     readonly result: Promise<QueryResult>;
     /** Send another user turn. No-op after close(). */

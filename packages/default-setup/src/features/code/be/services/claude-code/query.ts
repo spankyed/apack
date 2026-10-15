@@ -1,3 +1,4 @@
+import { createBackgroundTaskTracker } from './background-tasks.ts'
 import { createHookRegistry } from './hooks.ts'
 /**
  * High-level streaming conversation API.
@@ -63,6 +64,8 @@ export interface QueryHandle {
   readonly sessionId: Promise<string>
   /** Every non-control stream line, in order, until the child exits. */
   readonly events: AsyncIterable<StreamLine>
+  /** Pending native task state when this result was emitted, independent of later buffered events. */
+  hasPendingBackgroundTasks(result: StreamLine): boolean
   /** Final normalised result. Rejects on error result or non-zero exit. */
   readonly result: Promise<QueryResult>
   /** Send another user turn. No-op after close(). */
@@ -140,8 +143,9 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // `stream.done()` handler below is the single source of truth for
   // "what happened at child exit".
   const surfaceControlRequests = opts.surfaceControlRequests ?? false
+  const backgroundTasks = createBackgroundTaskTracker()
   const hostControls = createHostControls(value => stream.write(value))
-  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds)
+  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks)
     .catch(err => {
       hostControls.close(err)
       sessionId.reject(err)
@@ -227,6 +231,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     initialized,
     sessionId: sessionId.promise,
     events: eventQueue,
+    hasPendingBackgroundTasks: result => backgroundTasks.hasPendingTasks(result),
     result: resultPromise.promise,
 
     send(text: string | UserInputMessage): void {
@@ -321,6 +326,7 @@ async function pump(
   surfaceControlRequests: boolean,
   hostControls: ReturnType<typeof createHostControls>,
   hookCallbackIds: ReadonlySet<string>,
+  backgroundTasks: ReturnType<typeof createBackgroundTaskTracker>,
 ): Promise<void> {
   const pendingCallbacks = new Set<string>()
   let reading = true
@@ -354,6 +360,7 @@ async function pump(
       }
 
       const line = decoded.value as KnownStreamLine
+      backgroundTasks.observe(line)
 
       switch (line.type) {
         case 'control_request': {
