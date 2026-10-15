@@ -111,39 +111,17 @@ export async function action(
 
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
+  if (prior?.historyError) {
+    services.chat.sendBlockMessage({threadId, text: `Cannot continue after a failed history change: ${prior.historyError} Reset or resume a session before continuing.`, blocks: [], forkable: false});
+    return {success: false, error: 'history change unresolved'};
+  }
   let resumeSessionId = prior?.sessionId || undefined;
   let forkFrom = prior?.forkFrom;
   let revertTo = prior?.revertTo;
 
-  // Guard: fork/revert requires a valid sessionId to resume from.
-  // If sessionId is missing (race with stream-consumer), drop the
-  // fork/revert intent and start a fresh session instead.
   if ((forkFrom || revertTo) && !resumeSessionId) {
-    log.warn('[revert-guard] fork/revert requested but no sessionId — starting fresh', {
-      threadId,
-      hadForkFrom: !!forkFrom,
-      hadRevertTo: !!revertTo,
-      revertCliUuid: revertTo?.cliUuid ?? null,
-      forkCliUuid: forkFrom?.cliUuid ?? null,
-      fullPriorState: JSON.stringify(prior ?? {}),
-    });
-    persistClaudeState(services, threadId, {
-      revertTo: undefined,
-      forkFrom: undefined,
-    });
-    // Notify the user — their revert/fork intent was silently dropped.
-    services.chat.sendBlockMessage({
-      threadId,
-      text: '⚠️ Could not revert — session data is unavailable. Starting a fresh session.',
-      blocks: [{ type: 'note', props: {
-        content: 'The revert point could not be found because the session was lost. Your next message will start a new conversation.',
-        variant: 'warning',
-        label: 'Revert Skipped',
-      }}],
-      forkable: false,
-    });
-    forkFrom = undefined;
-    revertTo = undefined;
+    services.chat.sendBlockMessage({threadId, text: 'Cannot apply the requested history change because its native session is unavailable. Reset or resume a session before continuing.', blocks: [], forkable: false});
+    return {success: false, error: 'history session unavailable'};
   }
 
   log.debug('resume state resolved', {
@@ -300,6 +278,15 @@ export async function action(
   // because --worktree shifts the project bucket the JSONL is looked up from.
   // Treat undefined sessionWorktree as non-worktree (pre-tracking sessions).
   if (resumeSessionId && (prior?.sessionWorktree ?? false) !== useWorktree) {
+    if (forkFrom || revertTo) {
+      const reason = 'The worktree setting changed. Reset or resume a session before changing history.';
+      persistClaudeState(services, threadId, {historyError: reason});
+      setRunning(services, threadId, false);
+      updateChatState(services, threadId, 'error');
+      toolActivity.finalise('error');
+      writer.finalize(reason);
+      return {success: false, error: 'history worktree mismatch', messageId: currentMessageId};
+    }
     log.info('[worktree] session/toggle mismatch — clearing session', {
       threadId, resumeSessionId,
       sessionWorktree: prior?.sessionWorktree, useWorktree,
@@ -397,6 +384,7 @@ export async function action(
           threadId, resumeSessionId, revertTo: revertTo?.cliUuid ?? null,
         });
         const isRevert = !!revertTo;
+        if (forkFrom || revertTo) persistClaudeState(services, threadId, {historyError: 'The native session project directory is unavailable.'});
         toolActivity.finalise('error');
         setRunning(services, threadId, false);
         updateChatState(services, threadId, 'idle');
@@ -429,7 +417,10 @@ export async function action(
         writer.finalize(isRevert
           ? '⚠️ Could not revert — the CLI session file no longer exists on disk. It may have been cleaned up by the Claude CLI.'
           : '⚠️ Could not resume — the CLI session file no longer exists on disk.');
-        markSessionBroken(services, threadId, `Session ${resumeSessionId} file missing`);
+        if (forkFrom || revertTo) {
+          persistClaudeState(services, threadId, {historyError: `Session ${resumeSessionId} file missing`});
+          updateChatState(services, threadId, 'error');
+        } else markSessionBroken(services, threadId, `Session ${resumeSessionId} file missing`);
         return { success: false, error: 'session file missing', messageId: currentMessageId };
       }
     }
@@ -492,12 +483,13 @@ export async function action(
   } catch (err: any) {
     const message = err?.message || 'Claude Code query failed to start';
     log.error('chat action failed to start query', { message, stack: err?.stack });
+    if ((forkFrom || revertTo) && getClaudeState(services, threadId)?.sessionId === resumeSessionId) persistClaudeState(services, threadId, {historyError: message});
     toolActivity.finalise('error');
     setRunning(services, threadId, false);
 
     // ─── Session-not-found: clear stale sessionId, mark session broken ──
     if (extractStaleSessionId(message)) {
-      finalizeSessionError(services, threadId as EntityId, writer, message, undefined, { isRevert: !!revertTo });
+      finalizeSessionError(services, threadId as EntityId, writer, message, undefined, { isHistoryChange: !!(revertTo || forkFrom) });
       // Emit cc.stream.completed so CC: Turn Completed can run bookkeeping
       // (turn counts, cost tracking). Without this, the turn is "lost" from
       // the flow's perspective.

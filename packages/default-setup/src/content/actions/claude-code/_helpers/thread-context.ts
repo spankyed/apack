@@ -87,6 +87,8 @@ export interface ClaudeCodeThreadState {
   sessionWorktree?: boolean;
   /** Human-readable error when the session is broken (e.g. JSONL deleted). */
   sessionError?: string;
+  /** Failed history changes block continuation until an explicit reset/resume or successful retry. */
+  historyError?: string;
   /** Threshold percentages that have already fired an alert (avoids re-alerting). */
   alertedThresholds?: number[];
   /** Full context usage breakdown from CLI `/context` query. */

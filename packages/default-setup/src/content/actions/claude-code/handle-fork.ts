@@ -1,13 +1,4 @@
-/**
- * CC: Handle Fork — initializes Claude Code session state on a forked thread
- * and sets up CLI-level session truncation at the fork point.
- *
- * Triggered by the `thread.fork` brain event. Copies the sessionId, looks up
- * the fork-point message's CLI UUID, and stores a `forkFrom` marker so the
- * next chat action passes `--fork-session --resume-session-at <uuid>` to the
- * CLI, creating an isolated JSONL transcript truncated to the fork point.
- */
-
+/** Initialize the selected native history on a new app fork, with no fallback to another boundary. */
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getClaudeState, persistClaudeState, dequeueMessage } from './_helpers/thread-context.ts';
@@ -24,105 +15,48 @@ export const meta: ActionMeta = {
   },
 };
 
-export async function action(
-  params: Record<string, any>,
-  services: Services,
-) {
-  const { sourceThreadId, newThreadId, sourceMessageId } = params as {
-    sourceThreadId: string;
-    newThreadId: string;
-    sourceMessageId?: string;
-  };
-
-  if (!sourceThreadId || !newThreadId) {
+export async function action(params: Record<string, any>, services: Services) {
+  const {sourceThreadId,newThreadId,sourceMessageId} = params as {sourceThreadId:string;newThreadId:string;sourceMessageId?:string};
+  const fail = (reason:string) => {
     if (newThreadId) {
-      persistClaudeState(services, newThreadId, { forkPending: undefined });
-      const queued = dequeueMessage(services, newThreadId);
-      if (queued) await replayQueuedMessage(services, newThreadId as EntityId, queued, services.logger);
+      persistClaudeState(services,newThreadId,{forkPending:undefined,historyError:reason});
+      services.chat.sendBlockMessage({threadId:newThreadId as EntityId,text:`Could not prepare fork: ${reason} Reset or resume a session before continuing.`,blocks:[],forkable:false});
     }
-    return { success: false, reason: 'missing sourceThreadId or newThreadId' };
+    return {success:false,copied:false,reason};
+  };
+  if (!sourceThreadId || !newThreadId) return fail('The fork source or target is unavailable.');
+  const source = getClaudeState(services,sourceThreadId);
+  const readSnapshot = () => JSON.stringify({state:getClaudeState(services,sourceThreadId),
+    messages:services.repository.chatQueries.threadData(sourceThreadId as EntityId)?.messages?.map(message=>[message.id,message.context?.cliUuid])});
+  const snapshot = readSnapshot();
+  if (!source?.sessionId) {
+    const nativeMessages=services.repository.chatQueries.threadData(sourceThreadId as EntityId)?.messages?.some(message=>message.context?.cliUuid);
+    if (nativeMessages) return fail('The native session for this history is unavailable.');
+    persistClaudeState(services,newThreadId,{forkPending:undefined,historyError:undefined});
+    const queued=dequeueMessage(services,newThreadId);
+    if (queued) await replayQueuedMessage(services,newThreadId as EntityId,queued,services.logger);
+    return {success:true,copied:false};
   }
-
-  const log = services.logger;
-  const sourceState = getClaudeState(services, sourceThreadId);
-  if (!sourceState?.sessionId) {
-    persistClaudeState(services, newThreadId, { forkPending: undefined });
-    const queued = dequeueMessage(services, newThreadId);
-    if (queued) await replayQueuedMessage(services, newThreadId as EntityId, queued, log);
-    return { success: true, copied: false };
-  }
-
-  // Find the CLI UUID at the fork point so the CLI truncates correctly.
-  // The fork-point message could be user or assistant. Walk backwards from
-  // it to find the nearest assistant message with a cliUuid.
-  let cliUuid: string | undefined;
+  if (source.historyError && !sourceMessageId) return fail('Select a valid checkpoint or reset/resume the source before forking its whole session.');
+  if (!source.cwd) return fail('The native session project directory is unavailable.');
+  if (source.isRunning || services.cli.claudeCode.getHandle(sourceThreadId)) return fail('Pause the source turn before forking.');
+  let cliUuid:string|undefined;
   if (sourceMessageId) {
-    const threadData = services.repository.chatQueries.threadData(sourceThreadId as EntityId);
-    const messages = (threadData?.messages ?? []) as Array<{
-      id?: string;
-      sender?: string;
-      context?: Record<string, unknown>;
-    }>;
-    const targetIndex = messages.findIndex(m => m.id === sourceMessageId);
-    if (targetIndex >= 0) {
-      // The fork-point message itself might be an assistant message with a cliUuid.
-      // Otherwise walk backwards to find the nearest one.
-      for (let i = targetIndex; i >= 0; i--) {
-        const msg = messages[i];
-        if (msg.sender === 'assistant' && msg.context?.cliUuid) {
-          cliUuid = msg.context.cliUuid as string;
-          break;
-        }
-      }
-    }
+    const messages=services.repository.chatQueries.threadData(sourceThreadId as EntityId)?.messages ?? [];
+    const index=messages.findIndex(message=>message.id===sourceMessageId);
+    if (index<0) return fail('The selected fork message is unavailable.');
+    const assistant=[...messages.slice(0,index+1)].reverse().find(message=>message.sender==='assistant'&&typeof message.context?.cliUuid==='string');
+    cliUuid=assistant?.context?.cliUuid as string|undefined;
+    if (!cliUuid) return fail('No native assistant checkpoint exists at this fork point.');
   }
-
-  // Validate cliUuid exists in current session JSONL (post-compaction guard).
-  // After compaction the sessionId changes but existing messages retain
-  // cliUuids from the old session. Passing a stale UUID to
-  // --resume-session-at would trigger "No message found" / "Session not found".
-  // Same pattern as handle-revert.ts:79-107.
-  if (cliUuid && sourceState.sessionId) {
-    let uuidValid = false;
-    try {
-      const transcript = await services.cli.claudeCode.viewSession(
-        sourceState.sessionId,
-        { cwd: sourceState.cwd },
-      ) as Array<Record<string, unknown>>;
-      uuidValid = transcript.some(
-        (e: any) => e.type === 'assistant' && e.uuid === cliUuid,
-      );
-    } catch (err: any) {
-      log.warn('[fork] could not validate cliUuid against session JSONL', {
-        sourceThreadId, sessionId: sourceState.sessionId, cliUuid, err: err?.message,
-      });
-    }
-    if (!uuidValid) {
-      log.info('[fork] cliUuid not found in current session (likely post-compaction) — forking from end', {
-        sourceThreadId, cliUuid, sessionId: sourceState.sessionId,
-      });
-      cliUuid = undefined;
-    }
-  }
-
-  persistClaudeState(services, newThreadId, {
-    sessionId: sourceState.sessionId,
-    sessionWorktree: sourceState.sessionWorktree,
-    lastTurnAt: sourceState.lastTurnAt,
-    cwd: sourceState.cwd,
-    forkFrom: { sessionId: sourceState.sessionId, cliUuid },
-    forkPending: undefined,
-  });
-
-  log.debug('copied session state to forked thread', {
-    sourceThreadId,
-    newThreadId,
-    sessionId: sourceState.sessionId,
-    cliUuid: cliUuid ?? 'none (will fork from end)',
-  });
-
-  const queued = dequeueMessage(services, newThreadId);
-  if (queued) await replayQueuedMessage(services, newThreadId as EntityId, queued, log);
-
-  return { success: true, copied: true, sessionId: sourceState.sessionId, cliUuid };
+  try {
+    if (cliUuid) await services.cli.claudeCode.validateResumeTarget({sessionId:source.sessionId,messageUuid:cliUuid,cwd:source.cwd});
+    else await services.cli.claudeCode.getContextUsage({sessionId:source.sessionId,cwd:source.cwd});
+  } catch (error:any) { return fail(error?.message ?? 'The native history boundary is unavailable.'); }
+  if (snapshot!==readSnapshot() || services.cli.claudeCode.getHandle(sourceThreadId)) return fail('The source conversation changed during validation. Retry the fork.');
+  persistClaudeState(services,newThreadId,{sessionId:source.sessionId,cwd:source.cwd,sessionWorktree:source.sessionWorktree,
+    lastTurnAt:source.lastTurnAt,forkFrom:{sessionId:source.sessionId,cliUuid},forkPending:undefined,historyError:undefined});
+  const queued=dequeueMessage(services,newThreadId);
+  if (queued) await replayQueuedMessage(services,newThreadId as EntityId,queued,services.logger);
+  return {success:true,copied:true,sessionId:source.sessionId,cliUuid};
 }

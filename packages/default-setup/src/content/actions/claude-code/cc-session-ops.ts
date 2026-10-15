@@ -214,6 +214,7 @@ async function handleResume(
   // Set up session state — persistClaudeState adds 'claude-code' tag
   persistClaudeState(services, targetThreadId, {
     sessionId,
+    historyError: undefined,
     cwd: (session as any).cwd || '',
     sessionWorktree: false,
   });

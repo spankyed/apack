@@ -583,7 +583,7 @@ export async function consumeStream(
         forkCliUuid: ctx.forkCliUuid ?? null,
       });
 
-      finalizeSessionError(services, threadId, writer, errorText, undefined, { isRevert: !!ctx.revertCliUuid });
+      finalizeSessionError(services, threadId, writer, errorText, undefined, { isHistoryChange: !!ctx.isFork });
 
       finaliseThinking();
       toolActivity.finalise('error');
@@ -737,7 +737,7 @@ export async function consumeStream(
     toolActivity.finalise('error');
 
     // Session-not-found mid-stream: clear stale session and mark broken.
-    finalizeSessionError(services, threadId, writer, message, writer.text, { isRevert: !!ctx.revertCliUuid });
+    finalizeSessionError(services, threadId, writer, message, writer.text, { isHistoryChange: !!ctx.isFork });
     services.chat.updateMessageState(currentMessageId as any, { forkable: currentMessageHasCliUuid } as any);
 
     // Kill the CLI subprocess on error (it may be in a bad state).
@@ -771,24 +771,24 @@ export function finalizeSessionError(
   writer: ReturnType<typeof createStreamWriter>,
   errorText: string,
   prefix?: string,
-  context?: { isRevert?: boolean },
+  context?: { isHistoryChange?: boolean },
 ): void {
   const staleId = extractStaleSessionId(errorText);
-  // Distinguish "message UUID not found" (e.g. reverting past a compaction
-  // point) from "session file deleted" — the user-facing message should be
-  // specific so they understand what happened.
-  const isUuidNotFound = /No message found with message\.uuid/i.test(errorText);
   let warning: string;
-  if (staleId && context?.isRevert && isUuidNotFound) {
-    warning = '⚠️ Could not revert — the revert point no longer exists in the current session (likely due to compaction). Your conversation history is preserved. Your next message will start a fresh session.';
-  } else if (staleId && context?.isRevert) {
-    warning = '⚠️ Could not revert — the session file was deleted or moved. Your conversation history is preserved but the CLI session cannot be resumed. Your next message will start a fresh session.';
+  if (context?.isHistoryChange) {
+    warning = `Could not apply the requested history change: ${errorText} Reset or resume a session before continuing.`;
   } else if (staleId) {
     warning = '⚠️ Session expired — the conversation file was deleted or is invalid. Your next message will start a fresh session in the same project directory. Previous messages are still visible for reference.';
   } else {
     warning = `⚠️ ${errorText}`;
   }
+
   writer.finalize(prefix ? `${prefix}\n\n${warning}`.trim() : warning);
+  if (context?.isHistoryChange) {
+    persistClaudeState(services, threadId, {historyError: errorText});
+    updateChatState(services, threadId, 'error');
+    return;
+  }
   markSessionBroken(services, threadId, staleId ? `Session ${staleId} not found` : errorText);
 }
 
