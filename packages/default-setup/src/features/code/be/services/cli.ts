@@ -1,3 +1,4 @@
+import './thread-history.ts'
 import { renameSession, validateSessionResumeTarget, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 

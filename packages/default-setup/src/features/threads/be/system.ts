@@ -2,7 +2,8 @@ import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
-import { setup } from 'xstate';
+import { assign, setup, fromPromise, spawnChild } from 'xstate';
+import { runThreadHistoryOperation, type ThreadHistoryOperationInput } from './history-operation.ts';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
@@ -51,6 +52,7 @@ function reportThreadOperationError(
 export const threadsSystem = setup({
   types: threadsSpec.types,
   actors: {
+    historyOperation: fromPromise(async ({input, signal}: {input: ThreadHistoryOperationInput; signal: AbortSignal}) => runThreadHistoryOperation(input, signal)),
   },
   actions: threadsSpec.actions({
     // ---- Thread management actions ----
@@ -594,166 +596,205 @@ export const threadsSystem = setup({
         logger.error('forwardUserCommand failed', { error: err });
       }
     },
-    forkThread: ({ event, reply }) => {
-      const { messageId, threadId, threadTopic } = threadsSpec.typeOf('FORK_THREAD', event);
-      if (!threadId) return;
-
-      let result: { id: EARS.EntityId } | undefined;
-      const forkContext: Record<string, any> = {};
-
-      try {
-        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
-        const sourceUserMessagesAfterFork = sourceIndex >= 0
-          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
-          : 0;
-        const originalTopic = threadTopic || 'Untitled';
-
-        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
-        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
-
-        result = services.chat.createThreadAndNotify({ topic: forkTopic, instructions: '' });
-        if (!result) throw new Error('Failed to create thread');
-
-        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
-
-        repository.chatCommands.copyMessagesUpTo({
-          sourceThreadId: threadId as EARS.EntityId,
-          targetThreadId: result.id,
-          upToMessageId: messageId,
-        });
-
-        // Set forkPending on the NEW thread so chat actions queue messages
-        // until the async handle-fork actions finish persisting session state.
-        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
-        const sourceContext = (sourceThread as any)?.context ?? {};
-        for (const [key, value] of Object.entries(sourceContext)) {
-          if (value && typeof value === 'object') {
-            forkContext[key] = { forkPending: true };
-          }
-        }
-        if (Object.keys(forkContext).length > 0) {
-          repository.threadCommands.update(result.id, { context: forkContext });
-        }
-
-        services.chat.openThreadChatAndRefreshRecent(result.id, { reply });
-
-        sendToSystem('brain', {
-          type: 'TRIGGER_BRAIN_EVENT',
-          eventType: 'thread.fork',
-          payload: {
-            sourceThreadId: threadId,
-            sourceMessageId: messageId,
-            newThreadId: result.id,
-            sourceUserMessagesAfterFork,
-          },
-        });
-      } catch (err) {
-        logger.error('forkThread failed', { error: err });
-        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
-        if (result && Object.keys(forkContext).length > 0) {
-          const clearContext = Object.fromEntries(
-            Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
-          );
-          repository.threadCommands.update(result.id, { context: clearContext });
-        }
-      }
-    },
-    revertThread: ({ event, reply }) => {
-      try {
-      const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-
-      // Stop active processes before soft-deleting so nothing races
-      // against the deletion (e.g. a stream consumer writing to messages).
-      runThreadTeardown(threadId);
-
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
-      });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
-
-      // Determine which agent flows had messages deleted so each flow can
-      // skip its revert handler when it isn't affected.
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
-      };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
-
-      services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
-
-      // Unified `thread.revert` brain event — the `kind` discriminator
-      // tells the claude-code flow which variant to run.
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: {
-          threadId,
-          messageId,
-          kind: restoreFiles ? 'rewind' : 'revert',
-          deletedMessageIds: deletion.deletedIds,
-          deletedUserMessageCount,
-          agents,
-          codexDeletedUserMessageCount,
-          ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+    forkThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('FORK_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'fork' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected fork', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not fork: ${errorMessage(error)}`, blocks: [], forkable: false});
         },
-      });
-      } catch (err) {
-        logger.error('revertThread failed', { error: err });
-      }
-    },
-    summarizeThread: ({ event, reply }) => {
-      try {
-      const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+        commit: () => {
+          const { messageId, threadId, threadTopic } = threadsSpec.typeOf('FORK_THREAD', event);
+          if (!threadId) return;
 
-      // Stop active processes before soft-deleting (same as revert).
-      runThreadTeardown(threadId);
+          let result: { id: EARS.EntityId } | undefined;
+          const forkContext: Record<string, any> = {};
 
-      // Matches Claude Code's native `direction: 'from'` — the pivot and
-      // everything after it disappear from the visible transcript, then a
-      // synthetic `/compact` turn runs against the truncated session.
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
-      });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+          try {
+            const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+            const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
+            const sourceUserMessagesAfterFork = sourceIndex >= 0
+              ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user' && !m.deleted).length
+              : 0;
+            const originalTopic = threadTopic || 'Untitled';
 
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
+            const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
+            const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
+
+            result = services.chat.createThreadAndNotify({ topic: forkTopic, instructions: '' });
+            if (!result) throw new Error('Failed to create thread');
+
+            repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
+
+            repository.chatCommands.copyMessagesUpTo({
+              sourceThreadId: threadId as EARS.EntityId,
+              targetThreadId: result.id,
+              upToMessageId: messageId,
+            });
+
+            // Set forkPending on the NEW thread so chat actions queue messages
+            // until the async handle-fork actions finish persisting session state.
+            const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
+            const sourceContext = (sourceThread as any)?.context ?? {};
+            for (const [key, value] of Object.entries(sourceContext)) {
+              if (value && typeof value === 'object') {
+                forkContext[key] = { forkPending: true };
+              }
+            }
+            if (Object.keys(forkContext).length > 0) {
+              repository.threadCommands.update(result.id, { context: forkContext });
+            }
+
+            services.chat.openThreadChatAndRefreshRecent(result.id, { reply });
+
+            sendToSystem('brain', {
+              type: 'TRIGGER_BRAIN_EVENT',
+              eventType: 'thread.fork',
+              payload: {
+                sourceThreadId: threadId,
+                sourceMessageId: messageId,
+                newThreadId: result.id,
+                sourceUserMessagesAfterFork,
+              },
+            });
+          } catch (err) {
+            logger.error('forkThread failed', { error: err });
+            // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
+            if (result && Object.keys(forkContext).length > 0) {
+              const clearContext = Object.fromEntries(
+                Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
+              );
+              repository.threadCommands.update(result.id, { context: clearContext });
+            }
+          }
+        },
       };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
+    }) }),
+    revertThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('REVERT_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'revert' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not revert: ${errorMessage(error)}`, blocks: [], forkable: false});
+        },
+        commit: () => {
+          try {
+          const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
+          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
 
-      services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
+          // Stop active processes before soft-deleting so nothing races
+          // against the deletion (e.g. a stream consumer writing to messages).
+          runThreadTeardown(threadId);
 
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
-      });
-      } catch (err) {
-        logger.error('summarizeThread failed', { error: err });
-      }
-    },
+          const deletion = repository.chatCommands.softDeleteMessagesAfter({
+            threadId: threadId as EARS.EntityId,
+            messageId: messageId as EARS.EntityId,
+          });
+          const deletedIds = new Set(deletion.deletedIds);
+          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+          // Determine which agent flows had messages deleted so each flow can
+          // skip its revert handler when it isn't affected.
+          const agents = {
+            claudeCode: deletedMessages.some((m: any) =>
+              m.context?.cliUuid || m.context?.agent === 'Claude Code'
+            ),
+            codex: deletedMessages.some((m: any) =>
+              m.context?.agent === 'Codex'
+            ),
+          };
+          const codexDeletedUserMessageCount = agents.codex
+            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+            : 0;
+
+          services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
+
+          // Unified `thread.revert` brain event — the `kind` discriminator
+          // tells the claude-code flow which variant to run.
+          sendToSystem('brain', {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'thread.revert',
+            payload: {
+              threadId,
+              messageId,
+              kind: restoreFiles ? 'rewind' : 'revert',
+              deletedMessageIds: deletion.deletedIds,
+              deletedUserMessageCount,
+              agents,
+              codexDeletedUserMessageCount,
+              ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+            },
+          });
+          } catch (err) {
+            logger.error('revertThread failed', { error: err });
+          }
+        },
+      };
+    }) }),
+    summarizeThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'summarize' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected summarize', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not summarize: ${errorMessage(error)}`, blocks: [], forkable: false});
+        },
+        commit: () => {
+          try {
+          const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+
+          // Stop active processes before soft-deleting (same as revert).
+          runThreadTeardown(threadId);
+
+          // Matches Claude Code's native `direction: 'from'` — the pivot and
+          // everything after it disappear from the visible transcript, then a
+          // synthetic `/compact` turn runs against the truncated session.
+          const deletion = repository.chatCommands.softDeleteMessagesAfter({
+            threadId: threadId as EARS.EntityId,
+            messageId: messageId as EARS.EntityId,
+          });
+          const deletedIds = new Set(deletion.deletedIds);
+          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+          const agents = {
+            claudeCode: deletedMessages.some((m: any) =>
+              m.context?.cliUuid || m.context?.agent === 'Claude Code'
+            ),
+            codex: deletedMessages.some((m: any) =>
+              m.context?.agent === 'Codex'
+            ),
+          };
+          const codexDeletedUserMessageCount = agents.codex
+            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+            : 0;
+
+          services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
+
+          sendToSystem('brain', {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'thread.revert',
+            payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
+          });
+          } catch (err) {
+            logger.error('summarizeThread failed', { error: err });
+          }
+        },
+      };
+    }) }),
     pauseTurn: ({ event }) => {
       const { threadId } = threadsSpec.typeOf('PAUSE_TURN', event);
       sendToSystem('brain', {
