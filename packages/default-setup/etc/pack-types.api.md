@@ -1098,6 +1098,12 @@ interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'en
     cwd: string;
 }
 
+interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    messageUuid: string;
+    cwd: string;
+}
+
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
@@ -1146,6 +1152,10 @@ interface CliServiceType {
         getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<ClaudeContextUsage>;
+        /** Validate native fork/resume membership without a prompt or persisted fork. */
+        validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<void>;
         version(): Promise<string>;
         authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
@@ -1198,7 +1208,7 @@ interface CliServiceType {
             scope: string;
             path: string;
         }>>;
-        /** Rename a Claude Code session by appending a metadata entry to its JSONL file. */
+        /** Rename a Claude Code session through the native process. */
         renameSession(id: string, title: string, opts?: {
             cwd?: string;
         }): Promise<void>;

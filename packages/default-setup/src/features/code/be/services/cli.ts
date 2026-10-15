@@ -1,4 +1,4 @@
-import { renameSession } from './claude-code/session-controls.ts'
+import { renameSession, validateSessionResumeTarget, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 
 import { GitRepository } from '#features/code/be/services/git.ts'
@@ -48,6 +48,8 @@ export interface CliServiceType {
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
     /** Read a saved session's native context summary without a prompt or transcript writes. */
     getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & { cwd?: string }): Promise<ClaudeContextUsage>
+    /** Validate native fork/resume membership without a prompt or persisted fork. */
+    validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & { cwd?: string }): Promise<void>
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -83,7 +85,7 @@ export interface CliServiceType {
     listSkills(): Promise<Array<{ name: string; scope: string; path: string }>>
     /** List memory/CLAUDE.md files from known locations. */
     listMemoryFiles(): Promise<Array<{ name: string; scope: string; path: string }>>
-    /** Rename a Claude Code session by appending a metadata entry to its JSONL file. */
+    /** Rename a Claude Code session through the native process. */
     renameSession(id: string, title: string, opts?: { cwd?: string }): Promise<void>
     /** Check whether a session JSONL file exists under the given (or default) project directory. */
     sessionExists(id: string, opts?: { cwd?: string }): Promise<boolean>
@@ -184,6 +186,9 @@ function createCliService(): CliServiceType {
       },
       getContextUsage(opts) {
         return getSessionContextUsage({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      },
+      validateResumeTarget(opts) {
+        return validateSessionResumeTarget({ ...opts, cwd: opts.cwd ?? resolveCwd() })
       },
       version() {
         return claudeCode.system.version()
