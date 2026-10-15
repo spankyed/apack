@@ -40,6 +40,11 @@
             "description": "Current thread ID",
             "required": true
           },
+          "requestId": {
+            "type": "string",
+            "description": "Pending ExitPlanMode request ID",
+            "required": true
+          },
           "response": {
             "type": "object",
             "description": "User response from the approval block",
