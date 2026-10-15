@@ -286,6 +286,27 @@ describe('query() native control replies', () => {
     await handle.close()
   })
 
+  it('reads typed MCP state before any user turn and preserves future server fields', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
+      response: { commands: [], agents: [], models: [] },
+    } })
+    await handle.initialized
+    const status = handle.getMcpStatus()
+    await Promise.resolve()
+    const request = mock.writes[1] as { request_id: string; request: unknown }
+    expect(request.request).toEqual({ subtype: 'mcp_status' })
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: request.request_id,
+      response: { mcpServers: [{ name: 'research', status: 'connected', futureField: true, tools: [{ name: 'echo' }] }] },
+    } })
+    await expect(status).resolves.toMatchObject({ mcpServers: [{ name: 'research', futureField: true }] })
+    expect(mock.writes.some(value => (value as { type: string }).type === 'user')).toBe(false)
+    await handle.close()
+  })
+
   it('awaits correlated interrupt receipts, validates options and propagates rejection', async () => {
     const mock = makeMockStream()
     vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)

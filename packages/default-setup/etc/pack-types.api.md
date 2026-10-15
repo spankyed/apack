@@ -902,6 +902,197 @@ declare const ClaudeInterruptReceiptSchema: z.ZodObject<{
     cancelled: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>;
+
+/** Live MCP server state; preserve future status/configuration fields. */
+declare const ClaudeMcpStatusSchema: z.ZodObject<{
+    mcpServers: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    mcpServers: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    mcpServers: z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        name: z.ZodString;
+        status: z.ZodString;
+        serverInfo: z.ZodOptional<z.ZodObject<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+            version: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>>;
+        tools: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+        }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+            name: z.ZodString;
+        }, z.ZodTypeAny, "passthrough">>, "many">>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">>;
+
 interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
     cwd: string;
@@ -4895,6 +5086,8 @@ interface QueryHandle {
     }): Promise<ClaudeInterruptReceipt>;
     /** Rename the native session; an explicit ID protects against renaming a different session. */
     renameSession(title: string, sessionId?: string): Promise<void>;
+    /** Read live MCP server and tool status without a model turn. */
+    getMcpStatus(): Promise<ClaudeMcpStatus>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */
     getContextUsage(): Promise<ClaudeContextUsage>;
     /** Change the running CLI policy and return its acknowledged permission mode. */

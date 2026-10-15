@@ -33,8 +33,8 @@ import { argsFromOptions } from './args.ts'
 import { PermissionModeSchema, type PermissionMode } from './types.ts'
 import { z } from 'zod'
 import { createControlRouter } from './control.ts'
-import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema } from './host-controls.ts'
-import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt } from './host-controls.ts'
+import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema } from './host-controls.ts'
+import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus } from './host-controls.ts'
 import {
   ClaudeAbortError,
   type ClaudeCodeError,
@@ -87,6 +87,8 @@ export interface QueryHandle {
   interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
   /** Rename the native session; an explicit ID protects against renaming a different session. */
   renameSession(title: string, sessionId?: string): Promise<void>
+  /** Read live MCP server and tool status without a model turn. */
+  getMcpStatus(): Promise<ClaudeMcpStatus>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
   getContextUsage(): Promise<ClaudeContextUsage>
   /** Change the running CLI policy and return its acknowledged permission mode. */
@@ -252,6 +254,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       await initialized
       await hostControls.request({ subtype: 'rename_session', title: validTitle, source: 'host',
         ...(sessionId === undefined ? {} : { session_id: sessionId }) })
+    },
+
+    async getMcpStatus(): Promise<ClaudeMcpStatus> {
+      await initialized
+      return ClaudeMcpStatusSchema.parse(await hostControls.request({ subtype: 'mcp_status' }))
     },
 
     async getContextUsage(): Promise<ClaudeContextUsage> {

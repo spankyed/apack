@@ -39,6 +39,16 @@ export const ClaudeInterruptReceiptSchema = z.object({
 }).passthrough()
 export type ClaudeInterruptReceipt = z.infer<typeof ClaudeInterruptReceiptSchema>
 
+/** Live MCP server state; preserve future status/configuration fields. */
+export const ClaudeMcpStatusSchema = z.object({
+  mcpServers: z.array(z.object({
+    name: z.string(), status: z.string(),
+    serverInfo: z.object({ name: z.string(), version: z.string() }).passthrough().optional(),
+    tools: z.array(z.object({ name: z.string() }).passthrough()).optional(),
+  }).passthrough()),
+}).passthrough()
+export type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>
+
 interface PendingControl {
   resolve(value: unknown): void
   reject(error: Error): void
