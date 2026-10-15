@@ -2,6 +2,8 @@ export interface ThreadHistoryRequest {
   kind: 'fork' | 'revert' | 'summarize'
   threadId: string
   messageId: string
+  restoreFiles?: boolean
+  userMessageId?: string
 }
 export interface ThreadHistoryOperationInput {
   request: ThreadHistoryRequest

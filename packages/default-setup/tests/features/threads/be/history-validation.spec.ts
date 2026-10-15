@@ -92,3 +92,13 @@ it('does not ask Claude to validate a revert affecting only another provider',as
   expect(f.validate).not.toHaveBeenCalled()
   expect(f.notify).not.toHaveBeenCalled()
 })
+it('rejects an unavailable file checkpoint before deleting conversation history',async()=>{
+ const app=await startApp({systems:['threads']});const f=fixture();
+ const preview=vi.fn(async()=>({canRewind:false,error:'No file checkpoint found'}));
+ mockService<Services,'cli'>('cli',{claudeCode:{getHandle:vi.fn(),validateResumeTarget:f.validate,getFileRewindPreview:preview} as never});
+ await app.send('threads',{type:'REVERT_THREAD',threadId:f.id,messageId:f.pivot.id,restoreFiles:true,userCliUuid:'native-user'});
+ await vi.waitFor(()=>expect(f.notify).toHaveBeenCalled());
+ expect(preview).toHaveBeenCalledWith(expect.objectContaining({sessionId:'native-session',userMessageId:'native-user'}));
+ expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(3);
+ expect(f.validate).not.toHaveBeenCalled();
+});

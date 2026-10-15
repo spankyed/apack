@@ -348,7 +348,7 @@
       },
       "Action:CC: Handle Rewind": {
         "category": "claude-code",
-        "description": "Revert plus restoring files to their state at the reverted message via `claude --rewind-files`.",
+        "description": "Revert plus restoring files through native file checkpoints.",
         "entityType": "Action",
         "input": {
           "threadId": {

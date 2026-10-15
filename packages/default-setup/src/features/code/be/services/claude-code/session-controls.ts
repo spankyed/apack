@@ -1,3 +1,4 @@
+import type { ClaudeFileRewind } from './host-controls.ts'
 import { query } from './query.ts'
 import { ClaudeProtocolError } from './errors.ts'
 import type { QueryOptions } from './types.ts'
@@ -35,4 +36,27 @@ export async function validateSessionResumeTarget(options: ClaudeSessionResumeTa
     resumeSessionAt: messageUuid, noSessionPersistence: true, keepStdinOpen: true })
   try { await handle.initialized }
   finally { await handle.close() }
+}
+
+export interface ClaudeSessionFileRewindOptions extends Pick<QueryOptions, 'env' | 'cliPath' | 'signal'> {
+  sessionId: string
+  userMessageId: string
+  cwd: string
+}
+async function runSessionFileRewind(options: ClaudeSessionFileRewindOptions, dryRun: boolean): Promise<ClaudeFileRewind> {
+  const allowed = new Set(['sessionId', 'userMessageId', 'cwd', 'env', 'cliPath', 'signal'])
+  if (Object.keys(options).some(key => !allowed.has(key))) throw new ClaudeProtocolError('unsupported file rewind options')
+  const {sessionId, userMessageId, cwd, env, cliPath, signal} = options
+  if (!sessionId.trim() || !userMessageId.trim()) throw new ClaudeProtocolError('sessionId and userMessageId are required')
+  const handle = await query({cwd, env, cliPath, signal, resume: sessionId, noSessionPersistence: true, keepStdinOpen: true})
+  try { return await handle.rewindFiles(userMessageId, {dryRun}) }
+  finally { await handle.close() }
+}
+/** Inspect native file checkpoints without changing files or sending a user turn. */
+export async function getSessionFileRewindPreview(options: ClaudeSessionFileRewindOptions): Promise<ClaudeFileRewind> {
+  return runSessionFileRewind(options, true)
+}
+/** Restore files using native checkpoints; inspect canRewind even on a successful response. */
+export async function rewindSessionFiles(options: ClaudeSessionFileRewindOptions): Promise<ClaudeFileRewind> {
+  return runSessionFileRewind(options, false)
 }

@@ -679,7 +679,7 @@ export const threadsSystem = setup({
       const threadId = request.threadId ?? '';
       const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
         messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
-      return { request: {kind: 'revert' as const, threadId, messageId: request.messageId},
+      return { request: {kind: 'revert' as const, threadId, messageId: request.messageId, restoreFiles: request.restoreFiles, userMessageId: request.userCliUuid},
         snapshot: readSnapshot(), readSnapshot,
         rejected: (error: unknown) => {
           logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});

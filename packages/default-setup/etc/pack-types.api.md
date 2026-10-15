@@ -782,6 +782,32 @@ declare const ClaudeContextUsageSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>;
+
+/** Native rewind verdict; a successful control response may still reject the checkpoint. */
+declare const ClaudeFileRewindSchema: z.ZodObject<{
+    canRewind: z.ZodBoolean;
+    error: z.ZodOptional<z.ZodString>;
+    filesChanged: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    insertions: z.ZodOptional<z.ZodNumber>;
+    deletions: z.ZodOptional<z.ZodNumber>;
+    skippedLinks: z.ZodOptional<z.ZodNumber>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    canRewind: z.ZodBoolean;
+    error: z.ZodOptional<z.ZodString>;
+    filesChanged: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    insertions: z.ZodOptional<z.ZodNumber>;
+    deletions: z.ZodOptional<z.ZodNumber>;
+    skippedLinks: z.ZodOptional<z.ZodNumber>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    canRewind: z.ZodBoolean;
+    error: z.ZodOptional<z.ZodString>;
+    filesChanged: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    insertions: z.ZodOptional<z.ZodNumber>;
+    deletions: z.ZodOptional<z.ZodNumber>;
+    skippedLinks: z.ZodOptional<z.ZodNumber>;
+}, z.ZodTypeAny, "passthrough">>;
+
 interface ClaudeHookRegistration {
     matcher?: string;
     timeout?: number;
@@ -1098,6 +1124,12 @@ interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'en
     cwd: string;
 }
 
+interface ClaudeSessionFileRewindOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
+    userMessageId: string;
+    cwd: string;
+}
+
 interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
     messageUuid: string;
@@ -1156,6 +1188,12 @@ interface CliServiceType {
         validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<void>;
+        getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeFileRewind>;
+        rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudeFileRewind>;
         version(): Promise<string>;
         authStatus(): Promise<AuthStatus>;
         listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>;
@@ -5062,6 +5100,10 @@ type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & Host
 interface QueryHandle {
     /** Native commands, models and capabilities, available before a model turn. */
     readonly initialized: Promise<ClaudeInitialization>;
+    /** Explicit dryRun is required: preview and mutation have different effects. */
+    rewindFiles(userMessageId: string, options: {
+        dryRun: boolean;
+    }): Promise<ClaudeFileRewind>;
     /** Resolves with the session id as soon as the CLI emits `system/init`. */
     readonly sessionId: Promise<string>;
     /** Every non-control stream line, in order, until the child exits. */

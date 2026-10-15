@@ -16,6 +16,15 @@ registerThreadHistoryValidator(async (request, signal) => {
     return
   }
   if (state.isRunning || services.cli.claudeCode.getHandle(request.threadId)) throw new Error('Pause the current turn before changing history.')
+  if (request.restoreFiles) {
+    if (!state.cwd) throw new Error('The native session project directory is unavailable.')
+    const recordedId = messages[pivot].context?.cliUuid
+    if (typeof recordedId === 'string' && request.userMessageId && recordedId !== request.userMessageId) throw new Error('The file checkpoint identity changed. Retry from the current message.')
+    const userMessageId = recordedId ?? request.userMessageId
+    if (typeof userMessageId !== 'string' || !userMessageId.trim()) throw new Error('No native file checkpoint identity is recorded for this message.')
+    const preview = await services.cli.claudeCode.getFileRewindPreview({sessionId: state.sessionId, userMessageId, cwd: state.cwd, signal})
+    if (!preview.canRewind) throw new Error(preview.error ?? 'The native file checkpoint is unavailable.')
+  }
   const prefix = messages.slice(0, pivot + (request.kind === 'fork' ? 1 : 0))
   const assistant = [...prefix].reverse().find(message => message.sender === 'assistant' && typeof message.context?.cliUuid === 'string')
   if (!assistant) {

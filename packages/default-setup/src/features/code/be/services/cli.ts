@@ -1,12 +1,12 @@
 import './thread-history.ts'
-import { renameSession, validateSessionResumeTarget, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
+import { renameSession, validateSessionResumeTarget, getSessionFileRewindPreview, rewindSessionFiles, type ClaudeSessionFileRewindOptions, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 
 import { GitRepository } from '#features/code/be/services/git.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
 import { getSessionContextUsage, type ClaudeSessionContextOptions } from './claude-code/context.ts'
-import type { ClaudeContextUsage } from './claude-code/host-controls.ts'
+import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-controls.ts'
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
@@ -51,6 +51,8 @@ export interface CliServiceType {
     getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & { cwd?: string }): Promise<ClaudeContextUsage>
     /** Validate native fork/resume membership without a prompt or persisted fork. */
     validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & { cwd?: string }): Promise<void>
+    getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
+    rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -191,6 +193,8 @@ function createCliService(): CliServiceType {
       validateResumeTarget(opts) {
         return validateSessionResumeTarget({ ...opts, cwd: opts.cwd ?? resolveCwd() })
       },
+      getFileRewindPreview(opts) { return getSessionFileRewindPreview({...opts, cwd: opts.cwd ?? resolveCwd()}) },
+      rewindFiles(opts) { return rewindSessionFiles({...opts, cwd: opts.cwd ?? resolveCwd()}) },
       version() {
         return claudeCode.system.version()
       },

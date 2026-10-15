@@ -111,3 +111,10 @@ export function createHostControls(write: (value: unknown) => boolean) {
     },
   }
 }
+
+/** Native rewind verdict; a successful control response may still reject the checkpoint. */
+export const ClaudeFileRewindSchema = z.object({
+  canRewind: z.boolean(), error: z.string().optional(), filesChanged: z.array(z.string()).optional(),
+  insertions: z.number().optional(), deletions: z.number().optional(), skippedLinks: z.number().optional(),
+}).passthrough()
+export type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>

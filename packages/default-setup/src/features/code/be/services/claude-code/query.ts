@@ -34,8 +34,8 @@ import { argsFromOptions } from './args.ts'
 import { PermissionModeSchema, type PermissionMode } from './types.ts'
 import { z } from 'zod'
 import { createControlRouter } from './control.ts'
-import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema } from './host-controls.ts'
-import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus } from './host-controls.ts'
+import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema, ClaudeFileRewindSchema } from './host-controls.ts'
+import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus, ClaudeFileRewind } from './host-controls.ts'
 import {
   ClaudeAbortError,
   type ClaudeCodeError,
@@ -60,6 +60,8 @@ import type {
 export interface QueryHandle {
   /** Native commands, models and capabilities, available before a model turn. */
   readonly initialized: Promise<ClaudeInitialization>
+  /** Explicit dryRun is required: preview and mutation have different effects. */
+  rewindFiles(userMessageId: string, options: { dryRun: boolean }): Promise<ClaudeFileRewind>
   /** Resolves with the session id as soon as the CLI emits `system/init`. */
   readonly sessionId: Promise<string>
   /** Every non-control stream line, in order, until the child exits. */
@@ -259,6 +261,13 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       await initialized
       await hostControls.request({ subtype: 'rename_session', title: validTitle, source: 'host',
         ...(sessionId === undefined ? {} : { session_id: sessionId }) })
+    },
+
+    async rewindFiles(userMessageId: string, options: { dryRun: boolean }): Promise<ClaudeFileRewind> {
+      const id = z.string().trim().min(1).parse(userMessageId)
+      const valid = z.object({ dryRun: z.boolean() }).strict().parse(options)
+      await initialized
+      return ClaudeFileRewindSchema.parse(await hostControls.request({subtype: 'rewind_files', user_message_id: id, dry_run: valid.dryRun}))
     },
 
     async getMcpStatus(): Promise<ClaudeMcpStatus> {
