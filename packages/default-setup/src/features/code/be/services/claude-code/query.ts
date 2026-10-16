@@ -529,7 +529,7 @@ function sumModelUsageCost(modelUsage: Record<string, any> | undefined): number 
   return total
 }
 
-function normaliseResult(raw: ResultLine): QueryResult {
+export function normaliseResult(raw: ResultLine): QueryResult {
   return {
     sessionId: raw.session_id ?? '',
     text: raw.result ?? '',

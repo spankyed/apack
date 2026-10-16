@@ -26,7 +26,7 @@ export async function action(
 
   // No-op if nothing is running.
   const prior = getClaudeState(services, threadId);
-  if (!prior?.isRunning && !prior?.pendingControlRequest) {
+  if (!prior?.isRunning && !prior?.pendingControlRequest && !services.cli.claudeCode.getHandle(threadId) && !services.cli.claudeCode.isConversationBusy(threadId)) {
     return { success: true, noop: true };
   }
 

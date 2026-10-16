@@ -6,9 +6,10 @@ import { actionLabel, writeDefaultFlows } from '../../../_support/flows.ts';
 
 it('compiled cc-fork reports native rejection before creating a thread', async () => {
   writeDefaultFlows();
+  mockService<Services, 'codex'>('codex', { start: vi.fn(async () => {}) });
   const validate=vi.fn(async()=>{throw Error('No message found with message.uuid');});
   const create=vi.fn(), notify=vi.fn();
-  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,getHandle:vi.fn()} as never});
+  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn()} as never});
   mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify});
   const app=await startApp({systems:['brain']});
   await app.runFlow('Claude Code');

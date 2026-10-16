@@ -1,3 +1,4 @@
+import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
 import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
 import type { ClaudePlan } from './claude-code/host-controls.ts'
 import './thread-history.ts'
@@ -12,7 +13,7 @@ import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-co
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
-import { storeHandle, getHandle, clearHandle } from './claude-code/handle-store.ts'
+import { storeHandle, getHandle, clearHandle, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
 import { codexExec } from './codex/runner.ts'
 import type { CodexExecOptions, CodexExecResult } from './codex/runner.ts'
 import { testCli, isCliName } from '../utils/resolve-cli.ts'
@@ -49,6 +50,11 @@ export interface CliServiceType {
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
+    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
+    getConversation(key: string): { owner: ClaudeConversation; launchKey: string } | undefined
+    isConversationBusy(key: string): boolean
+    isCurrentTurn(key: string, handle: QueryHandle): boolean
+    closeIdleConversation(key: string): Promise<boolean>
     /** Read a saved session's native plan without a prompt or transcript writes. */
     getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & { cwd?: string }): Promise<ClaudePlan>
     /** Read a saved session's native context summary without a prompt or transcript writes. */
@@ -76,7 +82,7 @@ export interface CliServiceType {
     storeHandle(key: string, handle: QueryHandle): void
     /** Retrieve a stored query handle by key (typically threadId). */
     getHandle(key: string): QueryHandle | undefined
-    /** Clear a stored handle (call on query end to avoid leaking references). */
+    /** Release an owned turn; idle process controls remain available until close/teardown. */
     clearHandle(key: string): void
     /**
      * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
@@ -191,6 +197,14 @@ function createCliService(): CliServiceType {
         // `replayUserMessages: false` explicitly (spread order honors it).
         return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
       },
+      openConversation(key, launchKey, opts, consumeAutonomous) {
+        return openConversation(key, launchKey, () => claudeCode.query({ ...opts, cwd: opts.cwd ?? resolveCwd(),
+          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous)
+      },
+      getConversation,
+      isConversationBusy,
+      isCurrentTurn,
+      closeIdleConversation,
       getPlan(opts) {
         return getSessionPlan({ ...opts, cwd: opts.cwd ?? resolveCwd() })
       },

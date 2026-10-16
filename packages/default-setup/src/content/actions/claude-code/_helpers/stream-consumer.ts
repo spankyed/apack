@@ -1,3 +1,4 @@
+import type { ClaudeConversationTurn } from '#features/code/be/services/claude-code/conversation.ts';
 /**
  * Stream consumer — fire-and-forget async function that owns the `for await`
  * loop over a Claude Code CLI handle's event stream.
@@ -65,6 +66,8 @@ export interface ConsumerContext {
   forkCliUuid?: string;
   /** Whether this turn was invoked with --worktree. */
   useWorktree?: boolean;
+  persistent?: boolean;
+  costBaseline?: number;
 }
 
 export interface ConsumerWriters {
@@ -72,6 +75,29 @@ export interface ConsumerWriters {
   toolActivity: ReturnType<typeof createToolActivityWriter>;
   thinking: ReturnType<typeof createThinkingWriter>;
   messageId: EntityId;
+}
+
+/** Map one owned native input/autonomous turn into app writers and persistence. */
+export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx: ConsumerContext, initial?: ConsumerWriters): Promise<void> {
+  const { services, threadId } = ctx;
+  if (turn.stopped) {
+    if (initial) {
+      initial.thinking.finalise();
+      initial.toolActivity.finalise('done');
+      initial.writer.finalize(initial.writer.text || 'Claude Code stopped.');
+    }
+    return;
+  }
+  const messageId = initial?.messageId ?? services.chat.sendBlockMessage({ threadId, text: 'Thinking…', blocks: [], forkable: false }).messageId as EntityId;
+  const thinking = initial?.thinking ?? createThinkingWriter(services, messageId, { intervalMs: 250 });
+  const writers = initial ?? { messageId, thinking,
+    writer: createStreamWriter(services, messageId, { intervalMs: 80 }),
+    toolActivity: createToolActivityWriter(services, messageId, { intervalMs: 250, phase: ctx.phase, getThinkingBlock: () => thinking.buildBlock() }),
+  };
+  services.cli.claudeCode.storeHandle(threadId, turn.handle);
+  setRunning(services, threadId, true);
+  updateChatState(services, threadId, 'working');
+  await consumeStream(turn.handle, { ...ctx, persistent: true, costBaseline: turn.costBaseline }, writers);
 }
 
 /**
@@ -92,8 +118,9 @@ export async function consumeStream(
   // killTurn() cleared it, or after any caller stored a replacement handle.
   // When false, we must not call clearHandle / persistClaudeState / emit
   // cc.stream.completed — those belong to whoever owns the slot now.
-  const stillCurrent = () =>
-    (services.cli as any).claudeCode.getHandle(threadId) === handle;
+  const stillCurrent = () => ctx.persistent
+    ? services.cli.claudeCode.isCurrentTurn(threadId, handle)
+    : services.cli.claudeCode.getHandle(threadId) === handle;
 
   let currentMessageId: EntityId = initialWriters.messageId;
   let writer = initialWriters.writer;
@@ -148,6 +175,7 @@ export async function consumeStream(
     // ─── Drain the event stream ──────────────────────────────────────────
     let eventCount = 0;
     for await (const ev of handle.events) {
+      if (!stillCurrent()) throw new Error('Claude turn was superseded');
       const line = ev as any;
       eventCount++;
 
@@ -513,7 +541,7 @@ export async function consumeStream(
         resultFromLine = {
           sessionId: (line as any).session_id ?? '',
           text: (line as any).result ?? '',
-          totalCostUsd: (line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage),
+          totalCostUsd: Math.max(0, ((line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage)) - (ctx.costBaseline ?? 0)),
           durationMs: (line as any).duration_ms ?? 0,
           subtype: (line as any).subtype,
           errors: (line as any).errors,
@@ -526,6 +554,8 @@ export async function consumeStream(
         break;
       }
     }
+
+    if (!stillCurrent()) throw new Error('Claude turn was superseded before finalization');
 
     // ─── Stream drained — check for silent failures ─────────────────────
     // If no events arrived, the CLI likely failed immediately (wrong binary,
@@ -606,8 +636,10 @@ export async function consumeStream(
     log.debug('stream consumer completed');
 
     // Close stdin so the CLI subprocess exits cleanly (prevents child leak).
-    try { await handle.close(); } catch (closeErr: any) {
-      log.debug('handle.close failed', { message: closeErr?.message });
+    if (!ctx.persistent) {
+      try { await handle.close(); } catch (closeErr: any) {
+        log.debug('handle.close failed', { message: closeErr?.message });
+      }
     }
 
     // Superseded by killTurn() + a new turn (e.g. user sent a new message

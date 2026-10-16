@@ -74,4 +74,30 @@ describe('background continuation action consumer', () => {
     expect(handle.close).toHaveBeenCalledOnce();
     expect(handle.kill).not.toHaveBeenCalled();
   });
+  it('does not repersist an old background result when ownership changes as its stream ends', async () => {
+    const { id } = repository.threadCommands.create({ topic: 'Superseded background', instructions: '', tags: [] });
+    repository.threadCommands.update(id, { context: { claudeCode: { sessionId: 'old-session', isRunning: true } } });
+    const emit = vi.fn();
+    mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToPlugin: vi.fn() });
+    mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+    mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
+    let current: object | undefined;
+    const handle = { events: (async function* () {
+      yield { type: 'result', subtype: 'success', session_id: 'old-session', total_cost_usd: 1 };
+      repository.threadCommands.update(id, { context: { claudeCode: { sessionId: 'replacement-session', isRunning: true } } });
+      current = undefined;
+    })(), hasPendingBackgroundTasks: () => true, close: vi.fn(async () => {}) };
+    current = handle;
+    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => current), clearHandle: vi.fn() } as never });
+    const messageId = 'superseded-message' as EntityId;
+    const thinking = createThinkingWriter(services, messageId);
+    await consumeStream(handle, { services, threadId: id, text: 'Superseded input' }, {
+      messageId, thinking, writer: createStreamWriter(services, messageId),
+      toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+    });
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ sessionId: 'replacement-session', isRunning: true });
+    expect(emit).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'cc.stream.completed' }));
+    expect(handle.close).not.toHaveBeenCalled();
+  });
+
 });

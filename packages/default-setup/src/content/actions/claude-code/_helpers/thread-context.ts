@@ -429,8 +429,8 @@ export function killTurn(services: Services, threadId: string): void {
   const handle = (services.cli as any).claudeCode.getHandle(threadId);
   if (handle) {
     try { handle.kill(); } catch { /* already gone */ }
-    (services.cli as any).claudeCode.clearHandle(threadId);
   }
+  services.cli.claudeCode.clearHandle(threadId);
 
   // Reject plan draft if killed during ExitPlanMode approval.
   if (prior?.pendingControlRequest?.toolName === 'ExitPlanMode') {

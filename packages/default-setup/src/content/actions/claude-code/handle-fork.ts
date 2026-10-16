@@ -39,6 +39,7 @@ export async function action(params: Record<string, any>, services: Services) {
   }
   if (source.historyError && !sourceMessageId) return fail('Select a valid checkpoint or reset/resume the source before forking its whole session.');
   if (!source.cwd) return fail('The native session project directory is unavailable.');
+  if (!await services.cli.claudeCode.closeIdleConversation(sourceThreadId)) return fail('Pause the source turn before forking.');
   if (source.isRunning || services.cli.claudeCode.getHandle(sourceThreadId)) return fail('Pause the source turn before forking.');
   let cliUuid:string|undefined;
   if (sourceMessageId) {

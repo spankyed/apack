@@ -8,6 +8,7 @@ let app: TestApp;
 const kill = vi.fn(), respond = vi.fn();
 beforeEach(async () => {
   writeDefaultFlows();
+  mockService<Services, 'codex'>('codex', { start: vi.fn(async () => {}) });
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ kill, respond })), clearHandle: vi.fn() } as never });
   mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn(), createThreadAndNotify: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });

@@ -1,8 +1,8 @@
 /**
  * Claude Code Chat — the main conversational action.
  *
- * Starts a Claude Code CLI query, stores the handle, and kicks off a
- * fire-and-forget stream consumer that processes events in the background.
+ * Reuses or starts a per-thread Claude Code process and registers a
+ * turn consumer that processes events in the background.
  * The action returns immediately so the brain's step actor is not blocked
  * for the duration of the CLI session.
  *
@@ -21,7 +21,7 @@ import { createStreamWriter } from './_helpers/stream-writer.ts';
 import { createToolActivityWriter } from './_helpers/tool-activity-writer.ts';
 import { createThinkingWriter } from './_helpers/thinking-writer.ts';
 import { getClaudeState, persistClaudeState, setRunning, enqueueMessage, killTurn, ensureSessionMarker, updateChatState, extractStaleSessionId, markSessionBroken } from './_helpers/thread-context.ts';
-import { consumeStream, finalizeSessionError } from './_helpers/stream-consumer.ts';
+import { consumeConversationTurn, finalizeSessionError } from './_helpers/stream-consumer.ts';
 import { buildSessionBootstrapPrompt } from '../_helpers/session-bootstrap.ts';
 
 export const meta: ActionMeta = {
@@ -150,9 +150,15 @@ export async function action(
     pendingToolName: prior?.pendingControlRequest?.toolName ?? null,
   });
 
+  if (services.cli.claudeCode.isConversationBusy(threadId) && !prior?.pendingControlRequest && !prior?.isRunning) {
+    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+    if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
+    return { success: true, queued: true };
+  }
+
   if (prior?.isRunning) {
     // Handle exists → CLI process is genuinely running, queue the message
-    const handleExists = !!(services.cli as any).claudeCode.getHandle(threadId);
+    const handleExists = services.cli.claudeCode.isConversationBusy(threadId);
     if (handleExists) {
       log.debug('action already running — queuing message', { threadId });
       enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
@@ -184,7 +190,7 @@ export async function action(
   // Race guard: if a parallel invocation (from a duplicate flow actor)
   // already stored a CLI handle for this thread, bail out to prevent
   // creating orphaned "Thinking…" placeholder messages.
-  const existingHandle = (services.cli as any).claudeCode.getHandle(threadId);
+  const existingHandle = services.cli.claudeCode.isConversationBusy(threadId);
   if (existingHandle) {
     log.warn('[concurrency-guard] parallel invocation detected — bailing', { threadId });
     return { success: false, error: 'parallel invocation' };
@@ -425,9 +431,8 @@ export async function action(
       }
     }
 
-    const handle = await services.cli.claudeCode.query({
+    const options = {
       ...(sessionCwd && { cwd: sessionCwd }),
-      prompt,
       resume: resumeSessionId,
       model,
       includePartialMessages: true,
@@ -438,45 +443,44 @@ export async function action(
       disallowedTools,
       appendSystemPrompt: composedSystemPrompt,
       surfaceControlRequests: true,
-      ...(useWorktree && { worktree: true }),
+      ...(useWorktree && { worktree: true as const }),
       ...(addDirs.length > 0 && { addDir: addDirs }),
       // Fork/revert: create a new CLI session JSONL file, truncated to the
       // fork/revert point via --resume-session-at.
       ...((forkFrom || revertTo) && { forkSession: true }),
       ...(revertTo && { resumeSessionAt: revertTo.cliUuid }),
       ...(forkFrom?.cliUuid && { resumeSessionAt: forkFrom.cliUuid }),
-    } as any);
-
-    // Store the handle so "CC: Route Response" and the stream consumer
-    // can write control_responses back to the CLI's stdin.
-    (services.cli as any).claudeCode.storeHandle(threadId, handle);
-
-    log.debug('query handle received, kicking off stream consumer');
-
-    // Fire-and-forget: the stream consumer runs in the background,
-    // processing events until the CLI stream ends. The action returns
-    // immediately so the brain's step actor is freed.
-    consumeStream(handle, {
+    };
+    const launchKey = JSON.stringify({ cwd: sessionCwd, model, allowedTools: options.allowedTools,
+      disallowedTools, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
+    let conversation = services.cli.claudeCode.getConversation(threadId);
+    const existingKey = conversation?.owner.sessionCwd
+      ? JSON.stringify({ ...JSON.parse(conversation.launchKey), cwd: conversation.owner.sessionCwd })
+      : conversation?.launchKey;
+    if (conversation && (existingKey !== launchKey || forkFrom || revertTo
+      || (conversation.owner.sessionId && conversation.owner.sessionId !== resumeSessionId))) {
+      if (!await services.cli.claudeCode.closeIdleConversation(threadId)) throw new Error('Claude conversation changed while preparing this input');
+      conversation = undefined;
+    }
+    const owner = conversation?.owner ?? await services.cli.claudeCode.openConversation(threadId, launchKey, options,
+      turn => consumeConversationTurn(turn, { services, threadId, text: '',
+        sessionCwd: services.cli.claudeCode.getConversation(threadId)?.owner.sessionCwd ?? sessionCwd, useWorktree,
+        phase: getClaudeState(services, threadId)?.permissionMode === 'plan' ? 'Plan' : undefined }));
+    if (conversation) await owner.handle.setPermissionMode(effectivePermissionMode as any);
+    if (owner.busy) {
+      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+      if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
+      thinking.finalise();
+      toolActivity.finalise('done');
+      writer.finalize('Message queued while Claude Code continues its native work.');
+      return { success: true, queued: true };
+    }
+    owner.start(prompt, turn => consumeConversationTurn(turn, {
       services, threadId, text, phase, userMessageId,
-      resumeSessionId: resumeSessionId ?? undefined,
-      sessionCwd: sessionCwd ?? undefined,
-      isFork: !!(forkFrom || revertTo),
-      revertCliUuid: revertTo?.cliUuid,
-      forkCliUuid: forkFrom?.cliUuid,
-      useWorktree,
-    }, {
-      writer, toolActivity, thinking, messageId: currentMessageId as EntityId,
-    }).catch((err) => {
-      // Safety net — consumeStream has its own try/catch, but guard
-      // against truly unexpected escapes. Mirror its cleanup path.
-      log.error('consumeStream escaped error boundary', { err: err?.message });
-      (services.cli as any).claudeCode.clearHandle(threadId);
-      setRunning(services, threadId, false);
-      updateChatState(services, threadId, 'idle');
-      services.emitter.broadcastToSurface('default-setup/threads', {
-        type: 'FLASH_CHAT_STATE', threadId, stateId: 'error', durationMs: 3000,
-      });
-    });
+      resumeSessionId: resumeSessionId ?? undefined, sessionCwd,
+      isFork: !!(forkFrom || revertTo), revertCliUuid: revertTo?.cliUuid,
+      forkCliUuid: forkFrom?.cliUuid, useWorktree,
+    }, { writer, toolActivity, thinking, messageId: currentMessageId as EntityId }));
 
     return { success: true, streaming: true };
   } catch (err: any) {

@@ -35,7 +35,7 @@ for(const worktreeMismatch of [false,true]) {
   const{id}=repository.threadCommands.create({topic:'History startup',instructions:''});
   repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'native-session',cwd:'/fixture',revertTo:{cliUuid:'native-assistant'},useWorktree:worktreeMismatch,sessionWorktree:false}}});
   const query=vi.fn(async()=>{throw Error('Fixture executable unavailable');});
-  mockService<Services,'cli'>('cli',{claudeCode:{query,getHandle:vi.fn(),sessionExists:vi.fn(async()=>true)} as never});
+  mockService<Services,'cli'>('cli',{claudeCode:{openConversation:query,isConversationBusy:vi.fn(()=>false),getConversation:vi.fn(),getHandle:vi.fn(),sessionExists:vi.fn(async()=>true)} as never});
   mockService<Services,'chat'>('chat',{...chatService,resolveReferences:vi.fn(async()=>({textPrefix:'',imageBlocks:[]}))} as never);
   mockService<Services,'threads'>('threads',{updateChatState:vi.fn()});
   const result=await chat({threadId:id,text:'Continue'},services,{} as never,'');

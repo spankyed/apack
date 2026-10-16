@@ -28,6 +28,7 @@ export async function action(params: Record<string, any>, services: Services) {
     services.chat.sendBlockMessage({threadId: threadId as EntityId, text: `Could not prepare revert: ${reason}`, blocks: [], forkable: false});
     return {success: false, reason};
   };
+  if (!await services.cli.claudeCode.closeIdleConversation(threadId)) return fail('Pause the current turn before reverting.');
   if (state?.isRunning || services.cli.claudeCode.getHandle(threadId)) return fail('Pause the current turn before reverting.');
   if (cliUuid) {
     if (!state?.sessionId || !state.cwd) return fail('The native session or project directory is unavailable.', true);

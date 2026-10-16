@@ -10,7 +10,7 @@ function fixture(validate = vi.fn(async () => {})) {
   repository.chatCommands.addMessage({threadId:id,sender:'assistant',text:'Original',context:{cliUuid:'native-assistant'}});
   const create = vi.fn((opts: {topic:string;instructions:string})=>repository.threadCommands.create(opts));
   const notify = vi.fn();
-  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,getHandle:vi.fn() } as never});
+  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn() } as never});
   mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify});
   return {id,create,notify,validate};
 }
@@ -38,6 +38,7 @@ it('rejects a source changed while native validation was pending', async () => {
   let release!:()=>void;
   const f=fixture(vi.fn(()=>new Promise<void>(resolve=>{release=resolve;})));
   const pending=action({threadId:f.id},services,{} as never,'');
+ await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
   repository.chatCommands.addMessage({threadId:f.id,sender:'user',text:'A new turn'});
   release();
   expect((await pending).success).toBe(false);

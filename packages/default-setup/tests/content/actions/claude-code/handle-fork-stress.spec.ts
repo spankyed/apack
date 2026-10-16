@@ -14,7 +14,7 @@ function fixture(reject=false){
  repository.chatCommands.addMessage({threadId:source,sender:'assistant',text:'Later',context:{cliUuid:'later-uuid'}});
  const validate=vi.fn(async()=>{if(reject)throw Error('No message found');});
  const context=vi.fn(async()=>({}));
- mockService<Services,'cli'>('cli',{claudeCode:{getHandle:vi.fn(),validateResumeTarget:validate,getContextUsage:context} as never});
+ mockService<Services,'cli'>('cli',{claudeCode:{closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn(),validateResumeTarget:validate,getContextUsage:context} as never});
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()});
  return{source,target,first,user,initialUser,validate,context};
 }
@@ -52,6 +52,7 @@ it('rejects a source changed during native validation',async()=>{
  const f=fixture();let release!:()=>void;
  f.validate.mockImplementation(()=>new Promise<void>(resolve=>{release=resolve;}));
  const pending=action({sourceThreadId:f.source,newThreadId:f.target,sourceMessageId:f.first.id},services);
+ await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
  repository.chatCommands.addMessage({threadId:f.source,sender:'user',text:'Concurrent turn'});release();
  expect((await pending).success).toBe(false);
  expect(repository.threadQueries.byId(f.target)?.context?.claudeCode?.sessionId).toBeUndefined();

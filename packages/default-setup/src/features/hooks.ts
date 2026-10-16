@@ -1,3 +1,4 @@
+import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
 import { terminalService } from './code/be/services/terminal.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
 import { removeAllListeners as removeAllAdHocListeners } from './brain/be/services/brain.ts';
@@ -14,6 +15,7 @@ export const onInit = () => {};
 export const onShutdown = () => {
   services.runHistory.stopActive();
   terminalService.killAll();
+  killAllHandles();
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();

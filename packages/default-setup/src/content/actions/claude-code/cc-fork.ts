@@ -56,6 +56,7 @@ async function handleFork(
 
   const state = getClaudeState(services, threadId);
   if (!state?.sessionId || !state.cwd) return { text: 'Cannot fork — the native session or project directory is unavailable.' };
+  if (!await services.cli.claudeCode.closeIdleConversation(threadId)) return { text: 'Pause the current turn before forking.' };
   if (state.isRunning || services.cli.claudeCode.getHandle(threadId)) return { text: 'Pause the current turn before forking.' };
   const snapshot = JSON.stringify({ sessionId: state.sessionId, cwd: state.cwd, lastTurnAt: state.lastTurnAt,
     messages: messages.map(message => [message.id, message.context?.cliUuid]) });

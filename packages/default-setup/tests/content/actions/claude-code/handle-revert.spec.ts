@@ -15,7 +15,7 @@ async function createServices(nativeError?: Error, sendBlockMessage = vi.fn()) {
 
   mockService<Services, 'cli'>('cli', {
     claudeCode: {
-      getHandle: vi.fn(() => undefined),
+      closeIdleConversation:vi.fn(async()=>true),getHandle: vi.fn(() => undefined),
       clearHandle: vi.fn(),
       validateResumeTarget: vi.fn(async () => {
         if (nativeError) throw nativeError;
@@ -49,6 +49,7 @@ describe('CC: Handle Revert', () => {
     let release!:()=>void;
     vi.mocked(services.cli.claudeCode.validateResumeTarget).mockImplementation(()=>new Promise<void>(resolve=>{release=resolve;}));
     const pending=handleRevert({threadId,messageId},services);
+ await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
     repository.threadCommands.update(threadId,{context:{claudeCode:{sessionId:'new-session',cwd:'/project'}}});
     release();
     expect((await pending).success).toBe(false);
