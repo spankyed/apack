@@ -7,7 +7,9 @@
  * and fail with "Invalid API key · Fix external API key".
  */
 
-import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts'
+import { getEventListeners } from 'node:events'
+import { tmpdir } from 'node:os'
+import { buildChildEnv, spawnStream } from '#features/code/be/services/claude-code/runner.ts'
 
 describe('buildChildEnv', () => {
   const originalKey = process.env.ANTHROPIC_API_KEY
@@ -50,5 +52,37 @@ describe('buildChildEnv', () => {
 
   it.each(['true', '0', 'auto:10'])('honors explicit native tool-search configuration %s', setting => {
     expect(buildChildEnv({ ENABLE_TOOL_SEARCH: setting }).ENABLE_TOOL_SEARCH).toBe(setting)
+  })
+})
+
+describe('spawnStream termination', () => {
+  const ignoringChild = `process.on('SIGTERM', () => {}); process.on('SIGINT', () => {}); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
+
+  it.each(['abort', 'kill'] as const)('settles a child that ignores SIGTERM after %s', async source => {
+    const controller = new AbortController()
+    const handle = await spawnStream(['-e', ignoringChild], { cliPath: process.execPath, cwd: tmpdir(), signal: controller.signal })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await expect(handle.lines[Symbol.asyncIterator]().next()).resolves.toMatchObject({ value: { ok: true, value: { ready: true } } })
+      if (source === 'abort') controller.abort()
+      else handle.kill()
+      const result = await Promise.race([handle.done(), new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('child did not exit after termination')), 2500)
+      })])
+      expect(result.signal).toBe('SIGKILL')
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    } finally {
+      if (deadline) clearTimeout(deadline)
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 5000)
+
+  it('removes the abort listener when the child exits normally', async () => {
+    const controller = new AbortController()
+    const handle = await spawnStream(['-e', 'process.exit(0)'], { cliPath: process.execPath, cwd: tmpdir(), signal: controller.signal })
+    expect((await handle.done()).exitCode).toBe(0)
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    controller.abort()
   })
 })

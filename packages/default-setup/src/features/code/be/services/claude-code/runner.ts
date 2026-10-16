@@ -225,7 +225,8 @@ export async function execOnce(
  *
  * The caller drives the lifecycle: write stdin turns, iterate `lines`, then
  * call `endInput()` and `await done()`. If `signal` aborts, the child is
- * SIGTERM'd and `done()` rejects with `ClaudeAbortError`.
+ * sent SIGTERM, with SIGKILL after one second if it has not exited. `done()`
+ * reports the observed exit so the query layer can classify cancellation.
  */
 export async function spawnStream(
   args: readonly string[],
@@ -262,12 +263,39 @@ export async function spawnStream(
     }
   })
 
+  let exited = false
+  let killTimer: ReturnType<typeof setTimeout> | undefined
+  const clearKillTimer = () => {
+    if (killTimer) clearTimeout(killTimer)
+    killTimer = undefined
+  }
+  const terminate = (signal: NodeJS.Signals = 'SIGTERM') => {
+    if (exited) return
+    child.kill(signal)
+    // A successful signal send does not prove that the child exited.
+    if (signal !== 'SIGKILL' && !killTimer) {
+      killTimer = setTimeout(() => {
+        killTimer = undefined
+        if (!exited) child.kill('SIGKILL')
+      }, 1000)
+      killTimer.unref()
+    }
+  }
+  const onAbort = () => terminate()
+  const cleanup = () => {
+    exited = true
+    clearKillTimer()
+    opts.signal?.removeEventListener('abort', onAbort)
+  }
+  child.once('exit', cleanup)
+
   // One-shot promise that resolves on exit. Cached so multiple `done()`
   // calls are idempotent.
   const exitPromise = new Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>(
     (resolve, reject) => {
-      child.once('error', err => reject(wrapSpawnError(err, cliPath)))
+      child.once('error', err => { cleanup(); reject(wrapSpawnError(err, cliPath)) })
       child.once('close', (code, sig) => {
+        cleanup()
         resolve({
           exitCode: code ?? -1,
           signal: sig,
@@ -277,14 +305,14 @@ export async function spawnStream(
     },
   )
 
-  // Honour external abort by SIGTERM'ing the child. The exit handler above
+  // Honour external abort with bounded termination. The exit handler above
   // turns that into a normal resolve with a non-zero exit code; callers of
   // `done()` can classify it themselves.
   if (opts.signal) {
     if (opts.signal.aborted) {
-      child.kill('SIGTERM')
+      onAbort()
     } else {
-      opts.signal.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
+      opts.signal.addEventListener('abort', onAbort, { once: true })
     }
   }
 
@@ -306,7 +334,7 @@ export async function spawnStream(
       return exitPromise
     },
     kill(signal: NodeJS.Signals = 'SIGTERM'): void {
-      child.kill(signal)
+      terminate(signal)
     },
   }
 }
