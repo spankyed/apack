@@ -438,7 +438,6 @@ export async function action(
       disallowedTools,
       appendSystemPrompt: composedSystemPrompt,
       surfaceControlRequests: true,
-      env: { CLAUDE_CODE_COORDINATOR_MODE: '1' },
       ...(useWorktree && { worktree: true }),
       ...(addDirs.length > 0 && { addDir: addDirs }),
       // Fork/revert: create a new CLI session JSONL file, truncated to the
