@@ -11,6 +11,32 @@ import type { StreamLine } from '../../../../src/features/code/be/services/claud
 vi.mock('../../../../src/content/actions/claude-code/_helpers/context-usage.ts', () => ({ refreshThreadContextUsage: vi.fn(async () => {}) }));
 
 describe('background continuation action consumer', () => {
+  it('maps only the input replay UUID when tool-result user events arrive first', async () => {
+    const { id } = repository.threadCommands.create({ topic: 'Replay identity', instructions: '', tags: [] });
+    const update = vi.fn();
+    mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: vi.fn() });
+    mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { sendToSystem: vi.fn(), broadcastToPlugin: vi.fn() });
+    const lines = [
+      { type: 'user', uuid: 'tool-result-row', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'unknown-tool', content: 'Done' }] } },
+      { type: 'user', uuid: 'child-input', isReplay: true, parent_tool_use_id: 'child-task', message: { role: 'user', content: 'Child prompt' } },
+      { type: 'user', uuid: 'host-input', isReplay: true, parent_tool_use_id: null, message: { role: 'user', content: 'Host prompt' } },
+      { type: 'user', uuid: 'later-input', isReplay: true, parent_tool_use_id: null, message: { role: 'user', content: 'Later prompt' } },
+      { type: 'result', subtype: 'success', session_id: 'fixture', result: 'Done' },
+    ];
+    const handle = { events: (async function* () { yield* lines; })(), hasPendingBackgroundTasks: () => false,
+      close: vi.fn(async () => {}), kill: vi.fn() };
+    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => handle), clearHandle: vi.fn() } as never });
+    const messageId = 'replay-assistant' as EntityId;
+    const thinking = createThinkingWriter(services, messageId);
+    await consumeStream(handle, { services, threadId: id, text: 'Host prompt', userMessageId: 'app-user' }, {
+      messageId, writer: createStreamWriter(services, messageId), thinking,
+      toolActivity: createToolActivityWriter(services, messageId, { getThinkingBlock: () => thinking.buildBlock() }),
+    });
+    const mapped = update.mock.calls.filter(([target, patch]) => target === 'app-user' && patch.context?.cliUuid);
+    expect(mapped).toEqual([['app-user', { context: { cliUuid: 'host-input' } }]]);
+  });
+
   it('persists follow-up assistant output and uses the final cumulative usage', async () => {
     const { id } = repository.threadCommands.create({ topic: 'Background', instructions: '', tags: [] });
     repository.threadCommands.update(id, { context: { claudeCode: { isRunning: true } } });

@@ -283,24 +283,11 @@ export async function consumeStream(
       }
 
       if (line.type === 'user') {
-        // Track the CLI's user message UUID (first user event per turn).
-        // Needed for --rewind-files on revert-with-file-restore. Claude
-        // emits user events both as an input echo (uuid absent) and as
-        // a post-persistence replay (uuid required); the replay is what
-        // we need. If neither ever arrives, rewind fails later with
-        // "no CLI UUID on the reverted user message" — the diagnostics
-        // below distinguish "uuid never emitted by CLI" from "we were
-        // given no userMessageId to write onto".
-        if (!userUuidTracked) {
+        // Tool results also carry user-event UUIDs. Only the native input replay
+        // identifies the host prompt's persisted user row for file rewind.
+        if (!userUuidTracked && line.isReplay === true && !line.parent_tool_use_id) {
           if (!ctx.userMessageId) {
-            log.warn('user event without userMessageId — cliUuid tracking skipped', { threadId });
-            // Set the flag to suppress log spam on every subsequent user
-            // echo — NOT because we're abandoning recovery. ctx is
-            // closed-over and invariant for this consumer invocation, so
-            // if userMessageId is undefined here it will remain undefined
-            // for the rest of the stream; no future event could have
-            // recovered it. `backfillUserCliUuids` (jsonl-backfill.ts)
-            // handles retroactive recovery at rewind time.
+            log.warn('input replay without userMessageId — cliUuid tracking skipped', { threadId });
             userUuidTracked = true;
           } else if (line.uuid) {
             services.chat.updateMessageState(ctx.userMessageId as any, {
@@ -308,7 +295,6 @@ export async function consumeStream(
             } as any);
             userUuidTracked = true;
           }
-          // else: input echo without uuid — silently wait for the replay.
         }
         const content = (line.message as { content?: unknown })?.content;
         if (!Array.isArray(content)) continue;
