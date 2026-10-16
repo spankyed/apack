@@ -31,4 +31,20 @@ describe('CC: Answer Question', () => {
       updatedInput: { ...originalInput, answers: { 'Which fixture?': 'Alpha' } } });
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();
   });
+  it.each(['missing', 'closed'])('retires an expired request without starting a model turn (%s process)', async state => {
+    const { id } = setup('current');
+    const update = vi.fn(), send = vi.fn(), execute = vi.fn();
+    const respond = vi.fn(() => { throw new Error('stdin closed'); });
+    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => state === 'missing' ? undefined : { respond }) } as never });
+    mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: send });
+    mockService<Services, 'action'>('action', { executeIfFound: execute });
+    await expect(action({ threadId: id, requestId: 'current', response: 'Alpha' }, services))
+      .resolves.toMatchObject({ success: false });
+    expect(execute).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith('approval', expect.objectContaining({ blockResponse: { cancelled: true } }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ threadId: id, text: expect.stringContaining('request expired') }));
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ isRunning: false, chatState: 'error' });
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();
+  });
+
 });

@@ -243,10 +243,10 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     },
 
     respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void {
-      stream.write({
+      if (!stream.write({
         type: 'control_response',
         response: { subtype: 'success', request_id: requestId, response },
-      })
+      })) throw new ClaudeProtocolError('could not send control response: stdin is closed')
     },
 
     async interrupt(options: { cancelQueued?: boolean } = {}): Promise<ClaudeInterruptReceipt> {

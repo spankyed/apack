@@ -397,6 +397,17 @@ export function cancelPendingControlRequest(services: Services, threadId: string
   return true;
 }
 
+/** A response belongs to its process; do not turn a lost request into a model prompt. */
+export function expirePendingControlRequest(services: Services, threadId: string, requestId: string): void {
+  if (!cancelPendingControlRequest(services, threadId, requestId)) return;
+  setRunning(services, threadId, false);
+  updateChatState(services, threadId as EntityId, 'error');
+  const text = 'This Claude Code request expired before your response could be sent. Start a new turn to continue.';
+  services.chat.sendBlockMessage({ threadId: threadId as EntityId, text, forkable: false,
+    blocks: [{ type: 'note', props: { content: text, variant: 'warning', label: 'Request expired' } }],
+  });
+}
+
 /**
  * Kill the CLI handle, invalidate any pending interactive block, resolve
  * plan drafts, and clear all mid-turn flags. Shared by pause-turn, deny-tool,

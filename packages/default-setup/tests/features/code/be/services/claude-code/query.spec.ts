@@ -986,3 +986,16 @@ describe('query() — permission flow round-trip (pump + router + handler)', () 
     expect(String(toolResult.content)).toContain('String to replace not found')
   })
 })
+
+
+describe('surfaced control response delivery', () => {
+  it('reports an unwritable stdin instead of silently claiming a response was sent', async () => {
+    const mock = makeMockStream();
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle);
+    const handle = await query({ cwd: '/fixture', surfaceControlRequests: true });
+    vi.spyOn(mock.handle, 'write').mockReturnValue(false);
+    expect(() => handle.respond('expired', { behavior: 'allow', updatedInput: {} }))
+      .toThrow('could not send control response: stdin is closed');
+    await handle.close();
+  });
+});

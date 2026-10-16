@@ -5,7 +5,7 @@
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { getClaudeState, persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import { expirePendingControlRequest, getClaudeState, persistClaudeState, setRunning, updateClaudeState, updateChatState } from './_helpers/thread-context.ts';
 import { resolvePlanDraft } from './_helpers/plan-artifact.ts';
 
 export const meta: ActionMeta = {
@@ -42,24 +42,17 @@ export async function action(
 
   const handle = (services.cli as any).claudeCode.getHandle(threadId);
 
-  // Handle post-restart: CLI process is gone but the user can still approve
-  // the pending plan/tool. Start a new turn to resume the session.
   if (!handle) {
-    if (toolName === 'ExitPlanMode') {
-      resolvePlanDraft(services, threadId as EntityId, 'approved');
-      services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
-    }
-    persistClaudeState(services, threadId, { pendingControlRequest: undefined });
-    // Start a new turn that resumes the session — mirrors replayQueuedMessage.
-    await services.action.executeIfFound('Claude Code Chat', {
-      threadId,
-      text: 'continue',
-      phase: toolName === 'ExitPlanMode' ? 'Edit' : undefined,
-    });
-    return { success: true, resumed: true };
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code request expired' };
   }
 
-  handle.respond(requestId, { behavior: 'allow', updatedInput: originalInput ?? {} });
+  try {
+    handle.respond(requestId, { behavior: 'allow', updatedInput: originalInput ?? {} });
+  } catch {
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code response could not be sent' };
+  }
 
   if (toolName === 'ExitPlanMode') {
     resolvePlanDraft(services, threadId as EntityId, 'approved');

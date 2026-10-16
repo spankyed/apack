@@ -34,6 +34,19 @@ describe('compiled Claude response routing', () => {
     expect(services.chat.sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ threadId: id,
       blocks: [{ type: 'markdown', props: { content: '# Native plan', label: 'Plan' } }] }));
   });
+  it.each(['AskUserQuestion', 'Bash', 'ExitPlanMode'])('retires a %s response after process loss without starting chat', async tool => {
+    const id = thread(tool), execute = vi.fn();
+    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => undefined) } as never });
+    mockService<Services, 'action'>('action', { executeIfFound: execute });
+    const response = tool === 'AskUserQuestion' ? 'Alpha' : { approved: true };
+    const run = await app.runFlow('Claude Code', { event: 'interactive.message.response',
+      data: { threadId: id, messageId: 'approval-fixture', response } });
+    expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Route Response', tool === 'AskUserQuestion' ? 'CC: Answer Question' : 'CC: Approve Tool']);
+    expect(execute).not.toHaveBeenCalled();
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ isRunning: false, chatState: 'error' });
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();
+    expect(services.chat.sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('request expired') }));
+  });
   it('forwards the current native request identity to clear-context approval', async () => {
     const id = thread();
     const run = await app.runFlow('Claude Code', { event: 'interactive.message.response',
