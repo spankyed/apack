@@ -135,10 +135,13 @@ export const ToolUseSummaryLineSchema = withUuid.extend({
 }).passthrough()
 export type ToolUseSummaryLine = z.infer<typeof ToolUseSummaryLineSchema>
 
-/** Final result line — marks turn completion. */
+/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
 export const ResultLineSchema = withUuid.extend({
   type: z.literal('result'),
   subtype: z.string(),
+  /** Correlates a host input; autonomous results can omit it. */
+  user_message_uuid: z.string().optional(),
+  queued_turn_count: z.number().int().nonnegative().optional(),
   is_error: z.boolean().optional(),
   duration_ms: z.number().optional(),
   duration_api_ms: z.number().optional(),

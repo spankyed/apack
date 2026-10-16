@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { createClaudeUiControls, type ClaudeUiControls } from './ui-controls.ts'
 import { createBackgroundTaskTracker } from './background-tasks.ts'
 import { createHookRegistry } from './hooks.ts'
@@ -9,7 +10,7 @@ import { createHookRegistry } from './hooks.ts'
  *
  *   - an async iterable of parsed stream events (everything except the
  *     control-request traffic, which is handled internally)
- *   - a `result` promise that resolves with the final normalised result
+ *   - a `result` promise that resolves with the first normalised result
  *
  * Two modes, picked by whether an initial `prompt` is provided:
  *
@@ -71,10 +72,10 @@ export interface QueryHandle {
   readonly events: AsyncIterable<StreamLine>
   /** Pending native task state when this result was emitted, independent of later buffered events. */
   hasPendingBackgroundTasks(result: StreamLine): boolean
-  /** Final normalised result. Rejects on error result or non-zero exit. */
+  /** First normalised result; later multi-turn results arrive through events. */
   readonly result: Promise<QueryResult>
-  /** Send another user turn. No-op after close(). */
-  send(text: string | UserInputMessage): void
+  /** Write a user turn and return its host UUID. Lifecycle/replay events confirm native acceptance; throws when stdin is closed. */
+  send(text: string | UserInputMessage): string
   /**
    * Send a control_response back to the CLI for a surfaced control_request.
    * Only meaningful when `surfaceControlRequests: true` — in callback mode
@@ -167,43 +168,6 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   initialized.catch(() => {})
   logger.debug('initialize control_request sent')
 
-  // Push the initial user turn, if any.
-  //
-  // Stdin lifecycle: stdin stays open through the turn and closes only once the result promise
-  // settles — which is when the pump has seen the terminal `result` line. Both halves matter.
-  //
-  // Closing it earlier, synchronously after `writeUserTurn`, breaks the stdio permission flow,
-  // which is bidirectional: the CLI emits `can_use_tool` control_requests on stdout and expects a
-  // `control_response` back on stdin. With stdin already EOF'd, either (a) the response-writes
-  // silently no-op through the `if (!child.stdin.writable) return` guard in runner.ts and the CLI
-  // waits forever for a response, or (b) the CLI detects stdin EOF *before* emitting the
-  // control_request and short-circuits to its non-interactive fallback (prose "please approve in
-  // your terminal"), never emitting `can_use_tool` at all. Either way the tools sit in a running
-  // state with no approval block visible.
-  //
-  // Not closing it at all deadlocks the other way: `--print` mode keeps waiting for more stdin
-  // after emitting its `result` line. Closing on settle gives the CLI stdin EOF alongside a result
-  // it has already emitted, and it exits cleanly.
-  //
-  // `.then(autoClose, autoClose)` is deliberate: we close stdin on both
-  // resolve and reject so aborts, parse errors, and child-crash rejections
-  // still flush EOF cleanly. `stream.endInput()` is already idempotent
-  // (runner.ts guards on `child.stdin.writable`) and wrapped in try/catch
-  // as extra belt-and-suspenders for the "child already gone" edge case.
-  //
-  // Multi-turn callers (`keepStdinOpen: true`) bypass this entirely and
-  // own the close lifecycle via `handle.close()`.
-  if (opts.prompt !== undefined) {
-    writeUserTurn(stream, opts.prompt)
-    if (!opts.keepStdinOpen && !surfaceControlRequests) {
-      const autoClose = () => {
-        hostControls.close()
-        try { stream.endInput() } catch { /* already closed or child gone */ }
-      }
-      resultPromise.promise.then(autoClose, autoClose)
-    }
-  }
-
   // Wire child exit into the result promise. This is the single place that
   // decides "did the query complete successfully?" after the child exits —
   // `finaliseNoResult` classifies the exit state with full stderr context.
@@ -232,6 +196,49 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     eventQueue.fail(err)
   })
 
+  // Push the initial user turn, if any.
+  //
+  // Stdin lifecycle: stdin stays open through the turn and closes only once the result promise
+  // settles — which is when the pump has seen the terminal `result` line. Both halves matter.
+  //
+  // Closing it earlier, synchronously after `writeUserTurn`, breaks the stdio permission flow,
+  // which is bidirectional: the CLI emits `can_use_tool` control_requests on stdout and expects a
+  // `control_response` back on stdin. With stdin already EOF'd, either (a) the response-writes
+  // silently no-op through the `if (!child.stdin.writable) return` guard in runner.ts and the CLI
+  // waits forever for a response, or (b) the CLI detects stdin EOF *before* emitting the
+  // control_request and short-circuits to its non-interactive fallback (prose "please approve in
+  // your terminal"), never emitting `can_use_tool` at all. Either way the tools sit in a running
+  // state with no approval block visible.
+  //
+  // Not closing it at all deadlocks the other way: `--print` mode keeps waiting for more stdin
+  // after emitting its `result` line. Closing on settle gives the CLI stdin EOF alongside a result
+  // it has already emitted, and it exits cleanly.
+  //
+  // `.then(autoClose, autoClose)` is deliberate: we close stdin on both
+  // resolve and reject so aborts, parse errors, and child-crash rejections
+  // still flush EOF cleanly. `stream.endInput()` is already idempotent
+  // (runner.ts guards on `child.stdin.writable`) and wrapped in try/catch
+  // as extra belt-and-suspenders for the "child already gone" edge case.
+  //
+  // Multi-turn callers (`keepStdinOpen: true`) bypass this entirely and
+  // own the close lifecycle via `handle.close()`.
+  if (opts.prompt !== undefined) {
+    try {
+      writeUserTurn(stream, opts.prompt)
+    } catch (error) {
+      hostControls.close(error instanceof Error ? error : new Error(String(error)))
+      stream.kill('SIGTERM')
+      throw error
+    }
+    if (!opts.keepStdinOpen && !surfaceControlRequests) {
+      const autoClose = () => {
+        hostControls.close()
+        try { stream.endInput() } catch { /* already closed or child gone */ }
+      }
+      resultPromise.promise.then(autoClose, autoClose)
+    }
+  }
+
   // ─── Public handle ────────────────────────────────────────────────────────
 
   return {
@@ -242,8 +249,8 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     hasPendingBackgroundTasks: result => backgroundTasks.hasPendingTasks(result),
     result: resultPromise.promise,
 
-    send(text: string | UserInputMessage): void {
-      writeUserTurn(stream, text)
+    send(text: string | UserInputMessage): string {
+      return writeUserTurn(stream, text)
     },
 
     respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void {
@@ -315,16 +322,13 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
 // ─── Internals ───────────────────────────────────────────────────────────────
 
 /** Normalise a caller-supplied turn to the NDJSON user-message shape. */
-function writeUserTurn(stream: StreamHandle, turn: string | UserInputMessage): void {
-  if (typeof turn === 'string') {
-    stream.write({
-      type: 'user',
-      message: { role: 'user', content: turn },
-      parent_tool_use_id: null,
-    } satisfies UserInputMessage)
-    return
-  }
-  stream.write(turn)
+function writeUserTurn(stream: StreamHandle, turn: string | UserInputMessage): string {
+  const message: UserInputMessage = typeof turn === 'string'
+    ? { type: 'user', message: { role: 'user', content: turn }, parent_tool_use_id: null }
+    : turn
+  const uuid = message.uuid ?? randomUUID()
+  if (!stream.write({ ...message, uuid })) throw new ClaudeProtocolError('could not send user turn: stdin is closed')
+  return uuid
 }
 
 /**

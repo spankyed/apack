@@ -5154,10 +5154,10 @@ interface QueryHandle {
     readonly events: AsyncIterable<StreamLine>;
     /** Pending native task state when this result was emitted, independent of later buffered events. */
     hasPendingBackgroundTasks(result: StreamLine): boolean;
-    /** Final normalised result. Rejects on error result or non-zero exit. */
+    /** First normalised result; later multi-turn results arrive through events. */
     readonly result: Promise<QueryResult>;
-    /** Send another user turn. No-op after close(). */
-    send(text: string | UserInputMessage): void;
+    /** Write a user turn and return its host UUID. Lifecycle/replay events confirm native acceptance; throws when stdin is closed. */
+    send(text: string | UserInputMessage): string;
     /**
      * Send a control_response back to the CLI for a surfaced control_request.
      * Only meaningful when `surfaceControlRequests: true` — in callback mode
@@ -5351,13 +5351,16 @@ type Repositories = OwnRepositories;
 
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
-/** Final result line — marks turn completion. */
+/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
 declare const ResultLineSchema: z.ZodObject<{
     uuid: z.ZodOptional<z.ZodString>;
     session_id: z.ZodOptional<z.ZodString>;
 } & {
     type: z.ZodLiteral<"result">;
     subtype: z.ZodString;
+    /** Correlates a host input; autonomous results can omit it. */
+    user_message_uuid: z.ZodOptional<z.ZodString>;
+    queued_turn_count: z.ZodOptional<z.ZodNumber>;
     is_error: z.ZodOptional<z.ZodBoolean>;
     duration_ms: z.ZodOptional<z.ZodNumber>;
     duration_api_ms: z.ZodOptional<z.ZodNumber>;
@@ -5376,6 +5379,9 @@ declare const ResultLineSchema: z.ZodObject<{
 } & {
     type: z.ZodLiteral<"result">;
     subtype: z.ZodString;
+    /** Correlates a host input; autonomous results can omit it. */
+    user_message_uuid: z.ZodOptional<z.ZodString>;
+    queued_turn_count: z.ZodOptional<z.ZodNumber>;
     is_error: z.ZodOptional<z.ZodBoolean>;
     duration_ms: z.ZodOptional<z.ZodNumber>;
     duration_api_ms: z.ZodOptional<z.ZodNumber>;
@@ -5394,6 +5400,9 @@ declare const ResultLineSchema: z.ZodObject<{
 } & {
     type: z.ZodLiteral<"result">;
     subtype: z.ZodString;
+    /** Correlates a host input; autonomous results can omit it. */
+    user_message_uuid: z.ZodOptional<z.ZodString>;
+    queued_turn_count: z.ZodOptional<z.ZodNumber>;
     is_error: z.ZodOptional<z.ZodBoolean>;
     duration_ms: z.ZodOptional<z.ZodNumber>;
     duration_api_ms: z.ZodOptional<z.ZodNumber>;

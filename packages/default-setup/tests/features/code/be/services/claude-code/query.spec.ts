@@ -1,3 +1,4 @@
+import { ResultLineSchema } from '#features/code/be/services/claude-code/types.ts'
 /**
  * Tests for the `finaliseNoResult` helper — the single point in `query.ts`
  * that classifies a child-exit-without-a-result into a typed error.
@@ -999,3 +1000,54 @@ describe('surfaced control response delivery', () => {
     await handle.close();
   });
 });
+
+
+describe('host input delivery', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('assigns distinct host UUIDs and preserves a supplied identity and multimodal content', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({ cwd: '/fixture' })
+    const first = handle.send('first')
+    const second = handle.send('second')
+    expect(first).toMatch(/^[a-f0-9-]{36}$/)
+    expect(second).not.toBe(first)
+    expect(mock.writes[1]).toMatchObject({ uuid: first, message: { content: 'first' } })
+    expect(mock.writes[2]).toMatchObject({ uuid: second, message: { content: 'second' } })
+    const turn = { type: 'user' as const, uuid: '33333333-3333-4333-8333-333333333333', message: { role: 'user' as const, content: [{ type: 'text', text: 'with image' }, { type: 'image', source: { type: 'base64', data: 'fixture' } }] } }
+    expect(handle.send(turn)).toBe(turn.uuid)
+    expect(mock.writes[3]).toEqual(turn)
+    expect(turn).not.toHaveProperty('parent_tool_use_id')
+    await handle.close()
+  })
+
+  it('terminates the spawned process when its initial input cannot be written', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    vi.spyOn(mock.handle, 'write').mockImplementation(value => (value as { type: string }).type !== 'user')
+    await expect(query({ cwd: '/fixture', prompt: 'initial input' })).rejects.toThrow('could not send user turn: stdin is closed')
+    expect(mock.killed).toBe(true)
+    mock.forceExit()
+  })
+
+  it('rejects an unwritable user input instead of returning a misleading receipt', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({ cwd: '/fixture' })
+    vi.spyOn(mock.handle, 'write').mockReturnValue(false)
+    expect(() => handle.send('lost input')).toThrow('could not send user turn: stdin is closed')
+    await handle.close()
+  })
+})
+
+
+describe('native result input identity', () => {
+  it('keeps the originating input and validates the queued count without requiring a host for autonomous results', () => {
+    const result = { type: 'result', subtype: 'success', user_message_uuid: 'fixture-input', queued_turn_count: 0 }
+    expect(ResultLineSchema.parse(result)).toMatchObject(result)
+    expect(ResultLineSchema.parse({ type: 'result', subtype: 'success' })).not.toHaveProperty('user_message_uuid')
+    expect(ResultLineSchema.safeParse({ ...result, queued_turn_count: -1 }).success).toBe(false)
+    expect(ResultLineSchema.safeParse({ ...result, user_message_uuid: 42 }).success).toBe(false)
+  })
+})
