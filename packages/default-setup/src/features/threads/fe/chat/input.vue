@@ -17,6 +17,8 @@
         @dragover.prevent
         @drop.prevent="onDrop">
         <StatusIndicator :anchor="inputCardRef"/>
+        <StatusLine :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
+          @click="emit('statusline-click')" @press="emit('native-ui-press', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
@@ -182,7 +184,6 @@
           </div>
         </div>
 
-        <StatusLine :anchor="inputCardRef" :status-line="statusLine" @click="emit('statusline-click')" />
       </div>
     </form>
   </div>
@@ -213,7 +214,7 @@ import type { Component } from 'vue'
 import Button from '@apackdev/ui/design/button'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusIndicator from './status-indicator.vue'
-import type { AgentThreadData, AgentMode, MessageReferences, QuickPrompt } from '#generated/types.ts'
+import type { ClaudeUiMountState, AgentThreadData, AgentMode, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { matchesHotkey, useSurfaceStorage, type HotkeyEvent, type HotkeysMap } from '@apackdev/sdk/fe'
 import QuickPromptsPopup from './QuickPromptsPopup.vue'
@@ -245,10 +246,11 @@ const props = defineProps<{
   isBusy?: boolean
   /** Max duration (in minutes) for a single voice-input session. */
   recordingLimitMinutes?: number
-  /** Optional status text shown at the bottom-right corner of the input card. */
+  /** CWD label shown in the attached session strip. */
   statusLine?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
+  nativeUi?: ClaudeUiMountState
 }>()
 
 // Define emits including new button actions
@@ -269,6 +271,7 @@ const emit = defineEmits<{
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
+  (e: 'native-ui-press', actionId: string): void
   (e: 'statusline-click'): void
 }>()
 

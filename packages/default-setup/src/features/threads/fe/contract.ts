@@ -6,7 +6,7 @@
 import type { Simplify } from '@apackdev/sdk/helpers'
 import type { HotkeysMap, NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
 import type {
-  AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
+  ClaudeUiMountState, AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
   ThreadEntity, ThreadTagOption, ThreadViewData, ThreadsSettings,
 } from '#generated/types.ts'
 import type { ThreadTabGroup } from './canvas/agent/tabs/types.ts'
@@ -44,6 +44,7 @@ export interface ThreadsContext {
   };
   threadsImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number };
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
+  nativeUiViews: Record<string, { threadId: string; state: ClaudeUiMountState }>;
   // Chat/agent
   currentThread: AgentThreadData | null;
   recentThreadIds: string[];

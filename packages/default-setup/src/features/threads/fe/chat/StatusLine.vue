@@ -1,43 +1,27 @@
 <template>
-<Teleport to="body">
-  <span v-if="statusLine && pos && isAnchorVisible"
-    class="px-2 py-0.5 rounded-full bg-neutral-800 border border-neutral-700 text-[11px] text-neutral-500 font-mono truncate select-none cursor-pointer hover:text-neutral-300 hover:border-neutral-500 transition-colors"
-    :style="pos"
-    @click="emit('click')">
-    {{ statusLine }}
-  </span>
-</Teleport>
+  <div v-if="statusLine || hasContent || nativeUi?.status === 'error'"
+    class="min-w-0 border-b border-neutral-700 px-3 py-2 text-xs text-neutral-400" data-testid="composer-session-strip">
+    <div v-if="statusLine" class="flex min-w-0 justify-end">
+      <button type="button" class="min-w-0 max-w-full whitespace-normal break-words text-right hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400"
+        :title="cwd" @click="emit('click')">{{ statusLine }}</button>
+    </div>
+    <div v-if="nativeUi?.status === 'live' && hasContent" class="max-h-48 overflow-y-auto min-w-0" :class="{ 'mt-1.5': statusLine }">
+      <NativeUiNode :node="nativeUi.tree" @press="emit('press', $event)" />
+    </div>
+    <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useAnchorTracking } from './composables/useAnchorTracking.ts'
-
-const props = defineProps<{
-  anchor?: HTMLElement | null
-  statusLine?: string
-}>()
-
-const emit = defineEmits<{
-  click: []
-}>()
-
-const pos = ref<Record<string, string> | null>(null)
-
-const { isVisible: isAnchorVisible } = useAnchorTracking(
-  () => props.anchor,
-  (el) => {
-    if (!props.statusLine) { pos.value = null; return }
-    const r = el.getBoundingClientRect()
-    if (r.height === 0) { pos.value = null; return }
-    pos.value = {
-      position: 'fixed',
-      top: `${r.top - 10}px`,
-      right: `${window.innerWidth - r.right - 8}px`,
-      maxWidth: `${r.width * 0.6 + 16}px`,
-      zIndex: '40',
-    }
-  },
-  () => { pos.value = null },
-)
+import { computed } from 'vue'
+import type { ClaudeUiMountState, ClaudeUiNode } from '#generated/types.ts'
+import NativeUiNode from './NativeUiNode.vue'
+const props = defineProps<{ statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }>()
+const emit = defineEmits<{ click: []; press: [actionId: string] }>()
+function visible(node: ClaudeUiNode): boolean {
+  if (node.kind === 'box') return node.children.some(visible)
+  if (node.kind === 'text') return !!node.text.trim()
+  return node.kind !== 'unsupported' || node.component !== 'engine'
+}
+const hasContent = computed(() => props.nativeUi?.status === 'live' && visible(props.nativeUi.tree))
 </script>

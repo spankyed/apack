@@ -13,7 +13,7 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 import type { ActorRefFrom } from 'xstate';
 import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse } from '#generated/types.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
+import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
@@ -139,6 +139,7 @@ type SystemEvent =
   | { type: 'ARCHIVED_THREADS_DATA'; threads: any[] }
 
 type UIEvent =
+  | ClaudeUiViewRequest
   // Thread management events
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
   | { type: 'SHOW_CREATE_FORM' }
@@ -1457,6 +1458,7 @@ const threadsState = setup({
     filters: { statuses: [], tags: [], chatStates: [], search: '', showRootOnly: true },
     threadsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
     threadsExport: { status: 'idle' as const, errors: [], filePath: '', threadCount: 0 },
+    nativeUiViews: {},
     // Chat/agent
     currentThread: defaultChatThread,
     recentThreadIds: [] as string[],
@@ -1480,6 +1482,20 @@ const threadsState = setup({
   }),
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
+    CLAUDE_UI_MOUNT: { actions: [assign(({ context, event }) => ({ nativeUiViews: {
+      ...context.nativeUiViews, [event.mountId]: context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } },
+    } })), ({ event }) => { sendToSystem(id, event) }] },
+    CLAUDE_UI_UNMOUNT: { actions: [assign(({ context, event }) => {
+      const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
+      return { nativeUiViews }
+    }), ({ event }) => { sendToSystem(id, event) }] },
+    CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+    } },
+    CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { threadId: event.threadId, state: event.state } } }
+    }) },
     // Thread management events
     SHOW_CREATE_FORM: {
       target: '.create',

@@ -1,4 +1,5 @@
-import { mountClaudeUi, type ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-mount.ts'
+import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import { mountClaudeUi } from '#features/code/be/services/claude-code/ui-mount.ts'
 import type { StreamLine } from '#features/code/be/services/claude-code/types.ts'
 
 function deferred<T>() {

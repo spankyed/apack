@@ -90,6 +90,8 @@
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
               :status-line-cwd="statusLineCwd"
+              :native-ui="nativeUiDrawing"
+              @native-ui-press="pressNativeUi"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
@@ -221,6 +223,37 @@ function isTailMessage(msg: MessageEntity): boolean {
 }
 
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const nativeUiMount = ref<{ threadId: string; mountId: string }>()
+const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
+const nativeUiDrawing = computed(() => {
+  const mount = nativeUiMount.value
+  return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
+})
+let heartbeat: ReturnType<typeof setInterval> | undefined
+let stopNativeUiWatch: (() => void) | undefined
+function detachNativeUi() {
+  if (heartbeat) clearInterval(heartbeat)
+  heartbeat = undefined
+  const mount = nativeUiMount.value
+  nativeUiMount.value = undefined
+  if (mount) actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
+}
+function pressNativeUi(actionId: string) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId })
+}
+onMounted(() => {
+  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode], ([threadId, enabled]) => {
+    detachNativeUi()
+    if (!threadId || !enabled) return
+    const mount = { threadId, mountId: crypto.randomUUID() }
+    nativeUiMount.value = mount
+    const renew = () => actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount })
+    renew()
+    heartbeat = setInterval(renew, 10000)
+  }, { immediate: true })
+})
+onUnmounted(() => { stopNativeUiWatch?.(); detachNativeUi() })
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])

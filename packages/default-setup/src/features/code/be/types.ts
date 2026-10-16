@@ -278,3 +278,5 @@ export interface CodeSystemContext {
   gitRepository: GitRepository | null
   gitWatcher: GitWatcherService | null
 }
+
+export type { ClaudeUiNode, ClaudeUiMountState } from './services/claude-code/ui-presentation.ts'

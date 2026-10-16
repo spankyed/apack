@@ -2,11 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ClaudeProtocolError } from './errors.ts'
 import type { ClaudeUiPress } from './ui-controls.ts'
 
-export type ClaudeUiNode =
-  | { kind: 'text'; text: string; plugin?: string }
-  | { kind: 'box'; children: ClaudeUiNode[]; plugin?: string }
-  | { kind: 'button'; label: string; actionId?: string; plugin?: string }
-  | { kind: 'unsupported'; component: string; plugin?: string }
+import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
   tree: ClaudeUiNode

@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { createClaudeUiDrawing, type ClaudeUiDrawing, type ClaudeUiNode } from './ui-tree.ts'
+import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-export type ClaudeUiMountState =
-  | { status: 'connecting' | 'rendering' | 'disconnected' }
-  | { status: 'live'; tree: ClaudeUiNode }
-  | { status: 'error'; message: string }
+import type { ClaudeUiMountState } from './ui-presentation.ts'
 
 type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: ClaudeUiControls } }
 

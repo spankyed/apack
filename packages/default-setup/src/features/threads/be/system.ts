@@ -1,3 +1,4 @@
+import { handleClaudeUiView } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
@@ -55,6 +56,9 @@ export const threadsSystem = setup({
     historyOperation: fromPromise(async ({input, signal}: {input: ThreadHistoryOperationInput; signal: AbortSignal}) => runThreadHistoryOperation(input, signal)),
   },
   actions: threadsSpec.actions({
+    claudeUiView: ({ event, client, reply }) => {
+      if (event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS') handleClaudeUiView(event, client, reply);
+    },
     // ---- Thread management actions ----
     sendThreadsConnectedData: () => {
       const connectedData = repository.threadQueries.connectedData();
@@ -872,6 +876,9 @@ export const threadsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
+      CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_PRESS: { actions: 'claudeUiView' },
       SEND_STATE: {
         actions: ['sendThreadsConnectedData', 'sendChatConnectedData'],
       },
