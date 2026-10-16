@@ -4,6 +4,7 @@ name: Claude Code commands
 <!-- section:field -->
 **cc-sessions**: Session ID (optional, lists all if omitted)
 **cc-config**: get|set <key> [value]
+**cc-plan**: Show the current native plan without a model turn
 **cc-context**: Show context window usage breakdown
 **cc-status**: Show version and auth info
 **cc-model**: Model name (optional, shows current if omitted)

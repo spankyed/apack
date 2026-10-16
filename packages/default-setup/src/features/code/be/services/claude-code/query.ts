@@ -34,8 +34,8 @@ import { argsFromOptions } from './args.ts'
 import { PermissionModeSchema, type PermissionMode } from './types.ts'
 import { z } from 'zod'
 import { createControlRouter } from './control.ts'
-import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema, ClaudeFileRewindSchema } from './host-controls.ts'
-import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus, ClaudeFileRewind } from './host-controls.ts'
+import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema, ClaudeFileRewindSchema, ClaudePlanSchema } from './host-controls.ts'
+import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus, ClaudeFileRewind, ClaudePlan } from './host-controls.ts'
 import {
   ClaudeAbortError,
   type ClaudeCodeError,
@@ -92,6 +92,8 @@ export interface QueryHandle {
   interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
   /** Rename the native session; an explicit ID protects against renaming a different session. */
   renameSession(title: string, sessionId?: string): Promise<void>
+  /** Read the current native plan without a model turn. */
+  getPlan(): Promise<ClaudePlan>
   /** Read live MCP server and tool status without a model turn. */
   getMcpStatus(): Promise<ClaudeMcpStatus>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
@@ -268,6 +270,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       const valid = z.object({ dryRun: z.boolean() }).strict().parse(options)
       await initialized
       return ClaudeFileRewindSchema.parse(await hostControls.request({subtype: 'rewind_files', user_message_id: id, dry_run: valid.dryRun}))
+    },
+
+    async getPlan(): Promise<ClaudePlan> {
+      await initialized
+      return ClaudePlanSchema.parse(await hostControls.request({ subtype: 'get_plan' }))
     },
 
     async getMcpStatus(): Promise<ClaudeMcpStatus> {

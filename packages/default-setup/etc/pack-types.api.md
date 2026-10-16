@@ -1119,6 +1119,29 @@ declare const ClaudeMcpStatusSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudePlan = z.infer<typeof ClaudePlanSchema>;
+
+/** Native lookup does not create a plan; paths can be omitted by the native access mode. */
+declare const ClaudePlanSchema: z.ZodDiscriminatedUnion<"exists", [z.ZodObject<{
+    exists: z.ZodLiteral<false>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    exists: z.ZodLiteral<false>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    exists: z.ZodLiteral<false>;
+}, z.ZodTypeAny, "passthrough">>, z.ZodObject<{
+    exists: z.ZodLiteral<true>;
+    content: z.ZodString;
+    path: z.ZodOptional<z.ZodString>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    exists: z.ZodLiteral<true>;
+    content: z.ZodString;
+    path: z.ZodOptional<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    exists: z.ZodLiteral<true>;
+    content: z.ZodString;
+    path: z.ZodOptional<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">>]>;
+
 interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
     cwd: string;
@@ -1127,6 +1150,11 @@ interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'en
 interface ClaudeSessionFileRewindOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
     userMessageId: string;
+    cwd: string;
+}
+
+interface ClaudeSessionPlanOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
+    sessionId: string;
     cwd: string;
 }
 
@@ -1180,6 +1208,10 @@ interface CliServiceType {
         query(opts: Omit<QueryOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<QueryHandle>;
+        /** Read a saved session's native plan without a prompt or transcript writes. */
+        getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & {
+            cwd?: string;
+        }): Promise<ClaudePlan>;
         /** Read a saved session's native context summary without a prompt or transcript writes. */
         getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & {
             cwd?: string;
@@ -5140,6 +5172,8 @@ interface QueryHandle {
     }): Promise<ClaudeInterruptReceipt>;
     /** Rename the native session; an explicit ID protects against renaming a different session. */
     renameSession(title: string, sessionId?: string): Promise<void>;
+    /** Read the current native plan without a model turn. */
+    getPlan(): Promise<ClaudePlan>;
     /** Read live MCP server and tool status without a model turn. */
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */

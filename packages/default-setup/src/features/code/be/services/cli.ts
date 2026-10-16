@@ -1,3 +1,5 @@
+import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
+import type { ClaudePlan } from './claude-code/host-controls.ts'
 import './thread-history.ts'
 import { renameSession, validateSessionResumeTarget, getSessionFileRewindPreview, rewindSessionFiles, type ClaudeSessionFileRewindOptions, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
@@ -47,6 +49,8 @@ export interface CliServiceType {
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
+    /** Read a saved session's native plan without a prompt or transcript writes. */
+    getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & { cwd?: string }): Promise<ClaudePlan>
     /** Read a saved session's native context summary without a prompt or transcript writes. */
     getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & { cwd?: string }): Promise<ClaudeContextUsage>
     /** Validate native fork/resume membership without a prompt or persisted fork. */
@@ -186,6 +190,9 @@ function createCliService(): CliServiceType {
         // || UDS_INBOX feature). Callers can still override by passing
         // `replayUserMessages: false` explicitly (spread order honors it).
         return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
+      },
+      getPlan(opts) {
+        return getSessionPlan({ ...opts, cwd: opts.cwd ?? resolveCwd() })
       },
       getContextUsage(opts) {
         return getSessionContextUsage({ ...opts, cwd: opts.cwd ?? resolveCwd() })

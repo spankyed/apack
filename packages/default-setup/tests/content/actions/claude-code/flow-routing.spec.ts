@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockService, startApp, type TestApp } from '@apackdev/testing/harness';
-import type { Services } from '#generated/services.ts';
+import { services, type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { actionLabel, writeDefaultFlows } from '../../../_support/flows.ts';
 
@@ -23,6 +23,17 @@ function thread(toolName = 'ExitPlanMode') {
 }
 
 describe('compiled Claude response routing', () => {
+  it('routes cc-plan to the native plan action without a chat turn', async () => {
+    const id = thread();
+    const getPlan = vi.fn().mockResolvedValue({ exists: true, content: '# Native plan' });
+    const handle = { getPlan };
+    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => handle) } as never });
+    const run = await app.runFlow('Claude Code', { event: 'user.command', data: { command: 'cc-plan', threadId: id } });
+    expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Plan']);
+    expect(getPlan).toHaveBeenCalledOnce();
+    expect(services.chat.sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ threadId: id,
+      blocks: [{ type: 'markdown', props: { content: '# Native plan', label: 'Plan' } }] }));
+  });
   it('forwards the current native request identity to clear-context approval', async () => {
     const id = thread();
     const run = await app.runFlow('Claude Code', { event: 'interactive.message.response',

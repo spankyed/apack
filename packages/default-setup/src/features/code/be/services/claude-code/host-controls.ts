@@ -49,6 +49,13 @@ export const ClaudeMcpStatusSchema = z.object({
 }).passthrough()
 export type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>
 
+/** Native lookup does not create a plan; paths can be omitted by the native access mode. */
+export const ClaudePlanSchema = z.discriminatedUnion('exists', [
+  z.object({ exists: z.literal(false) }).passthrough(),
+  z.object({ exists: z.literal(true), content: z.string(), path: z.string().optional() }).passthrough(),
+])
+export type ClaudePlan = z.infer<typeof ClaudePlanSchema>
+
 interface PendingControl {
   resolve(value: unknown): void
   reject(error: Error): void
