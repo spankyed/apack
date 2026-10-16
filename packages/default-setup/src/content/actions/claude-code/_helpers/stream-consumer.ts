@@ -400,7 +400,7 @@ export async function consumeStream(
               { type: 'prompt', props: { content: 'Approve this plan and start implementing?' } },
               { type: 'approval', props: {
                 options: [
-                  { label: 'Yes, clear context and auto-accept edits', variant: 'primary', flags: { clearContext: true, autoAccept: true } },
+                  { label: 'Yes, start a new thread and auto-accept edits', variant: 'primary', flags: { clearContext: true, autoAccept: true } },
                   { label: 'Yes, auto-accept edits', variant: 'secondary', flags: { autoAccept: true } },
                   { label: 'Deny', variant: 'neutral', flags: { approved: false } },
                 ],
