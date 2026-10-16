@@ -1164,6 +1164,16 @@ interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' 
     cwd: string;
 }
 
+type ClaudeUiAttach = z.infer<typeof attach>;
+
+type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
+
+type ClaudeUiPress = z.infer<typeof press>;
+
+type ClaudeUiRender = z.infer<typeof render>;
+
+type ClaudeUiRenderResult = z.infer<typeof renderResult>;
+
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
@@ -5130,6 +5140,8 @@ type QualifiedSurfaceEvents = Qualified<'default-setup', OwnSurfaceEvents> & Hos
 type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & HostSystemEvents;
 
 interface QueryHandle {
+    /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
+    readonly ui: ClaudeUiControls;
     /** Native commands, models and capabilities, available before a model turn. */
     readonly initialized: Promise<ClaudeInitialization>;
     /** Explicit dryRun is required: preview and mutation have different effects. */
@@ -6443,6 +6455,40 @@ declare function addMessagesToThread(params: {
     }>;
 }): void;
 
+declare const attach: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    viewport: z.ZodOptional<z.ZodObject<{
+        columns: z.ZodNumber;
+        rows: z.ZodNumber;
+        isFullscreen: z.ZodOptional<z.ZodBoolean>;
+    }, "strict", z.ZodTypeAny, {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    }, {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    }>>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+}>;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -6664,6 +6710,33 @@ declare function clearHandle(key: string): void;
  */
 declare function createAndNotify(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
+};
+
+/** Native UI transport only. A renderer must validate tree nodes before displaying them. */
+declare function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>): {
+    /** No reverse clipboard/composer/selection handlers are advertised. */
+    attach(options: ClaudeUiAttach): Promise<z.objectOutputType<{
+        surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
+    }, z.ZodTypeAny, "passthrough">>;
+    detach(id: string): Promise<z.objectOutputType<{
+        detached: z.ZodBoolean;
+        surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
+    }, z.ZodTypeAny, "passthrough">>;
+    render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
+    /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
+    press(options: ClaudeUiPress): Promise<z.objectOutputType<{
+        handled: z.ZodBoolean;
+        element: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
+};
+
+/** Host-to-CLI requests are independent of CLI-to-host tool permission requests. */
+declare function createHostControls(write: (value: unknown) => boolean): {
+    request(request: Record<string, unknown> & {
+        subtype: string;
+    }, timeoutMs?: number): Promise<unknown>;
+    receive(value: unknown): void;
+    close(error?: Error): void;
 };
 
 /**
@@ -7005,6 +7078,29 @@ declare function paginatedMessages(threadId: EARS.EntityId, cursor?: string | nu
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
+declare const press: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    plugin: z.ZodString;
+    handle: z.ZodNumber;
+    key: z.ZodOptional<z.ZodString>;
+    href: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    href?: string | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    href?: string | undefined;
+}>;
+
 declare const promptCommands: {
     create: (data: _apackdev_sdk_repositories.PromptInput) => _apackdev_sdk.PromptEntity;
     update: (id: _apackdev_sdk.EARS.EntityId, updates: Partial<_apackdev_sdk_repositories.PromptInput>) => void;
@@ -7032,6 +7128,86 @@ declare const promptQueries: {
  * Register a cron job that fires the given callback on each tick.
  */
 declare function registerSchedule(key: string, cronExpression: string, callback: () => void): void;
+
+declare const render: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    component: z.ZodString;
+    instance_id: z.ZodString;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    viewport: z.ZodOptional<z.ZodObject<{
+        columns: z.ZodNumber;
+        rows: z.ZodNumber;
+        isFullscreen: z.ZodOptional<z.ZodBoolean>;
+    }, "strict", z.ZodTypeAny, {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    }, {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    }>>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    props: Record<string, unknown>;
+    component: string;
+    instance_id: string;
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    props: Record<string, unknown>;
+    component: string;
+    instance_id: string;
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+}>;
+
+declare const renderResult: z.ZodEffects<z.ZodObject<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">>, z.objectOutputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">>;
 
 /**
  * Resolve all message reference types (images, files, notes, threads,

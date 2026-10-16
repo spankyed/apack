@@ -1,3 +1,4 @@
+import { createClaudeUiControls, type ClaudeUiControls } from './ui-controls.ts'
 import { createBackgroundTaskTracker } from './background-tasks.ts'
 import { createHookRegistry } from './hooks.ts'
 /**
@@ -58,6 +59,8 @@ import type {
 } from './types.ts'
 
 export interface QueryHandle {
+  /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
+  readonly ui: ClaudeUiControls
   /** Native commands, models and capabilities, available before a model turn. */
   readonly initialized: Promise<ClaudeInitialization>
   /** Explicit dryRun is required: preview and mutation have different effects. */
@@ -232,6 +235,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // ─── Public handle ────────────────────────────────────────────────────────
 
   return {
+    ui: createClaudeUiControls(initialized, hostControls),
     initialized,
     sessionId: sessionId.promise,
     events: eventQueue,
