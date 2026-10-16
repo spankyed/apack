@@ -6,9 +6,7 @@ import { action } from '../../../../src/content/actions/claude-code/approve-tool
 
 function setup(requestId?: string) {
   const { id } = repository.threadCommands.create({ topic: 'Approval', instructions: '', tags: [] });
-  repository.threadCommands.update(id, { context: { claudeCode: {
-    ...(requestId ? { pendingControlRequest: { requestId, toolName: 'Bash', approvalMessageId: 'approval' } } : {}),
-  } } });
+  repository.threadCommands.update(id, { context: { claudeCode: requestId ? { pendingControlRequest: { requestId, toolName: 'Bash', approvalMessageId: 'approval' } } : {} } });
   const respond = vi.fn();
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ respond })) } as never });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });

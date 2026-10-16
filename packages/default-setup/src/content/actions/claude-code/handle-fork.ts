@@ -45,7 +45,7 @@ export async function action(params: Record<string, any>, services: Services) {
     const messages=services.repository.chatQueries.threadData(sourceThreadId as EntityId)?.messages ?? [];
     const index=messages.findIndex(message=>message.id===sourceMessageId);
     if (index<0) return fail('The selected fork message is unavailable.');
-    const assistant=[...messages.slice(0,index+1)].reverse().find(message=>message.sender==='assistant'&&typeof message.context?.cliUuid==='string');
+    const assistant=messages.slice(0,index+1).reverse().find(message=>message.sender==='assistant'&&typeof message.context?.cliUuid==='string');
     cliUuid=assistant?.context?.cliUuid as string|undefined;
     if (!cliUuid) return fail('No native assistant checkpoint exists at this fork point.');
   }
