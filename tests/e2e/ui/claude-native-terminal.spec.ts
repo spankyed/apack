@@ -99,6 +99,21 @@ test('hands one conversation to the native terminal and displays its main and ag
   expect(synchronized.messages.some((message: any) => message.text.includes('DropNativeHistoryFixture') || message.text.includes('RewriteNativeHistoryFixture'))).toBe(false)
   expect(synchronized.messages.filter((message: any) => message.context?.claudeTerminalMessage).length).toBeGreaterThanOrEqual(4)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-returned-history.png') })
+  await card.locator('[contenteditable="true"]').fill('Continue after the native interface.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => (await context()).messages.filter((message: any) => message.sender === 'assistant' && message.text === 'Fixture completed.').length).toBe(2)
+  expect((await context()).sessionId).toBe(sessionId)
+  let resumedCost = 0
+  await expect.poll(async () => {
+    for (const bucket of await readdir(projects)) {
+      try {
+        const rows = (await readFile(join(projects, bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+        resumedCost = rows.filter(row => row.type === 'cost-state').at(-1)?.totalCostUSD ?? 0
+        if (resumedCost > nativeCost) return (await context()).claude.totalCostUsd === resumedCost
+      } catch (error: any) { if (error.code !== 'ENOENT') throw error }
+    }
+    return false
+  }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })
