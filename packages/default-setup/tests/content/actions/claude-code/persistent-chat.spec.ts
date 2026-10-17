@@ -122,3 +122,43 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   expect(store.getHandle(id)).toBeUndefined();
   expect(native.close).toHaveBeenCalledOnce();
 });
+
+it('preserves native assistant rows when one provider reply becomes several transcript rows', async () => {
+  const { id } = repository.threadCommands.create({ topic: 'Native row identity', instructions: '', tags: [] });
+  repository.threadCommands.update(id, { context: { claudeCode: { cwd: '/fixture' } } });
+  const events = new PassThrough({ objectMode: true });
+  const native = { events: events as AsyncIterable<StreamLine>, send: vi.fn(() => 'input-paired'),
+    hasPendingBackgroundTasks: () => false, close: vi.fn(async () => events.end()), kill: vi.fn(() => events.end()),
+  } as unknown as QueryHandle;
+  mockService<Services, 'cli'>('cli', { claudeCode: {
+    openConversation: (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume),
+    getConversation: store.getConversation, isConversationBusy: store.isConversationBusy,
+    getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
+    sessionExists: vi.fn(async () => true),
+  } as never });
+  mockService<Services, 'chat'>('chat', { ...chatService, resolveReferences: vi.fn(async () => ({ textPrefix: '', imageBlocks: [] })) } as never);
+  mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
+  const errors = vi.fn();
+  mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: errors });
+  const emitted = vi.fn();
+  mockService<Services, 'emitter'>('emitter', { sendToSystem: emitted, broadcastToPlugin: vi.fn() });
+  const user = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'paired reply' });
+  expect(await chat({ threadId: id, text: 'paired reply', messageId: user.id }, services, {} as never, '')).toMatchObject({ streaming: true });
+  events.write({ type: 'command_lifecycle', state: 'started', command_uuid: 'input-paired' });
+  events.write({ type: 'system', subtype: 'init', session_id: 'paired-session', cwd: '/fixture' });
+  events.write({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
+  events.write({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Repeated text' } } });
+  events.write({ type: 'assistant', uuid: 'native-row-a', session_id: 'paired-session', message: { id: 'same-provider-id', content: [{ type: 'text', text: 'Repeated text' }] } });
+  // The second row deliberately has no text deltas; it must still be retained.
+  events.write({ type: 'assistant', uuid: 'native-row-b', session_id: 'paired-session', message: { id: 'same-provider-id', content: [{ type: 'text', text: 'Repeated text' }] } });
+  events.write({ type: 'result', subtype: 'success', session_id: 'paired-session', total_cost_usd: 0, result: 'Repeated text\nRepeated text' });
+  await vi.waitFor(() => expect({ emitted: emitted.mock.calls, errors: errors.mock.calls }).toMatchObject({ emitted: expect.arrayContaining([[expect.anything(), expect.objectContaining({ eventType: 'cc.stream.completed' })]]) }));
+  await vi.waitFor(() => expect(store.isConversationBusy(id)).toBe(false));
+  const replies = repository.chatQueries.threadData(id)?.messages?.filter(message => message.sender === 'assistant') ?? [];
+  expect(replies.map(message => message.text)).toEqual(['Repeated text\nRepeated text']);
+  expect(replies[0]?.text).toBe('Repeated text\nRepeated text');
+  expect(replies[0]?.context).toMatchObject({ cliUuid: 'native-row-b', claudeNativeMessages: [
+    { uuid: 'native-row-a', sessionId: 'paired-session', text: 'Repeated text', start: 0, end: 13 },
+    { uuid: 'native-row-b', sessionId: 'paired-session', text: 'Repeated text', start: 14, end: 27 },
+  ] });
+});

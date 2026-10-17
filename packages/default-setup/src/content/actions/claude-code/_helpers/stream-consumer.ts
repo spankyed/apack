@@ -1,3 +1,4 @@
+import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
 import { projectClaudeInputReplay } from './native-input-replay.ts';
 import type { ClaudeNestedActivity } from '#features/code/be/services/claude-code/nested-activity.ts';
 import type { ClaudeConversationTurn } from '#features/code/be/services/claude-code/conversation.ts';
@@ -133,6 +134,9 @@ export async function consumeStream(
   let toolActivity = initialWriters.toolActivity;
   let thinking = initialWriters.thinking;
   let currentMessageHasCliUuid = false;
+  let currentMessageCliUuid: string | undefined;
+  let nativeMessages = createClaudeNativeMessageTracker();
+  let nativeSessionId = ctx.resumeSessionId;
   const activity = ctx.activity;
   let nestedToolCount = 0;
   let nestedToolErrors = false;
@@ -209,12 +213,15 @@ export async function consumeStream(
       const isMessageStart = line.type === 'assistant' || (line.type === 'stream_event' && (line as any).event?.type === 'message_start');
       if (splitOnNextMessageStart && isMessageStart) {
         splitOnNextMessageStart = false;
+        nativeMessages = createClaudeNativeMessageTracker();
+        currentMessageCliUuid = undefined;
         ({ currentMessageId, writer, toolActivity, thinking, currentMessageHasCliUuid } = splitMessage());
       }
 
       // First `system/init` event carries sessionId/model/cwd.
       if (line.type === 'system' && line.subtype === 'init') {
         if (line.session_id) {
+          nativeSessionId = line.session_id;
           log.debug('[stream] persisting sessionId from system/init', {
             threadId, sessionId: line.session_id, cwd: line.cwd || 'NONE',
           });
@@ -273,9 +280,7 @@ export async function consumeStream(
       if (line.type === 'assistant') {
         // Track the CLI's message UUID so revert can use --resume-session-at.
         if (line.uuid) {
-          services.chat.updateMessageState(currentMessageId as any, {
-            context: { cliUuid: line.uuid },
-          } as any);
+          currentMessageCliUuid = line.uuid;
           currentMessageHasCliUuid = true;
         }
         const blocks = line.message?.content || [];
@@ -332,15 +337,19 @@ export async function consumeStream(
               recent.push({ name: block.name, summary, at: Date.now() });
               return { recentTools: recent };
             });
-          } else if (block?.type === 'text' && typeof block.text === 'string' && block.text.length > 0) {
-            // Fallback: some CLI turns deliver assistant prose via a terminal
-            // `text` content block instead of streamed `text_delta` events
-            // (observed after --resume-session-at / --fork-session, and on
-            // tool-only-then-text turns). Only harvest if nothing streamed
-            // into this message's writer yet — otherwise we'd duplicate.
-            if (!writer.text) writer.push(block.text);
           }
         }
+        const nativeText = blocks.filter((block: { type?: string; text?: unknown }) => block?.type === 'text' && typeof block.text === 'string').map((block: { text: string }) => block.text).join('\n');
+        const projected = nativeMessages.accept(writer.text, {
+          uuid: line.uuid,
+          sessionId: line.session_id || nativeSessionId,
+          text: nativeText,
+          parentToolUseId: line.parent_tool_use_id,
+        });
+        if (projected.text.length > writer.text.length) writer.push(projected.text.slice(writer.text.length));
+        if (currentMessageCliUuid || projected.rows.length) services.chat.updateMessageState(currentMessageId as any, {
+          context: { ...(currentMessageCliUuid ? { cliUuid: currentMessageCliUuid } : {}), ...(projected.rows.length ? { claudeNativeMessages: projected.rows } : {}) },
+        } as any);
         continue;
       }
 
