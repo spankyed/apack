@@ -48,3 +48,15 @@ describe('native UI presentation boundary', () => {
     expect(() => createClaudeUiDrawing(cycle)).toThrow('repeated object references')
   })
 })
+
+
+it('keeps keyed field authority through redraws and refuses ambiguous keys', () => {
+  const input = { type: 'Input', props: { key: 'draft', rows: 3, value: 'first\nsecond' }, press: { plugin: 'fixture', handle: 1 } }
+  const first = createClaudeUiDrawing(input)
+  const second = createClaudeUiDrawing({ ...input, press: { plugin: 'fixture', handle: 2 } }, first)
+  expect(second.tree).toMatchObject({ kind: 'input', rows: 3, value: 'first\nsecond' })
+  expect([...second.fields.keys()]).toEqual([...first.fields.keys()])
+  expect([...second.fields.values()][0]!.handle).toBe(2)
+  expect(() => createClaudeUiDrawing({ type: 'Box', children: [input, input] })).toThrow()
+  expect(() => createClaudeUiDrawing({ type: 'Select', props: { key: 'pick', options: [{ value: 'a' }, { value: 'a' }] }, press: input.press })).toThrow('ambiguous')
+})

@@ -1489,6 +1489,9 @@ const threadsState = setup({
       const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
       return { nativeUiViews }
     }), ({ event }) => { sendToSystem(id, event) }] },
+    CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+    } },
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

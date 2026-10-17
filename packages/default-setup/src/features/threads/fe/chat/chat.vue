@@ -92,6 +92,7 @@
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing"
               @native-ui-press="pressNativeUi"
+              @native-ui-field="editNativeUi"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
@@ -237,6 +238,10 @@ function detachNativeUi() {
   const mount = nativeUiMount.value
   nativeUiMount.value = undefined
   if (mount) actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
+}
+function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
 }
 function pressNativeUi(actionId: string) {
   const mount = nativeUiMount.value

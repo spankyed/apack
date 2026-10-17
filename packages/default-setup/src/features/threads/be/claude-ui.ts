@@ -53,12 +53,13 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (view && view.threadId !== event.threadId) return
   if (view && view.expires <= Date.now()) { drop(key, view); view = undefined }
   if (event.type === 'CLAUDE_UI_UNMOUNT') { if (view) drop(key, view); return }
-  if (event.type === 'CLAUDE_UI_PRESS') {
+  if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {
     if (!view || !validId(event.actionId)) return
     bind(key, view)
     const target = view
     const mount = target.mount
-    void mount?.press(event.actionId).catch(error => {
+    const operation = event.type === 'CLAUDE_UI_PRESS' ? mount?.press(event.actionId) : mount?.field(event)
+    void operation?.catch(error => {
       if (views.get(key) === target && target.mount === mount && getConversation(target.threadId)?.owner === target.owner) publish(target, { status: 'error', message: error instanceof Error ? error.message : 'Native UI action failed' })
     })
     return

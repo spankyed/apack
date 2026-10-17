@@ -18,7 +18,7 @@
         @drop.prevent="onDrop">
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
-          @click="emit('statusline-click')" @press="emit('native-ui-press', $event)" />
+          @click="emit('statusline-click')" @press="emit('native-ui-press', $event)" @field="emit('native-ui-field', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
@@ -271,6 +271,7 @@ const emit = defineEmits<{
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
+  (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
   (e: 'native-ui-press', actionId: string): void
   (e: 'statusline-click'): void
 }>()

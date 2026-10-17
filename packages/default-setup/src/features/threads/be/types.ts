@@ -470,6 +470,7 @@ export type AgentSettings = ThreadsSettings['chat'];
 export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string }
   | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string }
+  | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string };
 
 export type IncomingThreadsEvents =

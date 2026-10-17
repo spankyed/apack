@@ -5,6 +5,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>
   tree: ClaudeUiNode
   /** Backend authority only: never serialize this map into plugin state or durable data. */
   actions: ReadonlyMap<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>
@@ -44,9 +45,11 @@ function validateBudget(tree: unknown): void {
 }
 
 /** Translate observed nodes only. Native props, engine refs and executable modules never cross this boundary. */
-export function createClaudeUiDrawing(tree: unknown): ClaudeUiDrawing {
+export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing): ClaudeUiDrawing {
   validateBudget(tree)
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
+  const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
+  const identities = new Set<string>()
   let nodes = 0
   function visit(value: unknown): ClaudeUiNode {
     if (++nodes > limits.nodes) throw new ClaudeProtocolError('native UI tree exceeds node limit')
@@ -61,6 +64,35 @@ export function createClaudeUiDrawing(tree: unknown): ClaudeUiDrawing {
         return { kind: 'text', text: value.children.join(''), ...attribution }
       }
       return { kind: 'box', children: value.children.map(visit), ...attribution }
+    }
+    if (value.type === 'Input' || value.type === 'Select') {
+      const props = value.props, press = value.press
+      if (!record(props) || typeof props.key !== 'string' || !record(press)
+        || typeof press.plugin !== 'string' || !press.plugin || press.plugin.length > 256
+        || typeof press.handle !== 'number' || !Number.isSafeInteger(press.handle)) throw new ClaudeProtocolError('native UI field has invalid identity')
+      for (const name of ['label', 'placeholder', 'value']) if (props[name] !== undefined && typeof props[name] !== 'string') throw new ClaudeProtocolError('native UI field has invalid text')
+      if (typeof props.value === 'string' && props.value.length > 16384) throw new ClaudeProtocolError('native UI field text exceeds limit')
+      const type = value.type === 'Input' ? 'input' : 'select'
+      const identity = JSON.stringify([type, press.plugin, props.key])
+      if (identities.has(identity)) throw new ClaudeProtocolError('native UI field key is ambiguous')
+      identities.add(identity)
+      const actionId = [...(previous?.fields ?? [])].find(([, field]) => field.type === type && field.plugin === press.plugin && field.key === props.key)?.[0] ?? randomUUID()
+      const field = { type, plugin: press.plugin, handle: press.handle, key: props.key } as const
+      const label = typeof props.label === 'string' ? { label: props.label } : {}
+      const common = { actionId, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
+      if (type === 'input') {
+        if (props.rows !== undefined && (typeof props.rows !== 'number' || !Number.isSafeInteger(props.rows) || props.rows < 1)) throw new ClaudeProtocolError('native UI input rows are invalid')
+        fields.set(actionId, field)
+        return { kind: 'input', ...common, rows: Math.min(typeof props.rows === 'number' ? props.rows : 1, 48), ...(typeof props.placeholder === 'string' ? { placeholder: props.placeholder } : {}) }
+      }
+      if (!Array.isArray(props.options) || !props.options.length) throw new ClaudeProtocolError('native UI select requires options')
+      const options = props.options.map(option => {
+        if (!record(option) || typeof option.value !== 'string' || option.value.length > 16384 || (option.label !== undefined && typeof option.label !== 'string')) throw new ClaudeProtocolError('native UI select option is invalid')
+        return { value: option.value, label: typeof option.label === 'string' ? option.label : option.value }
+      })
+      if (new Set(options.map(option => option.value)).size !== options.length) throw new ClaudeProtocolError('native UI select options are ambiguous')
+      fields.set(actionId, { ...field, options: options.map(option => option.value) })
+      return { kind: 'select', ...common, options }
     }
     if (value.type === 'Button') {
       if (!record(value.props) || typeof value.props.label !== 'string') throw new ClaudeProtocolError('native UI button must have a label')
@@ -78,5 +110,5 @@ export function createClaudeUiDrawing(tree: unknown): ClaudeUiDrawing {
     }
     return { kind: 'unsupported', component: value.type, ...attribution }
   }
-  return { tree: visit(tree), actions }
+  return { tree: visit(tree), actions, fields }
 }

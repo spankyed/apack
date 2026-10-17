@@ -6,12 +6,12 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren() })
 function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), submit = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), submit = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('form', { onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
-    h(StatusLine, { ...state, onClick: cwd, onPress: press }), h('textarea', { 'aria-label': 'Message' }),
+    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
-  return { state, root, cwd, press, submit }
+  return { state, root, cwd, press, field, submit }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -68,4 +68,30 @@ it('renders unknown components inert and disables buttons without authority', ()
   const button = f.root.querySelector('button')!
   expect(button.disabled).toBe(true)
   button.click(); expect(f.press).not.toHaveBeenCalled()
+})
+
+
+it('keeps field typing across native echoes and submits the field without submitting chat', async () => {
+  const input = { kind: 'input' as const, actionId: 'field-authority', label: 'Native draft', value: '', rows: 3, autoFocus: false }
+  const f = mount({ nativeUi: { status: 'live', tree: input } })
+  const field = f.root.querySelector('textarea[aria-label="Native draft"]')!
+  ;(field as HTMLTextAreaElement).value = 'first\nsecond'
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', kind: 'change', value: 'first\nsecond' })
+  f.state.nativeUi = { status: 'live', tree: { ...input, value: 'stale echo' } }; await nextTick()
+  expect((field as HTMLTextAreaElement).value).toBe('first\nsecond')
+  const newline = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })
+  field.dispatchEvent(newline); expect(newline.defaultPrevented).toBe(false)
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', kind: 'submit', value: 'first\nsecond' })
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('uses native select values and leaves the message composer untouched', () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'select', actionId: 'select-authority', label: 'Mode', value: 'a',
+    autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
+  const select = f.root.querySelector('select')!
+  select.value = 'b'; select.dispatchEvent(new Event('change', { bubbles: true }))
+  expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', kind: 'select', value: 'b' })
+  expect(f.submit).not.toHaveBeenCalled()
 })

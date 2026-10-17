@@ -12,7 +12,7 @@ function fixture() {
   const done = deferred<void>()
   const states: ClaudeUiMountState[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -138,4 +138,39 @@ describe('native UI mounted lifecycle', () => {
     expect(f.states.at(-1)).toMatchObject({ status: 'error' })
     await other.dispose()
   })
+})
+
+
+it('routes keyed field edits through invalidation and rejects foreign or removed field authority', async () => {
+  const f = fixture()
+  const field = { type: 'Input', props: { key: 'draft', value: '', rows: 2 }, press: { plugin: 'fixture', handle: 7 } }
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const live = f.states.at(-1)!
+  if (live.status !== 'live' || live.tree.kind !== 'input') throw new Error('expected input')
+  const actionId = live.tree.actionId
+  f.invalidate()
+  await expect(view.field({ actionId, kind: 'change', value: 'typed' })).resolves.toEqual({ handled: true })
+  expect(f.ui.input).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 7, key: 'draft', component: 'AbovePrompt', kind: 'change', value: 'typed' }))
+  await expect(view.field({ actionId: 'foreign', kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
+  f.ui.render.mockResolvedValue(rendered()); await vi.advanceTimersByTimeAsync(50)
+  await expect(view.field({ actionId, kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
+  await view.dispose()
+})
+
+it('checks select membership before native dispatch and retires it on disposal', async () => {
+  const f = fixture()
+  const field = { type: 'Select', props: { key: 'pick', options: [{ value: 'a' }, { value: 'b' }] }, press: { plugin: 'fixture', handle: 8 } }
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const live = f.states.at(-1)!
+  if (live.status !== 'live' || live.tree.kind !== 'select') throw new Error('expected select')
+  const actionId = live.tree.actionId
+  await expect(view.field({ actionId, kind: 'select', value: 'foreign' })).resolves.toEqual({ handled: false })
+  expect(f.ui.select).not.toHaveBeenCalled()
+  await expect(view.field({ actionId, kind: 'select', value: 'b' })).resolves.toEqual({ handled: true })
+  expect(f.ui.select).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 8, key: 'pick', value: 'b' }))
+  await view.dispose()
+  await expect(view.field({ actionId, kind: 'select', value: 'a' })).resolves.toEqual({ handled: false })
+  expect(f.ui.select).toHaveBeenCalledTimes(1)
 })

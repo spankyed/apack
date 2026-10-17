@@ -3,9 +3,9 @@ import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-import type { ClaudeUiMountState } from './ui-presentation.ts'
+import type { ClaudeUiFieldEvent, ClaudeUiMountState } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
@@ -22,6 +22,7 @@ export function mountClaudeUi(options: {
   let rendering = false
   let scheduled: ReturnType<typeof setTimeout> | undefined
   let drawing: ClaudeUiDrawing | undefined
+  let fieldDrawing: ClaudeUiDrawing | undefined
   let generation = 0
   let pressing = false
   let disposal: Promise<void> | undefined
@@ -48,7 +49,7 @@ export function mountClaudeUi(options: {
     drawing = undefined
     const alreadyDirty = dirty
     dirty = true
-    if (attached && !alreadyDirty) publish({ status: 'rendering' })
+    if (attached && !alreadyDirty && !fieldDrawing?.fields.size) publish({ status: 'rendering' })
     schedule()
   }
   async function render(): Promise<void> {
@@ -59,11 +60,13 @@ export function mountClaudeUi(options: {
     try {
       const result = await owner.handle.ui.render({ ...client, component: 'AbovePrompt', instance_id: instanceId, props: {} })
       if (!current() || revision !== generation) return
-      drawing = createClaudeUiDrawing(result.tree)
+      drawing = createClaudeUiDrawing(result.tree, fieldDrawing)
+      fieldDrawing = drawing
       publish({ status: 'live', tree: drawing.tree })
     } catch (error) {
       if (current() && revision === generation) {
         drawing = undefined
+        fieldDrawing = undefined
         publish({ status: 'error', message: error instanceof Error ? error.message : 'Native UI render failed' })
       }
     } finally {
@@ -74,6 +77,7 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    fieldDrawing = undefined
     generation++
     drawing = undefined
     if (scheduled) clearTimeout(scheduled)
@@ -108,6 +112,17 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
+      if (!current() || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
+      const field = fieldDrawing?.fields.get(event.actionId)
+      if (!field || (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit')) return { handled: false }
+      const identity = { ...client, plugin: field.plugin, handle: field.handle, key: field.key, component: 'AbovePrompt', instance_id: instanceId, value: event.value }
+      // Native queues each plugin's field callbacks. Keyed identity safely re-resolves redraws.
+      // Never retry a callback whose native side effect may already have happened.
+      const result = field.type === 'select' ? await owner.handle.ui.select(identity)
+        : await owner.handle.ui.input({ ...identity, kind: event.kind as 'change' | 'submit' })
+      return { handled: current() && result.handled }
+    },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */
     async press(actionId: string): Promise<{ handled: boolean }> {
       if (!current() || pressing) return { handled: false }
@@ -116,7 +131,7 @@ export function mountClaudeUi(options: {
       pressing = true
       // Retire immediately; a second click cannot reuse an accepted capability.
       drawing = undefined
-      publish({ status: 'rendering' })
+      if (!fieldDrawing?.fields.size) publish({ status: 'rendering' })
       try {
         const result = await owner.handle.ui.press({ ...client, ...action })
         return { handled: current() && result.handled }
