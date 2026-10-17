@@ -82,6 +82,30 @@ test('native extension fields, paint and hover work inside the actual composer',
   expect(promptHost.before.text).toBe('Review the changes and outline the next steps.');
   expect(promptHost.filled.isFilled).toBe(true);
   expect(promptHost.after.text).toBe('Review the changes and outline the next steps. (native draft)');
+  const synchronized = () => appPage.evaluate(() => {
+    const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
+    const view: any = Object.values(context.nativeUiViews).find((value: any) => value.threadId === context.currentThread?.id);
+    return !!view?.promptRevision && view.prompt?.revision === view.promptRevision;
+  });
+  await expect.poll(synchronized).toBe(true);
+  await expect(editor.locator('.claude-prompt-decoration')).toHaveText('(native draft)');
+  await expect(editor.locator('.claude-prompt-decoration')).toHaveCSS('font-style', 'italic');
+  const richReplacement = '**Native** replacement\n\n- item';
+  await strip.getByRole('button', { name: 'Fill draft', exact: true }).click();
+  const nativeDraft = async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-host.json'), 'utf8')).after.text;
+  await expect.poll(nativeDraft).toBe(richReplacement);
+  await expect(editor.locator('strong')).toHaveText('Native');
+  await expect(editor.locator('li')).toContainText('item');
+  await expect.poll(synchronized).toBe(true);
+  await expect(editor.locator('.claude-prompt-decoration').first()).toHaveCSS('font-style', 'italic');
+  await editor.focus(); await editor.press('ArrowLeft');
+  await expect.poll(synchronized).toBe(true);
+  await expect(editor.locator('.claude-prompt-decoration')).toHaveCount(0);
+  await strip.getByRole('button', { name: 'Fill draft', exact: true }).click();
+  await expect.poll(nativeDraft).toBe(richReplacement.slice(0, -1) + ' inserted' + richReplacement.slice(-1));
+  await expect.poll(synchronized).toBe(true);
+  await expect(editor.locator('.claude-prompt-decoration')).toHaveText('inserted');
+  await expect(editor.locator('.claude-prompt-decoration')).toHaveCSS('font-style', 'italic');
   expect(await snapshot()).toEqual(before);
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-wide.png') });
   await appPage.setViewportSize({ width: 680, height: 900 });
@@ -99,5 +123,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativePromptHostRead: true, nativePromptHostFill: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
 });

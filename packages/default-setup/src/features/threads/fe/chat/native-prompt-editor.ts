@@ -25,6 +25,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     completionPending = { revision, snapshot, selection: editor.state.selection }
     try { completion.request({ revision, text: snapshot.text, cursor: snapshot.cursor }) } catch { retireCompletions() }
   }
+  let fillPaint: { revision: number; text: string; runs: NonNullable<Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input']['decorations']> } | undefined
   let settled = false
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection; done: Promise<boolean>; finish: (accepted: boolean) => void } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
@@ -53,6 +54,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     if (editor.view.composing) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)
     revision++
+    if (fillPaint?.revision !== revision) fillPaint = undefined
     let finish!: (accepted: boolean) => void
     const done = new Promise<boolean>(resolve => { finish = resolve })
     pending = snapshot ? { revision, snapshot, selection: editor.state.selection, done, finish } : undefined
@@ -102,6 +104,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         } catch { return false }
       }
       const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
+      fillPaint = { revision: revision + 1, text, runs }
       const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
       tr.setSelection(TextSelection.create(tr.doc, next.position)).setMeta('claude-prompt-by', 'app')
       tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
@@ -123,7 +126,10 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         const tr = editor.state.tr
         if (next.doc !== snapshot.doc) tr.replaceWith(0, tr.doc.content.size, next.doc.content)
         tr.setSelection(TextSelection.create(tr.doc, next.position))
-        tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, reply.frame.decorations ?? [], serialize))
+        // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
+        const runs = reply.frame.decorations ?? (fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.runs : [])
+        tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
+        fillPaint = undefined
         editor.view.dispatch(tr)
         onProblem(undefined)
         finishPending(true)
@@ -156,7 +162,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return true
     },
     dispose() {
-      disposed = true; finishPending(false); retireCompletions()
+      disposed = true; fillPaint = undefined; finishPending(false); retireCompletions()
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
       editor.off('destroy', destroyed)

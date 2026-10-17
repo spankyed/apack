@@ -234,3 +234,33 @@ it('leaves the current draft unchanged if its Markdown parser refuses a structur
     expect(serialize(editor.state.doc)).toBe('Keep this draft')
   } finally { parsing.mockRestore(); bridge.dispose() }
 })
+
+
+it('keeps fill paint through its app acknowledgement and replaces it on the next actual edit answer', () => {
+  editor.commands.setContent('draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  expect(bridge.fillDraft({ mode: 'append', text: ' native', decorations: [{ start: 1, end: 7, italic: true }] }, bridge.revision)).toBe(true)
+  const frame = bridge.readDraft()!
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('native')
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.fontStyle).toBe('italic')
+  expect(serialize(editor.state.doc)).toBe('draft native')
+  editor.commands.insertContent(' next')
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: bridge.readDraft()! })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(serialize(editor.state.doc)).toBe('draft native next')
+  bridge.dispose()
+})
+
+it('allows explicit native paint to override a fill acknowledgement and ignores old acknowledgements', () => {
+  editor.commands.setContent('draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.fillDraft({ mode: 'replace', text: 'first', decorations: [{ start: 0, end: 5, italic: true }] }, bridge.revision)
+  const old = { revision: bridge.revision, status: 'applied' as const, frame: bridge.readDraft()! }
+  bridge.fillDraft({ mode: 'replace', text: 'second', decorations: [{ start: 0, end: 6, bold: true }] }, bridge.revision)
+  bridge.receive(old)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('second')
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { ...bridge.readDraft()!, decorations: [] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  bridge.dispose()
+})
