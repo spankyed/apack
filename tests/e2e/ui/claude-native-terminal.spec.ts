@@ -44,7 +44,21 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
   await input.pressSequentially('NativeSubagentParentFixture: run the disposable status worker.', { delay: 1 }); await input.press('Enter')
   const tasks = section.getByRole('list', { name: 'Native Claude agents', exact: true })
-  await expect(tasks).toContainText('AppNativeAgent running', { timeout: 20000 })
+  await appPage.waitForTimeout(500)
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-before-agent.png') })
+  // This native notice is shown when the worker first selects auto mode on a loopback endpoint.
+  // Dismiss only its specific informational screen; keep native permission decisions intact.
+  const notice = "We're changing auto mode to no longer charge for classifier requests in Claude Code."
+  const nativeText = async () => (await context()).native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
+  await expect.poll(async () => (await nativeText()).includes(notice) || await tasks.count() > 0, { timeout: 10000 }).toBe(true)
+  if ((await nativeText()).includes(notice)) await input.press('Enter')
+  try {
+    await expect(tasks).toContainText('AppNativeAgent running', { timeout: 20000 })
+  } catch (error) {
+    await writeFile(join(workspace!, 'native-terminal-failure.json'), JSON.stringify(await context(), null, 2))
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-failure.png') })
+    throw error
+  }
   await expect(tasks).not.toContainText('ForeignMustNotReachApp')
   const running = await context(); expect(running.native.state.sessionId).toBe(sessionId)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-main-agent.png') })

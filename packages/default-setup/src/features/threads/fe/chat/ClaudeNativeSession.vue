@@ -1,5 +1,5 @@
 <template>
-  <section :class="active ? 'flex min-h-0 flex-1 flex-col' : 'flex shrink-0 justify-end px-4 py-1'" aria-label="Claude native interface">
+  <section :class="active ? ['flex min-h-0 flex-1 flex-col bg-[#1c1c1c]', expanded ? 'fixed inset-x-0 bottom-0 top-10 z-40' : ''] : 'flex shrink-0 justify-end px-4 py-1'" aria-label="Claude native interface">
     <div v-if="!active" class="flex items-center gap-3">
       <span v-if="view?.problem" role="status" class="text-xs text-red-300">{{ view.problem }}</span>
       <button type="button" class="rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" :disabled="busy || view?.opening" @click="open">{{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}</button>
@@ -8,6 +8,7 @@
       <header class="flex shrink-0 items-center gap-3 border-b border-white/[0.06] px-4 py-2 text-xs text-neutral-400">
         <span class="flex-1 font-medium text-neutral-200">Claude Code <span class="ml-2 font-normal text-neutral-500">Native interface</span></span>
         <span role="status">{{ view?.state?.status }}</span>
+        <button type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
         <button v-if="ended" type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="dismissed = true">Back to conversation</button>
         <button v-else type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="stop">Stop session</button>
       </header>
@@ -38,6 +39,7 @@ const actor: ThreadsState = usePlugin()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
+const expanded = ref(true)
 const dismissed = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
 const active = computed(() => !!view.value?.state && !dismissed.value)
