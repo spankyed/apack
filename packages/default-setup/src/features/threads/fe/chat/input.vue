@@ -53,7 +53,7 @@
             @pause="emit('pause')"
             @open-revert-menu="openRevertMenu"
           />
-          <div v-if="nativeCompletions.length" role="group" aria-label="Claude suggestions" class="max-h-40 overflow-y-auto border-t border-neutral-700" @keydown="navigateNativeCompletions">
+          <div v-if="nativeCompletions.length && !hostPopupActive" role="group" aria-label="Claude suggestions" class="max-h-40 overflow-y-auto border-t border-neutral-700" @keydown="navigateNativeCompletions">
             <button v-for="(row, index) in nativeCompletions" :key="index" type="button" class="block w-full px-3 py-1 text-left text-sm text-neutral-300 hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:outline focus-visible:outline-blue-400" @mousedown.prevent @click="promptEditor?.selectCompletion(index, row.offerId)">
               <span>{{ row.label ?? row.text }}</span><span v-if="row.description" class="ml-2 text-xs text-neutral-500">{{ row.description }}</span>
             </button>
@@ -201,6 +201,8 @@ import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVert
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import StatusLine from './StatusLine.vue'
+import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
+import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
@@ -298,6 +300,7 @@ interface ActionButton {
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
 const nativePromptProblem = ref<string>()
+const hostPopupActive = ref(false)
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
@@ -307,8 +310,21 @@ onUnmounted(() => { composerEpoch++ })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
-  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => { nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : [] } })
+  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
+    nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
+    const owner = promptEditor
+    setClaudeCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
+  } })
 }, { flush: 'post' })
+watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
+  if (!editor) { hostPopupActive.value = false; return }
+  const update = () => {
+    const command = commandSuggestionPluginKey.getState(editor.state)
+    hostPopupActive.value = !!(command?.active && !command.selectedCommand) || referenceSuggestionPluginKey.getState(editor.state)?.active === true
+  }
+  update(); editor.on('transaction', update)
+  onCleanup(() => { editor.off('transaction', update) })
+})
 watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
 watch(() => props.nativePrompt?.completions, reply => { if (reply) promptEditor?.receiveCompletions(reply) })
 function navigateNativeCompletions(event: KeyboardEvent) {
