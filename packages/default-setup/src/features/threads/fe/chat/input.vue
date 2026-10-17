@@ -18,7 +18,7 @@
         @drop.prevent="onDrop">
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
-          @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" />
+          @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"

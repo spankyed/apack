@@ -8,12 +8,12 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), submit = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('form', { onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
-    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field }), h('textarea', { 'aria-label': 'Message' }),
+    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
-  return { state, root, cwd, press, field, submit }
+  return { state, root, cwd, press, field, returnFocus, submit }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -123,4 +123,21 @@ it('keeps embedded fences and markup literal inside native code with its gutter'
   expect(f.root.querySelector('script')).toBeNull()
   expect(f.root.textContent).toContain('fixture.html')
   expect(f.root.querySelector('pre[aria-hidden="true"]')?.textContent).toBe('9\n10')
+})
+
+
+it('does not let native autofocus steal typing when an idle drawing appears', async () => {
+  const f = mount({})
+  const message = f.root.querySelector('textarea[aria-label="Message"]')! as HTMLTextAreaElement
+  message.value = 'Unsent draft'; message.focus()
+  f.state.nativeUi = { status: 'live', tree: { kind: 'input', actionId: 'field', label: 'Native focus', value: '', rows: 1, autoFocus: true } }
+  await nextTick()
+  expect(document.activeElement).toBe(message)
+  const site = f.root.querySelector('[tabindex="0"]')! as HTMLElement
+  site.focus()
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Native focus')
+  expect(message.value).toBe('Unsent draft')
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  expect(f.returnFocus).toHaveBeenCalledOnce()
+  expect(f.submit).not.toHaveBeenCalled()
 })
