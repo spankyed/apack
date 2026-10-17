@@ -51,7 +51,7 @@ function reportFocusOut(event: FocusEvent) {
 }
 watch(() => props.nativeFocus, reply => {
   const site = nativeSite.value
-  if (!reply || reply.revision !== focusRevision || composing.value || !held || !site || !site.contains(document.activeElement) || !document.hasFocus()) return
+  if (!reply || reply.paneId || reply.revision !== focusRevision || composing.value || !held || !site || !site.contains(document.activeElement) || !document.hasFocus()) return
   const target = reply.focusId === null ? site : [...site.querySelectorAll<HTMLElement>('[data-native-focus-id]')].find(element => element.dataset.nativeFocusId === reply.focusId)
   if (!target || (target instanceof HTMLButtonElement && target.disabled)) return
   for (let element: HTMLElement | null = target; element; element = element.parentElement) {

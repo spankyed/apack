@@ -95,7 +95,7 @@
               @native-prompt-edit="editNativePrompt" @native-prompt-host-response="answerPromptHost"
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
-              @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
+              @native-ui-pane="operateNativePane" @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
@@ -246,6 +246,10 @@ const nativeFocus = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.focus : undefined
 })
+function operateNativePane(event: import('#generated/types.ts').ClaudeUiPaneEvent) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_UI_PANE', ...mount, ...event })
+}
 function focusNativeUi(event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_UI_FOCUS', ...mount, ...event })

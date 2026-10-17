@@ -44,7 +44,7 @@ export interface ThreadsContext {
   };
   threadsImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number };
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
-  nativeUiViews: Record<string, { threadId: string; state: ClaudeUiMountState; promptHostRequest?: ClaudePromptHostRequest; focusRevision?: number; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
+  nativeUiViews: Record<string, { threadId: string; state: ClaudeUiMountState; promptHostRequest?: ClaudePromptHostRequest; focusRevision?: number; focusSite?: string; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
   // Chat/agent
   currentThread: AgentThreadData | null;
   recentThreadIds: string[];

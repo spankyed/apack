@@ -1530,17 +1530,20 @@ const threadsState = setup({
     })] },
     CLAUDE_UI_FOCUS: { actions: [assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.focusRevision ?? 0)) return {}
-      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focusRevision: event.revision, focus: undefined } } }
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || (view.focusSite === event.paneId && event.revision <= (view.focusRevision ?? 0))) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focusRevision: event.revision, focusSite: event.paneId, focus: undefined } } }
     }), ({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (view?.threadId === event.threadId && view.focusRevision === event.revision) sendToSystem(id, event)
+      if (view?.threadId === event.threadId && view.focusRevision === event.revision && view.focusSite === event.paneId) sendToSystem(id, event)
     }] },
     CLAUDE_UI_FOCUS_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (!view || view.threadId !== event.threadId || (view.focusRevision ?? 0) !== event.result.revision) return {}
+      if (!view || view.threadId !== event.threadId || (view.focusRevision ?? 0) !== event.result.revision || view.focusSite !== event.result.paneId) return {}
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focus: event.result } } }
     }) },
+    CLAUDE_UI_PANE: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+    } },
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

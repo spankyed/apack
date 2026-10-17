@@ -92,15 +92,21 @@ export type ClaudePromptReply =
 
 export type ClaudeUiFieldEvent = { actionId: string; revision: number; kind: 'change' | 'submit' | 'select'; value: string }
 
-export type ClaudeUiMountState =
+export interface ClaudeUiPanePresentation {
+  roster: import('./ui-controls.ts').ClaudeUiPaneRoster
+  body: { status: 'connecting' | 'rendering' | 'error'; message?: string } | { status: 'live'; tree: ClaudeUiNode }
+}
+export type ClaudeUiPaneEvent = { kind: 'show' | 'focus' | 'close'; id: string | null }
+  | { kind: 'layout'; id: string; columns: number; rows: number; offset: number }
+export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-
+) & { panes?: ClaudeUiPanePresentation }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
-export type ClaudeUiFocusEvent = { revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }
-export type ClaudeUiFocusReply = { revision: number; moved: boolean; focusId: string | null; deny?: string }
+export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }
+export type ClaudeUiFocusReply = { paneId?: string; revision: number; moved: boolean; focusId: string | null; deny?: string }
 
 export type ClaudePromptHostRequest = { requestId: string; revision: number; expiresAt: number } & (
   | { kind: 'read' }

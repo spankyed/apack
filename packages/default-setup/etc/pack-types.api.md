@@ -1512,6 +1512,7 @@ type ClaudeUiFocus = z.infer<typeof focus>;
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 type ClaudeUiFocusEvent = {
+    paneId?: string;
     revision: number;
     isHeld: boolean;
     focusId?: string | null;
@@ -1519,6 +1520,7 @@ type ClaudeUiFocusEvent = {
 };
 
 type ClaudeUiFocusReply = {
+    paneId?: string;
     revision: number;
     moved: boolean;
     focusId: string | null;
@@ -1536,7 +1538,7 @@ interface ClaudeUiHover {
 
 type ClaudeUiInput = z.infer<typeof input>;
 
-type ClaudeUiMountState = {
+type ClaudeUiMountState = ({
     status: 'connecting' | 'disconnected' | 'rendering';
 } | {
     status: 'live';
@@ -1544,6 +1546,8 @@ type ClaudeUiMountState = {
 } | {
     status: 'error';
     message: string;
+}) & {
+    panes?: ClaudeUiPanePresentation;
 };
 
 type ClaudeUiNode = {
@@ -1634,6 +1638,28 @@ type ClaudeUiNode = {
     plugin?: string;
 };
 
+type ClaudeUiPaneEvent = {
+    kind: 'close' | 'focus' | 'show';
+    id: string | null;
+} | {
+    kind: 'layout';
+    id: string;
+    columns: number;
+    rows: number;
+    offset: number;
+};
+
+interface ClaudeUiPanePresentation {
+    roster: ClaudeUiPaneRoster;
+    body: {
+        status: 'connecting' | 'error' | 'rendering';
+        message?: string;
+    } | {
+        status: 'live';
+        tree: ClaudeUiNode;
+    };
+}
+
 type ClaudeUiPaneRoster = z.infer<typeof paneRoster>;
 
 type ClaudeUiPress = z.infer<typeof press>;
@@ -1684,7 +1710,11 @@ type ClaudeUiViewRequest = ({
     type: 'CLAUDE_PROMPT_EDIT';
     threadId: string;
     mountId: string;
-} & ClaudePromptEdit) | {
+} & ClaudePromptEdit) | ({
+    type: 'CLAUDE_UI_PANE';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiPaneEvent) | {
     type: 'CLAUDE_UI_MOUNT';
     threadId: string;
     mountId: string;
@@ -6509,6 +6539,7 @@ interface ThreadsContext {
         state: ClaudeUiMountState;
         promptHostRequest?: ClaudePromptHostRequest;
         focusRevision?: number;
+        focusSite?: string;
         focus?: ClaudeUiFocusReply;
         prompt?: ClaudePromptReply;
         promptRevision?: number;

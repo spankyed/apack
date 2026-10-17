@@ -17,6 +17,7 @@
         @dragleave="onDragLeave"
         @dragover.prevent
         @drop.prevent="onDrop">
+        <NativePanePanel v-if="nativeUi?.panes" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="tiptapRef?.editor?.commands.focus()" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @focus-report="emit('native-ui-focus', $event)" />
@@ -202,6 +203,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
+import NativePanePanel from './NativePanePanel.vue'
 import StatusLine from './StatusLine.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
@@ -288,6 +290,7 @@ const emit = defineEmits<{
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
+  (e: 'native-ui-pane', event: import('#generated/types.ts').ClaudeUiPaneEvent): void
   (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
   (e: 'native-ui-press', actionId: string, href?: string): void
@@ -312,6 +315,15 @@ function handleComposerNativeHotkey(event: KeyboardEvent) {
 }
 const nativePromptProblem = ref<string>()
 const hostPopupActive = ref(false)
+const paneFocusGrant = ref<string | null>(null)
+watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
+  if (!id || !document.hasFocus()) return
+  const editor = tiptapRef.value?.editor
+  const allowed = !!editor && editor.isFocused && !editor.view.composing && !editor.state.doc.textContent.trim() && !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+  paneFocusGrant.value = allowed ? id : null
+  emit('native-ui-pane', { kind: 'focus', id: paneFocusGrant.value })
+})
+
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
@@ -444,6 +456,17 @@ const {
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
 } = useAttachments()
+watch([hasTextContent, () => props.isBusy, () => props.disabled, submitting, hasAttachments, hostPopupActive], values => {
+  if (values.some(Boolean)) paneFocusGrant.value = null
+})
+watch(() => props.nativeUi?.panes?.roster.shown_id, (id, previous) => {
+  if (!id && previous && document.hasFocus() && document.activeElement?.closest('[data-native-pane-panel]')) {
+    void nextTick(() => tiptapRef.value?.editor?.commands.focus())
+  }
+})
+watch(() => props.nativeUi?.panes?.roster.focused_id, id => {
+  if (!id && !props.nativeUi?.panes?.roster.focus_requested_id) paneFocusGrant.value = null
+})
 watch([() => props.disabled, () => props.isBusy, submitting, hasAttachments, hostPopupActive, () => nativeCompletions.value.length], ([disabled, busy, sending, attachments, popup, completions]) => {
   if (disabled || busy || sending || attachments || popup || completions) promptEditor?.dismissSuggestion()
 })

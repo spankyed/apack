@@ -77,8 +77,8 @@ function bind(key: string, view: ClaudeUiView): void {
   }
   view.mount = mountClaudeUi({ owner, promptHost,
     isCurrent: () => views.get(key) === view && getConversation(view.threadId)?.owner === owner,
-    requestFocus: (focusId, revision) => {
-      if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId } })
+    requestFocus: (focusId, revision, paneId) => {
+      if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId, ...(paneId ? { paneId } : {}) } })
     },
     publish: state => { if (views.get(key) === view && view.owner === owner) publish(view, state) },
   })
@@ -95,6 +95,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (!view) return
     bind(key, view)
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
+    return
+  }
+  if (event.type === 'CLAUDE_UI_PANE') {
+    if (!view) return
+    bind(key, view)
+    void view.mount?.pane(event)?.catch(() => { /* A failed operation retains the native roster. */ })
     return
   }
   if (event.type === 'CLAUDE_UI_FOCUS') {

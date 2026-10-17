@@ -1,3 +1,4 @@
+import { createClaudePaneHost } from './ui-pane-host.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
@@ -5,14 +6,14 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
   owner: UiOwner
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
-  requestFocus?(focusId: string, revision: number): void
+  requestFocus?(focusId: string, revision: number, paneId?: string): void
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
 }) {
   const { owner } = options
@@ -36,10 +37,13 @@ export function mountClaudeUi(options: {
   let stopPromptHost: (() => void) | undefined
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
+  let lastState: ClaudeUiMountState = { status: 'connecting' }
+  let panes: ReturnType<typeof createClaudePaneHost> | undefined
 
   function publish(state: ClaudeUiMountState): void {
     // An observer must not break native attachment cleanup or the process event reader.
-    try { options.publish(state) } catch { /* presentation is not process authority */ }
+    lastState = state
+    try { options.publish({ ...state, ...(panes?.state ? { panes: panes.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -108,6 +112,7 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    panes?.dispose()
     stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
     fieldRevisions.clear()
@@ -127,9 +132,11 @@ export function mountClaudeUi(options: {
     return disposal
   }
 
+  panes = createClaudePaneHost({ ui: owner.handle.ui, client, current, publish: () => publish(lastState), requestFocus: options.requestFocus })
   publish({ status: 'connecting' })
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
+    panes?.receive(line)
     if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
       if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }
@@ -141,7 +148,7 @@ export function mountClaudeUi(options: {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach(client)
       attached = true
-      if (current()) invalidate()
+      if (current()) { invalidate(); await panes?.start() }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
@@ -153,8 +160,10 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    pane(event: import('./ui-presentation.ts').ClaudeUiPaneEvent) { return panes?.operate(event) },
     get promptRevision() { return promptRevision },
     async focus(event: ClaudeUiFocusEvent): Promise<ClaudeUiFocusReply | undefined> {
+      if (event.paneId) return panes?.focus(event)
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= focusRevision || typeof event.isHeld !== 'boolean' || !['person', 'auto'].includes(event.by)) return
       focusRevision = event.revision
       const snapshot = drawing, revision = event.revision, epoch = generation
@@ -201,6 +210,7 @@ export function mountClaudeUi(options: {
       }
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
+      if (panes?.ownsField(event.actionId)) return panes.field(event)
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= (fieldRevisions.get(event.actionId) ?? 0) || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
       const field = fieldDrawing?.fields.get(event.actionId)
       if (!field || (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit')) return { handled: false }
@@ -218,6 +228,7 @@ export function mountClaudeUi(options: {
     },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */
     async press(actionId: string, href?: string): Promise<{ handled: boolean }> {
+      if (panes?.ownsAction(actionId)) return panes.press(actionId, href)
       if (!current() || pressing) return { handled: false }
       const action = drawing?.actions.get(actionId)
       if (!action) return { handled: false }
