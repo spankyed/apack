@@ -8,14 +8,14 @@ import type { ClaudeUiMountState } from '#generated/types.ts'
 beforeEach(() => { startFeTestRuntime() })
 let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
-function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }) {
+function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('form', { onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
-    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus }), h('textarea', { 'aria-label': 'Message' }),
+    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus, onFocusReport: focusReport }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
-  return { state, root, cwd, press, field, returnFocus, submit, phase }
+  return { state, root, cwd, press, field, returnFocus, submit, phase, focusReport }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -373,4 +373,40 @@ it('preserves native Shift+Tab focus order and lets IME consume Escape before re
   expect(composing.defaultPrevented).toBe(false); expect(f.returnFocus).not.toHaveBeenCalled()
   const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); site.dispatchEvent(escape)
   expect(escape.defaultPrevented).toBe(true); expect(f.returnFocus).toHaveBeenCalledOnce()
+})
+
+
+it('reports native focus ownership and applies current redirects without echo or stealing composer focus', async () => {
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [
+      { kind: 'button', label: 'Start', actionId: 'press', focusId: 'first' },
+      { kind: 'input', label: 'Destination', actionId: 'input', focusId: 'second', revision: 0, value: '', rows: 1, autoFocus: false, submitLabel: 'send' },
+    ] } } })
+    const button = f.root.querySelector<HTMLButtonElement>('[data-native-focus-id="first"]')!, field = f.root.querySelector<HTMLTextAreaElement>('[data-native-focus-id="second"]')!
+    button.focus()
+    expect(f.focusReport).toHaveBeenLastCalledWith({ revision: 1, isHeld: true, focusId: 'first', by: 'person' })
+    f.state.nativeFocus = { revision: 1, moved: true, focusId: 'second' }; await nextTick()
+    expect(document.activeElement).toBe(field); expect(f.focusReport).toHaveBeenCalledTimes(1)
+    field.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    f.state.nativeFocus = { revision: 1, moved: true, focusId: 'first' }; await nextTick(); expect(document.activeElement).toBe(field)
+    field.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    button.focus(); expect(f.focusReport).toHaveBeenLastCalledWith({ revision: 2, isHeld: true, focusId: 'first', by: 'person' })
+    f.state.nativeFocus = { revision: 1, moved: true, focusId: 'second' }; await nextTick(); expect(document.activeElement).toBe(button)
+    f.state.nativeFocus = { revision: 2, moved: true, focusId: 'foreign' }; await nextTick(); expect(document.activeElement).toBe(button)
+    const composer = f.root.querySelector<HTMLTextAreaElement>('[aria-label="Message"]')!; composer.focus()
+    expect(f.focusReport).toHaveBeenLastCalledWith({ revision: 3, isHeld: false, by: 'person' })
+    f.state.nativeFocus = { revision: 3, moved: true, focusId: 'second' }; await nextTick(); expect(document.activeElement).toBe(composer)
+  } finally { windowFocus.mockRestore() }
+})
+
+it('attributes site-entry autofocus to the plugin and never re-runs it for a native container redirect', async () => {
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = mount({ nativeUi: { status: 'live', tree: { kind: 'button', label: 'Auto', actionId: 'press', focusId: 'auto', autoFocus: true } } })
+    const site = f.root.querySelector<HTMLElement>('[tabindex="0"]')!; site.focus()
+    expect(f.focusReport).toHaveBeenCalledExactlyOnceWith({ revision: 1, isHeld: true, focusId: 'auto', by: 'auto' })
+    f.state.nativeFocus = { revision: 1, moved: true, focusId: null }; await nextTick()
+    expect(document.activeElement).toBe(site); expect(f.focusReport).toHaveBeenCalledTimes(1)
+  } finally { windowFocus.mockRestore() }
 })

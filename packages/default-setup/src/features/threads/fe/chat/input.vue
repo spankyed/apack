@@ -17,8 +17,8 @@
         @dragover.prevent
         @drop.prevent="onDrop">
         <StatusIndicator :anchor="inputCardRef"/>
-        <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
-          @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" />
+        <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
+          @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
@@ -262,6 +262,7 @@ const props = defineProps<{
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
   nativePrompt?: { mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
+  nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
   nativeUi?: ClaudeUiMountState
 }>()
 
@@ -285,6 +286,7 @@ const emit = defineEmits<{
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
+  (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'statusline-click'): void

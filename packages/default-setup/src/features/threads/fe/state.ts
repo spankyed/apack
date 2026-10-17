@@ -1515,6 +1515,19 @@ const threadsState = setup({
       if (!view || view.threadId !== event.threadId || view.promptRevision !== event.result.revision) return {}
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, prompt: event.result } } }
     }) },
+    CLAUDE_UI_FOCUS: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.focusRevision ?? 0)) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focusRevision: event.revision, focus: undefined } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.focusRevision === event.revision) sendToSystem(id, event)
+    }] },
+    CLAUDE_UI_FOCUS_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || (view.focusRevision ?? 0) !== event.result.revision) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focus: event.result } } }
+    }) },
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

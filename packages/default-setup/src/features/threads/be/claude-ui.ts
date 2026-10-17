@@ -41,6 +41,9 @@ function bind(key: string, view: ClaudeUiView): void {
   if (!owner) { publish(view, { status: 'disconnected' }); return }
   view.mount = mountClaudeUi({ owner,
     isCurrent: () => views.get(key) === view && getConversation(view.threadId)?.owner === owner,
+    requestFocus: (focusId, revision) => {
+      if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId } })
+    },
     publish: state => { if (views.get(key) === view && view.owner === owner) publish(view, state) },
   })
 }
@@ -52,6 +55,16 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   let view = views.get(key)
   if (view && view.threadId !== event.threadId) return
   if (view && view.expires <= Date.now()) { drop(key, view); view = undefined }
+  if (event.type === 'CLAUDE_UI_FOCUS') {
+    if (!view) return
+    bind(key, view)
+    const target = view, mount = target.mount
+    if (!mount) return
+    void mount.focus(event).then(result => {
+      if (result && views.get(key) === target && target.mount === mount && getConversation(target.threadId)?.owner === target.owner) target.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: target.threadId, mountId: target.mountId, result })
+    }).catch(() => { /* focus failure must not replace or disable the live drawing */ })
+    return
+  }
   if (event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') {
     if (!view) return
     bind(key, view)

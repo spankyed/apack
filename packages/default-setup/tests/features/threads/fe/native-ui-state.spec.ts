@@ -58,3 +58,18 @@ it('rejects completion replies from another view or an older edit and retires ro
   expect(actor.getSnapshot().context.nativeUiViews.view).toBeUndefined()
   actor.stop()
 })
+
+
+it('rejects foreign and superseded focus and clears a pending redirect when the person moves again', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  const focus = { type: 'CLAUDE_UI_FOCUS' as const, ...identity, revision: 1, isHeld: true, focusId: 'one', by: 'person' as const }
+  actor.send(focus); actor.send({ ...focus, revision: 2, focusId: 'two' })
+  const reply = { type: 'CLAUDE_UI_FOCUS_STATE' as const, ...identity, result: { revision: 1, moved: true, focusId: 'old' } }
+  actor.send(reply); expect(actor.getSnapshot().context.nativeUiViews.view?.focus).toBeUndefined()
+  actor.send({ ...reply, threadId: 'foreign', result: { ...reply.result, revision: 2 } }); expect(actor.getSnapshot().context.nativeUiViews.view?.focus).toBeUndefined()
+  actor.send({ ...reply, result: { revision: 2, moved: true, focusId: 'redirect' } }); expect(actor.getSnapshot().context.nativeUiViews.view?.focus?.focusId).toBe('redirect')
+  actor.send({ ...focus, revision: 3, isHeld: false }); expect(actor.getSnapshot().context.nativeUiViews.view?.focus).toBeUndefined()
+  actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity }); actor.send(reply); expect(actor.getSnapshot().context.nativeUiViews).toEqual({})
+  actor.stop()
+})

@@ -12,7 +12,7 @@ export function mountClaudeUi(options: {
   owner: UiOwner
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
-  requestFocus?(focusId: string): void
+  requestFocus?(focusId: string, revision: number): void
 }) {
   const { owner } = options
   const client = { client_id: `apack-${randomUUID()}`, surface: 'desktop' as const }
@@ -115,7 +115,7 @@ export function mountClaudeUi(options: {
     const line = event as Record<string, unknown>
     if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
-      if (target) { try { options.requestFocus?.(target[0]) } catch { /* closed presentation */ } }
+      if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }
     }
     if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') invalidate()
   })

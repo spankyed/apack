@@ -90,12 +90,12 @@
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
               :status-line-cwd="statusLineCwd"
-              :native-ui="nativeUiDrawing"
+              :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
               :native-prompt="nativePrompt"
               @native-prompt-edit="editNativePrompt"
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
-              @native-ui-field="editNativeUi"
+              @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
@@ -233,6 +233,14 @@ const nativeUiDrawing = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
 })
+const nativeFocus = computed(() => {
+  const mount = nativeUiMount.value
+  return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.focus : undefined
+})
+function focusNativeUi(event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_UI_FOCUS', ...mount, ...event })
+}
 const nativePrompt = computed(() => {
   const mount = nativeUiMount.value
   if (!mount || mount.threadId !== currentThread.value?.id) return

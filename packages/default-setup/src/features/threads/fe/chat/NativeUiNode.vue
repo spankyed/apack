@@ -10,7 +10,7 @@
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </component>
   <button v-else-if="node.kind === 'button'" :ref="hoverElement" :style="buttonPaint" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
-    :aria-label="node.label" :aria-keyshortcuts="node.hotkey" :data-native-hotkey="node.actionId ? node.hotkey : undefined" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
+    :aria-label="node.label" :aria-keyshortcuts="node.hotkey" :data-native-focus-id="node.focusId" :data-native-hotkey="node.actionId ? node.hotkey : undefined" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
     :data-native-role="node.role"
     class="inline-flex min-h-8 max-w-full self-start items-center justify-center gap-1.5 whitespace-normal break-words rounded-lg border px-3 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40"
     :class="[node.variant === 'primary' ? 'border-blue-500/60 bg-blue-600 text-white shadow-sm hover:bg-blue-500' : 'border-white/10 bg-white/[0.04] text-neutral-300 hover:border-white/15 hover:bg-white/[0.08] hover:text-neutral-100',

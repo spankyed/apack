@@ -1471,6 +1471,25 @@ type ClaudeUiFieldEvent = {
     value: string;
 };
 
+type ClaudeUiFocus = z.infer<typeof focus>;
+
+/** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
+type ClaudeUiFocusEvent = {
+    revision: number;
+    isHeld: boolean;
+    focusId?: string | null;
+    by: 'auto' | 'person';
+};
+
+type ClaudeUiFocusReply = {
+    revision: number;
+    moved: boolean;
+    focusId: string | null;
+    deny?: string;
+};
+
+type ClaudeUiFocusResult = z.infer<typeof focusResult>;
+
 interface ClaudeUiHover {
     group?: string;
     text?: Pick<ClaudeUiTextStyle, 'backgroundColor' | 'bold' | 'color' | 'dimColor' | 'inverse' | 'italic' | 'strikethrough' | 'underline'>;
@@ -1536,8 +1555,10 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'button';
+    focusId?: string;
     hover?: ClaudeUiHover;
     label: string;
+    hotkey?: string;
     children?: ClaudeUiNode[];
     dimColor?: boolean;
     variant?: 'primary' | 'secondary';
@@ -1547,6 +1568,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'input';
+    focusId?: string;
     actionId: string;
     revision: number;
     submitLabel: string;
@@ -1558,6 +1580,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'select';
+    focusId?: string;
     actionId: string;
     revision: number;
     label?: string;
@@ -1607,6 +1630,10 @@ interface ClaudeUiTextStyle {
 }
 
 type ClaudeUiViewRequest = ({
+    type: 'CLAUDE_UI_FOCUS';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiFocusEvent) | ({
     type: 'CLAUDE_PROMPT_AUTOCOMPLETE';
     threadId: string;
     mountId: string;
@@ -5166,6 +5193,11 @@ type OutgoingThreadsEvents = {
     mountId: string;
     result: ClaudePromptReply;
 } | {
+    type: 'CLAUDE_UI_FOCUS_STATE';
+    threadId: string;
+    mountId: string;
+    result: ClaudeUiFocusReply;
+} | {
     type: 'CLAUDE_UI_STATE';
     threadId: string;
     mountId: string;
@@ -6427,6 +6459,8 @@ interface ThreadsContext {
     nativeUiViews: Record<string, {
         threadId: string;
         state: ClaudeUiMountState;
+        focusRevision?: number;
+        focus?: ClaudeUiFocusReply;
         prompt?: ClaudePromptReply;
         promptRevision?: number;
         completions?: ClaudePromptCompletionReply;
@@ -7238,6 +7272,8 @@ declare function createClaudeUiControls(initialized: Promise<ClaudeInitializatio
         surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
     }, z.ZodTypeAny, "passthrough">>;
     render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
+    /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
+    focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
     promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame>;
     /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
@@ -7496,6 +7532,88 @@ declare const flowsQueries: {
     readonly extendedData: (flowId: EARS.EntityId, include?: keyof FlowExtendedData | (keyof FlowExtendedData)[]) => FlowExtendedData;
     readonly connectedData: () => FlowsConnectedData;
 };
+
+declare const focus: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    component: z.ZodEnum<["Pane", "AbovePrompt"]>;
+    instance_id: z.ZodString;
+    is_held: z.ZodBoolean;
+    element: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        plugin: z.ZodString;
+        key: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        plugin: string;
+    }, {
+        key: string;
+        plugin: string;
+    }>>>;
+    by: z.ZodEnum<["person", "auto"]>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    by: "auto" | "person";
+    component: "AbovePrompt" | "Pane";
+    instance_id: string;
+    is_held: boolean;
+    element?: {
+        key: string;
+        plugin: string;
+    } | null | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    by: "auto" | "person";
+    component: "AbovePrompt" | "Pane";
+    instance_id: string;
+    is_held: boolean;
+    element?: {
+        key: string;
+        plugin: string;
+    } | null | undefined;
+}>;
+
+declare const focusResult: z.ZodObject<{
+    moved: z.ZodBoolean;
+    element: z.ZodNullable<z.ZodObject<{
+        plugin: z.ZodString;
+        key: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        plugin: string;
+    }, {
+        key: string;
+        plugin: string;
+    }>>;
+    deny: z.ZodOptional<z.ZodString>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    moved: z.ZodBoolean;
+    element: z.ZodNullable<z.ZodObject<{
+        plugin: z.ZodString;
+        key: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        plugin: string;
+    }, {
+        key: string;
+        plugin: string;
+    }>>;
+    deny: z.ZodOptional<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    moved: z.ZodBoolean;
+    element: z.ZodNullable<z.ZodObject<{
+        plugin: z.ZodString;
+        key: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        plugin: string;
+    }, {
+        key: string;
+        plugin: string;
+    }>>;
+    deny: z.ZodOptional<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">>;
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
 

@@ -9,7 +9,7 @@ import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts'
 async function native(threadId = 'thread') {
   const events = new PassThrough({ objectMode: true })
   const ui = { focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
-    render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
+    render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run', key: 'run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
     press: vi.fn(async () => ({ handled: true })) }
   const handle = { ui, events, kill: () => events.end(), close: async () => { events.end() } } as unknown as QueryHandle
   const owner = await openConversation(threadId, 'fixture', async () => handle, async () => {})
@@ -124,4 +124,23 @@ it('routes autocomplete only to the requesting mounted window and refuses foreig
   handleClaudeUiView(request, 'window', delivery); await vi.advanceTimersByTimeAsync(0)
   expect(delivery.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'CLAUDE_PROMPT_COMPLETIONS', mountId, threadId: 'thread', result: { revision: 1, status: 'ready' } })
   expect(foreign).not.toHaveBeenCalled()
+})
+
+
+it('returns focus only to the requesting delivery and drops replies after unmount', async () => {
+  const { ui } = await native(), delivery = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  const drawn = delivery.mock.calls.at(-1)?.[0]
+  if (drawn?.type !== 'CLAUDE_UI_STATE' || drawn.state.status !== 'live' || drawn.state.tree.kind !== 'button') throw Error('expected button')
+  const event = { ...mount, type: 'CLAUDE_UI_FOCUS' as const, revision: 1, isHeld: true, by: 'person' as const, focusId: drawn.state.tree.focusId! }
+  handleClaudeUiView(event, 'foreign', foreign); expect(ui.focus).not.toHaveBeenCalled()
+  handleClaudeUiView(event, 'window', delivery); await vi.advanceTimersByTimeAsync(0)
+  expect(delivery.mock.calls.at(-1)?.[0]).toEqual({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: 'thread', mountId, result: { revision: 1, moved: true, focusId: null } })
+  let resolve!: (value: { moved: boolean; element: null }) => void
+  ui.focus.mockImplementationOnce(() => new Promise(yes => { resolve = yes }))
+  handleClaudeUiView({ ...event, revision: 2 }, 'window', delivery); await vi.advanceTimersByTimeAsync(0)
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'window', delivery)
+  const count = delivery.mock.calls.length
+  resolve({ moved: true, element: null }); await vi.advanceTimersByTimeAsync(0)
+  expect(delivery.mock.calls).toHaveLength(count); expect(foreign).not.toHaveBeenCalled()
 })

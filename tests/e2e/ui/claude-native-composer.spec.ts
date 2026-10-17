@@ -48,9 +48,21 @@ test('native extension fields, paint and hover work inside the actual composer',
   });
   await expect.poll(async () => (await snapshot()).turns).toBe(1);
   const before = await snapshot();
+  await editor.focus();
+  await editor.press('1');
+  await expect(strip.getByText('Context tools · 1 update', { exact: true })).toBeVisible();
+  await expect(editor).toBeEmpty();
+  // A draft keeps ordinary digits; the native survey shortcut only owns an empty composer.
+  await editor.fill('Draft'); await editor.press('1'); await expect(editor).toHaveText('Draft1');
+  const note = strip.getByRole('textbox', { name: 'Context note', exact: true });
+  await strip.getByRole('button', { name: 'Focus note', exact: true }).focus();
+  await expect(note).toBeFocused();
+  await note.fill('Move focus to response style');
+  await expect(strip.getByRole('combobox', { name: 'Response style', exact: true })).toBeFocused();
+
   await editor.fill('Review the changes and outline the next steps.');
   await strip.getByRole('button', { name: 'Refresh context', exact: true }).click();
-  await expect(strip.getByText('Context tools · 1 update', { exact: true })).toBeVisible();
+  await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   await strip.getByRole('textbox', { name: 'Context note', exact: true }).fill('Focus on the UI and interaction details.');
   await expect.poll(async () => readFile(join(workspace!, 'native-field.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify('Focus on the UI and interaction details.'));
   await strip.getByRole('combobox', { name: 'Response style', exact: true }).selectOption('beta');
@@ -78,7 +90,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLEAR_THREAD' }));
   await expect(card.getByRole('button', { name: 'Refresh context', exact: true })).toHaveCount(0);
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
-  await expect(strip.getByText('Context tools · 1 update', { exact: true })).toBeVisible();
+  await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
 });

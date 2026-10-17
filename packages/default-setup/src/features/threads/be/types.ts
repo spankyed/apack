@@ -468,6 +468,7 @@ export type AgentSettings = ThreadsSettings['chat'];
 // System-private entity type
 
 export type ClaudeUiViewRequest =
+  | ({ type: 'CLAUDE_UI_FOCUS'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent)
   | ({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE'; threadId: string; mountId: string } & ClaudePromptCompletionRequest)
   | ({ type: 'CLAUDE_PROMPT_EDIT'; threadId: string; mountId: string } & ClaudePromptEdit)
   | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string }
@@ -509,6 +510,7 @@ export type IncomingThreadsEvents =
 export type OutgoingThreadsEvents =
   | { type: 'CLAUDE_PROMPT_COMPLETIONS'; threadId: string; mountId: string; result: ClaudePromptCompletionReply }
   | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }
+  | { type: 'CLAUDE_UI_FOCUS_STATE'; threadId: string; mountId: string; result: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }
   | { type: 'CLAUDE_UI_STATE'; threadId: string; mountId: string; state: ClaudeUiMountState }
   // Thread management events
   | { type: 'THREAD_CONNECTED'; data: ThreadConnectedData }
