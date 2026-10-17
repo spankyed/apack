@@ -5,7 +5,7 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 
 import type { ClaudeUiMountState } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: ClaudeUiControls } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
