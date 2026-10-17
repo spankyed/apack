@@ -55,6 +55,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
       }
       return true
     },
+    clearMain() { mainStatus = undefined },
     clear() { mainStatus = undefined; agents = []; decorations.clear(); epochs.clear() },
   }
 }

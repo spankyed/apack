@@ -29,6 +29,7 @@ export async function createClaudeTerminalBridge(options: {
   const projection = createClaudeTerminalStatus(options.sessionId)
   const session = createClaudeTerminalSession(options.sessionId)
   const transcripts: ClaudeNativeTranscript[] = []
+  let mainCommand = command(options.settings.effective.statusLine) ?? null
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let closed = false, busy = false, ready = false
   let pending: { id: string; sessionId: string; text: string; sent: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
@@ -49,8 +50,12 @@ export async function createClaudeTerminalBridge(options: {
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
       if (request.url === '/poll') {
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
+        if (value.statusCommand !== undefined) {
+          if (value.statusCommand !== null && (typeof value.statusCommand !== 'string' || value.statusCommand.length > 32768)) return reply(400, {})
+        }
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
+        if (value.statusCommand !== undefined && mainCommand !== value.statusCommand) { mainCommand = value.statusCommand as string | null; projection.clearMain() }
         if (changedSession) { session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) session.update(value.metadata)
         ready = true; options.changed()
@@ -79,6 +84,7 @@ export async function createClaudeTerminalBridge(options: {
         return reply(200, {})
       }
       if (request.url === '/native-status') {
+        if (value.kind === 'main' && value.command !== mainCommand) return reply(409, {})
         if (!projection.accept(value)) return reply(409, {})
         options.changed(); return reply(200, {})
       }
@@ -106,17 +112,14 @@ export async function createClaudeTerminalBridge(options: {
     const shellPrefix = typeof configuredPrefix === 'string' ? configuredPrefix : options.shellPrefix
     async function wrapper(kind: 'main' | 'subagent', original: string, delegate = false): Promise<string> {
       const config = join(directory, kind + '.json'), launcher = join(directory, kind)
-      await writeFile(config, JSON.stringify({ socketPath, token, commands: { [original]: kind }, electronEnv: options.electronEnv, originalPrefix: shellPrefix, ...(delegate ? { delegatePrefix: shellPrefix } : {}) }), { mode: 0o600 })
+      await writeFile(config, JSON.stringify({ socketPath, token, commands: { [original]: kind }, electronEnv: options.electronEnv, originalPrefix: shellPrefix, ...(delegate ? { delegatePrefix: shellPrefix, captureMain: true } : {}) }), { mode: 0o600 })
       await writeFile(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${quote(process.execPath)} ${quote(runtime)} ${quote(config)} "$@"\n`, { mode: 0o700 })
       return delegate ? launcher : quote(launcher) + ' ' + quote(original)
     }
     // Keep native managed-helper selection authoritative. Never replace a managed setting with our flag.
     const managed = (key: string) => options.settings.sources.some(source => /policy|managed/i.test(source.source) && source.settings[key] !== undefined)
     const settings: Record<string, unknown> = {}
-    if (main && !managed('statusLine')) {
-      if (shellPrefix) settings.env = { CLAUDE_CODE_SHELL_PREFIX: await wrapper('main', main, true) }
-      else settings.statusLine = { ...object(options.settings.effective.statusLine), command: await wrapper('main', main) }
-    }
+    if (!managed('statusLine')) settings.env = { CLAUDE_CODE_SHELL_PREFIX: await wrapper('main', main ?? '', true) }
     if (subagent && !managed('subagentStatusLine')) settings.subagentStatusLine = { ...object(options.settings.effective.subagentStatusLine), command: await wrapper('subagent', subagent) }
     const pluginRoot = join(directory, 'plugin')
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))
@@ -128,7 +131,7 @@ export async function createClaudeTerminalBridge(options: {
       on('classic.*',async($,e,next)=>{const result=await next(e);if(e.transcript_path&&e.session_id&&e.transcript_path.endsWith('/'+e.session_id+'.jsonl')){paths[e.session_id]=e.transcript_path;await send($,'/transcript',{sessionId:e.session_id,path:e.transcript_path}).catch(()=>{});}return result;});
       on('session.append',async($,e,next)=>{const sessionId=await $.session.id();const result=await next(e);if(!e.agentId&&result.message&&result.uuid)await send($,'/append',{sessionId,uuid:result.uuid,message:result.message,door:e.door,origin:e.origin,...(submission&&e.door==='prompt'?{submissionId:submission.id}:{})}).catch(()=>{});return result;});
       on('prompt.submit',async($,e,next)=>{const own=submission;try{const result=await next(e);if(own)await send($,'/submission',{id:own.id,...(typeof result.drop==='string'?{drop:result.drop}:{accepted:true})}).catch(()=>{});return result;}finally{if(submission===own)submission=undefined;}});
-      on('session.start',async($,e,next)=>{if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const command=await send($,'/poll',{agents,metadata});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=false;try{const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
+      on('session.start',async($,e,next)=>{if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const status=(settings.allowManagedHooksOnly?policy:settings).statusLine;const statusCommand=status?.type==='command'&&typeof status.command==='string'&&status.command?status.command:null;const command=await send($,'/poll',{agents,metadata,statusCommand});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=false;try{const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
       on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
       on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId)await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});return result;});
     }`

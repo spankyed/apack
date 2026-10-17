@@ -16,7 +16,7 @@ async function publish({ socketPath, token }, body) {
 export async function runNativeStatusPrefix(options, argv = process.argv.slice(2)) {
   if (argv.length !== 1 || !argv[0]) { process.exitCode = 64; return; }
   const startedAt = process.hrtime.bigint().toString();
-  const command = argv[0], kind = options.commands[command];
+  const command = argv[0], kind = options.captureMain ? 'main' : options.commands[command];
   const observed = kind === 'main' || kind === 'subagent';
   // Native treats the prefix as one executable path, with an optional raw flag tail.
   const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
@@ -50,7 +50,7 @@ export async function runNativeStatusPrefix(options, argv = process.argv.slice(2
     let payload; try { payload = JSON.parse(Buffer.concat(inputChunks).toString()); } catch {}
     const valid = typeof payload?.session_id === 'string' && /^[a-f0-9-]{36}$/i.test(payload.session_id)
       && (kind === 'main' ? typeof payload.version === 'string' && payload.cost && payload.context_window : Array.isArray(payload.tasks));
-    if (valid) await publish(options, { sessionId: payload.session_id, kind, startedAt, stdout: Buffer.concat(outputChunks).toString(), truncated, code: result.code, signal: result.signal,
+    if (valid) await publish(options, { sessionId: payload.session_id, kind, command, startedAt, stdout: Buffer.concat(outputChunks).toString(), truncated, code: result.code, signal: result.signal,
       ...(kind === 'subagent' ? { tasks: payload.tasks.filter(task => typeof task.id === 'string' && task.id.length <= 256 && typeof task.status === 'string').slice(0, 256).map(task => ({id:task.id,status:task.status})) } : {}) });
   }
   if (result.signal) process.kill(process.pid, result.signal);

@@ -20,10 +20,11 @@ it('runs the same original helper in distinct native roles', async () => {
   const original = '/usr/bin/printf "Native line\\nSecond line\\n"'
   const settings = { effective: { statusLine: { type: 'command', command: original, padding: 3, refreshInterval: 2 }, subagentStatusLine: { type: 'command', command: original } }, sources: [] }
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings, changed() {}, enter() {} })
-  expect(bridge.settings.env).toBeUndefined()
-  expect(bridge.settings.statusLine).toMatchObject({ padding: 3, refreshInterval: 2 })
+  expect(bridge.settings.env).toBeDefined()
+  expect(bridge.settings.statusLine).toBeUndefined()
   expect(settings.effective.statusLine.command).toBe(original)
-  const config = bridge.settings.statusLine as { command: string }
+  const prefix = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+  const config = { command: prefix + " '" + original.replaceAll("'", "'\"'\"'") + "'" }
   const command = 'printf \'%s\' \'{"session_id":"' + session + '","version":"2.1.302","cost":{},"context_window":{}}\' | ' + config.command
   const native = await exec('/bin/sh', ['-c', command])
   expect(native.stdout).toBe('Native line\nSecond line\n')
@@ -93,5 +94,26 @@ sys.exit(subprocess.run(['/bin/sh','-c',sys.argv[-1]],stdin=sys.stdin,stdout=sys
     expect((await exec('/bin/sh', ['-c', subagent.command + ' < ' + quote(payload)], { env })).stdout).toBe(prefix + '\n')
     const calls = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
     expect(calls).toEqual([original, 'printf passthrough'].map(command => ({ args: flags ? ['--fixture-prefix', command] : [command], prefix })))
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+it('observes native-selected command changes and rejects removed or obsolete main outputs', async () => {
+  const oldCommand = '/usr/bin/printf old', nextCommand = '/usr/bin/printf new'
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: oldCommand } }, sources: [] }, changed() {}, enter() {} })
+  const prefix = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+  const payload = JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} })
+  const directory = await mkdtemp(join(tmpdir(), 'native-live-prefix-'))
+  try {
+    const path = join(directory, 'payload.json'); await writeFile(path, payload)
+    const invoke = (command: string) => exec('/bin/sh', ['-c', `'${prefix}' '${command}' < '${path}'`])
+    expect((await invoke(oldCommand)).stdout).toBe('old'); expect(bridge.projection.mainStatus).toBe('old')
+    expect((await request('/poll', { sessionId: session, agents: 'invalid', statusCommand: null })).status).toBe(400)
+    expect(bridge.projection.mainStatus).toBe('old')
+    await request('/poll', { sessionId: session, agents: [], statusCommand: nextCommand })
+    expect(bridge.projection.mainStatus).toBeUndefined()
+    expect((await invoke(oldCommand)).stdout).toBe('old'); expect(bridge.projection.mainStatus).toBeUndefined()
+    expect((await invoke(nextCommand)).stdout).toBe('new'); expect(bridge.projection.mainStatus).toBe('new')
+    await request('/poll', { sessionId: session, agents: [], statusCommand: null })
+    expect(bridge.projection.mainStatus).toBeUndefined()
+    expect((await invoke(nextCommand)).stdout).toBe('new'); expect(bridge.projection.mainStatus).toBeUndefined()
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
