@@ -1,5 +1,5 @@
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
-import { claudeAssistantDisplayText } from './ui-transcript-rows.ts'
+import { claudeAssistantDisplayText } from '../../../common/claude-message-display.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiTranscriptFrame, ClaudeUiTranscriptRow, ClaudeUiFieldEvent, ClaudeUiNode } from './ui-presentation.ts'
 
@@ -20,9 +20,9 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end
+const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
 const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => sameSource(a, b) && (a.component === 'AssistantMessage' && b.component === 'AssistantMessage' ? a.isFirstOfReply === b.isFirstOfReply : a.component === 'UserMessage' && b.component === 'UserMessage' && a.isExpanded === b.isExpanded && a.origin.kind === b.origin.kind)
-const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.text) : row.text
+const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.isSummary ? row.text.trim() : row.text) : row.text
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
@@ -72,7 +72,7 @@ export function createClaudeTranscriptMessageHost(options: {
         const epoch = entry.epoch, completed = new Map(entry.completed)
         try {
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid,
-            props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply }
+            props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
               : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
           if (!valid(entry) || epoch !== entry.epoch) continue
           const drawing = createClaudeUiDrawing(result.tree, entry.fields)

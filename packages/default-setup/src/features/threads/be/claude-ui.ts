@@ -21,6 +21,7 @@ interface ClaudeUiView {
   expires: number
   messageIds: Set<string>
   userExpansion: Map<string, boolean>
+  thinkingExpansion: Map<string, ReadonlySet<number>>
   reply: Reply<OutgoingThreadsEvents>
   state: ClaudeUiMountState
   pendingPrompt?: { requestId: string; kind: ClaudePromptHostRequest['kind']; finish(answer?: ClaudePromptHostResponse): void }
@@ -81,7 +82,7 @@ function bind(key: string, view: ClaudeUiView): void {
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost,
-    messages: () => view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion) : [],
+    messages: () => view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.thinkingExpansion) : [],
     isCurrent: () => views.get(key) === view && getConversation(view.threadId)?.owner === owner,
     requestFocus: (focusId, revision, paneId) => {
       if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId, ...(paneId ? { paneId } : {}) } })
@@ -95,6 +96,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (!client || !reply || !validId(event.mountId) || !event.threadId || event.threadId.length > 256) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.messageIds !== undefined && (!Array.isArray(event.messageIds) || !event.messageIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256))) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.userExpansion !== undefined && (!event.userExpansion || typeof event.userExpansion !== 'object' || Array.isArray(event.userExpansion) || !Object.entries(event.userExpansion).every(([id, value]) => id.length > 0 && id.length <= 256 && typeof value === 'boolean'))) return
+  if (event.type === 'CLAUDE_UI_MOUNT' && event.thinkingExpansion !== undefined && (!event.thinkingExpansion || typeof event.thinkingExpansion !== 'object' || Array.isArray(event.thinkingExpansion) || !Object.entries(event.thinkingExpansion).every(([id, indices]) => id.length > 0 && id.length <= 256 && Array.isArray(indices) && indices.every(index => Number.isSafeInteger(index) && index >= 0)))) return
   const key = keyOf(client, event.mountId)
   let view = views.get(key)
   if (view && view.threadId !== event.threadId) return
@@ -173,13 +175,14 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   }
   if (!view) {
     if (views.size >= 256 || [...views.values()].filter(item => item.client === client).length >= 16) return
-    view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, messageIds: new Set(), userExpansion: new Map(), reply, state: { status: 'disconnected' } }
+    view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, messageIds: new Set(), userExpansion: new Map(), thinkingExpansion: new Map(), reply, state: { status: 'disconnected' } }
     views.set(key, view)
   }
   if (event.messageIds !== undefined) {
     view.messageIds = new Set(event.messageIds)
   }
   if (event.userExpansion !== undefined) view.userExpansion = new Map(Object.entries(event.userExpansion))
+  if (event.thinkingExpansion !== undefined) view.thinkingExpansion = new Map(Object.entries(event.thinkingExpansion).map(([id, indices]) => [id, new Set(indices)]))
   view.reply = reply
   view.expires = Date.now() + 30000
   publish(view, view.state)

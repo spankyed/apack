@@ -126,7 +126,8 @@ interface ClaudeUiTranscriptRowSource {
   end: number
 }
 export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
-  | { component: 'AssistantMessage'; isFirstOfReply: boolean }
+  | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary?: false }
+  | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary: true; blockIndex: number }
   | { component: 'UserMessage'; origin: { kind: 'unclassified' }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {

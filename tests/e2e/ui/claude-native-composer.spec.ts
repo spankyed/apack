@@ -93,7 +93,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   const rowAction = () => appPage.evaluate(() => {
     const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const [mountId, view]: any = Object.entries(context.nativeUiViews).find(([, value]: any) => value.threadId === context.currentThread.id)!;
-    const first = view.state.transcriptMessages?.find((frame: any) => frame.component === 'AssistantMessage');
+    const first = view.state.transcriptMessages?.find((frame: any) => frame.component === 'AssistantMessage' && !frame.isSummary);
     const find = (node: any): string | undefined => node?.kind === 'button' ? node.actionId : node?.children?.map(find).find(Boolean);
     return { mountId, threadId: context.currentThread.id, actionId: first?.body.status === 'live' ? find(first.body.tree) : undefined };
   });
@@ -111,6 +111,47 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(nativeRows.nth(0).getByLabel('Message note', { exact: true })).toHaveValue('Message-only note');
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-assistant-messages.png') });
   expect(await snapshot()).toEqual(before);
+  const summaryRows = appPage.locator('[data-native-summary]');
+  const firstAssistant = nativeRows.first().locator('xpath=ancestor::*[@data-chat-message][1]');
+  const thinkingToggle = firstAssistant.getByRole('button', { name: /^Thought for/ });
+  await expect(thinkingToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(summaryRows).toHaveCount(0);
+  expect(JSON.parse(await readFile(join(workspace!, 'app-summary-frames.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '{}'; throw error }))).toEqual({});
+  await thinkingToggle.click();
+  await expect(summaryRows).toHaveCount(1);
+  await expect(summaryRows.first()).toContainText('Summary display: Synthetic thinking summary 1.');
+  const summaryId = await summaryRows.first().getAttribute('data-native-summary');
+  expect(nativeIds).not.toContain(summaryId);
+  const summaryFrames = async () => JSON.parse(await readFile(join(workspace!, 'app-summary-frames.json'), 'utf8'));
+  await expect.poll(async () => (await summaryFrames())[summaryId!]).toEqual({ id: summaryId, text: 'Synthetic thinking summary 1.', isSummary: true, isFirstOfReply: true });
+  await summaryRows.first().getByRole('button', { name: 'Inspect native summary', exact: true }).click();
+  const summaryPresses = async () => JSON.parse(await readFile(join(workspace!, 'app-summary-presses.json'), 'utf8'));
+  await expect.poll(summaryPresses).toEqual([{ id: summaryId, text: 'Synthetic thinking summary 1.' }]);
+  await summaryRows.first().getByLabel('Summary note', { exact: true }).fill('Summary-only note');
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'app-summary-note.json'), 'utf8'))).toEqual({ id: summaryId, value: 'Summary-only note' });
+  await expect(nativeRows.first().getByLabel('Message note', { exact: true })).toHaveValue('Message-only note');
+  const summaryAction = await appPage.evaluate(id => {
+    const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
+    const [mountId, view]: any = Object.entries(context.nativeUiViews).find(([, value]: any) => value.threadId === context.currentThread.id)!;
+    const frame = view.state.transcriptMessages.find((frame: any) => frame.uuid === id && frame.isSummary);
+    const find = (node: any): string | undefined => node?.kind === 'button' ? node.actionId : node?.children?.map(find).find(Boolean);
+    return { mountId, threadId: context.currentThread.id, actionId: find(frame.body.tree) };
+  }, summaryId);
+  const storedThinking = await appPage.evaluate(() => {
+    const thread = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread;
+    return thread.messages.flatMap((message: any) => (message.blocks ?? []).filter((block: any) => block.type === 'thinking').map((block: any) => block.props));
+  });
+  expect(storedThinking).toHaveLength(1);
+  expect(storedThinking[0].content).toBe('Synthetic thinking summary 1.');
+  expect(storedThinking[0].nativeMessages).toEqual([expect.objectContaining({ uuid: summaryId, isSummary: true, text: storedThinking[0].content, start: 0, end: storedThinking[0].content.length })]);
+  expect(JSON.stringify(storedThinking)).not.toContain('signature');
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-thinking-summary.png') });
+  await thinkingToggle.click(); await expect(summaryRows).toHaveCount(0);
+  await appPage.evaluate(identity => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLAUDE_UI_PRESS', ...identity }), summaryAction);
+  await thinkingToggle.click(); await expect(summaryRows).toHaveCount(1);
+  await expect(summaryRows.first().getByLabel('Summary note', { exact: true })).toHaveValue('Summary-only note');
+  expect(await summaryPresses()).toHaveLength(1);
+  await thinkingToggle.click(); await expect(summaryRows).toHaveCount(0);
   const ghost = editor.locator('.claude-prompt-suggestion');
   const suggest = strip.getByRole('button', { name: 'Suggest next step', exact: true });
   const suggestions = async () => JSON.parse(await readFile(join(workspace!, 'native-suggestions.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error }));
@@ -416,6 +457,14 @@ test('native extension fields, paint and hover work inside the actual composer',
   });
   expect(storedLong).toHaveLength(2); expect(storedLong[1].text).toContain('Review user expansion line 30');
   expect(storedLong.every((message: any) => !message.text.includes('User display:') && message.native.text === message.text)).toBe(true);
+  const secondAssistant = nativeRows.nth(2).locator('xpath=ancestor::*[@data-chat-message][1]');
+  const secondThinking = secondAssistant.getByRole('button', { name: /^Thought for/ });
+  await expect(secondThinking).toHaveAttribute('aria-expanded', 'false');
+  await secondThinking.click(); await expect(summaryRows).toHaveCount(1);
+  await expect(summaryRows.first()).toContainText('Summary display: Synthetic thinking summary 2.');
+  expect(await summaryRows.first().getAttribute('data-native-summary')).not.toBe(summaryId);
+  await expect(summaryRows.first().getByLabel('Summary note', { exact: true })).toHaveValue('');
+  await secondThinking.click(); await expect(summaryRows).toHaveCount(0);
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-user-message.png') });
   const launches = (await readFile(join(workspace!, 'native-launches.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   expect(launches.filter(value => value.args.includes('--input-format'))).toHaveLength(1);
@@ -431,5 +480,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeHidden();
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-restyled-narrow.png') });
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeUserRows: true, nativeUserRewrite: true, nativeUserCallbacks: true, nativeUserFields: true, nativeUserExpansion: true, nativeUserStoredText: true, nativeAssistantRows: true, nativeAssistantRewrite: true, nativeAssistantCallbacks: true, nativeAssistantFields: true, nativeAssistantStoredText: true, nativeAssistantStaleRefused: true, nativePluginStatus: true, nativeToastHold: true, nativeToastHover: true, nativeToastExpiry: true, nativeToastDismiss: true, nativeStatusClear: true, nativePaneResized: true, nativePaneSizePreference: true, nativePaneResizeMeasured: true, nativePaneResizeReset: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeSummaryRows: true, nativeSummaryControls: true, nativeSummaryStoredText: true, nativeSummaryCollapse: true, nativeUserRows: true, nativeUserRewrite: true, nativeUserCallbacks: true, nativeUserFields: true, nativeUserExpansion: true, nativeUserStoredText: true, nativeAssistantRows: true, nativeAssistantRewrite: true, nativeAssistantCallbacks: true, nativeAssistantFields: true, nativeAssistantStoredText: true, nativeAssistantStaleRefused: true, nativePluginStatus: true, nativeToastHold: true, nativeToastHover: true, nativeToastExpiry: true, nativeToastDismiss: true, nativeStatusClear: true, nativePaneResized: true, nativePaneSizePreference: true, nativePaneResizeMeasured: true, nativePaneResizeReset: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });

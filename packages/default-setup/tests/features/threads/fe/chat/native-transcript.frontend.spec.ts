@@ -1,5 +1,6 @@
 import { createApp, h, nextTick, type App } from 'vue'
-import { claudeNativeMessageParts } from '#features/threads/fe/chat/native-message-parts.ts'
+import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
+import { claudeNativeMessageParts, claudeThinkingMessageParts } from '#features/threads/fe/chat/native-message-parts.ts'
 import NativeTranscriptMessage from '#features/threads/fe/chat/NativeTranscriptMessage.vue'
 import type { ClaudeUiTranscriptFrame } from '#features/code/be/services/claude-code/ui-presentation.ts'
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
@@ -49,4 +50,36 @@ it('keeps user control clicks local while allowing body clicks to reach the host
   expect(root.querySelector('[data-native-assistant]')).toBeNull()
   root.querySelector('button')!.click(); expect(press).toHaveBeenCalledOnce(); expect(clicked).not.toHaveBeenCalled()
   root.querySelector<HTMLElement>('[data-engine-text]')!.click(); expect(clicked).toHaveBeenCalledOnce()
+})
+
+it('keeps narration out of the body and renders summary engines as literal plaintext', () => {
+  const value: ClaudeUiTranscriptFrame = { ...frame('summary', 0, 'Summary'), component: 'AssistantMessage', isFirstOfReply: true, isSummary: true, blockIndex: 1 }
+  expect(claudeNativeMessageParts('app', 'Summary', [value])).toEqual([{ kind: 'host', text: 'Summary', start: 0 }])
+  expect(claudeNativeMessageParts('app', 'Summary', [value], 0)).toEqual([{ kind: 'host', text: 'Summary', start: 0 }])
+  expect(claudeNativeMessageParts('app', 'Summary', [value], 1)[0]).toEqual({ kind: 'native', frame: value })
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(NativeTranscriptMessage, { frame: value }) }); app.mount(root)
+  expect(root.querySelector('[data-native-summary]')).not.toBeNull()
+  expect(root.querySelector('[data-native-assistant]')).toBeNull()
+  expect(root.querySelector('[data-engine-text]')).toBeNull()
+  expect(root.querySelector('pre')?.textContent).toBe('Display only <script>literal</script>')
+  expect(root.querySelector('script')).toBeNull()
+})
+it('does not reveal context while a narration hook is pending, and preserves raw thinking', () => {
+  const text = ' <context>Hidden</context>\nNarration '
+  const block = { content: text + '\n\n<context>Raw</context>', label: 'Thought', state: 'done' as const, nativeMessages: [{ uuid: 'summary', sessionId: 'session', text, start: 0, end: text.length, isSummary: true as const }] }
+  expect(claudeThinkingMessageParts('app', 0, block).map(part => part.kind === 'host' && part.text)).toEqual(['Narration', '\n\n<context>Raw</context>'])
+  expect(block.content).toContain('Hidden')
+})
+it('reports actual thinking expansion and removes its native slot on collapse', async () => {
+  const view = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ThinkingBlock, { content: 'Original', label: 'Thought', state: 'done', defaultOpen: false, onView: view }, { default: () => h('span', { 'data-summary-slot': true }, 'Native summary') }) }); app.mount(root)
+  expect(view).toHaveBeenLastCalledWith(false)
+  expect(root.querySelector('[data-summary-slot]')).toBeNull()
+  root.querySelector('button')!.click(); await nextTick()
+  expect(view).toHaveBeenLastCalledWith(true)
+  expect(root.querySelector('[data-summary-slot]')).not.toBeNull()
+  root.querySelector('button')!.click(); await nextTick()
+  expect(view).toHaveBeenLastCalledWith(false)
+  expect(root.querySelector('[data-summary-slot]')).toBeNull()
 })

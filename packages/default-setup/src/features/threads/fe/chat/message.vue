@@ -157,14 +157,18 @@
 
         <!-- Tool-activity blocks render ABOVE text so the work log
              appears before the model's commentary, not after it. -->
-        <InteractionContainer
-          v-if="toolActivityBlocks.length > 0"
-          class="mb-2"
-          :blocks="toolActivityBlocks"
-          :message-id="message.id"
-          :is-disabled="!!message.responseTimestamp"
-          :response="message.blockResponse"
-        />
+        <template v-for="entry in aboveTextBlocks" :key="entry.blockIndex">
+          <ThinkingBlock v-if="entry.thinking" class="mb-2" v-bind="entry.thinking"
+            @view="open => reportThinkingView(entry.blockIndex, open)">
+            <template v-for="part in thinkingParts(entry.blockIndex, entry.thinking)" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+              <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
+                @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+              <pre v-else class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ part.text }}</pre>
+            </template>
+          </ThinkingBlock>
+          <InteractionContainer v-else class="mb-2" :blocks="[entry.block]" :message-id="message.id"
+            :is-disabled="!!message.responseTimestamp" :response="message.blockResponse" />
+        </template>
 
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
@@ -226,7 +230,9 @@ import { computed, ref, onUpdated, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
-import { claudeNativeMessageParts } from './native-message-parts.ts'
+import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
+import type { ThinkingBlockProps } from '#features/threads/be/types.ts'
+import { claudeNativeMessageParts, claudeThinkingMessageParts } from './native-message-parts.ts'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
@@ -238,6 +244,7 @@ import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 interface ChatMessageProps {
   message: MessageEntity
   nativeFrames?: ClaudeUiTranscriptFrame[]
+  nativeViewId?: string
   isTyping?: boolean
   isTail?: boolean
   isClaudeCodeThread?: boolean
@@ -246,6 +253,7 @@ interface ChatMessageProps {
 interface ChatMessageEmits {
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
+  (e: 'native-ui-thinking-view', view: { messageId: string; blockIndex: number; open: boolean }): void
   (e: 'native-ui-message-view', view: { messageId: string; isExpanded: boolean }): void
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
@@ -265,6 +273,15 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 const emit = defineEmits<ChatMessageEmits>()
 
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
+
+const thinkingExpansion = new Map<number, boolean>()
+function reportThinkingView(blockIndex: number, open: boolean) {
+  thinkingExpansion.set(blockIndex, open)
+  emit('native-ui-thinking-view', { messageId: props.message.id, blockIndex, open })
+}
+watch(() => props.nativeViewId, () => {
+  for (const [blockIndex, open] of thinkingExpansion) emit('native-ui-thinking-view', { messageId: props.message.id, blockIndex, open })
+}, { flush: 'post' })
 
 const expanded = ref(false)
 const forking = ref(false)
@@ -357,9 +374,14 @@ const asideContext = computed(() => {
 // Split blocks by type so tool-activity and thinking render above text while
 // other block types (approval, choice, etc.) render below text.
 const ABOVE_TEXT_BLOCKS = new Set(['tool-activity', 'thinking'])
-const toolActivityBlocks = computed(() =>
-  (props.message.blocks ?? []).filter((b: any) => ABOVE_TEXT_BLOCKS.has(b.type))
-)
+function thinkingProps(block: { type: string; props?: unknown }): ThinkingBlockProps | undefined {
+  if (block.type !== 'thinking' || !block.props || typeof block.props !== 'object') return
+  const value = block.props as Partial<ThinkingBlockProps>
+  if (typeof value.content !== 'string' || typeof value.label !== 'string' || (value.state !== 'streaming' && value.state !== 'done')) return
+  return value as ThinkingBlockProps
+}
+const aboveTextBlocks = computed(() => (props.message.blocks ?? []).map((block, blockIndex) => ({ block, blockIndex, thinking: thinkingProps(block) })).filter(entry => ABOVE_TEXT_BLOCKS.has(entry.block.type)))
+const thinkingParts = (blockIndex: number, block: ThinkingBlockProps) => claudeThinkingMessageParts(props.message.id, blockIndex, block, props.isClaudeCodeThread ? props.nativeFrames : [])
 const otherBlocks = computed(() =>
   (props.message.blocks ?? []).filter((b: any) => !ABOVE_TEXT_BLOCKS.has(b.type))
 )

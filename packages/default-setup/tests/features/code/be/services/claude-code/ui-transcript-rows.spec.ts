@@ -1,4 +1,5 @@
-import { claudeAssistantDisplayText, selectClaudeTranscriptRows } from '#features/code/be/services/claude-code/ui-transcript-rows.ts'
+import { claudeAssistantDisplayText } from '#features/code/common/claude-message-display.ts'
+import { selectClaudeTranscriptRows } from '#features/code/be/services/claude-code/ui-transcript-rows.ts'
 const row = (uuid: string, start = 0, text = 'Native text', apiMessageId = 'provider') => ({ uuid, sessionId: 'session', apiMessageId, text, start, end: start + text.length })
 const message = (id: string, rows: ReturnType<typeof row>[], text = rows.map(value => value.text).join('\n')) => ({ id, sender: 'assistant', text, context: { claudeNativeMessages: rows } })
 it('derives reply opening from all persisted native rows, including rows outside the mounted selection', () => {
@@ -38,4 +39,24 @@ it('uses only accepted user provenance and the owning view expansion state', () 
   expect(selectClaudeTranscriptRows([{ ...user, status: 'queued' }], 'session', new Set(['app-user']))).toEqual([])
   expect(selectClaudeTranscriptRows([{ ...user, text: 'Edited prompt' }], 'session', new Set(['app-user']))).toEqual([])
   expect(selectClaudeTranscriptRows([{ ...user, context: { ...user.context, claudeNativeUserMessage: { ...user.context.claudeNativeUserMessage, origin: { kind: 'composer' } } } }], 'session', new Set(['app-user']))).toEqual([])
+})
+
+it('selects only open, classified narration from exact persisted thinking ranges', () => {
+  const summary = { ...row('summary', 0, '  Narration  '), isSummary: true }
+  const raw = row('raw', 15, 'Raw thought')
+  const blocks = [{ type: 'tool-activity', props: {} }, { type: 'thinking', props: { content: '  Narration  \n\nRaw thought', nativeMessages: [summary, raw] } }]
+  const source = { ...message('app', [row('text')]), blocks }
+  const open = new Map([['app', new Set([1])]])
+  expect(selectClaudeTranscriptRows([source], 'session', new Set(['app']))).toHaveLength(1)
+  expect(selectClaudeTranscriptRows([source], 'session', new Set(['app']), new Map(), open)).toEqual([
+    { component: 'AssistantMessage', isSummary: true, blockIndex: 1, isFirstOfReply: true, messageId: 'app', uuid: 'summary', sessionId: 'session', text: '  Narration  ', start: 0, end: 13 },
+    expect.objectContaining({ uuid: 'text' }),
+  ])
+  expect(selectClaudeTranscriptRows([source], 'foreign', new Set(['app']), new Map(), open)).toEqual([])
+  blocks[1].props = { content: 'Edited thinking', nativeMessages: [summary, raw] }
+  expect(selectClaudeTranscriptRows([source], 'session', new Set(['app']), new Map(), open)).toHaveLength(1)
+})
+it('rejects duplicate native identity even when the other thinking block is closed', () => {
+  const source = { ...message('app', [row('same')]), blocks: [{ type: 'thinking', props: { content: 'Summary', nativeMessages: [{ ...row('same', 0, 'Summary'), isSummary: true }] } }] }
+  expect(selectClaudeTranscriptRows([source], 'session', new Set(['app']))).toEqual([])
 })

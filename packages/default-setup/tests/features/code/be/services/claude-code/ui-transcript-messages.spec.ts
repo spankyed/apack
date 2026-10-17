@@ -107,3 +107,21 @@ it('caps user body rewrites at the native printable limit without changing store
   expect(f.host.state[0].displayText).toHaveLength(100000); expect(f.host.state[0].text).toBe(original)
   f.host.dispose()
 })
+
+it('retires collapsed summary controls before reopening a fresh drawing', async () => {
+  const f = fixture()
+  const summary: ClaudeUiTranscriptRow = { ...f.rows[0], component: 'AssistantMessage', isFirstOfReply: true, isSummary: true, blockIndex: 2, text: '  <context>Hidden</context>\nSummary  ', start: 0, end: 37 }
+  f.setRows([summary]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ props: { text: 'Summary', isSummary: true, isFirstOfReply: true } }))
+  const button = f.nodes()[0], input = f.nodes()[1]; if (button.kind !== 'button' || input.kind !== 'input') throw Error('controls')
+  f.setRows([])
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  await expect(f.host.field({ actionId: input.actionId, revision: 1, kind: 'change', value: 'Stale' })).resolves.toEqual({ handled: false })
+  f.host.refresh(); expect(f.host.state).toEqual([])
+  f.setRows([summary]); f.host.refresh(); await vi.advanceTimersByTimeAsync(50)
+  const reopened = f.nodes()[0]; if (reopened.kind !== 'button') throw Error('button')
+  expect(reopened.actionId).not.toBe(button.actionId)
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  await expect(f.host.press(reopened.actionId!)).resolves.toEqual({ handled: true })
+  f.host.dispose()
+})

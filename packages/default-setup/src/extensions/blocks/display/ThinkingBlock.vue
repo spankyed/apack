@@ -4,6 +4,7 @@
     <button
       type="button"
       class="w-full flex items-baseline gap-2 px-3 py-2 text-left hover:bg-neutral-700/40 transition-colors"
+      :aria-expanded="isOpen"
       @click="isOpen = !isOpen"
     >
       <ChevronRight
@@ -26,13 +27,13 @@
       class="border-t border-neutral-700 max-h-80 overflow-y-auto px-3 py-2"
       @scroll="onScroll"
     >
-      <pre class="text-xs text-neutral-400 whitespace-pre-wrap font-sans leading-relaxed m-0">{{ content }}</pre>
+      <slot><pre class="text-xs text-neutral-400 whitespace-pre-wrap font-sans leading-relaxed m-0">{{ content }}</pre></slot>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ChevronRight, Brain } from 'lucide-vue-next'
 
 interface Props {
@@ -47,6 +48,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const isOpen = ref(props.defaultOpen)
+const emit = defineEmits<{ view: [open: boolean] }>()
+watch(isOpen, open => emit('view', open), { immediate: true })
+onBeforeUnmount(() => emit('view', false))
 const contentEl = ref<HTMLElement | null>(null)
 let userHasScrolled = false
 

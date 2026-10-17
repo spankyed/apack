@@ -1760,6 +1760,12 @@ type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
 type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & ({
     component: 'AssistantMessage';
     isFirstOfReply: boolean;
+    isSummary?: false;
+} | {
+    component: 'AssistantMessage';
+    isFirstOfReply: boolean;
+    isSummary: true;
+    blockIndex: number;
 } | {
     component: 'UserMessage';
     origin: {
@@ -1811,6 +1817,7 @@ type ClaudeUiViewRequest = ({
     mountId: string;
     messageIds?: string[];
     userExpansion?: Record<string, boolean>;
+    thinkingExpansion?: Record<string, number[]>;
 } | {
     type: 'CLAUDE_UI_UNMOUNT';
     threadId: string;
