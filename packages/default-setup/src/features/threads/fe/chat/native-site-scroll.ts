@@ -81,5 +81,10 @@ export function useClaudeSiteScroll(options: {
   }, { flush: 'post', immediate: true })
   watch(options.state, apply, { flush: 'post' })
   onBeforeUnmount(cleanup)
-  return { reveal(top: number) { setTop(top) }, reportLayout: schedule }
+  return { reveal(top: number) {
+    const before = lastOffset
+    followEnd = false; setTop(top)
+    pendingBy += lastOffset - before
+    schedule()
+  }, reportLayout: schedule }
 }

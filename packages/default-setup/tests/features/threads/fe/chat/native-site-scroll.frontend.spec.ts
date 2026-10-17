@@ -11,8 +11,9 @@ it('applies native offsets without echo, reports gestures, preserves fractional 
   const frame = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback(0)) }
   const state = reactive<{ scroll?: ClaudeUiScrollState }>({}), emit = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const element = ref<HTMLElement | null>(null)
+  let bridge!: ReturnType<typeof useClaudeSiteScroll>
   const app = createApp({ setup() {
-    useClaudeSiteScroll({ element, state: () => state.scroll, emit })
+    bridge = useClaudeSiteScroll({ element, state: () => state.scroll, emit })
     return () => h('div', { ref: element, style: { lineHeight: '20px' } }, [h('div', { 'data-native-scroll-content': '' }, [h('span', { 'data-native-scroll-id': 'opaque' }, 'Target')])])
   } }); app.mount(root)
   try {
@@ -39,6 +40,8 @@ it('applies native offsets without echo, reports gestures, preserves fractional 
     state.scroll = { serial: 5, offset: 15, followEnd: true }; await nextTick(); expect(site.scrollTop).toBe(300)
     height = 600; observers[0]([], {} as ResizeObserver); frame(); expect(site.scrollTop).toBe(500)
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ by: 0, contentRows: 30 }))
+    bridge.reveal(200); frame(); expect(site.scrollTop).toBe(200)
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 10, by: -15 }))
     observers[0]([], {} as ResizeObserver); app.unmount(); expect(callbacks.size).toBe(0)
   } finally { if (root.firstChild) app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })
