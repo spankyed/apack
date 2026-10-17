@@ -437,6 +437,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect.poll(fitsComposer).toBe(true);
   const editorArea = card.getByTestId('composer-editor-area');
   await expect.poll(() => editorArea.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect.poll(() => editorArea.evaluate(element => { const bounds = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)); })).toBe(true);
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 });
   const shortGeometry = await card.evaluate(element => {
     const bounds = element.getBoundingClientRect(), pane = element.closest('[data-testid="chat-composer-area"]')!.getBoundingClientRect();
