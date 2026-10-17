@@ -91,6 +91,8 @@
               :status-line="statusLine"
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing"
+              :native-prompt="nativePrompt"
+              @native-prompt-edit="editNativePrompt"
               @native-ui-press="pressNativeUi"
               @native-ui-field="editNativeUi"
               @send-message="handleSendMessage"
@@ -230,6 +232,15 @@ const nativeUiDrawing = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
 })
+const nativePrompt = computed(() => {
+  const mount = nativeUiMount.value
+  if (!mount || mount.threadId !== currentThread.value?.id) return
+  return { mountId: mount.mountId, revision: nativeUiViews.value[mount.mountId]?.promptRevision, reply: nativeUiViews.value[mount.mountId]?.prompt }
+})
+function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...mount, ...edit })
+}
 let heartbeat: ReturnType<typeof setInterval> | undefined
 let stopNativeUiWatch: (() => void) | undefined
 function detachNativeUi() {

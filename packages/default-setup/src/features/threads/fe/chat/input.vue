@@ -53,6 +53,7 @@
             @pause="emit('pause')"
             @open-revert-menu="openRevertMenu"
           />
+          <p v-if="nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ nativePromptProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
             :anchor-el="inputCardRef"
@@ -195,6 +196,8 @@ import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVert
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import StatusLine from './StatusLine.vue'
+import { bindClaudePromptEditor } from './native-prompt-editor.ts'
+import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
 import { DOUBLE_ESC_MS } from '@apackdev/ui/components/tiptap/composables/createEditorKeyboard'
 import { useAttachments } from './composables/useAttachments.ts'
@@ -250,6 +253,7 @@ const props = defineProps<{
   statusLine?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
+  nativePrompt?: { mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply }
   nativeUi?: ClaudeUiMountState
 }>()
 
@@ -271,6 +275,7 @@ const emit = defineEmits<{
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
+  (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'statusline-click'): void
@@ -286,6 +291,15 @@ interface ActionButton {
 
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
+const nativePromptProblem = ref<string>()
+let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
+watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
+  promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
+  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision)
+}, { flush: 'post' })
+watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
+onUnmounted(() => promptEditor?.dispose())
+
 
 const messageContent = ref('')
 const hasTextContent = ref(false)
@@ -322,7 +336,7 @@ watch(popoverOpen, (isOpen) => {
 // Prefill the input when the parent sets prefillText (e.g., on revert).
 watch(() => props.prefillText, (text) => {
   if (text && tiptapRef.value?.editor) {
-    tiptapRef.value.editor.commands.setContent(text)
+    tiptapRef.value.editor.chain().setMeta('claude-prompt-by', 'app').setContent(text).run()
     tiptapRef.value.editor.commands.focus('end')
   }
 })
@@ -395,7 +409,7 @@ function onClearInput() {
   const md = messageContent.value
   if (!md.trim()) return
   lastClearedContent.value = md
-  editor.commands.clearContent(true)
+  editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
 }
 
 function onHistoryPrev() {
@@ -410,7 +424,7 @@ function onHistoryPrev() {
   }
 
   navigatingHistory.value = true
-  editor.commands.setContent(sentHistory.value[historyIndex.value])
+  editor.chain().setMeta('claude-prompt-by', 'app').setContent(sentHistory.value[historyIndex.value]).run()
   navigatingHistory.value = false
 }
 
@@ -421,7 +435,7 @@ function onHistoryNext() {
   if (historyIndex.value === -1) {
     if (lastClearedContent.value) {
       navigatingHistory.value = true
-      editor.commands.setContent(lastClearedContent.value)
+      editor.chain().setMeta('claude-prompt-by', 'app').setContent(lastClearedContent.value).run()
       lastClearedContent.value = null
       navigatingHistory.value = false
     }
@@ -431,12 +445,12 @@ function onHistoryNext() {
   if (historyIndex.value < sentHistory.value.length - 1) {
     historyIndex.value++
     navigatingHistory.value = true
-    editor.commands.setContent(sentHistory.value[historyIndex.value])
+    editor.chain().setMeta('claude-prompt-by', 'app').setContent(sentHistory.value[historyIndex.value]).run()
     navigatingHistory.value = false
   } else {
     historyIndex.value = -1
     navigatingHistory.value = true
-    editor.commands.clearContent(true)
+    editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
     navigatingHistory.value = false
   }
 }
@@ -447,7 +461,7 @@ const { isSupported: speechSupported, isListening, toggle: toggleSpeech, start: 
     if (!editor) return
     const trimmed = transcript.trim()
     if (!trimmed) return
-    editor.commands.insertContent(trimmed + '. ')
+    editor.chain().setMeta('claude-prompt-by', 'person').insertContent(trimmed + '. ').run()
   },
   maxDurationMs: () => {
     const mins = props.recordingLimitMinutes
@@ -673,7 +687,7 @@ const handleSubmit = async () => {
     saveHistory(sentHistory.value)
     historyIndex.value = -1
     lastClearedContent.value = null
-    editor.commands.clearContent(true)
+    editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
     messageContent.value = ''
     hasTextContent.value = false
     clearAll()
