@@ -17,6 +17,13 @@ const field = z.object({
 }).strict()
 const input = field.extend({ kind: z.enum(['change', 'submit']) })
 const fieldResult = z.object({ handled: z.boolean(), element: z.string().optional(), value: z.string().optional() }).passthrough()
+// Absent element reports hold only; null selects the site container (native 2.1.302).
+const focusElement = z.object({ plugin: z.string().max(256), key: z.string().max(256) }).strict()
+const focus = z.object({ client_id: clientId, surface, component: z.enum(['Pane', 'AbovePrompt']),
+  instance_id: z.string().max(256), is_held: z.boolean(), element: focusElement.nullable().optional(),
+  by: z.enum(['person', 'auto']),
+}).strict()
+const focusResult = z.object({ moved: z.boolean(), element: focusElement.nullable(), deny: z.string().optional() }).passthrough()
 const promptKey = z.object({ key: z.string().min(1).max(32), ctrl: z.literal(true).optional(), shift: z.literal(true).optional(), meta: z.literal(true).optional() }).strict()
 const promptEdit = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe(),
   by: z.enum(['person', 'app']), key: promptKey.optional(),
@@ -46,6 +53,8 @@ const renderResult = z.object({ tree: z.unknown(), props: z.record(z.unknown()),
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
 export type ClaudeUiPress = z.infer<typeof press>
+export type ClaudeUiFocus = z.infer<typeof focus>
+export type ClaudeUiFocusResult = z.infer<typeof focusResult>
 export type ClaudeUiInput = z.infer<typeof input>
 export type ClaudeUiSelect = z.infer<typeof field>
 export type ClaudeUiPromptEdit = z.infer<typeof promptEdit>
@@ -74,6 +83,11 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
       return renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+    },
+    /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
+    async focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult> {
+      const valid = focus.parse(options)
+      return focusResult.parse(await request({ subtype: 'ui_focus', ...valid }))
     },
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
     async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {

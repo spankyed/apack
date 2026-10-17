@@ -127,3 +127,34 @@ it('validates native autocomplete rows and token boundaries while preserving sup
   await vi.waitFor(() => expect(f.writes).toHaveLength(3)); f.reply(2, { suggestions: [{ text: 'token' }], start: 4 })
   await rejected
 })
+
+
+it('preserves focus hold-only, container and redirected element reports', async () => {
+  const f = fixture()
+  const site = { ...client, component: 'AbovePrompt' as const, instance_id: 'above-prompt', by: 'person' as const, is_held: true }
+  const held = f.ui.focus(site)
+  await Promise.resolve()
+  expect(f.writes[0]!.request).toEqual({ subtype: 'ui_focus', ...site })
+  f.reply(0, { moved: false, element: null }); await expect(held).resolves.toEqual({ moved: false, element: null })
+  const container = f.ui.focus({ ...site, element: null })
+  await Promise.resolve()
+  expect(f.writes[1]!.request).toEqual({ subtype: 'ui_focus', ...site, element: null })
+  const redirect = { plugin: 'fixture-plugin', key: 'redirected' }
+  f.reply(1, { moved: true, element: redirect }); await expect(container).resolves.toEqual({ moved: true, element: redirect })
+  const denied = f.ui.focus({ ...site, by: 'auto', element: redirect })
+  await Promise.resolve(); f.reply(2, { moved: false, element: null, deny: 'hook declined' })
+  await expect(denied).resolves.toMatchObject({ moved: false, deny: 'hook declined' })
+  await expect(f.ui.focus({ ...site, instance_id: 'x'.repeat(257) })).rejects.toThrow()
+  expect(f.writes).toHaveLength(3); f.controls.close()
+})
+
+it('rejects malformed focus replies and gates focus on the UI capability', async () => {
+  const options = { ...client, component: 'AbovePrompt' as const, instance_id: 'above-prompt', by: 'person' as const, is_held: false }
+  const f = fixture(), pending = f.ui.focus(options)
+  const rejected = expect(pending).rejects.toThrow()
+  await Promise.resolve(); f.reply(0, { moved: true, element: { key: 'missing-plugin' } })
+  await rejected; f.controls.close()
+  const unavailable = fixture([])
+  await expect(unavailable.ui.focus(options)).rejects.toThrow('capability is unavailable')
+  expect(unavailable.writes).toEqual([]); unavailable.controls.close()
+})
