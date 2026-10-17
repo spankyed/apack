@@ -9,7 +9,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ maxHeight: 'calc(var(--composer-available-height) - clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem))' }"
+        :style="{ maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem)))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Buttons row -->
-        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 bg-[#202022] px-3 pb-3 pt-2 text-neutral-500">
+        <div data-composer-toolbar class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 bg-[#202022] px-3 pb-3 pt-2 text-neutral-500">
           <!-- Left side buttons -->
           <div class="flex items-center min-w-0">
             <!-- Collapsed: ... dropdown menu (narrow) -->
@@ -821,6 +821,11 @@ const handleSubmit = async () => {
   box-shadow: 0 12px 40px -20px rgba(0, 0, 0, 0.6);
   &:focus-within { border-color: rgba(147, 180, 240, 0.32); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+@media (max-height: 700px) {
+  .input { --composer-history-reserve: 2rem; }
+  .input :global([data-testid="composer-editor-area"]), .input :global(.ProseMirror) { min-height: 40px; }
+  .input :global(.ProseMirror) { padding-top: 8px; padding-bottom: 8px; }
 }
 .inputCommandActive, .inputCommandActive:focus-within {
   border-color: rgba(180, 180, 255, 0.45);

@@ -429,6 +429,9 @@ test('native extension fields, paint and hover work inside the actual composer',
     const bounds = element.getBoundingClientRect(), site = element.closest('.native-extension-surface')!.getBoundingClientRect();
     return bounds.top >= site.top - 1 && bounds.bottom <= site.bottom + 1;
   })).toBe(true);
+  await expect(note).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => note.evaluate(element => { const bounds = element.getBoundingClientRect(); return [bounds.top + 2, (bounds.top + bounds.bottom) / 2, bounds.bottom - 2].every(y => document.elementFromPoint(bounds.left + bounds.width / 2, y) === element); })).toBe(true);
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-focused-short.png') });
   await note.press('Escape'); await expect(editor).toBeFocused();
   await editor.fill(Array.from({ length: 40 }, (_, index) => `Draft line ${index + 1}`).join('\n'));
   await expect.poll(fitsComposer).toBe(true);
