@@ -1,10 +1,10 @@
 <template>
   <div class="w-full max-w-2xl">
-    <div class="overflow-hidden rounded-xl bg-[#202022] border border-white/[0.08] animate-fade-in">
+    <div class="overflow-hidden rounded-lg border border-white/[0.06] animate-fade-in">
       <!-- Header -->
-      <div class="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
-        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-300/10 bg-blue-300/[0.06]"><Wrench :size="15" class="text-blue-200/80" /></span>
-        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
+      <div class="flex items-center gap-2.5 px-4 py-3">
+        <span class="flex h-6 w-6 shrink-0 items-center justify-center text-neutral-400"><Wrench :size="15" class="text-neutral-400" /></span>
+        <h3 class="min-w-0 flex-1 truncate text-xs font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
         <button
           v-if="content.sessionId"
           @click="openTerminalTab"
@@ -14,7 +14,7 @@
           <Terminal :size="12" />
         </button>
 
-        <span class="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1">
+        <span class="flex shrink-0 items-center gap-1.5 px-1 py-0.5">
           <span class="relative inline-block w-2 h-2" :title="content.chatState">
             <span
               :class="[
@@ -75,8 +75,15 @@
         >Clear</button>
       </div>
 
-      <!-- Key/value grid -->
-      <div class="px-5 py-4 space-y-4 text-xs">
+      <!-- Keep diagnostics available without dominating the conversation. -->
+      <details class="group border-t border-white/[0.06] text-xs">
+        <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-neutral-400 transition-colors hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-blue-400 [&::-webkit-details-marker]:hidden">
+          <span class="min-w-0 flex-1 truncate font-medium text-neutral-300">{{ content.model || 'Model unavailable' }}</span>
+          <span class="tabular-nums">{{ content.turns ?? 0 }} turns</span>
+          <span class="tabular-nums">${{ (content.totalCostUsd ?? 0).toFixed(3) }}</span>
+          <span class="text-neutral-500 group-open:text-neutral-300">Details <span aria-hidden="true" class="inline-block transition-transform group-open:rotate-180">⌄</span></span>
+        </summary>
+      <div class="px-4 pb-4 pt-2 space-y-4 text-xs">
         <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3">
           <span class="text-neutral-500">Model</span>
           <span class="text-neutral-100 font-medium truncate">{{ content.model || '—' }}</span>
@@ -253,6 +260,7 @@
           </div>
         </div>
       </div>
+      </details>
     </div>
   </div>
 </template>

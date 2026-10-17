@@ -1,15 +1,15 @@
 <template>
   <div v-if="statusLine || hasContent || nativeUi?.status === 'error'"
-    class="flex min-h-0 min-w-0 flex-col overflow-y-auto bg-[#202022] px-5 py-3 text-xs text-neutral-400" :class="{ 'min-h-36': hasContent && toolsOpen, 'border-b border-white/[0.06]': hasContent || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
+    class="flex min-h-0 min-w-0 flex-col overflow-y-auto px-4 py-2 text-xs text-neutral-400" :class="{ 'min-h-36': hasContent && toolsOpen, 'border-b border-white/[0.06]': hasContent || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3 pr-5">
-      <span v-if="statusLine" class="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">{{ isWorkspacePath ? 'Workspace' : 'Session' }}</span>
+      <span v-if="statusLine" class="shrink-0 text-[11px] font-medium text-neutral-400">{{ isWorkspacePath ? 'Workspace' : 'Session' }}</span>
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
-        :title="cwd || statusLine" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0" :class="isWorkspacePath ? 'truncate' : 'whitespace-pre-wrap break-words'">{{ displayPath }}</span></button>
+        :title="cwd || statusLine" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0" :class="'truncate'">{{ displayPath }}</span></button>
       <button v-if="hasContent" type="button" aria-label="Session tools" :aria-expanded="toolsOpen" class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium text-neutral-300 hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-blue-400" @click="toolsOpen = !toolsOpen">
         <span>Tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
     </div>
-    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface max-h-56 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-4': statusLine }">
+    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface max-h-56 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-3 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
