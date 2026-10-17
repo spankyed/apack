@@ -59,6 +59,21 @@ test('native extension fields, paint and hover work inside the actual composer',
     return !!view?.promptRevision && view.prompt?.revision === view.promptRevision;
   });
   const before = await snapshot();
+  const nativeUserRows = appPage.locator('[data-native-user]');
+  await expect(nativeUserRows).toHaveCount(1);
+  await expect(nativeUserRows.first()).toContainText('User display: Help me review the changes in this workspace.');
+  const userId = await nativeUserRows.first().getAttribute('data-native-user');
+  await nativeUserRows.first().getByRole('button', { name: 'Inspect native user', exact: true }).click();
+  const userPresses = async () => JSON.parse(await readFile(join(workspace!, 'app-user-presses.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error }));
+  await expect.poll(userPresses).toEqual([{ id: userId, text: 'Help me review the changes in this workspace.', origin: { kind: 'unclassified' }, isExpanded: true }]);
+  await nativeUserRows.first().getByLabel('User note', { exact: true }).fill('User-only note');
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'app-user-note.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '{}'; throw error }))).toEqual({ id: userId, value: 'User-only note' });
+  const storedUserText = await appPage.evaluate(() => {
+    const thread = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread;
+    return thread.messages.find((message: any) => message.context?.claudeNativeUserMessage)?.text;
+  });
+  expect(storedUserText).toBe('Help me review the changes in this workspace.');
+  expect(await snapshot()).toEqual(before);
   const nativeRows = appPage.locator('[data-native-assistant]');
   await expect.poll(() => appPage.getByTestId('chat-transcript').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(96);
   await expect(nativeRows).toHaveCount(2);
@@ -78,7 +93,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   const rowAction = () => appPage.evaluate(() => {
     const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const [mountId, view]: any = Object.entries(context.nativeUiViews).find(([, value]: any) => value.threadId === context.currentThread.id)!;
-    const first = view.state.assistantMessages?.[0];
+    const first = view.state.transcriptMessages?.find((frame: any) => frame.component === 'AssistantMessage');
     const find = (node: any): string | undefined => node?.kind === 'button' ? node.actionId : node?.children?.map(find).find(Boolean);
     return { mountId, threadId: context.currentThread.id, actionId: first?.body.status === 'live' ? find(first.body.tree) : undefined };
   });
@@ -379,15 +394,35 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-short.png') });
   await appPage.setViewportSize({ width: 680, height: 900 });
 
-  await editor.fill('Continue with the review.');
+  const longUserText = Array.from({ length: 30 }, (_, index) => `Review user expansion line ${index + 1}: preserve original source and native callbacks.`).join('\n');
+  await editor.fill(longUserText);
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(async () => (await snapshot()).turns).toBe(2);
   await expect(nativeRows).toHaveCount(4);
+  await expect(nativeUserRows).toHaveCount(2);
+  const longUser = nativeUserRows.nth(1), longUserId = await longUser.getAttribute('data-native-user');
+  const userFrames = async () => JSON.parse(await readFile(join(workspace!, 'app-user-frames.json'), 'utf8'));
+  await expect.poll(async () => (await userFrames())[longUserId!]?.isExpanded).toBe(false);
+  await longUser.getByLabel('User note', { exact: true }).fill('Long user note');
+  const longUserBubble = longUser.locator('xpath=ancestor::*[@data-chat-message][1]');
+  await longUserBubble.getByRole('button', { name: 'Expand user message', exact: true }).click();
+  await expect.poll(async () => (await userFrames())[longUserId!]?.isExpanded).toBe(true);
+  await expect(longUser).toContainText('Review user expansion line 30');
+  await expect(longUser.getByLabel('User note', { exact: true })).toHaveValue('Long user note');
+  await expect(nativeUserRows.first().getByLabel('User note', { exact: true })).toHaveValue('User-only note');
+  const storedLong = await appPage.evaluate(() => {
+    const thread = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread;
+    return thread.messages.filter((message: any) => message.context?.claudeNativeUserMessage).map((message: any) => ({ text: message.text, native: message.context.claudeNativeUserMessage }));
+  });
+  expect(storedLong).toHaveLength(2); expect(storedLong[1].text).toContain('Review user expansion line 30');
+  expect(storedLong.every((message: any) => !message.text.includes('User display:') && message.native.text === message.text)).toBe(true);
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-user-message.png') });
   const launches = (await readFile(join(workspace!, 'native-launches.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   expect(launches.filter(value => value.args.includes('--input-format'))).toHaveLength(1);
   await appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLEAR_THREAD' }));
   await expect(card.getByRole('button', { name: 'Refresh context', exact: true })).toHaveCount(0);
   await expect(nativeRows).toHaveCount(0);
+  await expect(nativeUserRows).toHaveCount(0);
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(nativeRows).toHaveCount(4);
   if (await toolsToggle.getAttribute('aria-expanded') === 'false') await toolsToggle.click();
@@ -396,5 +431,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeHidden();
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-restyled-narrow.png') });
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeAssistantRows: true, nativeAssistantRewrite: true, nativeAssistantCallbacks: true, nativeAssistantFields: true, nativeAssistantStoredText: true, nativeAssistantStaleRefused: true, nativePluginStatus: true, nativeToastHold: true, nativeToastHover: true, nativeToastExpiry: true, nativeToastDismiss: true, nativeStatusClear: true, nativePaneResized: true, nativePaneSizePreference: true, nativePaneResizeMeasured: true, nativePaneResizeReset: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeUserRows: true, nativeUserRewrite: true, nativeUserCallbacks: true, nativeUserFields: true, nativeUserExpansion: true, nativeUserStoredText: true, nativeAssistantRows: true, nativeAssistantRewrite: true, nativeAssistantCallbacks: true, nativeAssistantFields: true, nativeAssistantStoredText: true, nativeAssistantStaleRefused: true, nativePluginStatus: true, nativeToastHold: true, nativeToastHover: true, nativeToastExpiry: true, nativeToastDismiss: true, nativeStatusClear: true, nativePaneResized: true, nativePaneSizePreference: true, nativePaneResizeMeasured: true, nativePaneResizeReset: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });

@@ -116,6 +116,8 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   if (mode === 'source') {
     expect(messages.find(message => message.id === user1.id)?.text).toBe('input 1');
     expect(messages.find(message => message.id === user2.id)?.text).toBe('input 2');
+    expect(messages.find(message => message.id === user1.id)?.context?.claudeNativeUserMessage).toEqual({ uuid: 'input-1', sessionId: 'fixture-session', text: 'input 1', origin: { kind: 'unclassified' } });
+    expect(messages.find(message => message.id === user2.id)?.context?.claudeNativeUserMessage).toEqual({ uuid: 'input-2', sessionId: 'fixture-session', text: 'input 2', origin: { kind: 'unclassified' } });
   }
   expect(messages.filter(message => message.sender === 'assistant').map(message => message.text)).toEqual(['reply 1', ...(mode === 'source' ? ['Model selection accepted: haiku. The next turn will report the effective model.'] : []), 'reply 2', 'native autonomous work']);
   expect(await store.closeIdleConversation(id)).toBe(true);

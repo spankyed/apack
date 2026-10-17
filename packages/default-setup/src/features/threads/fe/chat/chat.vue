@@ -58,9 +58,10 @@
                   v-for="message in visibleMessages"
                   :key="message.id"
                   :message="message"
-                  :native-frames="nativeUiDrawing?.assistantMessages"
+                  :native-frames="nativeUiDrawing?.transcriptMessages"
                   @native-ui-press="pressNativeUi"
                   @native-ui-field="editNativeUi"
+                  @native-ui-message-view="reportNativeMessageView"
                   :is-tail="isTailMessage(message)"
                   :is-claude-code-thread="!!currentThread?.context?.claudeCode"
                   @open-lightbox="openLightbox"
@@ -239,6 +240,7 @@ function isTailMessage(msg: MessageEntity): boolean {
 }
 
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const nativeUserExpansion = ref<Record<string, boolean>>({})
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
 const nativeUiDrawing = computed(() => {
@@ -249,6 +251,14 @@ const nativeFocus = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.focus : undefined
 })
+function renewNativeUi() {
+  const mount = nativeUiMount.value
+  if (mount && mount.threadId === currentThread.value?.id) actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value })
+}
+function reportNativeMessageView(view: { messageId: string; isExpanded: boolean }) {
+  if (!visibleMessages.value.some(message => message.id === view.messageId && message.sender === 'user') || nativeUserExpansion.value[view.messageId] === view.isExpanded) return
+  nativeUserExpansion.value = { ...nativeUserExpansion.value, [view.messageId]: view.isExpanded }; renewNativeUi()
+}
 function operateNativeNotice(event: import('#generated/types.ts').ClaudeUiNoticeEvent) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_UI_NOTICE', ...mount, ...event })
@@ -291,6 +301,7 @@ function detachNativeUi() {
   heartbeat = undefined
   const mount = nativeUiMount.value
   nativeUiMount.value = undefined
+  nativeUserExpansion.value = {}
   if (mount) actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
 }
 function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
@@ -307,16 +318,13 @@ onMounted(() => {
     if (!threadId || !enabled) return
     const mount = { threadId, mountId: crypto.randomUUID() }
     nativeUiMount.value = mount
-    const renew = () => actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id) })
+    const renew = renewNativeUi
     renew()
     heartbeat = setInterval(renew, 10000)
   }, { immediate: true })
 })
 onUnmounted(() => { stopNativeUiWatch?.(); detachNativeUi() })
-watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), () => {
-  const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id) })
-}, { flush: 'post' })
+watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), renewNativeUi, { flush: 'post' })
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])

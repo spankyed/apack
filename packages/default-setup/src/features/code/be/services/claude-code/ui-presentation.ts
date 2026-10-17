@@ -117,16 +117,19 @@ export interface ClaudeUiNotices {
   toasts: { id: string; plugin: string; text: string }[]
 }
 
-export interface ClaudeUiAssistantRow {
+interface ClaudeUiTranscriptRowSource {
   messageId: string
   uuid: string
   sessionId: string
   text: string
   start: number
   end: number
-  isFirstOfReply: boolean
 }
-export interface ClaudeUiAssistantFrame extends ClaudeUiAssistantRow {
+export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
+  | { component: 'AssistantMessage'; isFirstOfReply: boolean }
+  | { component: 'UserMessage'; origin: { kind: 'unclassified' }; isExpanded: boolean }
+)
+export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   displayText: string
   body: { status: 'rendering' | 'error' } | { status: 'live'; tree: ClaudeUiNode }
 }
@@ -135,7 +138,7 @@ export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; assistantMessages?: ClaudeUiAssistantFrame[] }
+) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[] }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

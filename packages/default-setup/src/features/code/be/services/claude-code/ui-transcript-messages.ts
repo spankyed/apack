@@ -1,14 +1,14 @@
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
-import { claudeAssistantDisplayText } from './ui-assistant-rows.ts'
+import { claudeAssistantDisplayText } from './ui-transcript-rows.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
-import type { ClaudeUiAssistantFrame, ClaudeUiAssistantRow, ClaudeUiFieldEvent, ClaudeUiNode } from './ui-presentation.ts'
+import type { ClaudeUiTranscriptFrame, ClaudeUiTranscriptRow, ClaudeUiFieldEvent, ClaudeUiNode } from './ui-presentation.ts'
 
 type Entry = {
-  row: ClaudeUiAssistantRow
+  row: ClaudeUiTranscriptRow
   epoch: number
   dirty: boolean
   pressing: boolean
-  body: ClaudeUiAssistantFrame['body']
+  body: ClaudeUiTranscriptFrame['body']
   displayText: string
   drawing?: ClaudeUiDrawing
   fields?: ClaudeUiDrawing
@@ -20,13 +20,15 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-const same = (a: ClaudeUiAssistantRow, b: ClaudeUiAssistantRow) => a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && a.isFirstOfReply === b.isFirstOfReply
+const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end
+const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => sameSource(a, b) && (a.component === 'AssistantMessage' && b.component === 'AssistantMessage' ? a.isFirstOfReply === b.isFirstOfReply : a.component === 'UserMessage' && b.component === 'UserMessage' && a.isExpanded === b.isExpanded && a.origin.kind === b.origin.kind)
+const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.text) : row.text
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
-export function createClaudeAssistantMessageHost(options: {
+export function createClaudeTranscriptMessageHost(options: {
   ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select'>
   client: { client_id: string; surface: 'desktop' }
-  rows(): ClaudeUiAssistantRow[]
+  rows(): ClaudeUiTranscriptRow[]
   current(): boolean
   publish(): void
 }) {
@@ -49,7 +51,8 @@ export function createClaudeAssistantMessageHost(options: {
     for (const row of rows) {
       const prior = entries.get(row.uuid)
       if (prior && same(prior.row, row)) continue
-      entries.set(row.uuid, { row, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: claudeAssistantDisplayText(row.text), revisions: new Map(), completed: new Map() })
+      if (prior && sameSource(prior.row, row)) { prior.row = row; retire(prior); changed = true; continue }
+      entries.set(row.uuid, { row, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: originalDisplayText(row), revisions: new Map(), completed: new Map() })
       changed = true
     }
     if (changed) publish()
@@ -68,8 +71,9 @@ export function createClaudeAssistantMessageHost(options: {
         entry.dirty = false
         const epoch = entry.epoch, completed = new Map(entry.completed)
         try {
-          const result = await options.ui.render({ ...options.client, component: 'AssistantMessage', instance_id: entry.row.uuid,
-            props: { text: claudeAssistantDisplayText(entry.row.text), isFirstOfReply: entry.row.isFirstOfReply } })
+          const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid,
+            props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply }
+              : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
           if (!valid(entry) || epoch !== entry.epoch) continue
           const drawing = createClaudeUiDrawing(result.tree, entry.fields)
           function stamp(node: ClaudeUiNode) {
@@ -78,12 +82,12 @@ export function createClaudeAssistantMessageHost(options: {
           }
           stamp(drawing.tree)
           entry.drawing = drawing; entry.fields = drawing
-          entry.displayText = typeof result.props.text === 'string' ? result.props.text : claudeAssistantDisplayText(entry.row.text)
+          entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()
         } catch {
-          if (present(entry) && epoch === entry.epoch) { entry.drawing = undefined; entry.fields = undefined; entry.displayText = claudeAssistantDisplayText(entry.row.text); entry.body = { status: 'error' }; publish() }
+          if (present(entry) && epoch === entry.epoch) { entry.drawing = undefined; entry.fields = undefined; entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish() }
         }
       }
     } finally {
@@ -94,12 +98,12 @@ export function createClaudeAssistantMessageHost(options: {
   function fail(entry: Entry) {
     if (!present(entry)) return
     entry.epoch++; entry.dirty = false; entry.drawing = undefined; entry.fields = undefined
-    entry.displayText = claudeAssistantDisplayText(entry.row.text); entry.body = { status: 'error' }; publish()
+    entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish()
   }
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiAssistantFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, body: entry.body })) },
     start() { started = true; refresh() },
     refresh,
     receive(line: Record<string, unknown>) {
@@ -109,7 +113,7 @@ export function createClaudeAssistantMessageHost(options: {
         for (const entry of entries.values()) if (!entry.dirty) { retire(entry); changed = true }
         if (changed) publish()
         refreshPending = true; schedule()
-      } else if (line.type === 'assistant' || (line.type === 'system' && line.subtype === 'init') || line.type === 'conversation_reset') {
+      } else if (line.type === 'assistant' || (line.type === 'user' && line.isReplay === true) || (line.type === 'system' && line.subtype === 'init') || line.type === 'conversation_reset') {
         // Owner observers run before the chat consumer persists this completed row.
         refreshPending = true; schedule()
       }
@@ -140,7 +144,7 @@ export function createClaudeAssistantMessageHost(options: {
       const field = entry.fields!.fields.get(event.actionId)!
       if (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit') return { handled: false }
       entry.revisions.set(event.actionId, event.revision)
-      const identity = { ...options.client, plugin: field.plugin, handle: field.handle, key: field.key, component: 'AssistantMessage', instance_id: entry.row.uuid, value: event.value }
+      const identity = { ...options.client, plugin: field.plugin, handle: field.handle, key: field.key, component: entry.row.component, instance_id: entry.row.uuid, value: event.value }
       try {
         const result = field.type === 'select' ? await options.ui.select(identity) : await options.ui.input({ ...identity, kind: event.kind as 'change' | 'submit' })
         if (valid(entry) && entry.fields?.fields.has(event.actionId)) { entry.completed.set(event.actionId, Math.max(entry.completed.get(event.actionId) ?? 0, event.revision)); invalidate(entry) }

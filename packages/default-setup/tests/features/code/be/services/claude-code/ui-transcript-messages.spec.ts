@@ -1,9 +1,9 @@
 import type { ClaudeUiRender, ClaudeUiRenderResult, ClaudeUiPress } from '#features/code/be/services/claude-code/ui-controls.ts'
-import { createClaudeAssistantMessageHost } from '#features/code/be/services/claude-code/ui-assistant-messages.ts'
-import type { ClaudeUiAssistantRow } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import { createClaudeTranscriptMessageHost } from '#features/code/be/services/claude-code/ui-transcript-messages.ts'
+import type { ClaudeUiTranscriptRow } from '#features/code/be/services/claude-code/ui-presentation.ts'
 function fixture(clientId = 'view') {
   let current = true, handle = 0
-  let rows: ClaudeUiAssistantRow[] = ['a', 'b'].map((uuid, index) => ({ uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
+  let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
   const ui = {
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
@@ -13,9 +13,9 @@ function fixture(clientId = 'view') {
     press: vi.fn(async (_request: ClaudeUiPress) => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })),
   }
   const publish = vi.fn()
-  const host = createClaudeAssistantMessageHost({ ui, client: { client_id: clientId, surface: 'desktop' }, rows: () => rows, current: () => current, publish })
+  const host = createClaudeTranscriptMessageHost({ ui, client: { client_id: clientId, surface: 'desktop' }, rows: () => rows, current: () => current, publish })
   const nodes = (index = 0) => { const body = host.state[index].body; if (body.status !== 'live' || body.tree.kind !== 'box') throw Error('expected message'); return body.tree.children }
-  return { host, ui, publish, nodes, rows, replace: () => { current = false }, setRows: (next: ClaudeUiAssistantRow[]) => { rows = next } }
+  return { host, ui, publish, nodes, rows, replace: () => { current = false }, setRows: (next: ClaudeUiTranscriptRow[]) => { rows = next } }
 }
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
@@ -80,5 +80,30 @@ it('keeps a failed message callback local and never retries its possible native 
   expect(f.host.state[1].body.status).toBe('live')
   await vi.advanceTimersByTimeAsync(500)
   expect(f.ui.press).toHaveBeenCalledTimes(1)
+  f.host.dispose()
+})
+
+
+it('routes user fields by component and retains keyed drafts across readonly expansion changes', async () => {
+  const f = fixture()
+  const user: ClaudeUiTranscriptRow = { component: 'UserMessage', messageId: 'app-user', uuid: 'native-user', sessionId: 'session', text: 'Typed prompt', start: 0, end: 12, origin: { kind: 'unclassified' }, isExpanded: false }
+  f.setRows([user]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ component: 'UserMessage', instance_id: 'native-user', props: { text: 'Typed prompt', origin: { kind: 'unclassified' }, isExpanded: false } }))
+  const button = f.nodes()[0], input = f.nodes()[1]; if (button.kind !== 'button' || input.kind !== 'input') throw Error('controls')
+  await f.host.field({ actionId: input.actionId, revision: 1, kind: 'change', value: 'User note' })
+  expect(f.ui.input).toHaveBeenLastCalledWith(expect.objectContaining({ component: 'UserMessage', instance_id: 'native-user', value: 'User note' }))
+  f.setRows([{ ...user, isExpanded: true }]); f.host.refresh()
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  await vi.advanceTimersByTimeAsync(50)
+  expect(f.nodes()[1]).toMatchObject({ actionId: input.actionId, revision: 1 })
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ props: { text: 'Typed prompt', origin: { kind: 'unclassified' }, isExpanded: true } }))
+  f.host.dispose()
+})
+it('caps user body rewrites at the native printable limit without changing stored text', async () => {
+  const f = fixture(), original = 'Original prompt', rewrite = 'x'.repeat(100001)
+  f.setRows([{ component: 'UserMessage', messageId: 'app-user', uuid: 'user', sessionId: 'session', text: original, start: 0, end: original.length, origin: { kind: 'unclassified' }, isExpanded: true }])
+  f.ui.render.mockResolvedValueOnce({ tree: { type: 'engine', ref: 1 }, props: { text: rewrite }, rewritten: true, hooked: true })
+  f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.state[0].displayText).toHaveLength(100000); expect(f.host.state[0].text).toBe(original)
   f.host.dispose()
 })

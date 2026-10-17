@@ -371,10 +371,10 @@ export async function consumeStream(
             log.warn('input replay without userMessageId — cliUuid tracking skipped', { threadId });
             userUuidTracked = true;
           } else if (line.uuid) {
-            const accepted = projectClaudeInputReplay(line.message?.content, ctx.text, ctx.submittedPrompt);
+            const accepted = projectClaudeInputReplay(line.message?.content, ctx.text, ctx.submittedPrompt, { uuid: line.uuid, sessionId: line.session_id || nativeSessionId });
             services.chat.updateMessageState(ctx.userMessageId as any, {
               ...(accepted.text !== undefined ? { text: accepted.text } : {}),
-              context: { cliUuid: line.uuid, ...(accepted.claudeSubmittedText !== undefined ? { claudeSubmittedText: accepted.claudeSubmittedText } : {}) },
+              context: { cliUuid: line.uuid, ...(accepted.claudeNativeUserMessage ? { claudeNativeUserMessage: accepted.claudeNativeUserMessage } : {}), ...(accepted.claudeSubmittedText !== undefined ? { claudeSubmittedText: accepted.claudeSubmittedText } : {}) },
             } as any);
             userUuidTracked = true;
           }

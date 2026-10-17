@@ -1,5 +1,6 @@
 <template>
   <div
+    :data-chat-message="message.id"
     :class="[
       'flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'
@@ -140,8 +141,13 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
+        <!-- Measure original user text independently of plugin-controlled display and controls. -->
+        <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
+          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+        </div>
+
         <!-- Attachments: files then images, horizontal scroll -->
-        <div v-if="message.references?.files?.length || message.references?.images?.length"
+        <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
           <ImageThumbnail v-for="(img, index) in message.references.images" :key="'i-'+index"
             :src="img.url" :name="img.name" @click="$emit('open-lightbox', img.url)" />
@@ -163,7 +169,7 @@
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
           <template v-for="part in nativeParts" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
-            <NativeAssistantMessage v-if="part.kind === 'native'" :frame="part.frame"
+            <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
             <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
           </template>
@@ -191,9 +197,8 @@
         <!-- Truncation overlay for long user messages -->
         <div v-if="isUser && isTruncated && !userExpanded"
           class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-neutral-800 via-neutral-800/90 to-transparent flex items-end justify-center pb-2 pointer-events-none">
-          <span class="text-xs text-neutral-400 flex items-center gap-1">
-            <ChevronDown :size="14" /> Click to view
-          </span>
+          <button v-if="hasNativeUserFrame" type="button" aria-label="Expand user message" class="pointer-events-auto flex items-center gap-1 rounded px-2 py-1 text-xs text-neutral-300 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-blue-400" @click.stop="userExpanded = true"><ChevronDown :size="14" /> Expand message</button>
+          <span v-else class="text-xs text-neutral-400 flex items-center gap-1"><ChevronDown :size="14" /> Click to view</span>
         </div>
       </div>
       </div>
@@ -220,9 +225,9 @@
 import { computed, ref, onUpdated, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
-import NativeAssistantMessage from './NativeAssistantMessage.vue'
+import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import { claudeNativeMessageParts } from './native-message-parts.ts'
-import type { ClaudeUiAssistantFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
@@ -232,7 +237,7 @@ import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
 interface ChatMessageProps {
   message: MessageEntity
-  nativeFrames?: ClaudeUiAssistantFrame[]
+  nativeFrames?: ClaudeUiTranscriptFrame[]
   isTyping?: boolean
   isTail?: boolean
   isClaudeCodeThread?: boolean
@@ -241,6 +246,7 @@ interface ChatMessageProps {
 interface ChatMessageEmits {
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
+  (e: 'native-ui-message-view', view: { messageId: string; isExpanded: boolean }): void
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'fork', messageId: string): void
@@ -258,7 +264,7 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 
 const emit = defineEmits<ChatMessageEmits>()
 
-const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' ? props.nativeFrames : []))
+const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
 const expanded = ref(false)
 const forking = ref(false)
@@ -289,10 +295,20 @@ const bubbleRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
 const MAX_USER_MSG_HEIGHT = 200
+const originalUserBody = ref<HTMLElement | null>(null), attachmentStrip = ref<HTMLElement | null>(null)
+const hasNativeUserFrame = computed(() => isUser.value && nativeParts.value.some(part => part.kind === 'native' && part.frame.component === 'UserMessage'))
+
+watch([() => props.message.id, () => props.isClaudeCodeThread, () => isUser.value, () => isTruncated.value, () => userExpanded.value], () => {
+  if (isUser.value && props.isClaudeCodeThread) emit('native-ui-message-view', { messageId: props.message.id, isExpanded: !isTruncated.value || userExpanded.value })
+}, { immediate: true })
 
 function checkTruncation() {
   if (bubbleRef.value && isUser.value) {
-    isTruncated.value = bubbleRef.value.scrollHeight > MAX_USER_MSG_HEIGHT
+    if (hasNativeUserFrame.value && !originalUserBody.value?.scrollHeight) return
+    const height = hasNativeUserFrame.value && originalUserBody.value
+      ? originalUserBody.value.scrollHeight + (attachmentStrip.value ? attachmentStrip.value.offsetHeight + 8 : 0) + 26
+      : bubbleRef.value.scrollHeight
+    isTruncated.value = height > MAX_USER_MSG_HEIGHT
   }
 }
 
@@ -304,6 +320,12 @@ watch(bubbleRef, (el, _prev, onCleanup) => {
   checkTruncation()
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
+
+watch(originalUserBody, (element, _prior, onCleanup) => {
+  if (!element) return
+  const observer = new ResizeObserver(checkTruncation); observer.observe(element); checkTruncation()
+  onCleanup(() => observer.disconnect())
+})
 
 onUpdated(checkTruncation)
 

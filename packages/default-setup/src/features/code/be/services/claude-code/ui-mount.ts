@@ -1,4 +1,4 @@
-import { createClaudeAssistantMessageHost } from './ui-assistant-messages.ts'
+import { createClaudeTranscriptMessageHost } from './ui-transcript-messages.ts'
 import { createClaudeUiNotices } from './ui-notices.ts'
 import { createClaudeSiteScroll } from './ui-site-scroll.ts'
 import { createClaudePaneHost } from './ui-pane-host.ts'
@@ -17,7 +17,7 @@ export function mountClaudeUi(options: {
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number, paneId?: string): void
-  messages?(): import('./ui-presentation.ts').ClaudeUiAssistantRow[]
+  messages?(): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
 }) {
   const { owner } = options
@@ -45,7 +45,7 @@ export function mountClaudeUi(options: {
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
   const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
-  const messages = createClaudeAssistantMessageHost({ ui: owner.handle.ui, client, current, rows: () => options.messages?.() ?? [], publish: () => publish(lastState) })
+  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => options.messages?.() ?? [], publish: () => publish(lastState) })
 
   const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
 
@@ -54,7 +54,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(messages.state.length ? { assistantMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(messages.state.length ? { transcriptMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
