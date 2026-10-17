@@ -324,7 +324,7 @@ watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([edit
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
     const owner = promptEditor
     setClaudeCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
-  } })
+  } }, { canSuggest: () => !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
 }, { flush: 'post' })
 watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   if (!editor) { hostPopupActive.value = false; return }
@@ -341,6 +341,9 @@ watch(() => props.nativePrompt?.hostRequest, request => {
   if (request.kind === 'read') {
     const box = available ? promptEditor?.readDraft() : undefined
     emit('native-prompt-host-response', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) })
+  } else if (request.kind === 'suggest') {
+    const shown = available && (promptEditor?.showSuggestion(request.text, request.revision) ?? false)
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'suggest', shown })
   } else {
     const filled = available && (promptEditor?.fillDraft(request.input, request.revision) ?? false)
     emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', filled })
@@ -440,6 +443,10 @@ const {
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, openFilePicker, removeFile,
   captureAttachments, restoreFromReferences,
 } = useAttachments()
+watch([() => props.disabled, () => props.isBusy, submitting, hasAttachments, hostPopupActive, () => nativeCompletions.value.length], ([disabled, busy, sending, attachments, popup, completions]) => {
+  if (disabled || busy || sending || attachments || popup || completions) promptEditor?.dismissSuggestion()
+})
+
 
 const { isDragging: isDraggingFile, onDragEnter, onDragLeave, onDrop } = useExternalFileDrag({
   onDrop: handleFileDrop,
@@ -777,6 +784,7 @@ const handleSubmit = async () => {
 </script>
 
 <style lang="scss" module>
+.input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input {
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 0.45);

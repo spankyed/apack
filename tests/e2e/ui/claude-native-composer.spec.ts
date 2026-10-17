@@ -47,7 +47,34 @@ test('native extension fields, paint and hover work inside the actual composer',
     return { threadId: context.currentThread?.id, messages: context.currentThread?.messages.length, turns: context.currentThread?.context?.claudeCode?.turns };
   });
   await expect.poll(async () => (await snapshot()).turns).toBe(1);
+  const synchronized = () => appPage.evaluate(() => {
+    const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
+    const view: any = Object.values(context.nativeUiViews).find((value: any) => value.threadId === context.currentThread?.id);
+    return !!view?.promptRevision && view.prompt?.revision === view.promptRevision;
+  });
   const before = await snapshot();
+  const ghost = editor.locator('.claude-prompt-suggestion');
+  const suggest = strip.getByRole('button', { name: 'Suggest next step', exact: true });
+  const suggestions = async () => JSON.parse(await readFile(join(workspace!, 'native-suggestions.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error }));
+  for (const key of ['Tab', 'ArrowRight']) {
+    await editor.fill(''); await expect.poll(synchronized).toBe(true);
+    await suggest.click(); await expect(ghost).toBeVisible(); await expect(ghost).toHaveText('Review the implementation.');
+    if (key === 'Tab') await appPage.screenshot({ path: testInfo.outputPath('apack-native-suggestion.png') });
+    await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await expect.poll(async () => (await suggestions()).at(-1)?.result.isShown).toBe(true);
+    expect((await suggestions()).at(-1).draft).toEqual({ text: '', cursor: 0 });
+    await editor.focus(); await editor.press(key);
+    await expect(ghost).toHaveCount(0); await expect(editor).toHaveText('Review the implementation.');
+    await expect.poll(synchronized).toBe(true);
+  }
+  const acceptedSuggestions = JSON.parse(await readFile(join(workspace!, 'native-accepted-suggestions.json'), 'utf8'));
+  expect(acceptedSuggestions.map((value: any) => value.key.key)).toEqual(['tab', 'right']);
+  expect(acceptedSuggestions.every((value: any) => value.origin.kind === 'person')).toBe(true);
+  await suggest.click();
+  await expect.poll(async () => (await suggestions()).at(-1)?.result.isShown).toBe(false);
+  await expect(editor).toHaveText('Review the implementation.');
+  expect(await snapshot()).toEqual(before);
+  await editor.fill(''); await expect.poll(synchronized).toBe(true);
   await editor.focus();
   await editor.press('1');
   await expect(strip.getByText('Context tools · 1 update', { exact: true })).toBeVisible();
@@ -82,11 +109,6 @@ test('native extension fields, paint and hover work inside the actual composer',
   expect(promptHost.before.text).toBe('Review the changes and outline the next steps.');
   expect(promptHost.filled.isFilled).toBe(true);
   expect(promptHost.after.text).toBe('Review the changes and outline the next steps. (native draft)');
-  const synchronized = () => appPage.evaluate(() => {
-    const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
-    const view: any = Object.values(context.nativeUiViews).find((value: any) => value.threadId === context.currentThread?.id);
-    return !!view?.promptRevision && view.prompt?.revision === view.promptRevision;
-  });
   await expect.poll(synchronized).toBe(true);
   await expect(editor.locator('.claude-prompt-decoration')).toHaveText('(native draft)');
   await expect(editor.locator('.claude-prompt-decoration')).toHaveCSS('font-style', 'italic');
@@ -126,5 +148,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
 });

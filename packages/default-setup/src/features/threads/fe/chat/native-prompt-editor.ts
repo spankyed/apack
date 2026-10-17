@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { createClaudePromptSuggestion } from './native-prompt-suggestion.ts'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
 import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
 import type { ClaudePromptHostRequest } from '#generated/types.ts'
@@ -7,11 +8,13 @@ import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest
 import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument, type ClaudePromptDocument } from './native-prompt-document.ts'
 
 /** A mounted view owns its revisions and listeners; it never owns the editor's lifetime. */
-export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }) {
+export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean }) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
   const decorations = createClaudePromptDecorations()
   editor.registerPlugin(decorations.plugin)
+  const suggestion = createClaudePromptSuggestion()
+  editor.registerPlugin(suggestion.plugin)
   let revision = initialRevision, applying = false, disposed = false
   let completionRevision = completion?.initialRevision ?? 0
   let completionPending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
@@ -30,11 +33,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection; done: Promise<boolean>; finish: (accepted: boolean) => void } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
   let key: ClaudePromptEdit['key']
+  const nativeKeys: Record<string, string> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'return', Escape: 'escape', Tab: 'tab', Backspace: 'backspace', Delete: 'delete', PageUp: 'pageup', PageDown: 'pagedown', Home: 'home', End: 'end', Insert: 'insert' }
   const intent = (event?: Event) => {
     person = true
     if (event?.type === 'keydown') {
       const keyboard = event as KeyboardEvent
-      key = keyboard.key && keyboard.key.length <= 32 ? { key: keyboard.key, ...(keyboard.ctrlKey ? { ctrl: true as const } : {}), ...(keyboard.shiftKey ? { shift: true as const } : {}), ...(keyboard.metaKey ? { meta: true as const } : {}) } : undefined
+      key = keyboard.key && keyboard.key.length <= 32 ? { key: nativeKeys[keyboard.key] ?? (/^F\d{1,2}$/.test(keyboard.key) ? keyboard.key.toLowerCase() : keyboard.key), ...(keyboard.ctrlKey ? { ctrl: true as const } : {}), ...(keyboard.shiftKey ? { shift: true as const } : {}), ...(keyboard.metaKey ? { meta: true as const } : {}) } : undefined
     } else if (event?.type !== 'beforeinput') key = undefined
     if (clearPerson) clearTimeout(clearPerson)
     clearPerson = setTimeout(() => { person = false; key = undefined }, 0)
@@ -64,6 +68,53 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     try { send({ revision, text: snapshot.text, cursor: snapshot.cursor, by: origin, ...(origin === 'person' && key ? { key } : {}) }) }
     catch (error) { finishPending(false); onProblem(error instanceof Error ? error.message : 'Claude input could not be sent') }
   }
+  function prepareDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number) {
+    if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision) return
+    const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)
+    if (!snapshot) return
+    const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
+    const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
+    const cursor = offset + input.text.length
+    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize)
+    if (!next) {
+      let atoms = false
+      snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
+      if (atoms && input.mode !== 'replace') return
+      // Parse through the existing Markdown extension, once, into an inert template.
+      const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
+      try {
+        const template = document.createElement('template')
+        template.innerHTML = parser.parse(text)
+        const doc = PromptDOMParser.fromSchema(editor.schema).parse(template.content)
+        const position = findClaudePromptPosition(doc, cursor, serialize)
+        if (serialize(doc) !== text || position === undefined) return
+        next = { doc, position }
+      } catch { return }
+    }
+    const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
+    return { next, text, offset, runs }
+  }
+  function placeDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number, origin: 'app' | 'person'): boolean {
+    const prepared = prepareDraft(input, expectedRevision)
+    if (!prepared) return false
+    const { next, text, runs } = prepared
+    fillPaint = origin === 'app' ? { revision: revision + 1, text, runs } : undefined
+    const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
+    tr.setSelection(TextSelection.create(tr.doc, next.position)).setMeta('claude-prompt-by', origin)
+    tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
+    editor.view.dispatch(tr)
+    return true
+  }
+  function dismissSuggestion() {
+    if (!disposed && !editor.isDestroyed && suggestion.key.getState(editor.state)) editor.view.dispatch(editor.state.tr.setMeta(suggestion.key, null))
+  }
+  function acceptSuggestion(event: KeyboardEvent) {
+    if (disposed || editor.isDestroyed || event.defaultPrevented || event.isComposing || editor.view.composing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || !['Tab', 'ArrowRight'].includes(event.key) || (host && !host.canSuggest())) return
+    const text = suggestion.key.getState(editor.state)
+    if (text && editor.isEmpty && placeDraft({ mode: 'replace', text }, revision, 'person')) {
+      event.preventDefault(); event.stopImmediatePropagation()
+    }
+  }
   const transaction = ({ transaction }: { transaction: import('@tiptap/pm/state').Transaction }) => {
     if (transaction.docChanged || transaction.selectionSet) publish(transaction.getMeta('claude-prompt-by'))
   }
@@ -72,6 +123,9 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   editor.on('destroy', destroyed)
   editor.on('transaction', transaction)
   dom.addEventListener('compositionend', compositionEnd)
+  dom.addEventListener('compositionstart', dismissSuggestion)
+  dom.addEventListener('keydown', acceptSuggestion, true)
+  window.addEventListener('blur', dismissSuggestion)
   publish()
   return {
     get revision() { return revision },
@@ -81,36 +135,15 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return snapshot ? { text: snapshot.text, cursor: snapshot.cursor } : undefined
     },
     fillDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number): boolean {
-      if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision) return false
-      const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)
-      if (!snapshot) return false
-      const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
-      const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
-      const cursor = offset + input.text.length
-      let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize)
-      if (!next) {
-        let atoms = false
-        snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
-        if (atoms && input.mode !== 'replace') return false
-        // Parse through the existing Markdown extension, once, into an inert template.
-        const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
-        try {
-          const template = document.createElement('template')
-          template.innerHTML = parser.parse(text)
-          const doc = PromptDOMParser.fromSchema(editor.schema).parse(template.content)
-          const position = findClaudePromptPosition(doc, cursor, serialize)
-          if (serialize(doc) !== text || position === undefined) return false
-          next = { doc, position }
-        } catch { return false }
-      }
-      const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
-      fillPaint = { revision: revision + 1, text, runs }
-      const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
-      tr.setSelection(TextSelection.create(tr.doc, next.position)).setMeta('claude-prompt-by', 'app')
-      tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
-      editor.view.dispatch(tr)
+      return placeDraft(input, expectedRevision, 'app')
+    },
+    showSuggestion(text: string, expectedRevision: number): boolean {
+      if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision || !editor.isEmpty || !text.trim() || text.length > 1000000 || (host && !host.canSuggest())) return false
+      if (!prepareDraft({ mode: 'replace', text }, expectedRevision)) return false
+      editor.view.dispatch(editor.state.tr.setMeta(suggestion.key, text))
       return true
     },
+    dismissSuggestion() { dismissSuggestion() },
     /** Settle this edit only; newer edits retire this send intent instead of joining it. */
     settle(): Promise<boolean> { return pending?.done ?? Promise.resolve(settled && !disposed && !editor.isDestroyed && !editor.view.composing) },
     receive(reply: ClaudePromptReply) {
@@ -166,9 +199,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
       editor.off('destroy', destroyed)
-      if (!editor.isDestroyed) editor.unregisterPlugin(decorations.key)
+      if (!editor.isDestroyed) { editor.unregisterPlugin(decorations.key); editor.unregisterPlugin(suggestion.key) }
       for (const event of events) dom.removeEventListener(event, intent, true)
       dom.removeEventListener('compositionend', compositionEnd)
+      dom.removeEventListener('compositionstart', dismissSuggestion)
+      dom.removeEventListener('keydown', acceptSuggestion, true)
+      window.removeEventListener('blur', dismissSuggestion)
     },
   }
 }

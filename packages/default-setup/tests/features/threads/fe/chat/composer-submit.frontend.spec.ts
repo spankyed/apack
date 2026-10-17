@@ -35,7 +35,7 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
@@ -251,5 +251,28 @@ it('answers native host reads/fills through the actual input and refuses stale, 
     const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); document.body.append(dialog)
     request('fill'); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ filled: false })
     expect(editor.state.doc.textContent).toBe(newer); expect(f.send).not.toHaveBeenCalled(); dialog.remove()
+  } finally { windowFocus.mockRestore() }
+})
+
+
+it('shows native ghost text without changing the draft, accepts Tab and retires it for busy or attached input', async () => {
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = mount(vi.fn(async () => undefined))
+    f.root.querySelector('[data-testid="editor-fixture"]')!.append(editor.view.dom)
+    f.state.nativePrompt = { mountId: 'native-owner' }; editor.commands.clearContent(); await nextTick()
+    const propose = () => { f.state.nativePrompt!.hostRequest = { requestId: crypto.randomUUID(), revision: f.prompt.mock.calls.at(-1)![0].revision, expiresAt: Date.now() + 3000, kind: 'suggest', text: 'Native ghost' } }
+    propose(); await nextTick()
+    expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'suggest', shown: true })
+    expect(editor.state.doc.textContent).toBe('')
+    expect(f.root.querySelector('.claude-prompt-suggestion')?.textContent).toBe('Native ghost')
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); await nextTick()
+    expect(editor.state.doc.textContent).toBe('Native ghost'); expect(f.send).not.toHaveBeenCalled()
+    editor.commands.clearContent(); await nextTick(); f.state.isBusy = true
+    propose(); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ shown: false })
+    f.state.isBusy = false; propose(); await nextTick(); expect(f.root.querySelector('.claude-prompt-suggestion')).not.toBeNull()
+    attachments.pendingFiles.value = [file('context.txt')]; await nextTick()
+    expect(f.root.querySelector('.claude-prompt-suggestion')).toBeNull()
+    propose(); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ shown: false })
   } finally { windowFocus.mockRestore() }
 })

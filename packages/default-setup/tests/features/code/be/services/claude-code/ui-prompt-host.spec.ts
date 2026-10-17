@@ -59,3 +59,20 @@ it('retires host work on detach and suppresses canceled/closed replies', async (
   f.hosts.receive(read('closed')); f.hosts.close(); await flush()
   expect(f.host.read).not.toHaveBeenCalled(); expect(f.write).toHaveBeenCalledOnce(); detach()
 })
+
+
+it('advertises suggestions only for an answering host and correlates shown/refused outcomes', async () => {
+  const f = fixture(), suggesting = { ...read('suggest'), request: { ...read().request, subtype: 'ui_prompt_suggest', text: 'ghost' } }
+  expect(f.hosts.answers('view')).toEqual(['ui_prompt_read', 'ui_prompt_fill'])
+  f.hosts.receive(suggesting); await flush(); expect(f.answer()).toMatchObject({ response: { response: { shown: false } } })
+  f.detach()
+  const suggest = vi.fn(async () => true)
+  f.hosts.register('view', { ...f.host, suggest })
+  expect(f.hosts.answers('view')).toEqual(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest'])
+  f.hosts.receive({ ...suggesting, request_id: 'supported' }); await flush()
+  expect(suggest).toHaveBeenCalledWith('ghost', expect.any(AbortSignal), expect.any(Number))
+  expect(f.answer()).toMatchObject({ response: { request_id: 'supported', response: { shown: true } } })
+  f.hosts.receive({ ...suggesting, request_id: 'blank', request: { ...suggesting.request, text: '  ' } }); await flush()
+  expect(suggest).toHaveBeenCalledOnce(); expect(f.answer()).toMatchObject({ response: { response: { shown: false } } })
+  f.hosts.close()
+})

@@ -80,7 +80,7 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     /** Advertise only reverse APIs the attached view can actually answer. */
     async attach(options: ClaudeUiAttach) {
       const valid = attach.parse(options)
-      return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: valid.surface === 'desktop' && promptHosts?.has(valid.client_id) ? ['ui_prompt_read', 'ui_prompt_fill'] : [] }))
+      return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: valid.surface === 'desktop' ? promptHosts?.answers(valid.client_id) ?? [] : [] }))
     },
     async detach(id: string) {
       const valid = clientId.parse(id)

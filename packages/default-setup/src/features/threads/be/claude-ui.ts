@@ -9,6 +9,8 @@ import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from './types.ts'
 import type { Reply } from '@apackdev/sdk/events'
 import { registerThreadTeardown } from './thread-teardown.ts'
 
+type ClaudePromptHostOperation = { [Kind in ClaudePromptHostRequest['kind']]: Omit<Extract<ClaudePromptHostRequest, { kind: Kind }>, 'requestId' | 'revision' | 'expiresAt'> }[ClaudePromptHostRequest['kind']]
+
 interface ClaudeUiView {
   client: string
   threadId: string
@@ -16,7 +18,7 @@ interface ClaudeUiView {
   expires: number
   reply: Reply<OutgoingThreadsEvents>
   state: ClaudeUiMountState
-  pendingPrompt?: { requestId: string; kind: 'read' | 'fill'; finish(answer?: ClaudePromptHostResponse): void }
+  pendingPrompt?: { requestId: string; kind: ClaudePromptHostRequest['kind']; finish(answer?: ClaudePromptHostResponse): void }
   owner?: ClaudeConversation
   mount?: ReturnType<typeof mountClaudeUi>
 }
@@ -46,12 +48,12 @@ function bind(key: string, view: ClaudeUiView): void {
   view.owner = owner
   if (!owner) { publish(view, { status: 'disconnected' }); return }
   let promptQueue: Promise<unknown> = Promise.resolve()
-  function ask(request: Omit<Extract<ClaudePromptHostRequest, { kind: 'read' }>, 'requestId' | 'revision' | 'expiresAt'> | Omit<Extract<ClaudePromptHostRequest, { kind: 'fill' }>, 'requestId' | 'revision' | 'expiresAt'>, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
+  function ask(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
     const result = promptQueue.then(() => dispatch(request, signal, expiresAt))
     promptQueue = result.then(() => undefined, () => undefined)
     return result
   }
-  function dispatch(request: Omit<Extract<ClaudePromptHostRequest, { kind: 'read' }>, 'requestId' | 'revision' | 'expiresAt'> | Omit<Extract<ClaudePromptHostRequest, { kind: 'fill' }>, 'requestId' | 'revision' | 'expiresAt'>, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
+  function dispatch(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
     if (signal.aborted || Date.now() >= expiresAt || views.get(key) !== view || view.owner !== owner || getConversation(view.threadId)?.owner !== owner) return Promise.resolve(undefined)
     // Queue each view's requests so Vue cannot collapse two host operations into one state update.
     if (view.pendingPrompt) return Promise.resolve(undefined)
@@ -71,6 +73,7 @@ function bind(key: string, view: ClaudeUiView): void {
   const promptHost: ClaudePromptHost = {
     async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
     async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
+    async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost,
     isCurrent: () => views.get(key) === view && getConversation(view.threadId)?.owner === owner,

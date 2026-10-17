@@ -105,8 +105,10 @@ export type ClaudeUiFocusReply = { revision: number; moved: boolean; focusId: st
 export type ClaudePromptHostRequest = { requestId: string; revision: number; expiresAt: number } & (
   | { kind: 'read' }
   | { kind: 'fill'; input: import('./ui-prompt-host.ts').ClaudePromptHostFill }
+  | { kind: 'suggest'; text: string }
 )
 export type ClaudePromptHostResponse = { requestId: string } & (
   | { kind: 'read'; box?: import('./ui-prompt-host.ts').ClaudePromptHostBox }
   | { kind: 'fill'; filled: boolean }
+  | { kind: 'suggest'; shown: boolean }
 )
