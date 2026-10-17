@@ -23,7 +23,11 @@ test('native extension fields, paint and hover work inside the actual composer',
   });
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..');
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!);
-  await expect(appPage.getByText('Settings saved', { exact: true })).toBeVisible();
+  // CLI paths save after the form's 600ms debounce; remount to verify persisted state.
+  await appPage.waitForTimeout(700);
+  await app.navigate('default-setup/threads');
+  await app.navigate('host/settings');
+  await expect(provider.getByPlaceholder('Path override (auto-detected if empty)')).toHaveValue(launcher!);
   await app.navigate('default-setup/threads');
   await appPage.evaluate(cwd => {
     const threads = (window as any).applicationState.system.get('default-setup/threads');
