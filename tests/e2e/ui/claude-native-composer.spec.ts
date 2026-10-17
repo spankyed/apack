@@ -125,11 +125,12 @@ test('native extension fields, paint and hover work inside the actual composer',
   const summaryFrames = async () => JSON.parse(await readFile(join(workspace!, 'app-summary-frames.json'), 'utf8'));
   await expect.poll(async () => (await summaryFrames())[summaryId!]).toEqual({ id: summaryId, text: 'Synthetic thinking summary 1.', isSummary: true, isFirstOfReply: true });
   await summaryRows.first().getByRole('button', { name: 'Inspect native summary', exact: true }).click();
-  const summaryPresses = async () => JSON.parse(await readFile(join(workspace!, 'app-summary-presses.json'), 'utf8'));
+  const summaryPresses = async () => JSON.parse(await readFile(join(workspace!, 'app-summary-presses.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error }));
   await expect.poll(summaryPresses).toEqual([{ id: summaryId, text: 'Synthetic thinking summary 1.' }]);
   await summaryRows.first().getByLabel('Summary note', { exact: true }).fill('Summary-only note');
-  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'app-summary-note.json'), 'utf8'))).toEqual({ id: summaryId, value: 'Summary-only note' });
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'app-summary-note.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '{}'; throw error }))).toEqual({ id: summaryId, value: 'Summary-only note' });
   await expect(nativeRows.first().getByLabel('Message note', { exact: true })).toHaveValue('Message-only note');
+  await expect(summaryRows.first().getByRole('button', { name: 'Inspect native summary', exact: true })).toBeEnabled();
   const summaryAction = await appPage.evaluate(id => {
     const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const [mountId, view]: any = Object.entries(context.nativeUiViews).find(([, value]: any) => value.threadId === context.currentThread.id)!;
