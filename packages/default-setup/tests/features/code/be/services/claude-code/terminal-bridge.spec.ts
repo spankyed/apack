@@ -129,3 +129,18 @@ it('forwards native pane rosters only from the current owner and session', async
     expect(receive).toHaveBeenCalledExactlyOnceWith(event)
   } finally { unsubscribe() }
 })
+
+it.each([
+  { type: 'system', subtype: 'ui_scroll', client_id: 'app', component: 'Pane', instance_id: 'review', offset: 20 },
+  { type: 'system', subtype: 'ui_focus', client_id: 'app', component: 'AbovePrompt', instance_id: 'above-prompt', plugin: 'fixture', element: 'target' },
+])('fences native $subtype site movement events', async event => {
+  await create()
+  const receive = vi.fn(), unsubscribe = bridge!.uiTransport.subscribe(receive)
+  try {
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid + 1, event })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, component: 'foreign' } })).status).toBe(409)
+    expect(receive).not.toHaveBeenCalled()
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event })).status).toBe(200)
+    expect(receive).toHaveBeenCalledExactlyOnceWith(event)
+  } finally { unsubscribe() }
+})

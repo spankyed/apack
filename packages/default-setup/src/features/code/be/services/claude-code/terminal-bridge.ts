@@ -122,7 +122,10 @@ export async function createClaudeTerminalBridge(options: {
         const panes = event.subtype === 'ui_panes' && Array.isArray(event.panes) && event.panes.length <= 256
           && event.panes.every(value => { const pane = object(value); return pane && typeof pane.id === 'string' && typeof pane.plugin === 'string' && typeof pane.title === 'string' })
           && [event.shown_id, event.focused_id, event.focus_requested_id].every(id => id === null || typeof id === 'string')
-        if (!invalidation && !panes) return reply(409, {})
+        const site = typeof event.client_id === 'string' && ['Pane', 'AbovePrompt'].includes(String(event.component)) && typeof event.instance_id === 'string'
+        const scroll = site && event.subtype === 'ui_scroll' && Number.isSafeInteger(event.offset) && Number(event.offset) >= 0
+        const focus = site && event.subtype === 'ui_focus' && typeof event.plugin === 'string' && typeof event.element === 'string'
+        if (!invalidation && !panes && !scroll && !focus) return reply(409, {})
         ui.receive(event); return reply(200, {})
       }
       if (request.url === '/transcript') {

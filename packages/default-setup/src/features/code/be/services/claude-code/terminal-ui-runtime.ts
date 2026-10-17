@@ -7,6 +7,96 @@ const clients=new Set(),seen=new Set();let native,initializing,activeSession=con
 function publish(event){
  try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
 }
+// Native hook dispatch owns admission and rewrites; this adapter supplies the remote layout.
+const sites=new Map();
+function siteExists(n,component,id){return component==='AbovePrompt'&&id===n.runtime.f4||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
+function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
+function dropSite(n,key){
+ const site=sites.get(key);if(!site)return;sites.delete(key);site.abort.abort();
+ for(const [registry,entry,previous] of [[n.runtime.xbe(),site.scrollEntry,site.previousScroll],[n.runtime.Eat(),site.focusEntry,site.previousFocus]])if(registry.get(key)===entry){if(previous)registry.set(key,previous);else registry.delete(key);}
+}
+function refreshSite(n,site){
+ const key=n.runtime.kV(site.component,site.id),scrolls=n.runtime.xbe(),focuses=n.runtime.Eat();
+ if(scrolls.get(key)!==site.scrollEntry)site.previousScroll=scrolls.get(key);
+ if(focuses.get(key)!==site.focusEntry)site.previousFocus=focuses.get(key);
+ const current=()=>sites.get(key)===site&&clients.has(site.clientId)&&siteExists(n,site.component,site.id);
+ const moved=()=>publish({type:'system',subtype:'ui_scroll',client_id:site.clientId,component:site.component,instance_id:site.id,offset:siteOffset(site),...(site.follow?{follow_end:true}:{})});
+ site.scrollEntry={component:site.component,requestId:site.id,owner:site.owner,bodyRows:site.bodyRows,contentRows:site.contentRows,maxOffset:Math.max(0,site.contentRows-site.bodyRows),offset:()=>siteOffset(site),keyRows:(plugin,key)=>{const row=site.keyed.find(row=>row.plugin===plugin&&row.key===key);return row&&{top:row.top,bottom:row.bottom};},commit:(offset,origin)=>{
+  if(!current()||origin.kind==='person'&&site.superseded)return false;
+  const end=Math.max(0,site.contentRows-site.bodyRows);site.offset=Math.min(end,Math.max(0,offset));
+  if(origin.kind==='person')site.follow=site.follow&&site.offset>=end;
+  else{site.superseded=site.moving;site.follow=false;moved();}return true;
+ },followEnd:()=>{if(current()){site.follow=true;moved();}}};
+ site.focusEntry={component:site.component,requestId:site.id,owner:site.owner,isHeldNow:()=>site.held,holderNow:()=>site.holder?.plugin,hasElement:(plugin,element)=>site.focusables.some(item=>item.plugin===plugin&&item.element===element),commit:input=>{
+  if(!current())return 'no such site';
+  if(input.plugin===undefined||input.element===undefined){site.holder=undefined;return;}
+  if(!site.focusables.some(item=>item.plugin===input.plugin&&item.element===input.element))return 'no element of '+input.plugin+' is drawn under that key';
+  site.holder={plugin:input.plugin,element:input.element};
+  if(input.origin.kind==='plugin'&&!site.reporting)publish({type:'system',subtype:'ui_focus',client_id:site.clientId,component:site.component,instance_id:site.id,plugin:input.plugin,element:input.element});
+ }};
+ scrolls.set(key,site.scrollEntry);focuses.set(key,site.focusEntry);
+}
+function remoteSite(n,clientId,component,id){
+ if(!clients.has(clientId)||!siteExists(n,component,id))return;
+ const key=n.runtime.kV(component,id);let site=sites.get(key);
+ if(site&&site.clientId!==clientId){dropSite(n,key);site=undefined;}
+ if(!site){site={clientId,component,id,owner:component==='Pane'?paneRoster(n).panes.find(pane=>pane.id===id)?.plugin:undefined,offset:0,bodyRows:0,contentRows:0,keyed:[],focusables:[],held:false,follow:false,abort:new AbortController()};sites.set(key,site);}
+ refreshSite(n,site);return site;
+}
+function synchronizePanes(n){
+ const state=n.roster.Ui().getState();
+ for(const [key,site] of sites){if(!siteExists(n,site.component,site.id)){dropSite(n,key);continue;}if(site.component==='Pane'){site.held=state.focusedId===site.id;if(!site.held)site.holder=undefined;}refreshSite(n,site);}
+}
+function siteTurn(site,kind,report,merge,run){
+ const state=site[kind]??(site[kind]={});
+ if(state.active){
+  if(state.waiting){state.waiting.report=merge(state.waiting.report,report);return state.waiting.promise;}
+  let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});state.waiting={report,promise,resolve,reject};return promise;
+ }
+ state.active=true;
+ return Promise.resolve().then(()=>run(report)).finally(()=>{
+  state.active=false;const next=state.waiting;state.waiting=undefined;
+  if(next)siteTurn(site,kind,next.report,merge,run).then(next.resolve,next.reject);
+ });
+}
+async function remoteFocus(n,value){
+ const site=remoteSite(n,value.client_id??'desktop:default',value.component,value.instance_id);
+ if(!site)return {moved:false,element:null,deny:'no such site'};
+ return siteTurn(site,'focusQueue',value,(before,after)=>after.element===undefined&&after.is_held&&before.element!==undefined?{...after,element:before.element,by:before.by}:after,async value=>{
+  if(site.abort.signal.aborted)return {moved:false,element:null,deny:'no such site'};
+  site.held=value.is_held;if(!site.held)site.holder=undefined;site.reporting=true;refreshSite(n,site);
+  const element=value.element;let result={};
+  try{if(element!==undefined&&site.held)result=await n.runtime.v7t({input:{component:site.component,requestId:site.id,...(element?{plugin:element.plugin,element:element.key}:{}),origin:value.by==='auto'&&element?{kind:'plugin',name:element.plugin}:{kind:'person'}},signal:site.abort.signal});}
+  finally{site.reporting=false;}
+  const holder=site.holder;return {moved:result.deny===undefined,element:holder?{plugin:holder.plugin,key:holder.element}:null,...(result.deny!==undefined?{deny:result.deny}:{})};
+ });
+}
+async function remoteScroll(n,value){
+ const site=remoteSite(n,value.client_id??'desktop:default',value.component,value.instance_id);
+ if(!site)return {moved:false,offset:value.offset,deny:'no such site'};
+ return siteTurn(site,'scrollQueue',value,(before,after)=>({...after,by:before.by+after.by}),async value=>{
+  if(site.abort.signal.aborted)return {moved:false,offset:siteOffset(site),deny:'no such site'};
+  const end=Math.max(0,value.content_rows-value.body_rows),before=site.follow?end:Math.min(site.offset,end),wasFollowing=site.follow;
+  site.offset=before;site.bodyRows=value.body_rows;site.contentRows=value.content_rows;if(value.keyed)site.keyed=value.keyed;site.moving=true;site.superseded=false;refreshSite(n,site);
+  let result;
+  try{result=await n.runtime.vxt({input:{component:site.component,requestId:site.id,offset:Math.min(end,Math.max(0,before+value.by)),by:value.by,bodyRows:site.bodyRows,contentRows:site.contentRows,origin:{kind:'person'},...(value.pointer?{pointer:value.pointer}:{})},signal:site.abort.signal});}
+  finally{site.moving=false;}
+  if(site.abort.signal.aborted||site.superseded)return {moved:false,offset:siteOffset(site),deny:'the window moved meanwhile',...(site.follow?{follow_end:true}:{})};
+  if(result.deny!==undefined)site.offset=before;
+  else site.follow=site.follow||wasFollowing&&value.by>0&&site.offset>=end;
+  return {moved:result.deny===undefined,offset:siteOffset(site),...(result.deny!==undefined?{deny:result.deny}:{}),...(site.follow?{follow_end:true}:{})};
+ });
+}
+function recordDrawing(n,value,tree){
+ const site=remoteSite(n,value.client_id,value.component,value.instance_id);if(!site)return;
+ const scroll=value.props?.scroll;
+ if(scroll&&Number.isInteger(scroll.bodyRows)&&scroll.bodyRows>=0)site.bodyRows=scroll.bodyRows;
+ if(typeof value.props?.isFocused==='boolean')site.held=value.props.isFocused;
+ site.focusables=n.session.Ket(tree);
+ if(site.holder&&!site.focusables.some(item=>item.plugin===site.holder.plugin&&item.element===site.holder.element))site.holder=undefined;
+ refreshSite(n,site);n.runtime.k7t().emit();
+}
+
 function paneRoster(n){
  const state=n.roster.Ui().getState(),visible=state.open.filter(pane=>n.engine.FPe(pane.plugin));
  const hidden=new Set(state.open.filter(pane=>!visible.includes(pane)).map(pane=>pane.id));
@@ -27,7 +117,8 @@ async function initialize(){
   const modules={gate,engine,session,roster,schemas,runtime};
   engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
-  roster.Ui().subscribe(()=>{const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
+  runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
+  roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   return native={gate,engine,session,roster,schemas,runtime};
  })();
  return initializing;
@@ -144,7 +235,7 @@ function drainCompletion(n,clientId,state){
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });
 }
-const schemaNames={ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
+const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
@@ -164,11 +255,14 @@ async function control(request){
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
+  for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
  }
+ if(value.subtype==='ui_focus')return remoteFocus(n,value);
+ if(value.subtype==='ui_scroll')return remoteScroll(n,value);
  if(['ui_panes','ui_pane_show','ui_pane_focus','ui_close'].includes(value.subtype)){
   const id=clientId??'desktop:default';
   if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
@@ -195,9 +289,11 @@ async function control(request){
   if((value.component==='ToolUse'||value.component==='ToolResult')&&typeof props.tool_use_id!=='string')props.tool_use_id=value.instance_id;
   if(typeof props.output==='string'&&props.output.length>65536)props.output=props.output.slice(0,65536);
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
+  recordDrawing(n,value,result.tree);
   return {tree:result.tree,props:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
+ for(const site of sites.values())refreshSite(n,site);
  const args={plugin:value.plugin,handle:value.handle,surface:'desktop',...(value.key!==undefined?{element:value.key}:{}),...(value.component!==undefined?{component:value.component}:{}),...(value.instance_id!==undefined?{requestId:value.instance_id}:{})};
  const result=value.subtype==='ui_press'?await n.engine.I9e.press({...args,...(value.href!==undefined?{link:{href:value.href}}:{})}):value.subtype==='ui_input'?await n.engine.I9e.input({...args,kind:value.kind,value:value.value}):await n.engine.I9e.select({...args,value:value.value});
  return result===undefined?{handled:false}:{handled:true,element:result.element,...(value.subtype!=='ui_press'?{value:result.value}:{})};
@@ -215,7 +311,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
    const result=await control(body.request);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
