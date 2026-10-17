@@ -112,3 +112,16 @@ it('returns composer replies only to the connection that owns the mounted native
   expect(delivery).toHaveBeenCalledWith({ type: 'CLAUDE_PROMPT_STATE', threadId: 'thread', mountId, result: { revision: 1, status: 'applied', frame: { text: 'native draft', cursor: 12 } } })
   expect(foreign).not.toHaveBeenCalled()
 })
+
+
+it('routes autocomplete only to the requesting mounted window and refuses foreign thread identities', async () => {
+  const { ui } = await native(), delivery = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  const request = { ...mount, type: 'CLAUDE_PROMPT_AUTOCOMPLETE' as const, revision: 1, text: 'tok', cursor: 3 }
+  handleClaudeUiView(request, 'foreign-window', foreign)
+  handleClaudeUiView({ ...request, threadId: 'foreign-thread' }, 'window', delivery)
+  expect(ui.promptAutocomplete).not.toHaveBeenCalled()
+  handleClaudeUiView(request, 'window', delivery); await vi.advanceTimersByTimeAsync(0)
+  expect(delivery.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'CLAUDE_PROMPT_COMPLETIONS', mountId, threadId: 'thread', result: { revision: 1, status: 'ready' } })
+  expect(foreign).not.toHaveBeenCalled()
+})

@@ -62,6 +62,7 @@ export type ClaudeUiNode =
   | { kind: 'unsupported'; component: string; plugin?: string }
 
 export type ClaudePromptEdit = Omit<import('./ui-controls.ts').ClaudeUiPromptEdit, 'client_id' | 'surface'> & { revision: number }
+export type ClaudePromptCompletionRow = import('./ui-controls.ts').ClaudeUiPromptCompletions['suggestions'][number]
 export type ClaudePromptCompletionRequest = Omit<import('./ui-controls.ts').ClaudeUiPromptAutocomplete, 'client_id' | 'surface'> & { revision: number }
 export type ClaudePromptCompletionReply =
   | { revision: number; status: 'ready'; result: import('./ui-controls.ts').ClaudeUiPromptCompletions }

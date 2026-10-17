@@ -1,16 +1,28 @@
 import type { Editor } from '@tiptap/core'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
 import { TextSelection } from '@tiptap/pm/state'
-import type { ClaudePromptEdit, ClaudePromptReply } from '#generated/types.ts'
+import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow } from '#generated/types.ts'
 import { captureClaudePromptDocument, rewriteClaudePromptDocument, type ClaudePromptDocument } from './native-prompt-document.ts'
 
 /** A mounted view owns its revisions and listeners; it never owns the editor's lifetime. */
-export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0) {
+export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
   const decorations = createClaudePromptDecorations()
   editor.registerPlugin(decorations.plugin)
   let revision = initialRevision, applying = false, disposed = false
+  let completionRevision = completion?.initialRevision ?? 0
+  let completionPending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
+  let completionOffer: NonNullable<typeof completionPending> & { id: string; result: Extract<ClaudePromptCompletionReply, { status: 'ready' }>['result'] } | undefined
+  function retireCompletions() { completionPending = undefined; completionOffer = undefined; completion?.update([]) }
+  function askCompletions() {
+    if (!completion || disposed || editor.isDestroyed || editor.view.composing) return
+    const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)
+    if (!snapshot) return
+    const revision = ++completionRevision
+    completionPending = { revision, snapshot, selection: editor.state.selection }
+    try { completion.request({ revision, text: snapshot.text, cursor: snapshot.cursor }) } catch { retireCompletions() }
+  }
   let settled = false
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection; done: Promise<boolean>; finish: (accepted: boolean) => void } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
@@ -35,6 +47,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   function publish(by?: 'app' | 'person') {
     if (disposed || applying || editor.isDestroyed) return
     finishPending(false)
+    retireCompletions()
     if (editor.view.composing) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)
     revision++
@@ -77,13 +90,36 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         editor.view.dispatch(tr)
         onProblem(undefined)
         finishPending(true)
+        askCompletions()
       } catch (error) {
         finishPending(false)
         onProblem(error instanceof Error ? error.message : 'Claude input could not be applied')
       } finally { applying = false }
     },
+    receiveCompletions(reply: ClaudePromptCompletionReply) {
+      const pending = completionPending
+      if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
+      completionPending = undefined
+      if (reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      completionOffer = { ...pending, id: crypto.randomUUID(), result: reply.result }
+      completion?.update(reply.result.suggestions, completionOffer.id)
+    },
+    dismissCompletions() { retireCompletions() },
+    selectCompletion(index: number, offerId: string): boolean {
+      const offer = completionOffer, row = offer?.result.suggestions[index]
+      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
+      const { snapshot, result } = offer, start = result.start!
+      const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(snapshot.cursor), cursor: start + row.text.length }, serialize)
+      retireCompletions()
+      if (!next) { onProblem('Claude completion cannot replace this token without changing editor structure'); return false }
+      const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
+      tr.setSelection(TextSelection.create(tr.doc, next.position)).setMeta('claude-prompt-by', 'app')
+      editor.view.dispatch(tr)
+      editor.view.focus()
+      return true
+    },
     dispose() {
-      disposed = true; finishPending(false)
+      disposed = true; finishPending(false); retireCompletions()
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
       editor.off('destroy', destroyed)

@@ -1,6 +1,6 @@
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
-import type { ClaudePromptReply } from '#generated/types.ts'
+import type { ClaudePromptReply, ClaudePromptCompletionReply } from '#generated/types.ts'
 import type { Editor } from '@tiptap/core'
 import type { useAttachments } from '#features/threads/fe/chat/composables/useAttachments.ts'
 import ChatInput from '#features/threads/fe/chat/input.vue'
@@ -35,11 +35,11 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
-  const send = vi.fn(), command = vi.fn(), prompt = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onSendCommand: command, onNativePromptEdit: prompt }) }); app.mount(root)
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const send = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onSendCommand: command, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
-  return { state, send, command, prompt, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
+  return { state, send, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
@@ -142,4 +142,64 @@ it.each(['disconnect', 'error', 'superseded'] as const)('retires a waiting Send 
   await nextTick(); await nextTick()
   expect(f.send).not.toHaveBeenCalled()
   expect(editor.state.doc.textContent).toBe('firstx')
+})
+
+
+it('draws native rows without autofocus, selects the exact token and never submits chat', async () => {
+  const f = await nativeMount()
+  const request = f.complete.mock.lastCall![0]
+  f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native-word', label: '<script>Native</script>', description: 'Plugin description' }] } }
+  await nextTick()
+  const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  expect(row.textContent).toContain('<script>Native</script>')
+  expect(f.root.querySelector('script')).toBeNull()
+  expect(document.activeElement).not.toBe(row)
+  row.click(); await nextTick()
+  expect(editor.state.doc.textContent).toBe('native-word')
+  expect(f.prompt.mock.lastCall![0]).toMatchObject({ by: 'app', text: 'native-word', cursor: 11 })
+  expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
+  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+})
+
+it('keeps native row navigation inside its group and drops stale clicks after typing', async () => {
+  const f = await nativeMount(), request = f.complete.mock.lastCall![0]
+  f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'one' }, { text: 'two' }] } }
+  await nextTick()
+  const group = f.root.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
+  buttons[0]!.focus(); buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
+  expect(document.activeElement).toBe(buttons[1])
+  editor.commands.insertContent('x'); await nextTick()
+  buttons[0]!.click(); expect(editor.state.doc.textContent).toBe('firstx')
+  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+  expect(f.send).not.toHaveBeenCalled()
+})
+
+
+it('dismisses native offers on Escape and leaves Shift+Tab to normal focus traversal', async () => {
+  const f = await nativeMount(), request = f.complete.mock.lastCall![0]
+  f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native' }] } }
+  await nextTick()
+  const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+  row.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false)
+  row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+  row.click(); expect(editor.state.doc.textContent).toBe('first')
+  expect(f.send).not.toHaveBeenCalled()
+})
+
+
+it('refuses a detached old row click even after a newer offer occupies the same index', async () => {
+  const f = await nativeMount(), first = f.complete.mock.lastCall![0]
+  f.state.nativePrompt!.completions = { revision: first.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'old' }] } }
+  await nextTick()
+  const old = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  editor.commands.insertContent('x'); await nextTick()
+  const edit = f.prompt.mock.lastCall![0]
+  f.state.nativePrompt!.reply = { revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } }; await nextTick()
+  const second = f.complete.mock.lastCall![0]
+  f.state.nativePrompt!.completions = { revision: second.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'new' }] } }; await nextTick()
+  old.click(); expect(editor.state.doc.textContent).toBe('firstx')
+  ;(f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement).click()
+  expect(editor.state.doc.textContent).toBe('new')
 })

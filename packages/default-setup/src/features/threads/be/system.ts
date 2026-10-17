@@ -57,7 +57,7 @@ export const threadsSystem = setup({
   },
   actions: threadsSpec.actions({
     claudeUiView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_PROMPT_EDIT') handleClaudeUiView(event, client, reply);
+      if (event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
     },
     // ---- Thread management actions ----
     sendThreadsConnectedData: () => {
@@ -880,6 +880,7 @@ export const threadsSystem = setup({
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_PRESS: { actions: 'claudeUiView' },
       CLAUDE_UI_FIELD: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_AUTOCOMPLETE: { actions: 'claudeUiView' },
       CLAUDE_PROMPT_EDIT: { actions: 'claudeUiView' },
       SEND_STATE: {
         actions: ['sendThreadsConnectedData', 'sendChatConnectedData'],

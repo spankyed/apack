@@ -37,3 +37,24 @@ it('correlates native draft replies with the latest edit in the mounted thread s
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', mountId: 'mounted', threadId: 'thread-one' }); actor.send({ ...reply, result: { ...reply.result, revision: 2 } })
   expect(actor.getSnapshot().context.nativeUiViews).toEqual({}); actor.stop()
 })
+
+
+it('rejects completion replies from another view or an older edit and retires rows on edit/unmount', () => {
+  const actor = createActor(threadsState).start()
+  const identity = { mountId: 'view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity, revision: 1, by: 'app', text: 'tok', cursor: 3 })
+  actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity, revision: 1, text: 'tok', cursor: 3 })
+  const result = { revision: 1, status: 'ready' as const, result: { start: 0, suggestions: [{ text: 'token' }] } }
+  actor.send({ type: 'CLAUDE_PROMPT_COMPLETIONS', ...identity, mountId: 'foreign', result })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.completions).toBeUndefined()
+  actor.send({ type: 'CLAUDE_PROMPT_COMPLETIONS', ...identity, result })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.completions).toEqual(result)
+  actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity, revision: 2, by: 'person', text: 'toke', cursor: 4 })
+  actor.send({ type: 'CLAUDE_PROMPT_COMPLETIONS', ...identity, result })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.completions).toBeUndefined()
+  actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_PROMPT_COMPLETIONS', ...identity, result })
+  expect(actor.getSnapshot().context.nativeUiViews.view).toBeUndefined()
+  actor.stop()
+})

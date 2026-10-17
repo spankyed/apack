@@ -53,6 +53,11 @@
             @pause="emit('pause')"
             @open-revert-menu="openRevertMenu"
           />
+          <div v-if="nativeCompletions.length" role="group" aria-label="Claude suggestions" class="max-h-40 overflow-y-auto border-t border-neutral-700" @keydown="navigateNativeCompletions">
+            <button v-for="(row, index) in nativeCompletions" :key="index" type="button" class="block w-full px-3 py-1 text-left text-sm text-neutral-300 hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:outline focus-visible:outline-blue-400" @mousedown.prevent @click="promptEditor?.selectCompletion(index, row.offerId)">
+              <span>{{ row.label ?? row.text }}</span><span v-if="row.description" class="ml-2 text-xs text-neutral-500">{{ row.description }}</span>
+            </button>
+          </div>
           <p v-if="submissionProblem || nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ submissionProblem || nativePromptProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
@@ -253,7 +258,7 @@ const props = defineProps<{
   statusLine?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
-  nativePrompt?: { mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply }
+  nativePrompt?: { mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeUi?: ClaudeUiMountState
 }>()
 
@@ -275,6 +280,7 @@ const emit = defineEmits<{
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
+  (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
   (e: 'native-ui-press', actionId: string, href?: string): void
@@ -292,6 +298,7 @@ interface ActionButton {
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
 const nativePromptProblem = ref<string>()
+const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
 let composerEpoch = 0
@@ -300,9 +307,19 @@ onUnmounted(() => { composerEpoch++ })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
-  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision)
+  if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => { nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : [] } })
 }, { flush: 'post' })
 watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
+watch(() => props.nativePrompt?.completions, reply => { if (reply) promptEditor?.receiveCompletions(reply) })
+function navigateNativeCompletions(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); promptEditor?.dismissCompletions(); tiptapRef.value?.editor?.view.focus(); return }
+  if (event.key === 'Tab') { event.stopPropagation(); return }
+  if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+  const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll('button'))
+  const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
+  event.preventDefault(); event.stopPropagation(); buttons[next]?.focus()
+}
 onUnmounted(() => promptEditor?.dispose())
 
 

@@ -52,6 +52,19 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   let view = views.get(key)
   if (view && view.threadId !== event.threadId) return
   if (view && view.expires <= Date.now()) { drop(key, view); view = undefined }
+  if (event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') {
+    if (!view) return
+    bind(key, view)
+    const target = view, mount = target.mount
+    if (!mount) return
+    const { type: _, threadId: __, mountId: ___, ...box } = event
+    void mount.autocompletePrompt(box).then(result => {
+      if (result && views.get(key) === target && target.mount === mount && getConversation(target.threadId)?.owner === target.owner) {
+        target.reply({ type: 'CLAUDE_PROMPT_COMPLETIONS', threadId: target.threadId, mountId: target.mountId, result })
+      }
+    }).catch(() => { /* delivery connection closed */ })
+    return
+  }
   if (event.type === 'CLAUDE_PROMPT_EDIT') {
     if (!view) return
     bind(key, view)

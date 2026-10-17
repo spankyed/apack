@@ -1492,11 +1492,24 @@ const threadsState = setup({
     CLAUDE_PROMPT_EDIT: { actions: [assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.promptRevision ?? 0)) return {}
-      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptRevision: event.revision } } }
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptRevision: event.revision, completions: undefined } } }
     }), ({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (view?.threadId === event.threadId && view.promptRevision === event.revision) sendToSystem(id, event)
     }] },
+    CLAUDE_PROMPT_AUTOCOMPLETE: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.completionRevision ?? 0)) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, completions: undefined, completionRevision: event.revision, completionEditRevision: view.promptRevision } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.completionRevision === event.revision) sendToSystem(id, event)
+    }] },
+    CLAUDE_PROMPT_COMPLETIONS: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.completionRevision !== event.result.revision || view.completionEditRevision !== view.promptRevision) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, completions: event.result } } }
+    }) },
     CLAUDE_PROMPT_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (!view || view.threadId !== event.threadId || view.promptRevision !== event.result.revision) return {}
