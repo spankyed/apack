@@ -12,7 +12,7 @@ function fixture() {
   const done = deferred<void>()
   const states: ClaudeUiMountState[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -241,4 +241,22 @@ it('stamps rendered field replacements only after native callbacks finish and re
   await expect(view.field({ actionId, revision: 1, kind: 'change', value: 'replay' })).resolves.toEqual({ handled: false })
   expect(f.ui.input).toHaveBeenCalledOnce()
   await view.dispose()
+})
+
+
+it('scopes autocomplete to the current owner and ignores rows overtaken by edits or newer asks', async () => {
+  const f = fixture(), view = f.mount(); await view.ready
+  const first = deferred<{ suggestions: { text: string; label: string }[]; start: number }>()
+  f.ui.promptAutocomplete.mockImplementationOnce(() => first.promise)
+  const old = view.autocompletePrompt({ revision: 1, text: 'tok', cursor: 3 }); await Promise.resolve()
+  const current = await view.autocompletePrompt({ revision: 2, text: 'toke', cursor: 4 })
+  expect(current).toMatchObject({ revision: 2, status: 'ready', result: { suggestions: [{ text: 'native' }] } })
+  first.resolve({ suggestions: [{ text: 'old', label: 'Old' }], start: 0 }); await expect(old).resolves.toBeUndefined()
+  const delayed = deferred<{ suggestions: { text: string; label: string }[]; start: number }>()
+  f.ui.promptAutocomplete.mockImplementationOnce(() => delayed.promise)
+  const editing = view.autocompletePrompt({ revision: 3, text: 'toke', cursor: 4 }); await Promise.resolve()
+  await view.editPrompt({ revision: 1, text: 'new draft', cursor: 9, by: 'person' })
+  delayed.resolve({ suggestions: [{ text: 'stale', label: 'Stale' }], start: 0 }); await expect(editing).resolves.toBeUndefined()
+  await view.dispose()
+  await expect(view.autocompletePrompt({ revision: 4, text: 'tok', cursor: 3 })).resolves.toBeUndefined()
 })

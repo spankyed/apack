@@ -3,9 +3,9 @@ import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-import type { ClaudeUiFieldEvent, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply } from './ui-presentation.ts'
+import type { ClaudeUiFieldEvent, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
@@ -27,6 +27,7 @@ export function mountClaudeUi(options: {
   const fieldRevisions = new Map<string, number>()
   const completedFields = new Map<string, number>()
   let promptRevision = 0
+  let completionRevision = 0
   let generation = 0
   let pressing = false
   let disposal: Promise<void> | undefined
@@ -127,6 +128,21 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async autocompletePrompt(event: ClaudePromptCompletionRequest): Promise<ClaudePromptCompletionReply | undefined> {
+      if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= completionRevision) return
+      completionRevision = event.revision
+      const editRevision = promptRevision, { revision, ...box } = event
+      try {
+        await ready
+        if (!current() || revision !== completionRevision || editRevision !== promptRevision) return
+        if (!attached) return { revision, status: 'error', message: attachmentError ?? 'Native composer is not attached' }
+        const result = await owner.handle.ui.promptAutocomplete({ ...client, ...box })
+        if (!current() || revision !== completionRevision || editRevision !== promptRevision) return
+        return { revision, status: 'ready', result }
+      } catch (error) {
+        if (current() && revision === completionRevision && editRevision === promptRevision) return { revision, status: 'error', message: error instanceof Error ? error.message : 'Native autocomplete failed' }
+      }
+    },
     async editPrompt(event: ClaudePromptEdit): Promise<ClaudePromptReply | undefined> {
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= promptRevision) return
       promptRevision = event.revision

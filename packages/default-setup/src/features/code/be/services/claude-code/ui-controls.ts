@@ -21,6 +21,10 @@ const promptKey = z.object({ key: z.string().min(1).max(32), ctrl: z.literal(tru
 const promptEdit = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe(),
   by: z.enum(['person', 'app']), key: promptKey.optional(),
 }).strict().refine(value => value.by !== 'app' || value.key === undefined, 'programmatic draft adoption carries no key')
+const promptAutocomplete = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe() }).strict()
+const promptCompletions = z.object({ suggestions: z.array(z.object({ text: z.string().min(1), label: z.string().optional(), description: z.string().optional() }).passthrough()),
+  start: z.number().int().nonnegative().optional(), superseded: z.literal(true).optional(),
+}).passthrough()
 const promptDecoration = z.object({ start: z.number().int().nonnegative(), end: z.number().int(), color: z.string().optional(), backgroundColor: z.string().optional(),
   dimColor: z.boolean().optional(), bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
   virtualText: z.string().optional(),
@@ -45,6 +49,8 @@ export type ClaudeUiPress = z.infer<typeof press>
 export type ClaudeUiInput = z.infer<typeof input>
 export type ClaudeUiSelect = z.infer<typeof field>
 export type ClaudeUiPromptEdit = z.infer<typeof promptEdit>
+export type ClaudeUiPromptAutocomplete = z.infer<typeof promptAutocomplete>
+export type ClaudeUiPromptCompletions = z.infer<typeof promptCompletions>
 export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
@@ -73,6 +79,13 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {
       const valid = promptEdit.parse(options)
       return promptFrame.parse(await request({ subtype: 'ui_prompt_edit', ...valid }))
+    },
+    /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
+    async promptAutocomplete(options: ClaudeUiPromptAutocomplete): Promise<ClaudeUiPromptCompletions> {
+      const valid = promptAutocomplete.parse(options)
+      const result = promptCompletions.parse(await request({ subtype: 'ui_prompt_autocomplete', ...valid }))
+      if ((result.start !== undefined && result.start > Math.min(valid.cursor, valid.text.length)) || (result.suggestions.length && result.start === undefined)) throw new ClaudeProtocolError('native autocomplete token range is invalid')
+      return result
     },
     /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
     async input(options: ClaudeUiInput) {

@@ -110,3 +110,20 @@ describe('native UI transport', () => {
   })
 
 })
+
+
+it('validates native autocomplete rows and token boundaries while preserving supersession', async () => {
+  const f = fixture()
+  const pending = f.ui.promptAutocomplete({ ...client, text: 'prefix tok', cursor: 10 })
+  await vi.waitFor(() => expect(f.writes).toHaveLength(1))
+  expect(f.writes[0]!.request).toEqual({ subtype: 'ui_prompt_autocomplete', ...client, text: 'prefix tok', cursor: 10 })
+  f.reply(0, { start: 7, suggestions: [{ text: 'token', label: 'Token', description: 'Native description' }] })
+  await expect(pending).resolves.toMatchObject({ start: 7, suggestions: [{ text: 'token' }] })
+  const stale = f.ui.promptAutocomplete({ ...client, text: 'tok', cursor: 3 })
+  await vi.waitFor(() => expect(f.writes).toHaveLength(2)); f.reply(1, { suggestions: [], superseded: true })
+  await expect(stale).resolves.toEqual({ suggestions: [], superseded: true })
+  const invalid = f.ui.promptAutocomplete({ ...client, text: 'tok', cursor: 3 })
+  const rejected = expect(invalid).rejects.toThrow('token range')
+  await vi.waitFor(() => expect(f.writes).toHaveLength(3)); f.reply(2, { suggestions: [{ text: 'token' }], start: 4 })
+  await rejected
+})
