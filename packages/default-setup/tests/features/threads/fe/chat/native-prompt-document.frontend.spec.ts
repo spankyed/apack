@@ -99,9 +99,11 @@ it('marks history adoption as app-owned even inside a keyboard event task', () =
 })
 
 
-it('can detach after the editor has already been destroyed', () => {
+it('can detach and settle after the editor has already been destroyed', async () => {
   const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  const waiting = bridge.settle()
   editor.destroy()
+  await expect(waiting).resolves.toBe(false)
   expect(() => bridge.dispose()).not.toThrow()
 })
 
@@ -167,5 +169,14 @@ it('draws virtual text as inert text outside the draft and refuses arbitrary col
   const span = editor.view.dom.querySelector('.claude-prompt-decoration')! as HTMLElement
   expect(span.style.color).toBe('')
   expect(span.style.backgroundColor).toBe('')
+  bridge.dispose()
+})
+
+
+it('settles a failed dispatch instead of leaving Send pending', async () => {
+  const problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, () => { throw new Error('Dispatch closed') }, problem)
+  await expect(bridge.settle()).resolves.toBe(false)
+  expect(problem).toHaveBeenLastCalledWith('Dispatch closed')
   bridge.dispose()
 })

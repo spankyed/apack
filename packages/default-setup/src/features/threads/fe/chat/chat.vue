@@ -235,7 +235,9 @@ const nativeUiDrawing = computed(() => {
 const nativePrompt = computed(() => {
   const mount = nativeUiMount.value
   if (!mount || mount.threadId !== currentThread.value?.id) return
-  return { mountId: mount.mountId, revision: nativeUiViews.value[mount.mountId]?.promptRevision, reply: nativeUiViews.value[mount.mountId]?.prompt }
+  const view = nativeUiViews.value[mount.mountId]
+  if (!view || !['rendering', 'live', 'error'].includes(view.state.status)) return
+  return { mountId: mount.mountId, revision: view.promptRevision, reply: view.prompt }
 })
 function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) {
   const mount = nativeUiMount.value

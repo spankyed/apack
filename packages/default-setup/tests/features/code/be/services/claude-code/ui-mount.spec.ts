@@ -120,6 +120,7 @@ describe('native UI mounted lifecycle', () => {
     const f = fixture(); f.ui.attach.mockRejectedValueOnce(new Error('lost attachment reply'))
     const view = f.mount(); await view.ready
     expect(f.states.at(-1)).toMatchObject({ status: 'error', message: 'lost attachment reply' })
+    await expect(view.editPrompt({ revision: 1, by: 'app', text: 'draft', cursor: 5 })).resolves.toEqual({ revision: 1, status: 'error', message: 'lost attachment reply' })
     await view.dispose()
     expect(f.ui.attach).toHaveBeenCalledTimes(1)
     expect(f.ui.detach).toHaveBeenCalledTimes(1)
@@ -194,13 +195,13 @@ it('accepts only the latest native draft reply and retires edits with the native
   await view.dispose()
 })
 
-it('keeps a native edit failure separate from mounted controls and discards superseded frames', async () => {
+it('keeps a native edit failure separate from mounted controls and delivers superseded acknowledgments to settle the composer', async () => {
   const f = fixture(), view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   f.ui.promptEdit.mockRejectedValueOnce(new Error('native edit failed'))
   await expect(view.editPrompt({ revision: 1, by: 'person', text: 'draft', cursor: 5 })).resolves.toEqual({ revision: 1, status: 'error', message: 'native edit failed' })
   expect(f.states.at(-1)?.status).toBe('live')
   f.ui.promptEdit.mockResolvedValueOnce({ text: 'draft', cursor: 5, superseded: true } as { text: string; cursor: number })
-  await expect(view.editPrompt({ revision: 2, by: 'person', text: 'draft', cursor: 5 })).resolves.toBeUndefined()
+  await expect(view.editPrompt({ revision: 2, by: 'person', text: 'draft', cursor: 5 })).resolves.toMatchObject({ revision: 2, status: 'applied', frame: { superseded: true } })
   await view.dispose()
 })
 

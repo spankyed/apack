@@ -1,5 +1,6 @@
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
+import type { ClaudePromptReply } from '#generated/types.ts'
 import type { Editor } from '@tiptap/core'
 import type { useAttachments } from '#features/threads/fe/chat/composables/useAttachments.ts'
 import ChatInput from '#features/threads/fe/chat/input.vue'
@@ -34,11 +35,11 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
-  const send = vi.fn(), command = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onSendCommand: command }) }); app.mount(root)
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const send = vi.fn(), command = vi.fn(), prompt = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onSendCommand: command, onNativePromptEdit: prompt }) }); app.mount(root)
   editor.commands.setContent('first')
-  return { state, send, command, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
+  return { state, send, command, prompt, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
@@ -93,4 +94,52 @@ it('retires an in-flight send when the composer unmounts', async () => {
   app!.unmount(); app = undefined
   finish('/media/old.png'); await new Promise(resolve => setTimeout(resolve, 10))
   expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
+})
+
+
+async function nativeMount() {
+  const f = mount(vi.fn(async () => undefined))
+  f.state.nativePrompt = { mountId: 'native-view' }; await nextTick()
+  const adoption = f.prompt.mock.lastCall![0]
+  f.state.nativePrompt.reply = { revision: adoption.revision, status: 'applied', frame: { text: adoption.text, cursor: adoption.cursor } }
+  await nextTick()
+  return f
+}
+
+it('waits for the current native edit and sends its rewritten draft once', async () => {
+  const f = await nativeMount()
+  editor.view.dom.dispatchEvent(new Event('beforeinput', { bubbles: true }))
+  editor.commands.insertContent('x')
+  const request = f.prompt.mock.lastCall![0]
+  f.submit(); f.submit(); await nextTick()
+  expect(f.send).not.toHaveBeenCalled()
+  f.state.nativePrompt!.reply = { revision: request.revision, status: 'applied', frame: { text: 'FIRSTX', cursor: 6 } }
+  await vi.waitFor(() => expect(f.send).toHaveBeenCalledOnce())
+  expect(f.send).toHaveBeenCalledWith('FIRSTX', expect.anything())
+  expect(editor.state.doc.textContent).toBe('')
+})
+
+it('retires a waiting Send on newer typing, leaving the new draft for an explicit Send', async () => {
+  const f = await nativeMount()
+  editor.commands.insertContent('x'); const old = f.prompt.mock.lastCall![0]
+  f.submit(); editor.commands.insertContent('y'); const latest = f.prompt.mock.lastCall![0]
+  await nextTick(); expect(f.send).not.toHaveBeenCalled()
+  f.state.nativePrompt!.reply = { revision: old.revision, status: 'applied', frame: { text: 'OLD', cursor: 3 } }
+  await nextTick(); expect(editor.state.doc.textContent).toBe('firstxy')
+  f.state.nativePrompt!.reply = { revision: latest.revision, status: 'applied', frame: { text: 'FIRSTXY', cursor: 7 } }
+  await nextTick(); expect(f.send).not.toHaveBeenCalled()
+  f.submit(); await vi.waitFor(() => expect(f.send).toHaveBeenCalledOnce())
+  expect(f.send).toHaveBeenCalledWith('FIRSTXY', expect.anything())
+})
+
+it.each(['disconnect', 'error', 'superseded'] as const)('retires a waiting Send on native %s', async outcome => {
+  const f = await nativeMount()
+  editor.commands.insertContent('x'); const request = f.prompt.mock.lastCall![0]
+  f.submit()
+  if (outcome === 'disconnect') f.state.nativePrompt = undefined
+  else if (outcome === 'error') f.state.nativePrompt!.reply = { revision: request.revision, status: 'error', message: 'Native edit refused' }
+  else f.state.nativePrompt!.reply = { revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor, superseded: true } }
+  await nextTick(); await nextTick()
+  expect(f.send).not.toHaveBeenCalled()
+  expect(editor.state.doc.textContent).toBe('firstx')
 })

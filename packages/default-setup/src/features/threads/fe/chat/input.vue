@@ -659,58 +659,67 @@ const handleSubmit = async () => {
   if (props.disabled || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
-  const md = ((editor.storage as any).markdown.getMarkdown() as string)
-    .replace(/(\n&nbsp;)+$/, '')  // strip trailing empty-line placeholders from EmptyLinePreserver
-    .trim()
-  const textContent = editor.state.doc.textContent.trim()
-  if (textContent || hasAttachments.value) {
-    const epoch = composerEpoch, doc = editor.state.doc
+  const epoch = composerEpoch, bridge = promptEditor
+  if (props.nativePrompt && !bridge) { submissionProblem.value = 'Claude input is connecting'; return }
+  submitting.value = true
+  submissionProblem.value = undefined
+  try {
+    if (bridge) {
+      const revision = bridge.revision
+      if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge) {
+        if (epoch === composerEpoch) submissionProblem.value = nativePromptProblem.value ?? 'Claude input changed while preparing this message. Send again.'
+        return
+      }
+    }
+    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+    const md = ((editor.storage as any).markdown.getMarkdown() as string)
+      .replace(/(\n&nbsp;)+$/, '')
+      .trim()
+    if (!editor.state.doc.textContent.trim() && !hasAttachments.value) return
+    const doc = editor.state.doc
     const entityId = props.currentThread?.id || 'chat-attachments'
     const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)
     const cmdState = commandSuggestionKey.getState(editor.state)
-    submitting.value = true
-    submissionProblem.value = undefined
-    try {
-      const attachmentRefs = await attachments.collect(entityId)
-      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
-      const references: MessageReferences = {
-        ...attachmentRefs,
-        ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
-      }
+    const attachmentRefs = await attachments.collect(entityId)
+    if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+    const references: MessageReferences = {
+      ...attachmentRefs,
+      ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
+    }
 
-      // Check if this is a command submission
-      if (cmdState?.active && cmdState.selectedCommand) {
-        const commandName = cmdState.selectedCommand.name
-        const prefix = `/${commandName} `
-        const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
-        emit('send-command', commandName, bodyText.trim(), references)
+    // Check if this is a command submission
+    if (cmdState?.active && cmdState.selectedCommand) {
+      const commandName = cmdState.selectedCommand.name
+      const prefix = `/${commandName} `
+      const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
+      emit('send-command', commandName, bodyText.trim(), references)
 
-        // Deactivate command plugin
-        if (editor.state.doc === doc) {
-          const { tr } = editor.state
-          tr.setMeta(commandSuggestionKey, { deactivate: true })
-          editor.view.dispatch(tr)
-        }
-      } else {
-        emit('send-message', md, references)
-      }
-
-      sentHistory.value.push(md)
-      saveHistory(sentHistory.value)
-      historyIndex.value = -1
-      lastClearedContent.value = null
+      // Deactivate command plugin
       if (editor.state.doc === doc) {
-        editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
-        messageContent.value = ''
-        hasTextContent.value = false
+        const { tr } = editor.state
+        tr.setMeta(commandSuggestionKey, { deactivate: true })
+        editor.view.dispatch(tr)
       }
-      attachments.clear()
-    } catch (error) {
-      if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Message could not be sent'
-    } finally { submitting.value = false }
-  }
+    } else {
+      emit('send-message', md, references)
+    }
+
+    sentHistory.value.push(md)
+    saveHistory(sentHistory.value)
+    historyIndex.value = -1
+    lastClearedContent.value = null
+    if (editor.state.doc === doc) {
+      editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
+      messageContent.value = ''
+      hasTextContent.value = false
+    }
+    attachments.clear()
+  } catch (error) {
+    if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Message could not be sent'
+  } finally { submitting.value = false }
 }
+
 </script>
 
 <style lang="scss" module>

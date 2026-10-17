@@ -18,6 +18,7 @@ export function mountClaudeUi(options: {
   const instanceId = randomUUID()
   let disposed = false
   let attached = false
+  let attachmentError: string | undefined
   let dirty = false
   let rendering = false
   let scheduled: ReturnType<typeof setTimeout> | undefined
@@ -117,7 +118,8 @@ export function mountClaudeUi(options: {
       attached = true
       if (current()) invalidate()
     } catch (error) {
-      if (current()) publish({ status: 'error', message: error instanceof Error ? error.message : 'Native UI attachment failed' })
+      attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
+      if (current()) publish({ status: 'error', message: attachmentError })
     }
   })()
   void owner.done.then(() => dispose(), () => dispose()).catch(() => {})
@@ -131,9 +133,10 @@ export function mountClaudeUi(options: {
       const { revision, ...box } = event
       try {
         await ready
-        if (!attached || !current() || revision !== promptRevision) return
+        if (!current() || revision !== promptRevision) return
+        if (!attached) return { revision, status: 'error', message: attachmentError ?? 'Native composer is not attached' }
         const frame = await owner.handle.ui.promptEdit({ ...client, ...box })
-        if (!current() || revision !== promptRevision || frame.superseded) return
+        if (!current() || revision !== promptRevision) return
         return { revision, status: 'applied', frame }
       } catch (error) {
         if (current() && revision === promptRevision) return { revision, status: 'error', message: error instanceof Error ? error.message : 'Native composer edit failed' }
