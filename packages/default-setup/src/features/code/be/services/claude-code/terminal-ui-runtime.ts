@@ -69,7 +69,71 @@ async function prepareTerminalPrompt(n,text){
  const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
  return {filled:result.isFilled===true&&(await composer.read()).text===text};
 }
-const schemaNames={ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
+// Keep remote edit state separate from the hidden terminal draft used for submission.
+const edits=new Map();
+function clearEdit(clientId){
+ const state=edits.get(clientId);if(!state)return;
+ edits.delete(clientId);state.active?.abort();
+ for(const item of state.waiting)item.answer({...item.box,superseded:true});state.waiting=[];
+}
+function editPrompt(n,clientId,box,key,by){
+ let state=edits.get(clientId);
+ if(!state){state={box:{text:'',cursor:0},waiting:[]};edits.set(clientId,state);}
+ box=n.session.o_n(box);
+ if(by==='app'){
+  for(const item of state.waiting)item.answer({...item.box,superseded:true});
+  state.waiting=[];state.box=box;state.offered=undefined;state.stale=!!state.active;return box;
+ }
+ return new Promise(answer=>{state.waiting.push({box,key,answer});drainEdit(n,clientId,state);});
+}
+function drainEdit(n,clientId,state){
+ if(state.active||!state.waiting.length)return;
+ const batch=state.waiting,next=batch.at(-1);
+ for(const item of batch.slice(0,-1))item.answer({...item.box,superseded:true});
+ const distance=before=>{const diff=n.session.Aze(before,next.box);return diff.end-diff.start+diff.inputText.length;};
+ const before=state.offered&&distance(state.offered)<distance(state.box)?state.offered:state.box;
+ const key=batch.length===1?next.key:undefined;
+ const nativeKey=key?{key:key.key==='space'?' ':key.key,name:key.key==='space'||[...key.key].length===1?'':key.key,ctrl:key.ctrl===true,shift:key.shift===true,meta:key.meta===true}:undefined;
+ state.box=next.box;state.offered=undefined;state.waiting=[];
+ const abort=new AbortController();state.active=abort;
+ Promise.resolve().then(()=>n.session.kGr({before,after:next.box,...(nativeKey?{key:nativeKey}:{})},abort.signal)).catch(()=>next.box).then(result=>{
+  state.active=undefined;
+  if(abort.signal.aborted||edits.get(clientId)!==state){next.answer({...next.box,superseded:true});return;}
+  const box=n.session.o_n(result),decorations=n.runtime.qgr(n.runtime.nxe(result.decorations,box.text));
+  if((box.text!==next.box.text||box.cursor!==next.box.cursor)&&!state.waiting.length&&!state.stale)state.offered=box;
+  state.stale=false;next.answer({...box,...(decorations.length?{decorations}:{})});drainEdit(n,clientId,state);
+ });
+}
+// Each attached composer has one native completion chain and at most one queued draft.
+const completions=new Map();
+function clearCompletion(clientId){
+ const state=completions.get(clientId);if(!state)return;
+ completions.delete(clientId);state.active?.abort();
+ state.waiting?.answer({suggestions:[],superseded:true});state.waiting=undefined;
+}
+function autocomplete(n,clientId,box){
+ let state=completions.get(clientId);
+ if(!state){state={};completions.set(clientId,state);}
+ return new Promise(answer=>{
+  state.waiting?.answer({suggestions:[],superseded:true});
+  state.waiting={box,answer};drainCompletion(n,clientId,state);
+ });
+}
+function drainCompletion(n,clientId,state){
+ if(state.active){state.active.abort();return;}
+ const next=state.waiting;
+ if(!next){if(completions.get(clientId)===state)completions.delete(clientId);return;}
+ state.waiting=undefined;
+ const args=n.session.rwt(next.box);
+ if(!args){next.answer({suggestions:[]});drainCompletion(n,clientId,state);return;}
+ const abort=new AbortController();state.active=abort;
+ Promise.resolve().then(()=>n.session.r_n(args,abort.signal)).then(result=>n.session.n_n(result.suggestions),()=>[]).then(suggestions=>{
+  state.active=undefined;
+  next.answer(abort.signal.aborted||completions.get(clientId)!==state?{suggestions:[],superseded:true}:{suggestions,start:args.start});
+  if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
+ });
+}
+const schemaNames={ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
@@ -89,9 +153,20 @@ async function control(request){
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
+  clearEdit(clientId);clearCompletion(clientId);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
+ }
+ if(value.subtype==='ui_prompt_edit'){
+  const id=clientId??'desktop:default';
+  if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
+  return editPrompt(n,id,{text:value.text,cursor:value.cursor},value.key,value.by);
+ }
+ if(value.subtype==='ui_prompt_autocomplete'){
+  const id=clientId??'desktop:default';
+  if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
+  return autocomplete(n,id,n.session.o_n({text:value.text,cursor:value.cursor}));
  }
  if(value.subtype==='ui_render'){
   if(!clients.has(clientId))throw Error('Native UI client is not attached to this owner');
@@ -120,7 +195,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const id of clients)await native.session.d2t(id,'detach');restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
    const result=await control(body.request);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
