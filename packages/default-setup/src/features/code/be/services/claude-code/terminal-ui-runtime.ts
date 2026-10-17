@@ -7,6 +7,35 @@ const clients=new Set(),seen=new Set();let native,initializing,activeSession=con
 function publish(event){
  try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
 }
+// Match native remote replay: latest status per plugin, bounded recent transients for first attach.
+const noticeStatuses=new Map(),noticeTransient=[],noticeContexts=new WeakSet(),noticeMethods=new WeakSet();
+let noticeSession=config.sessionId,noticeOrder=0,noticeAttached=false;
+function resetNotices(sessionId){noticeSession=sessionId;noticeStatuses.clear();noticeTransient.length=0;noticeAttached=false;}
+function recordNotice(subtype,plugin,text,timeout){
+ const current=JSON.parse(readFileSync(configUrl,'utf8'));
+ if(noticeSession!==current.sessionId)resetNotices(current.sessionId);
+ const event={type:'system',subtype,plugin,text:text??null,uuid:randomUUID(),session_id:current.sessionId,...(subtype==='ui_toast'?{timeout_ms:timeout}:{})};
+ const item={event,at:Date.now(),order:++noticeOrder};
+ if(subtype==='ui_status'){noticeStatuses.delete(plugin);noticeStatuses.set(plugin,item);}
+ else if(!clients.size){noticeTransient.push(item);noticeTransient.splice(0,Math.max(0,noticeTransient.length-20));}
+ if(clients.size)publish(event);
+}
+function installNotices(n,context){
+ if(context?.surface!=='terminal'||noticeContexts.has(context))return;
+ if(noticeMethods.has(context.toast)&&noticeMethods.has(context.status)){noticeContexts.add(context);return;}
+ noticeContexts.add(context);
+ const toast=context.toast,status=context.status;
+ context.toast=function(plugin,text,timeout){const result=Reflect.apply(toast,this,arguments);try{recordNotice('ui_toast',plugin,text,timeout??n.runtime.o7t);}catch{}return result;};
+ context.status=function(plugin,text){const result=Reflect.apply(status,this,arguments);try{recordNotice('ui_status',plugin,text);}catch{}return result;};
+ noticeMethods.add(context.toast);noticeMethods.add(context.status);
+}
+function replayNotices(){
+ const current=JSON.parse(readFileSync(configUrl,'utf8'));
+ if(noticeSession!==current.sessionId)resetNotices(current.sessionId);
+ const items=[...noticeStatuses.values(),...(!noticeAttached?noticeTransient.filter(item=>Date.now()-item.at<=60000):[])].sort((a,b)=>a.order-b.order);
+ noticeTransient.length=0;noticeAttached=true;
+ for(const item of items)publish(item.event);
+}
 // Native hook dispatch owns admission and rewrites; this adapter supplies the remote layout.
 const sites=new Map();
 function siteExists(n,component,id){return component==='AbovePrompt'&&id===n.runtime.f4||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
@@ -238,6 +267,7 @@ function drainCompletion(n,clientId,state){
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
  const n=await initialize();
+ if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
  const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
@@ -249,9 +279,11 @@ async function control(request){
  if(value.subtype==='ui_attach'){
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
   const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
+  installNotices(n,n.runtime.ey());
   if(answers.length)installHosts(n);
   clients.add(clientId);
   try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);}catch(error){clients.delete(clientId);throw error;}
+  replayNotices();
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
@@ -311,7 +343,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});

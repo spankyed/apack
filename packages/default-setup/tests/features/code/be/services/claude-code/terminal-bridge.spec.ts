@@ -144,3 +144,19 @@ it.each([
     expect(receive).toHaveBeenCalledExactlyOnceWith(event)
   } finally { unsubscribe() }
 })
+
+it('accepts session-scoped native notices and refuses malformed or foreign updates', async () => {
+  await create()
+  const receive = vi.fn(), unsubscribe = bridge!.uiTransport.subscribe(receive)
+  const event = { type: 'system', subtype: 'ui_toast', session_id: session, uuid: 'notice-1', plugin: 'fixture', text: 'Native notice', timeout_ms: 1500 }
+  try {
+    for (const invalid of [{ ...event, session_id: 'foreign' }, { ...event, timeout_ms: -1 }, { ...event, text: null }, { ...event, plugin: '' }]) {
+      expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: invalid })).status).toBe(409)
+    }
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid + 1, event })).status).toBe(409)
+    expect(receive).not.toHaveBeenCalled()
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event })).status).toBe(200)
+    expect(receive).toHaveBeenCalledExactlyOnceWith(event)
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, subtype: 'ui_status', text: null } })).status).toBe(200)
+  } finally { unsubscribe() }
+})
