@@ -261,7 +261,7 @@ const props = defineProps<{
   statusLine?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
-  nativePrompt?: { mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
+  nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
   nativeUi?: ClaudeUiMountState
 }>()
@@ -285,6 +285,7 @@ const emit = defineEmits<{
   (e: 'revert-with-files', messageId: string): void
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
+  (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
@@ -333,6 +334,17 @@ watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   }
   update(); editor.on('transaction', update)
   onCleanup(() => { editor.off('transaction', update) })
+})
+watch(() => props.nativePrompt?.hostRequest, request => {
+  if (!request) return
+  const available = Date.now() < request.expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
+  if (request.kind === 'read') {
+    const box = available ? promptEditor?.readDraft() : undefined
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) })
+  } else {
+    const filled = available && (promptEditor?.fillDraft(request.input, request.revision) ?? false)
+    emit('native-prompt-host-response', { requestId: request.requestId, kind: 'fill', filled })
+  }
 })
 watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
 watch(() => props.nativePrompt?.completions, reply => { if (reply) promptEditor?.receiveCompletions(reply) })

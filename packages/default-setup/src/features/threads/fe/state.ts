@@ -1515,6 +1515,19 @@ const threadsState = setup({
       if (!view || view.threadId !== event.threadId || view.promptRevision !== event.result.revision) return {}
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, prompt: event.result } } }
     }) },
+    CLAUDE_PROMPT_HOST_REQUEST: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptHostRequest: event.request } } }
+    }) },
+    CLAUDE_PROMPT_HOST_RESPONSE: { actions: [({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.promptHostRequest?.requestId === event.requestId && view.promptHostRequest.kind === event.kind) sendToSystem(id, event)
+    }, assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.promptHostRequest?.requestId !== event.requestId || view.promptHostRequest.kind !== event.kind) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptHostRequest: undefined } } }
+    })] },
     CLAUDE_UI_FOCUS: { actions: [assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.focusRevision ?? 0)) return {}
@@ -1536,7 +1549,7 @@ const threadsState = setup({
     } },
     CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
-      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, state: event.state } } }
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) ? { promptHostRequest: undefined } : {}) } } }
     }) },
     // Thread management events
     SHOW_CREATE_FORM: {

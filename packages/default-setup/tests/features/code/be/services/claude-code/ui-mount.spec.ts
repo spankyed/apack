@@ -1,3 +1,4 @@
+import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { mountClaudeUi } from '#features/code/be/services/claude-code/ui-mount.ts'
 import type { StreamLine } from '#features/code/be/services/claude-code/types.ts'
@@ -13,12 +14,12 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { servePrompt: vi.fn(() => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
   const owner = { handle: { ui }, done: done.promise, subscribe(listener: (event: StreamLine) => void) { listeners.add(listener); return () => { listeners.delete(listener) } } }
-  const mount = () => mountClaudeUi({ owner, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
+  const mount = (promptHost?: ClaudePromptHost) => mountClaudeUi({ owner, promptHost, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
   const invalidate = () => { for (const listener of listeners) listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' } as StreamLine) }
   const action = () => { const last = states.at(-1); if (last?.status !== 'live' || last.tree.kind !== 'button' || !last.tree.actionId) throw new Error('expected live button'); return last.tree.actionId }
   return { mount, ui, states, focusRequests, done, listeners, invalidate, action, replace: () => { current = false } }
@@ -320,4 +321,16 @@ it('keeps fields mounted but retires visible button authority until fresh redraw
   if (fresh?.kind !== 'button') throw Error('expected button')
   expect(fresh.actionId).toBeTruthy(); expect(fresh.actionId).not.toBe(oldButton.actionId)
   await view.dispose()
+})
+
+
+it('unregisters a composer host when native attachment fails and does not reuse its registration', async () => {
+  const f = fixture(), stop = vi.fn()
+  f.ui.servePrompt.mockReturnValueOnce(stop)
+  f.ui.attach.mockRejectedValueOnce(Error('no surface'))
+  const view = f.mount({ read: async () => undefined, fill: async () => false })
+  await view.ready
+  expect(stop).toHaveBeenCalledOnce()
+  expect(f.states.at(-1)).toEqual({ status: 'error', message: 'no surface' })
+  await view.dispose(); expect(stop).toHaveBeenCalledOnce()
 })

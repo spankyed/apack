@@ -92,7 +92,7 @@
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
               :native-prompt="nativePrompt"
-              @native-prompt-edit="editNativePrompt"
+              @native-prompt-edit="editNativePrompt" @native-prompt-host-response="answerPromptHost"
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
               @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
@@ -246,8 +246,12 @@ const nativePrompt = computed(() => {
   if (!mount || mount.threadId !== currentThread.value?.id) return
   const view = nativeUiViews.value[mount.mountId]
   if (!view || !['rendering', 'live', 'error'].includes(view.state.status)) return
-  return { mountId: mount.mountId, revision: view.promptRevision, reply: view.prompt, completionRevision: view.completionRevision, completions: view.completions }
+  return { mountId: mount.mountId, hostRequest: view.promptHostRequest, revision: view.promptRevision, reply: view.prompt, completionRevision: view.completionRevision, completions: view.completions }
 })
+function answerPromptHost(response: import('#generated/types.ts').ClaudePromptHostResponse) {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...mount, ...response })
+}
 function completeNativePrompt(request: import('#generated/types.ts').ClaudePromptCompletionRequest) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...mount, ...request })

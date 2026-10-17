@@ -18,7 +18,7 @@ it('correlates read and fill once, preserving UTF-16 cursor, mode and decoration
   const request = fill(); Object.assign(request.request, { decorations: [{ start: 0, end: 6, bold: true }] })
   f.hosts.receive(request); f.hosts.receive(request); await flush()
   expect(f.host.fill).toHaveBeenCalledOnce()
-  expect(f.host.fill).toHaveBeenCalledWith({ text: 'native', mode: 'insert', decorations: [{ start: 0, end: 6, bold: true }] }, expect.any(AbortSignal))
+  expect(f.host.fill).toHaveBeenCalledWith({ text: 'native', mode: 'insert', decorations: [{ start: 0, end: 6, bold: true }] }, expect.any(AbortSignal), expect.any(Number))
   expect(f.answer()).toMatchObject({ response: { request_id: 'fill', response: { filled: true } } })
   expect(f.hosts.receive({ ...read(), request: { subtype: 'can_use_tool' } })).toBe(false)
   f.hosts.close()

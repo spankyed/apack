@@ -101,3 +101,12 @@ export type ClaudeUiMountState =
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }
 export type ClaudeUiFocusReply = { revision: number; moved: boolean; focusId: string | null; deny?: string }
+
+export type ClaudePromptHostRequest = { requestId: string; revision: number; expiresAt: number } & (
+  | { kind: 'read' }
+  | { kind: 'fill'; input: import('./ui-prompt-host.ts').ClaudePromptHostFill }
+)
+export type ClaudePromptHostResponse = { requestId: string } & (
+  | { kind: 'read'; box?: import('./ui-prompt-host.ts').ClaudePromptHostBox }
+  | { kind: 'fill'; filled: boolean }
+)

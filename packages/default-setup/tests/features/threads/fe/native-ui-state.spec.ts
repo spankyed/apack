@@ -73,3 +73,20 @@ it('rejects foreign and superseded focus and clears a pending redirect when the 
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity }); actor.send(reply); expect(actor.getSnapshot().context.nativeUiViews).toEqual({})
   actor.stop()
 })
+
+
+it('routes only the current prompt host response and retires requests when the owner disconnects', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  const request = { requestId: 'request', revision: 1, expiresAt: Date.now() + 3000, kind: 'read' as const }
+  actor.send({ type: 'CLAUDE_PROMPT_HOST_REQUEST', ...identity, threadId: 'foreign', request })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toBeUndefined()
+  actor.send({ type: 'CLAUDE_PROMPT_HOST_REQUEST', ...identity, request })
+  actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity, requestId: 'foreign', kind: 'read', box: { text: 'wrong', cursor: 0 } })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toEqual(request)
+  actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity, requestId: request.requestId, kind: 'fill', filled: true })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toEqual(request)
+  actor.send({ type: 'CLAUDE_UI_STATE', ...identity, state: { status: 'disconnected' } })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toBeUndefined()
+  actor.stop()
+})

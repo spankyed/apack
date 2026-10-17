@@ -19,8 +19,8 @@ const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill'])
 export type ClaudePromptHostBox = z.infer<typeof box>
 export type ClaudePromptHostFill = z.infer<typeof fill>
 export interface ClaudePromptHost {
-  read(signal: AbortSignal): Promise<ClaudePromptHostBox | undefined>
-  fill(input: ClaudePromptHostFill, signal: AbortSignal): Promise<boolean>
+  read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>
+  fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>
 }
 
 /** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
@@ -57,6 +57,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean) {
       const input = read ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
       const fillInput = input?.success ? input.data : undefined
       if (!host || (!read && !fillInput)) { reply(fallback); return true }
+      const expiresAt = Date.now() + 3500
       const abort = new AbortController()
       const timer = setTimeout(() => finish(), 4000)
       timer.unref()
@@ -68,7 +69,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean) {
       pending.set(line.request_id, { client: parsed.success ? parsed.data.client_id : '', abort, finish })
       void Promise.resolve().then<unknown>(() => {
         if (abort.signal.aborted) return undefined
-        return read ? host.read(abort.signal) : host.fill(fillInput!, abort.signal)
+        return read ? host.read(abort.signal, expiresAt) : host.fill(fillInput!, abort.signal, expiresAt)
       }).then(value => {
         if (read) { const valid = box.safeParse(value); finish(valid.success ? valid.data : fallback) }
         else finish({ filled: value === true })

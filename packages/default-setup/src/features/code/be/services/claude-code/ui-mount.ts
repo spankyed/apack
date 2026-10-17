@@ -5,7 +5,7 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
@@ -13,6 +13,7 @@ export function mountClaudeUi(options: {
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number): void
+  promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
 }) {
   const { owner } = options
   const client = { client_id: `apack-${randomUUID()}`, surface: 'desktop' as const }
@@ -32,6 +33,7 @@ export function mountClaudeUi(options: {
   let completionRevision = 0
   let generation = 0
   let pressing = false
+  let stopPromptHost: (() => void) | undefined
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
 
@@ -106,6 +108,7 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
     fieldRevisions.clear()
     completedFields.clear()
@@ -135,10 +138,12 @@ export function mountClaudeUi(options: {
   })
   const ready = (async () => {
     try {
+      if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach(client)
       attached = true
       if (current()) invalidate()
     } catch (error) {
+      stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
       if (current()) publish({ status: 'error', message: attachmentError })
     }
@@ -148,6 +153,7 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    get promptRevision() { return promptRevision },
     async focus(event: ClaudeUiFocusEvent): Promise<ClaudeUiFocusReply | undefined> {
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= focusRevision || typeof event.isHeld !== 'boolean' || !['person', 'auto'].includes(event.by)) return
       focusRevision = event.revision

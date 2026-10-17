@@ -180,3 +180,57 @@ it('settles a failed dispatch instead of leaving Send pending', async () => {
   expect(problem).toHaveBeenLastCalledWith('Dispatch closed')
   bridge.dispose()
 })
+
+
+it('reads the live UTF-16 draft and fills insert/append/replace without focusing the editor', () => {
+  editor.commands.setContent('Draft🙂'); editor.commands.setTextSelection(6)
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const elsewhere = document.createElement('button'); document.body.append(elsewhere); elsewhere.focus()
+  expect(bridge.readDraft()).toEqual({ text: 'Draft🙂', cursor: 5 })
+  expect(bridge.fillDraft({ mode: 'insert', text: ' native' }, bridge.revision)).toBe(true)
+  expect(bridge.readDraft()).toEqual({ text: 'Draft native🙂', cursor: 12 })
+  expect(document.activeElement).toBe(elsewhere)
+  expect(send.mock.calls.at(-1)?.[0].by).toBe('app')
+  expect(bridge.fillDraft({ mode: 'append', text: '\n\nNext paragraph' }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('Draft native🙂\n\nNext paragraph')
+  expect(bridge.fillDraft({ mode: 'replace', text: '**New**\n\n- item' }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('**New**\n\n- item')
+  expect(editor.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold')
+  elsewhere.remove(); bridge.dispose()
+})
+
+it('refuses expired draft revisions, IME and disposed fills while preserving newer text', () => {
+  editor.commands.setContent('original')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn()), old = bridge.revision
+  editor.commands.insertContent('newer')
+  const draft = serialize(editor.state.doc)
+  expect(bridge.fillDraft({ mode: 'replace', text: 'stale' }, old)).toBe(false)
+  const composing = vi.spyOn(editor.view, 'composing', 'get').mockReturnValue(true)
+  expect(bridge.readDraft()).toBeUndefined()
+  expect(bridge.fillDraft({ mode: 'replace', text: 'IME' }, bridge.revision)).toBe(false)
+  composing.mockRestore(); bridge.dispose()
+  expect(bridge.readDraft()).toBeUndefined()
+  expect(bridge.fillDraft({ mode: 'replace', text: 'closed' }, bridge.revision)).toBe(false)
+  expect(serialize(editor.state.doc)).toBe(draft)
+})
+
+it('paints inserted fill decorations at their new offset without adding decorated text to the draft', () => {
+  editor.commands.setContent('prefix'); editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  expect(bridge.fillDraft({ mode: 'append', text: ' native', decorations: [{ start: 1, end: 7, bold: true }] }, bridge.revision)).toBe(true)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('native')
+  expect(serialize(editor.state.doc)).toBe('prefix native')
+  bridge.dispose()
+})
+
+
+it('leaves the current draft unchanged if its Markdown parser refuses a structural fill', () => {
+  editor.commands.setContent('Keep this draft')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  const parser = (editor.storage as unknown as { markdown: { parser: { parse(text: string): string } } }).markdown.parser
+  const parsing = vi.spyOn(parser, 'parse').mockImplementationOnce(() => { throw Error('custom parser refused') })
+  try {
+    expect(bridge.fillDraft({ mode: 'replace', text: '**native**' }, bridge.revision)).toBe(false)
+    expect(serialize(editor.state.doc)).toBe('Keep this draft')
+  } finally { parsing.mockRestore(); bridge.dispose() }
+})

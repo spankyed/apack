@@ -1,3 +1,4 @@
+import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { PassThrough } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import { handleClaudeUiView, clearClaudeUiViews } from '#features/threads/be/claude-ui.ts'
@@ -8,7 +9,7 @@ import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts'
 
 async function native(threadId = 'thread') {
   const events = new PassThrough({ objectMode: true })
-  const ui = { focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
+  const ui = { servePrompt: vi.fn((_id: string, _host: ClaudePromptHost) => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run', key: 'run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
     press: vi.fn(async () => ({ handled: true })) }
   const handle = { ui, events, kill: () => events.end(), close: async () => { events.end() } } as unknown as QueryHandle
@@ -143,4 +144,30 @@ it('returns focus only to the requesting delivery and drops replies after unmoun
   const count = delivery.mock.calls.length
   resolve({ moved: true, element: null }); await vi.advanceTimersByTimeAsync(0)
   expect(delivery.mock.calls).toHaveLength(count); expect(foreign).not.toHaveBeenCalled()
+})
+
+
+it('correlates queued native prompt requests to the right view and retires them on unmount', async () => {
+  const { ui } = await native(), delivery = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  const host = ui.servePrompt.mock.calls[0]![1], controller = new AbortController(), expires = Date.now() + 3500
+  const reading = host.read(controller.signal, expires)
+  await vi.advanceTimersByTimeAsync(0)
+  const request = delivery.mock.calls.at(-1)?.[0]
+  if (request?.type !== 'CLAUDE_PROMPT_HOST_REQUEST') throw Error('expected read request')
+  expect(request.request).toMatchObject({ kind: 'read', revision: 0, expiresAt: expires })
+  const response = { ...mount, type: 'CLAUDE_PROMPT_HOST_RESPONSE' as const, requestId: request.request.requestId, kind: 'read' as const, box: { text: 'live draft', cursor: 4 } }
+  handleClaudeUiView(response, 'foreign', foreign)
+  handleClaudeUiView(response, 'window', delivery)
+  await expect(reading).resolves.toEqual(response.box)
+  const first = host.read(controller.signal, expires), second = host.fill({ mode: 'append', text: ' native' }, controller.signal, expires)
+  await vi.advanceTimersByTimeAsync(0)
+  const queued = delivery.mock.calls.at(-1)?.[0]
+  if (queued?.type !== 'CLAUDE_PROMPT_HOST_REQUEST' || queued.request.kind !== 'read') throw Error('expected queued read')
+  handleClaudeUiView({ ...response, requestId: queued.request.requestId }, 'window', delivery)
+  await first; await vi.advanceTimersByTimeAsync(0)
+  expect(delivery.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'CLAUDE_PROMPT_HOST_REQUEST', request: { kind: 'fill', input: { mode: 'append', text: ' native' } } })
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'window', delivery)
+  await expect(second).resolves.toBe(false)
+  expect(foreign).not.toHaveBeenCalled()
 })

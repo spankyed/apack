@@ -35,11 +35,11 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
-  const send = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
-  return { state, send, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
+  return { state, send, hostResponse, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
@@ -226,4 +226,30 @@ it('uses a bare digit for a native survey only when the actual composer draft an
   attachments.pendingFiles.value = []; attachments.pendingImages.value = [image('context.png')]; await nextTick(); expect(key().defaultPrevented).toBe(false)
   attachments.pendingImages.value = []; f.state.nativeUi = { status: 'disconnected' }; await nextTick(); expect(key().defaultPrevented).toBe(false)
   expect(f.press).toHaveBeenCalledTimes(1); expect(f.send).not.toHaveBeenCalled()
+})
+
+
+it('answers native host reads/fills through the actual input and refuses stale, expired or modal fills', async () => {
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = mount(vi.fn(async () => undefined))
+    f.state.nativePrompt = { mountId: 'native-owner' }; await nextTick()
+    const request = (kind: 'read' | 'fill', extra = {}) => {
+      const revision = f.prompt.mock.calls.at(-1)?.[0].revision ?? 0
+      f.state.nativePrompt!.hostRequest = { requestId: crypto.randomUUID(), revision, expiresAt: Date.now() + 3000, ...(kind === 'read' ? { kind } : { kind, input: { text: 'native fill', mode: 'replace' as const } }), ...extra }
+    }
+    request('read'); await nextTick()
+    expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'read', box: { text: 'first' } })
+    request('fill'); await nextTick(); expect(editor.state.doc.textContent).toBe('native fill')
+    expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'fill', filled: true })
+    editor.commands.insertContent(' typing'); await nextTick()
+    const newer = editor.state.doc.textContent
+    request('fill', { revision: 0 }); await nextTick(); expect(editor.state.doc.textContent).toBe(newer)
+    expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'fill', filled: false })
+    request('fill', { expiresAt: Date.now() - 1 }); await nextTick()
+    expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ filled: false })
+    const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); document.body.append(dialog)
+    request('fill'); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ filled: false })
+    expect(editor.state.doc.textContent).toBe(newer); expect(f.send).not.toHaveBeenCalled(); dialog.remove()
+  } finally { windowFocus.mockRestore() }
 })

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import type { ClaudePromptHostRequest, ClaudePromptHostResponse } from '#generated/types.ts'
+import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { getConversation } from '#features/code/be/services/claude-code/handle-store.ts'
 import { mountClaudeUi } from '#features/code/be/services/claude-code/ui-mount.ts'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
@@ -13,6 +16,7 @@ interface ClaudeUiView {
   expires: number
   reply: Reply<OutgoingThreadsEvents>
   state: ClaudeUiMountState
+  pendingPrompt?: { requestId: string; kind: 'read' | 'fill'; finish(answer?: ClaudePromptHostResponse): void }
   owner?: ClaudeConversation
   mount?: ReturnType<typeof mountClaudeUi>
 }
@@ -27,6 +31,7 @@ function publish(view: ClaudeUiView, state: ClaudeUiMountState): void {
 }
 function drop(key: string, view: ClaudeUiView): void {
   views.delete(key)
+  view.pendingPrompt?.finish()
   // A stopped thread can remain visible; explicitly retire the frontend drawing as well.
   try { publish(view, { status: 'disconnected' }) } catch { /* window already closed */ }
   void view.mount?.dispose().catch(() => {})
@@ -35,11 +40,39 @@ function drop(key: string, view: ClaudeUiView): void {
 function bind(key: string, view: ClaudeUiView): void {
   const owner = getConversation(view.threadId)?.owner
   if (owner === view.owner) return
+  view.pendingPrompt?.finish()
   void view.mount?.dispose().catch(() => {})
   view.mount = undefined
   view.owner = owner
   if (!owner) { publish(view, { status: 'disconnected' }); return }
-  view.mount = mountClaudeUi({ owner,
+  let promptQueue: Promise<unknown> = Promise.resolve()
+  function ask(request: Omit<Extract<ClaudePromptHostRequest, { kind: 'read' }>, 'requestId' | 'revision' | 'expiresAt'> | Omit<Extract<ClaudePromptHostRequest, { kind: 'fill' }>, 'requestId' | 'revision' | 'expiresAt'>, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
+    const result = promptQueue.then(() => dispatch(request, signal, expiresAt))
+    promptQueue = result.then(() => undefined, () => undefined)
+    return result
+  }
+  function dispatch(request: Omit<Extract<ClaudePromptHostRequest, { kind: 'read' }>, 'requestId' | 'revision' | 'expiresAt'> | Omit<Extract<ClaudePromptHostRequest, { kind: 'fill' }>, 'requestId' | 'revision' | 'expiresAt'>, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
+    if (signal.aborted || Date.now() >= expiresAt || views.get(key) !== view || view.owner !== owner || getConversation(view.threadId)?.owner !== owner) return Promise.resolve(undefined)
+    // Queue each view's requests so Vue cannot collapse two host operations into one state update.
+    if (view.pendingPrompt) return Promise.resolve(undefined)
+    return new Promise(resolve => {
+      const requestId = randomUUID()
+      const finish = (answer?: ClaudePromptHostResponse) => {
+        signal.removeEventListener('abort', aborted)
+        if (view.pendingPrompt?.requestId === requestId) view.pendingPrompt = undefined
+        resolve(answer)
+      }
+      const aborted = () => finish()
+      view.pendingPrompt = { requestId, kind: request.kind, finish }
+      signal.addEventListener('abort', aborted, { once: true })
+      try { view.reply({ type: 'CLAUDE_PROMPT_HOST_REQUEST', threadId: view.threadId, mountId: view.mountId, request: { ...request, requestId, expiresAt, revision: view.mount?.promptRevision ?? 0 } }) } catch { finish() }
+    })
+  }
+  const promptHost: ClaudePromptHost = {
+    async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
+    async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
+  }
+  view.mount = mountClaudeUi({ owner, promptHost,
     isCurrent: () => views.get(key) === view && getConversation(view.threadId)?.owner === owner,
     requestFocus: (focusId, revision) => {
       if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId } })
@@ -55,6 +88,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   let view = views.get(key)
   if (view && view.threadId !== event.threadId) return
   if (view && view.expires <= Date.now()) { drop(key, view); view = undefined }
+  if (event.type === 'CLAUDE_PROMPT_HOST_RESPONSE') {
+    if (!view) return
+    bind(key, view)
+    if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
+    return
+  }
   if (event.type === 'CLAUDE_UI_FOCUS') {
     if (!view) return
     bind(key, view)
