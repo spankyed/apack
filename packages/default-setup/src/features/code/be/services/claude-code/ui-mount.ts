@@ -50,13 +50,27 @@ export function mountClaudeUi(options: {
     // At most one render in flight, with a bounded refresh rate during invalidation bursts.
     scheduled = setTimeout(() => { scheduled = undefined; void render() }, 50)
   }
+  function retireDrawing(): void {
+    if (!fieldDrawing?.fields.size) { publish({ status: 'rendering' }); return }
+    function retire(node: import('./ui-presentation.ts').ClaudeUiNode): import('./ui-presentation.ts').ClaudeUiNode {
+      if (node.kind === 'button' || node.kind === 'markdown') {
+        const { actionId: _, ...inert } = node
+        return inert
+      }
+      if (node.kind === 'box' || node.kind === 'link') return { ...node, children: node.children.map(retire) }
+      if (node.kind === 'text' && node.children) return { ...node, children: node.children.map(retire) }
+      return node
+    }
+    // Keep in-progress fields mounted, but never display an expired button/link as actionable.
+    publish({ status: 'live', tree: retire(fieldDrawing.tree) })
+  }
   function invalidate(): void {
     if (!current()) return
     generation++
     drawing = undefined
     const alreadyDirty = dirty
     dirty = true
-    if (attached && !alreadyDirty && !fieldDrawing?.fields.size) publish({ status: 'rendering' })
+    if (attached && !alreadyDirty) retireDrawing()
     schedule()
   }
   async function render(): Promise<void> {
@@ -211,7 +225,7 @@ export function mountClaudeUi(options: {
       pressing = true
       // Retire immediately; a second click cannot reuse an accepted capability.
       drawing = undefined
-      if (!fieldDrawing?.fields.size) publish({ status: 'rendering' })
+      retireDrawing()
       try {
         const result = await owner.handle.ui.press({ ...client, ...action, ...(href !== undefined ? { href } : {}) })
         return { handled: current() && result.handled }

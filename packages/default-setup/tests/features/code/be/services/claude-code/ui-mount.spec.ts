@@ -300,3 +300,24 @@ it('scopes plugin focus pushes to the attached client, canonical site and live d
   f.invalidate(); deliver(push); expect(f.focusRequests).toHaveLength(1)
   await view.dispose(); deliver(push); expect(f.focusRequests).toHaveLength(1)
 })
+
+
+it('keeps fields mounted but retires visible button authority until fresh redraw actions arrive', async () => {
+  const f = fixture()
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: { type: 'Box', children: [rendered().tree,
+    { type: 'Input', props: { key: 'draft', value: '' }, press: { plugin: 'fixture', handle: 7 } },
+  ] } } as unknown as ReturnType<typeof rendered>)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const tree = () => { const state = f.states.at(-1); if (state?.status !== 'live' || state.tree.kind !== 'box') throw Error('expected retained tree'); return state.tree }
+  const oldButton = tree().children[0], field = tree().children[1]
+  if (oldButton?.kind !== 'button' || field?.kind !== 'input') throw Error('expected controls')
+  expect(oldButton.actionId).toBeTruthy()
+  f.invalidate()
+  expect(tree().children[0]).not.toHaveProperty('actionId'); expect(tree().children[1]).toEqual(field)
+  await expect(view.press(oldButton.actionId!)).resolves.toEqual({ handled: false })
+  await vi.advanceTimersByTimeAsync(50)
+  const fresh = tree().children[0]
+  if (fresh?.kind !== 'button') throw Error('expected button')
+  expect(fresh.actionId).toBeTruthy(); expect(fresh.actionId).not.toBe(oldButton.actionId)
+  await view.dispose()
+})
