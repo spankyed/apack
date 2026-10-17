@@ -98,11 +98,14 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(editor.locator('li')).toContainText('item');
   await expect.poll(synchronized).toBe(true);
   await expect(editor.locator('.claude-prompt-decoration').first()).toHaveCSS('font-style', 'italic');
-  await editor.focus(); await editor.press('ArrowLeft');
+  await editor.focus(); await editor.press('ArrowLeft'); await editor.press('x');
   await expect.poll(synchronized).toBe(true);
   await expect(editor.locator('.claude-prompt-decoration')).toHaveCount(0);
   await strip.getByRole('button', { name: 'Fill draft', exact: true }).click();
-  await expect.poll(nativeDraft).toBe(richReplacement.slice(0, -1) + ' inserted' + richReplacement.slice(-1));
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-host.json'), 'utf8')).mode).toBe('insert');
+  const inserted = JSON.parse(await readFile(join(workspace!, 'native-prompt-host.json'), 'utf8'));
+  expect(inserted.before.text).toContain('x');
+  expect(inserted.after.text).toBe(inserted.before.text.slice(0, inserted.before.cursor) + ' inserted' + inserted.before.text.slice(inserted.before.cursor));
   await expect.poll(synchronized).toBe(true);
   await expect(editor.locator('.claude-prompt-decoration')).toHaveText('inserted');
   await expect(editor.locator('.claude-prompt-decoration')).toHaveCSS('font-style', 'italic');
