@@ -1,7 +1,7 @@
 import { watch, onBeforeUnmount, nextTick, type Ref } from 'vue'
 import type { ClaudeUiScrollEvent, ClaudeUiScrollState } from '#generated/types.ts'
 
-/** Mirror one native window; programmatic offsets never feed back as person gestures. */
+/** Mirror one native window: native offsets do not echo; local gestures and focus reveals are reported. */
 export function useClaudeSiteScroll(options: {
   element: Ref<HTMLElement | null>
   state(): ClaudeUiScrollState | undefined
@@ -23,7 +23,7 @@ export function useClaudeSiteScroll(options: {
     const state = options.state(), element = options.element.value
     if (!element || !state || state.serial <= appliedSerial) return
     appliedSerial = state.serial
-    if (state.requestRevision !== undefined && state.requestRevision < lastSent) return
+    if (state.requestRevision !== undefined && (state.requestRevision < lastSent || pendingBy !== 0)) return
     if (state.requestRevision === undefined) pendingBy = 0
     followEnd = state.followEnd
     if (state.requestRevision !== undefined && !followEnd && state.offset === Math.floor(element.scrollTop / rowHeight())) return
