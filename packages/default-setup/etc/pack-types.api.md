@@ -1418,7 +1418,10 @@ interface ClaudeNativeTerminalState {
     sessionId: string;
     cwd: string;
     status: 'error' | 'exited' | 'live' | 'starting';
+    /** Process attached to the PTY; may be a configured launcher. */
     pid?: number;
+    /** Authenticated native executable beneath that launcher. */
+    nativePid?: number;
     exitCode?: number;
     busy: boolean;
     lastTurn?: {

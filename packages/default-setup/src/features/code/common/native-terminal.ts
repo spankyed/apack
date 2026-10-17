@@ -10,7 +10,10 @@ export interface ClaudeNativeTerminalState {
   sessionId: string
   cwd: string
   status: 'starting' | 'live' | 'exited' | 'error'
+  /** Process attached to the PTY; may be a configured launcher. */
   pid?: number
+  /** Authenticated native executable beneath that launcher. */
+  nativePid?: number
   exitCode?: number
   busy: boolean
   lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }

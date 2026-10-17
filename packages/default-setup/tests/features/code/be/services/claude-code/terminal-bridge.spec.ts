@@ -1,35 +1,28 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { createClaudeTerminalBridge } from '#features/code/be/services/claude-code/terminal-bridge.ts'
-const exec = promisify(execFile), session = '11111111-1111-1111-1111-111111111111'
+const session = '11111111-1111-1111-1111-111111111111'
 let bridge: Awaited<ReturnType<typeof createClaudeTerminalBridge>> | undefined
+async function config() { return JSON.parse(await readFile(bridge!.directory + '/observer.json', 'utf8')) }
 async function request(path: string, body: unknown, token?: string) {
-  const config = JSON.parse(await readFile(bridge!.directory + '/main.json', 'utf8'))
+  const value = await config()
   return new Promise<{ status: number; value: Record<string, unknown> }>((resolve, reject) => {
-    const req = http.request({ socketPath: config.socketPath, path, method: 'POST', headers: { 'content-type': 'application/json', 'x-apack-native-token': token ?? config.token } }, response => {
+    const req = http.request({ socketPath: value.socketPath, path, method: 'POST', headers: { 'content-type': 'application/json', 'x-apack-native-token': token ?? value.token } }, response => {
       let bytes = ''; response.on('data', chunk => { bytes += chunk }); response.on('end', () => resolve({ status: response.statusCode!, value: JSON.parse(bytes) }))
     }); req.on('error', reject); req.end(JSON.stringify(body))
   })
 }
+async function observed(command = 'main') {
+  return { sessionId: session, parentPid: process.pid, childPid: process.pid + 1, kind: 'main', command, generation: (await config()).generations.main, startedAt: '100', stdout: 'native output', code: 0, signal: null, truncated: false }
+}
+async function create() {
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'main' }, subagentStatusLine: { type: 'command', command: 'sub' } }, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter() {} })
+  await request('/observer-ready', { sessionId: session, pid: process.pid })
+  await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
+}
 afterEach(async () => { await bridge?.close(); bridge = undefined })
-it('runs the same original helper in distinct native roles', async () => {
-  const original = '/usr/bin/printf "Native line\\nSecond line\\n"'
-  const settings = { effective: { statusLine: { type: 'command', command: original, padding: 3, refreshInterval: 2 }, subagentStatusLine: { type: 'command', command: original } }, sources: [] }
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings, changed() {}, enter() {} })
-  expect(bridge.settings.env).toBeUndefined()
-  expect(bridge.settings.statusLine).toBeUndefined()
-  expect(settings.effective.statusLine.command).toBe(original)
-  const prefix = bridge.prefixLauncher!
-  const config = { command: prefix + " '" + original.replaceAll("'", "'\"'\"'") + "'" }
-  const command = 'printf \'%s\' \'{"session_id":"' + session + '","version":"2.1.302","cost":{},"context_window":{}}\' | ' + config.command
-  const native = await exec('/bin/sh', ['-c', command])
-  expect(native.stdout).toBe('Native line\nSecond line\n')
-  expect(bridge.projection.mainStatus).toBe('Native line\nSecond line')
-})
 it('fences prompt requests by session and nonce and never enters a rejected or repeated request', async () => {
   const enter = vi.fn()
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: '/usr/bin/printf fixture' } }, sources: [] }, changed() {}, enter })
@@ -64,80 +57,49 @@ it('fences prompt requests by session and nonce and never enters a rejected or r
   const pending = bridge.submit('Closing'), closed = expect(pending).rejects.toThrow('closed')
   await bridge.close(); await closed
 })
-it('does not replace a native managed helper in flag settings', async () => {
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'managed-helper' } }, sources: [{ source: 'policySettings', settings: { statusLine: { type: 'command', command: 'managed-helper' } } }] }, changed() {}, enter() {} })
-  expect(bridge.settings).toEqual({})
-})
 
-it.each(['', ' --fixture-prefix'])('preserves original prefix argv and environment for a path with spaces: %s', async flags => {
-  const directory = await mkdtemp(join(tmpdir(), 'native-prefix-'))
-  try {
-    const prefixPath = join(directory, "user's prefix"), log = join(directory, 'calls.jsonl'), payload = join(directory, 'payload.json')
-    const prefix = prefixPath + flags
-    await writeFile(prefixPath, `#!/usr/bin/python3
-import json,os,subprocess,sys
-with open(${JSON.stringify(log)},'a') as f: f.write(json.dumps({'args':sys.argv[1:],'prefix':os.environ.get('CLAUDE_CODE_SHELL_PREFIX')})+'\\n')
-sys.exit(subprocess.run(['/bin/sh','-c',sys.argv[-1]],stdin=sys.stdin,stdout=sys.stdout,stderr=sys.stderr).returncode)
-`, { mode: 0o700 })
-    const original = `/usr/bin/printf '%s\\n' "native's output"`
-    bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { env: { CLAUDE_CODE_SHELL_PREFIX: prefix }, statusLine: { type: 'command', command: original }, subagentStatusLine: { type: 'command', command: '/usr/bin/printenv CLAUDE_CODE_SHELL_PREFIX' } }, sources: [] }, changed() {}, enter() {} })
-    expect(bridge.settings.statusLine).toBeUndefined()
-    const installed = bridge.prefixLauncher!
-    const quote = (text: string) => "'" + text.replaceAll("'", "'\"'\"'") + "'"
-    const env = { ...process.env, CLAUDE_CODE_SHELL_PREFIX: installed }
-    await writeFile(payload, JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} }))
-    const result = await exec('/bin/sh', ['-c', quote(installed) + ' ' + quote(original) + ' < ' + quote(payload)], { env })
-    expect(result.stdout).toBe("native's output\n")
-    expect(bridge.projection.mainStatus).toBe("native's output")
-    expect((await exec(installed, ['printf passthrough'], { env })).stdout).toBe('passthrough')
-    const subagent = bridge.settings.subagentStatusLine as { command: string }
-    expect((await exec('/bin/sh', ['-c', subagent.command + ' < ' + quote(payload)], { env })).stdout).toBe(prefix + '\n')
-    const calls = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
-    expect(calls).toEqual([original, 'printf passthrough'].map(command => ({ args: flags ? ['--fixture-prefix', command] : [command], prefix })))
-  } finally { await rm(directory, { recursive: true, force: true }) }
-})
-it('observes native-selected command changes and rejects removed or obsolete main outputs', async () => {
-  const oldCommand = '/usr/bin/printf old', nextCommand = '/usr/bin/printf new'
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: oldCommand } }, sources: [] }, changed() {}, enter() {} })
-  const prefix = bridge.prefixLauncher!
-  const payload = JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} })
-  const directory = await mkdtemp(join(tmpdir(), 'native-live-prefix-'))
-  try {
-    const path = join(directory, 'payload.json'); await writeFile(path, payload)
-    const invoke = (command: string) => exec('/bin/sh', ['-c', `'${prefix}' '${command}' < '${path}'`])
-    expect((await invoke(oldCommand)).stdout).toBe('old'); expect(bridge.projection.mainStatus).toBe('old')
-    expect((await request('/poll', { sessionId: session, agents: 'invalid', statusCommand: null })).status).toBe(400)
-    expect(bridge.projection.mainStatus).toBe('old')
-    await request('/poll', { sessionId: session, agents: [], statusCommand: nextCommand })
-    expect(bridge.projection.mainStatus).toBeUndefined()
-    expect((await invoke(oldCommand)).stdout).toBe('old'); expect(bridge.projection.mainStatus).toBeUndefined()
-    expect((await invoke(nextCommand)).stdout).toBe('new'); expect(bridge.projection.mainStatus).toBe('new')
-    await request('/poll', { sessionId: session, agents: [], statusCommand: null })
-    expect(bridge.projection.mainStatus).toBeUndefined()
-    expect((await invoke(nextCommand)).stdout).toBe('new'); expect(bridge.projection.mainStatus).toBeUndefined()
-  } finally { await rm(directory, { recursive: true, force: true }) }
-})
-it('fences old prefix results, restores an unset prefix and exposes native refusal', async () => {
-  const original = '/usr/bin/printf main'
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: original }, subagentStatusLine: { type: 'command', command: '/usr/bin/printf subagent' } }, sources: [] }, changed() {}, enter() {} })
-  const initial = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
-  const event = { sessionId: session, kind: 'main', command: original, generation: initial.generation, startedAt: '100', stdout: 'old prefix result', code: 0, signal: null, truncated: false }
+it('refuses foreign native owners, children and sessions before accepting status', async () => {
+  await create()
+  expect((await request('/observer-ready', { sessionId: session, pid: process.pid + 1 })).status).toBe(409)
+  const event = await observed()
+  expect((await request('/native-status', { ...event, parentPid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/native-status', { ...event, childPid: 0 })).status).toBe(409)
+  expect((await request('/native-status', { ...event, sessionId: '22222222-2222-2222-2222-222222222222' })).status).toBe(409)
   expect((await request('/native-status', event)).status).toBe(200)
-  expect(bridge.projection.mainStatus).toBe('old prefix result')
-  expect((await request('/prefix', { sessionId: session, prefix: '/private/user prefix --flag' })).status).toBe(200)
-  const changed = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
-  const subagent = JSON.parse(await readFile(bridge.directory + '/subagent.json', 'utf8'))
-  expect(changed.generation).not.toBe(initial.generation)
-  expect(changed.delegatePrefix).toBe('/private/user prefix --flag')
-  expect(subagent.originalPrefix).toBe(changed.originalPrefix)
-  expect(subagent.generation).toBe(changed.generation)
-  expect(bridge.projection.mainStatus).toBeUndefined()
+  expect(bridge!.projection.mainStatus).toBe('native output')
+})
+it('accepts a native result preceding its metadata, then fences obsolete commands and generations', async () => {
+  await create()
+  const event = await observed('new main')
+  expect((await request('/native-status', event)).status).toBe(202)
+  expect(bridge!.projection.mainStatus).toBeUndefined()
+  await request('/poll', { sessionId: session, agents: [], statusCommand: 'new main' })
+  expect(bridge!.projection.mainStatus).toBe('native output')
   expect((await request('/native-status', { ...event, startedAt: '200' })).status).toBe(409)
-  expect((await request('/native-status', { ...event, generation: changed.generation, startedAt: '200', stdout: 'current prefix result' })).status).toBe(200)
-  expect((await request('/prefix', { sessionId: session, prefix: null })).status).toBe(200)
-  const unset = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
-  expect(unset.originalPrefix).toBeUndefined(); expect(unset.delegatePrefix).toBeUndefined()
-  expect((await request('/native-status', { ...event, generation: changed.generation, startedAt: '300' })).status).toBe(409)
-  expect((await request('/prefix-error', { sessionId: session, message: 'fixture native denial' })).status).toBe(200)
-  expect(bridge.problem).toBe('Native status capture was refused: fixture native denial')
+  expect((await request('/poll', { sessionId: session, agents: 'invalid', statusCommand: null })).status).toBe(400)
+  expect(bridge!.projection.mainStatus).toBe('native output')
+  await request('/poll', { sessionId: session, agents: [], statusCommand: null })
+  expect(bridge!.projection.mainStatus).toBeUndefined()
+})
+it('keeps subagent identity native-owned across live command changes and ignores foreign rows', async () => {
+  await create()
+  await request('/poll', { sessionId: session, agents: [{ id: 'task', type: 'worker', status: 'running' }] })
+  const event = { ...await observed('sub'), kind: 'subagent', generation: (await config()).generations.subagent, tasks: [{ id: 'task', status: 'running' }], stdout: '{"id":"task","content":"running decoration"}\n{"id":"foreign","content":"forged"}\n' }
+  expect((await request('/native-status', event)).status).toBe(200)
+  expect(bridge!.projection.tasks).toEqual([{ id: 'task', name: 'worker', status: 'running', statusText: 'running decoration' }])
+  await request('/poll', { sessionId: session, agents: [{ id: 'task', type: 'worker', status: 'running' }], subagentCommand: 'new sub' })
+  expect(bridge!.projection.tasks[0]?.statusText).toBeUndefined()
+  expect((await request('/native-status', event)).status).toBe(409)
+})
+it.each([0, 7])('preserves real child streams, Unicode, exit code and the original preload environment: %s', async code => {
+  let nativePid: number | undefined
+  const helper = "const data=[];process.stdin.on('data',x=>data.push(x));process.stdin.on('end',()=>{const p=JSON.parse(Buffer.concat(data));const b=Buffer.from('中文🙂 '+p.session_id);process.stdout.write(b.subarray(0,2));setImmediate(()=>{process.stdout.write(b.subarray(2));process.exitCode=" + code + "})});"
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: helper } }, sources: [] }, bunOptions: '--preload=/private/user-preload.mjs', ownsProcess: async pid => pid === nativePid, changed() {}, enter() {} })
+  const launcher = join(bridge.directory, 'fixture.mjs')
+  await writeFile(launcher, `await import('./status.mjs');const {spawn}=await import('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);const chunks=[];child.stdout.on('data',x=>chunks.push(x));child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));child.once('close',code=>console.log(JSON.stringify({code,text:Buffer.concat(chunks).toString(),bunOptions:process.env.BUN_OPTIONS})));`)
+  const child = spawn(process.execPath, [launcher], { env: { ...process.env, BUN_OPTIONS: bridge.bunOptions }, stdio: ['ignore', 'pipe', 'pipe'] }); nativePid = child.pid
+  let output = '', error = ''; child.stdout.on('data', chunk => { output += chunk }); child.stderr.on('data', chunk => { error += chunk })
+  await new Promise<void>((resolve, reject) => { child.once('error', reject); child.once('close', exit => exit === 0 ? resolve() : reject(new Error(error))) })
+  expect(JSON.parse(output)).toEqual({ code, text: '中文🙂 ' + session, bunOptions: '--preload=/private/user-preload.mjs' })
+  expect(bridge.projection.mainStatus).toBe(code === 0 ? '中文🙂 ' + session : undefined)
 })

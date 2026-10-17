@@ -101,6 +101,12 @@ test('hands one conversation to the native terminal and displays its main and ag
   }
   await expect(tasks).not.toContainText('ForeignMustNotReachApp')
   await expect(tasks).toContainText('prefix=' + livePrefix)
+  const liveSubagent = join(workspace!, 'sub-live.py')
+  await writeFile(liveSubagent, (await readFile(join(workspace!, 'sub.py'), 'utf8')).replace('AppNativeAgent ', 'AppNativeAgentLive '))
+  await writeFile(settingsPath, JSON.stringify({ ...originalSettings, env: { ...originalSettings.env, CLAUDE_CODE_SHELL_PREFIX: livePrefix }, subagentStatusLine: { type: 'command', command: `/usr/bin/python3 '${liveSubagent}'` } }))
+  await expect(tasks).toContainText('AppNativeAgentLive running', { timeout: 10000 })
+  expect(await readFile(join(workspace!, 'helper-bun-options.txt'), 'utf8')).toBe('--preload=' + join(workspace!, 'user-preload.mjs'))
+
   const running = await context(); expect(running.native.state.sessionId).toBe(sessionId)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-main-agent.png') })
   await appPage.setViewportSize({ width: 680, height: 900 })
@@ -151,5 +157,5 @@ test('hands one conversation to the native terminal and displays its main and ag
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })

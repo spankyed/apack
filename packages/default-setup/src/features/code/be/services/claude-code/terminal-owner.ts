@@ -1,3 +1,4 @@
+import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
@@ -70,7 +71,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, settings: options.settings, electronEnv: env.ELECTRON_RUN_AS_NODE, shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX, changed,
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
   let hardStop: ReturnType<typeof setTimeout> | undefined
   async function finish(code: number) {
@@ -98,7 +99,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     started = true
     try {
       const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
-      if (Object.keys(bridge.settings).length) args.push('--settings', JSON.stringify(bridge.settings))
+      terminalEnv.BUN_OPTIONS = bridge.bunOptions
       for (const directory of options.pluginDir ?? []) args.push('--plugin-dir', directory)
       if (options.model) args.push('--model', options.model)
       if (options.allowedTools?.length) args.push('--allowed-tools', ...options.allowedTools)
@@ -125,7 +126,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
