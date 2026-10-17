@@ -146,6 +146,8 @@ test('native extension fields, paint and hover work inside the actual composer',
   expect(storedThinking[0].content).toBe('Synthetic thinking summary 1.');
   expect(storedThinking[0].nativeMessages).toEqual([expect.objectContaining({ uuid: summaryId, isSummary: true, text: storedThinking[0].content, start: 0, end: storedThinking[0].content.length })]);
   expect(JSON.stringify(storedThinking)).not.toContain('signature');
+  await toolsToggle.click();
+  await thinkingToggle.locator('..').scrollIntoViewIfNeeded();
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-thinking-summary.png') });
   await thinkingToggle.click(); await expect(summaryRows).toHaveCount(0);
   await appPage.evaluate(identity => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLAUDE_UI_PRESS', ...identity }), summaryAction);
@@ -153,6 +155,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(summaryRows.first().getByLabel('Summary note', { exact: true })).toHaveValue('Summary-only note');
   expect(await summaryPresses()).toHaveLength(1);
   await thinkingToggle.click(); await expect(summaryRows).toHaveCount(0);
+  await toolsToggle.click();
   const ghost = editor.locator('.claude-prompt-suggestion');
   const suggest = strip.getByRole('button', { name: 'Suggest next step', exact: true });
   const suggestions = async () => JSON.parse(await readFile(join(workspace!, 'native-suggestions.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error }));
