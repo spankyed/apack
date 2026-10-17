@@ -13,7 +13,7 @@ function fixture(validate = vi.fn(async () => {})) {
   const pivot=repository.chatCommands.addMessage({threadId:id,sender:'user',text:'Pivot',context:{agent:'Claude Code'}})
   repository.chatCommands.addMessage({threadId:id,sender:'assistant',text:'Later',context:{cliUuid:'native-later'}})
   const notify=vi.fn()
-  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,getHandle:vi.fn()} as never})
+  mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn()} as never})
   mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:notify})
   return {id,first,pivot,validate,notify}
 }
@@ -95,10 +95,37 @@ it('does not ask Claude to validate a revert affecting only another provider',as
 it('rejects an unavailable file checkpoint before deleting conversation history',async()=>{
  const app=await startApp({systems:['threads']});const f=fixture();
  const preview=vi.fn(async()=>({canRewind:false,error:'No file checkpoint found'}));
- mockService<Services,'cli'>('cli',{claudeCode:{getHandle:vi.fn(),validateResumeTarget:f.validate,getFileRewindPreview:preview} as never});
+ mockService<Services,'cli'>('cli',{claudeCode:{closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn(),validateResumeTarget:f.validate,getFileRewindPreview:preview} as never});
  await app.send('threads',{type:'REVERT_THREAD',threadId:f.id,messageId:f.pivot.id,restoreFiles:true,userCliUuid:'native-user'});
  await vi.waitFor(()=>expect(f.notify).toHaveBeenCalled());
  expect(preview).toHaveBeenCalledWith(expect.objectContaining({sessionId:'native-session',userMessageId:'native-user'}));
  expect(repository.chatQueries.threadData(f.id)?.messages).toHaveLength(3);
  expect(f.validate).not.toHaveBeenCalled();
 });
+
+it('closes a retained idle process before validating menu history', async () => {
+  const app = await startApp({ systems: ['threads'] })
+  const f = fixture()
+  let idle = true
+  const close = vi.fn(async () => { idle = false; return true })
+  mockService<Services, 'cli'>('cli', { claudeCode: {
+    closeIdleConversation: close, getHandle: vi.fn(() => idle ? {} : undefined), validateResumeTarget: f.validate,
+  } as never })
+  await app.send('threads', { type: 'FORK_THREAD', threadId: f.id, messageId: f.first.id })
+  await vi.waitFor(() => expect(repository.threadCommands.forkCount(f.id)).toBe(1))
+  expect(close).toHaveBeenCalledWith(f.id)
+  expect(close.mock.invocationCallOrder[0]).toBeLessThan(f.validate.mock.invocationCallOrder[0])
+})
+
+it('preserves a busy process and history before menu validation', async () => {
+  const app = await startApp({ systems: ['threads'] })
+  const f = fixture()
+  const before = repository.chatQueries.threadData(f.id)?.messages
+  mockService<Services, 'cli'>('cli', { claudeCode: {
+    closeIdleConversation: vi.fn(async () => false), getHandle: vi.fn(() => ({})), validateResumeTarget: f.validate,
+  } as never })
+  await app.send('threads', { type: 'REVERT_THREAD', threadId: f.id, messageId: f.pivot.id })
+  await vi.waitFor(() => expect(f.notify).toHaveBeenCalled())
+  expect(f.validate).not.toHaveBeenCalled()
+  expect(repository.chatQueries.threadData(f.id)?.messages).toEqual(before)
+})
