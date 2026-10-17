@@ -1,3 +1,4 @@
+import { projectClaudeInputReplay } from './native-input-replay.ts';
 import type { ClaudeNestedActivity } from '#features/code/be/services/claude-code/nested-activity.ts';
 import type { ClaudeConversationTurn } from '#features/code/be/services/claude-code/conversation.ts';
 /**
@@ -56,6 +57,9 @@ export interface ConsumerContext {
   phase?: string;
   /** The app's user message entity ID — used to store the CLI's user message UUID. */
   userMessageId?: string;
+  /** Full input text, including app-injected bootstrap/reference context. */
+  submittedPrompt?: string;
+  nativeInputId?: string;
   // ── Resume diagnostics (for error logging) ──
   resumeSessionId?: string;
   sessionCwd?: string;
@@ -99,7 +103,7 @@ export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx:
   services.cli.claudeCode.storeHandle(threadId, turn.handle);
   setRunning(services, threadId, true);
   updateChatState(services, threadId, 'working');
-  await consumeStream(turn.handle, { ...ctx, persistent: true, get costBaseline() { return turn.costBaseline; }, activity: turn.activity }, writers);
+  await consumeStream(turn.handle, { ...ctx, persistent: true, get costBaseline() { return turn.costBaseline; }, activity: turn.activity, nativeInputId: turn.inputId }, writers);
 }
 
 /**
@@ -352,13 +356,15 @@ export async function consumeStream(
       if (line.type === 'user') {
         // Tool results also carry user-event UUIDs. Only the native input replay
         // identifies the host prompt's persisted user row for file rewind.
-        if (!userUuidTracked && line.isReplay === true && !line.parent_tool_use_id) {
+        if (!userUuidTracked && line.isReplay === true && !line.parent_tool_use_id && (!ctx.nativeInputId || line.uuid === ctx.nativeInputId)) {
           if (!ctx.userMessageId) {
             log.warn('input replay without userMessageId — cliUuid tracking skipped', { threadId });
             userUuidTracked = true;
           } else if (line.uuid) {
+            const accepted = projectClaudeInputReplay(line.message?.content, ctx.text, ctx.submittedPrompt);
             services.chat.updateMessageState(ctx.userMessageId as any, {
-              context: { cliUuid: line.uuid },
+              ...(accepted.text !== undefined ? { text: accepted.text } : {}),
+              context: { cliUuid: line.uuid, ...(accepted.claudeSubmittedText !== undefined ? { claudeSubmittedText: accepted.claudeSubmittedText } : {}) },
             } as any);
             userUuidTracked = true;
           }

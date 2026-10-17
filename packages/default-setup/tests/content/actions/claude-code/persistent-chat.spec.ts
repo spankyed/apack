@@ -43,6 +43,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   const finish = async (number: number) => {
     events.write({ type: 'command_lifecycle', state: 'started', command_uuid: `input-${number}` });
     events.write({ type: 'system', subtype: 'init', session_id: 'fixture-session', cwd: worktree ? '/fixture/native-worktree' : '/fixture' });
+    if (mode === 'source') events.write({ type: 'user', isReplay: true, uuid: 'foreign-input', message: { content: 'foreign rewrite' } });
     events.write({ type: 'user', isReplay: true, uuid: `input-${number}`, message: { content: `input ${number}` } });
     events.write({ type: 'assistant', uuid: `assistant-${number}`, message: { content: [{ type: 'text', text: `reply ${number}` }] } });
     events.write({ type: 'result', subtype: 'success', session_id: 'fixture-session', user_message_uuid: `input-${number}`, total_cost_usd: number, result: `reply ${number}` });
@@ -112,6 +113,10 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   const messages = repository.chatQueries.threadData(id)?.messages ?? [];
   expect(messages.find(message => message.id === user1.id)?.context?.cliUuid).toBe('input-1');
   expect(messages.find(message => message.id === user2.id)?.context?.cliUuid).toBe('input-2');
+  if (mode === 'source') {
+    expect(messages.find(message => message.id === user1.id)?.text).toBe('input 1');
+    expect(messages.find(message => message.id === user2.id)?.text).toBe('input 2');
+  }
   expect(messages.filter(message => message.sender === 'assistant').map(message => message.text)).toEqual(['reply 1', ...(mode === 'source' ? ['Model selection accepted: haiku. The next turn will report the effective model.'] : []), 'reply 2', 'native autonomous work']);
   expect(await store.closeIdleConversation(id)).toBe(true);
   expect(store.getHandle(id)).toBeUndefined();

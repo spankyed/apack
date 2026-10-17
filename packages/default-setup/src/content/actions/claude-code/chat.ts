@@ -482,7 +482,7 @@ export async function action(
       return { success: true, queued: true };
     }
     owner.start(prompt, turn => consumeConversationTurn(turn, {
-      services, threadId, text, phase, userMessageId,
+      services, threadId, text, phase, userMessageId, submittedPrompt: promptText,
       resumeSessionId: resumeSessionId ?? undefined, sessionCwd,
       isFork: !!(forkFrom || revertTo), revertCliUuid: revertTo?.cliUuid,
       forkCliUuid: forkFrom?.cliUuid, useWorktree,
