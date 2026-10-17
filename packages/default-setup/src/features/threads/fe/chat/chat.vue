@@ -29,7 +29,7 @@
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
         <!-- Shrinkable content area -->
-        <div class="flex flex-col flex-grow overflow-hidden min-h-0">
+        <div class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
           <div class="relative flex-grow w-full overflow-hidden min-h-0" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -203,6 +203,15 @@ const threadsSettings = useSettings('threads')
 const shell = useShell()
 const actor: ThreadsState = useSurface();
 const isOnboarding = shell.isOnboarding;
+// The input's budget excludes tabs/recent threads and follows panel resizing, not the window.
+const composerAreaRef = ref<HTMLElement | null>(null)
+watch(composerAreaRef, (element, _previous, onCleanup) => {
+  if (!element) return
+  const update = () => element.style.setProperty('--composer-available-height', `${element.clientHeight}px`)
+  const observer = new ResizeObserver(update)
+  observer.observe(element); update()
+  onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
+}, { flush: 'post' })
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
@@ -674,13 +683,10 @@ watch(messagesContent, (el, _, onCleanup) => {
 }
 
 .inputContainer {
-  // Cap the input at the chat area's height. When the form is taller than the cap
-  // (lots of attachments + a small chat panel), anchor it to the bottom and clip
-  // the top — so the toolbar (Send/Pause/Mode) stays visible.
+  // The card bounds and scrolls its own content; never hide its header above the pane.
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  overflow: hidden;
+  min-height: 0;
   max-height: 100%;
 }
 </style>

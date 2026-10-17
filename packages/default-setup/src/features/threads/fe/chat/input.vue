@@ -8,7 +8,8 @@
     >
       <div
         ref="inputCardRef"
-        class="relative flex flex-col overflow-visible rounded-2xl border bg-[#202022]"
+        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#222224]"
+        :style="{ maxHeight: 'calc(var(--composer-available-height) - 1rem)' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
@@ -22,7 +23,7 @@
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
-          class="flex items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin">
+          class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin">
           <ImageThumbnail v-for="(img, index) in pendingImages" :key="'i-'+index"
             :src="img.dataUrl" :name="img.name" class="group" @click="$emit('open-lightbox', img.dataUrl)">
             <button type="button" @click="removeImage(index)"
@@ -35,14 +36,14 @@
         </div>
 
         <!-- Editor container -->
-        <div class="relative w-full min-h-[72px]" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div class="relative w-full min-h-[96px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
             variant="chat"
             :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full min-h-[72px] rounded-2xl px-4 py-3 pr-10 text-sm leading-relaxed focus:outline-none"
+            editor-class="w-full min-h-[96px] rounded-2xl px-5 py-4 pr-10 text-sm leading-relaxed focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -71,7 +72,7 @@
         </div>
 
         <!-- Buttons row -->
-        <div class="relative flex items-center justify-between gap-3 px-3 pb-3 pt-1 text-neutral-500">
+        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.04] bg-[#222224] px-3 py-2.5 text-neutral-500">
           <!-- Left side buttons -->
           <div class="flex items-center min-w-0">
             <!-- Collapsed: ... dropdown menu (narrow) -->
@@ -182,7 +183,7 @@
               type="submit"
               aria-label="Send"
               :disabled="submitting || (!hasTextContent && !hasAttachments) || disabled"
-              class="h-8 gap-2 rounded-lg px-3 text-xs font-medium @lg:px-3.5"
+              class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
             >
               <span class="hidden @lg:inline">Send</span>
               <CornerDownLeft class="-rotate-45" :size="16" />
@@ -786,8 +787,8 @@ const handleSubmit = async () => {
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input {
-  border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 12px 36px -16px rgba(0, 0, 0, 0.55);
   &:focus-within { border-color: rgba(255, 255, 255, 0.18); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }

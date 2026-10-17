@@ -236,7 +236,7 @@ it('renders inline Button content as one named action and focuses only on site e
   const button = f.root.querySelector('button')!
   expect(button.getAttribute('aria-label')).toBe('Save changes')
   expect(button.querySelector('.font-semibold')?.textContent).toBe('changes')
-  expect(button.classList.contains('bg-blue-600')).toBe(true)
+  expect(button.classList.contains('bg-white/[0.10]')).toBe(true)
   expect(button.classList.contains('opacity-60')).toBe(true)
   f.root.querySelector<HTMLElement>('[tabindex="0"]')!.focus()
   expect(document.activeElement).toBe(button)
@@ -408,5 +408,24 @@ it('attributes site-entry autofocus to the plugin and never re-runs it for a nat
     expect(f.focusReport).toHaveBeenCalledExactlyOnceWith({ revision: 1, isHeld: true, focusId: 'auto', by: 'auto' })
     f.state.nativeFocus = { revision: 1, moved: true, focusId: null }; await nextTick()
     expect(document.activeElement).toBe(site); expect(f.focusReport).toHaveBeenCalledTimes(1)
+  } finally { windowFocus.mockRestore() }
+})
+
+
+it('reveals a native focus redirect inside its own scroll site without scrolling the conversation', async () => {
+  const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [
+      { kind: 'button', label: 'Start', actionId: 'press', focusId: 'first' },
+      { kind: 'input', label: 'Below viewport', actionId: 'input', focusId: 'second', revision: 0, value: '', rows: 1, autoFocus: false, submitLabel: 'send' },
+    ] } } })
+    const site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = f.root.querySelector<HTMLTextAreaElement>('[data-native-focus-id="second"]')!
+    vi.spyOn(site, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 300, 50))
+    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 180, 100, 30))
+    const outsideScroll = document.documentElement.scrollTop
+    f.root.querySelector<HTMLButtonElement>('[data-native-focus-id="first"]')!.focus()
+    f.state.nativeFocus = { revision: 1, moved: true, focusId: 'second' }; await nextTick()
+    expect(document.activeElement).toBe(field); expect(site.scrollTop).toBe(60)
+    expect(document.documentElement.scrollTop).toBe(outsideScroll)
   } finally { windowFocus.mockRestore() }
 })

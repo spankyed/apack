@@ -133,11 +133,42 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(editor.locator('.claude-prompt-decoration')).toHaveCSS('font-style', 'italic');
   expect(await snapshot()).toEqual(before);
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-wide.png') });
+  const fitsComposer = () => card.evaluate(element => {
+    const pane = element.closest('[data-testid="chat-composer-area"]')!;
+    const bounds = element.getBoundingClientRect(), area = pane.getBoundingClientRect();
+    return bounds.top >= area.top - 1 && bounds.bottom <= area.bottom + 1;
+  });
+  await expect.poll(fitsComposer).toBe(true);
   await appPage.setViewportSize({ width: 680, height: 900 });
   await expect(strip.getByRole('button', { name: 'Refresh context', exact: true })).toBeVisible();
   const geometry = await strip.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth }));
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
+  await expect.poll(fitsComposer).toBe(true);
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-narrow.png') });
+  await appPage.setViewportSize({ width: 680, height: 600 });
+  await expect.poll(fitsComposer).toBe(true);
+  const nativeSite = strip.locator('.native-extension-surface');
+  await expect.poll(() => nativeSite.evaluate(element => element.clientHeight > 0 && element.scrollHeight > element.clientHeight)).toBe(true);
+  await strip.getByRole('button', { name: 'Focus note', exact: true }).focus();
+  await expect(note).toBeFocused();
+  await expect.poll(() => note.evaluate(element => {
+    const bounds = element.getBoundingClientRect(), site = element.closest('.native-extension-surface')!.getBoundingClientRect();
+    return bounds.top >= site.top - 1 && bounds.bottom <= site.bottom + 1;
+  })).toBe(true);
+  await note.press('Escape'); await expect(editor).toBeFocused();
+  await editor.fill(Array.from({ length: 40 }, (_, index) => `Draft line ${index + 1}`).join('\n'));
+  await expect.poll(fitsComposer).toBe(true);
+  const editorArea = card.getByTestId('composer-editor-area');
+  await expect.poll(() => editorArea.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 });
+  const shortGeometry = await card.evaluate(element => {
+    const bounds = element.getBoundingClientRect(), pane = element.closest('[data-testid="chat-composer-area"]')!.getBoundingClientRect();
+    return { top: bounds.top, bottom: bounds.bottom, paneTop: pane.top, paneBottom: pane.bottom };
+  });
+  expect(await snapshot()).toEqual(before);
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-short.png') });
+  await appPage.setViewportSize({ width: 680, height: 900 });
+
   await editor.fill('Continue with the review.');
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(async () => (await snapshot()).turns).toBe(2);
@@ -148,5 +179,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });
