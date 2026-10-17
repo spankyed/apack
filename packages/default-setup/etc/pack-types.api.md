@@ -1620,6 +1620,7 @@ interface ClaudeTerminalSubmissionState {
 }
 
 interface ClaudeTerminalUiTransport {
+    readonly promptHosts: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>;
     request(value: Record<string, unknown> & {
         subtype: string;
     }): Promise<unknown>;
@@ -7703,7 +7704,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean): {
 };
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-declare function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: ReturnType<typeof createClaudePromptHosts>): {
+declare function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>): {
     /** Register only a mounted composer; registration alone does not attach or create a process. */
     servePrompt(id: string, host: ClaudePromptHost): () => void;
     /** Advertise only reverse APIs the attached view can actually answer. */

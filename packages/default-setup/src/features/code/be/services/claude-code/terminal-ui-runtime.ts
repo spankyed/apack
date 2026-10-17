@@ -1,7 +1,7 @@
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
 export const claudeTerminalUiRuntime = String.raw`import http from 'node:http';
 import {readFileSync} from 'node:fs';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,inFlight=0,highestSequence=0;
 async function initialize(){
@@ -21,9 +21,59 @@ async function initialize(){
  })();
  return initializing;
 }
+let originalContext,wrappedContext,releaseHostGateway,hostSequence=0;
+async function askHost(subtype,args){
+ if(!clients.has(args.clientId))return undefined;
+ const current=JSON.parse(readFileSync(configUrl,'utf8')),id=randomUUID();
+ return new Promise(resolve=>{
+  const request=http.request({socketPath:config.socketPath,path:'/ui-host',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:4500},response=>{
+   let bytes=0;const chunks=[];response.on('data',chunk=>{bytes+=chunk.length;if(bytes>2*1048576)response.destroy();else chunks.push(chunk);});
+   response.on('error',()=>resolve(undefined));response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString());resolve(response.statusCode===200&&value.request_id===id&&value.pid===process.pid&&value.sessionId===current.sessionId?value.result:undefined);}catch{resolve(undefined);}});
+  });request.on('error',()=>resolve(undefined));request.on('timeout',()=>request.destroy());
+  request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));
+ });
+}
+function restoreHosts(n){
+ releaseHostGateway?.();releaseHostGateway=undefined;
+ if(wrappedContext&&n.runtime.ey()===wrappedContext)n.runtime.Zao(originalContext);
+ originalContext=undefined;wrappedContext=undefined;
+}
+function installHosts(n){
+ if(wrappedContext&&n.runtime.ey()===wrappedContext)return;
+ if(wrappedContext)restoreHosts(n);
+ const current=n.runtime.ey();if(!current?.composer)throw Error('Native terminal composer is not bound');
+ originalContext=current;
+ releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async()=>false,readSelection:async()=>({cause:'not_asked'}),readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',args))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
+ const remote=n.runtime.AXs(current.composer),has=answer=>n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes(answer));
+ wrappedContext={...current,composer:{...current.composer,read:()=>remote.read(),write:(...args)=>has('ui_prompt_fill')?remote.write(...args):current.composer.write(...args),propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
+ n.runtime.Zao(wrappedContext);
+}
+async function prepareTerminalPrompt(n,text){
+ if(typeof text!=='string'||!text.trim()||text.length>32768)throw Error('Native terminal draft is invalid');
+ if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
+ const context=originalContext??n.runtime.ey(),composer=context?.composer;
+ if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
+ if((await composer.read()).text)return {filled:false};
+ const normalize=n.runtime.ilo();
+ const core={name:'core',isCore:true,budgetMs:0,run:async input=>{
+  const value=normalize(input.text);let decorations=input.decorations;
+  if(decorations&&value!==input.text){
+   const offsets=new Uint32Array(input.text.length+1);let from=0,to=0;
+   for(const character of input.text){const next=String.fromCodePoint(value.codePointAt(to)??0),kept=to<value.length&&(character===next||((next==='\n'||next==='\uFFFD')&&normalize(character)===next));for(let unit=0;unit<character.length;unit++)offsets[from+unit]=to+(kept?unit:0);from+=character.length;if(kept)to+=next.length;}
+   offsets[input.text.length]=to;const offset=index=>offsets[Math.max(0,Math.min(input.text.length,index))]??value.length;
+   decorations=decorations.map(run=>({...run,start:offset(run.start),end:offset(run.end)}));
+  }
+  const write=()=>composer.write(value,input.mode,decorations);
+  return composer.attribute?composer.attribute(input.origin,write):write();
+ }};
+ const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
+ return {filled:result.isFilled===true&&(await composer.read()).text===text};
+}
 const schemaNames={ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
- const n=await initialize(),schema=schemaNames[request.subtype];
+ const n=await initialize();
+ if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
+ const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
  const value=n.schemas[schema]().parse(request);
  if(value.surface!==undefined&&value.surface!=='desktop')throw Error('This app owns a desktop UI surface');
@@ -32,12 +82,15 @@ async function control(request){
  const clientId=value.client_id;
  if(value.subtype==='ui_attach'){
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
-  if(value.answers?.length)throw Error('Native reverse UI host transport is not integrated');
-  await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},[]);clients.add(clientId);
+  const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
+  if(answers.length)installHosts(n);
+  clients.add(clientId);
+  try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);}catch(error){clients.delete(clientId);throw error;}
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
+  if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_render'){
@@ -67,7 +120,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native)for(const id of clients)await native.session.d2t(id,'detach');clients.clear();activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const id of clients)await native.session.d2t(id,'detach');restoreHosts(native);}clients.clear();activeSession=body.sessionId;}
    const result=await control(body.request);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});

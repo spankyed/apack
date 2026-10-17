@@ -35,7 +35,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
   await writeFile(path, row('22222222-2222-2222-2222-222222222222', 'a'.repeat(1300000)) + (damaged ? '{broken\n' : '') + row('33333333-3333-3333-3333-333333333333', 'b'.repeat(1300000)) + row('44444444-4444-4444-4444-444444444444', 'Final native answer'))
   let exited = false, release: (() => Promise<void>) | undefined
   const owner: ClaudeNativeTerminalOwner = {
-    uiTransport: { request: async () => { throw new Error('UI is not used in the persistence fixture') }, subscribe: () => () => {} },
+    uiTransport: { promptHosts: { register: () => () => {}, answers: () => [], detach() {} }, request: async () => { throw new Error('UI is not used in the persistence fixture') }, subscribe: () => () => {} },
     get state() { return { ownerId: 'owned', sessionId, cwd: directory, status: exited ? 'exited' as const : 'live' as const, busy: false, tasks: [] } },
     busy: false, done: Promise.resolve(), output: [], records: [],
     beforeRelease(listener) { release = listener },

@@ -17,8 +17,8 @@ async function request(path: string, body: unknown, token?: string) {
 async function observed(command = 'main') {
   return { sessionId: session, parentPid: process.pid, childPid: process.pid + 1, kind: 'main', command, generation: (await config()).generations.main, startedAt: '100', stdout: 'native output', code: 0, signal: null, truncated: false }
 }
-async function create() {
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'main' }, subagentStatusLine: { type: 'command', command: 'sub' } }, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter() {} })
+async function create(enter = () => {}) {
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'main' }, subagentStatusLine: { type: 'command', command: 'sub' } }, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter })
   await request('/observer-ready', { sessionId: session, pid: process.pid })
   await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
 }
@@ -102,4 +102,16 @@ it.each([0, 7])('preserves real child streams, Unicode, exit code and the origin
   await new Promise<void>((resolve, reject) => { child.once('error', reject); child.once('close', exit => exit === 0 ? resolve() : reject(new Error(error))) })
   expect(JSON.parse(output)).toEqual({ code, text: '中文🙂 ' + session, bunOptions: '--preload=/private/user-preload.mjs' })
   expect(bridge.projection.mainStatus).toBe(code === 0 ? '中文🙂 ' + session : undefined)
+})
+
+it('retains the app draft and never enters when native terminal preparation is unavailable', async () => {
+  const enter = vi.fn(), fill = vi.fn(async () => true)
+  await create(enter)
+  const unregister = bridge!.uiTransport.promptHosts.register('app', { read: async () => ({ text: 'Keep app draft', cursor: 14 }), fill })
+  try {
+    const rejected = expect(bridge!.submit('Keep app draft')).rejects.toThrow()
+    await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
+    await rejected
+    expect(enter).not.toHaveBeenCalled(); expect(fill).not.toHaveBeenCalled()
+  } finally { unregister() }
 })

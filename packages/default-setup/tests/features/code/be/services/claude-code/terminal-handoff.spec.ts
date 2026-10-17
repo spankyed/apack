@@ -16,7 +16,7 @@ async function printOwner() {
 function terminal() {
   let resolve!: () => void
   const done = new Promise<void>(yes => { resolve = yes })
-  return { uiTransport: { request: vi.fn(async () => { throw new Error('UI is not used in the handoff fixture') }), subscribe: () => () => {} }, state: { ownerId: 'terminal-owner', sessionId: session, cwd: '/native-cwd', status: 'live', busy: false, tasks: [] }, busy: false, output: [], records: [], readJournal: vi.fn(async () => ({ entries: [], pending: false, problems: [] })), beforeRelease: vi.fn(), done,
+  return { uiTransport: { promptHosts: { register: () => () => {}, answers: () => [], detach() {} }, request: vi.fn(async () => { throw new Error('UI is not used in the handoff fixture') }), subscribe: () => () => {} }, state: { ownerId: 'terminal-owner', sessionId: session, cwd: '/native-cwd', status: 'live', busy: false, tasks: [] }, busy: false, output: [], records: [], readJournal: vi.fn(async () => ({ entries: [], pending: false, problems: [] })), beforeRelease: vi.fn(), done,
     kill: vi.fn(resolve), close: vi.fn(async () => resolve()), subscribe: vi.fn(() => () => {}), input: vi.fn(() => true), resize: vi.fn(() => true), submit: vi.fn(async () => ({ sessionId: '11111111-1111-1111-1111-111111111111', uuid: '22222222-2222-2222-2222-222222222222', text: 'Draft' })) } satisfies ClaudeNativeTerminalOwner
 }
 afterEach(async () => { killAllHandles(); mocks.prepare.mockReset(); await Promise.resolve() })
