@@ -9,7 +9,7 @@ export function useClaudeSiteScroll(options: {
   emit(event: ClaudeUiScrollEvent): void
 }) {
   let revision = 0, lastSent = 0, appliedSerial = 0, lastOffset = 0, pendingBy = 0
-  let followEnd = false, suppressedTop: number | undefined
+  let followEnd = false, suppressedTop: number | undefined, lastLayout: string | undefined
   let frame: number | undefined, observer: ResizeObserver | undefined, mutations: MutationObserver | undefined, removeListener = () => {}
   const rowHeight = () => Number.parseFloat(options.element.value ? getComputedStyle(options.element.value).lineHeight : '') || 20
   function setTop(top: number) {
@@ -40,7 +40,10 @@ export function useClaudeSiteScroll(options: {
       return id && rect.height > 0 && rect.width > 0 ? [{ id, top: Math.max(0, Math.floor((rect.top - bounds.top + element.scrollTop) / line)), bottom: Math.max(0, Math.ceil((rect.bottom - bounds.top + element.scrollTop) / line)) }] : []
     }).slice(0, 512)
     const offset = Math.max(0, Math.floor(element.scrollTop / line)), by = pendingBy
-    pendingBy = 0; lastOffset = offset; lastSent = ++revision
+    pendingBy = 0; lastOffset = offset
+    const layout = JSON.stringify({ paneId: options.paneId?.(), offset, rows: Math.floor(element.clientHeight / line), contentRows: Math.ceil(element.scrollHeight / line), keyed })
+    if (by === 0 && layout === lastLayout) return
+    lastLayout = layout; lastSent = ++revision
     options.emit({ ...(options.paneId?.() ? { paneId: options.paneId() } : {}), revision, offset, by,
       rows: Math.max(0, Math.floor(element.clientHeight / line)), contentRows: Math.max(0, Math.ceil(element.scrollHeight / line)), keyed })
   }
@@ -62,7 +65,7 @@ export function useClaudeSiteScroll(options: {
     frame = undefined; pendingBy = 0
   }
   watch([() => options.element.value, () => options.paneId?.()], ([element]) => {
-    cleanup(); appliedSerial = 0; lastOffset = 0; followEnd = false; suppressedTop = undefined
+    cleanup(); lastLayout = undefined; appliedSerial = 0; lastOffset = 0; followEnd = false; suppressedTop = undefined
     if (!element) return
     element.addEventListener('scroll', scrolled, { passive: true }); removeListener = () => element.removeEventListener('scroll', scrolled)
     if (typeof ResizeObserver !== 'undefined') {

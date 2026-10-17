@@ -26,7 +26,7 @@ export function createClaudeSiteScroll(options: {
     })
     try {
       const result = await options.ui.scroll({ ...options.client, component: options.component, instance_id: options.instanceId,
-        offset: event.offset, by: event.by, body_rows: event.rows, content_rows: event.contentRows, keyed })
+        offset: event.offset, by: event.by, body_rows: event.rows, content_rows: event.contentRows, ...(keyed.length || (targets && !event.keyed.length) ? { keyed } : {}) })
       if (current() && epoch === generation && event.revision === latest) {
         state = { serial: ++serial, requestRevision: event.revision, offset: Math.max(0, result.offset), followEnd: result.follow_end === true }
         options.publish(state)

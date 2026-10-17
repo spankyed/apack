@@ -29,7 +29,7 @@ export function createClaudePaneHost(options: {
     if (!host) {
       host = createClaudeSiteScroll({ ui, client, component: 'Pane', instanceId: id,
         current: () => current() && !!roster?.panes.some(pane => pane.id === id),
-        drawing: () => roster?.shown_id === id ? drawing : undefined,
+        drawing: () => roster?.shown_id === id ? drawing ?? fields : undefined,
         publish: state => {
           if (roster?.shown_id !== id) return
           const layout = layouts.get(id)

@@ -24,6 +24,8 @@ it('applies native offsets without echo, reports gestures, preserves fractional 
     site.querySelector<HTMLElement>('span')!.getBoundingClientRect = () => ({ top: 160 - site.scrollTop, bottom: 200 - site.scrollTop, width: 100, height: 40 }) as DOMRect
     frame()
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, offset: 0, by: 0, rows: 5, contentRows: 20, keyed: [{ id: 'opaque', top: 8, bottom: 10 }] }))
+    observers[0]([], {} as ResizeObserver); frame(); expect(emit).toHaveBeenCalledTimes(1)
+    site.querySelector<HTMLElement>('span')!.style.color = 'red'; await nextTick(); await Promise.resolve(); frame(); expect(emit).toHaveBeenCalledTimes(1)
     state.scroll = { serial: 1, offset: 5, followEnd: false }; await nextTick()
     expect(site.scrollTop).toBe(100); site.dispatchEvent(new Event('scroll')); frame(); expect(emit).toHaveBeenCalledTimes(1)
     site.scrollTop = 60; site.dispatchEvent(new Event('scroll')); frame()

@@ -40,7 +40,7 @@ export function mountClaudeUi(options: {
   let unsubscribe = () => {}
   let lastState: ClaudeUiMountState = { status: 'connecting' }
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
-  const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing, publish: () => publish(lastState) })
+  const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
   function publish(state: ClaudeUiMountState): void {
     // An observer must not break native attachment cleanup or the process event reader.
