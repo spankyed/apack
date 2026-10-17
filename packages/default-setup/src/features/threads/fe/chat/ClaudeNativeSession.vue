@@ -2,7 +2,7 @@
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <div v-if="!active" class="native-launch__actions">
       <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
-      <button type="button" class="native-button native-button--launch" :disabled="busy || view?.opening" @click="open">
+      <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}
       </button>
