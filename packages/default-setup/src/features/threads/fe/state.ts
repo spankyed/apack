@@ -139,6 +139,7 @@ type SystemEvent =
   | { type: 'ARCHIVED_THREADS_DATA'; threads: any[] }
 
 type UIEvent =
+  | import('../be/claude-terminal-views.ts').ClaudeTerminalViewRequest
   | ClaudeUiViewRequest
   // Thread management events
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
@@ -1458,6 +1459,7 @@ const threadsState = setup({
     filters: { statuses: [], tags: [], chatStates: [], search: '', showRootOnly: true },
     threadsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
     threadsExport: { status: 'idle' as const, errors: [], filePath: '', threadCount: 0 },
+    nativeTerminalViews: {},
     nativeUiViews: {},
     // Chat/agent
     currentThread: defaultChatThread,
@@ -1556,6 +1558,19 @@ const threadsState = setup({
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
+    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, opening: false, output: [] } } })), ({ event }) => sendToSystem(id, event)] },
+    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => sendToSystem(id, event), assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
+    CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeTerminalViews[event.mountId]; if (view?.threadId !== event.threadId) return {};
+      const sameOwner = view.state?.ownerId === event.state?.ownerId;
+      const output = [...(sameOwner ? view.output : []), ...event.output];
+      let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
+      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, state: event.state, opening: event.opening, problem: event.problem, output: output.slice(from) } } };
+    }) },
     CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) ? { promptHostRequest: undefined } : {}) } } }

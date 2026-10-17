@@ -482,6 +482,7 @@ export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
 
 export type IncomingThreadsEvents =
+  | import('./claude-terminal-views.ts').ClaudeTerminalViewRequest
   | ClaudeUiViewRequest
   // Thread management events
   | { type: 'CREATE_THREAD'; topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }
@@ -513,6 +514,7 @@ export type IncomingThreadsEvents =
   | { type: 'THREAD_DELETED'; threadId: string }
 
 export type OutgoingThreadsEvents =
+  | import('./claude-terminal-views.ts').ClaudeTerminalViewReply
   | { type: 'CLAUDE_PROMPT_COMPLETIONS'; threadId: string; mountId: string; result: ClaudePromptCompletionReply }
   | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }
   | { type: 'CLAUDE_PROMPT_HOST_REQUEST'; threadId: string; mountId: string; request: import('#generated/types.ts').ClaudePromptHostRequest }

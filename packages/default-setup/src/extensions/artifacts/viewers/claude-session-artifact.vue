@@ -7,11 +7,11 @@
         <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
         <button
           v-if="content.sessionId"
-          @click="openTerminalTab"
+          @click="openConversation"
           class="text-neutral-500 hover:text-neutral-300 transition-colors p-1"
-          title="Open in terminal"
+          title="Open conversation"
         >
-          <Terminal :size="12" />
+          <MessageSquare :size="12" />
         </button>
 
         <span class="flex shrink-0 items-center gap-1.5 px-1 py-0.5">
@@ -267,7 +267,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Wrench, Copy, Check, Terminal } from 'lucide-vue-next'
+import { Wrench, Copy, Check, MessageSquare } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
@@ -412,14 +412,9 @@ async function copySessionId() {
   } catch { /* clipboard denied */ }
 }
 
-function openTerminalTab() {
-  // The code surface routes a terminal.* event to its terminals
-  openSurface('code', {
-    type: 'terminal.CREATE',
-    target: 'tab',
-    command: `claude --resume ${content.value.sessionId}`,
-    cwd: content.value.cwd || undefined,
-  })
+function openConversation() {
+  const threadId = currentThreadId.value
+  if (threadId) openSurface('threads', { type: 'OPEN_THREAD_CHAT', threadId })
 }
 
 // ─── Permission mode segmented control ─────────────────────────────────

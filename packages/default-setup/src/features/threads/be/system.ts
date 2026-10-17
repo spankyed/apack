@@ -1,3 +1,5 @@
+import { createClaudeTerminalViews } from './claude-terminal-views.ts';
+import { registerThreadTeardown } from './thread-teardown.ts';
 import { handleClaudeUiView } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
@@ -21,6 +23,8 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
+const terminalViews = createClaudeTerminalViews({ get: key => services.cli.claudeCode.getNativeTerminal(key), open: key => services.cli.claudeCode.openNativeTerminal(key) });
+registerThreadTeardown(key => terminalViews.clear(key));
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
 
@@ -56,6 +60,9 @@ export const threadsSystem = setup({
     historyOperation: fromPromise(async ({input, signal}: {input: ThreadHistoryOperationInput; signal: AbortSignal}) => runThreadHistoryOperation(input, signal)),
   },
   actions: threadsSpec.actions({
+    claudeTerminalView: ({ event, client, reply }) => {
+      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE') terminalViews.handle(event, client, reply);
+    },
     claudeUiView: ({ event, client, reply }) => {
       if (event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
     },
@@ -876,6 +883,12 @@ export const threadsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
+      CLAUDE_TERMINAL_MOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_UNMOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_INPUT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
       CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_PRESS: { actions: 'claudeUiView' },

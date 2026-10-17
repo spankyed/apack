@@ -1550,6 +1550,45 @@ declare const ClaudeSettingsSchema: z.ZodObject<{
     applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeTerminalViewReply = ClaudeTerminalViewSnapshot & {
+    type: 'CLAUDE_TERMINAL_STATE';
+    threadId: string;
+    mountId: string;
+};
+
+type ClaudeTerminalViewRequest = {
+    threadId: string;
+    mountId: string;
+} & ({
+    type: 'CLAUDE_TERMINAL_MOUNT';
+} | {
+    type: 'CLAUDE_TERMINAL_UNMOUNT';
+} | {
+    type: 'CLAUDE_TERMINAL_OPEN';
+} | {
+    type: 'CLAUDE_TERMINAL_INPUT';
+    ownerId: string;
+    text: string;
+} | {
+    type: 'CLAUDE_TERMINAL_RESIZE';
+    ownerId: string;
+    columns: number;
+    rows: number;
+} | {
+    type: 'CLAUDE_TERMINAL_CLOSE';
+    ownerId: string;
+});
+
+type ClaudeTerminalViewSnapshot = {
+    state?: ClaudeNativeTerminalState;
+    opening: boolean;
+    problem?: string;
+    output: {
+        sequence: number;
+        text: string;
+    }[];
+};
+
 type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
 
 type ClaudeUiAttach = z.infer<typeof attach>;
@@ -3942,7 +3981,7 @@ type IncomingTerminalEvents = {
     terminalId: string;
 };
 
-type IncomingThreadsEvents = ClaudeUiViewRequest | {
+type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
     type: 'CREATE_THREAD';
     topic: string;
     tags?: string[];
@@ -5458,7 +5497,7 @@ type OutgoingTerminalEvents =
     data: TerminalInfo;
 };
 
-type OutgoingThreadsEvents = {
+type OutgoingThreadsEvents = ClaudeTerminalViewReply | {
     type: 'CLAUDE_PROMPT_COMPLETIONS';
     threadId: string;
     mountId: string;
@@ -6743,6 +6782,9 @@ interface ThreadsContext {
         filePath: string;
         threadCount: number;
     };
+    nativeTerminalViews: Record<string, {
+        threadId: string;
+    } & ClaudeTerminalViewSnapshot>;
     nativeUiViews: Record<string, {
         threadId: string;
         state: ClaudeUiMountState;

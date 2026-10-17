@@ -28,8 +28,9 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
+        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" @active="nativeTerminalActive = $event" />
         <!-- Shrinkable content area -->
-        <div class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
+        <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
           <div class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -188,6 +189,7 @@ function rotateQuote() {
 
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
+import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
 import RecentThreads from './recent-threads.vue'
 import InlineTabBar from './inline-tab-bar.vue'
@@ -207,6 +209,7 @@ import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
 const shell = useShell()
+const nativeTerminalActive = ref(false)
 const actor: ThreadsState = useSurface();
 const isOnboarding = shell.isOnboarding;
 // The input's budget excludes tabs/recent threads and follows panel resizing, not the window.
