@@ -12,8 +12,8 @@
   <button v-else-if="node.kind === 'button'" :ref="hoverElement" :style="buttonPaint" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
     :aria-label="node.label" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
     :data-native-role="node.role"
-    class="self-start max-w-full whitespace-normal break-words rounded border px-2 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-    :class="[node.variant === 'primary' ? 'border-blue-400 bg-blue-600 text-white hover:bg-blue-500' : 'border-neutral-600 text-neutral-200 hover:bg-neutral-700',
+    class="inline-flex min-h-8 max-w-full self-start items-center justify-center gap-1.5 whitespace-normal break-words rounded-lg border px-3 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40"
+    :class="[node.variant === 'primary' ? 'border-blue-500/60 bg-blue-600 text-white shadow-sm hover:bg-blue-500' : 'border-white/10 bg-white/[0.04] text-neutral-300 hover:border-white/15 hover:bg-white/[0.08] hover:text-neutral-100',
       buttonTextStyle.dimColor && 'opacity-60 hover:opacity-100 focus:opacity-100', node.role === 'dismiss' && 'ml-auto']"
     @click="node.actionId && emit('press', node.actionId)">
     <span v-if="node.role === 'dismiss'" aria-hidden="true">×</span>
@@ -114,7 +114,7 @@ const emit = defineEmits<{ press: [actionId: string, href?: string]; field: [eve
 </script>
 
 <script lang="ts">
-const textSizes = { caption: 'text-[10px]', footnote: 'text-xs', body: 'text-sm', heading: 'text-base', title: 'text-lg' }
+const textSizes = { caption: 'text-[11px]', footnote: 'text-xs', body: 'text-[13px]', heading: 'text-sm', title: 'text-base' }
 const textWeights = { regular: 'font-normal', medium: 'font-medium', semibold: 'font-semibold', bold: 'font-bold' }
 </script>
 

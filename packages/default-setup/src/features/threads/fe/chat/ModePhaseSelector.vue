@@ -3,7 +3,7 @@
     <!-- Conjoined container for both selectors -->
     <div
       v-if="!forcedMode"
-      class="inline-flex min-w-0 bg-neutral-800 border border-neutral-700/50 rounded-lg overflow-hidden transition-all"
+      class="inline-flex min-w-0 overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02] transition-colors"
     >
       <!-- Mode Selector (Left) -->
       <DropdownMenuRoot v-model:open="isModeOpen">
@@ -11,7 +11,7 @@
           <button
             type="button"
             :disabled="disabled"
-            class="flex items-center gap-1.5 px-3 py-2 h-7 text-sm transition-all text-neutral-300 min-w-0"
+            class="flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-xs text-neutral-400 transition-colors"
             :class="modeButtonClasses"
             @contextmenu.prevent="onModeContextMenu"
           >
@@ -54,7 +54,7 @@
       <!-- Divider (only when phases exist) -->
       <div
         v-if="hasPhases"
-        class="w-px bg-neutral-700/50"
+        class="w-px bg-white/[0.06]"
       />
 
       <!-- Phase Selector (Right, conditional) -->
@@ -63,7 +63,7 @@
           <button
             type="button"
             :disabled="disabled"
-            class="flex items-center gap-1.5 px-3 py-2 h-7 text-sm transition-all text-neutral-300 min-w-0"
+            class="flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-xs text-neutral-400 transition-colors"
             :class="phaseButtonClasses"
             :style="phaseButtonStyle"
           >

@@ -6,25 +6,8 @@
     :class="$style['status-indicator']"
     :style="positionStyle"
   >
-    <!-- dot + glow -->
-    <span class="relative inline-block">
-      <!-- solid dot -->
-      <span
-        :class="[
-          'block h-3 w-3 rounded-full transition-colors duration-300 ease-in-out',
-          isAnimated ? 'mosaic-dot' : ''
-        ]"
-        :style="!isAnimated ? { backgroundColor: stateConfig.color } : undefined"
-      />
-      <!-- glow -->
-      <span
-        :class="[
-          'absolute inset-0 rounded-full scale-[2] transition-colors duration-300 ease-in-out',
-          isAnimated ? 'mosaic-glow' : 'blur-[1px] opacity-40'
-        ]"
-        :style="!isAnimated ? { backgroundColor: stateConfig.color } : undefined"
-      />
-    </span>
+    <span aria-hidden="true" class="block h-1.5 w-1.5 rounded-full transition-colors duration-300"
+      :class="isAnimated ? 'mosaic-dot' : undefined" :style="!isAnimated ? { backgroundColor: stateConfig.color } : undefined" />
   </div>
 </Teleport>
 </template>
@@ -72,7 +55,7 @@ const { isVisible: isAnchorVisible } = useAnchorTracking(
   () => props.anchor,
   (el) => {
     const r = el.getBoundingClientRect()
-    pos.value = { top: r.top - 6.4, left: r.left - 6.4 }
+    pos.value = { top: r.top + 19, left: r.right - 20 }
   },
   () => { pos.value = null },
 )
@@ -81,7 +64,6 @@ const { isVisible: isAnchorVisible } = useAnchorTracking(
 <style lang="scss" module>
 .status-indicator {
   // Positioning lives on the element's inline :style — fixed to the input
-  // card's top-left via the anchor prop so the dot renders outside the chat
-  // area's overflow-clipped tree.
+  // card's trailing context row via the anchor prop.
 }
 </style>

@@ -1,15 +1,15 @@
 <template>
-  <label class="flex min-w-0 flex-col gap-1" :data-native-plugin="node.plugin">
-    <span v-if="node.label">{{ node.label }}</span>
+  <label class="flex min-w-0 flex-col gap-1.5" :data-native-plugin="node.plugin">
+    <span v-if="node.label" class="text-[11px] font-medium leading-4 text-neutral-400">{{ node.label }}</span>
     <select v-if="node.kind === 'select'" :data-native-autofocus="node.autoFocus" :value="draft" :aria-label="node.label || 'Claude selection'"
-      class="min-w-0 rounded border border-neutral-600 bg-neutral-900 px-2 py-1" @change="pick">
+      class="h-9 min-w-0 max-w-full rounded-lg border border-white/[0.08] bg-black/20 px-2.5 text-[13px] text-neutral-200 transition-colors hover:border-white/15 focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/10" @change="pick">
       <option v-for="option in node.options" :key="option.value" :value="option.value">{{ option.label }}</option>
     </select>
     <textarea v-else :data-native-autofocus="node.autoFocus" :value="draft" :rows="node.rows" :placeholder="node.placeholder"
       :aria-label="node.label || 'Claude input'" maxlength="16384"
-      class="min-w-0 resize-y rounded border border-neutral-600 bg-neutral-900 px-2 py-1"
+      class="min-w-0 max-w-full resize-y rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2 text-[13px] leading-5 text-neutral-200 placeholder:text-neutral-600 transition-colors hover:border-white/15 focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/10"
       @input="change" @keydown="keydown" @focus="focused = true" @blur="focused = false" />
-    <span v-if="node.kind === 'input' && focused" class="text-neutral-500">Enter: {{ node.submitLabel }}</span>
+    <span v-if="node.kind === 'input' && focused" class="text-[10px] text-neutral-500">Enter: {{ node.submitLabel }}</span>
   </label>
 </template>
 

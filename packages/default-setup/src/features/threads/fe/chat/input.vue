@@ -4,11 +4,11 @@
       @submit.prevent="handleSubmit"
       @keydown.shift.tab.prevent="cyclePhase"
       @keydown.ctrl.tab.prevent="cycleMode"
-      class="@container pb-4 max-w-[80%] mx-auto w-full flex-shrink-0 overflow-visible"
+      class="@container mx-auto w-full max-w-4xl flex-shrink-0 overflow-visible px-4 pb-4"
     >
       <div
         ref="inputCardRef"
-        class="relative flex flex-col border rounded-lg bg-neutral-800 overflow-visible"
+        class="relative flex flex-col overflow-visible rounded-2xl border bg-[#202022]"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
@@ -35,14 +35,14 @@
         </div>
 
         <!-- Editor container -->
-        <div class="relative w-full min-h-12" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div class="relative w-full min-h-[72px]" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
             variant="chat"
             :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full px-1.5 pr-2 py-2 rounded-lg min-h-12 focus:outline-none"
+            editor-class="w-full min-h-[72px] rounded-2xl px-4 py-3 pr-10 text-sm leading-relaxed focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -71,7 +71,7 @@
         </div>
 
         <!-- Buttons row -->
-        <div class="relative flex items-center justify-between px-3 pb-2 text-neutral-500">
+        <div class="relative flex items-center justify-between gap-3 px-3 pb-3 pt-1 text-neutral-500">
           <!-- Left side buttons -->
           <div class="flex items-center min-w-0">
             <!-- Collapsed: ... dropdown menu (narrow) -->
@@ -182,7 +182,7 @@
               type="submit"
               aria-label="Send"
               :disabled="submitting || (!hasTextContent && !hasAttachments) || disabled"
-              class="px-2 @lg:px-4"
+              class="h-8 gap-2 rounded-lg px-3 text-xs font-medium @lg:px-3.5"
             >
               <span class="hidden @lg:inline">Send</span>
               <CornerDownLeft class="-rotate-45" :size="16" />
@@ -758,18 +758,20 @@ const handleSubmit = async () => {
 
 <style lang="scss" module>
 .input {
-  border-color: rgb(60 60 60);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 0.45);
+  &:focus-within { border-color: rgba(255, 255, 255, 0.18); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.inputCommandActive {
+.inputCommandActive, .inputCommandActive:focus-within {
   border-color: rgba(180, 180, 255, 0.45);
   box-shadow: 0 0 0 1px rgba(180, 180, 255, 0.1), 0 0 12px -2px rgba(180, 180, 255, 0.15);
 }
-.inputDropActive {
+.inputDropActive, .inputDropActive:focus-within {
   border-color: rgba(100, 180, 255, 0.6);
   box-shadow: 0 0 0 1px rgba(100, 180, 255, 0.15), 0 0 12px -2px rgba(100, 180, 255, 0.2);
 }
-.inputRecording {
+.inputRecording, .inputRecording:focus-within {
   border-color: rgba(239, 68, 68, 0.6);
   box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15), 0 0 12px -2px rgba(239, 68, 68, 0.2);
 }
