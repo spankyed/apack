@@ -22,7 +22,7 @@ export async function createClaudeTerminalBridge(options: {
   const directory = await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'cc-app-'))
   const socketPath = join(directory, 'bridge.sock'), token = randomBytes(32).toString('hex')
   const projection = createClaudeTerminalStatus(options.sessionId)
-  let closed = false, busy = false
+  let closed = false, busy = false, ready = false
   let pending: { id: string; sessionId: string; text: string; sent: boolean; timer: ReturnType<typeof setTimeout>; resolve(): void; reject(error: Error): void } | undefined
   const settle = (error?: Error) => {
     const current = pending
@@ -43,7 +43,7 @@ export async function createClaudeTerminalBridge(options: {
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
         if (changedSession) { busy = false; settle(new Error('Native session changed before submission completed')) }
-        options.changed()
+        ready = true; options.changed()
         if (pending && !pending.sent && pending.sessionId === projection.sessionId) { pending.sent = true; return reply(200, { id: pending.id, text: pending.text }) }
         return reply(200, {})
       }
@@ -85,8 +85,8 @@ export async function createClaudeTerminalBridge(options: {
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))
     await writeFile(join(pluginRoot, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'apack-native-terminal', version: '0.0.1' }), { mode: 0o600 })
     await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
-    const plugin = `export function register(on) {
-      const send=async($,path,body)=>{const response=await $.http.fetch('http://apack'+path,{method:'POST',socketPath:${JSON.stringify(socketPath)},headers:{'x-apack-native-token':${JSON.stringify(token)},'content-type':'application/json'},body:JSON.stringify({sessionId:await $.session.id(),...body})});if(!response.ok)throw Error('Owned terminal broker refused');return JSON.parse(response.text);};
+    const plugin = `async function send($,path,body){const response=await $.http.fetch('http://apack'+path,{method:'POST',socketPath:${JSON.stringify(socketPath)},headers:{'x-apack-native-token':${JSON.stringify(token)},'content-type':'application/json'},body:JSON.stringify({sessionId:await $.session.id(),...body})});if(!response.ok)throw Error('Owned terminal broker refused');return JSON.parse(response.text);}
+    export function register(on) {
       let started=false,inFlight=false;
       on('session.start',async($,e,next)=>{if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const command=await send($,'/poll',{agents});if(!command.id)return;let filled=false;try{const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}catch{}await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
       on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
@@ -95,9 +95,10 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
       directory, pluginRoot, settings, projection,
+      get ready() { return ready && !closed },
       get busy() { return busy || !!pending },
       submit(text: string): Promise<void> {
-        if (closed || pending || busy || !text.trim() || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (closed || !ready || pending || busy || !text.trim() || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => settle(new Error('Native prompt bridge timed out')), 5000); timer.unref()
           pending = { id: randomUUID(), sessionId: projection.sessionId, text, sent: false, timer, resolve, reject }

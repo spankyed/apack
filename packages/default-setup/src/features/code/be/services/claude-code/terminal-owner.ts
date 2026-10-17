@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
+import type { PermissionMode } from './types.ts'
 import type { ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
@@ -26,6 +27,7 @@ export interface ClaudeNativeTerminalOptions {
   sessionId: string
   cwd: string
   settings: ClaudeSettings
+  permissionMode: PermissionMode
   cliPath?: string
   env?: NodeJS.ProcessEnv
   columns?: number
@@ -81,7 +83,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     if (started || closed) throw new Error('Native terminal startup is no longer available')
     started = true
     try {
-      const args = ['--resume', options.sessionId, '--plugin-dir', bridge.pluginRoot]
+      const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
       if (Object.keys(bridge.settings).length) args.push('--settings', JSON.stringify(bridge.settings))
       if (options.model) args.push('--model', options.model)
       if (options.allowedTools?.length) args.push('--allowed-tools', ...options.allowedTools)
@@ -105,10 +107,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       terminal.onExit(({ exitCode }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode).catch(() => {}) })
       options.signal?.addEventListener('abort', kill, { once: true })
       if (options.signal?.aborted) kill()
-      status = 'live'
+      status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status, pid: terminal?.pid, exitCode, mainStatus: bridge.projection.mainStatus, tasks: bridge.projection.tasks } },
+      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, mainStatus: bridge.projection.mainStatus, tasks: bridge.projection.tasks } },
       get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
       get output() { return output }, done,
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },

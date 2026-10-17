@@ -116,6 +116,8 @@ export interface QueryHandle {
   setModel(model: string): Promise<void>
   /** Change the running CLI policy and return its acknowledged permission mode. */
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
+  /** Last native acknowledgement, initialized from the native handshake. */
+  getPermissionMode(): Promise<PermissionMode | undefined>
   /** Close stdin and wait for the child to exit. */
   close(): Promise<void>
   /** Force-terminate the child process. */
@@ -162,6 +164,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // generator completes (child exited). It never rejects on its own: the
   // `stream.done()` handler below is the single source of truth for
   // "what happened at child exit".
+  let permissionMode: PermissionMode | undefined
   const surfaceControlRequests = opts.surfaceControlRequests ?? false
   const backgroundTasks = createBackgroundTaskTracker()
   const hostControls = createHostControls(value => stream.write(value))
@@ -337,7 +340,17 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
       const validMode = PermissionModeSchema.parse(mode)
       await initialized
       const response = await hostControls.request({ subtype: 'set_permission_mode', mode: validMode })
-      return z.object({ mode: PermissionModeSchema }).parse(response).mode
+      permissionMode = z.object({ mode: PermissionModeSchema }).parse(response).mode
+      return permissionMode
+    },
+
+    async getPermissionMode(): Promise<PermissionMode | undefined> {
+      const metadata = await initialized
+      if (permissionMode === undefined) {
+        const parsed = PermissionModeSchema.safeParse(metadata.current_permission_mode)
+        if (parsed.success) permissionMode = parsed.data
+      }
+      return permissionMode
     },
 
     async close(): Promise<void> {

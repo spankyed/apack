@@ -7,7 +7,7 @@ const mocks = { prepare: vi.fn() }
 const session = '11111111-1111-1111-1111-111111111111'
 async function printOwner() {
   const events = new PassThrough({ objectMode: true })
-  const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
+  const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getPermissionMode: vi.fn(async () => 'plan'), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
   const owner = await openConversation('thread', JSON.stringify({ cwd: '/fixture', model: 'native-model' }), async () => handle, async () => {})
   events.write({ type: 'system', subtype: 'init', session_id: session, cwd: '/native-cwd' })
   await vi.waitFor(() => expect(owner.sessionId).toBe(session))
@@ -25,7 +25,7 @@ it('prepares before close, starts after print exit, and refuses a second owner',
   const prepared = { start: vi.fn(async () => { await first.owner.done; expect(first.handle.close).toHaveBeenCalledOnce(); return native }), dispose: vi.fn(async () => {}) }
   mocks.prepare.mockImplementation(async () => { expect(first.handle.close).not.toHaveBeenCalled(); return prepared })
   expect(await openNativeTerminal('thread', { cliPath: '/native' }, mocks.prepare)).toBe(native)
-  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/native-cwd', sessionId: session, model: 'native-model' }))
+  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/native-cwd', sessionId: session, model: 'native-model', permissionMode: 'plan' }))
   expect(getConversation('thread')).toBeUndefined(); expect(getNativeTerminal('thread')).toBe(native)
   await expect(openConversation('thread', 'other', async () => first.handle, async () => {})).rejects.toThrow('already exists')
   expect(() => storeHandle('thread', first.handle)).toThrow('Native terminal owns')

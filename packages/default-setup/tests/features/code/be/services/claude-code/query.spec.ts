@@ -369,9 +369,10 @@ describe('query() native control replies', () => {
     const handle = await query({})
     const init = mock.writes[0] as { request_id: string }
     mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id,
-      response: { commands: [], agents: [], models: [] },
+      response: { commands: [], agents: [], models: [], current_permission_mode: 'default' },
     } })
     await handle.initialized
+    await expect(handle.getPermissionMode()).resolves.toBe('default')
     const change = handle.setPermissionMode('plan')
     await Promise.resolve()
     const request = mock.writes[1] as { request_id: string; request: unknown }
@@ -380,6 +381,7 @@ describe('query() native control replies', () => {
       response: { mode: 'plan' },
     } })
     await expect(change).resolves.toBe('plan')
+    await expect(handle.getPermissionMode()).resolves.toBe('plan')
     const rejected = handle.setPermissionMode('bypassPermissions')
     const assertion = expect(rejected).rejects.toThrow('disabled by policy')
     await Promise.resolve()
@@ -388,6 +390,7 @@ describe('query() native control replies', () => {
       error: 'disabled by policy',
     } })
     await assertion
+    await expect(handle.getPermissionMode()).resolves.toBe('plan')
     await expect(handle.setPermissionMode('invalid' as never)).rejects.toThrow()
     expect(mock.writes).toHaveLength(3)
     await handle.close()

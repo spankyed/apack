@@ -102,12 +102,14 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
   let published = false
   try {
     const settings = await previous.owner.handle.getSettings()
+    const permissionMode = await previous.owner.handle.getPermissionMode()
+    if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
     if (abort.signal.aborted || starting.get(key) !== ticket || conversations.get(key) !== previous || previous.owner.busy) throw new Error('Claude conversation changed during native terminal handoff')
     const launch = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
     const cwd = previous.owner.sessionCwd ?? launch.cwd
     if (typeof cwd !== 'string' || !cwd) throw new Error('Native terminal handoff has no current working directory')
     const sessionId = previous.owner.sessionId!
-    prepared = await prepare({ ...launch, ...options, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? launch.model, cwd, sessionId, settings, signal: abort.signal })
+    prepared = await prepare({ ...launch, ...options, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? launch.model, cwd, sessionId, settings, permissionMode, signal: abort.signal })
     if (abort.signal.aborted || previous.owner.busy || starting.get(key) !== ticket) throw new Error('Claude conversation changed before terminal startup')
     await previous.owner.close()
     if (abort.signal.aborted || starting.get(key) !== ticket) throw new Error('Native terminal handoff was cancelled')

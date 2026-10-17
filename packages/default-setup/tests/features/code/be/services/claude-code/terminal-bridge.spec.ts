@@ -31,6 +31,7 @@ it('fences prompt requests by session and nonce and never enters a rejected or r
   const enter = vi.fn()
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: '/usr/bin/printf fixture' } }, sources: [] }, changed() {}, enter })
   expect((await request('/poll', { sessionId: session, agents: [] }, 'foreign')).status).toBe(403)
+  await request('/poll', { sessionId: session, agents: [] })
   const first = bridge.submit('Draft'), rejected = expect(first).rejects.toThrow('rejected')
   const poll = await request('/poll', { sessionId: session, agents: [] })
   expect((await request('/result', { sessionId: '22222222-2222-2222-2222-222222222222', id: poll.value.id, filled: true })).status).toBe(409)
