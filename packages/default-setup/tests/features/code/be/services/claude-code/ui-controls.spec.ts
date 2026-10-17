@@ -158,3 +158,42 @@ it('rejects malformed focus replies and gates focus on the UI capability', async
   await expect(unavailable.ui.focus(options)).rejects.toThrow('capability is unavailable')
   expect(unavailable.writes).toEqual([]); unavailable.controls.close()
 })
+
+
+describe('native pane controls', () => {
+  it('preserves roster manners and focus requests without requiring a model turn', async () => {
+    const f = fixture()
+    const pending = f.ui.panes(client.client_id)
+    await Promise.resolve()
+    expect(f.writes[0].request).toEqual({ subtype: 'ui_panes', client_id: client.client_id })
+    const roster = { panes: [{ id: 'review-pane', title: '<Review>', plugin: 'fixture', close_on_escape: true, hold_toasts: true, rows: 8, columns: 40 }], shown_id: 'review-pane', focused_id: null, focus_requested_id: 'review-pane' }
+    f.reply(0, roster); await expect(pending).resolves.toEqual(roster)
+    f.controls.close()
+  })
+  it('uses separate show, focus/release and person-close verdicts, preserving refusal', async () => {
+    const f = fixture()
+    const selected = { ...client, id: 'review-pane' }
+    const showing = f.ui.showPane(selected); await Promise.resolve()
+    expect(f.writes[0].request).toEqual({ subtype: 'ui_pane_show', ...selected })
+    f.reply(0, { shown_id: selected.id }); await expect(showing).resolves.toEqual({ shown_id: selected.id })
+    const focus = f.ui.focusPane({ ...client, id: null }); await Promise.resolve()
+    expect(f.writes[1].request).toEqual({ subtype: 'ui_pane_focus', ...client, id: null })
+    f.reply(1, { focused_id: null }); await expect(focus).resolves.toEqual({ focused_id: null })
+    const close = f.ui.closePane({ client_id: client.client_id, id: selected.id }); await Promise.resolve()
+    expect(f.writes[2].request).toEqual({ subtype: 'ui_close', client_id: client.client_id, id: selected.id })
+    f.reply(2, { closed: false }); await expect(close).resolves.toEqual({ closed: false })
+    f.controls.close()
+  })
+  it('rejects absent capability, foreign-shaped identities and malformed roster data', async () => {
+    const denied = fixture([])
+    await expect(denied.ui.panes(client.client_id)).rejects.toThrow('capability is unavailable')
+    expect(denied.writes).toEqual([]); denied.controls.close()
+    const f = fixture()
+    await expect(f.ui.closePane({ client_id: client.client_id, id: '../pane' })).rejects.toThrow()
+    await expect(f.ui.focusPane({ ...client, id: '' })).rejects.toThrow()
+    expect(f.writes).toEqual([])
+    const roster = f.ui.panes(client.client_id); await Promise.resolve()
+    f.reply(0, { panes: [{ id: 'pane', title: 'Pane', plugin: 'fixture', close_on_escape: false }], shown_id: 'pane', focused_id: null, focus_requested_id: null })
+    await expect(roster).rejects.toThrow(); f.controls.close()
+  })
+})

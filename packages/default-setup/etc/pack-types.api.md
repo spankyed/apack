@@ -1634,6 +1634,8 @@ type ClaudeUiNode = {
     plugin?: string;
 };
 
+type ClaudeUiPaneRoster = z.infer<typeof paneRoster>;
+
 type ClaudeUiPress = z.infer<typeof press>;
 
 type ClaudeUiPromptAutocomplete = z.infer<typeof promptAutocomplete>;
@@ -7348,6 +7350,24 @@ declare function createClaudeUiControls(initialized: Promise<ClaudeInitializatio
         surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
     }, z.ZodTypeAny, "passthrough">>;
     render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
+    /** Read on mount: a pane opened before stream arming produces no roster push. */
+    panes(id: string): Promise<ClaudeUiPaneRoster>;
+    showPane(options: z.infer<typeof paneSelection>): Promise<z.objectOutputType<{
+        shown_id: z.ZodNullable<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
+    /** Null returns the keyboard and settles a refused plugin focus request. */
+    focusPane(options: Omit<z.infer<typeof paneSelection>, "id"> & {
+        id: string | null;
+    }): Promise<z.objectOutputType<{
+        focused_id: z.ZodNullable<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
+    /** Native runs ui.close with origin person; a hook may refuse, so never hide optimistically. */
+    closePane(options: {
+        client_id: string;
+        id: string;
+    }): Promise<z.objectOutputType<{
+        closed: z.ZodBoolean;
+    }, z.ZodTypeAny, "passthrough">>;
     /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
     focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
@@ -7953,6 +7973,109 @@ declare function paginatedMessages(threadId: EARS.EntityId, cursor?: string | nu
     hasMore: boolean;
     nextCursor: string | null;
 };
+
+declare const paneRoster: z.ZodObject<{
+    panes: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    shown_id: z.ZodNullable<z.ZodString>;
+    focused_id: z.ZodNullable<z.ZodString>;
+    focus_requested_id: z.ZodNullable<z.ZodString>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    panes: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    shown_id: z.ZodNullable<z.ZodString>;
+    focused_id: z.ZodNullable<z.ZodString>;
+    focus_requested_id: z.ZodNullable<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    panes: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        id: z.ZodString;
+        title: z.ZodString;
+        plugin: z.ZodString;
+        close_on_escape: z.ZodOptional<z.ZodLiteral<true>>;
+        hold_toasts: z.ZodOptional<z.ZodLiteral<true>>;
+        rows: z.ZodOptional<z.ZodNumber>;
+        columns: z.ZodOptional<z.ZodNumber>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    shown_id: z.ZodNullable<z.ZodString>;
+    focused_id: z.ZodNullable<z.ZodString>;
+    focus_requested_id: z.ZodNullable<z.ZodString>;
+}, z.ZodTypeAny, "passthrough">>;
+
+declare const paneSelection: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    id: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    id: string;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    id: string;
+}>;
 
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;

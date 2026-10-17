@@ -49,6 +49,15 @@ const promptFrame = z.object({ text: z.string().max(1000000), cursor: z.number()
     end = run.end
   }
 })
+// Frozen 2.1.302 pane roster and person-origin pane controls.
+const paneId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
+const pane = z.object({ id: paneId, title: z.string(), plugin: z.string(), close_on_escape: z.literal(true).optional(),
+  hold_toasts: z.literal(true).optional(), rows: z.number().int().optional(), columns: z.number().int().optional(),
+}).passthrough()
+const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(), focused_id: paneId.nullable(), focus_requested_id: paneId.nullable() }).passthrough()
+const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
+export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
+
 const renderResult = z.object({ tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
@@ -90,6 +99,23 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
       return renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+    },
+    /** Read on mount: a pane opened before stream arming produces no roster push. */
+    async panes(id: string): Promise<ClaudeUiPaneRoster> {
+      return paneRoster.parse(await request({ subtype: 'ui_panes', client_id: clientId.parse(id) }))
+    },
+    async showPane(options: z.infer<typeof paneSelection>) {
+      return z.object({ shown_id: paneId.nullable() }).passthrough().parse(await request({ subtype: 'ui_pane_show', ...paneSelection.parse(options) }))
+    },
+    /** Null returns the keyboard and settles a refused plugin focus request. */
+    async focusPane(options: Omit<z.infer<typeof paneSelection>, 'id'> & { id: string | null }) {
+      const valid = paneSelection.extend({ id: paneId.nullable() }).parse(options)
+      return z.object({ focused_id: paneId.nullable() }).passthrough().parse(await request({ subtype: 'ui_pane_focus', ...valid }))
+    },
+    /** Native runs ui.close with origin person; a hook may refuse, so never hide optimistically. */
+    async closePane(options: { client_id: string; id: string }) {
+      const valid = paneSelection.omit({ surface: true }).parse(options)
+      return z.object({ closed: z.boolean() }).passthrough().parse(await request({ subtype: 'ui_close', ...valid }))
     },
     /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
     async focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult> {
