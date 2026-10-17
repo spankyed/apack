@@ -804,6 +804,7 @@ interface ClaudeConversationTurn {
     stopped: boolean;
     /** Native process cost already accounted for before this turn. */
     costBaseline: number;
+    activity: ClaudeNestedActivity;
 }
 
 type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>;
@@ -1142,6 +1143,19 @@ declare const ClaudeMcpStatusSchema: z.ZodObject<{
         }, z.ZodTypeAny, "passthrough">>, "many">>;
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
+
+interface ClaudeNestedAccounting {
+    toolCallCount: number;
+    mutatedPaths: string[];
+    hadErrors: boolean;
+}
+
+interface ClaudeNestedActivity {
+    /** Bind an observed root tool to its existing app activity, for this process lifetime. */
+    register(rootToolId: string, receive: (event: StreamLine) => void): void;
+    /** Drain facts once, at the next native result; output bindings remain registered. */
+    takeAccounting(): ClaudeNestedAccounting;
+}
 
 type ClaudePlan = z.infer<typeof ClaudePlanSchema>;
 
@@ -2103,11 +2117,9 @@ interface EventListenerEntity {
 interface ExecOnceOptions {
     cwd?: string;
     /**
-     * Override the env passed to the child. Defaults to a copy of `process.env`
-     * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-     * (`claude auth login`) instead of an env-var key meant for the server's
-     * LLM client. Pass an explicit object if you want no scrubbing — the
-     * helper assumes you know what you're doing and does not post-process it.
+     * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
+     * and NODE_ENV are always removed, including explicit overrides. Native
+     * file checkpointing defaults on only when its environment switch is unset.
      */
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -5214,6 +5226,8 @@ interface QueryHandle {
         message?: string;
         updatedInput?: unknown;
     }): void;
+    /** Cancel an unsupported generic dialog through its native response channel. */
+    cancelUserDialog(requestId: string): void;
     /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
     interrupt(options?: {
         cancelQueued?: boolean;
@@ -6723,6 +6737,7 @@ declare const chatQueries: {
     readonly paginatedMessages: typeof paginatedMessages;
     readonly refreshThreadsData: () => RecentThreadRefreshData;
     readonly connectedData: () => AgentConnectedData;
+    readonly hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId) => boolean;
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
