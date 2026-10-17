@@ -1,3 +1,4 @@
+import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
 import { handleClaudeUiView } from './claude-ui.ts';
@@ -23,7 +24,17 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
-const terminalViews = createClaudeTerminalViews({ get: key => services.cli.claudeCode.getNativeTerminal(key), open: key => services.cli.claudeCode.openNativeTerminal(key) });
+const terminalViews = createClaudeTerminalViews({
+  get: key => services.cli.claudeCode.getNativeTerminal(key),
+  async open(key) {
+    const owner = await services.cli.claudeCode.openNativeTerminal(key);
+    syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
+      const current = services.cli.claudeCode.getNativeTerminal(key);
+      return current === owner || (!current && !services.cli.claudeCode.getConversation(key));
+    });
+    return owner;
+  },
+});
 registerThreadTeardown(key => terminalViews.clear(key));
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();

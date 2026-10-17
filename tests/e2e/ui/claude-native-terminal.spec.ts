@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -19,7 +19,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
@@ -42,14 +42,18 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(main).toContainText('AppNativeMain ' + sessionId)
   await expect(main).toContainText('Second native status line')
   await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
-  await input.pressSequentially('NativeSubagentParentFixture: run the disposable status worker.', { delay: 1 }); await input.press('Enter')
+  const nativeText = async () => (await context()).native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
+  await input.pressSequentially('DropNativeHistoryFixture', { delay: 1 }); await input.press('Enter')
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-drop-observed.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '{}'; throw error })).text).toBe('DropNativeHistoryFixture')
+  await expect.poll(async () => (await nativeText()).includes('Native history fixture refused'), { timeout: 5000 }).toBe(true)
+  await input.press('Control+u')
+  await input.pressSequentially('RewriteNativeHistoryFixture', { delay: 1 }); await input.press('Enter')
   const tasks = section.getByRole('list', { name: 'Native Claude agents', exact: true })
   await appPage.waitForTimeout(500)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-before-agent.png') })
   // This native notice is shown when the worker first selects auto mode on a loopback endpoint.
   // Dismiss only its specific informational screen; keep native permission decisions intact.
   const notice = "We're changing auto mode to no longer charge for classifier requests in Claude Code."
-  const nativeText = async () => (await context()).native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
   await expect.poll(async () => (await nativeText()).includes(notice) || await tasks.count() > 0, { timeout: 10000 }).toBe(true)
   if ((await nativeText()).includes(notice)) await input.press('Enter')
   try {
@@ -74,6 +78,27 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(section.getByRole('button', { name: 'Back to conversation', exact: true })).toBeVisible()
   const stopped = await context(); expect(stopped.native.state.mainStatus).toBeUndefined(); expect(stopped.native.state.tasks).toEqual([])
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click(); await expect(card).toBeVisible()
+  const projects = join(workspace!, '.claude/projects')
+  let journal: any[] = []
+  for (const bucket of await readdir(projects)) {
+    try { journal = (await readFile(join(projects, bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); break } catch (error: any) { if (error.code !== 'ENOENT') throw error }
+  }
+  const accepted = journal.find(row => row.type === 'user' && row.origin?.kind === 'human' && row.message?.content === 'NativeSubagentParentFixture: run the disposable status worker.')
+  expect(accepted?.uuid).toBeTruthy()
+  await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === accepted.uuid).length).toBe(1)
+  const nativeCost = journal.filter(row => row.type === 'cost-state').at(-1)?.totalCostUSD
+  expect(nativeCost).toBeGreaterThan(0)
+  await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
+  const synchronized = await context()
+  expect(synchronized.claude.turns).toBe(stopped.native.state.session.turns)
+  expect(synchronized.claude.toolCallCount).toBe(1)
+  const nativeUser = synchronized.messages.find((message: any) => message.context?.cliUuid === accepted.uuid)
+  expect(nativeUser.text).toBe(accepted.message.content)
+  expect(nativeUser.context.claudeNativeUserMessage.origin.kind).toBe('composer')
+  expect(synchronized.messages.filter((message: any) => message.sender === 'user')).toHaveLength(2)
+  expect(synchronized.messages.some((message: any) => message.text.includes('DropNativeHistoryFixture') || message.text.includes('RewriteNativeHistoryFixture'))).toBe(false)
+  expect(synchronized.messages.filter((message: any) => message.context?.claudeTerminalMessage).length).toBeGreaterThanOrEqual(4)
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-returned-history.png') })
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })

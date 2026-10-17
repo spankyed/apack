@@ -3,7 +3,7 @@ export interface ClaudeNativeUserMessage {
   sessionId: string
   text: string
   /** The SDK replay omits stored origin; native Jgr(undefined) is unclassified, not composer/sdk. */
-  origin: { kind: 'unclassified' }
+  origin: { kind: 'unclassified' | 'composer' }
 }
 interface ClaudeInputReplayProjection {
   text?: string

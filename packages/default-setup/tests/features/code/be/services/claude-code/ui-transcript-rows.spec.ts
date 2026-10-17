@@ -60,3 +60,9 @@ it('rejects duplicate native identity even when the other thinking block is clos
   const source = { ...message('app', [row('same')]), blocks: [{ type: 'thinking', props: { content: 'Summary', nativeMessages: [{ ...row('same', 0, 'Summary'), isSummary: true }] } }] }
   expect(selectClaudeTranscriptRows([source], 'session', new Set(['app']))).toEqual([])
 })
+
+it('accepts composer provenance only with a matching native human journal identity', () => {
+  const user = { id: 'app-user', sender: 'user', text: 'Native prompt', context: { cliUuid: 'native-user', claudeTerminalMessage: { uuid: 'native-user', sessionId: 'session', origin: { kind: 'human' } }, claudeNativeUserMessage: { uuid: 'native-user', sessionId: 'session', text: 'Native prompt', origin: { kind: 'composer' } } } }
+  expect(selectClaudeTranscriptRows([user], 'session', new Set(['app-user']))[0]).toMatchObject({ component: 'UserMessage', origin: { kind: 'composer' } })
+  expect(selectClaudeTranscriptRows([{ ...user, context: { ...user.context, claudeTerminalMessage: { ...user.context.claudeTerminalMessage, uuid: 'foreign' } } }], 'session', new Set(['app-user']))).toEqual([])
+})

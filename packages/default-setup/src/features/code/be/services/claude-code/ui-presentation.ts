@@ -128,7 +128,7 @@ interface ClaudeUiTranscriptRowSource {
 export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary?: false }
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary: true; blockIndex: number }
-  | { component: 'UserMessage'; origin: { kind: 'unclassified' }; isExpanded: boolean }
+  | { component: 'UserMessage'; origin: { kind: 'unclassified' | 'composer' }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   displayText: string

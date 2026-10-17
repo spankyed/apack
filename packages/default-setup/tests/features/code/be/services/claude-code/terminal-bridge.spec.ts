@@ -39,9 +39,25 @@ it('fences prompt requests by session and nonce and never enters a rejected or r
   expect(enter).not.toHaveBeenCalled()
   const second = bridge.submit('Next')
   const next = await request('/poll', { sessionId: session, agents: [] })
-  await request('/result', { sessionId: session, id: next.value.id, filled: true }); await second
+  let resolved = false; void second.then(() => { resolved = true })
+  await request('/result', { sessionId: session, id: next.value.id, filled: true })
+  expect(resolved).toBe(false)
+  expect((await request('/result', { sessionId: session, id: next.value.id, filled: true })).status).toBe(409)
+  const uuid = '33333333-3333-3333-3333-333333333333'
+  await request('/append', { sessionId: session, submissionId: next.value.id, uuid, door: 'prompt', origin: { kind: 'composer' }, message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'Native rewritten next' }] } })
+  await request('/submission', { sessionId: session, id: next.value.id, accepted: true })
+  await expect(second).resolves.toEqual({ sessionId: session, uuid, text: 'Native rewritten next' })
   expect(enter).toHaveBeenCalledOnce()
   expect((await request('/result', { sessionId: session, id: next.value.id, filled: true })).status).toBe(409)
+  const dropped = bridge.submit('Blocked'), refusal = expect(dropped).rejects.toThrow('Native prompt refused: fixture refusal')
+  const dropRequest = await request('/poll', { sessionId: session, agents: [] })
+  await request('/result', { sessionId: session, id: dropRequest.value.id, filled: true })
+  await request('/submission', { sessionId: session, id: dropRequest.value.id, drop: 'fixture refusal' }); await refusal
+  await request('/turn', { sessionId: session, running: false, turnId: 'native-turn', reason: 'error' })
+  expect(bridge.lastTurn).toEqual({ id: 'native-turn', reason: 'error' })
+  await request('/turn', { sessionId: session, running: true })
+  expect(bridge.lastTurn).toBeUndefined()
+  await request('/turn', { sessionId: session, running: false, turnId: 'next-native-turn', reason: 'answer' })
   const pending = bridge.submit('Closing'), closed = expect(pending).rejects.toThrow('closed')
   await bridge.close(); await closed
 })

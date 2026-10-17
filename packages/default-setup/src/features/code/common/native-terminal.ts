@@ -12,6 +12,9 @@ export interface ClaudeNativeTerminalState {
   status: 'starting' | 'live' | 'exited' | 'error'
   pid?: number
   exitCode?: number
+  busy: boolean
+  lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
+  session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata
   mainStatus?: string
   tasks: ClaudeNativeTerminalTask[]
   problem?: string

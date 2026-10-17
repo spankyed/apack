@@ -1,3 +1,6 @@
+import { PermissionModeSchema } from './types.ts'
+import { createClaudeNativeJournalReader, type ClaudeNativeJournalEntry } from './terminal-journal.ts'
+import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import * as pty from 'node-pty'
@@ -15,10 +18,12 @@ export interface ClaudeNativeTerminalOwner {
   readonly done: Promise<void>
   /** Raw native terminal bytes, sequenced independently of presentation metadata. */
   readonly output: readonly { sequence: number; text: string }[]
+  readJournal(): Promise<ClaudeNativeJournalEntry[]>
+  readonly records: readonly { sequence: number; record: ClaudeNativeTerminalRecord }[]
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
-  submit(text: string): Promise<void>
+  submit(text: string): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
   kill(): void
 }
@@ -37,6 +42,7 @@ export interface ClaudeNativeTerminalOptions {
   disallowedTools?: string[]
   appendSystemPrompt?: string
   addDir?: string[]
+  pluginDir?: string[]
   signal?: AbortSignal
 }
 
@@ -51,6 +57,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const env = buildChildEnv(options.env)
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
+  const readJournal = createClaudeNativeJournalReader()
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
@@ -85,6 +92,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     try {
       const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
       if (Object.keys(bridge.settings).length) args.push('--settings', JSON.stringify(bridge.settings))
+      for (const directory of options.pluginDir ?? []) args.push('--plugin-dir', directory)
       if (options.model) args.push('--model', options.model)
       if (options.allowedTools?.length) args.push('--allowed-tools', ...options.allowedTools)
       if (options.disallowedTools?.length) args.push('--disallowed-tools', ...options.disallowedTools)
@@ -110,9 +118,25 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, mainStatus: bridge.projection.mainStatus, tasks: bridge.projection.tasks } },
+      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, tasks: bridge.projection.tasks } },
       get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
-      get output() { return output }, done,
+      get output() { return output },
+      get records() { return bridge.session.records },
+      async readJournal() {
+        const entries = await readJournal(bridge.transcripts)
+        for (const entry of entries) {
+          const metadata = bridge.session.metadata
+          if (entry.sessionId !== bridge.projection.sessionId || !metadata) continue
+          if (entry.row.type === 'cost-state' && typeof entry.row.totalCostUSD === 'number' && Number.isFinite(entry.row.totalCostUSD) && entry.row.totalCostUSD >= 0) {
+            bridge.session.update({ ...metadata, totalCostUsd: Math.max(metadata.totalCostUsd ?? 0, entry.row.totalCostUSD) })
+          }
+          if (entry.row.type === 'permission-mode') {
+            const mode = PermissionModeSchema.safeParse(entry.row.permissionMode)
+            if (mode.success) bridge.session.update({ ...metadata, permissionMode: mode.data })
+          }
+        }
+        return entries
+      }, done,
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
       input(id, text) { if (closed || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; terminal!.write(text); return true },
       resize(id, columns, rows) {

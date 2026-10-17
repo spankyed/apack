@@ -11,10 +11,15 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
       const value = context.claudeNativeUserMessage
       if (!value || typeof value !== 'object') continue
       const user = value as Record<string, unknown>
-      if (user.sessionId !== sessionId || typeof user.uuid !== 'string' || !user.uuid || user.uuid.length > 256 || context.cliUuid !== user.uuid || user.text !== message.text || !message.text || !user.origin || typeof user.origin !== 'object' || (user.origin as Record<string, unknown>).kind !== 'unclassified') continue
+      if (user.sessionId !== sessionId || typeof user.uuid !== 'string' || !user.uuid || user.uuid.length > 256 || context.cliUuid !== user.uuid || user.text !== message.text || !message.text || !user.origin || typeof user.origin !== 'object' || !['unclassified', 'composer'].includes(String((user.origin as Record<string, unknown>).kind))) continue
+      if ((user.origin as Record<string, unknown>).kind === 'composer') {
+        const terminal = context.claudeTerminalMessage && typeof context.claudeTerminalMessage === 'object' ? context.claudeTerminalMessage as Record<string, unknown> : undefined
+        const origin = terminal?.origin && typeof terminal.origin === 'object' ? terminal.origin as Record<string, unknown> : undefined
+        if (terminal?.uuid !== user.uuid || terminal.sessionId !== sessionId || origin?.kind !== 'human') continue
+      }
       if (seen.has(user.uuid)) duplicates.add(user.uuid)
       seen.add(user.uuid)
-      if (selected.has(message.id)) rows.push({ component: 'UserMessage', messageId: message.id, uuid: user.uuid, sessionId, text: message.text, start: 0, end: message.text.length, origin: { kind: 'unclassified' }, isExpanded: userExpansion.get(message.id) ?? true })
+      if (selected.has(message.id)) rows.push({ component: 'UserMessage', messageId: message.id, uuid: user.uuid, sessionId, text: message.text, start: 0, end: message.text.length, origin: { kind: (user.origin as { kind: 'unclassified' | 'composer' }).kind }, isExpanded: userExpansion.get(message.id) ?? true })
       continue
     }
     if (message.sender !== 'assistant') continue
