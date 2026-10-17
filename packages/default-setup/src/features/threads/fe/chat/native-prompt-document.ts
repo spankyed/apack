@@ -15,6 +15,10 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   const resolved = doc.resolve(position)
   if (!resolved.parent.isTextblock) return
   const text = serialize(doc)
+  // The app's Markdown extension spells its empty paragraph as &nbsp;, not user draft text.
+  if ((text === '' || text === '&nbsp;') && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size) {
+    return { text: '', cursor: 0, doc, position }
+  }
   let marker = '\uE000apackCursor\uE001'
   while (text.includes(marker)) marker += '\uE002'
   const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, resolved.marks())), 0, 0))

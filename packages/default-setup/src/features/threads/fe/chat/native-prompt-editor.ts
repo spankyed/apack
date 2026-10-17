@@ -92,7 +92,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       } catch { return }
     }
     const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
-    return { next, text, offset, runs }
+    return { next, text, offset, runs, before: snapshot.text }
   }
   function placeDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number, origin: 'app' | 'person'): boolean {
     const prepared = prepareDraft(input, expectedRevision)
@@ -139,7 +139,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     },
     showSuggestion(text: string, expectedRevision: number): boolean {
       if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision || !editor.isEmpty || !text.trim() || text.length > 1000000 || (host && !host.canSuggest())) return false
-      if (!prepareDraft({ mode: 'replace', text }, expectedRevision)) return false
+      const prepared = prepareDraft({ mode: 'replace', text }, expectedRevision)
+      if (!prepared || prepared.before !== '') return false
       editor.view.dispatch(editor.state.tr.setMeta(suggestion.key, text))
       return true
     },

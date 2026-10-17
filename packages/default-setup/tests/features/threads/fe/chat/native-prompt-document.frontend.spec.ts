@@ -323,3 +323,22 @@ it('rejects stale/nonempty suggestions and clears ghost text on typing, composit
   expect(editor.view.dom.hasAttribute('data-native-suggestion')).toBe(false)
   expect(bridge.showSuggestion('closed', bridge.revision)).toBe(false)
 })
+
+
+it('maps the app serializer empty-paragraph entity to a native empty box and permits its first suggestion', () => {
+  editor.commands.clearContent()
+  const serializer = (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer
+  const original = serializer.serialize.bind(serializer)
+  const spelling = vi.spyOn(serializer, 'serialize').mockImplementation(doc => doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size ? '&nbsp;' : original(doc))
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ text: '', cursor: 0 }))
+    expect(bridge.readDraft()).toEqual({ text: '', cursor: 0 })
+    expect(bridge.showSuggestion('First native suggestion', bridge.revision)).toBe(true)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(bridge.readDraft()?.text).toBe('First native suggestion')
+    editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '&nbsp;' }] }] })
+    expect(bridge.readDraft()?.text).toBe(original(editor.state.doc))
+    expect(bridge.readDraft()?.text).not.toBe('')
+  } finally { bridge.dispose(); spelling.mockRestore() }
+})
