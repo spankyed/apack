@@ -49,7 +49,7 @@ export async function createClaudeTerminalBridge(options: {
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
-  let pending: { id: string; sessionId: string; text: string; sent: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
+  let pending: { id: string; sessionId: string; text: string; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
     if (!current) return
@@ -94,14 +94,20 @@ export async function createClaudeTerminalBridge(options: {
         if (changedSession) { session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) session.update(value.metadata)
         if (!observerPid && (mainCommand || subagentCommand) && !observerProblem) observerProblem = 'Native helper output could not be observed in this terminal'
+        if (pending?.entered && pending.prepared) {
+          const submission = pending
+          const outcome = object(await ui.transport.request({ subtype: 'apack_prompt_outcome', submission_id: submission.id }))
+          if (pending === submission && submission.sessionId === projection.sessionId && typeof outcome?.drop === 'string') settle(new Error('Native prompt refused: ' + outcome.drop))
+        }
         ready = true; options.changed()
         if (pending && !pending.sent && pending.sessionId === projection.sessionId) {
           const submission = pending; submission.sent = true
           if (ui.hasPromptHosts) {
             try {
-              const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text }))
+              const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id }))
               if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})
               if (result?.filled !== true) { settle(new Error('Native terminal draft could not be prepared; the app draft was retained')); return reply(200, {}) }
+              submission.prepared = true
               return reply(200, { id: submission.id, text: submission.text, prepared: true })
             } catch (error) { if (pending === submission) settle(error instanceof Error ? error : new Error('Native terminal draft could not be prepared')); return reply(200, {}) }
           }

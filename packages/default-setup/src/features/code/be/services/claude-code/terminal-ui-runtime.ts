@@ -179,12 +179,23 @@ function installHosts(n){
  wrappedContext={...current,composer:{...current.composer,read:()=>remote.read(),write:(...args)=>has('ui_prompt_fill')?remote.write(...args):current.composer.write(...args),propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
  n.runtime.Zao(wrappedContext);
 }
-async function prepareTerminalPrompt(n,text){
+let preparedPrompt;
+function promptOutcome(n,id){
+ if(!preparedPrompt||preparedPrompt.id!==id)return {};
+ const messages=(originalContext??n.runtime.ey())?.messages?.()??[];
+ const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
+ if(!message)return {};
+ const ending=message.promptSubmitEnding.ending;
+ return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
+}
+async function prepareTerminalPrompt(n,text,id){
  if(typeof text!=='string'||!text.trim()||text.length>32768)throw Error('Native terminal draft is invalid');
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
  if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
- if((await composer.read()).text)return {filled:false};
+ const prior=(await composer.read()).text;
+ if(prior&&prior!==preparedPrompt?.text)return {filled:false};
+ const before=new Set((context.messages?.()??[]).map(row=>row.uuid));
  const normalize=n.runtime.ilo();
  const core={name:'core',isCore:true,budgetMs:0,run:async input=>{
   const value=normalize(input.text);let decorations=input.decorations;
@@ -198,7 +209,9 @@ async function prepareTerminalPrompt(n,text){
   return composer.attribute?composer.attribute(input.origin,write):write();
  }};
  const result=await n.runtime.$i('prompt.fill',{core:{'prompt.fill':core}})({text,mode:'replace',origin:{kind:'plugin',name:'apack-native-terminal'}});
- return {filled:result.isFilled===true&&(await composer.read()).text===text};
+ const actual=(await composer.read()).text,filled=result.isFilled===true&&actual===text;
+ if(filled)preparedPrompt={id,text:actual,before};
+ return {filled};
 }
 // Keep remote edit state separate from the hidden terminal draft used for submission.
 const edits=new Map();
@@ -269,7 +282,8 @@ async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
- if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
+ if(request.subtype==='apack_prompt_outcome')return promptOutcome(n,request.submission_id);
+ if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id);
  const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
  const value=n.schemas[schema]().parse(request);
@@ -344,7 +358,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
