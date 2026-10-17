@@ -23,6 +23,8 @@ export function mountClaudeUi(options: {
   let scheduled: ReturnType<typeof setTimeout> | undefined
   let drawing: ClaudeUiDrawing | undefined
   let fieldDrawing: ClaudeUiDrawing | undefined
+  const fieldRevisions = new Map<string, number>()
+  const completedFields = new Map<string, number>()
   let promptRevision = 0
   let generation = 0
   let pressing = false
@@ -58,10 +60,18 @@ export function mountClaudeUi(options: {
     rendering = true
     dirty = false
     const revision = generation
+    // Stamp only callbacks completed before this render began. A reply racing newer typing is stale.
+    const completed = new Map(completedFields)
     try {
       const result = await owner.handle.ui.render({ ...client, component: 'AbovePrompt', instance_id: instanceId, props: {} })
       if (!current() || revision !== generation) return
       drawing = createClaudeUiDrawing(result.tree, fieldDrawing)
+      function stamp(node: import('./ui-presentation.ts').ClaudeUiNode): void {
+        if (node.kind === 'box') node.children.forEach(stamp)
+        else if (node.kind === 'input' || node.kind === 'select') node.revision = completed.get(node.actionId) ?? 0
+      }
+      stamp(drawing.tree)
+      for (const id of fieldRevisions.keys()) if (!drawing.fields.has(id)) { fieldRevisions.delete(id); completedFields.delete(id) }
       fieldDrawing = drawing
       publish({ status: 'live', tree: drawing.tree })
     } catch (error) {
@@ -79,6 +89,8 @@ export function mountClaudeUi(options: {
     if (disposal) return disposal
     disposed = true
     fieldDrawing = undefined
+    fieldRevisions.clear()
+    completedFields.clear()
     generation++
     drawing = undefined
     if (scheduled) clearTimeout(scheduled)
@@ -128,14 +140,19 @@ export function mountClaudeUi(options: {
       }
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
-      if (!current() || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
+      if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= (fieldRevisions.get(event.actionId) ?? 0) || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
       const field = fieldDrawing?.fields.get(event.actionId)
       if (!field || (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit')) return { handled: false }
+      fieldRevisions.set(event.actionId, event.revision)
       const identity = { ...client, plugin: field.plugin, handle: field.handle, key: field.key, component: 'AbovePrompt', instance_id: instanceId, value: event.value }
       // Native queues each plugin's field callbacks. Keyed identity safely re-resolves redraws.
       // Never retry a callback whose native side effect may already have happened.
       const result = field.type === 'select' ? await owner.handle.ui.select(identity)
         : await owner.handle.ui.input({ ...identity, kind: event.kind as 'change' | 'submit' })
+      if (current() && fieldDrawing?.fields.has(event.actionId)) {
+        completedFields.set(event.actionId, Math.max(completedFields.get(event.actionId) ?? 0, event.revision))
+        invalidate()
+      }
       return { handled: current() && result.handled }
     },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */

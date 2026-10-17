@@ -150,11 +150,11 @@ it('routes keyed field edits through invalidation and rejects foreign or removed
   if (live.status !== 'live' || live.tree.kind !== 'input') throw new Error('expected input')
   const actionId = live.tree.actionId
   f.invalidate()
-  await expect(view.field({ actionId, kind: 'change', value: 'typed' })).resolves.toEqual({ handled: true })
+  await expect(view.field({ revision: 1, actionId, kind: 'change', value: 'typed' })).resolves.toEqual({ handled: true })
   expect(f.ui.input).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 7, key: 'draft', component: 'AbovePrompt', kind: 'change', value: 'typed' }))
-  await expect(view.field({ actionId: 'foreign', kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
+  await expect(view.field({ revision: 1, actionId: 'foreign', kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
   f.ui.render.mockResolvedValue(rendered()); await vi.advanceTimersByTimeAsync(50)
-  await expect(view.field({ actionId, kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
+  await expect(view.field({ revision: 1, actionId, kind: 'submit', value: 'bad' })).resolves.toEqual({ handled: false })
   await view.dispose()
 })
 
@@ -166,12 +166,12 @@ it('checks select membership before native dispatch and retires it on disposal',
   const live = f.states.at(-1)!
   if (live.status !== 'live' || live.tree.kind !== 'select') throw new Error('expected select')
   const actionId = live.tree.actionId
-  await expect(view.field({ actionId, kind: 'select', value: 'foreign' })).resolves.toEqual({ handled: false })
+  await expect(view.field({ revision: 1, actionId, kind: 'select', value: 'foreign' })).resolves.toEqual({ handled: false })
   expect(f.ui.select).not.toHaveBeenCalled()
-  await expect(view.field({ actionId, kind: 'select', value: 'b' })).resolves.toEqual({ handled: true })
+  await expect(view.field({ revision: 1, actionId, kind: 'select', value: 'b' })).resolves.toEqual({ handled: true })
   expect(f.ui.select).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 8, key: 'pick', value: 'b' }))
   await view.dispose()
-  await expect(view.field({ actionId, kind: 'select', value: 'a' })).resolves.toEqual({ handled: false })
+  await expect(view.field({ revision: 1, actionId, kind: 'select', value: 'a' })).resolves.toEqual({ handled: false })
   expect(f.ui.select).toHaveBeenCalledTimes(1)
 })
 
@@ -219,5 +219,25 @@ it('forwards only authorized Markdown URLs to the native callback and retires th
   await expect(view.press(id, 'https://example.com/')).resolves.toEqual({ handled: true })
   expect(f.ui.press).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 9, key: 'doc', href: 'https://example.com/' }))
   await expect(view.press(id, 'https://example.com/')).resolves.toEqual({ handled: false })
+  await view.dispose()
+})
+
+
+it('stamps rendered field replacements only after native callbacks finish and refuses replayed edits', async () => {
+  const f = fixture(), pending = deferred<{ handled: boolean }>()
+  const field = { type: 'Input', props: { key: 'draft', value: '', submitLabel: 'send' }, press: { plugin: 'fixture', handle: 7 } }
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  f.ui.input.mockImplementationOnce(() => pending.promise)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const latest = () => { const live = f.states.at(-1)!; if (live.status !== 'live' || live.tree.kind !== 'input') throw new Error('expected input'); return live.tree }
+  const actionId = latest().actionId
+  const edit = view.field({ actionId, revision: 1, kind: 'change', value: 'typed' }); await Promise.resolve()
+  f.invalidate(); await vi.advanceTimersByTimeAsync(50)
+  expect(latest().revision).toBe(0)
+  expect(latest().submitLabel).toBe('send')
+  pending.resolve({ handled: true }); await edit; await vi.advanceTimersByTimeAsync(50)
+  expect(latest().revision).toBe(1)
+  await expect(view.field({ actionId, revision: 1, kind: 'change', value: 'replay' })).resolves.toEqual({ handled: false })
+  expect(f.ui.input).toHaveBeenCalledOnce()
   await view.dispose()
 })

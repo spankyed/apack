@@ -8,7 +8,8 @@
     <textarea v-else :data-native-autofocus="node.autoFocus" :value="draft" :rows="node.rows" :placeholder="node.placeholder"
       :aria-label="node.label || 'Claude input'" maxlength="16384"
       class="min-w-0 resize-y rounded border border-neutral-600 bg-neutral-900 px-2 py-1"
-      @input="change" @keydown="keydown" />
+      @input="change" @keydown="keydown" @focus="focused = true" @blur="focused = false" />
+    <span v-if="node.kind === 'input' && focused" class="text-neutral-500">Enter: {{ node.submitLabel }}</span>
   </label>
 </template>
 
@@ -18,21 +19,28 @@ import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 const props = defineProps<{ node: Extract<ClaudeUiNode, { kind: 'input' | 'select' }> }>()
 const emit = defineEmits<{ field: [event: ClaudeUiFieldEvent] }>()
 const draft = ref(props.node.value)
-let edited = false
-// Keep locally typed text across stale native echoes; acknowledge when native catches up.
-watch(() => props.node.value, value => {
-  if (value === draft.value) edited = false
-  else if (!edited) draft.value = value
+let revision = props.node.revision
+let nativeValue = props.node.value
+let replacement: string | undefined
+const focused = ref(false)
+watch(() => [props.node.value, props.node.revision, props.node.kind === 'select' ? props.node.options.map(option => option.value).join('\u0000') : ''] as const, ([value, completed]) => {
+  if (value !== nativeValue || (props.node.kind === 'select' && !props.node.options.some(option => option.value === draft.value))) replacement = value
+  nativeValue = value
+  if (completed >= revision && replacement !== undefined) {
+    draft.value = replacement
+    replacement = undefined
+  }
 })
+function send(kind: ClaudeUiFieldEvent['kind']) {
+  emit('field', { actionId: props.node.actionId, revision: ++revision, kind, value: draft.value })
+}
 function change(event: Event) {
   draft.value = (event.target as HTMLTextAreaElement).value
-  edited = true
-  emit('field', { actionId: props.node.actionId, kind: 'change', value: draft.value })
+  send('change')
 }
 function pick(event: Event) {
   draft.value = (event.target as HTMLSelectElement).value
-  edited = true
-  emit('field', { actionId: props.node.actionId, kind: 'select', value: draft.value })
+  send('select')
 }
 function keydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.isComposing) return
@@ -40,6 +48,6 @@ function keydown(event: KeyboardEvent) {
   event.stopPropagation()
   if (event.shiftKey && props.node.kind === 'input' && props.node.rows > 1) return
   event.preventDefault()
-  emit('field', { actionId: props.node.actionId, kind: 'submit', value: draft.value })
+  send('submit')
 }
 </script>

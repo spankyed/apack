@@ -74,27 +74,27 @@ it('renders unknown components inert and disables buttons without authority', ()
 
 
 it('keeps field typing across native echoes and submits the field without submitting chat', async () => {
-  const input = { kind: 'input' as const, actionId: 'field-authority', label: 'Native draft', value: '', rows: 3, autoFocus: false }
+  const input = { kind: 'input' as const, revision: 0, submitLabel: 'send', actionId: 'field-authority', label: 'Native draft', value: '', rows: 3, autoFocus: false }
   const f = mount({ nativeUi: { status: 'live', tree: input } })
   const field = f.root.querySelector('textarea[aria-label="Native draft"]')!
   ;(field as HTMLTextAreaElement).value = 'first\nsecond'
   field.dispatchEvent(new Event('input', { bubbles: true }))
-  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', kind: 'change', value: 'first\nsecond' })
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', revision: 1, kind: 'change', value: 'first\nsecond' })
   f.state.nativeUi = { status: 'live', tree: { ...input, value: 'stale echo' } }; await nextTick()
   expect((field as HTMLTextAreaElement).value).toBe('first\nsecond')
   const newline = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true })
   field.dispatchEvent(newline); expect(newline.defaultPrevented).toBe(false)
   field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', kind: 'submit', value: 'first\nsecond' })
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field-authority', revision: 2, kind: 'submit', value: 'first\nsecond' })
   expect(f.submit).not.toHaveBeenCalled()
 })
 
 it('uses native select values and leaves the message composer untouched', () => {
-  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'select', actionId: 'select-authority', label: 'Mode', value: 'a',
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'select-authority', label: 'Mode', value: 'a',
     autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
   const select = f.root.querySelector('select')!
   select.value = 'b'; select.dispatchEvent(new Event('change', { bubbles: true }))
-  expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', kind: 'select', value: 'b' })
+  expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', revision: 1, kind: 'select', value: 'b' })
   expect(f.submit).not.toHaveBeenCalled()
 })
 
@@ -130,7 +130,7 @@ it('does not let native autofocus steal typing when an idle drawing appears', as
   const f = mount({})
   const message = f.root.querySelector('textarea[aria-label="Message"]')! as HTMLTextAreaElement
   message.value = 'Unsent draft'; message.focus()
-  f.state.nativeUi = { status: 'live', tree: { kind: 'input', actionId: 'field', label: 'Native focus', value: '', rows: 1, autoFocus: true } }
+  f.state.nativeUi = { status: 'live', tree: { kind: 'input', revision: 0, submitLabel: 'submit', actionId: 'field', label: 'Native focus', value: '', rows: 1, autoFocus: true } }
   await nextTick()
   expect(document.activeElement).toBe(message)
   const site = f.root.querySelector('[tabindex="0"]')! as HTMLElement
@@ -140,4 +140,19 @@ it('does not let native autofocus steal typing when an idle drawing appears', as
   document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
   expect(f.returnFocus).toHaveBeenCalledOnce()
   expect(f.submit).not.toHaveBeenCalled()
+})
+
+
+it('applies native field replacements only after the latest local callback and shows its submit label', async () => {
+  const input = { kind: 'input' as const, actionId: 'field', revision: 0, submitLabel: 'send', label: 'Rewritable', value: '', rows: 2, autoFocus: false }
+  const f = mount({ nativeUi: { status: 'live', tree: input } })
+  const field = f.root.querySelector('textarea[aria-label="Rewritable"]')! as HTMLTextAreaElement
+  field.focus(); await nextTick(); expect(f.root.textContent).toContain('Enter: send')
+  field.value = 'first'; field.dispatchEvent(new Event('input', { bubbles: true }))
+  field.value = 'second'; field.dispatchEvent(new Event('input', { bubbles: true }))
+  f.state.nativeUi = { status: 'live', tree: { ...input, value: 'native first', revision: 1 } }; await nextTick()
+  expect(field.value).toBe('second')
+  f.state.nativeUi = { status: 'live', tree: { ...input, value: 'native second', revision: 2 } }; await nextTick()
+  expect(field.value).toBe('native second')
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field', revision: 2, kind: 'change', value: 'second' })
 })

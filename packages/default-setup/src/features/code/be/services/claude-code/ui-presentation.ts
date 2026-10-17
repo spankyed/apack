@@ -5,8 +5,8 @@ export type ClaudeUiNode =
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
   | { kind: 'button'; label: string; actionId?: string; plugin?: string }
-  | { kind: 'input'; actionId: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
-  | { kind: 'select'; actionId: string; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
+  | { kind: 'input'; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
+  | { kind: 'select'; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }
 
 export type ClaudePromptEdit = Omit<import('./ui-controls.ts').ClaudeUiPromptEdit, 'client_id' | 'surface'> & { revision: number }
@@ -14,7 +14,7 @@ export type ClaudePromptReply =
   | { revision: number; status: 'applied'; frame: import('./ui-controls.ts').ClaudeUiPromptFrame }
   | { revision: number; status: 'error'; message: string }
 
-export type ClaudeUiFieldEvent = { actionId: string; kind: 'change' | 'submit' | 'select'; value: string }
+export type ClaudeUiFieldEvent = { actionId: string; revision: number; kind: 'change' | 'submit' | 'select'; value: string }
 
 export type ClaudeUiMountState =
   | { status: 'connecting' | 'rendering' | 'disconnected' }

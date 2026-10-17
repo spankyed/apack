@@ -93,7 +93,7 @@ it('answers native UI updates only to the requesting connection through the actu
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
     await app.send('threads', mount, { sender: 'default-setup/threads', client: 'requested-window' })
-    await app.send('threads', { type: 'CLAUDE_UI_FIELD', threadId: mount.threadId, mountId, actionId: randomUUID(), kind: 'change', value: 'foreign' }, { sender: 'default-setup/threads', client: 'requested-window' })
+    await app.send('threads', { type: 'CLAUDE_UI_FIELD', revision: 1, threadId: mount.threadId, mountId, actionId: randomUUID(), kind: 'change', value: 'foreign' }, { sender: 'default-setup/threads', client: 'requested-window' })
     await app.send('threads', { type: 'CLAUDE_PROMPT_EDIT', threadId: mount.threadId, mountId, revision: 1, by: 'person', text: 'draft', cursor: 5 }, { sender: 'default-setup/threads', client: 'requested-window' })
     await app.settle()
     expect(sent.length).toBeGreaterThan(0)
