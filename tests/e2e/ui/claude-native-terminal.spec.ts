@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -15,7 +15,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
   await appPage.waitForTimeout(700)
   await app.navigate('default-setup/threads')
-  await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }) }, workspace!)
+  await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
@@ -65,10 +65,15 @@ test('hands one conversation to the native terminal and displays its main and ag
   await appPage.setViewportSize({ width: 680, height: 900 })
   await expect(main).toBeVisible(); await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-narrow.png') })
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
+  const nativeOwnerId = (await context()).native.state.ownerId
+  await app.navigate('host/settings'); await app.navigate('default-setup/threads')
+  await expect.poll(async () => (await context()).native?.state?.ownerId).toBe(nativeOwnerId)
+  await expect(section.locator('textarea.xterm-helper-textarea')).toBeVisible()
+  await expect(main).toContainText('AppNativeMain ' + sessionId)
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect(section.getByRole('button', { name: 'Back to conversation', exact: true })).toBeVisible()
   const stopped = await context(); expect(stopped.native.state.mainStatus).toBeUndefined(); expect(stopped.native.state.tasks).toEqual([])
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click(); await expect(card).toBeVisible()
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, returnsToConversation: true, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })
