@@ -365,3 +365,17 @@ describe('owned native model changes', () => {
     await owner.done
   })
 })
+
+it('starts a resumed owner at already-accounted native cost and resets with the native ledger', async () => {
+  const f = fixture(), charges: number[] = []
+  const owner = createClaudeConversation(f.native, async () => {}, 0.7)
+  const consume = async (turn: ClaudeConversationTurn) => {
+    for await (const event of turn.handle.events) if (event.type === 'result') charges.push(Math.max(0, Number(event.total_cost_usd) - turn.costBaseline))
+    owner.release(turn.handle)
+  }
+  const first = owner.start('Resume', consume); f.push(started(first)); f.push(result(0.84, first))
+  await vi.waitFor(() => expect(charges).toHaveLength(1)); expect(charges[0]).toBeCloseTo(0.14)
+  const next = owner.start('Next', consume); f.push(started(next)); f.push({ type: 'conversation_reset', new_conversation_id: 'new-native-session' }); f.push(result(0.2, next))
+  await vi.waitFor(() => expect(charges).toHaveLength(2)); expect(charges[1]).toBeCloseTo(0.2)
+  await owner.close()
+})

@@ -2067,6 +2067,7 @@ interface CliServiceType {
         }): Promise<QueryHandle>;
         openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & {
             cwd?: string;
+            accountedCostUsd?: number;
         }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>;
         getConversation(key: string): {
             owner: ClaudeConversation;

@@ -55,7 +55,7 @@ export interface CliServiceType {
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
-    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
+    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string; accountedCostUsd?: number }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
     getConversation(key: string): { owner: ClaudeConversation; launchKey: string } | undefined
     isConversationBusy(key: string): boolean
     isCurrentTurn(key: string, handle: QueryHandle): boolean
@@ -208,8 +208,9 @@ function createCliService(): CliServiceType {
         return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
       },
       openConversation(key, launchKey, opts, consumeAutonomous) {
-        return openConversation(key, launchKey, () => claudeCode.query({ ...opts, cwd: opts.cwd ?? resolveCwd(),
-          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous)
+        const { accountedCostUsd = 0, ...queryOptions } = opts
+        return openConversation(key, launchKey, () => claudeCode.query({ ...queryOptions, cwd: opts.cwd ?? resolveCwd(),
+          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous, accountedCostUsd)
       },
       getConversation,
       openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal) },

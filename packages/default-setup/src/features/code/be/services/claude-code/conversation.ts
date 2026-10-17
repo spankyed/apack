@@ -64,7 +64,7 @@ class ConversationQueue<T> implements AsyncIterable<T> {
 }
 
 /** One reader for the process lifetime; an ordinary result ends only its turn. */
-export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer): ClaudeConversation {
+export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0): ClaudeConversation {
   type ActiveTurn = { turn: ClaudeConversationTurn; queue: ConversationQueue<StreamLine>; consumed: Promise<void>; released: Promise<void>; resolveRelease(): void; terminal: boolean; resolve(result: QueryResult): void; reject(error: unknown): void }
   const activity = createClaudeNestedActivity()
   let active: ActiveTurn | undefined
@@ -76,7 +76,8 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let sessionCwd: string | undefined
   let changingModel = false
   let modelSelection: string | undefined
-  let cumulativeCost = 0
+  if (!Number.isFinite(accountedCostUsd) || accountedCostUsd < 0) throw new ClaudeProtocolError('Invalid accounted native cost baseline')
+  let cumulativeCost = accountedCostUsd
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
   // Native workers can ask concurrently; present one permission or generic dialog at a time.

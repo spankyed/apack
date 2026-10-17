@@ -468,7 +468,7 @@ export async function action(
       if (!await services.cli.claudeCode.closeIdleConversation(threadId)) throw new Error('Claude conversation changed while preparing this input');
       conversation = undefined;
     }
-    const owner = conversation?.owner ?? await services.cli.claudeCode.openConversation(threadId, launchKey, options,
+    const owner = conversation?.owner ?? await services.cli.claudeCode.openConversation(threadId, launchKey, { ...options, accountedCostUsd: resumeSessionId && !options.forkSession ? prior?.totalCostUsd ?? 0 : 0 },
       turn => consumeConversationTurn(turn, { services, threadId, text: '',
         sessionCwd: services.cli.claudeCode.getConversation(threadId)?.owner.sessionCwd ?? sessionCwd, useWorktree,
         phase: getClaudeState(services, threadId)?.permissionMode === 'plan' ? 'Plan' : undefined }));

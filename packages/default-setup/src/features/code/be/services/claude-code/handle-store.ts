@@ -23,14 +23,15 @@ function stop(key: string): void {
 }
 registerThreadTeardown(stop)
 
-export async function openConversation(key: string, launchKey: string, spawn: () => Promise<QueryHandle>, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation> {
+export async function openConversation(key: string, launchKey: string, spawn: () => Promise<QueryHandle>, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0): Promise<ClaudeConversation> {
+  if (!Number.isFinite(accountedCostUsd) || accountedCostUsd < 0) throw new Error('Invalid accounted native cost baseline')
   if (starting.has(key) || conversations.has(key) || terminals.has(key) || activeHandles.has(key)) throw new Error('Claude conversation already exists')
   const ticket = {}
   starting.set(key, ticket)
   try {
     const handle = await spawn()
     if (starting.get(key) !== ticket) { handle.kill(); throw new Error('Claude conversation startup was cancelled') }
-    const owner = createClaudeConversation(handle, consumeAutonomous)
+    const owner = createClaudeConversation(handle, consumeAutonomous, accountedCostUsd)
     conversations.set(key, { owner, launchKey })
     const cleanup = () => {
       if (conversations.get(key)?.owner === owner) conversations.delete(key)

@@ -210,6 +210,9 @@ import { useSettings } from '#generated/settings-fe.ts';
 const threadsSettings = useSettings('threads')
 const shell = useShell()
 const nativeTerminalActive = ref(false)
+watch(nativeTerminalActive, (active, previous) => {
+  if (previous && !active) void nextTick(() => forceScrollToBottom())
+})
 const actor: ThreadsState = useSurface();
 const isOnboarding = shell.isOnboarding;
 // The input's budget excludes tabs/recent threads and follows panel resizing, not the window.
