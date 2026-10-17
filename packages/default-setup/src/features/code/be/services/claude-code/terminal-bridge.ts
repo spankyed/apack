@@ -1,3 +1,5 @@
+import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
+import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 import { basename, isAbsolute } from 'node:path'
 import type { ClaudeNativeTranscript } from './terminal-journal.ts'
@@ -25,6 +27,7 @@ export async function createClaudeTerminalBridge(options: {
   enter(): void
 }) {
   const directory = await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'cc-app-'))
+  const uiSocketPath = join(directory, 'ui.sock')
   const socketPath = join(directory, 'bridge.sock'), token = randomBytes(32).toString('hex')
   const projection = createClaudeTerminalStatus(options.sessionId)
   const session = createClaudeTerminalSession(options.sessionId)
@@ -45,6 +48,7 @@ export async function createClaudeTerminalBridge(options: {
   const matches = (value: Record<string, unknown>) => value.kind === 'subagent' ? !!subagentCommand && value.command === subagentCommand : value.kind === 'main' && !!mainCommand && (value.command === mainCommand || value.command === prefixCommand(mainCommand))
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let closed = false, busy = false, ready = false
+  const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
   let pending: { id: string; sessionId: string; text: string; sent: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
@@ -95,6 +99,11 @@ export async function createClaudeTerminalBridge(options: {
         return reply(200, {})
       }
       if (value.sessionId !== projection.sessionId) return reply(409, {})
+      if (request.url === '/ui-event') {
+        const event = object(value.event)
+        if (value.pid !== observerPid || !event || event.type !== 'system' || event.subtype !== 'ui_invalidate' || event.event !== 'ui.render') return reply(409, {})
+        ui.receive(event); return reply(200, {})
+      }
       if (request.url === '/transcript') {
         if (typeof value.path !== 'string' || value.path.length > 16384 || !isAbsolute(value.path) || basename(value.path) !== value.sessionId + '.jsonl') return reply(400, {})
         if (!transcripts.some(entry => entry.path === value.path && entry.sessionId === value.sessionId)) transcripts.push({ sessionId: value.sessionId, path: value.path })
@@ -139,9 +148,10 @@ export async function createClaudeTerminalBridge(options: {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve) })
     const runtime = join(directory, 'status.mjs'), observerConfig = join(directory, 'observer.json')
     await writeFile(runtime, claudeTerminalStatusRuntime, { mode: 0o600 })
+    await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
     saveObserver = async () => {
       const temporary = observerConfig + '.' + randomUUID() + '.tmp'
-      await writeFile(temporary, JSON.stringify({ socketPath, token, sessionId: options.sessionId, originalBunOptions: options.bunOptions, generations }), { mode: 0o600 })
+      await writeFile(temporary, JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, originalBunOptions: options.bunOptions, generations }), { mode: 0o600 })
       await rename(temporary, observerConfig)
     }
     await saveObserver()
@@ -162,7 +172,7 @@ export async function createClaudeTerminalBridge(options: {
     }`
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
-      directory, pluginRoot, bunOptions, projection, session, transcripts,
+      directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport: ui.transport,
       get problem() { return observerProblem },
       get nativePid() { return observerPid },
       get lastTurn() { return lastTurn },
@@ -177,13 +187,13 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },
     }
   } catch (error) {
-    server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true }); throw error
   }
 }

@@ -20,5 +20,6 @@ ChildProcess.prototype.spawn=function(...args){
  return result;
 };
 await publish('/observer-ready',{sessionId:config.sessionId,pid:process.pid});
+if(config.uiSocketPath)await import('./ui.mjs');
 }
 `

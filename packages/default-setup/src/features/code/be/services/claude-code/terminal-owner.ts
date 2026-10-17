@@ -14,6 +14,8 @@ import type { ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
 export interface ClaudeNativeTerminalOwner {
+  /** Reviewed native UI operations; reverse hosts and the full UI owner are integrated separately. */
+  readonly uiTransport: import('./terminal-ui.ts').ClaudeTerminalUiTransport
   readonly state: ClaudeNativeTerminalState
   readonly busy: boolean
   readonly done: Promise<void>
@@ -130,6 +132,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
+      uiTransport: bridge.uiTransport,
       async readJournal() {
         const batch = await readJournal(bridge.transcripts, { final: closed })
         for (const entry of batch.entries) {
