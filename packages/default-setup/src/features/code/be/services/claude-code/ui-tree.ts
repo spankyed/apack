@@ -199,6 +199,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         || (props.variant !== undefined && props.variant !== 'primary' && props.variant !== 'secondary')
         || (props.role !== undefined && props.role !== 'dismiss')
         || (props.autoFocus !== undefined && props.autoFocus !== true)) throw new ClaudeProtocolError('native UI button style is invalid')
+      if (props.hotkey !== undefined && (typeof props.hotkey !== 'string' || props.hotkey.length !== 1 || !/^[0-9a-z]$/.test(props.hotkey))) throw new ClaudeProtocolError('native UI button hotkey is invalid')
       // The native wire carries a normalized accessible label alongside optional inline children.
       function validateInline(child: unknown): void {
         if (typeof child === 'string') return
@@ -210,6 +211,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const hover = readClaudeUiHover(value, props)
       const button: ClaudeUiNode = { kind: 'button', ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
         ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(visit) } : {}),
+        ...(props.hotkey !== undefined ? { hotkey: props.hotkey as string } : {}),
         ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),
         ...(props.variant !== undefined ? { variant: props.variant as 'primary' | 'secondary' } : {}),
         ...(props.role === 'dismiss' ? { role: 'dismiss' as const } : {}),

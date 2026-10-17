@@ -17,7 +17,7 @@
         @dragover.prevent
         @drop.prevent="onDrop">
         <StatusIndicator :anchor="inputCardRef"/>
-        <StatusLine :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
+        <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi"
           @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
@@ -35,7 +35,7 @@
         </div>
 
         <!-- Editor container -->
-        <div class="relative w-full min-h-[72px]" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div class="relative w-full min-h-[72px]" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
@@ -300,6 +300,12 @@ interface ActionButton {
 
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
+const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
+function handleComposerNativeHotkey(event: KeyboardEvent) {
+  const editor = tiptapRef.value?.editor
+  if (props.disabled || !editor?.isEmpty || hasAttachments.value || !(event.target instanceof Node) || !editor.view.dom.contains(event.target)) return
+  statusLineRef.value?.pressComposerHotkey(event)
+}
 const nativePromptProblem = ref<string>()
 const hostPopupActive = ref(false)
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
@@ -536,7 +542,7 @@ const handleVoiceKeyup = (e: KeyboardEvent) => {
 //   2. empty input, double-ESC → open revert menu
 let lastGlobalEscTime = 0
 const handleGlobalEsc = (e: KeyboardEvent) => {
-  if (e.key !== 'Escape') return
+  if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return
   // Skip if focus is inside the ProseMirror editor — the editor's own handler covers that case
   if ((e.target as HTMLElement)?.closest?.('.ProseMirror')) return
   // Skip if the revert menu is already open

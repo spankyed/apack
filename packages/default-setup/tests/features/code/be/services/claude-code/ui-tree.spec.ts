@@ -160,3 +160,9 @@ it('rejects hover groups without ownership and hover changes that alter normal f
     { type: 'Box', hover: { left: 2 } },
   ]) expect(() => createClaudeUiDrawing(node)).toThrow()
 })
+
+
+it('preserves one native Button hotkey and refuses malformed bindings', () => {
+  expect(createClaudeUiDrawing({ type: 'Button', props: { label: 'Run', hotkey: 'w' } }).tree).toMatchObject({ kind: 'button', hotkey: 'w' })
+  for (const hotkey of ['W', 'ab', '!', '1\n', 1]) expect(() => createClaudeUiDrawing({ type: 'Button', props: { label: 'Run', hotkey } })).toThrow()
+})

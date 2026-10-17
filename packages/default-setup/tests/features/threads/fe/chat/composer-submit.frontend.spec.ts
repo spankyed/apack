@@ -1,6 +1,6 @@
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
-import type { ClaudePromptReply, ClaudePromptCompletionReply } from '#generated/types.ts'
+import type { ClaudePromptReply, ClaudePromptCompletionReply, ClaudeUiMountState } from '#generated/types.ts'
 import type { Editor } from '@tiptap/core'
 import type { useAttachments } from '#features/threads/fe/chat/composables/useAttachments.ts'
 import ChatInput from '#features/threads/fe/chat/input.vue'
@@ -35,11 +35,11 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
-  const send = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onSendCommand: command, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const send = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
-  return { state, send, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
+  return { state, send, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
 const image = (name: string) => ({ name, dataUrl: 'data:image/png;base64,YQ==' })
 const file = (name: string) => ({ name, path: '/private/' + name, typeLabel: 'Text', isImage: false })
@@ -166,6 +166,8 @@ it('keeps native row navigation inside its group and drops stale clicks after ty
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'one' }, { text: 'two' }] } }
   await nextTick()
   const group = f.root.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
+  // The capture listener must see a later event than Vue's newly attached row listener.
+  await new Promise(resolve => setTimeout(resolve, 1))
   buttons[0]!.focus(); buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
   expect(document.activeElement).toBe(buttons[1])
   editor.commands.insertContent('x'); await nextTick()
@@ -180,6 +182,8 @@ it('dismisses native offers on Escape and leaves Shift+Tab to normal focus trave
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native' }] } }
   await nextTick()
   const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  // Advance one event-loop turn past Vue's listener-attachment timestamp guard.
+  await new Promise(resolve => setTimeout(resolve, 1))
   const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
   row.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false)
   row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()
@@ -202,4 +206,24 @@ it('refuses a detached old row click even after a newer offer occupies the same 
   old.click(); expect(editor.state.doc.textContent).toBe('firstx')
   ;(f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement).click()
   expect(editor.state.doc.textContent).toBe('new')
+})
+
+
+it('uses a bare digit for a native survey only when the actual composer draft and attachments are empty', async () => {
+  const f = mount(vi.fn(async () => undefined))
+  // This capture-path case needs the real editor DOM inside the mounted composer.
+  f.root.querySelector('[data-testid="editor-fixture"]')!.append(editor.view.dom)
+  f.state.nativeUi = { status: 'live', tree: { kind: 'button', label: 'Answer one', hotkey: '1', actionId: 'answer' } }
+  editor.commands.clearContent(); await nextTick()
+  const key = (init: KeyboardEventInit = {}) => { const event = new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true, ...init }); editor.view.dom.dispatchEvent(event); return event }
+  expect(key().defaultPrevented).toBe(true)
+  expect(f.press).toHaveBeenCalledExactlyOnceWith('answer', undefined)
+  editor.commands.setContent('Draft'); await nextTick()
+  expect(key().defaultPrevented).toBe(false)
+  editor.commands.clearContent(); await nextTick()
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }, { isComposing: true }, { key: 'w' }]) expect(key(init).defaultPrevented).toBe(false)
+  attachments.pendingFiles.value = [file('context.txt')]; await nextTick(); expect(key().defaultPrevented).toBe(false)
+  attachments.pendingFiles.value = []; attachments.pendingImages.value = [image('context.png')]; await nextTick(); expect(key().defaultPrevented).toBe(false)
+  attachments.pendingImages.value = []; f.state.nativeUi = { status: 'disconnected' }; await nextTick(); expect(key().defaultPrevented).toBe(false)
+  expect(f.press).toHaveBeenCalledTimes(1); expect(f.send).not.toHaveBeenCalled()
 })

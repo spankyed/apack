@@ -74,7 +74,7 @@ export type ClaudeUiNode =
   | { kind: 'box'; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
-  | { kind: 'button'; hover?: ClaudeUiHover; label: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
+  | { kind: 'button'; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
   | { kind: 'input'; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
   | { kind: 'select'; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }

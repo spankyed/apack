@@ -10,12 +10,12 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h('form', { onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
+  app = createApp({ render: () => h('form', { onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
     h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
-  return { state, root, cwd, press, field, returnFocus, submit }
+  return { state, root, cwd, press, field, returnFocus, submit, phase }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -333,4 +333,44 @@ it('limits duplicate sibling Box keys to the first scope and restores nested inv
   expect(normal.parentElement!.style.backgroundColor).toBe('blue')
   expect(normal.style.color).toBe('blue')
   expect(normal.style.backgroundColor).toBe('yellow')
+})
+
+
+it('dispatches native hotkeys to the last visible Button while preserving fields and modified keys', () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [
+    { kind: 'button', label: 'First', hotkey: 'w', actionId: 'first' },
+    { kind: 'button', label: 'Last', hotkey: 'w', actionId: 'last' },
+    { kind: 'box', layout: { display: 'none' }, children: [{ kind: 'button', label: 'Hidden', hotkey: 'w', actionId: 'hidden' }] },
+    { kind: 'button', label: 'Disabled', hotkey: 'w' },
+    { kind: 'input', actionId: 'field', revision: 0, label: 'Native edit', value: '', rows: 1, submitLabel: 'send', autoFocus: false },
+    { kind: 'select', actionId: 'choice', revision: 0, label: 'Native choice', value: 'a', options: [{ value: 'a', label: 'A' }], autoFocus: false },
+  ] } } })
+  const site = f.root.querySelector<HTMLElement>('[tabindex="0"]')!; site.focus()
+  const key = new KeyboardEvent('keydown', { key: 'W', shiftKey: true, bubbles: true, cancelable: true }); site.dispatchEvent(key)
+  expect(key.defaultPrevented).toBe(true)
+  expect(f.press).toHaveBeenCalledExactlyOnceWith('last', undefined)
+  expect(f.root.querySelector('button')!.getAttribute('aria-keyshortcuts')).toBe('w')
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) {
+    const event = new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true, ...init }); site.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
+  }
+  for (const field of [f.root.querySelector('textarea[aria-label="Native edit"]')!, f.root.querySelector('select')!]) {
+    const event = new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }); field.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
+  }
+  const editable = document.createElement('div'); editable.setAttribute('contenteditable', 'true'); site.append(editable)
+  const typing = new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }); editable.dispatchEvent(typing)
+  expect(typing.defaultPrevented).toBe(false)
+  expect(f.press).toHaveBeenCalledTimes(1); expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('preserves native Shift+Tab focus order and lets IME consume Escape before returning to the composer', () => {
+  const f = mount({ statusLine: '/fixture', cwd: '/fixture', nativeUi: live })
+  const site = f.root.querySelector<HTMLElement>('[tabindex="0"]')!
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }); site.dispatchEvent(tab)
+  expect(tab.defaultPrevented).toBe(false); expect(f.phase).not.toHaveBeenCalled()
+  const contextTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }); f.root.querySelector('button')!.dispatchEvent(contextTab)
+  expect(contextTab.defaultPrevented).toBe(false); expect(f.phase).not.toHaveBeenCalled()
+  const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }); site.dispatchEvent(composing)
+  expect(composing.defaultPrevented).toBe(false); expect(f.returnFocus).not.toHaveBeenCalled()
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); site.dispatchEvent(escape)
+  expect(escape.defaultPrevented).toBe(true); expect(f.returnFocus).toHaveBeenCalledOnce()
 })
