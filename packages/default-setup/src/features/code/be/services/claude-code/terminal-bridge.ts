@@ -117,7 +117,12 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/ui-event') {
         const event = object(value.event)
-        if (value.pid !== observerPid || !event || event.type !== 'system' || event.subtype !== 'ui_invalidate' || event.event !== 'ui.render') return reply(409, {})
+        if (value.pid !== observerPid || !event || event.type !== 'system') return reply(409, {})
+        const invalidation = event.subtype === 'ui_invalidate' && event.event === 'ui.render'
+        const panes = event.subtype === 'ui_panes' && Array.isArray(event.panes) && event.panes.length <= 256
+          && event.panes.every(value => { const pane = object(value); return pane && typeof pane.id === 'string' && typeof pane.plugin === 'string' && typeof pane.title === 'string' })
+          && [event.shown_id, event.focused_id, event.focus_requested_id].every(id => id === null || typeof id === 'string')
+        if (!invalidation && !panes) return reply(409, {})
         ui.receive(event); return reply(200, {})
       }
       if (request.url === '/transcript') {

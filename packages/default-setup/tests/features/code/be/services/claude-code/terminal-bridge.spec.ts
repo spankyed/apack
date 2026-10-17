@@ -115,3 +115,17 @@ it('retains the app draft and never enters when native terminal preparation is u
     expect(enter).not.toHaveBeenCalled(); expect(fill).not.toHaveBeenCalled()
   } finally { unregister() }
 })
+
+it('forwards native pane rosters only from the current owner and session', async () => {
+  await create()
+  const receive = vi.fn(), unsubscribe = bridge!.uiTransport.subscribe(receive)
+  const event = { type: 'system', subtype: 'ui_panes', panes: [{ id: 'review', plugin: 'fixture', title: 'Review' }], shown_id: 'review', focused_id: null, focus_requested_id: null }
+  try {
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid + 1, event })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: '22222222-2222-2222-2222-222222222222', pid: process.pid, event })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, panes: ['invalid'] } })).status).toBe(409)
+    expect(receive).not.toHaveBeenCalled()
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event })).status).toBe(200)
+    expect(receive).toHaveBeenCalledExactlyOnceWith(event)
+  } finally { unsubscribe() }
+})

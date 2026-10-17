@@ -4,6 +4,14 @@ import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,inFlight=0,highestSequence=0;
+function publish(event){
+ try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
+}
+function paneRoster(n){
+ const state=n.roster.Ui().getState(),visible=state.open.filter(pane=>n.engine.FPe(pane.plugin));
+ const hidden=new Set(state.open.filter(pane=>!visible.includes(pane)).map(pane=>pane.id));
+ return {panes:visible.map(pane=>({id:pane.id,title:pane.title,plugin:pane.plugin,...(pane.closeOnEscape?{close_on_escape:true}:{}),...(pane.holdToasts?{hold_toasts:true}:{}),...(pane.rows!==undefined?{rows:pane.rows}:{}),...(pane.columns!==undefined?{columns:pane.columns}:{})})),shown_id:hidden.has(state.shownId)?visible.at(-1)?.id??null:state.shownId,focused_id:hidden.has(state.focusedId)?null:state.focusedId,focus_requested_id:hidden.has(state.focusRequest)?null:state.focusRequest};
+}
 async function initialize(){
  if(native)return native;
  if(initializing)return initializing;
@@ -16,7 +24,10 @@ async function initialize(){
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  engine.I9e.onInvalidate(instances=>{try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const event={type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})};const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}});
+  const modules={gate,engine,session,roster,schemas,runtime};
+  engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
+  let previousRoster=JSON.stringify(paneRoster(modules));
+  roster.Ui().subscribe(()=>{const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
   return native={gate,engine,session,roster,schemas,runtime};
  })();
  return initializing;
@@ -133,7 +144,7 @@ function drainCompletion(n,clientId,state){
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });
 }
-const schemaNames={ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
+const schemaNames={ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
@@ -157,6 +168,15 @@ async function control(request){
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
+ }
+ if(['ui_panes','ui_pane_show','ui_pane_focus','ui_close'].includes(value.subtype)){
+  const id=clientId??'desktop:default';
+  if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
+  if(value.subtype==='ui_panes')return paneRoster(n);
+  if(value.subtype==='ui_pane_show'){n.roster.avr(value.id);return {shown_id:n.roster.Ui().getState().shownId};}
+  if(value.subtype==='ui_pane_focus'){n.roster.GY(value.id);return {focused_id:n.roster.Ui().getState().focusedId};}
+  await n.roster.rct(value.id,{kind:'person'});
+  return {closed:!n.roster.Hwe(n.roster.Ui().getState()).some(pane=>pane.id===value.id)};
  }
  if(value.subtype==='ui_prompt_edit'){
   const id=clientId??'desktop:default';
