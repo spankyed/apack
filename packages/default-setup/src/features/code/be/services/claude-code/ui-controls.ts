@@ -9,11 +9,21 @@ const viewport = z.object({ columns: z.number().int().positive(), rows: z.number
 const attach = z.object({ client_id: clientId, surface, viewport: viewport.optional() }).strict()
 const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.unknown()), viewport: viewport.optional() }).strict()
 const press = z.object({ client_id: clientId, surface, plugin: z.string(), handle: z.number().int().safe(), key: z.string().optional(), href: z.string().max(2048).optional() }).strict()
+// Frozen 2.1.302 ui_input/ui_select schemas: whole-field text, keyed redraw identity.
+const field = z.object({
+  client_id: clientId, surface, plugin: z.string().max(256), handle: z.number().int().safe(),
+  key: z.string().optional(), component: z.string().optional(), instance_id: z.string().max(256).optional(),
+  value: z.string().max(16384),
+}).strict()
+const input = field.extend({ kind: z.enum(['change', 'submit']) })
+const fieldResult = z.object({ handled: z.boolean(), element: z.string().optional(), value: z.string().optional() }).passthrough()
 const renderResult = z.object({ tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
 export type ClaudeUiPress = z.infer<typeof press>
+export type ClaudeUiInput = z.infer<typeof input>
+export type ClaudeUiSelect = z.infer<typeof field>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
@@ -36,6 +46,16 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
       return renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+    },
+    /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
+    async input(options: ClaudeUiInput) {
+      const valid = input.parse(options)
+      return fieldResult.parse(await request({ subtype: 'ui_input', ...valid }))
+    },
+    /** Native validates membership against the Select options in the current drawing. */
+    async select(options: ClaudeUiSelect) {
+      const valid = field.parse(options)
+      return fieldResult.parse(await request({ subtype: 'ui_select', ...valid }))
     },
     /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
     async press(options: ClaudeUiPress) {

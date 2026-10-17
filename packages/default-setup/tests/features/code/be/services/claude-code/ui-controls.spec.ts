@@ -68,4 +68,22 @@ describe('native UI transport', () => {
     await rejected
     await expect(f.ui.detach(client.client_id)).rejects.toThrow('process exited')
   })
+  it('correlates field edits and picks with keyed native redraw identity and preserves rewritten values', async () => {
+    const f = fixture()
+    const identity = { ...client, plugin: 'fixture-plugin', handle: 42, key: 'field', component: 'AbovePrompt', instance_id: 'fixture-above' }
+    const editing = f.ui.input({ ...identity, kind: 'change', value: 'first\nsecond' })
+    await Promise.resolve()
+    expect(f.writes[0]!.request).toEqual({ subtype: 'ui_input', ...identity, kind: 'change', value: 'first\nsecond' })
+    f.reply(0, { handled: true, element: 'field', value: 'rewritten' })
+    await expect(editing).resolves.toEqual({ handled: true, element: 'field', value: 'rewritten' })
+    const selecting = f.ui.select({ ...identity, value: 'unknown' })
+    await Promise.resolve()
+    expect(f.writes[1]!.request).toEqual({ subtype: 'ui_select', ...identity, value: 'unknown' })
+    f.reply(1, { handled: false })
+    await expect(selecting).resolves.toEqual({ handled: false })
+    await expect(f.ui.input({ ...identity, kind: 'submit', value: 'x'.repeat(16385) })).rejects.toThrow()
+    expect(f.writes).toHaveLength(2)
+    f.controls.close()
+  })
+
 })
