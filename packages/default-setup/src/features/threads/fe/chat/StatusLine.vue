@@ -1,5 +1,5 @@
 <template>
-  <div v-if="statusLine || hasContent || nativeUi?.status === 'error'"
+  <div v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'"
     class="flex min-h-0 min-w-0 flex-col overflow-y-auto px-5 py-3 text-xs text-neutral-400" :class="{ 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
@@ -8,6 +8,7 @@
         <span>Session tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
     </div>
+    <div v-if="nativeStatus" role="status" data-testid="composer-native-status" class="mt-1 max-h-24 min-w-0 overflow-y-auto text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
     <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-56 min-h-16 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
@@ -23,12 +24,13 @@ import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#gene
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
+import NativeStatusText from './NativeStatusText.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 const hover = createClaudeHoverSurface()
 provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
-const props = defineProps<{ statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()
+const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()
 const toolsOpen = ref(false)
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
 const displayPath = computed(() => {

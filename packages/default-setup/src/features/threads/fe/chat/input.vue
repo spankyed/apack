@@ -19,7 +19,7 @@
         @drop.prevent="onDrop">
         <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
-        <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
+        <StatusLine ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
@@ -265,10 +265,13 @@ const props = defineProps<{
   recordingLimitMinutes?: number
   /** CWD label shown in the attached session strip. */
   statusLine?: string
+  /** Actual output from the native main-session status helper. */
+  nativeStatus?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
   nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
+  nativeSubmit?: (text: string, references: MessageReferences) => Promise<void>
   nativeUi?: ClaudeUiMountState
 }>()
 
@@ -788,7 +791,10 @@ const handleSubmit = async () => {
     }
 
     // Check if this is a command submission
-    if (cmdState?.active && cmdState.selectedCommand) {
+    if (props.nativeSubmit) {
+      await props.nativeSubmit(md, references)
+      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+    } else if (cmdState?.active && cmdState.selectedCommand) {
       const commandName = cmdState.selectedCommand.name
       const prefix = `/${commandName} `
       const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)

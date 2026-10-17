@@ -96,8 +96,10 @@
               :quick-prompt-cursor="quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
+              :native-status="nativeComposerOwner?.mainStatus"
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
+              :native-submit="nativeComposerOwner ? submitNativeMessage : undefined"
               :native-prompt="nativePrompt"
               @native-prompt-edit="editNativePrompt" @native-prompt-host-response="answerPromptHost"
               @native-prompt-autocomplete="completeNativePrompt"
@@ -262,7 +264,10 @@ const nativeFocus = computed(() => {
 })
 function renewNativeUi() {
   const mount = nativeUiMount.value
-  if (mount && mount.threadId === currentThread.value?.id) actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, thinkingExpansion: nativeThinkingExpansion.value })
+  if (mount && mount.threadId === currentThread.value?.id) {
+    actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, thinkingExpansion: nativeThinkingExpansion.value })
+    actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
+  }
 }
 function reportNativeThinkingView(view: { messageId: string; blockIndex: number; open: boolean }) {
   const message = visibleMessages.value.find(message => message.id === view.messageId && message.sender === 'assistant')
@@ -321,7 +326,8 @@ function detachNativeUi() {
   nativeUiMount.value = undefined
   nativeUserExpansion.value = {}
   nativeThinkingExpansion.value = {}
-  if (mount) actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
+  if (mount) { actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount }); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount }) }
+  pendingNativeSend?.reject(new Error('Claude conversation view changed')); pendingNativeSend = undefined
 }
 function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
   const mount = nativeUiMount.value
@@ -367,6 +373,34 @@ const isBusy = useSelector(actor, ({ context }) => {
 })
 const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
+})
+const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
+const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
+const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+let nativeSendRevision = 0
+let pendingNativeSend: { ownerId: string; revision: number; resolve(): void; reject(error: Error): void } | undefined
+function submitNativeMessage(text: string, references: MessageReferences): Promise<void> {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (!mount || !owner || pendingNativeSend) return Promise.reject(new Error('Claude input is not ready'))
+  if (Object.values(references).some(value => Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null)) return Promise.reject(new Error('Native composer attachment and reference submission is not connected yet. Your draft is retained.'))
+  return new Promise((resolve, reject) => {
+    const revision = ++nativeSendRevision
+    pendingNativeSend = { ownerId: owner.ownerId, revision, resolve, reject }
+    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text })
+    pendingScrollOnSend.value = true
+  })
+}
+watch(nativeComposerView, view => {
+  const pending = pendingNativeSend
+  if (!pending) return
+  if (view?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(view.state.status)) {
+    pendingNativeSend = undefined; pending.reject(new Error('Claude conversation owner changed')); return
+  }
+  const result = view.submission
+  if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision || result.status === 'pending') return
+  pendingNativeSend = undefined
+  if (result.status === 'accepted') pending.resolve()
+  else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
 })
 const statusLine = computed(() => {
   const cwd = statusLineCwd.value

@@ -35,7 +35,7 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<void>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
@@ -215,6 +215,7 @@ it('uses a bare digit for a native survey only when the actual composer draft an
   f.root.querySelector('[data-testid="editor-fixture"]')!.append(editor.view.dom)
   f.state.nativeUi = { status: 'live', tree: { kind: 'button', label: 'Answer one', hotkey: '1', actionId: 'answer' } }
   editor.commands.clearContent(); await nextTick()
+  ;(f.root.querySelector('[aria-label="Session tools"]')! as HTMLButtonElement).click(); await nextTick()
   const key = (init: KeyboardEventInit = {}) => { const event = new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true, ...init }); editor.view.dom.dispatchEvent(event); return event }
   expect(key().defaultPrevented).toBe(true)
   expect(f.press).toHaveBeenCalledExactlyOnceWith('answer', undefined)
@@ -275,4 +276,24 @@ it('shows native ghost text without changing the draft, accepts Tab and retires 
     expect(f.root.querySelector('.claude-prompt-suggestion')).toBeNull()
     propose(); await nextTick(); expect(f.hostResponse.mock.calls.at(-1)?.[0]).toMatchObject({ shown: false })
   } finally { windowFocus.mockRestore() }
+})
+
+
+it('retains a native draft until acceptance and keeps a rejected draft retryable', async () => {
+  const f = mount(vi.fn(async () => undefined))
+  let accept!: () => void
+  f.state.nativeSubmit = vi.fn(() => new Promise<void>(resolve => { accept = resolve }))
+  await nextTick(); f.submit(); f.submit()
+  await vi.waitFor(() => expect(f.state.nativeSubmit).toHaveBeenCalledOnce())
+  expect(editor.state.doc.textContent).toBe('first'); expect(f.send).not.toHaveBeenCalled()
+  editor.commands.insertContent(' newer'); accept()
+  await vi.waitFor(() => expect(f.root.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(false))
+  expect(editor.state.doc.textContent).toBe('first newer')
+  f.state.nativeSubmit = vi.fn(async () => { throw new Error('Native hook refused') })
+  await nextTick(); f.submit()
+  await vi.waitFor(() => expect(f.root.textContent).toContain('Native hook refused'))
+  expect(editor.state.doc.textContent).toBe('first newer'); expect(f.send).not.toHaveBeenCalled()
+  f.state.nativeSubmit = vi.fn(async () => {})
+  await nextTick(); f.submit()
+  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe(''))
 })
