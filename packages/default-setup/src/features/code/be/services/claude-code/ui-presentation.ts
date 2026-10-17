@@ -52,6 +52,7 @@ export interface ClaudeUiTextStyle {
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
   | { kind: 'text'; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
+  | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
   | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'box'; layout?: ClaudeUiBoxLayout; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }

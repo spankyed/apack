@@ -107,6 +107,16 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         ? [{ kind: 'text', text: typeof value.props.label === 'string' ? value.props.label : raw }]
         : children.map(visit), ...attribution }
     }
+    if (value.type === 'Svg') {
+      const props = value.props
+      if (!record(props) || typeof props.source !== 'string' || !props.source.length || props.source.length > 131072 || typeof props.alt !== 'string' || /[\u0000-\u001f\u007f]/.test(props.alt) || value.children !== undefined) throw new ClaudeProtocolError('native Svg props are invalid')
+      for (const name of ['width', 'height'] as const) {
+        const dimension = props[name]
+        if (dimension !== undefined && (typeof dimension !== 'number' || !Number.isFinite(dimension) || dimension <= 0 || dimension > 4096)) throw new ClaudeProtocolError('native Svg dimensions are invalid')
+      }
+      if (props.isInteractive !== undefined && typeof props.isInteractive !== 'boolean') throw new ClaudeProtocolError('native Svg interactivity is invalid')
+      return { kind: 'svg', source: props.source, alt: props.alt, ...(props.width !== undefined ? { width: props.width as number } : {}), ...(props.height !== undefined ? { height: props.height as number } : {}), interactive: props.isInteractive === true, ...attribution }
+    }
     if (value.type === 'Markdown') {
       if (!record(value.props) || typeof value.props.text !== 'string' || (value.props.dimColor !== undefined && typeof value.props.dimColor !== 'boolean')) throw new ClaudeProtocolError('native Markdown props are invalid')
       const props = value.props

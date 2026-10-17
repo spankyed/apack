@@ -1,5 +1,6 @@
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
+import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
@@ -191,4 +192,36 @@ it('applies native Box direction, spacing, dimensions and hidden state without s
   f.state.nativeUi = { status: 'live', tree: { ...box, layout: { display: 'none' } } }; await nextTick()
   expect(element.style.display).toBe('none')
   expect(f.submit).not.toHaveBeenCalled()
+})
+
+
+it('keeps static SVG in an image and interactive SVG in an opaque scriptless frame', async () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" onload="bad()"><script>bad()</script><style>rect:hover{fill:red}</style><rect width="20" height="20"><title>Hover</title><animate attributeName="opacity" values="0;1" dur="1s"/></rect><a href="https://example.com/">external</a></svg>'
+  const node = { kind: 'svg' as const, source, alt: 'Native drawing', width: 100, interactive: false }
+  const f = mount({ nativeUi: { status: 'live', tree: node } })
+  const image = f.root.querySelector('img')!
+  expect(image.alt).toBe('Native drawing')
+  const decoded = decodeURIComponent(image.src.split(',')[1]!)
+  expect(decoded).not.toContain('<script'); expect(decoded).not.toContain('onload'); expect(decoded).not.toContain('https://example.com/')
+  expect(f.root.querySelector('svg')).toBeNull()
+  f.state.nativeUi = { status: 'live', tree: { ...node, interactive: true } }; await nextTick()
+  const frame = f.root.querySelector('iframe')!
+  expect(frame.getAttribute('sandbox')).toBe('')
+  expect(frame.title).toBe('Native drawing')
+  expect(frame.srcdoc).toContain("script-src 'none'")
+  expect(frame.srcdoc).toContain('<animate'); expect(frame.srcdoc).toContain('rect:hover')
+  expect(frame.srcdoc).not.toContain('<script'); expect(frame.srcdoc).not.toContain('onload')
+  expect(f.root.querySelector('svg')).toBeNull()
+  f.state.nativeUi = { status: 'live', tree: { ...node, source: '<not-svg/>' } }; await nextTick()
+  expect(f.root.querySelector('img,iframe')).toBeNull(); expect(f.root.textContent).toContain('Native drawing')
+})
+
+
+it('normalizes an SVG without xmlns and preserves its internal references', () => {
+  const drawing = prepareClaudeSvg('<svg viewBox="0 0 10 5"><defs><path id="shape" d="M0 0h5v5z"/></defs><use href="#shape"/></svg>')!
+  const parsed = new DOMParser().parseFromString(drawing.source, 'image/svg+xml')
+  expect(parsed.documentElement.namespaceURI).toBe('http://www.w3.org/2000/svg')
+  expect(parsed.querySelector('use')?.namespaceURI).toBe('http://www.w3.org/2000/svg')
+  expect(parsed.querySelector('use')?.getAttribute('href')).toBe('#shape')
+  expect(drawing.ratio).toBe(2)
 })

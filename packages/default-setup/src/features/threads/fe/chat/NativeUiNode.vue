@@ -2,6 +2,7 @@
   <div v-if="node.kind === 'box'" class="min-w-0 native-box" :style="boxStyle" :data-native-plugin="node.plugin">
     <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </div>
+  <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
   <span v-else-if="node.kind === 'text'" class="whitespace-pre-wrap break-words" :class="textClasses" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></span>
@@ -17,6 +18,7 @@
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue'
 import { openLink } from '@apackdev/sdk/fe'
+import NativeUiSvg from './NativeUiSvg.vue'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'

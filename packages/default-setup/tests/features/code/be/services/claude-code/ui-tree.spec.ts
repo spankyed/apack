@@ -101,3 +101,11 @@ it('preserves declared Box layout and refuses CSS injection or invalid geometry'
     expect(() => createClaudeUiDrawing({ type: 'Box', props })).toThrow('protocol error')
   }
 })
+
+
+it('maps native SVG data without callback authority and enforces source/dimension/leaf bounds', () => {
+  const source = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+  expect(createClaudeUiDrawing({ type: 'Svg', props: { source, alt: 'Native drawing', width: 40.5, height: 30, isInteractive: true } }).tree).toEqual({ kind: 'svg', source, alt: 'Native drawing', width: 40.5, height: 30, interactive: true })
+  for (const props of [{ source: '', alt: 'x' }, { source: 'x'.repeat(131073), alt: 'x' }, { source, alt: 'x', width: 0 }, { source, alt: 'x', height: 4097 }, { source, alt: 'x', isInteractive: 'yes' }]) expect(() => createClaudeUiDrawing({ type: 'Svg', props })).toThrow('protocol error')
+  expect(() => createClaudeUiDrawing({ type: 'Svg', props: { source, alt: 'x' }, children: [] })).toThrow('protocol error')
+})
