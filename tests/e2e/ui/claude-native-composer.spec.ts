@@ -60,6 +60,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   });
   const before = await snapshot();
   const nativeRows = appPage.locator('[data-native-assistant]');
+  await expect.poll(() => appPage.getByTestId('chat-transcript').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(96);
   await expect(nativeRows).toHaveCount(2);
   await expect(nativeRows.nth(0)).toContainText('Native display: Fixture completed.');
   await expect(nativeRows.nth(1)).toContainText('Native display: Second native text block.');

@@ -9,7 +9,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#272729]"
-        :style="{ maxHeight: 'calc(var(--composer-available-height) - 1rem)' }"
+        :style="{ maxHeight: 'calc(var(--composer-available-height) - clamp(7rem, calc(var(--composer-available-height) * 0.3), 10rem))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
