@@ -48,9 +48,9 @@ test('native extension fields, paint and hover work inside the actual composer',
   await strip.getByRole('button', { name: 'Refresh native count', exact: true }).click();
   await expect(strip.getByText('Native extension count: 1', { exact: true })).toBeVisible();
   await strip.getByRole('textbox', { name: 'Native field', exact: true }).fill('Native field draft');
-  await expect.poll(async () => readFile(join(workspace!, 'native-field.json'), 'utf8')).toBe(JSON.stringify('Native field draft'));
+  await expect.poll(async () => readFile(join(workspace!, 'native-field.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify('Native field draft'));
   await strip.getByRole('combobox', { name: 'Native choice', exact: true }).selectOption('beta');
-  await expect.poll(async () => readFile(join(workspace!, 'native-choice.json'), 'utf8')).toBe(JSON.stringify('beta'));
+  await expect.poll(async () => readFile(join(workspace!, 'native-choice.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify('beta'));
   const diagram = strip.getByRole('img', { name: 'Native extension diagram', exact: true });
   await expect(diagram).toBeVisible();
   await expect.poll(() => diagram.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true);
