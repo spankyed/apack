@@ -138,9 +138,21 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect.poll(async () => (await context()).native.state.busy, { timeout: 15000 }).toBe(false)
   await appPage.setViewportSize({ width: 680, height: 600 })
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeVisible()
+  const statusGeometry = await composerStatus.evaluate(element => {
+    const last = element.querySelector('span')?.lastElementChild
+    if (!last) return undefined
+    const range = document.createRange(); range.selectNodeContents(last)
+    const line = Array.from(range.getClientRects()).at(-1), clip = element.getBoundingClientRect()
+    return line ? { lineTop: line.top, lineBottom: line.bottom, clipTop: clip.top, clipBottom: clip.bottom, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight } : undefined
+  })
+  await writeFile(join(workspace!, 'native-composer-status-geometry.json'), JSON.stringify(statusGeometry))
+  expect(statusGeometry).toBeDefined()
+  expect(statusGeometry!.lineTop).toBeGreaterThanOrEqual(statusGeometry!.clipTop)
+  expect(statusGeometry!.lineBottom).toBeLessThanOrEqual(statusGeometry!.clipBottom + 1)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-normal-composer.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+  await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
   await expect(section.getByRole('button', { name: 'Back to conversation', exact: true })).toBeVisible()
   const stopped = await context(); expect(stopped.native.state.mainStatus).toBeUndefined(); expect(stopped.native.state.tasks).toEqual([])
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click(); await expect(card).toBeVisible()
