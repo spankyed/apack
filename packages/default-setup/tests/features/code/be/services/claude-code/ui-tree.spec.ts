@@ -166,3 +166,8 @@ it('preserves one native Button hotkey and refuses malformed bindings', () => {
   expect(createClaudeUiDrawing({ type: 'Button', props: { label: 'Run', hotkey: 'w' } }).tree).toMatchObject({ kind: 'button', hotkey: 'w' })
   for (const hotkey of ['W', 'ab', '!', '1\n', 1]) expect(() => createClaudeUiDrawing({ type: 'Button', props: { label: 'Run', hotkey } })).toThrow()
 })
+
+
+it.each([0, -1, 1.5, 1_000_000_001])('refuses Code line numbers outside the native contract: %s', startLine => {
+  expect(() => createClaudeUiDrawing({ type: 'Code', props: { source: 'literal', startLine } })).toThrow()
+})

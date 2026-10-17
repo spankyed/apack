@@ -165,7 +165,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const props = value.props
       if (!record(props) || typeof props.source !== 'string'
         || (props.language !== undefined && typeof props.language !== 'string') || (props.path !== undefined && typeof props.path !== 'string')
-        || (props.startLine !== undefined && (typeof props.startLine !== 'number' || !Number.isSafeInteger(props.startLine)))
+        || (props.startLine !== undefined && (typeof props.startLine !== 'number' || !Number.isSafeInteger(props.startLine) || props.startLine < 1 || props.startLine > 1_000_000_000))
         || (props.format !== undefined && props.format !== 'source' && props.format !== 'diff')
         || (props.wrap !== undefined && props.wrap !== 'wrap' && props.wrap !== 'truncate-end')) throw new ClaudeProtocolError('native Code props are invalid')
       return { kind: 'code', source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,

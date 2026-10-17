@@ -121,10 +121,10 @@ it('keeps embedded fences and markup literal inside native code with its gutter'
   await vi.waitFor(() => expect(f.root.querySelector('code')).not.toBeNull())
   const code = f.root.querySelector('code')!
   expect(code).not.toBeNull()
-  expect(code.textContent).toContain('```\n<script>bad()</script>')
+  expect([...f.root.querySelectorAll('code')].map(line => line.textContent).join('\n')).toBe('```\n<script>bad()</script>')
   expect(f.root.querySelector('script')).toBeNull()
   expect(f.root.textContent).not.toContain('fixture.html')
-  expect(f.root.querySelector('pre[aria-hidden="true"]')?.textContent).toBe('9\n10')
+  expect([...f.root.querySelectorAll('.native-source-row [aria-hidden="true"]')].map(line => line.textContent)).toEqual(['9', '10'])
 })
 
 
@@ -449,7 +449,7 @@ it('falls back to literal unnumbered source for a truncated native diff', async 
   const source = '@@ -1,2 +1,2 @@\n-only one'
   const f = mount({ nativeUi: { status: 'live', tree: { kind: 'code', source, startLine: 900, format: 'diff', wrap: 'wrap' } } })
   await vi.waitFor(() => expect(f.root.querySelector('code')).not.toBeNull())
-  expect(f.root.querySelector('code')?.textContent).toContain(source)
+  expect([...f.root.querySelectorAll('code')].map(line => line.textContent).join('\n')).toBe(source)
   expect(f.root.querySelector('[data-diff-kind]')).toBeNull()
   expect(f.root.querySelector('pre[aria-hidden="true"]')).toBeNull()
 })

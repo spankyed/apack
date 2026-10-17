@@ -145,6 +145,39 @@ test('native extension fields, paint and hover work inside the actual composer',
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
   await expect.poll(fitsComposer).toBe(true);
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-narrow.png') });
+  const codePreview = strip.getByRole('button', { name: 'Code preview', exact: true });
+  await codePreview.click();
+  const nativeCode = strip.getByRole('region', { name: 'Code', exact: true });
+  await expect(nativeCode).toBeVisible(); await nativeCode.scrollIntoViewIfNeeded();
+  await expect(nativeCode.locator('.native-source-row')).toHaveCount(4);
+  await expect(nativeCode.locator('.hljs-keyword').first()).toHaveText('const');
+  const wrappedCode = await nativeCode.evaluate(element => {
+    const rows = [...element.querySelectorAll('.native-source-row')];
+    return { firstHeight: rows[0].getBoundingClientRect().height, secondTop: rows[1].getBoundingClientRect().top,
+      firstBottom: rows[0].getBoundingClientRect().bottom, overflow: element.scrollWidth > element.clientWidth + 1,
+      aligned: rows.every(row => Math.abs(row.querySelector('code')!.getBoundingClientRect().top - row.querySelector('[aria-hidden]')!.getBoundingClientRect().top) < 1) };
+  });
+  expect(wrappedCode.firstHeight).toBeGreaterThan(20);
+  expect(wrappedCode.secondTop).toBeGreaterThanOrEqual(wrappedCode.firstBottom - 1);
+  expect(wrappedCode.aligned).toBe(true); expect(wrappedCode.overflow).toBe(false);
+  await expect(strip.getByText('language-hint-only.ts', { exact: true })).toHaveCount(0);
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-code-wrap.png') });
+  await codePreview.click(); await nativeCode.scrollIntoViewIfNeeded();
+  await expect.poll(() => nativeCode.locator('code').first().evaluate(element => ({
+    ellipsis: getComputedStyle(element).textOverflow, clipped: element.scrollWidth > element.clientWidth,
+    height: element.getBoundingClientRect().height,
+  }))).toEqual({ ellipsis: 'ellipsis', clipped: true, height: 20 });
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-code-truncate.png') });
+  await codePreview.click();
+  const nativeDiff = strip.getByRole('region', { name: 'Code diff', exact: true });
+  await expect(nativeDiff).toBeVisible(); await nativeDiff.scrollIntoViewIfNeeded();
+  await expect(nativeDiff.locator('[data-diff-kind="add"] code')).toHaveText('<img onerror="bad()">');
+  await expect(nativeDiff.locator('[data-diff-kind="remove"] code')).toHaveText('<script>old()</script>');
+  await expect(nativeDiff.locator('img, script')).toHaveCount(0);
+  expect(await nativeDiff.locator('[data-diff-kind="context"] .native-diff-number').allTextContents()).toEqual(['4', '8']);
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-code-diff.png') });
+  await codePreview.click(); await expect(nativeDiff).toHaveCount(0);
+  expect(await snapshot()).toEqual(before);
   await appPage.setViewportSize({ width: 680, height: 600 });
   await expect.poll(fitsComposer).toBe(true);
   const nativeSite = strip.locator('.native-extension-surface');
@@ -179,5 +212,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });
