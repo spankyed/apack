@@ -70,6 +70,12 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(main).toHaveCount(0, { timeout: 10000 })
   await writeFile(statusMode, 'normal')
   await expect(main).toContainText('AppNativeMain ' + sessionId, { timeout: 10000 })
+  const livePrefixPath = join(workspace!, "user's changed app prefix")
+  const livePrefix = livePrefixPath + ' --live-prefix'
+  const prefixScript = await readFile(join(workspace!, "user's app prefix"), 'utf8')
+  await writeFile(livePrefixPath, prefixScript.replace('result=subprocess.run', "os.environ['APACK_PREFIX_FIXTURE']='live'\nresult=subprocess.run"), { mode: 0o700 })
+  await writeFile(settingsPath, JSON.stringify({ ...originalSettings, env: { ...originalSettings.env, CLAUDE_CODE_SHELL_PREFIX: livePrefix } }))
+  await expect(main).toContainText('prefix=live', { timeout: 10000 })
   expect((await context()).native.state.ownerId).toBe(runningIdentity.native.state.ownerId)
   expect((await context()).native.state.pid).toBe(runningIdentity.native.state.pid)
   const nativeText = async () => (await context()).native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
@@ -94,11 +100,14 @@ test('hands one conversation to the native terminal and displays its main and ag
     throw error
   }
   await expect(tasks).not.toContainText('ForeignMustNotReachApp')
+  await expect(tasks).toContainText('prefix=' + livePrefix)
   const running = await context(); expect(running.native.state.sessionId).toBe(sessionId)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-main-agent.png') })
   await appPage.setViewportSize({ width: 680, height: 900 })
   await expect(main).toBeVisible(); await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-narrow.png') })
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
+  await writeFile(settingsPath, JSON.stringify(originalSettings))
+  await expect(main).toContainText('prefix=original', { timeout: 10000 })
   const nativeOwnerId = (await context()).native.state.ownerId
   await app.navigate('host/settings'); await app.navigate('default-setup/threads')
   await expect.poll(async () => (await context()).native?.state?.ownerId).toBe(nativeOwnerId)
@@ -142,5 +151,5 @@ test('hands one conversation to the native terminal and displays its main and ag
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeLiveMainSettings: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })
