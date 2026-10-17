@@ -69,7 +69,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   }
   const acceptedSuggestions = JSON.parse(await readFile(join(workspace!, 'native-accepted-suggestions.json'), 'utf8'));
   expect(acceptedSuggestions.map((value: any) => value.key.key)).toEqual(['tab', 'right']);
-  expect(acceptedSuggestions.every((value: any) => value.origin.kind === 'person')).toBe(true);
+  expect(acceptedSuggestions.every((value: any) => value.origin.kind === 'composer')).toBe(true);
   await suggest.click();
   await expect.poll(async () => (await suggestions()).at(-1)?.result.isShown).toBe(false);
   await expect(editor).toHaveText('Review the implementation.');
