@@ -176,3 +176,19 @@ it('renders nested text and links inline without hiding a text-only nested surfa
   expect(f.press).not.toHaveBeenCalled()
   expect(f.submit).not.toHaveBeenCalled()
 })
+
+
+it('applies native Box direction, spacing, dimensions and hidden state without submitting chat', async () => {
+  const box = { kind: 'box' as const, layout: { flexDirection: 'row' as const, gap: 'sm' as const, paddingX: 2, width: '100%', alignItems: 'center' as const }, children: [{ kind: 'button' as const, label: 'First' }, { kind: 'text' as const, text: 'Second' }] }
+  const f = mount({ nativeUi: { status: 'live', tree: box } })
+  const element = f.root.querySelector('.native-box')! as HTMLElement
+  expect(element.style.flexDirection).toBe('row')
+  expect(element.style.gap).toBe('0.5rem')
+  expect(element.style.paddingLeft).toBe('2ch')
+  expect(element.style.paddingRight).toBe('2ch')
+  expect(element.style.width).toBe('100%')
+  expect(element.style.alignItems).toBe('center')
+  f.state.nativeUi = { status: 'live', tree: { ...box, layout: { display: 'none' } } }; await nextTick()
+  expect(element.style.display).toBe('none')
+  expect(f.submit).not.toHaveBeenCalled()
+})

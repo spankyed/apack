@@ -1,5 +1,5 @@
 <template>
-  <div v-if="node.kind === 'box'" class="flex flex-col gap-1 min-w-0" :data-native-plugin="node.plugin">
+  <div v-if="node.kind === 'box'" class="min-w-0 native-box" :style="boxStyle" :data-native-plugin="node.plugin">
     <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </div>
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
@@ -15,12 +15,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 import { openLink } from '@apackdev/sdk/fe'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 const props = defineProps<{ node: ClaudeUiNode }>()
+const boxStyle = computed<CSSProperties>(() => {
+  if (props.node.kind !== 'box') return {}
+  const layout = props.node.layout ?? {}
+  const result: CSSProperties = { display: 'flex', flexDirection: 'column', position: 'relative' }
+  const scale = { xs: 0.25, sm: 0.5, md: 1, lg: 1.5, xl: 2 }
+  for (const [name, value] of Object.entries(layout)) {
+    const horizontal = /(?:Width|width|Left|left|Right|right|columnGap|X)$/.test(name)
+    const unit = horizontal ? 'ch' : 'lh'
+    const numeric = typeof value === 'number'
+    const spacing = /^(?:gap|columnGap|rowGap|margin|padding)/.test(name)
+    const converted = spacing ? numeric ? ['gap', 'margin', 'padding'].includes(name) ? `${value}lh ${value}ch` : `${value}${unit}` : `${scale[value as keyof typeof scale]}rem`
+      : ['flexGrow', 'flexShrink'].includes(name) ? value
+      : numeric ? `${value}${unit}` : value
+    if (name.endsWith('X') || name.endsWith('Y')) {
+      const base = name.slice(0, -1)
+      Object.assign(result, name.endsWith('X') ? { [`${base}Left`]: converted, [`${base}Right`]: converted } : { [`${base}Top`]: converted, [`${base}Bottom`]: converted })
+    } else Object.assign(result, { [name]: converted })
+  }
+  return result
+})
 const textClasses = computed(() => {
   if (props.node.kind !== 'text') return []
   const style = props.node.style ?? {}

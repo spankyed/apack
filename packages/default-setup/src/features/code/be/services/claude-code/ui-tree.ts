@@ -1,3 +1,4 @@
+import { readClaudeUiBoxLayout } from './ui-box-layout.ts'
 import { randomUUID } from 'node:crypto'
 import { ClaudeProtocolError } from './errors.ts'
 import type { ClaudeUiPress } from './ui-controls.ts'
@@ -85,7 +86,10 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
           ? { kind: 'text', text: children.join(''), ...styling, ...attribution }
           : { kind: 'text', text: '', children: children.map(visit), ...styling, ...attribution }
       }
-      return { kind: 'box', children: children.map(visit), ...attribution }
+      const props = value.props ?? {}
+      if (!record(props)) throw new ClaudeProtocolError('native Box props are invalid')
+      const layout = readClaudeUiBoxLayout(props)
+      return { kind: 'box', children: children.map(visit), ...(layout ? { layout } : {}), ...attribution }
     }
     if (value.type === 'Link') {
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')

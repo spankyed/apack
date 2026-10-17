@@ -92,3 +92,12 @@ it('keeps unsafe Link targets inert while preserving labels and inline children'
     expect(drawing.actions.size).toBe(0)
   }
 })
+
+
+it('preserves declared Box layout and refuses CSS injection or invalid geometry', () => {
+  const props = { flexDirection: 'row', flexWrap: 'wrap', gap: 'sm', width: '100%', paddingX: 2, top: -1, flexGrow: 1 }
+  expect(createClaudeUiDrawing({ type: 'Box', props }).tree).toEqual({ kind: 'box', children: [], layout: props })
+  for (const props of [{ display: 'block' }, { width: 'url(https://example.com/)' }, { padding: 10001 }, { left: 0.5 }, { gap: 'huge' }, { flexShrink: 10001 }]) {
+    expect(() => createClaudeUiDrawing({ type: 'Box', props })).toThrow('protocol error')
+  }
+})
