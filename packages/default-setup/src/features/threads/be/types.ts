@@ -472,6 +472,7 @@ export type ClaudeUiViewRequest =
   | ({ type: 'CLAUDE_UI_FOCUS'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent)
   | ({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE'; threadId: string; mountId: string } & ClaudePromptCompletionRequest)
   | ({ type: 'CLAUDE_PROMPT_EDIT'; threadId: string; mountId: string } & ClaudePromptEdit)
+  | ({ type: 'CLAUDE_UI_SCROLL'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiScrollEvent)
   | ({ type: 'CLAUDE_UI_PANE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiPaneEvent)
   | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string }
   | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string }

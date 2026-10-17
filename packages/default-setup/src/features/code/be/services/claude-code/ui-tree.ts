@@ -7,6 +7,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  scrollTargets: ReadonlyMap<string, { plugin: string; key: string }>
   focusables: ReadonlyMap<string, { plugin: string; key: string }>
   links: ReadonlyMap<string, ReadonlySet<string> | undefined>
   fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>
@@ -53,6 +54,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   validateBudget(tree)
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
   const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
+  const scrollBoxes = new Map<string, { plugin: string; key: string }>()
   const focusables = new Map<string, { plugin: string; key: string }>()
   function focusIdentity(plugin: string, key: unknown): { focusId?: string } {
     if (plugin.length > 256 || typeof key !== 'string' || key.length > 256) return {}
@@ -118,7 +120,9 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       }
       const hover = readClaudeUiHover(value, props)
       const boxKey = props.key === undefined ? undefined : typeof props.key === 'string' && props.key.length > 0 && props.key.length <= 10000 && !/[\u0000-\u001f\u007f]/.test(props.key) ? props.key : false
-      return { kind: 'box', ...(boxKey !== undefined ? { boxKey } : {}), ...(hover ? { hover } : {}), children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
+      const scrollId = plugin && plugin.length <= 256 && typeof boxKey === 'string' && boxKey.length <= 256 ? randomUUID() : undefined
+      if (scrollId) scrollBoxes.set(scrollId, { plugin: plugin!, key: boxKey as string })
+      return { kind: 'box', ...(scrollId ? { scrollId } : {}), ...(boxKey !== undefined ? { boxKey } : {}), ...(hover ? { hover } : {}), children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
     }
     if (value.type === 'Link') {
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')
@@ -237,5 +241,10 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     }
     return { kind: 'unsupported', component: value.type, ...attribution }
   }
-  return { tree: visit(tree), actions, fields, links, focusables }
+  const result = visit(tree)
+  const targets = [...scrollBoxes, ...focusables]
+  const counts = new Map<string, number>()
+  for (const [, identity] of targets) { const key = JSON.stringify(identity); counts.set(key, (counts.get(key) ?? 0) + 1) }
+  const scrollTargets = new Map(targets.filter(([, identity]) => counts.get(JSON.stringify(identity)) === 1))
+  return { tree: result, actions, fields, links, focusables, scrollTargets }
 }

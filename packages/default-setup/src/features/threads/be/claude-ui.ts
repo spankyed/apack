@@ -97,6 +97,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_SCROLL') {
+    if (!view) return
+    bind(key, view)
+    view.mount?.scroll(event)
+    return
+  }
   if (event.type === 'CLAUDE_UI_PANE') {
     if (!view) return
     bind(key, view)

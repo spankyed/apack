@@ -19,6 +19,14 @@ const field = z.object({
 const input = field.extend({ kind: z.enum(['change', 'submit']) })
 const fieldResult = z.object({ handled: z.boolean(), element: z.string().optional(), value: z.string().optional() }).passthrough()
 // Absent element reports hold only; null selects the site container (native 2.1.302).
+const scroll = z.object({ client_id: clientId, surface, component: z.enum(['Pane', 'AbovePrompt']), instance_id: z.string().max(256),
+  offset: z.number().int().nonnegative(), by: z.number().int(), body_rows: z.number().int().nonnegative(), content_rows: z.number().int().nonnegative(),
+  pointer: z.object({ column: z.number().int(), row: z.number().int() }).strict().optional(),
+  keyed: z.array(z.object({ plugin: z.string().max(256), key: z.string().max(256), top: z.number().int().nonnegative(), bottom: z.number().int().nonnegative() }).strict()).max(512).optional(),
+}).strict()
+const scrollResult = z.object({ moved: z.boolean(), offset: z.number().int(), deny: z.string().optional(), follow_end: z.boolean().optional() }).passthrough()
+export type ClaudeUiScroll = z.infer<typeof scroll>
+
 const focusElement = z.object({ plugin: z.string().max(256), key: z.string().max(256) }).strict()
 const focus = z.object({ client_id: clientId, surface, component: z.enum(['Pane', 'AbovePrompt']),
   instance_id: z.string().max(256), is_held: z.boolean(), element: focusElement.nullable().optional(),
@@ -116,6 +124,10 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async closePane(options: { client_id: string; id: string }) {
       const valid = paneSelection.omit({ surface: true }).parse(options)
       return z.object({ closed: z.boolean() }).passthrough().parse(await request({ subtype: 'ui_close', ...valid }))
+    },
+    /** Native owns scroll hooks and the authoritative offset, including a denied move. */
+    async scroll(options: ClaudeUiScroll) {
+      return scrollResult.parse(await request({ subtype: 'ui_scroll', ...scroll.parse(options) }))
     },
     /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
     async focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult> {

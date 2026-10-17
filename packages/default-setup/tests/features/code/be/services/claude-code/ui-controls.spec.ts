@@ -197,3 +197,14 @@ describe('native pane controls', () => {
     await expect(roster).rejects.toThrow(); f.controls.close()
   })
 })
+
+it('preserves native scroll denial/follow-end and validates site geometry before writing', async () => {
+  const f = fixture()
+  const options = { ...client, component: 'Pane' as const, instance_id: 'review', offset: 3, by: -2, body_rows: 8, content_rows: 30, keyed: [{ plugin: 'fixture', key: 'target', top: 10, bottom: 12 }] }
+  const pending = f.ui.scroll(options); await Promise.resolve()
+  expect(f.writes[0].request).toEqual({ subtype: 'ui_scroll', ...options })
+  f.reply(0, { moved: false, offset: 4, deny: 'kept', follow_end: true })
+  await expect(pending).resolves.toMatchObject({ moved: false, offset: 4, follow_end: true })
+  await expect(f.ui.scroll({ ...options, body_rows: -1 })).rejects.toThrow()
+  expect(f.writes).toHaveLength(1); f.controls.close()
+})

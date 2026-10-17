@@ -11,10 +11,10 @@
     </div>
     <div ref="site" class="native-pane-surface min-h-16 max-h-56 min-w-0 overflow-auto text-[13px] leading-5 outline-none" :style="{ height: `${Math.max(4, Math.min(activePane?.rows ?? 12, 24)) * 20}px` }" role="tabpanel" :aria-label="title" tabindex="0"
       @focusin="focusIn" @focusout="focusOut" @compositionstart="composing = true" @compositionend="composing = false"
-      @scroll="reportLayout" @keydown="siteKey" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
-      <NativeUiNode v-if="panes.body.status === 'live'" :node="panes.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" />
+      @keydown="siteKey" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
+      <div data-native-scroll-content><NativeUiNode v-if="panes.body.status === 'live'" :node="panes.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" />
       <p v-else-if="panes.body.status === 'error'" role="status" class="text-xs text-neutral-500">Claude pane unavailable</p>
-      <span v-else class="text-xs text-neutral-500" role="status">Loading pane…</span>
+      <span v-else class="text-xs text-neutral-500" role="status">Loading pane…</span></div>
     </div>
     <span ref="measure" data-pane-cell-measure aria-hidden="true" class="pointer-events-none invisible fixed -left-[9999px] whitespace-pre font-mono text-[13px]">0000000000</span>
   </section>
@@ -24,15 +24,17 @@
 import { computed, ref, watch, provide, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { X } from 'lucide-vue-next'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiFieldEvent } from '#generated/types.ts'
+import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null }>()
-const emit = defineEmits<{ operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': [] }>()
+const emit = defineEmits<{ operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': []; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
 const shown = computed(() => props.panes.roster.shown_id)
 const activePane = computed(() => props.panes.roster.panes.find(pane => pane.id === shown.value))
 const title = computed(() => activePane.value?.title ?? 'Claude pane')
 const site = ref<HTMLElement | null>(null)
+const scroll = useClaudeSiteScroll({ element: site, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
 const hover = createClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
 let revision = 0, applying = false, held = false, autoEntering = false
@@ -97,8 +99,8 @@ watch(() => props.focus, reply => {
   try {
     target.focus({ preventScroll: true })
     const bounds = element.getBoundingClientRect(), control = target.getBoundingClientRect()
-    if (control.top < bounds.top) element.scrollTop += control.top - bounds.top
-    else if (control.bottom > bounds.bottom) element.scrollTop += control.bottom - bounds.bottom
+    if (control.top < bounds.top) scroll.reveal(element.scrollTop + control.top - bounds.top)
+    else if (control.bottom > bounds.bottom) scroll.reveal(element.scrollTop + control.bottom - bounds.bottom)
   } finally { applying = false }
 })
 </script>

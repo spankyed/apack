@@ -1548,6 +1548,7 @@ type ClaudeUiMountState = ({
     message: string;
 }) & {
     panes?: ClaudeUiPanePresentation;
+    scroll?: ClaudeUiScrollState;
 };
 
 type ClaudeUiNode = {
@@ -1572,6 +1573,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'box';
+    scrollId?: string;
     boxKey?: string | false;
     hover?: ClaudeUiHover;
     layout?: ClaudeUiBoxLayout;
@@ -1650,6 +1652,7 @@ type ClaudeUiPaneEvent = {
 };
 
 interface ClaudeUiPanePresentation {
+    scroll?: ClaudeUiScrollState;
     roster: ClaudeUiPaneRoster;
     body: {
         status: 'connecting' | 'error' | 'rendering';
@@ -1675,6 +1678,29 @@ type ClaudeUiPromptFrame = z.infer<typeof promptFrame>;
 type ClaudeUiRender = z.infer<typeof render>;
 
 type ClaudeUiRenderResult = z.infer<typeof renderResult>;
+
+type ClaudeUiScroll = z.infer<typeof scroll>;
+
+interface ClaudeUiScrollEvent {
+    paneId?: string;
+    revision: number;
+    offset: number;
+    by: number;
+    rows: number;
+    contentRows: number;
+    keyed: {
+        id: string;
+        top: number;
+        bottom: number;
+    }[];
+}
+
+interface ClaudeUiScrollState {
+    serial: number;
+    requestRevision?: number;
+    offset: number;
+    followEnd: boolean;
+}
 
 type ClaudeUiSelect = z.infer<typeof field>;
 
@@ -1711,6 +1737,10 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
 } & ClaudePromptEdit) | ({
+    type: 'CLAUDE_UI_SCROLL';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiScrollEvent) | ({
     type: 'CLAUDE_UI_PANE';
     threadId: string;
     mountId: string;
@@ -7399,6 +7429,13 @@ declare function createClaudeUiControls(initialized: Promise<ClaudeInitializatio
     }): Promise<z.objectOutputType<{
         closed: z.ZodBoolean;
     }, z.ZodTypeAny, "passthrough">>;
+    /** Native owns scroll hooks and the authoritative offset, including a denied move. */
+    scroll(options: ClaudeUiScroll): Promise<z.objectOutputType<{
+        moved: z.ZodBoolean;
+        offset: z.ZodNumber;
+        deny: z.ZodOptional<z.ZodString>;
+        follow_end: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">>;
     /** Hooks may redirect the ring; the mounted owner validates the returned identity before applying it. */
     focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult>;
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
@@ -8586,6 +8623,81 @@ declare function resolveReferences(references: MessageReferences | undefined): P
     textPrefix: string;
     imageBlocks: any[];
     addDirs: string[];
+}>;
+
+declare const scroll: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    component: z.ZodEnum<["Pane", "AbovePrompt"]>;
+    instance_id: z.ZodString;
+    offset: z.ZodNumber;
+    by: z.ZodNumber;
+    body_rows: z.ZodNumber;
+    content_rows: z.ZodNumber;
+    pointer: z.ZodOptional<z.ZodObject<{
+        column: z.ZodNumber;
+        row: z.ZodNumber;
+    }, "strict", z.ZodTypeAny, {
+        column: number;
+        row: number;
+    }, {
+        column: number;
+        row: number;
+    }>>;
+    keyed: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        plugin: z.ZodString;
+        key: z.ZodString;
+        top: z.ZodNumber;
+        bottom: z.ZodNumber;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        plugin: string;
+        top: number;
+        bottom: number;
+    }, {
+        key: string;
+        plugin: string;
+        top: number;
+        bottom: number;
+    }>, "many">>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    by: number;
+    component: "AbovePrompt" | "Pane";
+    instance_id: string;
+    offset: number;
+    body_rows: number;
+    content_rows: number;
+    pointer?: {
+        column: number;
+        row: number;
+    } | undefined;
+    keyed?: {
+        key: string;
+        plugin: string;
+        top: number;
+        bottom: number;
+    }[] | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    by: number;
+    component: "AbovePrompt" | "Pane";
+    instance_id: string;
+    offset: number;
+    body_rows: number;
+    content_rows: number;
+    pointer?: {
+        column: number;
+        row: number;
+    } | undefined;
+    keyed?: {
+        key: string;
+        plugin: string;
+        top: number;
+        bottom: number;
+    }[] | undefined;
 }>;
 
 /**

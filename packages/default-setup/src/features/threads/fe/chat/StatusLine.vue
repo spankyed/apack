@@ -6,7 +6,7 @@
         :title="cwd" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0 whitespace-pre-wrap break-words">{{ displayPath }}</span></button>
     </div>
     <div v-if="nativeUi?.status === 'live' && hasContent" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface max-h-56 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2.5': statusLine }">
-      <NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
+      <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
   </div>
@@ -17,6 +17,7 @@ import { computed, provide, onBeforeUnmount, ref, watch } from 'vue'
 import { FolderOpen } from 'lucide-vue-next'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
@@ -29,8 +30,9 @@ const displayPath = computed(() => {
   const segments = props.cwd.split(/[\\/]/).filter(Boolean)
   return segments.length > 2 ? `…/${segments.at(-1)}` : props.statusLine
 })
-const emit = defineEmits<{ click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent] }>()
+const emit = defineEmits<{ click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
 const nativeSite = ref<HTMLElement | null>(null)
+const scroll = useClaudeSiteScroll({ element: nativeSite, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
 let focusRevision = 0
 let applyingFocus = false
 let autoEntering = false
@@ -65,8 +67,8 @@ watch(() => props.nativeFocus, reply => {
     // Reveal the control in its own site without scrolling the surrounding conversation.
     if (target !== site) {
       const bounds = site.getBoundingClientRect(), control = target.getBoundingClientRect()
-      if (control.top < bounds.top || control.height > bounds.height) site.scrollTop += control.top - bounds.top
-      else if (control.bottom > bounds.bottom) site.scrollTop += control.bottom - bounds.bottom
+      if (control.top < bounds.top || control.height > bounds.height) scroll.reveal(site.scrollTop + control.top - bounds.top)
+      else if (control.bottom > bounds.bottom) scroll.reveal(site.scrollTop + control.bottom - bounds.bottom)
     }
   } finally { applyingFocus = false }
 })

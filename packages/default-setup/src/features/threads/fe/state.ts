@@ -1541,6 +1541,9 @@ const threadsState = setup({
       if (!view || view.threadId !== event.threadId || (view.focusRevision ?? 0) !== event.result.revision || view.focusSite !== event.result.paneId) return {}
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focus: event.result } } }
     }) },
+    CLAUDE_UI_SCROLL: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+    } },
     CLAUDE_UI_PANE: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

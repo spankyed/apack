@@ -5,6 +5,7 @@ function fixture() {
   let roster: ClaudeUiPaneRoster = { panes: [{ id: 'a', title: 'A', plugin: 'fixture' }, { id: 'b', title: 'B', plugin: 'fixture' }], shown_id: 'a', focused_id: null, focus_requested_id: null }
   let current = true, handle = 0
   const ui = {
+    scroll: vi.fn(async () => ({ moved: true, offset: 0 })),
     panes: vi.fn(async () => roster),
     showPane: vi.fn(async ({ id }: { id: string }) => { roster = { ...roster, shown_id: id }; return { shown_id: id } }),
     focusPane: vi.fn(async ({ id }: { id: string | null }) => { roster = { ...roster, focused_id: id }; return { focused_id: id } }),

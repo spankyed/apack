@@ -71,7 +71,7 @@ export type ClaudeUiNode =
   | { kind: 'text'; hover?: ClaudeUiHover; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
   | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
-  | { kind: 'box'; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
+  | { kind: 'box'; scrollId?: string; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
   | { kind: 'button'; focusId?: string; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
@@ -92,7 +92,18 @@ export type ClaudePromptReply =
 
 export type ClaudeUiFieldEvent = { actionId: string; revision: number; kind: 'change' | 'submit' | 'select'; value: string }
 
+export interface ClaudeUiScrollEvent {
+  paneId?: string
+  revision: number
+  offset: number
+  by: number
+  rows: number
+  contentRows: number
+  keyed: { id: string; top: number; bottom: number }[]
+}
+export interface ClaudeUiScrollState { serial: number; requestRevision?: number; offset: number; followEnd: boolean }
 export interface ClaudeUiPanePresentation {
+  scroll?: ClaudeUiScrollState
   roster: import('./ui-controls.ts').ClaudeUiPaneRoster
   body: { status: 'connecting' | 'rendering' | 'error'; message?: string } | { status: 'live'; tree: ClaudeUiNode }
 }
@@ -102,7 +113,7 @@ export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { panes?: ClaudeUiPanePresentation }
+) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

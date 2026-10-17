@@ -1,5 +1,5 @@
 <template>
-  <label class="flex min-w-0 flex-col gap-1.5" :data-native-plugin="node.plugin">
+  <label class="flex min-w-0 flex-col gap-1.5" :data-native-plugin="node.plugin" :data-native-scroll-id="node.focusId">
     <span v-if="node.label" class="text-[11px] font-medium leading-4 text-neutral-400">{{ node.label }}</span>
     <select v-if="node.kind === 'select'" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :aria-label="node.label || 'Claude selection'"
       class="h-9 min-w-0 max-w-full rounded-lg border border-white/[0.08] bg-black/20 px-2.5 text-[13px] text-neutral-200 transition-colors hover:border-white/15 focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/10" @change="pick">

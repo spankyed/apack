@@ -1,10 +1,11 @@
+import { createClaudeSiteScroll } from './ui-site-scroll.ts'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeUiControls, ClaudeUiPaneRoster } from './ui-controls.ts'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply } from './ui-presentation.ts'
 
 /** Panes share the view's native attachment and lifetime, but never its composer callbacks. */
 export function createClaudePaneHost(options: {
-  ui: Pick<ClaudeUiControls, 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'render' | 'press' | 'input' | 'select' | 'focus'>
+  ui: Pick<ClaudeUiControls, 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'render' | 'press' | 'input' | 'select' | 'focus' | 'scroll'>
   client: { client_id: string; surface: 'desktop' }
   current(): boolean
   publish(): void
@@ -18,10 +19,28 @@ export function createClaudePaneHost(options: {
   let body: ClaudeUiPanePresentation['body'] = { status: 'connecting' }
   let drawing: ClaudeUiDrawing | undefined, fields: ClaudeUiDrawing | undefined
   let scheduled: ReturnType<typeof setTimeout> | undefined
+  const scrolls = new Map<string, ReturnType<typeof createClaudeSiteScroll>>()
   const layouts = new Map<string, { columns: number; rows: number; offset: number }>()
   const revisions = new Map<string, number>(), completed = new Map<string, number>(), focusRevisions = new Map<string, number>()
   const current = () => !disposed && options.current()
   const publish = () => { if (current()) options.publish() }
+  function siteScroll(id: string) {
+    let host = scrolls.get(id)
+    if (!host) {
+      host = createClaudeSiteScroll({ ui, client, component: 'Pane', instanceId: id,
+        current: () => current() && !!roster?.panes.some(pane => pane.id === id),
+        drawing: () => roster?.shown_id === id ? drawing : undefined,
+        publish: state => {
+          if (roster?.shown_id !== id) return
+          const layout = layouts.get(id)
+          if (layout && layout.offset !== state.offset) { layouts.set(id, { ...layout, offset: state.offset }); invalidate() }
+          publish()
+        },
+      })
+      scrolls.set(id, host)
+    }
+    return host
+  }
   function retire() {
     drawing = undefined
     function inert(node: import('./ui-presentation.ts').ClaudeUiNode): import('./ui-presentation.ts').ClaudeUiNode {
@@ -80,6 +99,7 @@ export function createClaudePaneHost(options: {
           epoch++; drawing = undefined; fields = undefined; revisions.clear(); completed.clear()
         }
         roster = next
+        for (const [id, host] of scrolls) if (!next.panes.some(pane => pane.id === id)) { host.dispose(); scrolls.delete(id); layouts.delete(id) }
         if (changed) { publish(); invalidate() }
       } while (current() && rosterDirty)
     } catch (error) {
@@ -87,10 +107,11 @@ export function createClaudePaneHost(options: {
     } finally { reading = false }
   }
   return {
-    get state(): ClaudeUiPanePresentation | undefined { return !disposed && roster?.panes.length ? { roster, body } : undefined },
+    get state(): ClaudeUiPanePresentation | undefined { return !disposed && roster?.panes.length ? { roster, body, ...(roster.shown_id && siteScroll(roster.shown_id).state ? { scroll: siteScroll(roster.shown_id).state } : {}) } : undefined },
     start: refresh,
     receive(event: Record<string, unknown>) {
       if (!current() || event.type !== 'system') return
+      if (event.subtype === 'ui_scroll' && event.component === 'Pane' && typeof event.instance_id === 'string' && roster?.panes.some(pane => pane.id === event.instance_id)) siteScroll(event.instance_id).receive(event)
       if (event.subtype === 'ui_panes') { if (focusInFlight) refreshAfterFocus = true; else void refresh() }
       if (event.subtype === 'ui_invalidate' && event.event === 'ui.render') invalidate()
       if (event.subtype === 'ui_focus' && event.client_id === client.client_id && event.component === 'Pane' && event.instance_id === roster?.shown_id) {
@@ -98,7 +119,8 @@ export function createClaudePaneHost(options: {
         if (id && roster?.shown_id) options.requestFocus?.(id, focusRevisions.get(roster.shown_id) ?? 0, roster.shown_id)
       }
     },
-    dispose() { disposed = true; epoch++; drawing = undefined; fields = undefined; roster = undefined; if (scheduled) clearTimeout(scheduled) },
+    dispose() { for (const host of scrolls.values()) host.dispose(); scrolls.clear(); disposed = true; epoch++; drawing = undefined; fields = undefined; roster = undefined; if (scheduled) clearTimeout(scheduled) },
+    scroll(event: import('./ui-presentation.ts').ClaudeUiScrollEvent) { if (event.paneId === roster?.shown_id && event.paneId) siteScroll(event.paneId).report(event) },
     ownsAction(id: string) { return drawing?.actions.has(id) === true },
     ownsField(id: string) { return fields?.fields.has(id) === true },
     async operate(event: ClaudeUiPaneEvent) {

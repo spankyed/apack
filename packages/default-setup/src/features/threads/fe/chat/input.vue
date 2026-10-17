@@ -17,10 +17,10 @@
         @dragleave="onDragLeave"
         @dragover.prevent
         @drop.prevent="onDrop">
-        <NativePanePanel v-if="nativeUi?.panes" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="tiptapRef?.editor?.commands.focus()" />
+        <NativePanePanel v-if="nativeUi?.panes" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="tiptapRef?.editor?.commands.focus()" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
-          @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @focus-report="emit('native-ui-focus', $event)" />
+          @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
@@ -290,6 +290,7 @@ const emit = defineEmits<{
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
+  (e: 'native-ui-scroll', event: import('#generated/types.ts').ClaudeUiScrollEvent): void
   (e: 'native-ui-pane', event: import('#generated/types.ts').ClaudeUiPaneEvent): void
   (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void
   (e: 'native-ui-field', event: import('#generated/types.ts').ClaudeUiFieldEvent): void
