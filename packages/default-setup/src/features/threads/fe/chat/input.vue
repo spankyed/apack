@@ -180,6 +180,7 @@
             </Button>
             <Button
               type="submit"
+              aria-label="Send"
               :disabled="submitting || (!hasTextContent && !hasAttachments) || disabled"
               class="px-2 @lg:px-4"
             >
