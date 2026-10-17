@@ -105,14 +105,11 @@ test('hands one conversation to the native terminal and displays its main and ag
   expect((await context()).sessionId).toBe(sessionId)
   let resumedCost = 0
   await expect.poll(async () => {
-    for (const bucket of await readdir(projects)) {
-      try {
-        const rows = (await readFile(join(projects, bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
-        resumedCost = rows.filter(row => row.type === 'cost-state').at(-1)?.totalCostUSD ?? 0
-        if (resumedCost > nativeCost) return (await context()).claude.totalCostUsd === resumedCost
-      } catch (error: any) { if (error.code !== 'ENOENT') throw error }
-    }
-    return false
+    const text = await readFile(join(workspace!, 'native-print-results.jsonl'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })
+    const result = text.split('\n').slice(0, -1).map(line => JSON.parse(line)).at(-1)
+    if (result?.sessionId !== sessionId || result.totalCostUsd <= nativeCost) return false
+    resumedCost = result.totalCostUsd
+    return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
