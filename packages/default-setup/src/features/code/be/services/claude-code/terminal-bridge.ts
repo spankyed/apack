@@ -4,7 +4,7 @@ import type { ClaudeNativeTranscript } from './terminal-journal.ts'
 import { createClaudeTerminalSession, parseClaudeTerminalMetadata, type ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createClaudeTerminalStatus } from './terminal-status.ts'
@@ -29,6 +29,9 @@ export async function createClaudeTerminalBridge(options: {
   const projection = createClaudeTerminalStatus(options.sessionId)
   const session = createClaudeTerminalSession(options.sessionId)
   const transcripts: ClaudeNativeTranscript[] = []
+  let prefixLauncher: string | undefined, prefixProblem: string | undefined
+  let updatePrefix: ((prefix: string | undefined) => Promise<void>) | undefined
+  let prefixGeneration = randomUUID()
   let mainCommand = command(options.settings.effective.statusLine) ?? null
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let closed = false, busy = false, ready = false
@@ -83,7 +86,18 @@ export async function createClaudeTerminalBridge(options: {
         else settle(new Error('Native prompt did not produce a stored user message'))
         return reply(200, {})
       }
+      if (request.url === '/prefix') {
+        if (value.sessionId !== projection.sessionId || !updatePrefix || (value.prefix !== null && (typeof value.prefix !== 'string' || value.prefix.length > 32768)) || value.prefix === prefixLauncher) return reply(409, {})
+        await updatePrefix(value.prefix === null ? undefined : value.prefix as string)
+        prefixProblem = undefined; options.changed(); return reply(200, {})
+      }
+      if (request.url === '/prefix-error') {
+        if (value.sessionId !== projection.sessionId || typeof value.message !== 'string') return reply(409, {})
+        prefixProblem = 'Native status capture was refused: ' + value.message.slice(0, 1000)
+        projection.clearOutput(); options.changed(); return reply(200, {})
+      }
       if (request.url === '/native-status') {
+        if (value.generation !== prefixGeneration) return reply(409, {})
         if (value.kind === 'main' && value.command !== mainCommand) return reply(409, {})
         if (!projection.accept(value)) return reply(409, {})
         options.changed(); return reply(200, {})
@@ -110,34 +124,54 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(runtime, runtimeSource, { mode: 0o600 })
     const configuredPrefix = object(options.settings.effective.env)?.CLAUDE_CODE_SHELL_PREFIX
     const shellPrefix = typeof configuredPrefix === 'string' ? configuredPrefix : options.shellPrefix
+    const configs = new Map<string, Record<string, unknown>>()
     async function wrapper(kind: 'main' | 'subagent', original: string, delegate = false): Promise<string> {
       const config = join(directory, kind + '.json'), launcher = join(directory, kind)
-      await writeFile(config, JSON.stringify({ socketPath, token, commands: { [original]: kind }, electronEnv: options.electronEnv, originalPrefix: shellPrefix, ...(delegate ? { delegatePrefix: shellPrefix, captureMain: true } : {}) }), { mode: 0o600 })
+      const value = { socketPath, token, generation: prefixGeneration, commands: { [original]: kind }, electronEnv: options.electronEnv, originalPrefix: shellPrefix, ...(delegate ? { delegatePrefix: shellPrefix, captureMain: true } : {}) }
+      configs.set(config, value)
+      await writeFile(config, JSON.stringify(value), { mode: 0o600 })
       await writeFile(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${quote(process.execPath)} ${quote(runtime)} ${quote(config)} "$@"\n`, { mode: 0o700 })
       return delegate ? launcher : quote(launcher) + ' ' + quote(original)
     }
     // Keep native managed-helper selection authoritative. Never replace a managed setting with our flag.
     const managed = (key: string) => options.settings.sources.some(source => /policy|managed/i.test(source.source) && source.settings[key] !== undefined)
     const settings: Record<string, unknown> = {}
-    if (!managed('statusLine')) settings.env = { CLAUDE_CODE_SHELL_PREFIX: await wrapper('main', main ?? '', true) }
+    if (!managed('statusLine')) prefixLauncher = await wrapper('main', main ?? '', true)
     if (subagent && !managed('subagentStatusLine')) settings.subagentStatusLine = { ...object(options.settings.effective.subagentStatusLine), command: await wrapper('subagent', subagent) }
+    updatePrefix = async prefix => {
+      prefixGeneration = randomUUID(); projection.clearOutput()
+      for (const [path, config] of configs) {
+        config.generation = prefixGeneration; config.originalPrefix = prefix
+        if (config.captureMain) config.delegatePrefix = prefix
+        const temporary = path + '.' + randomUUID() + '.tmp'
+        await writeFile(temporary, JSON.stringify(config), { mode: 0o600 }); await rename(temporary, path)
+      }
+    }
     const pluginRoot = join(directory, 'plugin')
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))
     await writeFile(join(pluginRoot, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'apack-native-terminal', version: '0.0.1' }), { mode: 0o600 })
     await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
     const plugin = `async function send($,path,body){const response=await $.http.fetch('http://apack'+path,{method:'POST',socketPath:${JSON.stringify(socketPath)},headers:{'x-apack-native-token':${JSON.stringify(token)},'content-type':'application/json'},body:JSON.stringify({sessionId:await $.session.id(),...body})});if(!response.ok)throw Error('Owned terminal broker refused');return JSON.parse(response.text);}
+    async function syncPrefix($){
+      const launcher=${JSON.stringify(prefixLauncher ?? null)};if(!launcher)return;
+      const prefix=await $.env.get('CLAUDE_CODE_SHELL_PREFIX');if(prefix===launcher)return;
+      await send($,'/prefix',{prefix:prefix??null});
+      const result=await $.env.set('CLAUDE_CODE_SHELL_PREFIX',launcher);
+      if(result.deny){await send($,'/prefix-error',{message:result.deny});throw Error('Native prefix capture was refused');}
+    }
     export function register(on) {
       let started=false,inFlight=false,submission;const paths={};
       on('classic.*',async($,e,next)=>{const result=await next(e);if(e.transcript_path&&e.session_id&&e.transcript_path.endsWith('/'+e.session_id+'.jsonl')){paths[e.session_id]=e.transcript_path;await send($,'/transcript',{sessionId:e.session_id,path:e.transcript_path}).catch(()=>{});}return result;});
       on('session.append',async($,e,next)=>{const sessionId=await $.session.id();const result=await next(e);if(!e.agentId&&result.message&&result.uuid)await send($,'/append',{sessionId,uuid:result.uuid,message:result.message,door:e.door,origin:e.origin,...(submission&&e.door==='prompt'?{submissionId:submission.id}:{})}).catch(()=>{});return result;});
       on('prompt.submit',async($,e,next)=>{const own=submission;try{const result=await next(e);if(own)await send($,'/submission',{id:own.id,...(typeof result.drop==='string'?{drop:result.drop}:{accepted:true})}).catch(()=>{});return result;}finally{if(submission===own)submission=undefined;}});
-      on('session.start',async($,e,next)=>{if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const status=(settings.allowManagedHooksOnly?policy:settings).statusLine;const statusCommand=status?.type==='command'&&typeof status.command==='string'&&status.command?status.command:null;const command=await send($,'/poll',{agents,metadata,statusCommand});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=false;try{const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
+      on('session.start',async($,e,next)=>{if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const status=(settings.allowManagedHooksOnly?policy:settings).statusLine;const statusCommand=status?.type==='command'&&typeof status.command==='string'&&status.command?status.command:null;const command=await send($,'/poll',{agents,metadata,statusCommand});await syncPrefix($);const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=false;try{const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
       on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
       on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId)await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});return result;});
     }`
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
-      directory, pluginRoot, settings, projection, session, transcripts,
+      directory, pluginRoot, settings, projection, session, transcripts, prefixLauncher,
+      get problem() { return prefixProblem },
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
       get busy() { return busy || !!pending },

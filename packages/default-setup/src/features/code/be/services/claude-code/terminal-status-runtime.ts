@@ -50,7 +50,7 @@ export async function runNativeStatusPrefix(options, argv = process.argv.slice(2
     let payload; try { payload = JSON.parse(Buffer.concat(inputChunks).toString()); } catch {}
     const valid = typeof payload?.session_id === 'string' && /^[a-f0-9-]{36}$/i.test(payload.session_id)
       && (kind === 'main' ? typeof payload.version === 'string' && payload.cost && payload.context_window : Array.isArray(payload.tasks));
-    if (valid) await publish(options, { sessionId: payload.session_id, kind, command, startedAt, stdout: Buffer.concat(outputChunks).toString(), truncated, code: result.code, signal: result.signal,
+    if (valid) await publish(options, { sessionId: payload.session_id, kind, command, generation: options.generation, startedAt, stdout: Buffer.concat(outputChunks).toString(), truncated, code: result.code, signal: result.signal,
       ...(kind === 'subagent' ? { tasks: payload.tasks.filter(task => typeof task.id === 'string' && task.id.length <= 256 && typeof task.status === 'string').slice(0, 256).map(task => ({id:task.id,status:task.status})) } : {}) });
   }
   if (result.signal) process.kill(process.pid, result.signal);

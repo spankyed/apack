@@ -125,7 +125,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, tasks: bridge.projection.tasks } },
+      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },

@@ -1,7 +1,7 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <div v-if="!active" class="native-launch__actions">
-      <span v-if="view?.problem" role="status" class="native-problem">{{ view.problem }}</span>
+      <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="busy || view?.opening" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}
@@ -28,7 +28,7 @@
       <div class="native-console">
         <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
       </div>
-      <footer v-if="view?.state?.mainStatus || view?.state?.tasks.length || view?.problem" class="native-activity">
+      <footer v-if="view?.state?.mainStatus || view?.state?.tasks.length || view?.problem || view?.state?.problem" class="native-activity">
         <div v-if="view?.state?.mainStatus" class="native-summary">
           <span class="native-section-label">Session status</span>
           <NativeStatusText data-testid="native-main-status" class="native-summary__text" :text="view.state.mainStatus" />
@@ -42,7 +42,7 @@
             </li>
           </ul>
         </div>
-        <p v-if="view?.problem" role="alert" class="native-problem">{{ view.problem }}</p>
+        <p v-if="view?.problem || view?.state?.problem" role="alert" class="native-problem">{{ view?.problem || view?.state?.problem }}</p>
       </footer>
     </template>
   </section>

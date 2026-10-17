@@ -20,10 +20,10 @@ it('runs the same original helper in distinct native roles', async () => {
   const original = '/usr/bin/printf "Native line\\nSecond line\\n"'
   const settings = { effective: { statusLine: { type: 'command', command: original, padding: 3, refreshInterval: 2 }, subagentStatusLine: { type: 'command', command: original } }, sources: [] }
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings, changed() {}, enter() {} })
-  expect(bridge.settings.env).toBeDefined()
+  expect(bridge.settings.env).toBeUndefined()
   expect(bridge.settings.statusLine).toBeUndefined()
   expect(settings.effective.statusLine.command).toBe(original)
-  const prefix = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+  const prefix = bridge.prefixLauncher!
   const config = { command: prefix + " '" + original.replaceAll("'", "'\"'\"'") + "'" }
   const command = 'printf \'%s\' \'{"session_id":"' + session + '","version":"2.1.302","cost":{},"context_window":{}}\' | ' + config.command
   const native = await exec('/bin/sh', ['-c', command])
@@ -82,7 +82,7 @@ sys.exit(subprocess.run(['/bin/sh','-c',sys.argv[-1]],stdin=sys.stdin,stdout=sys
     const original = `/usr/bin/printf '%s\\n' "native's output"`
     bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { env: { CLAUDE_CODE_SHELL_PREFIX: prefix }, statusLine: { type: 'command', command: original }, subagentStatusLine: { type: 'command', command: '/usr/bin/printenv CLAUDE_CODE_SHELL_PREFIX' } }, sources: [] }, changed() {}, enter() {} })
     expect(bridge.settings.statusLine).toBeUndefined()
-    const installed = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+    const installed = bridge.prefixLauncher!
     const quote = (text: string) => "'" + text.replaceAll("'", "'\"'\"'") + "'"
     const env = { ...process.env, CLAUDE_CODE_SHELL_PREFIX: installed }
     await writeFile(payload, JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} }))
@@ -99,7 +99,7 @@ sys.exit(subprocess.run(['/bin/sh','-c',sys.argv[-1]],stdin=sys.stdin,stdout=sys
 it('observes native-selected command changes and rejects removed or obsolete main outputs', async () => {
   const oldCommand = '/usr/bin/printf old', nextCommand = '/usr/bin/printf new'
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: oldCommand } }, sources: [] }, changed() {}, enter() {} })
-  const prefix = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+  const prefix = bridge.prefixLauncher!
   const payload = JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} })
   const directory = await mkdtemp(join(tmpdir(), 'native-live-prefix-'))
   try {
@@ -116,4 +116,28 @@ it('observes native-selected command changes and rejects removed or obsolete mai
     expect(bridge.projection.mainStatus).toBeUndefined()
     expect((await invoke(nextCommand)).stdout).toBe('new'); expect(bridge.projection.mainStatus).toBeUndefined()
   } finally { await rm(directory, { recursive: true, force: true }) }
+})
+it('fences old prefix results, restores an unset prefix and exposes native refusal', async () => {
+  const original = '/usr/bin/printf main'
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: original }, subagentStatusLine: { type: 'command', command: '/usr/bin/printf subagent' } }, sources: [] }, changed() {}, enter() {} })
+  const initial = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
+  const event = { sessionId: session, kind: 'main', command: original, generation: initial.generation, startedAt: '100', stdout: 'old prefix result', code: 0, signal: null, truncated: false }
+  expect((await request('/native-status', event)).status).toBe(200)
+  expect(bridge.projection.mainStatus).toBe('old prefix result')
+  expect((await request('/prefix', { sessionId: session, prefix: '/private/user prefix --flag' })).status).toBe(200)
+  const changed = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
+  const subagent = JSON.parse(await readFile(bridge.directory + '/subagent.json', 'utf8'))
+  expect(changed.generation).not.toBe(initial.generation)
+  expect(changed.delegatePrefix).toBe('/private/user prefix --flag')
+  expect(subagent.originalPrefix).toBe(changed.originalPrefix)
+  expect(subagent.generation).toBe(changed.generation)
+  expect(bridge.projection.mainStatus).toBeUndefined()
+  expect((await request('/native-status', { ...event, startedAt: '200' })).status).toBe(409)
+  expect((await request('/native-status', { ...event, generation: changed.generation, startedAt: '200', stdout: 'current prefix result' })).status).toBe(200)
+  expect((await request('/prefix', { sessionId: session, prefix: null })).status).toBe(200)
+  const unset = JSON.parse(await readFile(bridge.directory + '/main.json', 'utf8'))
+  expect(unset.originalPrefix).toBeUndefined(); expect(unset.delegatePrefix).toBeUndefined()
+  expect((await request('/native-status', { ...event, generation: changed.generation, startedAt: '300' })).status).toBe(409)
+  expect((await request('/prefix-error', { sessionId: session, message: 'fixture native denial' })).status).toBe(200)
+  expect(bridge.problem).toBe('Native status capture was refused: fixture native denial')
 })
