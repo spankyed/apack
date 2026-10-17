@@ -365,10 +365,11 @@ test('native extension fields, paint and hover work inside the actual composer',
   await paneSite.scrollIntoViewIfNeeded();
   const wheelBounds = await paneSite.boundingBox(); expect(wheelBounds).not.toBeNull();
   await appPage.mouse.move(wheelBounds!.x + wheelBounds!.width - 16, wheelBounds!.y + wheelBounds!.height - 16);
-  await appPage.mouse.wheel(0, 40);
+  // Native wheel transport varies with Electron's platform scaling; pin CSS-pixel deltas here.
+  await paneSite.dispatchEvent('wheel', { deltaY: 40, deltaMode: 0, clientX: wheelBounds!.x + 20, clientY: wheelBounds!.y + 20 });
   await expect.poll(async () => (await scrollState())?.offset).toBe(3);
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(60);
-  await appPage.mouse.wheel(0, 60);
+  await paneSite.dispatchEvent('wheel', { deltaY: 60, deltaMode: 0, clientX: wheelBounds!.x + 20, clientY: wheelBounds!.y + 20 });
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(60);
   const scrollEvents = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8'));
   expect(scrollEvents.some((event: any) => event.origin.kind === 'person' && event.by === 3)).toBe(true);
