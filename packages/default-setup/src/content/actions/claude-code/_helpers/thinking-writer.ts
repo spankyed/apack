@@ -9,8 +9,8 @@
  * field, and `updateMessageState` replaces the entire field. The thinking
  * writer writes directly to `blocks` until tool-activity starts, at which
  * point `stopDirectWrites()` is called and the tool-activity writer takes
- * over — it includes the thinking block via the `getThinkingBlock` callback
- * passed at construction time.
+ * over — it includes the thinking block via `getThinkingBlock`. Later model
+ * cycles reopen the summary and schedule writes through that same owner.
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
@@ -26,7 +26,7 @@ export interface ThinkingWriter {
   push(text: string): void;
   flush(): void;
   finalise(): void;
-  stopDirectWrites(): void;
+  stopDirectWrites(writeWithOwner?: () => void): void;
   buildBlock(): { type: string; props: ThinkingBlockProps } | null;
   readonly hasContent: boolean;
   readonly isStreaming: boolean;
@@ -39,8 +39,9 @@ export function createThinkingWriter(
 ): ThinkingWriter {
   const intervalMs = opts.intervalMs ?? 250;
   let buffer = '';
-  let firstPushAt = 0;
-  let finalisedAt = 0;
+  let segmentStartedAt: number | undefined;
+  let thinkingElapsed = 0;
+  let writeWithOwner: (() => void) | undefined;
   let state: 'streaming' | 'done' = 'streaming';
   let directWritesEnabled = true;
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,8 +49,7 @@ export function createThinkingWriter(
 
   function buildLabel(): string {
     if (state === 'streaming') return 'Thinking';
-    const elapsed = (finalisedAt || Date.now()) - (firstPushAt || Date.now());
-    return `Thought for ${formatDuration(elapsed)}`;
+    return `Thought for ${formatDuration(thinkingElapsed)}`;
   }
 
   function buildBlock(): { type: string; props: ThinkingBlockProps } | null {
@@ -65,7 +65,8 @@ export function createThinkingWriter(
       clearTimeout(pendingTimer);
       pendingTimer = null;
     }
-    if (!directWritesEnabled || !buffer) return;
+    if (!buffer) return;
+    if (!directWritesEnabled) { writeWithOwner?.(); lastFlushAt = Date.now(); return; }
     const block = buildBlock();
     if (block) {
       services.chat.updateMessageState(messageId, { blocks: [block] as any });
@@ -74,7 +75,7 @@ export function createThinkingWriter(
   }
 
   function schedule(): void {
-    if (!directWritesEnabled) return;
+    if (!directWritesEnabled && !writeWithOwner) return;
     if (pendingTimer) return;
     const since = Date.now() - lastFlushAt;
     const delay = Math.max(0, intervalMs - since);
@@ -89,8 +90,9 @@ export function createThinkingWriter(
     get isStreaming() { return state === 'streaming'; },
 
     push(text: string): void {
-      if (!text || state === 'done') return;
-      if (!firstPushAt) firstPushAt = Date.now();
+      if (!text) return;
+      if (state === 'done') { state = 'streaming'; if (buffer) buffer += '\n\n'; }
+      segmentStartedAt ??= Date.now();
       buffer += text;
       schedule();
     },
@@ -99,8 +101,9 @@ export function createThinkingWriter(
       writeNow();
     },
 
-    stopDirectWrites(): void {
+    stopDirectWrites(ownerWrite?: () => void): void {
       directWritesEnabled = false;
+      writeWithOwner = ownerWrite;
       if (pendingTimer) {
         clearTimeout(pendingTimer);
         pendingTimer = null;
@@ -109,7 +112,8 @@ export function createThinkingWriter(
 
     finalise(): void {
       if (state === 'done') return;
-      finalisedAt = Date.now();
+      if (segmentStartedAt !== undefined) thinkingElapsed += Date.now() - segmentStartedAt;
+      segmentStartedAt = undefined;
       state = 'done';
       writeNow();
     },

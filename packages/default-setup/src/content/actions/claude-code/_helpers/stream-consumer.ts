@@ -290,7 +290,8 @@ export async function consumeStream(
 
             // Finalize thinking and hand blocks ownership to tool-activity.
             finaliseThinking();
-            thinking.stopDirectWrites();
+            const thinkingActivityOwner = toolActivity;
+            thinking.stopDirectWrites(() => thinkingActivityOwner.flush());
             writer.flush();
             const summary = block.input ? shortenInput(block.input) : '';
             const toolId = block.id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
