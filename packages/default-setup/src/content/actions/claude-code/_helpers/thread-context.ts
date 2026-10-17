@@ -67,6 +67,8 @@ export interface ClaudeCodeThreadState {
   // ─── Persistent session data (single source of truth) ──────────────
   /** Model name reported by the CLI ("claude-sonnet-4-6" etc.). */
   model?: string;
+  /** Requested per-thread selection, distinct from native reported model. */
+  modelOverride?: string;
   /** Epoch ms when the session was first created. */
   startedAt?: number;
   /** Number of turns executed in this session. */

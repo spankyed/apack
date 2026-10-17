@@ -19,6 +19,8 @@ export interface ClaudeConversation {
   readonly closing: boolean
   readonly sessionId?: string
   readonly sessionCwd?: string
+  /** Last acknowledged selection, distinct from observed effective model. */
+  readonly modelSelection?: string
   readonly done: Promise<void>
   start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string
   release(handle: QueryHandle): boolean
@@ -72,6 +74,8 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let stopped = false
   let sessionId: string | undefined
   let sessionCwd: string | undefined
+  let changingModel = false
+  let modelSelection: string | undefined
   let cumulativeCost = 0
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
@@ -96,7 +100,16 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     const current = active ?? activate(consumeAutonomous)
     current.queue.push(next[1])
   }
-  const processHandle: QueryHandle = { ...native, respond(requestId, response) {
+  const processHandle: QueryHandle = { ...native, async setModel(model) {
+    if (closing || exited) throw new ClaudeProtocolError('conversation is closed')
+    if (changingModel || active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation must be idle before changing model')
+    changingModel = true
+    try {
+      await native.setModel(model)
+      if (closing || exited) throw new ClaudeProtocolError('conversation closed while changing model')
+      modelSelection = model
+    } finally { changingModel = false }
+  }, respond(requestId, response) {
     if (settledPermissions.has(requestId)) throw new ClaudeProtocolError('native permission request has already settled')
     if (permissionRequests.get(requestId)?.request.subtype === 'request_user_dialog') throw new ClaudeProtocolError('generic dialog requires its own response type')
     native.respond(requestId, response)
@@ -248,14 +261,15 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
 
   return {
     handle: processHandle,
-    get busy() { return active !== undefined || pending !== undefined || permissionRequests.size > 0 },
+    get busy() { return changingModel || active !== undefined || pending !== undefined || permissionRequests.size > 0 },
     get closing() { return closing || exited },
     get sessionId() { return sessionId },
     get sessionCwd() { return sessionCwd },
+    get modelSelection() { return modelSelection },
     done,
     start(input, consume) {
       if (closing || exited) throw new ClaudeProtocolError('conversation is closed')
-      if (active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation already has an active input or permission request')
+      if (changingModel || active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation already has an active input or permission request')
       const inputId = native.send(input)
       pending = { consume, inputId }
       return inputId

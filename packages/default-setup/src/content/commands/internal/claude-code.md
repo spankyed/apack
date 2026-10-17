@@ -8,7 +8,7 @@ name: Claude Code commands
 **cc-context**: Show context window usage breakdown
 **cc-status**: Show version and auth info
 **cc-models**: Read the matching native conversation catalog; `start` permits temporary discovery and session hooks. `start --include-unsupported-models` explicitly includes unknown account models.
-**cc-model**: Model name (optional, shows current if omitted)
+**cc-model**: Select this thread's model through its idle native conversation, or stage it for the next launch. With no argument, show selected and last reported model.
 **cc-memory**: File name or add|remove <name>
 **cc-recap**: Summarize current conversation
 **cc-skills**: List installed skills

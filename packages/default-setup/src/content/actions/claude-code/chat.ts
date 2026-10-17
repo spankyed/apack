@@ -83,7 +83,7 @@ export async function action(
     threadId,
     text,
     phase,
-    model,
+    model: requestedModel,
     allowedTools,
     disallowedTools,
     systemPrompt,
@@ -111,6 +111,7 @@ export async function action(
 
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
+  const model = requestedModel ?? prior?.modelOverride;
   if (prior?.historyError) {
     services.chat.sendBlockMessage({threadId, text: `Cannot continue after a failed history change: ${prior.historyError} Reset or resume a session before continuing.`, blocks: [], forkable: false});
     return {success: false, error: 'history change unresolved'};
@@ -454,9 +455,14 @@ export async function action(
     const launchKey = JSON.stringify({ cwd: sessionCwd, model, allowedTools: options.allowedTools,
       disallowedTools, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
     let conversation = services.cli.claudeCode.getConversation(threadId);
-    const existingKey = conversation?.owner.sessionCwd
-      ? JSON.stringify({ ...JSON.parse(conversation.launchKey), cwd: conversation.owner.sessionCwd })
-      : conversation?.launchKey;
+    const previousLaunch = conversation ? JSON.parse(conversation.launchKey) : undefined;
+    const existingKey = previousLaunch ? JSON.stringify({
+      cwd: conversation!.owner.sessionCwd ?? previousLaunch.cwd,
+      model: conversation!.owner.modelSelection ?? previousLaunch.model,
+      allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools,
+      appendSystemPrompt: previousLaunch.appendSystemPrompt, worktree: previousLaunch.worktree,
+      addDir: previousLaunch.addDir,
+    }) : undefined;
     if (conversation && (existingKey !== launchKey || forkFrom || revertTo
       || (conversation.owner.sessionId && conversation.owner.sessionId !== resumeSessionId))) {
       if (!await services.cli.claudeCode.closeIdleConversation(threadId)) throw new Error('Claude conversation changed while preparing this input');

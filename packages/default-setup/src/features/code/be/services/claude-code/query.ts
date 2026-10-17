@@ -107,6 +107,8 @@ export interface QueryHandle {
   getContextUsage(): Promise<ClaudeContextUsage>
   /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
   getModels(): Promise<ClaudeModelCatalog>
+  /** Acknowledges selection only; effective-model metadata comes from native turns. */
+  setModel(model: string): Promise<void>
   /** Change the running CLI policy and return its acknowledged permission mode. */
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   /** Close stdin and wait for the child to exit. */
@@ -311,6 +313,12 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     async getModels(): Promise<ClaudeModelCatalog> {
       await initialized
       return ClaudeModelCatalogSchema.parse(await hostControls.request({ subtype: 'list_models' }))
+    },
+
+    async setModel(model: string): Promise<void> {
+      const selection = z.string().min(1).parse(model)
+      await initialized
+      await hostControls.request({ subtype: 'set_model', model: selection })
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<PermissionMode> {

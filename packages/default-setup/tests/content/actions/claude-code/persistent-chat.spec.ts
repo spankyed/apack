@@ -10,6 +10,7 @@ import { chatService } from '#features/threads/be/services/chat.ts';
 import * as store from '#features/code/be/services/claude-code/handle-store.ts';
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts';
 import type { StreamLine } from '#features/code/be/services/claude-code/types.ts';
+import { action as modelCommand } from '../../../../src/content/actions/claude-code/cc-command.ts';
 import { action as chat } from '../../../../src/content/actions/claude-code/chat.ts';
 import { action as updateMode } from '../../../../src/content/actions/claude-code/update-permission-mode.ts';
 import { action as complete } from '../../../../src/content/actions/claude-code/turn-completed.ts';
@@ -17,14 +18,15 @@ vi.mock('../../../../src/content/actions/claude-code/_helpers/context-usage.ts',
 
 afterEach(() => store.killAllHandles());
 
-it.each([['source', false], ['compiled flow', false], ['source', true], ['compiled flow', true]] as const)('%s reuses a process across host/autonomous work (worktree: %s)', async (mode, worktree) => {
+it.each([['source', false, false], ['compiled flow', false, false], ['source', true, false], ['compiled flow', true, false], ['source', false, true], ['source', true, true]] as const)('%s reuses a process across host/autonomous work (worktree: %s)', async (mode, worktree, stagedModel) => {
   const { id } = repository.threadCommands.create({ topic: 'Persistent Claude', instructions: '', tags: [] });
-  repository.threadCommands.update(id, { context: { claudeCode: { cwd: '/fixture', useWorktree: worktree } } });
+  repository.threadCommands.update(id, { context: { claudeCode: { cwd: '/fixture', useWorktree: worktree, ...(stagedModel ? { modelOverride: 'sonnet' } : {}) } } });
   const events = new PassThrough({ objectMode: true });
   let sequence = 0;
   const native = { events: events as AsyncIterable<StreamLine>, send: vi.fn(() => `input-${++sequence}`),
     hasPendingBackgroundTasks: () => false, close: vi.fn(async () => { events.end(); }), kill: vi.fn(() => events.end()),
     setPermissionMode: vi.fn(async mode => mode),
+    setModel: vi.fn(async () => {}),
   } as unknown as QueryHandle;
   const opened = vi.fn(async (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume));
   mockService<Services, 'cli'>('cli', { claudeCode: { openConversation: opened, getConversation: store.getConversation,
@@ -69,9 +71,15 @@ it.each([['source', false], ['compiled flow', false], ['source', true], ['compil
   };
   const user1 = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'first' });
   expect(await invoke('first', user1.id)).toMatchObject({ streaming: true });
+  if (mode === 'source') expect(opened.mock.calls[0]![2].model).toBe(stagedModel ? 'sonnet' : undefined);
   await finish(1);
   expect(store.getHandle(id)).toBe(store.getConversation(id)?.owner.handle);
   expect(native.close).not.toHaveBeenCalled();
+  if (mode === 'source') {
+    expect((await modelCommand({ command: 'cc-model', threadId: id, text: 'haiku' }, services, {} as never, '')).text).toContain('selection accepted');
+    expect(native.setModel).toHaveBeenCalledWith('haiku');
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode?.modelOverride).toBe('haiku');
+  }
   const user2 = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'second' });
   expect(await invoke('second', user2.id)).toMatchObject({ streaming: true });
   await finish(2);
@@ -104,7 +112,7 @@ it.each([['source', false], ['compiled flow', false], ['source', true], ['compil
   const messages = repository.chatQueries.threadData(id)?.messages ?? [];
   expect(messages.find(message => message.id === user1.id)?.context?.cliUuid).toBe('input-1');
   expect(messages.find(message => message.id === user2.id)?.context?.cliUuid).toBe('input-2');
-  expect(messages.filter(message => message.sender === 'assistant').map(message => message.text)).toEqual(['reply 1', 'reply 2', 'native autonomous work']);
+  expect(messages.filter(message => message.sender === 'assistant').map(message => message.text)).toEqual(['reply 1', ...(mode === 'source' ? ['Model selection accepted: haiku. The next turn will report the effective model.'] : []), 'reply 2', 'native autonomous work']);
   expect(await store.closeIdleConversation(id)).toBe(true);
   expect(store.getHandle(id)).toBeUndefined();
   expect(native.close).toHaveBeenCalledOnce();

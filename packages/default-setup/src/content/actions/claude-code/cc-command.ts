@@ -1,3 +1,4 @@
+import { replayQueuedMessage } from './_helpers/stream-consumer.ts';
 /**
  * CC: Run Command — dispatcher for lightweight cc- commands (info, config, passthrough).
  *
@@ -7,8 +8,8 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
-import { getClaudeState, persistClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import type { Services, Z, EntityId } from '#generated/services.ts';
+import { getClaudeState, persistClaudeState, updateChatState, dequeueMessage } from './_helpers/thread-context.ts';
 import { DONT_BYPASS } from './_helpers/auto-approve.ts';
 
 export const meta: ActionMeta = {
@@ -208,20 +209,37 @@ async function handleModels(args: string[], services: Services, threadId?: strin
     const details = [model.description, model.supportedEffortLevels ? `Effort levels: ${model.supportedEffortLevels.join(', ') || '(none)'}` : undefined, ...capabilities];
     return `${model.value}: ${model.displayName}${model.resolvedModel ? ` (${model.resolvedModel})` : ''}${details.filter(Boolean).map(detail => `\n  ${detail}`).join('')}`;
   });
-  return { text: `${rows.join('\n') || 'Native catalog is empty.'}\n\ncc-model writes the saved model setting; an active conversation can differ. This catalog is not an exhaustive list of custom model IDs and does not identify the active selection.` };
+  return { text: `${rows.join('\n') || 'Native catalog is empty.'}\n\nUse cc-model <alias or model id> for this thread; acknowledged selection and last reported model are separate. This catalog is not an exhaustive list of custom model IDs and does not identify the active selection.` };
 }
 
 async function handleModel(
   args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
-  const settings = await services.cli.claudeCode.readSettings();
-  if (args.length === 0) {
-    return { text: settings.model || '(using default model)' };
+  if (!threadId) return { text: 'Select a thread before choosing its Claude model.' };
+  const prior = getClaudeState(services, threadId);
+  if (args.length === 0) return { text: `Selected: ${prior?.modelOverride || 'default'}\nLast reported: ${prior?.model || '(not yet reported)'}` };
+  if (args.length !== 1) return { text: 'Usage: cc-model <alias or model id>' };
+  const selection = args[0]!;
+  const conversation = services.cli.claudeCode.getConversation(threadId);
+  if (conversation) {
+    if (conversation.owner.busy) return { text: 'Wait for the Claude conversation to become idle before changing model.' };
+    const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+    if (conversation.owner.sessionCwd !== cwd) return { text: 'The native conversation directory does not match this project. Start a conversation in this project before changing its model.' };
+    try {
+      await conversation.owner.handle.setModel(selection);
+      persistClaudeState(services, threadId, { modelOverride: selection });
+      return { text: `Model selection accepted: ${selection}. The next turn will report the effective model.` };
+    } finally {
+      if (!conversation.owner.busy && !conversation.owner.closing) {
+        const queued = dequeueMessage(services, threadId);
+        if (queued) await replayQueuedMessage(services, threadId as EntityId, queued, services.logger);
+      }
+    }
   }
-  settings.model = args[0];
-  await services.cli.claudeCode.writeSettings(settings);
-  return { text: `Model set to: ${args[0]}` };
+  persistClaudeState(services, threadId, { modelOverride: selection });
+  return { text: `Model selected for the next launch: ${selection}. Claude will validate it when starting.` };
 }
 
 async function handleMemory(
