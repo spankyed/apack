@@ -4,16 +4,20 @@ import { createClaudeSiteScroll } from './ui-site-scroll.ts'
 import { createClaudePaneHost } from './ui-pane-host.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
-import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe' | 'sessionId'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> } }
+export interface ClaudeUiOwner {
+  readonly done: Promise<void>
+  readonly sessionId?: string
+  subscribe(listener: (event: unknown) => void): () => void
+  handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+}
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
-  owner: UiOwner
+  owner: ClaudeUiOwner
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number, paneId?: string): void

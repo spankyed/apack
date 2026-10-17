@@ -61,7 +61,7 @@ function refreshSite(n,site){
   if(input.plugin===undefined||input.element===undefined){site.holder=undefined;return;}
   if(!site.focusables.some(item=>item.plugin===input.plugin&&item.element===input.element))return 'no element of '+input.plugin+' is drawn under that key';
   site.holder={plugin:input.plugin,element:input.element};
-  if(input.origin.kind==='plugin'&&!site.reporting)publish({type:'system',subtype:'ui_focus',client_id:site.clientId,component:site.component,instance_id:site.id,plugin:input.plugin,element:input.element});
+  if(input.origin.kind==='plugin'&&!site.reporting)publish({type:'system',subtype:'ui_focus',client_id:site.clientId,component:site.component,instance_id:site.id,plugin:input.plugin,key:input.element});
  }};
  scrolls.set(key,site.scrollEntry);focuses.set(key,site.focusEntry);
 }
@@ -267,6 +267,7 @@ function drainCompletion(n,clientId,state){
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request){
  const n=await initialize();
+ if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text);
  const schema=schemaNames[request.subtype];

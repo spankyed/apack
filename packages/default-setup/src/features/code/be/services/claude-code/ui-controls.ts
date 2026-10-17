@@ -82,7 +82,7 @@ export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-export function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>) {
+export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>) {
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
     const metadata = await initialized
     if (!metadata.capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable')

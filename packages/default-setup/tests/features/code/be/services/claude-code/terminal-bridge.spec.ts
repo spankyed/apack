@@ -132,7 +132,7 @@ it('forwards native pane rosters only from the current owner and session', async
 
 it.each([
   { type: 'system', subtype: 'ui_scroll', client_id: 'app', component: 'Pane', instance_id: 'review', offset: 20 },
-  { type: 'system', subtype: 'ui_focus', client_id: 'app', component: 'AbovePrompt', instance_id: 'above-prompt', plugin: 'fixture', element: 'target' },
+  { type: 'system', subtype: 'ui_focus', client_id: 'app', component: 'AbovePrompt', instance_id: 'above-prompt', plugin: 'fixture', key: 'target' },
 ])('fences native $subtype site movement events', async event => {
   await create()
   const receive = vi.fn(), unsubscribe = bridge!.uiTransport.subscribe(receive)
