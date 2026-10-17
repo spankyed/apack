@@ -53,7 +53,7 @@
             @pause="emit('pause')"
             @open-revert-menu="openRevertMenu"
           />
-          <p v-if="nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ nativePromptProblem }}</p>
+          <p v-if="submissionProblem || nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ submissionProblem || nativePromptProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
             :anchor-el="inputCardRef"
@@ -175,7 +175,7 @@
             </Button>
             <Button
               type="submit"
-              :disabled="(!hasTextContent && !hasAttachments) || disabled"
+              :disabled="submitting || (!hasTextContent && !hasAttachments) || disabled"
               class="px-2 @lg:px-4"
             >
               <span class="hidden @lg:inline">Send</span>
@@ -292,6 +292,11 @@ interface ActionButton {
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
 const nativePromptProblem = ref<string>()
+const submitting = ref(false)
+const submissionProblem = ref<string>()
+let composerEpoch = 0
+watch([() => props.currentThread?.id, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
+onUnmounted(() => { composerEpoch++ })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
@@ -379,7 +384,7 @@ const commandHighlight = computed(() => {
 const {
   pendingImages, pendingFiles, hasAttachments,
   handlePaste, handleFileDrop, addImageFromUrl, removeImage, openFilePicker, removeFile,
-  collectAttachments, clearAll, restoreFromReferences,
+  captureAttachments, restoreFromReferences,
 } = useAttachments()
 
 const { isDragging: isDraggingFile, onDragEnter, onDragLeave, onDrop } = useExternalFileDrag({
@@ -651,7 +656,7 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
 }
 
 const handleSubmit = async () => {
-  if (props.disabled) return
+  if (props.disabled || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const md = ((editor.storage as any).markdown.getMarkdown() as string)
@@ -659,38 +664,51 @@ const handleSubmit = async () => {
     .trim()
   const textContent = editor.state.doc.textContent.trim()
   if (textContent || hasAttachments.value) {
+    const epoch = composerEpoch, doc = editor.state.doc
     const entityId = props.currentThread?.id || 'chat-attachments'
-    const attachmentRefs = await collectAttachments(entityId)
+    const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)
-    const references: MessageReferences = {
-      ...attachmentRefs,
-      ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
-    }
-
-    // Check if this is a command submission
     const cmdState = commandSuggestionKey.getState(editor.state)
-    if (cmdState?.active && cmdState.selectedCommand) {
-      const commandName = cmdState.selectedCommand.name
-      const prefix = `/${commandName} `
-      const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
-      emit('send-command', commandName, bodyText.trim(), references)
+    submitting.value = true
+    submissionProblem.value = undefined
+    try {
+      const attachmentRefs = await attachments.collect(entityId)
+      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
+      const references: MessageReferences = {
+        ...attachmentRefs,
+        ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
+      }
 
-      // Deactivate the command suggestion
-      const { tr } = editor.state
-      tr.setMeta(commandSuggestionKey, { deactivate: true })
-      editor.view.dispatch(tr)
-    } else {
-      emit('send-message', md, references)
-    }
+      // Check if this is a command submission
+      if (cmdState?.active && cmdState.selectedCommand) {
+        const commandName = cmdState.selectedCommand.name
+        const prefix = `/${commandName} `
+        const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
+        emit('send-command', commandName, bodyText.trim(), references)
 
-    sentHistory.value.push(md)
-    saveHistory(sentHistory.value)
-    historyIndex.value = -1
-    lastClearedContent.value = null
-    editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
-    messageContent.value = ''
-    hasTextContent.value = false
-    clearAll()
+        // Deactivate command plugin
+        if (editor.state.doc === doc) {
+          const { tr } = editor.state
+          tr.setMeta(commandSuggestionKey, { deactivate: true })
+          editor.view.dispatch(tr)
+        }
+      } else {
+        emit('send-message', md, references)
+      }
+
+      sentHistory.value.push(md)
+      saveHistory(sentHistory.value)
+      historyIndex.value = -1
+      lastClearedContent.value = null
+      if (editor.state.doc === doc) {
+        editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run()
+        messageContent.value = ''
+        hasTextContent.value = false
+      }
+      attachments.clear()
+    } catch (error) {
+      if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Message could not be sent'
+    } finally { submitting.value = false }
   }
 }
 </script>
