@@ -9,7 +9,7 @@
       :aria-label="node.label || 'Claude input'" maxlength="16384"
       class="min-w-0 max-w-full resize-y rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2 text-[13px] leading-5 text-neutral-200 placeholder:text-neutral-600 transition-colors hover:border-white/15 focus:border-blue-400/50 focus:outline-none focus:ring-2 focus:ring-blue-400/10"
       @input="change" @keydown="keydown" @focus="focused = true" @blur="focused = false" />
-    <span v-if="node.kind === 'input' && focused" class="text-[10px] text-neutral-500">Enter: {{ node.submitLabel }}</span>
+    <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="text-[10px] text-neutral-500">Enter: {{ node.submitLabel }}</span>
   </label>
 </template>
 

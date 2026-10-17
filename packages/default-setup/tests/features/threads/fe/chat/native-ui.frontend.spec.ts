@@ -453,3 +453,15 @@ it('falls back to literal unnumbered source for a truncated native diff', async 
   expect(f.root.querySelector('[data-diff-kind]')).toBeNull()
   expect(f.root.querySelector('pre[aria-hidden="true"]')).toBeNull()
 })
+
+
+it('keeps the native input submit hint mounted across blur so following actions do not move', async () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'input', actionId: 'field', revision: 0, value: '', rows: 1, autoFocus: false, submitLabel: 'Send', label: 'Draft' } } })
+  const input = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Draft"]')!, hint = [...f.root.querySelectorAll('span')].find(item => item.textContent === 'Enter: Send')!
+  expect(hint.getAttribute('aria-hidden')).toBe('true')
+  input.focus(); await nextTick()
+  expect(getComputedStyle(hint).visibility).toBe('visible')
+  input.blur(); await nextTick()
+  expect(hint.isConnected).toBe(true); expect(getComputedStyle(hint).visibility).toBe('hidden')
+  expect(hint.getAttribute('aria-hidden')).toBe('true')
+})
