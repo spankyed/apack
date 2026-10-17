@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'vue'
-import type { ClaudeUiBoxPaint } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import type { CSSProperties, ComputedRef, InjectionKey } from 'vue'
+import type { ClaudeUiBoxPaint, ClaudeUiTextStyle } from '#features/code/be/services/claude-code/ui-presentation.ts'
 
 // App defaults for native semantic names. The native custom theme is not exported by ui_render.
 const palette: Record<string, string> = {
@@ -39,4 +39,12 @@ export function claudeUiBoxPaint(paint: ClaudeUiBoxPaint | undefined): CSSProper
     result['--native-border-color'] = claudeUiColor(paint.borderColor) ?? 'currentColor'
   }
   return result
+}
+
+export type ClaudeTextPaint = Pick<ClaudeUiTextStyle, 'color' | 'backgroundColor' | 'inverse'>
+export const claudeTextPaint: InjectionKey<ComputedRef<ClaudeTextPaint>> = Symbol('claude-text-paint')
+export function claudeUiTextPaint(paint: ClaudeTextPaint): CSSProperties {
+  const foreground = claudeUiColor(paint.color), background = claudeUiColor(paint.backgroundColor)
+  return paint.inverse ? { color: background ?? palette.inverseText, backgroundColor: foreground ?? palette.text }
+    : { color: foreground, backgroundColor: background }
 }

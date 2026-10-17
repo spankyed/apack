@@ -277,3 +277,60 @@ it('accepts browser colors while refusing strings that try to introduce CSS rule
   expect(claudeUiBoxPaint({ borderStyle: 'quote' })).toMatchObject({ borderWidth: '0', borderLeftWidth: '2px' })
   expect(claudeUiBoxPaint({ borderStyle: 'url(https://example.com)' }).borderStyle).toBeUndefined()
 })
+
+
+it('applies plugin-scoped groups and keyed Box reveals locally without pressing or stealing focus', async () => {
+  const group = JSON.stringify(['fixture', 'shared']), foreign = JSON.stringify(['other', 'shared'])
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', boxKey: 'outer', children: [
+    { kind: 'text', text: 'Trigger', hover: { group, text: { color: 'red' } } },
+    { kind: 'text', text: 'Peer', hover: { group, text: { color: 'red' } } },
+    { kind: 'text', text: 'Foreign', hover: { group: foreign, text: { color: 'red' } } },
+    { kind: 'text', text: 'Local', hover: { text: { bold: true } } },
+    { kind: 'box', layout: { display: 'none' }, hover: { layout: { display: 'flex' } }, children: [{ kind: 'text', text: 'Revealed' }] },
+    { kind: 'box', boxKey: 'inner', children: [{ kind: 'text', text: 'Nested', hover: { text: { italic: true } } }] },
+  ] } } })
+  const spans = () => [...f.root.querySelectorAll<HTMLElement>('span')]
+  const find = (text: string) => spans().find(span => span.textContent === text)!
+  const editor = f.root.querySelector('textarea')!; editor.focus()
+  expect(find('Revealed').parentElement!.style.display).toBe('none')
+  find('Trigger').dispatchEvent(new MouseEvent('pointerover', { bubbles: true }))
+  await nextTick()
+  expect(find('Trigger').style.color).toBe('red')
+  expect(find('Peer').style.color).toBe('red')
+  expect(find('Foreign').style.color).toBe('')
+  expect(find('Local').style.fontWeight).toBe('600')
+  expect(find('Revealed').parentElement!.style.display).toBe('flex')
+  expect(find('Nested').classList.contains('italic')).toBe(false)
+  expect(document.activeElement).toBe(editor)
+  expect(f.press).not.toHaveBeenCalled()
+  find('Trigger').dispatchEvent(new MouseEvent('pointerout', { bubbles: true, relatedTarget: find('Nested') }))
+  find('Nested').dispatchEvent(new MouseEvent('pointerover', { bubbles: true }))
+  await nextTick()
+  expect(find('Peer').style.color).toBe('')
+  expect(find('Nested').classList.contains('italic')).toBe(true)
+  f.root.querySelector<HTMLElement>('[tabindex="0"]')!.dispatchEvent(new MouseEvent('pointerleave', { relatedTarget: editor }))
+  await nextTick()
+  expect(find('Revealed').parentElement!.style.display).toBe('none')
+  expect(find('Nested').classList.contains('italic')).toBe(false)
+  f.state.nativeUi = { status: 'error', message: 'fixture detached' }; await nextTick()
+  expect(f.root.querySelectorAll('.native-box')).toHaveLength(0)
+})
+
+it('limits duplicate sibling Box keys to the first scope and restores nested inverse colors', async () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [
+    { kind: 'box', boxKey: 'same', children: [{ kind: 'text', text: 'First', hover: { text: { color: 'red' } } }] },
+    { kind: 'box', boxKey: 'same', children: [{ kind: 'text', text: 'Duplicate', hover: { text: { color: 'red' } } }] },
+    { kind: 'text', text: 'Inverse', style: { color: 'blue', backgroundColor: 'yellow', inverse: true }, children: [{ kind: 'text', text: 'Normal', style: { inverse: false } }] },
+  ] } } })
+  const first = [...f.root.querySelectorAll<HTMLElement>('span')].find(span => span.textContent === 'First')!
+  const duplicate = [...f.root.querySelectorAll<HTMLElement>('span')].find(span => span.textContent === 'Duplicate')!
+  first.dispatchEvent(new MouseEvent('pointerover', { bubbles: true })); await nextTick()
+  expect(first.style.color).toBe('red')
+  duplicate.dispatchEvent(new MouseEvent('pointerover', { bubbles: true })); await nextTick()
+  expect(duplicate.style.color).toBe('')
+  const normal = [...f.root.querySelectorAll<HTMLElement>('span')].find(span => span.textContent === 'Normal')!
+  expect(normal.parentElement!.style.color).toBe('yellow')
+  expect(normal.parentElement!.style.backgroundColor).toBe('blue')
+  expect(normal.style.color).toBe('blue')
+  expect(normal.style.backgroundColor).toBe('yellow')
+})

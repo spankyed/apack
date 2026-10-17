@@ -1,3 +1,4 @@
+import { readClaudeUiHover } from './ui-hover.ts'
 import { readClaudeUiBoxLayout } from './ui-box-layout.ts'
 import { randomUUID } from 'node:crypto'
 import { ClaudeProtocolError } from './errors.ts'
@@ -67,7 +68,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         const props = value.props ?? {}
         if (!record(props)) throw new ClaudeProtocolError('native Text props are invalid')
         const style: NonNullable<Extract<ClaudeUiNode, { kind: 'text' }>['style']> = {}
-        for (const name of ['bold', 'italic', 'underline', 'strikethrough', 'mono', 'tabular', 'dimColor'] as const) {
+        for (const name of ['bold', 'italic', 'underline', 'strikethrough', 'mono', 'tabular', 'dimColor', 'inverse'] as const) {
           if (props[name] !== undefined) {
             if (typeof props[name] !== 'boolean') throw new ClaudeProtocolError('native Text style is invalid')
             style[name] = props[name]
@@ -87,7 +88,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
             Object.assign(style, { [name]: candidate })
           }
         }
-        const styling = Object.keys(style).length ? { style } : {}
+        const hover = readClaudeUiHover(value, props)
+        const styling = { ...(Object.keys(style).length ? { style } : {}), ...(hover ? { hover } : {}) }
         return children.every(child => typeof child === 'string')
           ? { kind: 'text', text: children.join(''), ...styling, ...attribution }
           : { kind: 'text', text: '', children: children.map(visit), ...styling, ...attribution }
@@ -106,7 +108,9 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         if (typeof props.borderDimColor !== 'boolean') throw new ClaudeProtocolError('native Box border dim is invalid')
         paint.borderDimColor = props.borderDimColor
       }
-      return { kind: 'box', children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
+      const hover = readClaudeUiHover(value, props)
+      const boxKey = props.key === undefined ? undefined : typeof props.key === 'string' && props.key.length > 0 && props.key.length <= 10000 && !/[\u0000-\u001f\u007f]/.test(props.key) ? props.key : false
+      return { kind: 'box', ...(boxKey !== undefined ? { boxKey } : {}), ...(hover ? { hover } : {}), children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
     }
     if (value.type === 'Link') {
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')
@@ -203,7 +207,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       }
       if (value.children !== undefined && !Array.isArray(value.children)) throw new ClaudeProtocolError('native UI button children are invalid')
       if (Array.isArray(value.children)) value.children.forEach(validateInline)
-      const button: ClaudeUiNode = { kind: 'button', label: props.label as string, ...attribution,
+      const hover = readClaudeUiHover(value, props)
+      const button: ClaudeUiNode = { kind: 'button', ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
         ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(visit) } : {}),
         ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),
         ...(props.variant !== undefined ? { variant: props.variant as 'primary' | 'secondary' } : {}),

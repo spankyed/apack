@@ -132,3 +132,31 @@ it('retains native Text colors and Box paint as data while rejecting invalid pro
   for (const props of [{ borderColor: 1 }, { borderStyle: {} }, { backgroundColor: [] }, { borderDimColor: 'true' }]) expect(() => createClaudeUiDrawing({ type: 'Box', props })).toThrow()
   expect(() => createClaudeUiDrawing({ type: 'Text', props: { color: {} } })).toThrow()
 })
+
+
+it('maps keyed Box and plugin-owned hover groups independently of root attribution', () => {
+  const drawing = createClaudeUiDrawing({ type: 'Box', props: { key: 'row', borderStyle: 'single' }, hover: { borderColor: 'success' }, children: [
+    { type: 'Text', props: { inverse: true }, hover: { scope: 'same', color: 'warning', inverse: false }, group: { plugin: 'owner' }, part: { plugin: 'attribution' }, children: ['Grouped'] },
+    { type: 'Button', props: { key: 'go', label: 'Go' }, hover: { scope: 'same', bold: true }, press: { plugin: 'owner', handle: 4 } },
+    { type: 'Box', props: { position: 'absolute', display: 'none' }, hover: { display: 'flex', left: -2 } },
+  ] })
+  expect(drawing.tree).toMatchObject({ kind: 'box', boxKey: 'row', hover: { paint: { borderColor: 'success' } }, children: [
+    { kind: 'text', plugin: 'attribution', style: { inverse: true }, hover: { group: JSON.stringify(['owner', 'same']), text: { color: 'warning', inverse: false } } },
+    { kind: 'button', hover: { group: JSON.stringify(['owner', 'same']), text: { bold: true } } },
+    { kind: 'box', hover: { layout: { display: 'flex', left: -2 } } },
+  ] })
+  expect(drawing.actions.size).toBe(1)
+  expect(createClaudeUiDrawing({ type: 'Box', props: { key: 42 } }).tree).toHaveProperty('boxKey', false)
+})
+it('rejects hover groups without ownership and hover changes that alter normal flow', () => {
+  for (const node of [
+    { type: 'Text', hover: { scope: 'group', color: 'red' } },
+    { type: 'Text', hover: { scope: 'bad\nname' }, group: { plugin: 'fixture' } },
+    { type: 'Text', hover: { color: 1 } },
+    { type: 'Text', hover: { position: 'absolute' } },
+    { type: 'Box', hover: { borderStyle: 'double' } },
+    { type: 'Box', hover: { display: 'flex' } },
+    { type: 'Box', props: { display: 'none' }, hover: { display: 'none' } },
+    { type: 'Box', hover: { left: 2 } },
+  ]) expect(() => createClaudeUiDrawing(node)).toThrow()
+})

@@ -56,17 +56,25 @@ export interface ClaudeUiTextStyle {
   mono?: boolean
   tabular?: boolean
   dimColor?: boolean
+  inverse?: boolean
+}
+
+export interface ClaudeUiHover {
+  group?: string
+  text?: Pick<ClaudeUiTextStyle, 'color' | 'backgroundColor' | 'dimColor' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'inverse'>
+  paint?: ClaudeUiBoxPaint
+  layout?: Pick<ClaudeUiBoxLayout, 'display' | 'top' | 'left' | 'right' | 'bottom'>
 }
 
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
-  | { kind: 'text'; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
+  | { kind: 'text'; hover?: ClaudeUiHover; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
   | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
-  | { kind: 'box'; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
+  | { kind: 'box'; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
-  | { kind: 'button'; label: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
+  | { kind: 'button'; hover?: ClaudeUiHover; label: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
   | { kind: 'input'; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
   | { kind: 'select'; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }

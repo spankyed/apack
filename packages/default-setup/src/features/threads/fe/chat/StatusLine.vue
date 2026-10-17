@@ -5,7 +5,7 @@
       <button type="button" class="min-w-0 max-w-full whitespace-normal break-words text-right hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400"
         :title="cwd" @click="emit('click')">{{ statusLine }}</button>
     </div>
-    <div v-if="nativeUi?.status === 'live' && hasContent" class="max-h-48 overflow-y-auto min-w-0" tabindex="0" @focus="focusNativeUi" :class="{ 'mt-1.5': statusLine }">
+    <div v-if="nativeUi?.status === 'live' && hasContent" class="max-h-48 overflow-y-auto min-w-0" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-1.5': statusLine }">
       <NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
@@ -13,9 +13,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, provide, onBeforeUnmount } from 'vue'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 import NativeUiNode from './NativeUiNode.vue'
+import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
+const hover = createClaudeHoverSurface()
+provide(claudeHoverSurface, hover)
+onBeforeUnmount(() => hover.dispose())
 const props = defineProps<{ statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }>()
 const emit = defineEmits<{ click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
 function focusNativeUi(event: FocusEvent) {
