@@ -171,3 +171,13 @@ it('preserves one native Button hotkey and refuses malformed bindings', () => {
 it.each([0, -1, 1.5, 1_000_000_001])('refuses Code line numbers outside the native contract: %s', startLine => {
   expect(() => createClaudeUiDrawing({ type: 'Code', props: { source: 'literal', startLine } })).toThrow()
 })
+
+
+it('inherits native root ownership for nested scroll targets and honors a nested part override', () => {
+  const drawing = createClaudeUiDrawing({ type: 'Box', part: { plugin: 'outer' }, children: [
+    { type: 'Box', props: { key: 'outer-target' }, children: [{ type: 'Text', children: ['Outer'] }] },
+    { type: 'Box', part: { plugin: 'inner' }, children: [{ type: 'Box', props: { key: 'inner-target' } }] },
+  ] })
+  expect([...drawing.scrollTargets.values()]).toEqual([{ plugin: 'outer', key: 'outer-target' }, { plugin: 'inner', key: 'inner-target' }])
+  expect(drawing.tree).toMatchObject({ kind: 'box', plugin: 'outer', children: [{ kind: 'box', plugin: 'outer', scrollId: expect.any(String) }, { kind: 'box', plugin: 'inner' }] })
+})

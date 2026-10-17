@@ -65,11 +65,11 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   const links = new Map<string, ReadonlySet<string> | undefined>()
   const identities = new Set<string>()
   let nodes = 0
-  function visit(value: unknown): ClaudeUiNode {
+  function visit(value: unknown, inheritedPlugin?: string): ClaudeUiNode {
     if (++nodes > limits.nodes) throw new ClaudeProtocolError('native UI tree exceeds node limit')
     if (typeof value === 'string') return { kind: 'text', text: value }
     if (!record(value) || typeof value.type !== 'string') throw new ClaudeProtocolError('native UI node must have a component type')
-    const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : undefined
+    const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : inheritedPlugin
     const attribution = plugin === undefined ? {} : { plugin }
     if (value.type === 'Box' || value.type === 'Text') {
       const children = value.children ?? []
@@ -102,7 +102,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         const styling = { ...(Object.keys(style).length ? { style } : {}), ...(hover ? { hover } : {}) }
         return children.every(child => typeof child === 'string')
           ? { kind: 'text', text: children.join(''), ...styling, ...attribution }
-          : { kind: 'text', text: '', children: children.map(visit), ...styling, ...attribution }
+          : { kind: 'text', text: '', children: children.map(child => visit(child, plugin)), ...styling, ...attribution }
       }
       const props = value.props ?? {}
       if (!record(props)) throw new ClaudeProtocolError('native Box props are invalid')
@@ -122,7 +122,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const boxKey = props.key === undefined ? undefined : typeof props.key === 'string' && props.key.length > 0 && props.key.length <= 10000 && !/[\u0000-\u001f\u007f]/.test(props.key) ? props.key : false
       const scrollId = plugin && plugin.length <= 256 && typeof boxKey === 'string' && boxKey.length <= 256 ? randomUUID() : undefined
       if (scrollId) scrollBoxes.set(scrollId, { plugin: plugin!, key: boxKey as string })
-      return { kind: 'box', ...(scrollId ? { scrollId } : {}), ...(boxKey !== undefined ? { boxKey } : {}), ...(hover ? { hover } : {}), children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
+      return { kind: 'box', ...(scrollId ? { scrollId } : {}), ...(boxKey !== undefined ? { boxKey } : {}), ...(hover ? { hover } : {}), children: children.map(child => visit(child, plugin)), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
     }
     if (value.type === 'Link') {
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')
@@ -138,7 +138,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (children !== undefined && !Array.isArray(children)) throw new ClaudeProtocolError('native Link children are invalid')
       return { kind: 'link', ...(href !== undefined ? { href } : {}), children: children === undefined || !children.length
         ? [{ kind: 'text', text: typeof value.props.label === 'string' ? value.props.label : raw }]
-        : children.map(visit), ...attribution }
+        : children.map(child => visit(child, plugin)), ...attribution }
     }
     if (value.type === 'Svg') {
       const props = value.props
@@ -222,7 +222,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (Array.isArray(value.children)) value.children.forEach(validateInline)
       const hover = readClaudeUiHover(value, props)
       const button: ClaudeUiNode = { kind: 'button', ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
-        ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(visit) } : {}),
+        ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(child => visit(child, plugin)) } : {}),
         ...(props.hotkey !== undefined ? { hotkey: props.hotkey as string } : {}),
         ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),
         ...(props.variant !== undefined ? { variant: props.variant as 'primary' | 'secondary' } : {}),
