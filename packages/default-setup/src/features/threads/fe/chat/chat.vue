@@ -243,9 +243,9 @@ function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
 }
-function pressNativeUi(actionId: string) {
+function pressNativeUi(actionId: string, href?: string) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId })
+  if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 onMounted(() => {
   stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode], ([threadId, enabled]) => {

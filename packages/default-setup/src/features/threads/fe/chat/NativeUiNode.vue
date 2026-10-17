@@ -1,7 +1,8 @@
 <template>
   <div v-if="node.kind === 'box'" class="flex flex-col gap-1 min-w-0" :data-native-plugin="node.plugin">
-    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" @press="emit('press', $event)" @field="emit('field', $event)" />
+    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </div>
+  <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
   <span v-else-if="node.kind === 'text'" class="whitespace-pre-wrap break-words" :data-native-plugin="node.plugin">{{ node.text }}</span>
   <button v-else-if="node.kind === 'button'" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
@@ -11,8 +12,9 @@
 </template>
 
 <script setup lang="ts">
+import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 defineProps<{ node: ClaudeUiNode }>()
-const emit = defineEmits<{ press: [actionId: string]; field: [event: ClaudeUiFieldEvent] }>()
+const emit = defineEmits<{ press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
 </script>

@@ -2,6 +2,8 @@
 export type ClaudeUiNode =
   | { kind: 'text'; text: string; plugin?: string }
   | { kind: 'box'; children: ClaudeUiNode[]; plugin?: string }
+  | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
+  | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
   | { kind: 'button'; label: string; actionId?: string; plugin?: string }
   | { kind: 'input'; actionId: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
   | { kind: 'select'; actionId: string; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }

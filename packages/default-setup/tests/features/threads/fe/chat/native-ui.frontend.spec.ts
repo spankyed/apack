@@ -1,9 +1,11 @@
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
+beforeEach(() => { startFeTestRuntime() })
 let app: App | undefined
-afterEach(() => { app?.unmount(); document.body.replaceChildren() })
+afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }) {
   const state = reactive(props)
   const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), submit = vi.fn()
@@ -28,7 +30,7 @@ it('renders the strip inside the form, preserves CWD navigation and emits presse
   expect(buttons[0]!.title).toBe('/private/fixture')
   buttons[0]!.click(); buttons[1]!.click()
   expect(f.cwd).toHaveBeenCalledOnce()
-  expect(f.press).toHaveBeenCalledWith('opaque-action')
+  expect(f.press).toHaveBeenCalledWith('opaque-action', undefined)
   expect(f.submit).not.toHaveBeenCalled()
   expect(strip.textContent).toContain('First line\nSecond line <script>bad()</script>')
   expect(strip.querySelector('script')).toBeNull()
@@ -94,4 +96,31 @@ it('uses native select values and leaves the message composer untouched', () => 
   select.value = 'b'; select.dispatchEvent(new Event('change', { bubbles: true }))
   expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', kind: 'select', value: 'b' })
   expect(f.submit).not.toHaveBeenCalled()
+})
+
+
+it('renders native Markdown through the existing viewer and sends owned link clicks to Claude', async () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'markdown', text: '**Native heading**\n\n[Open](https://example.com/)\n\n<script>bad()</script>', dim: false, actionId: 'markdown-action' } } })
+  await vi.waitFor(() => expect(f.root.querySelector('strong')).not.toBeNull())
+  expect(f.root.querySelector('strong')?.textContent).toBe('Native heading')
+  expect(f.root.querySelector('script')).toBeNull()
+  const link = f.root.querySelector('a[href="https://example.com/"]')!
+  expect(link).not.toBeNull()
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  expect(f.press).toHaveBeenCalledWith('markdown-action', 'https://example.com/')
+  f.press.mockClear()
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }))
+  expect(f.press).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('keeps embedded fences and markup literal inside native code with its gutter', async () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'code', source: '```\n<script>bad()</script>', language: 'html', path: 'fixture.html', startLine: 9, format: 'source', wrap: 'wrap' } } })
+  await vi.waitFor(() => expect(f.root.querySelector('code')).not.toBeNull())
+  const code = f.root.querySelector('code')!
+  expect(code).not.toBeNull()
+  expect(code.textContent).toContain('```\n<script>bad()</script>')
+  expect(f.root.querySelector('script')).toBeNull()
+  expect(f.root.textContent).toContain('fixture.html')
+  expect(f.root.querySelector('pre[aria-hidden="true"]')?.textContent).toBe('9\n10')
 })

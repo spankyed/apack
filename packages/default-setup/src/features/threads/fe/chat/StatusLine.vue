@@ -6,7 +6,7 @@
         :title="cwd" @click="emit('click')">{{ statusLine }}</button>
     </div>
     <div v-if="nativeUi?.status === 'live' && hasContent" class="max-h-48 overflow-y-auto min-w-0" :class="{ 'mt-1.5': statusLine }">
-      <NativeUiNode :node="nativeUi.tree" @press="emit('press', $event)" @field="emit('field', $event)" />
+      <NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
   </div>
@@ -17,7 +17,7 @@ import { computed } from 'vue'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 import NativeUiNode from './NativeUiNode.vue'
 const props = defineProps<{ statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState }>()
-const emit = defineEmits<{ click: []; press: [actionId: string]; field: [event: ClaudeUiFieldEvent] }>()
+const emit = defineEmits<{ click: []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
 function visible(node: ClaudeUiNode): boolean {
   if (node.kind === 'box') return node.children.some(visible)
   if (node.kind === 'text') return !!node.text.trim()

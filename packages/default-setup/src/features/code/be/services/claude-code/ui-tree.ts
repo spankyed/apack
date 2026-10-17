@@ -5,6 +5,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  links: ReadonlyMap<string, ReadonlySet<string> | undefined>
   fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>
   tree: ClaudeUiNode
   /** Backend authority only: never serialize this map into plugin state or durable data. */
@@ -49,6 +50,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   validateBudget(tree)
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
   const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
+  const links = new Map<string, ReadonlySet<string> | undefined>()
   const identities = new Set<string>()
   let nodes = 0
   function visit(value: unknown): ClaudeUiNode {
@@ -64,6 +66,31 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         return { kind: 'text', text: value.children.join(''), ...attribution }
       }
       return { kind: 'box', children: value.children.map(visit), ...attribution }
+    }
+    if (value.type === 'Markdown') {
+      if (!record(value.props) || typeof value.props.text !== 'string' || (value.props.dimColor !== undefined && typeof value.props.dimColor !== 'boolean')) throw new ClaudeProtocolError('native Markdown props are invalid')
+      const props = value.props
+      if (props.pressableLinks !== undefined && (!Array.isArray(props.pressableLinks) || !props.pressableLinks.every(href => typeof href === 'string'))) throw new ClaudeProtocolError('native Markdown links are invalid')
+      const pressableLinks = props.pressableLinks as string[] | undefined
+      const node: ClaudeUiNode = { kind: 'markdown', text: props.text as string, dim: props.dimColor === true, ...attribution,
+        ...(pressableLinks !== undefined ? { pressableLinks } : {}) }
+      if (value.press === undefined) return node
+      if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
+        || !Number.isSafeInteger(value.press.handle) || typeof props.key !== 'string') throw new ClaudeProtocolError('native Markdown callback is invalid')
+      const actionId = randomUUID()
+      actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle, key: props.key })
+      links.set(actionId, pressableLinks === undefined ? undefined : new Set(pressableLinks))
+      return { ...node, actionId }
+    }
+    if (value.type === 'Code') {
+      const props = value.props
+      if (!record(props) || typeof props.source !== 'string'
+        || (props.language !== undefined && typeof props.language !== 'string') || (props.path !== undefined && typeof props.path !== 'string')
+        || (props.startLine !== undefined && (typeof props.startLine !== 'number' || !Number.isSafeInteger(props.startLine)))
+        || (props.format !== undefined && props.format !== 'source' && props.format !== 'diff')
+        || (props.wrap !== undefined && props.wrap !== 'wrap' && props.wrap !== 'truncate-end')) throw new ClaudeProtocolError('native Code props are invalid')
+      return { kind: 'code', source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,
+        ...(typeof props.language === 'string' ? { language: props.language } : {}), ...(typeof props.path === 'string' ? { path: props.path } : {}), ...(typeof props.startLine === 'number' ? { startLine: props.startLine } : {}) }
     }
     if (value.type === 'Input' || value.type === 'Select') {
       const props = value.props, press = value.press
@@ -110,5 +137,5 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     }
     return { kind: 'unsupported', component: value.type, ...attribution }
   }
-  return { tree: visit(tree), actions, fields }
+  return { tree: visit(tree), actions, fields, links }
 }

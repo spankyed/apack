@@ -60,3 +60,15 @@ it('keeps keyed field authority through redraws and refuses ambiguous keys', () 
   expect(() => createClaudeUiDrawing({ type: 'Box', children: [input, input] })).toThrow()
   expect(() => createClaudeUiDrawing({ type: 'Select', props: { key: 'pick', options: [{ value: 'a' }, { value: 'a' }] }, press: input.press })).toThrow('ambiguous')
 })
+
+
+it('keeps document text literal and scopes Markdown link callbacks without exposing handles', () => {
+  const drawing = createClaudeUiDrawing({ type: 'Markdown', props: { key: 'doc', text: '**Hello**', dimColor: true, pressableLinks: ['https://example.com/'] }, press: { plugin: 'fixture', handle: 8 } })
+  expect(drawing.tree).toMatchObject({ kind: 'markdown', text: '**Hello**', dim: true })
+  const [actionId, capability] = [...drawing.actions][0]!
+  expect(capability).toEqual({ plugin: 'fixture', handle: 8, key: 'doc' })
+  expect(drawing.links.get(actionId)?.has('https://example.com/')).toBe(true)
+  expect(JSON.stringify(drawing.tree)).not.toContain('handle')
+  expect(createClaudeUiDrawing({ type: 'Code', props: { source: '<script>bad()</script>', path: 'fixture.ts', startLine: 9 } }).tree).toEqual({ kind: 'code', source: '<script>bad()</script>', path: 'fixture.ts', startLine: 9, format: 'source', wrap: 'wrap' })
+  expect(() => createClaudeUiDrawing({ type: 'Markdown', props: { key: 'doc', text: 'x', pressableLinks: [1] } })).toThrow()
+})

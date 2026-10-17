@@ -71,7 +71,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     bind(key, view)
     const target = view
     const mount = target.mount
-    const operation = event.type === 'CLAUDE_UI_PRESS' ? mount?.press(event.actionId) : mount?.field(event)
+    const operation = event.type === 'CLAUDE_UI_PRESS' ? mount?.press(event.actionId, event.href) : mount?.field(event)
     void operation?.catch(error => {
       if (views.get(key) === target && target.mount === mount && getConversation(target.threadId)?.owner === target.owner) publish(target, { status: 'error', message: error instanceof Error ? error.message : 'Native UI action failed' })
     })

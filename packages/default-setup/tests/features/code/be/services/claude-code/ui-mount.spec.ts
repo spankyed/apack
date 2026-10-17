@@ -203,3 +203,21 @@ it('keeps a native edit failure separate from mounted controls and discards supe
   await expect(view.editPrompt({ revision: 2, by: 'person', text: 'draft', cursor: 5 })).resolves.toBeUndefined()
   await view.dispose()
 })
+
+
+it('forwards only authorized Markdown URLs to the native callback and retires them after a click', async () => {
+  const f = fixture()
+  const doc = { type: 'Markdown', props: { key: 'doc', text: '[Open](https://example.com/)', pressableLinks: ['https://example.com/'] }, press: { plugin: 'fixture', handle: 9 } }
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: doc } as unknown as ReturnType<typeof rendered>)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const live = f.states.at(-1)!
+  if (live.status !== 'live' || live.tree.kind !== 'markdown' || !live.tree.actionId) throw new Error('expected Markdown')
+  const id = live.tree.actionId
+  await expect(view.press(id, 'javascript:bad()')).resolves.toEqual({ handled: false })
+  await expect(view.press(id, 'https://foreign.example/')).resolves.toEqual({ handled: false })
+  expect(f.ui.press).not.toHaveBeenCalled()
+  await expect(view.press(id, 'https://example.com/')).resolves.toEqual({ handled: true })
+  expect(f.ui.press).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'fixture', handle: 9, key: 'doc', href: 'https://example.com/' }))
+  await expect(view.press(id, 'https://example.com/')).resolves.toEqual({ handled: false })
+  await view.dispose()
+})

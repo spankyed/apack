@@ -139,16 +139,23 @@ export function mountClaudeUi(options: {
       return { handled: current() && result.handled }
     },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */
-    async press(actionId: string): Promise<{ handled: boolean }> {
+    async press(actionId: string, href?: string): Promise<{ handled: boolean }> {
       if (!current() || pressing) return { handled: false }
       const action = drawing?.actions.get(actionId)
       if (!action) return { handled: false }
+      const isLink = drawing?.links.has(actionId)
+      if (isLink) {
+        if (!href || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return { handled: false }
+        try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return { handled: false } } catch { return { handled: false } }
+        const allowed = drawing?.links.get(actionId)
+        if (allowed && !allowed.has(href)) return { handled: false }
+      } else if (href !== undefined) return { handled: false }
       pressing = true
       // Retire immediately; a second click cannot reuse an accepted capability.
       drawing = undefined
       if (!fieldDrawing?.fields.size) publish({ status: 'rendering' })
       try {
-        const result = await owner.handle.ui.press({ ...client, ...action })
+        const result = await owner.handle.ui.press({ ...client, ...action, ...(href !== undefined ? { href } : {}) })
         return { handled: current() && result.handled }
       } finally {
         pressing = false
