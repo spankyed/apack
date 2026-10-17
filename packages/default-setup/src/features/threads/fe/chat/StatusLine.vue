@@ -1,6 +1,6 @@
 <template>
   <div v-if="statusLine || hasContent || nativeUi?.status === 'error'"
-    class="flex min-h-0 min-w-0 flex-col overflow-y-auto bg-[#1d1d1f] px-5 py-3 text-xs text-neutral-400" :class="{ 'min-h-20': hasContent, 'border-b border-white/[0.06]': hasContent || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
+    class="flex min-h-0 min-w-0 flex-col overflow-y-auto bg-[#1d1d1f] px-5 py-3 text-xs text-neutral-400" :class="{ 'min-h-28': hasContent, 'border-b border-white/[0.06]': hasContent || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div v-if="statusLine" class="flex shrink-0 min-w-0 items-center pr-5">
       <button type="button" class="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-500 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
         :title="cwd" @click="emit('click')"><FolderOpen v-if="cwd" :size="12" class="shrink-0" aria-hidden="true" /><span class="min-w-0" :class="cwd && statusLine === cwd ? 'truncate' : 'whitespace-pre-wrap break-words'">{{ displayPath }}</span></button>
