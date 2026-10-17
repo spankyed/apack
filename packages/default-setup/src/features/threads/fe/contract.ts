@@ -6,7 +6,7 @@
 import type { Simplify } from '@apackdev/sdk/helpers'
 import type { HotkeysMap, NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
 import type {
-  ClaudeUiMountState, ClaudePromptReply, ClaudePromptCompletionReply, AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
+  ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptReply, ClaudePromptCompletionReply, AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
   ThreadEntity, ThreadTagOption, ThreadViewData, ThreadsSettings,
 } from '#generated/types.ts'
 import type { ThreadTabGroup } from './canvas/agent/tabs/types.ts'
@@ -44,7 +44,7 @@ export interface ThreadsContext {
   };
   threadsImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number };
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
-  nativeUiViews: Record<string, { threadId: string; state: ClaudeUiMountState; focusRevision?: number; focus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
+  nativeUiViews: Record<string, { threadId: string; state: ClaudeUiMountState; focusRevision?: number; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
   // Chat/agent
   currentThread: AgentThreadData | null;
   recentThreadIds: string[];
