@@ -122,3 +122,50 @@ it('continues the mounted view revision after the editor is rebound', () => {
   expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 13 }))
   bridge.dispose()
 })
+
+
+it('renders native styling without changing serialized text, and clears it on new edits or detach', () => {
+  editor.commands.setContent('hello world')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: 'hello world', cursor: 11, decorations: [{ start: 0, end: 5, bold: true, italic: true, underline: true, color: 'success' }] } })
+  const span = editor.view.dom.querySelector('.claude-prompt-decoration')! as HTMLElement
+  expect(span.textContent).toBe('hello')
+  expect(span.style.fontWeight).toBe('600')
+  expect(span.style.fontStyle).toBe('italic')
+  expect(serialize(editor.state.doc)).toBe('hello world')
+  editor.commands.insertContent('!')
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor, decorations: [{ start: 0, end: 5, bold: true }] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).not.toBeNull()
+  bridge.dispose()
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+})
+
+it('projects decoration ranges around Markdown syntax onto visible text', () => {
+  editor.commands.setContent('**hello**')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: '**hello**', cursor: 7, decorations: [{ start: 0, end: 9, italic: true }] } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('hello')
+  expect(serialize(editor.state.doc)).toBe('**hello**')
+  bridge.dispose()
+})
+
+it('draws virtual text as inert text outside the draft and refuses arbitrary color CSS', () => {
+  editor.commands.setContent('seed')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: 'seed', cursor: 4, decorations: [
+    { start: 0, end: 0, virtualText: '<script>hint</script>' },
+    { start: 0, end: 4, bold: true, color: 'red;position:fixed', backgroundColor: 'url(https://example.com/)' },
+  ] } })
+  const hint = editor.view.dom.querySelector('.claude-prompt-virtual')! as HTMLElement
+  expect(hint.textContent).toBe('<script>hint</script>')
+  expect(hint.contentEditable).toBe('false')
+  expect(editor.view.dom.querySelector('script')).toBeNull()
+  expect(serialize(editor.state.doc)).toBe('seed')
+  expect(editor.state.doc.textContent).toBe('seed')
+  const span = editor.view.dom.querySelector('.claude-prompt-decoration')! as HTMLElement
+  expect(span.style.color).toBe('')
+  expect(span.style.backgroundColor).toBe('')
+  bridge.dispose()
+})

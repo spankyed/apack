@@ -25,18 +25,20 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
 }
 
 /** Match exact serialized boundaries; syntax and atoms are never guessed through. */
-export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, serialize: ClaudePromptSerializer): number | undefined {
+export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, serialize: ClaudePromptSerializer, bias: -1 | 0 | 1 = 0): number | undefined {
   if (!Number.isInteger(offset) || offset < 0) return
-  let found: number | undefined
+  let found: number | undefined, distance = Infinity
   doc.descendants((node, position) => {
-    if (found !== undefined) return false
+    if (distance === 0) return false
     if (!node.isTextblock) return
     let low = position + 1, high = position + node.nodeSize - 1
     while (low <= high) {
       const middle = Math.floor((low + high) / 2)
       const projected = captureClaudePromptDocument(doc, middle, serialize)
       if (!projected) break
-      if (projected.cursor === offset) { found = middle; break }
+      if (projected.cursor === offset) { found = middle; distance = 0; break }
+      const delta = projected.cursor - offset
+      if (bias && Math.sign(delta) === bias && Math.abs(delta) < distance) { found = middle; distance = Math.abs(delta) }
       if (projected.cursor < offset) low = middle + 1
       else high = middle - 1
     }

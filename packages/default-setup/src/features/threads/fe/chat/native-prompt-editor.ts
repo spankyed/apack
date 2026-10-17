@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
 import { TextSelection } from '@tiptap/pm/state'
 import type { ClaudePromptEdit, ClaudePromptReply } from '#generated/types.ts'
 import { captureClaudePromptDocument, rewriteClaudePromptDocument, type ClaudePromptDocument } from './native-prompt-document.ts'
@@ -7,6 +8,8 @@ import { captureClaudePromptDocument, rewriteClaudePromptDocument, type ClaudePr
 export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
+  const decorations = createClaudePromptDecorations()
+  editor.registerPlugin(decorations.plugin)
   let revision = initialRevision, applying = false, disposed = false
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
@@ -55,6 +58,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         const tr = editor.state.tr
         if (next.doc !== snapshot.doc) tr.replaceWith(0, tr.doc.content.size, next.doc.content)
         tr.setSelection(TextSelection.create(tr.doc, next.position))
+        tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, reply.frame.decorations ?? [], serialize))
         editor.view.dispatch(tr)
         onProblem(undefined)
       } finally { applying = false }
@@ -63,6 +67,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       disposed = true; pending = undefined
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
+      if (!editor.isDestroyed) editor.unregisterPlugin(decorations.key)
       for (const event of events) dom.removeEventListener(event, intent, true)
       dom.removeEventListener('compositionend', compositionEnd)
     },
