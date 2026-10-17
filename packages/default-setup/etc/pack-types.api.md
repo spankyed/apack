@@ -1549,6 +1549,7 @@ type ClaudeUiMountState = ({
 }) & {
     panes?: ClaudeUiPanePresentation;
     scroll?: ClaudeUiScrollState;
+    notices?: ClaudeUiNotices;
 };
 
 type ClaudeUiNode = {
@@ -1639,6 +1640,27 @@ type ClaudeUiNode = {
     component: string;
     plugin?: string;
 };
+
+type ClaudeUiNoticeEvent = {
+    kind: 'dismiss';
+    id: string;
+} | {
+    kind: 'hold';
+    id: string;
+    isHeld: boolean;
+};
+
+interface ClaudeUiNotices {
+    statuses: {
+        plugin: string;
+        text: string;
+    }[];
+    toasts: {
+        id: string;
+        plugin: string;
+        text: string;
+    }[];
+}
 
 type ClaudeUiPaneEvent = {
     kind: 'close' | 'focus' | 'show';
@@ -1741,6 +1763,10 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
 } & ClaudePromptEdit) | ({
+    type: 'CLAUDE_UI_NOTICE';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiNoticeEvent) | ({
     type: 'CLAUDE_UI_SCROLL';
     threadId: string;
     mountId: string;

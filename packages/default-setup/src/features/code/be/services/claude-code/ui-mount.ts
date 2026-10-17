@@ -1,3 +1,4 @@
+import { createClaudeUiNotices } from './ui-notices.ts'
 import { createClaudeSiteScroll } from './ui-site-scroll.ts'
 import { createClaudePaneHost } from './ui-pane-host.ts'
 import { randomUUID } from 'node:crypto'
@@ -7,7 +8,7 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe' | 'sessionId'> & { handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
@@ -42,10 +43,14 @@ export function mountClaudeUi(options: {
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
   const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
+  const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
+
   function publish(state: ClaudeUiMountState): void {
     // An observer must not break native attachment cleanup or the process event reader.
     lastState = state
-    try { options.publish({ ...state, ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    const pane = panes?.state?.roster
+    notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
+    try { options.publish({ ...state, ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -116,6 +121,7 @@ export function mountClaudeUi(options: {
     disposed = true
     panes?.dispose()
     scroll.dispose()
+    notices.dispose()
     stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
     fieldRevisions.clear()
@@ -139,6 +145,7 @@ export function mountClaudeUi(options: {
   publish({ status: 'connecting' })
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
+    notices.receive(line)
     panes?.receive(line)
     scroll.receive(line)
     if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
@@ -164,6 +171,7 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
     scroll(event: import('./ui-presentation.ts').ClaudeUiScrollEvent) { if (event.paneId) panes?.scroll(event); else scroll.report(event) },
     pane(event: import('./ui-presentation.ts').ClaudeUiPaneEvent) { return panes?.operate(event) },
     get promptRevision() { return promptRevision },

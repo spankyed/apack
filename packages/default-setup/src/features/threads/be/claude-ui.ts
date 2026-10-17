@@ -97,6 +97,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_NOTICE') {
+    if (!view) return
+    bind(key, view)
+    view.mount?.notice(event)
+    return
+  }
   if (event.type === 'CLAUDE_UI_SCROLL') {
     if (!view) return
     bind(key, view)

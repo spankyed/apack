@@ -110,11 +110,18 @@ export interface ClaudeUiPanePresentation {
 }
 export type ClaudeUiPaneEvent = { kind: 'show' | 'focus' | 'close'; id: string | null }
   | { kind: 'layout'; id: string; columns: number; rows: number; offset: number }
+export type ClaudeUiNoticeEvent = { kind: 'dismiss'; id: string } | { kind: 'hold'; id: string; isHeld: boolean }
+
+export interface ClaudeUiNotices {
+  statuses: { plugin: string; text: string }[]
+  toasts: { id: string; plugin: string; text: string }[]
+}
+
 export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState }
+) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

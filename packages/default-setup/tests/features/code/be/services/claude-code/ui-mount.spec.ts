@@ -334,3 +334,16 @@ it('unregisters a composer host when native attachment fails and does not reuse 
   expect(f.states.at(-1)).toEqual({ status: 'error', message: 'no surface' })
   await view.dispose(); expect(stop).toHaveBeenCalledOnce()
 })
+
+it('holds native toast lifetime with the shown pane and releases it after its native roster closes', async () => {
+  const f = fixture()
+  f.ui.panes.mockResolvedValueOnce({ panes: [{ id: 'hold', title: 'Hold', plugin: 'fixture', hold_toasts: true }], shown_id: 'hold', focused_id: null, focus_requested_id: null } as unknown as Awaited<ReturnType<typeof f.ui.panes>>)
+  const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const toast = { type: 'system', subtype: 'ui_toast', uuid: 'toast', session_id: 'native-session', plugin: 'fixture', text: 'After pane', timeout_ms: 1000 } as StreamLine
+  for (const listener of f.listeners) listener(toast)
+  await vi.advanceTimersByTimeAsync(1500); expect(f.states.at(-1)?.notices).toBeUndefined()
+  for (const listener of f.listeners) listener({ type: 'system', subtype: 'ui_panes' } as StreamLine)
+  await vi.advanceTimersByTimeAsync(0); expect(f.states.at(-1)?.notices?.toasts).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(1001); expect(f.states.at(-1)?.notices).toBeUndefined()
+  await view.dispose()
+})

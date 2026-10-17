@@ -22,6 +22,8 @@
         <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
+        <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
+
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
           class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin">
@@ -205,6 +207,7 @@ import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import NativePanePanel from './NativePanePanel.vue'
 import StatusLine from './StatusLine.vue'
+import NativeUiNotices from './NativeUiNotices.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
@@ -290,6 +293,7 @@ const emit = defineEmits<{
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
+  (e: 'native-ui-notice', event: import('#generated/types.ts').ClaudeUiNoticeEvent): void
   (e: 'native-ui-scroll', event: import('#generated/types.ts').ClaudeUiScrollEvent): void
   (e: 'native-ui-pane', event: import('#generated/types.ts').ClaudeUiPaneEvent): void
   (e: 'native-ui-focus', event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent): void

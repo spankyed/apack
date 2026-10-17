@@ -279,4 +279,4 @@ export interface CodeSystemContext {
   gitWatcher: GitWatcherService | null
 }
 
-export type { ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'
+export type { ClaudeUiNoticeEvent, ClaudeUiNotices, ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'

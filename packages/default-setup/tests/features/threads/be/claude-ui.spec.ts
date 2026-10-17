@@ -14,7 +14,7 @@ async function native(threadId = 'thread') {
     press: vi.fn(async () => ({ handled: true })) }
   const handle = { ui, events, kill: () => events.end(), close: async () => { events.end() } } as unknown as QueryHandle
   const owner = await openConversation(threadId, 'fixture', async () => handle, async () => {})
-  return { ui, owner }
+  return { ui, owner, events }
 }
 const mountId = randomUUID()
 const mount = { type: 'CLAUDE_UI_MOUNT', threadId: 'thread', mountId } as const
@@ -170,4 +170,19 @@ it('correlates queued native prompt requests to the right view and retires them 
   handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'window', delivery)
   await expect(second).resolves.toBe(false)
   expect(foreign).not.toHaveBeenCalled()
+})
+
+it('keeps toast dismissal scoped to the requesting window, thread and current notice id', async () => {
+  const { events } = await native(), first = reply(), second = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'first', first); handleClaudeUiView(mount, 'second', second); await vi.advanceTimersByTimeAsync(100)
+  events.write({ type: 'system', subtype: 'ui_toast', uuid: 'native-toast', session_id: 'native-session', plugin: 'fixture', text: 'Native toast', timeout_ms: 1000 })
+  await vi.advanceTimersByTimeAsync(0)
+  const toasts = (delivery: ReturnType<typeof reply>) => { const value = delivery.mock.calls.at(-1)?.[0]; return value?.type === 'CLAUDE_UI_STATE' ? value.state.notices?.toasts ?? [] : [] }
+  expect(toasts(first)).toHaveLength(1); expect(toasts(second)).toHaveLength(1)
+  const event = { ...mount, type: 'CLAUDE_UI_NOTICE' as const, kind: 'dismiss' as const, id: 'native-toast' }
+  handleClaudeUiView(event, 'foreign', foreign); handleClaudeUiView({ ...event, threadId: 'foreign-thread' }, 'first', first)
+  handleClaudeUiView({ ...event, id: 'foreign-toast' }, 'first', first)
+  expect(toasts(first)).toHaveLength(1); expect(foreign).not.toHaveBeenCalled()
+  handleClaudeUiView(event, 'first', first)
+  expect(toasts(first)).toHaveLength(0); expect(toasts(second)).toHaveLength(1)
 })
