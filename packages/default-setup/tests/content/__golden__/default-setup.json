@@ -192,13 +192,23 @@
       },
       "Action:CC: Deny Tool": {
         "category": "claude-code",
-        "description": "Kills the CLI subprocess and stops the turn on denial.",
+        "description": "Denies the pending native tool request, or stops the turn on explicit cancellation.",
         "entityType": "Action",
         "input": {
           "threadId": {
             "type": "string",
             "description": "Thread ID",
             "required": true
+          },
+          "requestId": {
+            "type": "string",
+            "description": "CLI control_request ID",
+            "required": true
+          },
+          "response": {
+            "type": "object",
+            "description": "Denial reason or explicit cancellation from the interaction",
+            "required": false
           }
         },
         "label": "CC: Deny Tool",
