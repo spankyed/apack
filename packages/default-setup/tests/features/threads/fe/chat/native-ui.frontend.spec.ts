@@ -123,7 +123,7 @@ it('keeps embedded fences and markup literal inside native code with its gutter'
   expect(code).not.toBeNull()
   expect(code.textContent).toContain('```\n<script>bad()</script>')
   expect(f.root.querySelector('script')).toBeNull()
-  expect(f.root.textContent).toContain('fixture.html')
+  expect(f.root.textContent).not.toContain('fixture.html')
   expect(f.root.querySelector('pre[aria-hidden="true"]')?.textContent).toBe('9\n10')
 })
 
@@ -428,4 +428,28 @@ it('reveals a native focus redirect inside its own scroll site without scrolling
     expect(document.activeElement).toBe(field); expect(site.scrollTop).toBe(60)
     expect(document.documentElement.scrollTop).toBe(outsideScroll)
   } finally { windowFocus.mockRestore() }
+})
+
+
+it('renders native diff hunks with their own line numbers, markers and literal source', () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'code', source: '--- a/secret.ts\n+++ b/secret.ts\n@@ -4,2 +8,2 @@\n keep\n-<script>old()</script>\n+<img onerror="bad()">\n', path: 'secret.ts', startLine: 900, format: 'diff', wrap: 'truncate-end' } } })
+  const rows = f.root.querySelectorAll('[data-diff-kind]')
+  expect(rows).toHaveLength(4)
+  expect(rows[1].textContent).toContain('4')
+  expect(rows[1].textContent).toContain('8')
+  expect(rows[2].getAttribute('data-diff-kind')).toBe('remove')
+  expect(rows[3].getAttribute('data-diff-kind')).toBe('add')
+  expect(rows[3].querySelector('code')?.textContent).toBe('<img onerror="bad()">')
+  expect(f.root.querySelector('img, script')).toBeNull()
+  expect(f.root.textContent).not.toContain('secret.ts')
+  expect(f.root.textContent).not.toContain('900')
+})
+
+it('falls back to literal unnumbered source for a truncated native diff', async () => {
+  const source = '@@ -1,2 +1,2 @@\n-only one'
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'code', source, startLine: 900, format: 'diff', wrap: 'wrap' } } })
+  await vi.waitFor(() => expect(f.root.querySelector('code')).not.toBeNull())
+  expect(f.root.querySelector('code')?.textContent).toContain(source)
+  expect(f.root.querySelector('[data-diff-kind]')).toBeNull()
+  expect(f.root.querySelector('pre[aria-hidden="true"]')).toBeNull()
 })
