@@ -8,7 +8,7 @@
     >
       <div
         ref="inputCardRef"
-        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#222224]"
+        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#242426]"
         :style="{ maxHeight: 'calc(var(--composer-available-height) - 1rem)' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
@@ -44,7 +44,7 @@
             variant="chat"
             :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full min-h-[96px] rounded-2xl px-5 py-4 pr-10 text-sm leading-relaxed focus:outline-none"
+            editor-class="w-full min-h-[96px] rounded-2xl px-5 py-5 pr-10 text-sm leading-relaxed focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -73,7 +73,7 @@
         </div>
 
         <!-- Buttons row -->
-        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.04] bg-[#222224] px-3 py-2.5 text-neutral-500">
+        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.04] bg-[#242426] px-3 py-2 text-neutral-500">
           <!-- Left side buttons -->
           <div class="flex items-center min-w-0">
             <!-- Collapsed: ... dropdown menu (narrow) -->
@@ -811,9 +811,9 @@ const handleSubmit = async () => {
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: 0 12px 36px -16px rgba(0, 0, 0, 0.55);
-  &:focus-within { border-color: rgba(255, 255, 255, 0.18); }
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 16px 48px -20px rgba(0, 0, 0, 0.5);
+  &:focus-within { border-color: rgba(147, 180, 240, 0.28); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .inputCommandActive, .inputCommandActive:focus-within {

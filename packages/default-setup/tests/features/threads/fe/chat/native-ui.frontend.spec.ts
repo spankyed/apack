@@ -236,7 +236,7 @@ it('renders inline Button content as one named action and focuses only on site e
   const button = f.root.querySelector('button')!
   expect(button.getAttribute('aria-label')).toBe('Save changes')
   expect(button.querySelector('.font-semibold')?.textContent).toBe('changes')
-  expect(button.classList.contains('bg-white/[0.10]')).toBe(true)
+  expect(button.classList.contains('bg-blue-400/[0.12]')).toBe(true)
   expect(button.classList.contains('opacity-60')).toBe(true)
   f.root.querySelector<HTMLElement>('[tabindex="0"]')!.focus()
   expect(document.activeElement).toBe(button)

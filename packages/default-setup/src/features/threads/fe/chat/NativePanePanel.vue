@@ -1,12 +1,12 @@
 <template>
-  <section ref="panel" data-native-pane-panel @keydown="panelKey" class="min-h-0 shrink-0 border-b border-white/[0.06] bg-black/[0.08] px-4 py-3" aria-label="Claude panes">
-    <div class="mb-2 flex items-center gap-2">
-      <div v-if="panes.roster.panes.length > 1" class="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label="Claude pane tabs">
+  <section ref="panel" data-native-pane-panel @keydown="panelKey" class="min-h-0 shrink-0 border-b border-white/[0.06] bg-[#1b1b1d] px-5 py-3" aria-label="Claude panes">
+    <div class="mb-3 flex items-center gap-2">
+      <div v-if="panes.roster.panes.length > 1" class="flex min-w-0 flex-1 gap-3 overflow-x-auto" role="tablist" aria-label="Claude pane tabs">
         <button v-for="pane in panes.roster.panes" :key="pane.id" type="button" role="tab" :aria-selected="pane.id === shown" :tabindex="pane.id === shown ? 0 : -1"
-          class="max-w-48 shrink-0 truncate rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-blue-400" :class="{ 'bg-white/[0.08] text-neutral-100': pane.id === shown }"
+          class="max-w-48 shrink-0 truncate border-b-2 border-transparent px-1 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" :class="{ '!border-blue-400/70 !text-neutral-100': pane.id === shown }"
           @click="emit('operate', { kind: 'show', id: pane.id })" @keydown="tabKey($event, pane.id)">{{ pane.title }}</button>
       </div>
-      <span v-else class="flex-1" />
+      <span v-else class="flex-1 truncate text-xs font-medium text-neutral-300">{{ title }}</span>
       <button type="button" class="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" :aria-label="`Close ${title}`" @click="emit('operate', { kind: 'close', id: shown })"><X :size="14" /></button>
     </div>
     <div ref="site" class="native-pane-surface min-h-16 max-h-56 min-w-0 overflow-auto text-[13px] leading-5 outline-none" :style="{ height: `${Math.max(4, Math.min(activePane?.rows ?? 12, 24)) * 20}px` }" role="tabpanel" :aria-label="title" tabindex="0"
