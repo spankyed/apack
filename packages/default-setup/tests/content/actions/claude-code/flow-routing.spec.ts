@@ -7,6 +7,7 @@ import { actionLabel, writeDefaultFlows } from '../../../_support/flows.ts';
 let app: TestApp;
 const kill = vi.fn(), respond = vi.fn();
 beforeEach(async () => {
+  kill.mockClear(); respond.mockClear();
   writeDefaultFlows();
   mockService<Services, 'codex'>('codex', { start: vi.fn(async () => {}) });
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ kill, respond })), clearHandle: vi.fn() } as never });
@@ -72,6 +73,15 @@ describe('compiled Claude response routing', () => {
       data: { threadId: id, messageId: 'approval-fixture', response: { approved: true } } });
     expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Route Response', 'CC: Approve Tool']);
     expect(respond).toHaveBeenCalledWith('current-plan', { behavior: 'allow', updatedInput: {} });
+    expect(kill).not.toHaveBeenCalled();
+  });
+
+  it('routes a tool denial with its native request identity and reason without killing the process', async () => {
+    const id = thread('Bash');
+    const run = await app.runFlow('Claude Code', { event: 'interactive.message.response',
+      data: { threadId: id, messageId: 'approval-fixture', response: { approved: false, reason: 'Use a safer command' } } });
+    expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Route Response', 'CC: Deny Tool']);
+    expect(respond).toHaveBeenCalledWith('current-plan', { behavior: 'deny', message: 'Use a safer command' });
     expect(kill).not.toHaveBeenCalled();
   });
 

@@ -7,7 +7,7 @@
  * and fail with "Invalid API key · Fix external API key".
  */
 
-import { getEventListeners } from 'node:events'
+import { getEventListeners, once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { buildChildEnv, spawnStream } from '#features/code/be/services/claude-code/runner.ts'
 
@@ -85,4 +85,30 @@ describe('spawnStream termination', () => {
     expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
     controller.abort()
   })
+})
+
+describe('spawnStream input failure', () => {
+  it('settles a live child after its input pipe fails', async () => {
+    const child = `require('node:fs').closeSync(0); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
+    const handle = await spawnStream(['-e', child], { cliPath: process.execPath, cwd: tmpdir() })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await expect(handle.lines[Symbol.asyncIterator]().next()).resolves.toMatchObject({ value: { ok: true, value: { ready: true } } })
+      const inputError = once(handle.child.stdin!, 'error')
+      const settled = (async () => {
+        handle.write({ type: 'fixture' })
+        await inputError
+        return handle.done()
+      })()
+      const exit = await Promise.race([settled, new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('child stayed alive after stdin failed')), 2000)
+      })])
+      expect(exit.signal).toBe('SIGTERM')
+      expect(handle.write({ type: 'late' })).toBe(false)
+    } finally {
+      if (deadline) clearTimeout(deadline)
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 5000)
 })

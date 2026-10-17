@@ -31,6 +31,7 @@ import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
   ClaudeExitError,
+  ClaudeInputError,
   ClaudeTimeoutError,
 } from './errors.ts'
 
@@ -41,11 +42,9 @@ const logger = createLogger('claude-code-runner')
 export interface ExecOnceOptions {
   cwd?: string
   /**
-   * Override the env passed to the child. Defaults to a copy of `process.env`
-   * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-   * (`claude auth login`) instead of an env-var key meant for the server's
-   * LLM client. Pass an explicit object if you want no scrubbing — the
-   * helper assumes you know what you're doing and does not post-process it.
+   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
+   * and NODE_ENV are always removed, including explicit overrides. Native
+   * file checkpointing defaults on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
@@ -66,11 +65,9 @@ export interface ExecOnceResult {
 export interface SpawnStreamOptions {
   cwd?: string
   /**
-   * Override the env passed to the child. Defaults to a copy of `process.env`
-   * with `ANTHROPIC_API_KEY` removed so the CLI uses its own stored auth
-   * (`claude auth login`) instead of an env-var key meant for the server's
-   * LLM client. Pass an explicit object if you want no scrubbing — the
-   * helper assumes you know what you're doing and does not post-process it.
+   * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
+   * and NODE_ENV are always removed, including explicit overrides. Native
+   * file checkpointing defaults on only when its environment switch is unset.
    */
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
@@ -106,9 +103,10 @@ export interface StreamHandle {
  * subprocess we spawn would try to authenticate with that key and
  * fail with "Invalid API key · Fix external API key".
  *
- * If the caller explicitly passes an `env` override, we assume they know
- * what they're doing (e.g. an integration test or a truly external key)
- * and leave it untouched.
+ * Caller overrides are merged into the inherited environment before scrubbing.
+ * ANTHROPIC_API_KEY and NODE_ENV are always removed; an explicit override does
+ * not bypass that policy. Other native switches pass through, with checkpointing
+ * defaulted below only when unset. The parent and override objects stay unchanged.
  *
  * Exported for direct unit testing — testing via the real `spawn()` path
  * would require mocking `child_process`, which is needlessly heavy for a
@@ -168,7 +166,7 @@ export async function execOnce(
     }
 
     const timer = setTimeout(() => {
-      child?.kill('SIGKILL')
+      if (child?.pid !== undefined) child.kill('SIGKILL')
       settle(() => reject(new ClaudeTimeoutError(timeoutMs, args)))
     }, timeoutMs)
 
@@ -186,15 +184,15 @@ export async function execOnce(
     }
 
     const onAbort = () => {
-      child.kill('SIGTERM')
+      if (child.pid !== undefined) child.kill('SIGTERM')
+      // Aborting settles the call and clears its timeout, so termination needs
+      // its own bound when the child ignores SIGTERM.
+      const abortKillTimer = setTimeout(() => {
+        if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      }, 1000)
+      abortKillTimer.unref()
+      child.once('close', () => clearTimeout(abortKillTimer))
       settle(() => reject(new ClaudeAbortError(opts.signal?.reason)))
-    }
-    if (opts.signal) {
-      if (opts.signal.aborted) {
-        onAbort()
-        return
-      }
-      opts.signal.addEventListener('abort', onAbort, { once: true })
     }
 
     child.stdout?.on('data', c => chunksOut.push(c))
@@ -211,6 +209,22 @@ export async function execOnce(
         settle(() => reject(new ClaudeExitError(code, signal, stderr, args)))
       }
     })
+
+    child.stdin?.on('error', err => {
+      if (settled) return
+      if (child.pid !== undefined) child.kill('SIGKILL')
+      settle(() => reject(new ClaudeInputError(err)))
+    })
+
+    // Install process/pipe listeners before an already-aborted signal can
+    // settle this call; spawn errors and late pipe errors still need listeners.
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        onAbort()
+        return
+      }
+      opts.signal.addEventListener('abort', onAbort, { once: true })
+    }
 
     if (opts.input !== undefined && child.stdin) {
       child.stdin.end(opts.input)
@@ -252,17 +266,6 @@ export async function spawnStream(
   const stderrChunks: Buffer[] = []
   child.stderr.on('data', c => stderrChunks.push(c))
 
-  // Swallow expected pipe errors that occur when the child is killed mid-write.
-  // Without this listener the error becomes an uncaughtException and crashes the server.
-  child.stdin.on('error', (err: NodeJS.ErrnoException) => {
-    const expected = ['EPIPE', 'ECONNRESET', 'ERR_STREAM_DESTROYED'];
-    if (expected.includes(err.code ?? '')) {
-      logger.warn('stdin write error after child exit (expected during kill)', { code: err.code, pid: child.pid })
-    } else {
-      logger.error('unexpected stdin error', { err, pid: child.pid })
-    }
-  })
-
   let exited = false
   let killTimer: ReturnType<typeof setTimeout> | undefined
   const clearKillTimer = () => {
@@ -270,7 +273,8 @@ export async function spawnStream(
     killTimer = undefined
   }
   const terminate = (signal: NodeJS.Signals = 'SIGTERM') => {
-    if (exited) return
+    // A failed spawn can still be awaiting its error event, with no child PID.
+    if (exited || child.pid === undefined) return
     child.kill(signal)
     // A successful signal send does not prove that the child exited.
     if (signal !== 'SIGKILL' && !killTimer) {
@@ -281,6 +285,17 @@ export async function spawnStream(
       killTimer.unref()
     }
   }
+  // A broken input pipe makes this bidirectional process unusable even if it keeps
+  // stdout open. Termination lets the query/owner settle pending turns on exit.
+  child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+    if (exited) {
+      logger.warn('stdin write error after child exit', { code: err.code, pid: child.pid })
+      return
+    }
+    logger.error('stdin failed while child was alive; terminating process', { code: err.code, pid: child.pid })
+    terminate()
+  })
+
   const onAbort = () => terminate()
   const cleanup = () => {
     exited = true

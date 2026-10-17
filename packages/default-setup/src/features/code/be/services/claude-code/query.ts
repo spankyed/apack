@@ -92,6 +92,8 @@ export interface QueryHandle {
    * tool-activity row having never run. That happened once and took a while to find.
    */
   respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void
+  /** Cancel an unsupported generic dialog through its native response channel. */
+  cancelUserDialog(requestId: string): void
   /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
   interrupt(options?: { cancelQueued?: boolean }): Promise<ClaudeInterruptReceipt>
   /** Rename the native session; an explicit ID protects against renaming a different session. */
@@ -258,6 +260,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
         type: 'control_response',
         response: { subtype: 'success', request_id: requestId, response },
       })) throw new ClaudeProtocolError('could not send control response: stdin is closed')
+    },
+
+    cancelUserDialog(requestId): void {
+      const id = z.string().min(1).parse(requestId)
+      if (!stream.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'cancelled' } } })) throw new ClaudeProtocolError('could not send dialog cancellation: stdin is closed')
     },
 
     async interrupt(options: { cancelQueued?: boolean } = {}): Promise<ClaudeInterruptReceipt> {
@@ -506,13 +513,13 @@ function handleResult(raw: ResultLine, resultPromise: Deferred<QueryResult>): vo
     return
   }
 
-  if (raw.subtype === 'success') {
+  if (raw.subtype === 'success' && raw.is_error !== true) {
     resultPromise.resolve(normaliseResult(raw))
     return
   }
 
   resultPromise.reject(
-    new ClaudeResultError(raw.subtype, raw.errors ?? [], raw.session_id),
+    new ClaudeResultError(raw.subtype, raw.errors?.length ? raw.errors : raw.result ? [raw.result] : [], raw.session_id),
   )
 }
 

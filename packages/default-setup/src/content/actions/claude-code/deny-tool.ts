@@ -1,31 +1,47 @@
-/**
- * CC: Deny Tool — kills the CLI subprocess and stops the turn when the user
- * denies a tool approval or cancels an interaction.
- */
-
+/** Send a correlated native tool denial; explicit interaction cancellation stops the turn. */
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { killTurn, updateChatState } from './_helpers/thread-context.ts';
+import { expirePendingControlRequest, getClaudeState, killTurn, persistClaudeState, setRunning, updateChatState } from './_helpers/thread-context.ts';
+import { resolvePlanDraft } from './_helpers/plan-artifact.ts';
 
 export const meta: ActionMeta = {
   label: 'CC: Deny Tool',
-  description: 'Kills the CLI subprocess and stops the turn on denial.',
+  description: 'Denies the pending native tool request, or stops the turn on explicit cancellation.',
   category: 'claude-code',
   input: {
     threadId: { type: 'string', description: 'Thread ID', required: true },
+    requestId: { type: 'string', description: 'CLI control_request ID', required: true },
+    response: { type: 'object', description: 'Denial reason or explicit cancellation from the interaction', required: false },
   },
 };
 
-export async function action(
-  params: Record<string, any>,
-  services: Services,
-) {
-  const { threadId } = params as { threadId: string };
-
-  if (!threadId) return { success: false, reason: 'missing threadId' };
-
-  killTurn(services, threadId);
-  updateChatState(services, threadId as EntityId, 'idle');
-
+export async function action(params: Record<string, unknown>, services: Services) {
+  const threadId = typeof params.threadId === 'string' ? params.threadId : '';
+  const requestId = typeof params.requestId === 'string' ? params.requestId : '';
+  if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (pending?.requestId !== requestId) return { success: false, reason: 'denial is no longer pending' };
+  const response = params.response as { cancelled?: unknown; reason?: unknown } | undefined;
+  if (response?.cancelled === true) {
+    killTurn(services, threadId);
+    updateChatState(services, threadId as EntityId, 'idle');
+    return { success: true };
+  }
+  const handle = services.cli.claudeCode.getHandle(threadId);
+  if (!handle) {
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code request expired' };
+  }
+  const reason = typeof response?.reason === 'string' ? response.reason.trim() : '';
+  try {
+    handle.respond(requestId, { behavior: 'deny', message: reason || 'The user denied this tool request.' });
+  } catch {
+    expirePendingControlRequest(services, threadId, requestId);
+    return { success: false, reason: 'Claude Code response could not be sent' };
+  }
+  if (pending.toolName === 'ExitPlanMode') resolvePlanDraft(services, threadId as EntityId, 'rejected');
+  persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+  setRunning(services, threadId, true);
+  updateChatState(services, threadId as EntityId, 'working');
   return { success: true };
 }

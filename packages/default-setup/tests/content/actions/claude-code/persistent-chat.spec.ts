@@ -70,7 +70,7 @@ it.each([['source', false], ['compiled flow', false], ['source', true], ['compil
   const user1 = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'first' });
   expect(await invoke('first', user1.id)).toMatchObject({ streaming: true });
   await finish(1);
-  expect(store.getHandle(id)).toBe(native);
+  expect(store.getHandle(id)).toBe(store.getConversation(id)?.owner.handle);
   expect(native.close).not.toHaveBeenCalled();
   const user2 = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'second' });
   expect(await invoke('second', user2.id)).toMatchObject({ streaming: true });
@@ -89,7 +89,7 @@ it.each([['source', false], ['compiled flow', false], ['source', true], ['compil
   const changingMode = updateMode({ threadId: id, mode: 'default' }, services);
   events.write({ type: 'assistant', uuid: 'autonomous-assistant', message: { content: [{ type: 'text', text: 'native autonomous work' }] } });
   await vi.waitFor(() => expect(store.getConversation(id)?.owner.busy).toBe(true));
-  expect(store.getHandle(id)).toBe(native);
+  expect(store.getHandle(id)).toBe(store.getConversation(id)?.owner.handle);
   modeReady();
   expect(await changingMode).toMatchObject({ success: true });
   events.write({ type: 'result', subtype: 'success', session_id: 'fixture-session', total_cost_usd: 3, result: 'native autonomous work' });

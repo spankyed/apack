@@ -1,6 +1,7 @@
+import { createClaudeNestedActivity, type ClaudeNestedActivity } from './nested-activity.ts'
 import { ClaudeProtocolError, ClaudeResultError } from './errors.ts'
 import { normaliseResult, type QueryHandle } from './query.ts'
-import type { QueryResult, ResultLine, StreamLine, UserInputMessage } from './types.ts'
+import { ControlRequestLineSchema, type ControlRequestLine, type QueryResult, type ResultLine, type StreamLine, type UserInputMessage } from './types.ts'
 
 export interface ClaudeConversationTurn {
   handle: QueryHandle
@@ -9,6 +10,7 @@ export interface ClaudeConversationTurn {
   stopped: boolean
   /** Native process cost already accounted for before this turn. */
   costBaseline: number
+  activity: ClaudeNestedActivity
 }
 export type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>
 export interface ClaudeConversation {
@@ -61,7 +63,8 @@ class ConversationQueue<T> implements AsyncIterable<T> {
 
 /** One reader for the process lifetime; an ordinary result ends only its turn. */
 export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer): ClaudeConversation {
-  type ActiveTurn = { turn: ClaudeConversationTurn; queue: ConversationQueue<StreamLine>; consumed: Promise<void>; terminal: boolean; resolve(result: QueryResult): void; reject(error: unknown): void }
+  type ActiveTurn = { turn: ClaudeConversationTurn; queue: ConversationQueue<StreamLine>; consumed: Promise<void>; released: Promise<void>; resolveRelease(): void; terminal: boolean; resolve(result: QueryResult): void; reject(error: unknown): void }
+  const activity = createClaudeNestedActivity()
   let active: ActiveTurn | undefined
   let pending: { inputId: string; consume: ClaudeTurnConsumer } | undefined
   let closing = false
@@ -72,6 +75,47 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let cumulativeCost = 0
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
+  // Native workers can ask concurrently; present one permission or generic dialog at a time.
+  const permissionRequests = new Map<string, ControlRequestLine>()
+  const settledPermissions = new Set<string>()
+  let presentedPermission: string | undefined
+  function retirePermission(requestId: string): void {
+    permissionRequests.delete(requestId)
+    if (presentedPermission === requestId) presentedPermission = undefined
+    settledPermissions.add(requestId)
+    if (settledPermissions.size > 4096) settledPermissions.delete(settledPermissions.values().next().value!)
+  }
+  function clearPermissions(): void {
+    permissionRequests.clear(); settledPermissions.clear(); presentedPermission = undefined
+  }
+  function showNextPermission(): void {
+    if (presentedPermission || closing || exited || active?.terminal) return
+    const next = permissionRequests.entries().next().value
+    if (!next) return
+    presentedPermission = next[0]
+    const current = active ?? activate(consumeAutonomous)
+    current.queue.push(next[1])
+  }
+  const processHandle: QueryHandle = { ...native, respond(requestId, response) {
+    if (settledPermissions.has(requestId)) throw new ClaudeProtocolError('native permission request has already settled')
+    if (permissionRequests.get(requestId)?.request.subtype === 'request_user_dialog') throw new ClaudeProtocolError('generic dialog requires its own response type')
+    native.respond(requestId, response)
+    if (permissionRequests.has(requestId)) {
+      retirePermission(requestId)
+      try { showNextPermission() } catch (error) {
+        closing = true; activity.close(); clearPermissions(); native.kill()
+        throw error
+      }
+    }
+  }, cancelUserDialog(requestId) {
+    if (settledPermissions.has(requestId) || permissionRequests.get(requestId)?.request.subtype !== 'request_user_dialog') throw new ClaudeProtocolError('generic dialog is no longer pending')
+    native.cancelUserDialog(requestId)
+    retirePermission(requestId)
+    try { showNextPermission() } catch (error) {
+      closing = true; activity.close(); clearPermissions(); native.kill(); throw error
+    }
+  } }
+
 
   function activate(consume: ClaudeTurnConsumer, inputId?: string): ActiveTurn {
     const queue = new ConversationQueue<StreamLine>()
@@ -79,8 +123,10 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     let reject!: (error: unknown) => void
     const result = new Promise<QueryResult>((yes, no) => { resolve = yes; reject = no })
     result.catch(() => {})
-    const turn = { handle: { ...native, events: queue, result }, inputId, stopped, costBaseline: cumulativeCost }
-    const current: ActiveTurn = { turn, queue, resolve, reject, terminal: false, consumed: Promise.resolve() }
+    const turn = { handle: { ...processHandle, events: queue, result }, inputId, stopped, costBaseline: cumulativeCost, activity }
+    let resolveRelease!: () => void
+    const released = new Promise<void>(resolve => { resolveRelease = resolve })
+    const current: ActiveTurn = { turn, queue, resolve, reject, released, resolveRelease, terminal: false, consumed: Promise.resolve() }
     active = current
     current.consumed = Promise.resolve().then(() => consume(turn)).catch(error => {
       consumerFailure = error
@@ -97,6 +143,14 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     try {
       for await (const event of native.events) {
         const line = event as Record<string, unknown>
+        if (line.type === 'conversation_reset') {
+          if (typeof line.new_conversation_id !== 'string' || !line.new_conversation_id.trim()) {
+            throw new ClaudeProtocolError('native conversation reset has no identity')
+          }
+          // Native resets its cost ledger independently of the later session/init identity.
+          cumulativeCost = 0
+          if (active) active.turn.costBaseline = 0
+        }
         if (line.type === 'system' && line.subtype === 'init') {
           if (typeof line.session_id === 'string' && line.session_id) sessionId = line.session_id
           if (typeof line.cwd === 'string' && line.cwd) sessionCwd = line.cwd
@@ -119,9 +173,36 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           for (const listener of listeners) { try { listener(event) } catch { /* isolate observers */ } }
           continue
         }
+        const nested = activity.receive(event)
+        for (const listener of listeners) { try { listener(event) } catch { /* isolate raw observers */ } }
+        if (nested) continue
+        if (line.type === 'control_request') {
+          const parsed = ControlRequestLineSchema.safeParse(event)
+          if (!parsed.success) throw new ClaudeProtocolError('malformed native control request')
+          const request = parsed.data
+          if (request.request.subtype === 'can_use_tool' || request.request.subtype === 'request_user_dialog') {
+            const id = request.request_id
+            if (!id) throw new ClaudeProtocolError('native permission request has no identity')
+            if (settledPermissions.has(id) || permissionRequests.has(id)) continue
+            if (permissionRequests.size >= 4096) throw new ClaudeProtocolError('native permission queue exceeded its limit')
+            permissionRequests.set(id, request)
+            showNextPermission()
+            continue
+          }
+        }
+        if (line.type === 'control_cancel_request') {
+          const id = line.request_id
+          if (typeof id !== 'string' || !id) throw new ClaudeProtocolError('native permission cancellation has no identity')
+          if (permissionRequests.has(id)) {
+            const wasPresented = presentedPermission === id
+            retirePermission(id)
+            if (wasPresented) (active ?? activate(consumeAutonomous)).queue.push(event)
+            showNextPermission()
+            continue
+          }
+        }
         if (!active && (line.type === 'assistant' || line.type === 'result'
           || line.type === 'stream_event' || line.type === 'control_request')) activate(consumeAutonomous)
-        for (const listener of listeners) { try { listener(event) } catch { /* an observer cannot stop the conversation */ } }
         const current = active
         if (!current) continue
         if (line.type !== 'result') { current.queue.push(event); continue }
@@ -132,13 +213,15 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         current.queue.push(event)
         const normalized = normaliseResult(raw)
         cumulativeCost = Math.max(cumulativeCost, normalized.totalCostUsd)
-        if (raw.subtype === 'success') current.resolve(normalized)
-        else current.reject(new ClaudeResultError(raw.subtype, raw.errors ?? [], raw.session_id))
-        if (raw.subtype === 'success' && native.hasPendingBackgroundTasks(event)) continue
+        if (raw.subtype === 'success' && raw.is_error !== true) current.resolve(normalized)
+        else current.reject(new ClaudeResultError(raw.subtype, raw.errors?.length ? raw.errors : raw.result ? [raw.result] : [], raw.session_id))
         current.terminal = true
         current.queue.close()
-        await current.consumed
+        // A released terminal consumer may close this process while replaying a queued input.
+        // Waiting for that consumer here would make close wait on itself.
+        await Promise.race([current.consumed, current.released])
         if (active === current) active = undefined
+        showNextPermission()
       }
     } catch (error) { failure = error; native.kill() }
     finally {
@@ -155,6 +238,8 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         await current.consumed.catch(() => {})
         if (active === current) active = undefined
       }
+      activity.close()
+      clearPermissions()
       listeners.clear()
     }
     if (failure) throw failure
@@ -162,15 +247,15 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   done.catch(() => {})
 
   return {
-    handle: native,
-    get busy() { return active !== undefined || pending !== undefined },
+    handle: processHandle,
+    get busy() { return active !== undefined || pending !== undefined || permissionRequests.size > 0 },
     get closing() { return closing || exited },
     get sessionId() { return sessionId },
     get sessionCwd() { return sessionCwd },
     done,
     start(input, consume) {
       if (closing || exited) throw new ClaudeProtocolError('conversation is closed')
-      if (active || pending) throw new ClaudeProtocolError('conversation already has an active input')
+      if (active || pending || permissionRequests.size) throw new ClaudeProtocolError('conversation already has an active input or permission request')
       const inputId = native.send(input)
       pending = { consume, inputId }
       return inputId
@@ -185,8 +270,10 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         closing = true
         active.reject(error)
         active.queue.close(error)
+        activity.close()
+        clearPermissions()
         native.kill()
-      } else active.queue.close()
+      } else { active.queue.close(); active.resolveRelease() }
       active = undefined
       return true
     },
@@ -196,6 +283,6 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
       await native.close()
       await done
     },
-    kill() { stopped = true; if (active) active.turn.stopped = true; closing = true; native.kill() },
+    kill() { activity.close(); clearPermissions(); stopped = true; if (active) active.turn.stopped = true; closing = true; native.kill() },
   }
 }

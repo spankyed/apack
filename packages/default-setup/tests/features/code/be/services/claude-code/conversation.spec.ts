@@ -9,6 +9,8 @@ function fixture() {
   const native = {
     events: events as AsyncIterable<StreamLine>,
     send: vi.fn(() => `input-${++sequence}`),
+    respond: vi.fn(),
+    cancelUserDialog: vi.fn(),
     close: vi.fn(async () => { events.end() }),
     kill: vi.fn(() => { events.end() }),
     hasPendingBackgroundTasks: vi.fn(() => false),
@@ -134,4 +136,185 @@ describe('persistent Claude conversation owner', () => {
     expect(turn.stopped).toBe(true)
   })
 
+  it('releases pending-background results, accepts another input, and retains child output without phantom turns', async () => {
+    const f = fixture()
+    vi.mocked(f.native.hasPendingBackgroundTasks).mockReturnValue(true)
+    const turns: ClaudeConversationTurn[] = []
+    const childOutput = vi.fn()
+    const consume = async (turn: ClaudeConversationTurn) => {
+      turns.push(turn)
+      for await (const event of turn.handle.events) {
+        if (event.type === 'assistant') turn.activity.register('agent-root', childOutput)
+      }
+      owner.release(turn.handle)
+    }
+    const owner = createClaudeConversation(f.native, consume)
+    const first = owner.start('launch', consume)
+    f.push(started(first))
+    f.push({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'agent-root', name: 'Agent', input: {} }] } })
+    f.push(result(1, first))
+    await vi.waitFor(() => expect(owner.busy).toBe(false))
+    const second = owner.start('steer while backgrounded', consume)
+    f.push(started(second)); f.push(result(2, second))
+    await vi.waitFor(() => expect(owner.busy).toBe(false))
+    f.push({ type: 'assistant', parent_tool_use_id: 'agent-root', uuid: 'child-uuid', message: { content: [{ type: 'text', text: 'child complete' }] } })
+    await vi.waitFor(() => expect(childOutput).toHaveBeenCalledOnce())
+    expect(owner.busy).toBe(false)
+    expect(turns).toHaveLength(2)
+    f.push({ type: 'assistant', message: { content: [{ type: 'text', text: 'parent follow-up' }] } })
+    f.push(result(3))
+    await vi.waitFor(() => expect(turns).toHaveLength(3))
+    await vi.waitFor(() => expect(owner.busy).toBe(false))
+    expect(turns.map(turn => turn.costBaseline)).toEqual([0, 1, 2])
+    expect(turns.map(turn => turn.inputId)).toEqual([first, second, undefined])
+    await owner.close()
+  })
+
+  it('retains concurrent permissions across results and surfaces the next only after a successful response', async () => {
+    const f = fixture(), received: string[] = [], observed = vi.fn()
+    let completed = 0
+    const consume = async (turn: ClaudeConversationTurn) => {
+      for await (const event of turn.handle.events) if (event.type === 'control_request') received.push(String(event.request_id))
+      owner.release(turn.handle)
+      completed++
+    }
+    const owner = createClaudeConversation(f.native, consume)
+    owner.subscribe(observed)
+    const ask = (id: string) => ({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool', tool_name: 'Bash', tool_use_id: id } })
+    f.push(ask('first')); f.push(ask('second'))
+    await vi.waitFor(() => expect(observed).toHaveBeenCalledTimes(2))
+    expect(received).toEqual(['first'])
+    vi.mocked(f.native.respond).mockImplementationOnce(() => { throw Error('stdin refused') })
+    expect(() => owner.handle.respond('first', { behavior: 'deny', message: 'No' })).toThrow('stdin refused')
+    expect(received).toEqual(['first'])
+    f.push(result(1))
+    await vi.waitFor(() => expect(completed).toBe(1))
+    expect(owner.busy).toBe(true)
+    expect(() => owner.start('while pending', consume)).toThrow('permission request')
+    owner.handle.respond('first', { behavior: 'deny', message: 'No' })
+    await vi.waitFor(() => expect(received).toEqual(['first', 'second']))
+    expect(() => owner.handle.respond('first', { behavior: 'allow', updatedInput: {} })).toThrow('already settled')
+    owner.handle.respond('second', { behavior: 'allow', updatedInput: {} })
+    f.push(result(2))
+    await vi.waitFor(() => expect(owner.busy).toBe(false))
+    expect(f.native.kill).not.toHaveBeenCalled()
+    await owner.close()
+  })
+
+  it('withdraws queued permission requests without presenting them and advances a cancelled prompt in order', async () => {
+    const f = fixture(), received: string[] = []
+    const consume = async (turn: ClaudeConversationTurn) => {
+      for await (const event of turn.handle.events) if (event.type === 'control_request' || event.type === 'control_cancel_request') received.push(event.type + ':' + event.request_id)
+      owner.release(turn.handle)
+    }
+    const owner = createClaudeConversation(f.native, consume)
+    for (const id of ['first', 'withdrawn', 'third']) f.push({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } })
+    f.push({ type: 'control_cancel_request', request_id: 'withdrawn' })
+    f.push({ type: 'control_cancel_request', request_id: 'first' })
+    await vi.waitFor(() => expect(received).toEqual(['control_request:first', 'control_cancel_request:first', 'control_request:third']))
+    owner.kill(); await owner.done
+    expect(received).not.toContain('control_request:withdrawn')
+  })
+
+  it('waits for a terminal consumer to release before presenting the next approval', async () => {
+    const f = fixture(), received: string[] = []
+    let finishing = false
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => { resume = resolve })
+    const consume = async (turn: ClaudeConversationTurn) => {
+      for await (const event of turn.handle.events) if (event.type === 'control_request') received.push(String(event.request_id))
+      if (!finishing) { finishing = true; await gate }
+      owner.release(turn.handle)
+    }
+    const owner = createClaudeConversation(f.native, consume)
+    for (const id of ['first', 'second']) f.push({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } })
+    f.push(result(1))
+    await vi.waitFor(() => expect(finishing).toBe(true))
+    owner.handle.respond('first', { behavior: 'allow', updatedInput: {} })
+    expect(received).toEqual(['first'])
+    resume()
+    await vi.waitFor(() => expect(received).toEqual(['first', 'second']))
+    owner.handle.respond('second', { behavior: 'deny', message: 'No' }); f.push(result(2))
+    await vi.waitFor(() => expect(owner.busy).toBe(false))
+    await owner.close()
+  })
+
+})
+
+
+it('serializes generic dialogs with permissions and rejects wrong, withdrawn and duplicate responses', async () => {
+  const f = fixture(); const received: StreamLine[] = [];
+  const owner = createClaudeConversation(f.native, async () => {});
+  const id = owner.start('input', async turn => { for await (const line of turn.handle.events) received.push(line); owner.release(turn.handle); });
+  f.push(started(id));
+  f.push({ type: 'control_request', request_id: 'dialog', request: { subtype: 'request_user_dialog', dialog_kind: 'fixture', payload: {} } });
+  f.push({ type: 'control_request', request_id: 'tool', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: {} } });
+  await vi.waitFor(() => expect(received.filter(line => line.type === 'control_request')).toHaveLength(1));
+  expect(() => owner.handle.respond('dialog', { behavior: 'deny' })).toThrow('own response type');
+  expect(() => owner.handle.cancelUserDialog('tool')).toThrow('no longer pending');
+  vi.mocked(f.native.cancelUserDialog).mockImplementationOnce(() => { throw new Error('write failed'); });
+  expect(() => owner.handle.cancelUserDialog('dialog')).toThrow('write failed');
+  expect(received.filter(line => line.type === 'control_request')).toHaveLength(1);
+  owner.handle.cancelUserDialog('dialog');
+  await vi.waitFor(() => expect(received.filter(line => line.type === 'control_request')).toHaveLength(2));
+  expect(() => owner.handle.cancelUserDialog('dialog')).toThrow('no longer pending');
+  owner.handle.respond('tool', { behavior: 'deny', message: 'Fixture' });
+  f.push({ type: 'control_request', request_id: 'withdrawn', request: { subtype: 'request_user_dialog', dialog_kind: 'fixture', payload: {} } });
+  f.push({ type: 'control_cancel_request', request_id: 'withdrawn' });
+  await vi.waitFor(() => expect(received.some(line => line.type === 'control_cancel_request')).toBe(true));
+  expect(() => owner.handle.cancelUserDialog('withdrawn')).toThrow('no longer pending');
+  expect(f.native.cancelUserDialog).toHaveBeenCalledTimes(2);
+  expect(f.native.respond).toHaveBeenCalledTimes(1);
+  f.push(result(1, id)); await vi.waitFor(() => expect(owner.busy).toBe(false)); await owner.close();
+});
+
+
+it('rejects an owned success subtype marked is_error without losing native result accounting', async () => {
+  const f = fixture(), events: StreamLine[] = []; let rejection: Promise<unknown>;
+  const owner = createClaudeConversation(f.native, async () => {});
+  const id = owner.start('fixture', async turn => {
+    rejection = expect(turn.handle.result).rejects.toThrow('fixed native refusal');
+    for await (const line of turn.handle.events) events.push(line);
+    await rejection; owner.release(turn.handle);
+  });
+  f.push(started(id)); f.push({ ...result(0.25, id), is_error: true, terminal_reason: 'api_error', result: 'fixed native refusal' });
+  await vi.waitFor(() => expect(owner.busy).toBe(false));
+  expect(events.find(line => line.type === 'result')).toMatchObject({ total_cost_usd: 0.25, is_error: true });
+  await owner.close();
+});
+
+
+it('can close the process from a consumer after explicitly releasing its terminal turn',async()=>{
+ const f=fixture();let completed=false;
+ const consume=async(turn:ClaudeConversationTurn)=>{for await(const _event of turn.handle.events){}expect(owner.release(turn.handle)).toBe(true);await owner.close();completed=true;};
+ const owner=createClaudeConversation(f.native,consume),input=owner.start('fixture',consume);
+ f.push(started(input));f.push(result(1,input));
+ await vi.waitFor(()=>expect(completed).toBe(true),{timeout:700});await owner.done;expect(f.native.close).toHaveBeenCalledOnce();
+});
+
+
+it('resets active and future cost baselines when native clears its ledger', async () => {
+  const f = fixture()
+  const charges: number[] = []
+  const consume = async (turn: ClaudeConversationTurn) => {
+    for await (const event of turn.handle.events) {
+      if (event.type === 'result') charges.push(Math.max(0, Number(event.total_cost_usd) - turn.costBaseline))
+    }
+    owner.release(turn.handle)
+  }
+  const owner = createClaudeConversation(f.native, consume)
+  const first = owner.start('first', consume)
+  f.push(started(first)); f.push(result(2, first))
+  await vi.waitFor(() => expect(owner.busy).toBe(false))
+  const clear = owner.start('/clear', consume)
+  f.push(started(clear)); f.push({ type: 'conversation_reset', new_conversation_id: 'conversation-only-id' })
+  f.push({ type: 'system', subtype: 'init', session_id: 'new-session' })
+  f.push({ ...result(0.5, clear), session_id: 'new-session' })
+  await vi.waitFor(() => expect(owner.busy).toBe(false))
+  expect(owner.sessionId).toBe('new-session')
+  const next = owner.start('after clear', consume)
+  f.push(started(next)); f.push({ ...result(1.5, next), session_id: 'new-session' })
+  await vi.waitFor(() => expect(owner.busy).toBe(false))
+  expect(charges).toEqual([2, 0.5, 1])
+  await owner.close()
 })

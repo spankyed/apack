@@ -94,6 +94,8 @@ export default {
                 label: "deny-tool",
                 map: {
                   threadId: "$.steps[label=route-response].result.threadId",
+                  requestId: "$.steps[label=route-response].result.requestId",
+                  response: "$.steps[label=route-response].result.response",
                 },
               }),
             ],

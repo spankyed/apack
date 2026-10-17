@@ -1,4 +1,4 @@
-import { ResultLineSchema } from '#features/code/be/services/claude-code/types.ts'
+import { ResultLineSchema, type StreamLine } from '#features/code/be/services/claude-code/types.ts'
 /**
  * Tests for the `finaliseNoResult` helper — the single point in `query.ts`
  * that classifies a child-exit-without-a-result into a typed error.
@@ -1051,3 +1051,30 @@ describe('native result input identity', () => {
     expect(ResultLineSchema.safeParse({ ...result, user_message_uuid: 42 }).success).toBe(false)
   })
 })
+
+
+it('cancels generic dialogs with their own correlated response, rejects missing identity and failed writes', async () => {
+  const mock = makeMockStream(); vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle);
+  const handle = await query({ surfaceControlRequests: true });
+  handle.cancelUserDialog('dialog-fixture');
+  expect(mock.writes.at(-1)).toEqual({ type: 'control_response', response: { subtype: 'success', request_id: 'dialog-fixture', response: { behavior: 'cancelled' } } });
+  const before = mock.writes.length;
+  expect(() => handle.cancelUserDialog('')).toThrow();
+  expect(mock.writes).toHaveLength(before);
+  vi.spyOn(mock.handle, 'write').mockReturnValue(false);
+  expect(() => handle.cancelUserDialog('dialog-fixture')).toThrow('stdin is closed');
+  await handle.close();
+});
+
+
+it('rejects a native success subtype marked is_error while retaining its streamed result and refusal detail', async () => {
+  const mock = makeMockStream(); vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle);
+  const raw = { type: 'result', subtype: 'success', is_error: true, terminal_reason: 'api_error', session_id: 'refusal-session', result: 'API Error: fixed native refusal', total_cost_usd: 0.25 };
+  mock.pushEvent(raw);
+  const handle = await query({ prompt: 'fixture' });
+  const rejected = expect(handle.result).rejects.toThrow('API Error: fixed native refusal');
+  const events: StreamLine[] = []; for await (const line of handle.events) events.push(line);
+  await rejected;
+  expect(events).toContainEqual(raw);
+  await handle.close();
+});

@@ -1,3 +1,4 @@
+import type { ClaudeNestedActivity } from '#features/code/be/services/claude-code/nested-activity.ts';
 import type { ClaudeConversationTurn } from '#features/code/be/services/claude-code/conversation.ts';
 /**
  * Stream consumer — fire-and-forget async function that owns the `for await`
@@ -68,6 +69,7 @@ export interface ConsumerContext {
   useWorktree?: boolean;
   persistent?: boolean;
   costBaseline?: number;
+  activity?: ClaudeNestedActivity;
 }
 
 export interface ConsumerWriters {
@@ -97,7 +99,7 @@ export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx:
   services.cli.claudeCode.storeHandle(threadId, turn.handle);
   setRunning(services, threadId, true);
   updateChatState(services, threadId, 'working');
-  await consumeStream(turn.handle, { ...ctx, persistent: true, costBaseline: turn.costBaseline }, writers);
+  await consumeStream(turn.handle, { ...ctx, persistent: true, get costBaseline() { return turn.costBaseline; }, activity: turn.activity }, writers);
 }
 
 /**
@@ -107,7 +109,7 @@ export async function consumeConversationTurn(turn: ClaudeConversationTurn, ctx:
  */
 export async function consumeStream(
   handle: any,
-  ctx: ConsumerContext,
+  ctx: ConsumerContext & { activity: ClaudeNestedActivity },
   initialWriters: ConsumerWriters,
 ): Promise<void> {
   const { services, threadId, text } = ctx;
@@ -127,6 +129,9 @@ export async function consumeStream(
   let toolActivity = initialWriters.toolActivity;
   let thinking = initialWriters.thinking;
   let currentMessageHasCliUuid = false;
+  const activity = ctx.activity;
+  let nestedToolCount = 0;
+  let nestedToolErrors = false;
   let priorSegmentToolCount = 0;
   let priorSegmentsHadToolErrors = false;
 
@@ -141,13 +146,23 @@ export async function consumeStream(
   const mutatedPathsSet = new Set<string>();
   const mutatedPaths: string[] = [];
 
+  function collectNestedAccounting(): void {
+    const nested = activity.takeAccounting();
+    nestedToolCount += nested.toolCallCount;
+    nestedToolErrors ||= nested.hadErrors;
+    for (const path of nested.mutatedPaths) {
+      if (!mutatedPathsSet.has(path)) { mutatedPathsSet.add(path); mutatedPaths.push(path); }
+    }
+  }
+
+
   // Track whether we've captured the CLI's user message UUID for this turn.
   // The first `user` event echoes the prompt with the UUID the CLI assigned.
   let userUuidTracked = false;
 
   // Extracted from the `result` line directly — survives even if handle.result
   // rejects (error subtypes like error_during_execution).
-  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; durationMs: number; subtype?: string; errors?: string[] } | undefined;
+  let resultFromLine: { sessionId: string; text: string; totalCostUsd: number; durationMs: number; subtype?: string; isError?: boolean; errors?: string[] } | undefined;
 
   /** Finalize the current message and create a new "Thinking…" placeholder. */
   function splitMessage() {
@@ -269,13 +284,37 @@ export async function consumeStream(
             thinking.stopDirectWrites();
             writer.flush();
             const summary = block.input ? shortenInput(block.input) : '';
+            const toolId = block.id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             toolActivity.append({
-              id: block.id || `tu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              id: toolId,
               tool: block.name,
               summary,
               status: 'running',
               details: { input: block.input },
             });
+            {
+              const target = toolActivity;
+              activity.register(toolId, event => {
+                const nested = event as any;
+                if (!Array.isArray(nested.message?.content)) return;
+                const parts: string[] = [];
+                for (const block of nested.message.content) {
+                  if (block?.type === 'text' && typeof block.text === 'string') parts.push(block.text);
+                  else if (block?.type === 'tool_use' && typeof block.name === 'string') {
+                    parts.push(`${block.name}: ${block.input && typeof block.input === 'object' ? shortenInput(block.input) : ''}`);
+                  } else if (block?.type === 'tool_result') {
+                    parts.push(`${block.is_error ? 'Tool error' : 'Tool result'}: ${extractToolResultText(block.content)}`);
+                  }
+                }
+                const content = parts.join('\n').trim();
+                if (!content) return;
+                const previous = target.entries.find(entry => entry.id === toolId)?.details?.output ?? '';
+                const output = `${previous}${previous ? '\n\n' : ''}${content}`;
+                target.update(toolId, { outputSummary: 'Subagent activity', details: { output: output.length > 65536 ? `${output.slice(0, 65536)}\n[Subagent activity truncated]` : output } });
+                // Flush late output now so teardown cannot leave a pending writer timer.
+                target.flush();
+              });
+            }
             if (FILE_MUTATION_TOOLS.has(block.name) && block.input) {
               const p = (block.input as any).file_path || (block.input as any).path;
               if (typeof p === 'string' && !mutatedPathsSet.has(p)) {
@@ -360,6 +399,12 @@ export async function consumeStream(
       if (line.type === 'control_request') {
         const req = (line as any).request ?? {};
         const requestId = (line as any).request_id ?? '';
+
+        if (req.subtype === 'request_user_dialog') {
+          handle.cancelUserDialog(requestId);
+          services.chat.sendBlockMessage({ threadId, text: 'Claude Code requested a dialog that this app cannot display. The request was cancelled.', blocks: [], forkable: false });
+          continue;
+        }
 
         // Reject malformed requests missing a tool name.
         if (!req.tool_name) {
@@ -544,10 +589,11 @@ export async function consumeStream(
           totalCostUsd: Math.max(0, ((line as any).total_cost_usd || sumModelUsageCost((line as any).modelUsage)) - (ctx.costBaseline ?? 0)),
           durationMs: (line as any).duration_ms ?? 0,
           subtype: (line as any).subtype,
+          isError: (line as any).is_error === true,
           errors: (line as any).errors,
         };
         // Native background completion can trigger another assistant turn after this result.
-        if ((line as any).subtype === 'success' && handle.hasPendingBackgroundTasks(line)) {
+        if (!ctx.persistent && (line as any).subtype === 'success' && (line as any).is_error !== true && handle.hasPendingBackgroundTasks(line)) {
           splitOnNextMessageStart = true;
           continue;
         }
@@ -582,12 +628,13 @@ export async function consumeStream(
     // subtypes) when it fails to load/resume a session. Without this guard,
     // the broken sessionId gets re-persisted at line ~540, locking the thread
     // to a permanently un-resumable session.
-    const isErrorResult = result.subtype != null && result.subtype !== 'success';
+    const isErrorResult = result.isError === true || (result.subtype != null && result.subtype !== 'success');
 
-    const hadToolErrors = priorSegmentsHadToolErrors || toolActivity.entries.some(e => e.status === 'error');
+    collectNestedAccounting();
+    const hadToolErrors = nestedToolErrors || priorSegmentsHadToolErrors || toolActivity.entries.some(e => e.status === 'error');
 
     if (isErrorResult) {
-      const errorText = Array.isArray(result.errors) ? result.errors.join('; ') : `CLI error: ${result.subtype}`;
+      const errorText = result.errors?.length ? result.errors.join('; ') : result.text || `CLI error: ${result.subtype}`;
       log.error('CLI returned error result', {
         subtype: result.subtype,
         errors: result.errors,
@@ -668,7 +715,7 @@ export async function consumeStream(
         sessionId: result.sessionId,
         costUsd: result.totalCostUsd,
         durationMs: result.durationMs,
-        toolCallCount: priorSegmentToolCount + toolActivity.entries.length,
+        toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
         mutatedFileCount: mutatedPaths.length,
         mutatedPaths,
         hadErrors: !!hadToolErrors || !!isErrorResult,
@@ -707,13 +754,15 @@ export async function consumeStream(
       return;
     }
 
+    collectNestedAccounting();
+
     // If pause-turn already ran (isRunning=false), the kill was intentional.
     // Finalize writers cleanly and skip cleanup — pause-turn handled it.
     const state = getClaudeState(services, threadId);
     if (!state?.isRunning) {
       log.debug('stream consumer exiting — turn was paused');
       finaliseThinking();
-      const segmentHadErrors = toolActivity.entries.some(e => e.status === 'error');
+      const segmentHadErrors = nestedToolErrors || toolActivity.entries.some(e => e.status === 'error');
       toolActivity.finalise(segmentHadErrors ? 'error' : 'done');
       if (writer.text) {
         writer.finalize(writer.text);
@@ -738,7 +787,7 @@ export async function consumeStream(
           sessionId: resultFromLine?.sessionId || state?.sessionId || '',
           costUsd: resultFromLine?.totalCostUsd ?? 0,
           durationMs: resultFromLine?.durationMs ?? 0,
-          toolCallCount: priorSegmentToolCount + toolActivity.entries.length,
+          toolCallCount: priorSegmentToolCount + toolActivity.entries.length + nestedToolCount,
           mutatedFileCount: mutatedPaths.length,
           mutatedPaths,
           hadErrors: !!segmentHadErrors,

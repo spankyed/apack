@@ -24,8 +24,8 @@ it('reserves startup atomically and cancels the spawned process when thread tear
 })
 it('keeps an idle process addressable for controls and closes it before a history operation', async () => {
   const handle = native()
-  await openConversation('idle-thread', 'launch', async () => handle, async () => {})
-  expect(getHandle('idle-thread')).toBe(handle)
+  const owner = await openConversation('idle-thread', 'launch', async () => handle, async () => {})
+  expect(getHandle('idle-thread')).toBe(owner.handle)
   expect(isConversationBusy('idle-thread')).toBe(false)
   expect(await closeIdleConversation('idle-thread')).toBe(true)
   expect(handle.close).toHaveBeenCalledOnce()
