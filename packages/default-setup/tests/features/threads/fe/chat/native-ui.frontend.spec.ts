@@ -156,3 +156,23 @@ it('applies native field replacements only after the latest local callback and s
   expect(field.value).toBe('native second')
   expect(f.field).toHaveBeenLastCalledWith({ actionId: 'field', revision: 2, kind: 'change', value: 'second' })
 })
+
+
+it('renders nested text and links inline without hiding a text-only nested surface', () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'text', text: '', style: { dir: 'rtl', weight: 'regular', bold: true }, children: [
+    { kind: 'text', text: 'Hello ', style: { italic: true, mono: true } },
+    { kind: 'link', href: 'https://example.com/', children: [{ kind: 'text', text: 'world', style: { underline: true } }] },
+    { kind: 'link', children: [{ kind: 'text', text: '<script>bad()</script>' }] },
+  ] } } })
+  const strip = f.root.querySelector('[data-testid="composer-session-strip"]')!
+  expect(strip).not.toBeNull()
+  expect(strip.textContent).toContain('Hello world<script>bad()</script>')
+  expect(strip.querySelector('script')).toBeNull()
+  expect(strip.querySelectorAll('a')).toHaveLength(1)
+  expect(strip.querySelector('a')?.getAttribute('href')).toBe('https://example.com/')
+  expect(strip.querySelector('[dir="rtl"]')?.classList.contains('font-normal')).toBe(true)
+  expect(strip.querySelector('[dir="rtl"]')?.classList.contains('font-semibold')).toBe(false)
+  expect(strip.querySelector('.italic.font-mono')?.textContent).toBe('Hello ')
+  expect(f.press).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})

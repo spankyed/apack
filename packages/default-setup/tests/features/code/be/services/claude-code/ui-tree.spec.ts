@@ -26,7 +26,7 @@ describe('native UI presentation boundary', () => {
     expect(createClaudeUiDrawing({ type: 'Button', props: { label: 'Unavailable' } }).tree).toEqual({ kind: 'button', label: 'Unavailable' })
   })
 
-  it.each([null, [], { type: 'Box' }, { type: 'Text', children: 'bad' },
+  it.each([null, [], { type: 'Box', children: false }, { type: 'Text', children: 'bad' },
     { ...button(), press: { plugin: 'fixture', handle: 0.5 } },
     { ...button(), props: { label: 'Run', key: 3 } },
   ])('rejects malformed supported nodes: %j', tree => {
@@ -71,4 +71,24 @@ it('keeps document text literal and scopes Markdown link callbacks without expos
   expect(JSON.stringify(drawing.tree)).not.toContain('handle')
   expect(createClaudeUiDrawing({ type: 'Code', props: { source: '<script>bad()</script>', path: 'fixture.ts', startLine: 9 } }).tree).toEqual({ kind: 'code', source: '<script>bad()</script>', path: 'fixture.ts', startLine: 9, format: 'source', wrap: 'wrap' })
   expect(() => createClaudeUiDrawing({ type: 'Markdown', props: { key: 'doc', text: 'x', pressableLinks: [1] } })).toThrow()
+})
+
+
+it('preserves nested inline text styles and accepts empty native containers', () => {
+  expect(createClaudeUiDrawing({ type: 'Box' }).tree).toEqual({ kind: 'box', children: [] })
+  expect(createClaudeUiDrawing({ type: 'Text' }).tree).toEqual({ kind: 'text', text: '' })
+  expect(createClaudeUiDrawing({ type: 'Text', props: { weight: 'medium', dir: 'rtl', mono: true }, children: ['Hello ', { type: 'Text', props: { italic: true }, children: ['world'] }] }).tree)
+    .toEqual({ kind: 'text', text: '', style: { weight: 'medium', dir: 'rtl', mono: true }, children: [{ kind: 'text', text: 'Hello ' }, { kind: 'text', text: 'world', style: { italic: true } }] })
+  expect(() => createClaudeUiDrawing({ type: 'Text', props: { weight: 'evil' } })).toThrow('protocol error')
+})
+
+it('keeps unsafe Link targets inert while preserving labels and inline children', () => {
+  for (const href of ['javascript:alert(1)', 'file:///tmp/secret', 'http://example.com/', 'https://example.com/\nspoof']) {
+    expect(createClaudeUiDrawing({ type: 'Link', props: { href, label: 'Read' } }).tree).toEqual({ kind: 'link', children: [{ kind: 'text', text: 'Read' }] })
+  }
+  for (const href of ['https://example.com/', 'http://localhost:8080/']) {
+    const drawing = createClaudeUiDrawing({ type: 'Link', props: { href }, children: [{ type: 'Text', props: { bold: true }, children: ['Open'] }] })
+    expect(drawing.tree).toMatchObject({ kind: 'link', href, children: [{ kind: 'text', text: 'Open', style: { bold: true } }] })
+    expect(drawing.actions.size).toBe(0)
+  }
 })

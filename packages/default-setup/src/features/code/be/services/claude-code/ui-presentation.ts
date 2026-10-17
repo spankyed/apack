@@ -1,6 +1,20 @@
+export interface ClaudeUiTextStyle {
+  size?: 'caption' | 'footnote' | 'body' | 'heading' | 'title'
+  weight?: 'regular' | 'medium' | 'semibold' | 'bold'
+  dir?: 'ltr' | 'rtl'
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  strikethrough?: boolean
+  mono?: boolean
+  tabular?: boolean
+  dimColor?: boolean
+}
+
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
-  | { kind: 'text'; text: string; plugin?: string }
+  | { kind: 'text'; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
+  | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'box'; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }

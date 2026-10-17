@@ -60,12 +60,48 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : undefined
     const attribution = plugin === undefined ? {} : { plugin }
     if (value.type === 'Box' || value.type === 'Text') {
-      if (!Array.isArray(value.children)) throw new ClaudeProtocolError('native UI container must have children')
+      const children = value.children ?? []
+      if (!Array.isArray(children)) throw new ClaudeProtocolError('native UI container must have children')
       if (value.type === 'Text') {
-        if (!value.children.every(child => typeof child === 'string')) return { kind: 'unsupported', component: 'Text', ...attribution }
-        return { kind: 'text', text: value.children.join(''), ...attribution }
+        const props = value.props ?? {}
+        if (!record(props)) throw new ClaudeProtocolError('native Text props are invalid')
+        const style: NonNullable<Extract<ClaudeUiNode, { kind: 'text' }>['style']> = {}
+        for (const name of ['bold', 'italic', 'underline', 'strikethrough', 'mono', 'tabular', 'dimColor'] as const) {
+          if (props[name] !== undefined) {
+            if (typeof props[name] !== 'boolean') throw new ClaudeProtocolError('native Text style is invalid')
+            style[name] = props[name]
+          }
+        }
+        const choices = { size: ['caption', 'footnote', 'body', 'heading', 'title'], weight: ['regular', 'medium', 'semibold', 'bold'], dir: ['ltr', 'rtl'] } as const
+        for (const name of ['size', 'weight', 'dir'] as const) {
+          const candidate = props[name]
+          if (candidate !== undefined) {
+            if (typeof candidate !== 'string' || !(choices[name] as readonly string[]).includes(candidate)) throw new ClaudeProtocolError('native Text style is invalid')
+            Object.assign(style, { [name]: candidate })
+          }
+        }
+        const styling = Object.keys(style).length ? { style } : {}
+        return children.every(child => typeof child === 'string')
+          ? { kind: 'text', text: children.join(''), ...styling, ...attribution }
+          : { kind: 'text', text: '', children: children.map(visit), ...styling, ...attribution }
       }
-      return { kind: 'box', children: value.children.map(visit), ...attribution }
+      return { kind: 'box', children: children.map(visit), ...attribution }
+    }
+    if (value.type === 'Link') {
+      if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')
+      const raw = value.props.href
+      let href: string | undefined
+      if (raw.length <= 2048 && !/[\u0000-\u0020\u007f]/.test(raw)) {
+        try {
+          const url = new URL(raw)
+          if (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) href = raw
+        } catch { /* A remote surface draws an unsupported target as plain text. */ }
+      }
+      const children = value.children
+      if (children !== undefined && !Array.isArray(children)) throw new ClaudeProtocolError('native Link children are invalid')
+      return { kind: 'link', ...(href !== undefined ? { href } : {}), children: children === undefined || !children.length
+        ? [{ kind: 'text', text: typeof value.props.label === 'string' ? value.props.label : raw }]
+        : children.map(visit), ...attribution }
     }
     if (value.type === 'Markdown') {
       if (!record(value.props) || typeof value.props.text !== 'string' || (value.props.dimColor !== undefined && typeof value.props.dimColor !== 'boolean')) throw new ClaudeProtocolError('native Markdown props are invalid')

@@ -24,8 +24,8 @@ function focusNativeUi(event: FocusEvent) {
   site.querySelector<HTMLElement>('[data-native-autofocus="true"]')?.focus()
 }
 function visible(node: ClaudeUiNode): boolean {
-  if (node.kind === 'box') return node.children.some(visible)
-  if (node.kind === 'text') return !!node.text.trim()
+  if (node.kind === 'box' || node.kind === 'link') return node.children.some(visible)
+  if (node.kind === 'text') return !!node.text.trim() || !!node.children?.some(visible)
   return node.kind !== 'unsupported' || node.component !== 'engine'
 }
 const hasContent = computed(() => props.nativeUi?.status === 'live' && visible(props.nativeUi.tree))
