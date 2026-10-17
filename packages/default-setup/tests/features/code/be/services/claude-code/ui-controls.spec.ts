@@ -86,4 +86,27 @@ describe('native UI transport', () => {
     f.controls.close()
   })
 
+  it('keeps programmatic adoption separate from person edits and preserves native prompt frames', async () => {
+    const f = fixture()
+    const edit = f.ui.promptEdit({ ...client, by: 'person', text: 'hello', cursor: 5 })
+    await Promise.resolve()
+    expect(f.writes[0]!.request).toEqual({ subtype: 'ui_prompt_edit', ...client, by: 'person', text: 'hello', cursor: 5 })
+    const frame = { text: 'HELLO', cursor: 5, decorations: [{ start: 0, end: 5, bold: true }] }
+    f.reply(0, frame); await expect(edit).resolves.toEqual(frame)
+    const adoption = f.ui.promptEdit({ ...client, by: 'app', text: '', cursor: 0 })
+    await Promise.resolve(); f.reply(1, { text: '', cursor: 0, superseded: true })
+    await expect(adoption).resolves.toEqual({ text: '', cursor: 0, superseded: true })
+    await expect(f.ui.promptEdit({ ...client, by: 'app', text: '', cursor: 0, key: { key: 'return' } })).rejects.toThrow('no key')
+    expect(f.writes).toHaveLength(2)
+    f.controls.close()
+  })
+
+  it('rejects malformed native caret and decoration frames', async () => {
+    const f = fixture()
+    const edit = f.ui.promptEdit({ ...client, by: 'person', text: 'a', cursor: 1 })
+    const assertion = expect(edit).rejects.toThrow('decoration range')
+    await Promise.resolve(); f.reply(0, { text: 'a', cursor: 1, decorations: [{ start: 0, end: 2 }] })
+    await assertion; f.controls.close()
+  })
+
 })

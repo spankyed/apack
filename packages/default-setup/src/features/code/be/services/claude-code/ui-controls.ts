@@ -17,6 +17,26 @@ const field = z.object({
 }).strict()
 const input = field.extend({ kind: z.enum(['change', 'submit']) })
 const fieldResult = z.object({ handled: z.boolean(), element: z.string().optional(), value: z.string().optional() }).passthrough()
+const promptKey = z.object({ key: z.string().min(1).max(32), ctrl: z.literal(true).optional(), shift: z.literal(true).optional(), meta: z.literal(true).optional() }).strict()
+const promptEdit = z.object({ client_id: clientId, surface, text: z.string().max(1000000), cursor: z.number().int().nonnegative().safe(),
+  by: z.enum(['person', 'app']), key: promptKey.optional(),
+}).strict().refine(value => value.by !== 'app' || value.key === undefined, 'programmatic draft adoption carries no key')
+const promptDecoration = z.object({ start: z.number().int().nonnegative(), end: z.number().int(), color: z.string().optional(), backgroundColor: z.string().optional(),
+  dimColor: z.boolean().optional(), bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
+  virtualText: z.string().optional(),
+}).passthrough()
+const promptFrame = z.object({ text: z.string().max(1000000), cursor: z.number().int().nonnegative(),
+  decorations: z.array(promptDecoration).max(8192).optional(), superseded: z.literal(true).optional(),
+}).passthrough().superRefine((frame, context) => {
+  if (frame.cursor > frame.text.length) context.addIssue({ code: z.ZodIssueCode.custom, message: 'native prompt cursor exceeds text' })
+  let end = 0
+  for (const run of frame.decorations ?? []) {
+    if (run.start < end || run.end < run.start || run.end > frame.text.length || (run.end === run.start && !run.virtualText)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'native prompt decoration range is invalid' })
+    }
+    end = run.end
+  }
+})
 const renderResult = z.object({ tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
@@ -24,6 +44,8 @@ export type ClaudeUiRender = z.infer<typeof render>
 export type ClaudeUiPress = z.infer<typeof press>
 export type ClaudeUiInput = z.infer<typeof input>
 export type ClaudeUiSelect = z.infer<typeof field>
+export type ClaudeUiPromptEdit = z.infer<typeof promptEdit>
+export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
@@ -46,6 +68,11 @@ export function createClaudeUiControls(initialized: Promise<ClaudeInitialization
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
       return renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+    },
+    /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
+    async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {
+      const valid = promptEdit.parse(options)
+      return promptFrame.parse(await request({ subtype: 'ui_prompt_edit', ...valid }))
     },
     /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
     async input(options: ClaudeUiInput) {
