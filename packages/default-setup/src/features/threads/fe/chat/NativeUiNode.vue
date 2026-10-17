@@ -10,8 +10,16 @@
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </component>
   <button v-else-if="node.kind === 'button'" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
-    class="self-start max-w-full whitespace-normal break-words rounded border border-neutral-600 px-2 py-1 text-left text-neutral-200 hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-    @click="node.actionId && emit('press', node.actionId)">{{ node.label }}</button>
+    :aria-label="node.label" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
+    :data-native-role="node.role"
+    class="self-start max-w-full whitespace-normal break-words rounded border px-2 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
+    :class="[node.variant === 'primary' ? 'border-blue-400 bg-blue-600 text-white hover:bg-blue-500' : 'border-neutral-600 text-neutral-200 hover:bg-neutral-700',
+      node.dimColor && 'opacity-60 hover:opacity-100 focus:opacity-100', node.role === 'dismiss' && 'ml-auto']"
+    @click="node.actionId && emit('press', node.actionId)">
+    <span v-if="node.role === 'dismiss'" aria-hidden="true">×</span>
+    <template v-else-if="node.children?.length"><NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></template>
+    <template v-else>{{ node.label }}</template>
+  </button>
   <span v-else-if="node.component !== 'engine'" class="text-neutral-500" :data-native-plugin="node.plugin">Unsupported Claude component: {{ node.component }}</span>
 </template>
 

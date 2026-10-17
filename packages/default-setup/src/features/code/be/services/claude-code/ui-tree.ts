@@ -173,7 +173,25 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     }
     if (value.type === 'Button') {
       if (!record(value.props) || typeof value.props.label !== 'string') throw new ClaudeProtocolError('native UI button must have a label')
-      const button: ClaudeUiNode = { kind: 'button', label: value.props.label, ...attribution }
+      const props = value.props
+      if ((props.dimColor !== undefined && typeof props.dimColor !== 'boolean')
+        || (props.variant !== undefined && props.variant !== 'primary' && props.variant !== 'secondary')
+        || (props.role !== undefined && props.role !== 'dismiss')
+        || (props.autoFocus !== undefined && props.autoFocus !== true)) throw new ClaudeProtocolError('native UI button style is invalid')
+      // The native wire carries a normalized accessible label alongside optional inline children.
+      function validateInline(child: unknown): void {
+        if (typeof child === 'string') return
+        if (!record(child) || child.type !== 'Text' || (child.children !== undefined && !Array.isArray(child.children))) throw new ClaudeProtocolError('native UI button children must be text')
+        if (Array.isArray(child.children)) child.children.forEach(validateInline)
+      }
+      if (value.children !== undefined && !Array.isArray(value.children)) throw new ClaudeProtocolError('native UI button children are invalid')
+      if (Array.isArray(value.children)) value.children.forEach(validateInline)
+      const button: ClaudeUiNode = { kind: 'button', label: props.label as string, ...attribution,
+        ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(visit) } : {}),
+        ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),
+        ...(props.variant !== undefined ? { variant: props.variant as 'primary' | 'secondary' } : {}),
+        ...(props.role === 'dismiss' ? { role: 'dismiss' as const } : {}),
+        ...(props.autoFocus === true ? { autoFocus: true } : {}) }
       if (value.press === undefined) return button
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin
         || typeof value.press.handle !== 'number' || !Number.isSafeInteger(value.press.handle)

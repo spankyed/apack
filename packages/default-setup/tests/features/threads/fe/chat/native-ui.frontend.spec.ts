@@ -225,3 +225,26 @@ it('normalizes an SVG without xmlns and preserves its internal references', () =
   expect(parsed.querySelector('use')?.getAttribute('href')).toBe('#shape')
   expect(drawing.ratio).toBe(2)
 })
+
+
+it('renders inline Button content as one named action and focuses only on site entry', async () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'button', label: 'Save changes', actionId: 'save', variant: 'primary', dimColor: true, autoFocus: true,
+    children: [{ kind: 'text', text: 'Save ' }, { kind: 'text', text: 'changes', style: { bold: true } }] } } })
+  const editor = f.root.querySelector('textarea')!; editor.focus(); await nextTick()
+  expect(document.activeElement).toBe(editor)
+  const button = f.root.querySelector('button')!
+  expect(button.getAttribute('aria-label')).toBe('Save changes')
+  expect(button.querySelector('.font-semibold')?.textContent).toBe('changes')
+  expect(button.classList.contains('bg-blue-600')).toBe(true)
+  expect(button.classList.contains('opacity-60')).toBe(true)
+  f.root.querySelector<HTMLElement>('[tabindex="0"]')!.focus()
+  expect(document.activeElement).toBe(button)
+  button.querySelector('span')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  expect(f.press).toHaveBeenCalledExactlyOnceWith('save', undefined)
+  expect(f.submit).not.toHaveBeenCalled()
+  f.state.nativeUi = { status: 'live', tree: { kind: 'button', label: 'Dismiss controls', role: 'dismiss', actionId: 'close' } }; await nextTick()
+  const dismiss = f.root.querySelector('button')!
+  expect(dismiss.getAttribute('aria-label')).toBe('Dismiss controls')
+  expect(dismiss.textContent?.trim()).toBe('×')
+  dismiss.click(); expect(f.press).toHaveBeenLastCalledWith('close', undefined)
+})

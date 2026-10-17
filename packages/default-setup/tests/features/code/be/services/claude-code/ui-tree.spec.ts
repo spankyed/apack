@@ -109,3 +109,17 @@ it('maps native SVG data without callback authority and enforces source/dimensio
   for (const props of [{ source: '', alt: 'x' }, { source: 'x'.repeat(131073), alt: 'x' }, { source, alt: 'x', width: 0 }, { source, alt: 'x', height: 4097 }, { source, alt: 'x', isInteractive: 'yes' }]) expect(() => createClaudeUiDrawing({ type: 'Svg', props })).toThrow('protocol error')
   expect(() => createClaudeUiDrawing({ type: 'Svg', props: { source, alt: 'x' }, children: [] })).toThrow('protocol error')
 })
+
+
+it('preserves native Button inline labels and presentation with one action', () => {
+  const drawing = createClaudeUiDrawing({ type: 'Button', props: { key: 'save', label: 'Save 2', variant: 'primary', dimColor: true, role: 'dismiss', autoFocus: true },
+    press: { plugin: 'fixture', handle: 7 }, children: ['Save ', { type: 'Text', props: { dimColor: true }, children: ['2'] }] })
+  expect(drawing.tree).toMatchObject({ kind: 'button', label: 'Save 2', variant: 'primary', dimColor: true, role: 'dismiss', autoFocus: true,
+    children: [{ kind: 'text', text: 'Save ' }, { kind: 'text', text: '2', style: { dimColor: true } }] })
+  expect(drawing.actions.size).toBe(1)
+})
+it('rejects interactive descendants and malformed Button presentation', () => {
+  const base = { type: 'Button', props: { label: 'Run' } }
+  for (const children of [[button()], [{ type: 'Text', children: [button()] }], 'Run']) expect(() => createClaudeUiDrawing({ ...base, children })).toThrow()
+  for (const props of [{ variant: 'danger' }, { dimColor: 'yes' }, { role: 'admin' }, { autoFocus: false }]) expect(() => createClaudeUiDrawing({ ...base, props: { label: 'Run', ...props } })).toThrow()
+})
