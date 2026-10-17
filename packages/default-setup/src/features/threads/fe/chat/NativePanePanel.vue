@@ -7,14 +7,21 @@
           @click="emit('operate', { kind: 'show', id: pane.id })" @keydown="tabKey($event, pane.id)">{{ pane.title }}</button>
       </div>
       <span v-else class="flex-1 truncate text-xs font-medium text-neutral-300">{{ title }}</span>
+      <button v-if="preferredRows !== undefined" type="button" class="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" aria-label="Use requested pane height" title="Use requested pane height" @click="emit('resize', undefined)"><RotateCcw :size="12" /></button>
       <button type="button" class="rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" :aria-label="`Close ${title}`" @click="emit('operate', { kind: 'close', id: shown })"><X :size="14" /></button>
     </div>
-    <div ref="site" class="native-pane-surface min-h-16 max-h-56 min-w-0 overflow-auto text-[13px] leading-5 outline-none" :style="{ height: `${Math.max(4, Math.min(activePane?.rows ?? 12, 24)) * 20}px` }" role="tabpanel" :aria-label="title" tabindex="0"
+    <div ref="site" class="native-pane-surface min-h-10 min-w-0 overflow-auto text-[13px] leading-5 outline-none" :style="{ height: `${bodyRows * rowPixels}px` }" role="tabpanel" :aria-label="title" tabindex="0"
       @focusin="focusIn" @focusout="focusOut" @compositionstart="composing = true" @compositionend="composing = false"
       @keydown="siteKey" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
       <div data-native-scroll-content><NativeUiNode v-if="panes.body.status === 'live'" :node="panes.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" />
       <p v-else-if="panes.body.status === 'error'" role="status" class="text-xs text-neutral-500">Claude pane unavailable</p>
       <span v-else class="text-xs text-neutral-500" role="status">Loading pane…</span></div>
+    </div>
+    <div role="separator" aria-label="Resize Claude pane" aria-orientation="horizontal" tabindex="0"
+      :aria-valuemin="minRows" :aria-valuemax="maxRows" :aria-valuenow="bodyRows" :aria-valuetext="`${bodyRows} rows`"
+      class="group -mx-5 -mb-3 mt-2 flex h-3 touch-none select-none items-center justify-center cursor-row-resize rounded-sm outline-none focus-visible:bg-blue-400/10 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-400/60"
+      @pointerdown="startResize" @pointermove="moveResize" @pointerup="endResize" @pointercancel="endResize" @lostpointercapture="endResize" @keydown="resizeKey">
+      <span aria-hidden="true" class="h-0.5 w-8 rounded-full bg-white/10 transition-colors group-hover:bg-white/30 group-focus-visible:bg-blue-400/60" />
     </div>
     <span ref="measure" data-pane-cell-measure aria-hidden="true" class="pointer-events-none invisible fixed -left-[9999px] whitespace-pre font-mono text-[13px]">0000000000</span>
   </section>
@@ -22,17 +29,44 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, provide, onBeforeUnmount, onMounted, nextTick } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X, RotateCcw } from 'lucide-vue-next'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiFieldEvent } from '#generated/types.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
-const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null }>()
-const emit = defineEmits<{ operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': []; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
+const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null; preferredRows?: number }>()
+const emit = defineEmits<{ resize: [rows: number | undefined]; operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': []; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
 const shown = computed(() => props.panes.roster.shown_id)
 const activePane = computed(() => props.panes.roster.panes.find(pane => pane.id === shown.value))
 const title = computed(() => activePane.value?.title ?? 'Claude pane')
+const minRows = 2, rowPixels = ref(20), availableHeight = ref(768)
+// The surface reserves space for the composer, toolbar and pane header before granting body rows.
+const maxRows = computed(() => Math.max(minRows, Math.floor((availableHeight.value - 200) / rowPixels.value)))
+const bodyRows = computed(() => Math.max(minRows, Math.min(maxRows.value, props.preferredRows ?? activePane.value?.rows ?? Math.floor(availableHeight.value / rowPixels.value / 3))))
+let drag: { id: number; y: number; rows: number; element: HTMLElement } | undefined
+function startResize(event: PointerEvent) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  const element = event.currentTarget as HTMLElement
+  drag = { id: event.pointerId, y: event.clientY, rows: bodyRows.value, element }
+  element.setPointerCapture?.(event.pointerId)
+}
+function moveResize(event: PointerEvent) {
+  if (!drag || drag.id !== event.pointerId) return
+  event.preventDefault()
+  emit('resize', Math.max(minRows, Math.min(maxRows.value, Math.round(drag.rows + (event.clientY - drag.y) / rowPixels.value))))
+}
+function endResize() {
+  const previous = drag; drag = undefined
+  if (previous?.element.hasPointerCapture?.(previous.id)) previous.element.releasePointerCapture(previous.id)
+}
+function resizeKey(event: KeyboardEvent) {
+  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+  const rows = ({ ArrowUp: bodyRows.value - 1, ArrowDown: bodyRows.value + 1, PageUp: bodyRows.value - 4, PageDown: bodyRows.value + 4, Home: minRows, End: maxRows.value } as Record<string, number>)[event.key]
+  if (rows === undefined) return
+  event.preventDefault(); event.stopPropagation(); emit('resize', Math.max(minRows, Math.min(maxRows.value, rows)))
+}
 const site = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
@@ -76,8 +110,17 @@ function reportLayout() {
   emit('operate', { kind: 'layout', id, columns: Math.max(1, Math.floor(element.clientWidth / cell)), rows: Math.max(1, Math.floor(element.clientHeight / line)), offset: Math.max(0, Math.floor(element.scrollTop / line)) })
 }
 let observer: ResizeObserver | undefined
-onMounted(() => { observer = new ResizeObserver(reportLayout); if (site.value) observer.observe(site.value); reportLayout() })
-onBeforeUnmount(() => observer?.disconnect())
+onMounted(() => {
+  const area = panel.value?.closest<HTMLElement>('[data-testid="chat-composer-area"]')
+  const update = () => {
+    availableHeight.value = area?.clientHeight || window.innerHeight || 768
+    rowPixels.value = Number.parseFloat(site.value ? getComputedStyle(site.value).lineHeight : '') || 20
+    reportLayout()
+  }
+  observer = new ResizeObserver(update); if (site.value) observer.observe(site.value); if (area) observer.observe(area)
+  update()
+})
+onBeforeUnmount(() => { endResize(); observer?.disconnect() })
 watch(shown, () => { held = false; void nextTick(reportLayout) })
 watch([() => props.panes.roster.focused_id, () => props.grantFocus, () => props.panes.body.status], async ([id, grant, status]) => {
   if (!grant) consumedGrant = null

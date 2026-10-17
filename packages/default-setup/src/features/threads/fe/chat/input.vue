@@ -17,7 +17,7 @@
         @dragleave="onDragLeave"
         @dragover.prevent
         @drop.prevent="onDrop">
-        <NativePanePanel v-if="nativeUi?.panes" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="tiptapRef?.editor?.commands.focus()" />
+        <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="tiptapRef?.editor?.commands.focus()" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @return-focus="tiptapRef?.editor?.commands.focus()" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
@@ -316,6 +316,8 @@ function handleComposerNativeHotkey(event: KeyboardEvent) {
 }
 const nativePromptProblem = ref<string>()
 const hostPopupActive = ref(false)
+// Keep the person's pane size when panes close/reopen or the plugin changes its request.
+const paneRowsPreference = ref<number>()
 const paneFocusGrant = ref<string | null>(null)
 watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
   if (!id || !document.hasFocus()) return
