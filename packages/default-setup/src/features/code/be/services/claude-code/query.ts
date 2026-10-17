@@ -1,5 +1,6 @@
 import { ClaudeModelCatalogSchema, type ClaudeModelCatalog } from './host-controls.ts'
 import { randomUUID } from 'node:crypto'
+import { createClaudePromptHosts } from './ui-prompt-host.ts'
 import { createClaudeUiControls, type ClaudeUiControls } from './ui-controls.ts'
 import { createBackgroundTaskTracker } from './background-tasks.ts'
 import { createHookRegistry } from './hooks.ts'
@@ -160,7 +161,8 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   const surfaceControlRequests = opts.surfaceControlRequests ?? false
   const backgroundTasks = createBackgroundTaskTracker()
   const hostControls = createHostControls(value => stream.write(value))
-  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks)
+  const promptHosts = createClaudePromptHosts(value => stream.write(value))
+  const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks, promptHosts)
     .catch(err => {
       hostControls.close(err)
       sessionId.reject(err)
@@ -249,7 +251,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // ─── Public handle ────────────────────────────────────────────────────────
 
   return {
-    ui: createClaudeUiControls(initialized, hostControls),
+    ui: createClaudeUiControls(initialized, hostControls, promptHosts),
     initialized,
     sessionId: sessionId.promise,
     events: eventQueue,
@@ -329,6 +331,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     },
 
     async close(): Promise<void> {
+      promptHosts.close()
       hostControls.close()
       stream.endInput()
       await stream.done()
@@ -336,6 +339,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     },
 
     kill(): void {
+      promptHosts.close()
       hostControls.close()
       stream.kill('SIGTERM')
     },
@@ -374,6 +378,7 @@ async function pump(
   hostControls: ReturnType<typeof createHostControls>,
   hookCallbackIds: ReadonlySet<string>,
   backgroundTasks: ReturnType<typeof createBackgroundTaskTracker>,
+  promptHosts: ReturnType<typeof createClaudePromptHosts>,
 ): Promise<void> {
   const pendingCallbacks = new Set<string>()
   let reading = true
@@ -411,6 +416,7 @@ async function pump(
 
       switch (line.type) {
         case 'control_request': {
+          if (promptHosts.receive(line)) continue
           const req = (line as unknown as { request?: { subtype?: string }; request_id?: string })
           logger.debug('control_request received', {
             subtype: req.request?.subtype,
@@ -433,6 +439,7 @@ async function pump(
         }
 
         case 'control_cancel_request':
+          if (promptHosts.cancel(line.request_id)) continue
           pendingCallbacks.delete(line.request_id)
           if (surfaceControlRequests) break // surface to consumer
           continue
@@ -467,6 +474,7 @@ async function pump(
     }
 
   } finally {
+    promptHosts.close()
     reading = false
     pendingCallbacks.clear()
   }

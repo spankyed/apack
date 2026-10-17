@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host.ts'
 import { ClaudeProtocolError } from './errors.ts'
 import type { ClaudeInitialization, createHostControls } from './host-controls.ts'
 
@@ -64,20 +65,26 @@ export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-export function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>) {
+export function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: ReturnType<typeof createClaudePromptHosts>) {
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
     const metadata = await initialized
     if (!metadata.capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable')
     return controls.request(value)
   }
   return {
-    /** No reverse clipboard/composer/selection handlers are advertised. */
+    /** Register only a mounted composer; registration alone does not attach or create a process. */
+    servePrompt(id: string, host: ClaudePromptHost): () => void {
+      if (!promptHosts) throw new ClaudeProtocolError('native composer reply transport is unavailable')
+      return promptHosts.register(clientId.parse(id), host)
+    },
+    /** Advertise only reverse APIs the attached view can actually answer. */
     async attach(options: ClaudeUiAttach) {
       const valid = attach.parse(options)
-      return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: [] }))
+      return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: valid.surface === 'desktop' && promptHosts?.has(valid.client_id) ? ['ui_prompt_read', 'ui_prompt_fill'] : [] }))
     },
     async detach(id: string) {
       const valid = clientId.parse(id)
+      promptHosts?.detach(valid)
       return z.object({ detached: z.boolean(), surfaces }).passthrough().parse(await request({ subtype: 'ui_detach', client_id: valid }))
     },
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {

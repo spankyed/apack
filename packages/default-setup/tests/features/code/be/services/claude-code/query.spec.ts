@@ -287,6 +287,25 @@ describe('query() native control replies', () => {
     await handle.close()
   })
 
+  it('answers native composer controls internally even while ordinary permissions are surfaced', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({ surfaceControlRequests: true })
+    const read = vi.fn(async () => ({ text: 'current draft', cursor: 7 })), fill = vi.fn(async () => true)
+    handle.ui.servePrompt('view', { read, fill })
+    mock.pushEvent({ type: 'control_request', request_id: 'prompt-read', request: { subtype: 'ui_prompt_read', client_id: 'view', surface: 'desktop' } })
+    await vi.waitFor(() => expect(mock.writes).toHaveLength(2))
+    expect(mock.writes[1]).toMatchObject({ response: { request_id: 'prompt-read', response: { text: 'current draft', cursor: 7 } } })
+    mock.pushEvent({ type: 'control_request', request_id: 'prompt-fill', request: { subtype: 'ui_prompt_fill', client_id: 'view', surface: 'desktop', mode: 'append', text: ' new' } })
+    await vi.waitFor(() => expect(mock.writes).toHaveLength(3))
+    expect(fill).toHaveBeenCalledOnce()
+    mock.forceExit()
+    const events: StreamLine[] = []; for await (const event of handle.events) events.push(event)
+    expect(events).toEqual([])
+    expect(mock.writes.some(value => (value as { type: string }).type === 'user')).toBe(false)
+    await handle.close()
+  })
+
   it('reads typed MCP state before any user turn and preserves future server fields', async () => {
     const mock = makeMockStream()
     vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)

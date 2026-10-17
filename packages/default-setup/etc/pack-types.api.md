@@ -1381,6 +1381,15 @@ type ClaudePromptEdit = Omit<ClaudeUiPromptEdit, 'client_id' | 'surface'> & {
     revision: number;
 };
 
+interface ClaudePromptHost {
+    read(signal: AbortSignal): Promise<ClaudePromptHostBox | undefined>;
+    fill(input: ClaudePromptHostFill, signal: AbortSignal): Promise<boolean>;
+}
+
+type ClaudePromptHostBox = z.infer<typeof box>;
+
+type ClaudePromptHostFill = z.infer<typeof fill>;
+
 type ClaudePromptReply = {
     revision: number;
     status: 'applied';
@@ -7037,6 +7046,23 @@ declare const attach: z.ZodObject<{
     } | undefined;
 }>;
 
+declare const box: z.ZodEffects<z.ZodObject<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+}, "strict", z.ZodTypeAny, {
+    text: string;
+    cursor: number;
+}, {
+    text: string;
+    cursor: number;
+}>, {
+    text: string;
+    cursor: number;
+}, {
+    text: string;
+    cursor: number;
+}>;
+
 declare const brainCommands: {
     /** An event a flow run heard, with its payload as the node's attributes */
     readonly createEventRunNode: (eventNode: {
@@ -7261,9 +7287,21 @@ declare function createAndNotify(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
 };
 
+/** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
+declare function createClaudePromptHosts(write: (value: unknown) => boolean): {
+    register(client: string, host: ClaudePromptHost): () => void;
+    has: (client: string) => boolean;
+    detach: (client: string) => void;
+    receive(line: ControlRequestLine): boolean;
+    cancel(id: string): boolean;
+    close(): void;
+};
+
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-declare function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>): {
-    /** No reverse clipboard/composer/selection handlers are advertised. */
+declare function createClaudeUiControls(initialized: Promise<ClaudeInitialization>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: ReturnType<typeof createClaudePromptHosts>): {
+    /** Register only a mounted composer; registration alone does not attach or create a process. */
+    servePrompt(id: string, host: ClaudePromptHost): () => void;
+    /** Advertise only reverse APIs the attached view can actually answer. */
     attach(options: ClaudeUiAttach): Promise<z.objectOutputType<{
         surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
     }, z.ZodTypeAny, "passthrough">>;
@@ -7467,6 +7505,98 @@ declare const field: z.ZodObject<{
     key?: string | undefined;
     component?: string | undefined;
     instance_id?: string | undefined;
+}>;
+
+declare const fill: z.ZodEffects<z.ZodObject<{
+    text: z.ZodString;
+    mode: z.ZodEnum<["replace", "append", "insert"]>;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+    }, "strict", z.ZodTypeAny, {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }, {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }>, "many">>;
+}, "strict", z.ZodTypeAny, {
+    text: string;
+    mode: "append" | "insert" | "replace";
+    decorations?: {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }[] | undefined;
+}, {
+    text: string;
+    mode: "append" | "insert" | "replace";
+    decorations?: {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }[] | undefined;
+}>, {
+    text: string;
+    mode: "append" | "insert" | "replace";
+    decorations?: {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }[] | undefined;
+}, {
+    text: string;
+    mode: "append" | "insert" | "replace";
+    decorations?: {
+        start: number;
+        end: number;
+        bold?: boolean | undefined;
+        color?: string | undefined;
+        backgroundColor?: string | undefined;
+        dimColor?: boolean | undefined;
+        italic?: boolean | undefined;
+        underline?: boolean | undefined;
+        strikethrough?: boolean | undefined;
+    }[] | undefined;
 }>;
 
 /**
