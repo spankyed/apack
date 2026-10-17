@@ -12,7 +12,7 @@ function fixture() {
   const done = deferred<void>()
   const states: ClaudeUiMountState[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -173,4 +173,33 @@ it('checks select membership before native dispatch and retires it on disposal',
   await view.dispose()
   await expect(view.field({ actionId, kind: 'select', value: 'a' })).resolves.toEqual({ handled: false })
   expect(f.ui.select).toHaveBeenCalledTimes(1)
+})
+
+
+it('accepts only the latest native draft reply and retires edits with the native owner', async () => {
+  const f = fixture(), first = deferred<{ text: string; cursor: number }>(), second = deferred<{ text: string; cursor: number }>()
+  f.ui.promptEdit.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise)
+  const view = f.mount(); await view.ready
+  const old = view.editPrompt({ revision: 1, by: 'person', text: 'old', cursor: 3 }); await Promise.resolve()
+  const latest = view.editPrompt({ revision: 2, by: 'person', text: 'new', cursor: 3 }); await Promise.resolve()
+  second.resolve({ text: 'NEW', cursor: 3 })
+  await expect(latest).resolves.toEqual({ revision: 2, status: 'applied', frame: { text: 'NEW', cursor: 3 } })
+  first.resolve({ text: 'OLD', cursor: 3 }); await expect(old).resolves.toBeUndefined()
+  await expect(view.editPrompt({ revision: 1, by: 'app', text: '', cursor: 0 })).resolves.toBeUndefined()
+  expect(f.ui.promptEdit).toHaveBeenCalledTimes(2)
+  const pending = deferred<{ text: string; cursor: number }>()
+  f.ui.promptEdit.mockImplementationOnce(() => pending.promise)
+  const retiring = view.editPrompt({ revision: 3, by: 'app', text: 'history', cursor: 7 }); await Promise.resolve()
+  f.replace(); pending.resolve({ text: 'history', cursor: 7 }); await expect(retiring).resolves.toBeUndefined()
+  await view.dispose()
+})
+
+it('keeps a native edit failure separate from mounted controls and discards superseded frames', async () => {
+  const f = fixture(), view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
+  f.ui.promptEdit.mockRejectedValueOnce(new Error('native edit failed'))
+  await expect(view.editPrompt({ revision: 1, by: 'person', text: 'draft', cursor: 5 })).resolves.toEqual({ revision: 1, status: 'error', message: 'native edit failed' })
+  expect(f.states.at(-1)?.status).toBe('live')
+  f.ui.promptEdit.mockResolvedValueOnce({ text: 'draft', cursor: 5, superseded: true } as { text: string; cursor: number })
+  await expect(view.editPrompt({ revision: 2, by: 'person', text: 'draft', cursor: 5 })).resolves.toBeUndefined()
+  await view.dispose()
 })

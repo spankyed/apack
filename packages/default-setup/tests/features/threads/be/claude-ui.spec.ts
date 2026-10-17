@@ -8,7 +8,7 @@ import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts'
 
 async function native(threadId = 'thread') {
   const events = new PassThrough({ objectMode: true })
-  const ui = { input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
+  const ui = { promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
     press: vi.fn(async () => ({ handled: true })) }
   const handle = { ui, events, kill: () => events.end(), close: async () => { events.end() } } as unknown as QueryHandle
@@ -94,8 +94,21 @@ it('answers native UI updates only to the requesting connection through the actu
     await app.connect()
     await app.send('threads', mount, { sender: 'default-setup/threads', client: 'requested-window' })
     await app.send('threads', { type: 'CLAUDE_UI_FIELD', threadId: mount.threadId, mountId, actionId: randomUUID(), kind: 'change', value: 'foreign' }, { sender: 'default-setup/threads', client: 'requested-window' })
+    await app.send('threads', { type: 'CLAUDE_PROMPT_EDIT', threadId: mount.threadId, mountId, revision: 1, by: 'person', text: 'draft', cursor: 5 }, { sender: 'default-setup/threads', client: 'requested-window' })
     await app.settle()
     expect(sent.length).toBeGreaterThan(0)
     expect(sent.every(client => client === 'requested-window')).toBe(true)
   } finally { stop() }
+})
+
+it('returns composer replies only to the connection that owns the mounted native client', async () => {
+  const { ui } = await native(), delivery = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'owner-window', delivery); await vi.advanceTimersByTimeAsync(50)
+  const edit = { type: 'CLAUDE_PROMPT_EDIT' as const, threadId: 'thread', mountId, revision: 1, by: 'person' as const, text: 'draft', cursor: 5 }
+  handleClaudeUiView(edit, 'foreign-window', foreign)
+  expect(ui.promptEdit).not.toHaveBeenCalled()
+  handleClaudeUiView(edit, 'owner-window', delivery); await vi.advanceTimersByTimeAsync(0)
+  expect(ui.promptEdit).toHaveBeenCalledWith(expect.objectContaining({ text: 'draft', cursor: 5, by: 'person', surface: 'desktop' }))
+  expect(delivery).toHaveBeenCalledWith({ type: 'CLAUDE_PROMPT_STATE', threadId: 'thread', mountId, result: { revision: 1, status: 'applied', frame: { text: 'native draft', cursor: 12 } } })
+  expect(foreign).not.toHaveBeenCalled()
 })

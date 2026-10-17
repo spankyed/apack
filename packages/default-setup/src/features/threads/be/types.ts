@@ -1,4 +1,4 @@
-import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts';
+import type { ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply } from '#features/code/be/services/claude-code/ui-presentation.ts';
 export type * from './export-types.ts';
 import { type BaseEntity, EARS, type PackShapes, type ShortCodeOf } from '#generated/ears.ts';
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
@@ -468,6 +468,7 @@ export type AgentSettings = ThreadsSettings['chat'];
 // System-private entity type
 
 export type ClaudeUiViewRequest =
+  | ({ type: 'CLAUDE_PROMPT_EDIT'; threadId: string; mountId: string } & ClaudePromptEdit)
   | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string }
   | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string }
   | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)
@@ -505,6 +506,7 @@ export type IncomingThreadsEvents =
   | { type: 'THREAD_DELETED'; threadId: string }
 
 export type OutgoingThreadsEvents =
+  | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }
   | { type: 'CLAUDE_UI_STATE'; threadId: string; mountId: string; state: ClaudeUiMountState }
   // Thread management events
   | { type: 'THREAD_CONNECTED'; data: ThreadConnectedData }

@@ -3,9 +3,9 @@ import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-import type { ClaudeUiFieldEvent, ClaudeUiMountState } from './ui-presentation.ts'
+import type { ClaudeUiFieldEvent, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
@@ -23,6 +23,7 @@ export function mountClaudeUi(options: {
   let scheduled: ReturnType<typeof setTimeout> | undefined
   let drawing: ClaudeUiDrawing | undefined
   let fieldDrawing: ClaudeUiDrawing | undefined
+  let promptRevision = 0
   let generation = 0
   let pressing = false
   let disposal: Promise<void> | undefined
@@ -112,6 +113,20 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async editPrompt(event: ClaudePromptEdit): Promise<ClaudePromptReply | undefined> {
+      if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= promptRevision) return
+      promptRevision = event.revision
+      const { revision, ...box } = event
+      try {
+        await ready
+        if (!attached || !current() || revision !== promptRevision) return
+        const frame = await owner.handle.ui.promptEdit({ ...client, ...box })
+        if (!current() || revision !== promptRevision || frame.superseded) return
+        return { revision, status: 'applied', frame }
+      } catch (error) {
+        if (current() && revision === promptRevision) return { revision, status: 'error', message: error instanceof Error ? error.message : 'Native composer edit failed' }
+      }
+    },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
       if (!current() || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
       const field = fieldDrawing?.fields.get(event.actionId)

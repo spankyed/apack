@@ -1489,6 +1489,19 @@ const threadsState = setup({
       const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
       return { nativeUiViews }
     }), ({ event }) => { sendToSystem(id, event) }] },
+    CLAUDE_PROMPT_EDIT: { actions: [assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.promptRevision ?? 0)) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptRevision: event.revision } } }
+    }), ({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (view?.threadId === event.threadId && view.promptRevision === event.revision) sendToSystem(id, event)
+    }] },
+    CLAUDE_PROMPT_STATE: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || view.promptRevision !== event.result.revision) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, prompt: event.result } } }
+    }) },
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
@@ -1497,7 +1510,7 @@ const threadsState = setup({
     } },
     CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
-      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { threadId: event.threadId, state: event.state } } }
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, state: event.state } } }
     }) },
     // Thread management events
     SHOW_CREATE_FORM: {

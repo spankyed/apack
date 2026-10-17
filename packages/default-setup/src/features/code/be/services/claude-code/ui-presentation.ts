@@ -7,6 +7,11 @@ export type ClaudeUiNode =
   | { kind: 'select'; actionId: string; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }
 
+export type ClaudePromptEdit = Omit<import('./ui-controls.ts').ClaudeUiPromptEdit, 'client_id' | 'surface'> & { revision: number }
+export type ClaudePromptReply =
+  | { revision: number; status: 'applied'; frame: import('./ui-controls.ts').ClaudeUiPromptFrame }
+  | { revision: number; status: 'error'; message: string }
+
 export type ClaudeUiFieldEvent = { actionId: string; kind: 'change' | 'submit' | 'select'; value: string }
 
 export type ClaudeUiMountState =
