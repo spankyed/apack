@@ -1,15 +1,25 @@
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
+import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 
 export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & (
   | { type: 'CLAUDE_TERMINAL_MOUNT' }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
+  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
+export interface ClaudeTerminalSubmissionState {
+  ownerId: string
+  revision: number
+  status: 'pending' | 'accepted' | 'rejected'
+  receipt?: ClaudeNativeSubmissionReceipt
+  problem?: string
+}
 export type ClaudeTerminalViewSnapshot = {
+  submission?: ClaudeTerminalSubmissionState
   state?: ClaudeNativeTerminalState
   opening: boolean
   problem?: string
@@ -32,6 +42,8 @@ interface View {
   opening: boolean
   problem?: string
   queued?: boolean
+  submission?: ClaudeTerminalSubmissionState
+  submissionRevision?: number
 }
 
 /** Window leases own subscriptions; detaching a view never stops the native session. */
@@ -50,13 +62,13 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, opening: view.opening, problem: view.problem, output: [...output] })
+        state: view.owner?.state, submission: view.submission, opening: view.opening, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -100,7 +112,26 @@ export function createClaudeTerminalViews(dependencies: {
       }
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
-      if (event.type === 'CLAUDE_TERMINAL_INPUT') owner.input(event.ownerId, event.text)
+      if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
+        if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
+          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() || event.text.length > 32768) return
+        target.submissionRevision = event.revision
+        const submission: ClaudeTerminalSubmissionState = { ownerId: event.ownerId, revision: event.revision, status: 'pending' }
+        target.submission = submission; publish(key, target)
+        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.submission === submission
+        void Promise.resolve().then(() => {
+          if (!current()) return undefined
+          return owner.submit(event.text)
+        }).then(receipt => {
+          if (!current() || !receipt) return
+          if (receipt.sessionId !== owner.state.sessionId) throw new Error('Native prompt receipt belongs to another session')
+          target.submission = { ...submission, status: 'accepted', receipt }; publish(key, target)
+        }).catch(error => {
+          if (!current()) return
+          target.submission = { ...submission, status: 'rejected', problem: error instanceof Error ? error.message : 'Native prompt could not be submitted' }; publish(key, target)
+        })
+      }
+      else if (event.type === 'CLAUDE_TERMINAL_INPUT') owner.input(event.ownerId, event.text)
       else if (event.type === 'CLAUDE_TERMINAL_RESIZE') owner.resize(event.ownerId, event.columns, event.rows)
       else if (event.type === 'CLAUDE_TERMINAL_CLOSE') void owner.close().catch(error => {
         target.problem = error instanceof Error ? error.message : 'Native session could not stop'; publish(key, target)

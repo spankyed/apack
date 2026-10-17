@@ -72,7 +72,7 @@ export const threadsSystem = setup({
   },
   actions: threadsSpec.actions({
     claudeTerminalView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE') terminalViews.handle(event, client, reply);
+      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE') terminalViews.handle(event, client, reply);
     },
     claudeUiView: ({ event, client, reply }) => {
       if (event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
@@ -897,6 +897,7 @@ export const threadsSystem = setup({
       CLAUDE_TERMINAL_MOUNT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_UNMOUNT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_SUBMIT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_INPUT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },

@@ -7,7 +7,7 @@ function fixture() {
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
     subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }),
-    input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
+    submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
   const views = createClaudeTerminalViews({ get: () => current, open })
@@ -64,5 +64,45 @@ it('expires abandoned controls and deduplicates handoff while retaining the owne
     expect(f.listeners.size).toBe(0)
     f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_CLOSE', ownerId: f.owner.state.ownerId }, 'one', f.send)
     expect(f.owner.close).not.toHaveBeenCalled()
+  } finally { f.views.clear() }
+})
+
+it('submits once for the owning view and publishes the native accepted prompt identity', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    const receipt = { sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Native rewrite' }
+    vi.mocked(f.owner.submit).mockResolvedValue(receipt)
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Original draft' } as const
+    f.views.handle(submit, 'other-window', f.send)
+    f.views.handle({ ...submit, ownerId: randomUUID() }, 'one', f.send)
+    expect(f.owner.submit).not.toHaveBeenCalled()
+    f.views.handle(submit, 'one', f.send); f.views.handle(submit, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toEqual({ ownerId: submit.ownerId, revision: 1, status: 'accepted', receipt }))
+    f.views.handle(submit, 'one', f.send)
+    expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith('Original draft')
+  } finally { f.views.clear() }
+})
+it('reports native refusal without an accepted prompt receipt', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    vi.mocked(f.owner.submit).mockRejectedValue(new Error('Native prompt refused'))
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Keep this draft' }, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({ revision: 1, status: 'rejected', problem: 'Native prompt refused' }))
+    expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
+  } finally { f.views.clear() }
+})
+it('discards receipts after owner replacement', async () => {
+  const f = fixture()
+  let resolve!: (receipt: { sessionId: string; uuid: string; text: string }) => void
+  vi.mocked(f.owner.submit).mockImplementation(() => new Promise(done => { resolve = done }))
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Old draft' }, 'one', f.send)
+    await Promise.resolve(); const count = f.send.mock.calls.length
+    f.setCurrent(); resolve({ sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Old accepted prompt' })
+    await Promise.resolve(); await Promise.resolve()
+    expect(f.send).toHaveBeenCalledTimes(count)
   } finally { f.views.clear() }
 })
