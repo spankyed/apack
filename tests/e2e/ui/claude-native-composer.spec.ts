@@ -41,7 +41,13 @@ test('native extension fields, paint and hover work inside the actual composer',
   await editor.fill('Help me review the changes in this workspace.');
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   const strip = card.getByTestId('composer-session-strip');
-  await expect(strip.getByText('Context tools · 0 updates', { exact: true })).toBeVisible({ timeout: 20000 });
+  const toolsToggle = strip.getByRole('button', { name: 'Session tools', exact: true });
+  await expect(toolsToggle).toBeVisible({ timeout: 20000 });
+  await expect(toolsToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(strip.getByText('Context tools · 0 updates', { exact: true })).toBeHidden();
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-restyled.png') });
+  await toolsToggle.click();
+  await expect(strip.getByText('Context tools · 0 updates', { exact: true })).toBeVisible();
   const snapshot = () => appPage.evaluate(() => {
     const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     return { threadId: context.currentThread?.id, messages: context.currentThread?.messages.length, turns: context.currentThread?.context?.claudeCode?.turns };
@@ -285,8 +291,14 @@ test('native extension fields, paint and hover work inside the actual composer',
   await paneSite.focus();
   await paneSite.press('End');
   await expect.poll(() => paneSite.evaluate(element => Math.abs(element.scrollTop - (element.scrollHeight - element.clientHeight)) < 1)).toBe(true);
+  const beforeHome = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8')).length;
   await paneSite.press('Home');
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(0);
+  // Local paint precedes the animation-frame report; isolate the next edge gesture.
+  await expect.poll(async () => {
+    const events = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8'));
+    return events.slice(beforeHome).some((event: any) => event.offset === 0 && event.by < 0);
+  }).toBe(true);
   const beforeEdge = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8')).length;
   await paneSite.press('ArrowUp');
   await expect.poll(async () => {
@@ -338,7 +350,11 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLEAR_THREAD' }));
   await expect(card.getByRole('button', { name: 'Refresh context', exact: true })).toHaveCount(0);
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
+  if (await toolsToggle.getAttribute('aria-expanded') === 'false') await toolsToggle.click();
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
+  await toolsToggle.click();
+  await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeHidden();
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-restyled-narrow.png') });
   expect(errors).toEqual([]);
   await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativePluginStatus: true, nativeToastHold: true, nativeToastHover: true, nativeToastExpiry: true, nativeToastDismiss: true, nativeStatusClear: true, nativePaneResized: true, nativePaneSizePreference: true, nativePaneResizeMeasured: true, nativePaneResizeReset: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });

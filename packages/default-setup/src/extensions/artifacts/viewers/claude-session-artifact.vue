@@ -1,10 +1,10 @@
 <template>
-  <div class="max-w-2xl">
-    <div class="rounded-md bg-neutral-850 border border-neutral-800 animate-fade-in">
+  <div class="w-full max-w-2xl">
+    <div class="overflow-hidden rounded-xl bg-[#202022] border border-white/[0.08] animate-fade-in">
       <!-- Header -->
-      <div class="flex items-center gap-2 px-3 py-2 border-b border-neutral-800">
-        <Wrench :size="14" class="text-neutral-400" />
-        <h3 class="text-sm font-medium text-neutral-200">Claude Code session</h3>
+      <div class="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-300/10 bg-blue-300/[0.06]"><Wrench :size="15" class="text-blue-200/80" /></span>
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
         <button
           v-if="content.sessionId"
           @click="openTerminalTab"
@@ -13,8 +13,8 @@
         >
           <Terminal :size="12" />
         </button>
-        <span class="flex-1" />
-        <span class="flex items-center gap-1.5">
+
+        <span class="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1">
           <span class="relative inline-block w-2 h-2" :title="content.chatState">
             <span
               :class="[
@@ -76,10 +76,10 @@
       </div>
 
       <!-- Key/value grid -->
-      <div class="px-3 py-3 space-y-2 text-xs">
-        <div class="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-2">
+      <div class="px-5 py-4 space-y-4 text-xs">
+        <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3">
           <span class="text-neutral-500">Model</span>
-          <span class="text-neutral-200 font-mono truncate">{{ content.model || '—' }}</span>
+          <span class="text-neutral-100 font-medium truncate">{{ content.model || '—' }}</span>
 
           <span class="text-neutral-500">Session</span>
           <div class="flex items-center gap-2">
@@ -97,7 +97,7 @@
             </button>
           </div>
 
-          <span class="text-neutral-500">CWD</span>
+          <span class="text-neutral-500">Workspace</span>
           <span class="text-neutral-200 font-mono truncate" :title="content.cwd">
             {{ shortenCwd(content.cwd) || '—' }}
           </span>
@@ -130,7 +130,7 @@
         </div>
 
         <!-- Context usage breakdown (from CLI /context query) -->
-        <details v-if="ctx" class="pt-2 mt-2 border-t border-neutral-800 text-neutral-500 ml-1">
+        <details v-if="ctx" class="pt-4 mt-4 border-t border-white/[0.06] text-neutral-400">
           <summary class="text-[10px] uppercase tracking-wide cursor-pointer select-none hover:text-neutral-400 [&::marker]:mr-1">
             &nbsp;Context
             <span class="float-right text-xs tabular-nums normal-case tracking-normal" :class="ctx.percentage >= 90 ? 'text-red-400' : ctx.percentage >= 75 ? 'text-yellow-400' : 'text-neutral-400'">{{ ctx.percentage }}%</span>
@@ -186,7 +186,7 @@
         </details>
 
         <!-- Recent tools (last 3, collapsible) -->
-        <details v-if="recentTools.length" class="pt-2 mt-2 border-t border-neutral-800 text-neutral-500 ml-1">
+        <details v-if="recentTools.length" class="pt-4 mt-4 border-t border-white/[0.06] text-neutral-400">
           <summary class="text-[10px] uppercase tracking-wide cursor-pointer select-none hover:text-neutral-400 [&::marker]:mr-1">&nbsp;Recent</summary>
           <div class="mt-1 px-3">
             <div

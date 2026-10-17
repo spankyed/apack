@@ -13,7 +13,7 @@
     :aria-label="node.label" :aria-keyshortcuts="node.hotkey" :data-native-focus-id="node.focusId" :data-native-scroll-id="node.focusId" :data-native-hotkey="node.actionId ? node.hotkey : undefined" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
     :data-native-role="node.role"
     class="inline-flex min-h-8 max-w-full self-start items-center justify-center gap-1.5 whitespace-normal break-words rounded-lg border px-3 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40"
-    :class="[node.variant === 'primary' ? 'border-blue-400/20 bg-blue-400/[0.12] text-blue-200 hover:border-blue-400/30 hover:bg-blue-400/20' : 'border-transparent bg-transparent text-neutral-400 hover:border-white/[0.06] hover:bg-white/[0.05] hover:text-neutral-100',
+    :class="[node.variant === 'primary' ? 'border-blue-400/20 bg-blue-400/[0.12] text-blue-200 hover:border-blue-400/30 hover:bg-blue-400/20' : 'border-white/[0.07] bg-white/[0.025] text-neutral-300 hover:border-white/[0.14] hover:bg-white/[0.07] hover:text-neutral-100',
       buttonTextStyle.dimColor && 'opacity-60 hover:opacity-100 focus:opacity-100', node.role === 'dismiss' && 'ml-auto']"
     @click="node.actionId && emit('press', node.actionId)">
     <span v-if="node.role === 'dismiss'" aria-hidden="true">×</span>
