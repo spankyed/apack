@@ -13,13 +13,14 @@ import type { ClaudeSettings } from './host-controls.ts'
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'"
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
-const command = (value: unknown): string | undefined => { const entry = object(value); if (entry?.args !== undefined) throw new Error('Exec-form status helpers need native terminal handoff support'); return entry?.type === 'command' && typeof entry.command === 'string' && entry.command ? entry.command : undefined }
+const command = (value: unknown): string | undefined => { const entry = object(value); return entry?.type === 'command' && typeof entry.command === 'string' && entry.command ? entry.command : undefined }
 
 /** Native plugin and native-invoked command helpers share one private, session-scoped broker. */
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
   settings: ClaudeSettings
   electronEnv?: string
+  shellPrefix?: string
   changed(): void
   enter(): void
 }) {
@@ -101,16 +102,21 @@ export async function createClaudeTerminalBridge(options: {
     const main = command(options.settings.effective.statusLine), subagent = command(options.settings.effective.subagentStatusLine)
     const runtimeSource = claudeTerminalStatusRuntime.replaceAll('x-research-token', 'x-apack-native-token')
     await writeFile(runtime, runtimeSource, { mode: 0o600 })
-    async function wrapper(kind: 'main' | 'subagent', original: string): Promise<string> {
+    const configuredPrefix = object(options.settings.effective.env)?.CLAUDE_CODE_SHELL_PREFIX
+    const shellPrefix = typeof configuredPrefix === 'string' ? configuredPrefix : options.shellPrefix
+    async function wrapper(kind: 'main' | 'subagent', original: string, delegate = false): Promise<string> {
       const config = join(directory, kind + '.json'), launcher = join(directory, kind)
-      await writeFile(config, JSON.stringify({ socketPath, token, commands: { [original]: kind }, electronEnv: options.electronEnv }), { mode: 0o600 })
+      await writeFile(config, JSON.stringify({ socketPath, token, commands: { [original]: kind }, electronEnv: options.electronEnv, originalPrefix: shellPrefix, ...(delegate ? { delegatePrefix: shellPrefix } : {}) }), { mode: 0o600 })
       await writeFile(launcher, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${quote(process.execPath)} ${quote(runtime)} ${quote(config)} "$@"\n`, { mode: 0o700 })
-      return quote(launcher) + ' ' + quote(original)
+      return delegate ? launcher : quote(launcher) + ' ' + quote(original)
     }
     // Keep native managed-helper selection authoritative. Never replace a managed setting with our flag.
     const managed = (key: string) => options.settings.sources.some(source => /policy|managed/i.test(source.source) && source.settings[key] !== undefined)
     const settings: Record<string, unknown> = {}
-    if (main && !managed('statusLine')) settings.statusLine = { ...object(options.settings.effective.statusLine), command: await wrapper('main', main) }
+    if (main && !managed('statusLine')) {
+      if (shellPrefix) settings.env = { CLAUDE_CODE_SHELL_PREFIX: await wrapper('main', main, true) }
+      else settings.statusLine = { ...object(options.settings.effective.statusLine), command: await wrapper('main', main) }
+    }
     if (subagent && !managed('subagentStatusLine')) settings.subagentStatusLine = { ...object(options.settings.effective.subagentStatusLine), command: await wrapper('subagent', subagent) }
     const pluginRoot = join(directory, 'plugin')
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))

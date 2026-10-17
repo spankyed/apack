@@ -18,7 +18,14 @@ export async function runNativeStatusPrefix(options, argv = process.argv.slice(2
   const startedAt = process.hrtime.bigint().toString();
   const command = argv[0], kind = options.commands[command];
   const observed = kind === 'main' || kind === 'subagent';
-  const child = spawn('/bin/sh', ['-c', command], { stdio: observed ? ['pipe', 'pipe', 'inherit'] : 'inherit' });
+  // Native treats the prefix as one executable path, with an optional raw flag tail.
+  const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  const prefix = options.delegatePrefix;
+  const split = prefix?.lastIndexOf(' -') ?? -1;
+  const delegated = !prefix ? command : split > 0
+    ? quote(prefix.substring(0, split)) + ' ' + prefix.substring(split + 1) + ' ' + quote(command)
+    : quote(prefix) + ' ' + quote(command);
+  const child = spawn('/bin/sh', ['-c', delegated], { stdio: observed ? ['pipe', 'pipe', 'inherit'] : 'inherit' });
   const inputChunks = [], outputChunks = [];
   let inputBytes = 0, outputBytes = 0, truncated = false;
   if (observed) {
@@ -51,6 +58,7 @@ export async function runNativeStatusPrefix(options, argv = process.argv.slice(2
 }
 
 const config=JSON.parse(readFileSync(process.argv[2],'utf8'));
+if(config.originalPrefix === undefined)delete process.env.CLAUDE_CODE_SHELL_PREFIX;else process.env.CLAUDE_CODE_SHELL_PREFIX=config.originalPrefix;
 if(config.electronEnv === undefined)delete process.env.ELECTRON_RUN_AS_NODE;else process.env.ELECTRON_RUN_AS_NODE=config.electronEnv;
 await runNativeStatusPrefix(config,process.argv.slice(3));
 `

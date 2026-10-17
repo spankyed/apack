@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process'
 import http from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { createClaudeTerminalBridge } from '#features/code/be/services/claude-code/terminal-bridge.ts'
 const exec = promisify(execFile), session = '11111111-1111-1111-1111-111111111111'
@@ -14,9 +16,9 @@ async function request(path: string, body: unknown, token?: string) {
   })
 }
 afterEach(async () => { await bridge?.close(); bridge = undefined })
-it('runs the same original helper in distinct native roles without overriding the configured prefix', async () => {
+it('runs the same original helper in distinct native roles', async () => {
   const original = '/usr/bin/printf "Native line\\nSecond line\\n"'
-  const settings = { effective: { env: { CLAUDE_CODE_SHELL_PREFIX: '/private/user-prefix' }, statusLine: { type: 'command', command: original, padding: 3, refreshInterval: 2 }, subagentStatusLine: { type: 'command', command: original } }, sources: [] }
+  const settings = { effective: { statusLine: { type: 'command', command: original, padding: 3, refreshInterval: 2 }, subagentStatusLine: { type: 'command', command: original } }, sources: [] }
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings, changed() {}, enter() {} })
   expect(bridge.settings.env).toBeUndefined()
   expect(bridge.settings.statusLine).toMatchObject({ padding: 3, refreshInterval: 2 })
@@ -64,4 +66,32 @@ it('fences prompt requests by session and nonce and never enters a rejected or r
 it('does not replace a native managed helper in flag settings', async () => {
   bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'managed-helper' } }, sources: [{ source: 'policySettings', settings: { statusLine: { type: 'command', command: 'managed-helper' } } }] }, changed() {}, enter() {} })
   expect(bridge.settings).toEqual({})
+})
+
+it.each(['', ' --fixture-prefix'])('preserves original prefix argv and environment for a path with spaces: %s', async flags => {
+  const directory = await mkdtemp(join(tmpdir(), 'native-prefix-'))
+  try {
+    const prefixPath = join(directory, "user's prefix"), log = join(directory, 'calls.jsonl'), payload = join(directory, 'payload.json')
+    const prefix = prefixPath + flags
+    await writeFile(prefixPath, `#!/usr/bin/python3
+import json,os,subprocess,sys
+with open(${JSON.stringify(log)},'a') as f: f.write(json.dumps({'args':sys.argv[1:],'prefix':os.environ.get('CLAUDE_CODE_SHELL_PREFIX')})+'\\n')
+sys.exit(subprocess.run(['/bin/sh','-c',sys.argv[-1]],stdin=sys.stdin,stdout=sys.stdout,stderr=sys.stderr).returncode)
+`, { mode: 0o700 })
+    const original = `/usr/bin/printf '%s\\n' "native's output"`
+    bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { env: { CLAUDE_CODE_SHELL_PREFIX: prefix }, statusLine: { type: 'command', command: original }, subagentStatusLine: { type: 'command', command: '/usr/bin/printenv CLAUDE_CODE_SHELL_PREFIX' } }, sources: [] }, changed() {}, enter() {} })
+    expect(bridge.settings.statusLine).toBeUndefined()
+    const installed = (bridge.settings.env as { CLAUDE_CODE_SHELL_PREFIX: string }).CLAUDE_CODE_SHELL_PREFIX
+    const quote = (text: string) => "'" + text.replaceAll("'", "'\"'\"'") + "'"
+    const env = { ...process.env, CLAUDE_CODE_SHELL_PREFIX: installed }
+    await writeFile(payload, JSON.stringify({ session_id: session, version: '2.1.302', cost: {}, context_window: {} }))
+    const result = await exec('/bin/sh', ['-c', quote(installed) + ' ' + quote(original) + ' < ' + quote(payload)], { env })
+    expect(result.stdout).toBe("native's output\n")
+    expect(bridge.projection.mainStatus).toBe("native's output")
+    expect((await exec(installed, ['printf passthrough'], { env })).stdout).toBe('passthrough')
+    const subagent = bridge.settings.subagentStatusLine as { command: string }
+    expect((await exec('/bin/sh', ['-c', subagent.command + ' < ' + quote(payload)], { env })).stdout).toBe(prefix + '\n')
+    const calls = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    expect(calls).toEqual([original, 'printf passthrough'].map(command => ({ args: flags ? ['--fixture-prefix', command] : [command], prefix })))
+  } finally { await rm(directory, { recursive: true, force: true }) }
 })

@@ -70,7 +70,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, settings: options.settings, electronEnv: env.ELECTRON_RUN_AS_NODE, changed,
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, settings: options.settings, electronEnv: env.ELECTRON_RUN_AS_NODE, shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX, changed,
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
   let hardStop: ReturnType<typeof setTimeout> | undefined
   async function finish(code: number) {
