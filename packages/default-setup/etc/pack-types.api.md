@@ -788,6 +788,8 @@ interface ClaudeConversation {
     readonly closing: boolean;
     readonly sessionId?: string;
     readonly sessionCwd?: string;
+    /** Last acknowledged selection, distinct from observed effective model. */
+    readonly modelSelection?: string;
     readonly done: Promise<void>;
     start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string;
     release(handle: QueryHandle): boolean;
@@ -865,12 +867,36 @@ declare const ClaudeInitializationSchema: z.ZodObject<{
     models: z.ZodArray<z.ZodObject<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">>, "many">;
     claude_code_version: z.ZodOptional<z.ZodString>;
     current_permission_mode: z.ZodOptional<z.ZodString>;
@@ -896,12 +922,36 @@ declare const ClaudeInitializationSchema: z.ZodObject<{
     models: z.ZodArray<z.ZodObject<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">>, "many">;
     claude_code_version: z.ZodOptional<z.ZodString>;
     current_permission_mode: z.ZodOptional<z.ZodString>;
@@ -927,12 +977,36 @@ declare const ClaudeInitializationSchema: z.ZodObject<{
     models: z.ZodArray<z.ZodObject<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
         value: z.ZodString;
         displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
     }, z.ZodTypeAny, "passthrough">>, "many">;
     claude_code_version: z.ZodOptional<z.ZodString>;
     current_permission_mode: z.ZodOptional<z.ZodString>;
@@ -1144,6 +1218,115 @@ declare const ClaudeMcpStatusSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>;
+
+declare const ClaudeModelCatalogSchema: z.ZodObject<{
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    models: z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        value: z.ZodString;
+        displayName: z.ZodString;
+        resolvedModel: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        supportsEffort: z.ZodOptional<z.ZodBoolean>;
+        supportedEffortLevels: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        supportsAdaptiveThinking: z.ZodOptional<z.ZodBoolean>;
+        supportsFastMode: z.ZodOptional<z.ZodBoolean>;
+        supportsAutoMode: z.ZodOptional<z.ZodBoolean>;
+        supportsThinkingOff: z.ZodOptional<z.ZodBoolean>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+}, z.ZodTypeAny, "passthrough">>;
+
 interface ClaudeNestedAccounting {
     toolCallCount: number;
     mutatedPaths: string[];
@@ -1180,6 +1363,34 @@ declare const ClaudePlanSchema: z.ZodDiscriminatedUnion<"exists", [z.ZodObject<{
     path: z.ZodOptional<z.ZodString>;
 }, z.ZodTypeAny, "passthrough">>]>;
 
+type ClaudePromptCompletionReply = {
+    revision: number;
+    status: 'ready';
+    result: ClaudeUiPromptCompletions;
+} | {
+    revision: number;
+    status: 'error';
+    message: string;
+};
+
+type ClaudePromptCompletionRequest = Omit<ClaudeUiPromptAutocomplete, 'client_id' | 'surface'> & {
+    revision: number;
+};
+
+type ClaudePromptEdit = Omit<ClaudeUiPromptEdit, 'client_id' | 'surface'> & {
+    revision: number;
+};
+
+type ClaudePromptReply = {
+    revision: number;
+    status: 'applied';
+    frame: ClaudeUiPromptFrame;
+} | {
+    revision: number;
+    status: 'error';
+    message: string;
+};
+
 interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
     cwd: string;
@@ -1206,7 +1417,68 @@ type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
 
 type ClaudeUiAttach = z.infer<typeof attach>;
 
+interface ClaudeUiBoxLayout {
+    position?: 'absolute' | 'relative';
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+    flexDirection?: 'column' | 'column-reverse' | 'row' | 'row-reverse';
+    flexGrow?: number;
+    flexShrink?: number;
+    flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+    alignItems?: 'center' | 'flex-end' | 'flex-start' | 'stretch';
+    alignSelf?: 'auto' | 'center' | 'flex-end' | 'flex-start';
+    justifyContent?: 'center' | 'flex-end' | 'flex-start' | 'space-around' | 'space-between' | 'space-evenly';
+    display?: 'flex' | 'none';
+    overflow?: 'hidden' | 'visible';
+    width?: number | string;
+    height?: number | string;
+    minWidth?: number | string;
+    minHeight?: number | string;
+    gap?: number | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+    columnGap?: ClaudeUiBoxLayout['gap'];
+    rowGap?: ClaudeUiBoxLayout['gap'];
+    margin?: ClaudeUiBoxLayout['gap'];
+    marginX?: ClaudeUiBoxLayout['gap'];
+    marginY?: ClaudeUiBoxLayout['gap'];
+    marginTop?: ClaudeUiBoxLayout['gap'];
+    marginBottom?: ClaudeUiBoxLayout['gap'];
+    marginLeft?: ClaudeUiBoxLayout['gap'];
+    marginRight?: ClaudeUiBoxLayout['gap'];
+    padding?: ClaudeUiBoxLayout['gap'];
+    paddingX?: ClaudeUiBoxLayout['gap'];
+    paddingY?: ClaudeUiBoxLayout['gap'];
+    paddingTop?: ClaudeUiBoxLayout['gap'];
+    paddingBottom?: ClaudeUiBoxLayout['gap'];
+    paddingLeft?: ClaudeUiBoxLayout['gap'];
+    paddingRight?: ClaudeUiBoxLayout['gap'];
+}
+
+interface ClaudeUiBoxPaint {
+    borderStyle?: string;
+    borderColor?: string;
+    borderDimColor?: boolean;
+    backgroundColor?: string;
+}
+
 type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
+
+type ClaudeUiFieldEvent = {
+    actionId: string;
+    revision: number;
+    kind: 'change' | 'select' | 'submit';
+    value: string;
+};
+
+interface ClaudeUiHover {
+    group?: string;
+    text?: Pick<ClaudeUiTextStyle, 'backgroundColor' | 'bold' | 'color' | 'dimColor' | 'inverse' | 'italic' | 'strikethrough' | 'underline'>;
+    paint?: ClaudeUiBoxPaint;
+    layout?: Pick<ClaudeUiBoxLayout, 'bottom' | 'display' | 'left' | 'right' | 'top'>;
+}
+
+type ClaudeUiInput = z.infer<typeof input>;
 
 type ClaudeUiMountState = {
     status: 'connecting' | 'disconnected' | 'rendering';
@@ -1220,16 +1492,81 @@ type ClaudeUiMountState = {
 
 type ClaudeUiNode = {
     kind: 'text';
+    hover?: ClaudeUiHover;
     text: string;
+    children?: ClaudeUiNode[];
+    style?: ClaudeUiTextStyle;
     plugin?: string;
 } | {
-    kind: 'box';
+    kind: 'svg';
+    source: string;
+    alt: string;
+    width?: number;
+    height?: number;
+    interactive: boolean;
+    plugin?: string;
+} | {
+    kind: 'link';
+    href?: string;
     children: ClaudeUiNode[];
     plugin?: string;
 } | {
-    kind: 'button';
-    label: string;
+    kind: 'box';
+    boxKey?: string | false;
+    hover?: ClaudeUiHover;
+    layout?: ClaudeUiBoxLayout;
+    paint?: ClaudeUiBoxPaint;
+    children: ClaudeUiNode[];
+    plugin?: string;
+} | {
+    kind: 'markdown';
+    text: string;
+    dim: boolean;
     actionId?: string;
+    pressableLinks?: string[];
+    plugin?: string;
+} | {
+    kind: 'code';
+    source: string;
+    language?: string;
+    path?: string;
+    startLine?: number;
+    format: 'diff' | 'source';
+    wrap: 'truncate-end' | 'wrap';
+    plugin?: string;
+} | {
+    kind: 'button';
+    hover?: ClaudeUiHover;
+    label: string;
+    children?: ClaudeUiNode[];
+    dimColor?: boolean;
+    variant?: 'primary' | 'secondary';
+    role?: 'dismiss';
+    autoFocus?: boolean;
+    actionId?: string;
+    plugin?: string;
+} | {
+    kind: 'input';
+    actionId: string;
+    revision: number;
+    submitLabel: string;
+    label?: string;
+    placeholder?: string;
+    value: string;
+    rows: number;
+    autoFocus: boolean;
+    plugin?: string;
+} | {
+    kind: 'select';
+    actionId: string;
+    revision: number;
+    label?: string;
+    value: string;
+    options: {
+        value: string;
+        label: string;
+    }[];
+    autoFocus: boolean;
     plugin?: string;
 } | {
     kind: 'unsupported';
@@ -1239,11 +1576,45 @@ type ClaudeUiNode = {
 
 type ClaudeUiPress = z.infer<typeof press>;
 
+type ClaudeUiPromptAutocomplete = z.infer<typeof promptAutocomplete>;
+
+type ClaudeUiPromptCompletions = z.infer<typeof promptCompletions>;
+
+type ClaudeUiPromptEdit = z.infer<typeof promptEdit>;
+
+type ClaudeUiPromptFrame = z.infer<typeof promptFrame>;
+
 type ClaudeUiRender = z.infer<typeof render>;
 
 type ClaudeUiRenderResult = z.infer<typeof renderResult>;
 
-type ClaudeUiViewRequest = {
+type ClaudeUiSelect = z.infer<typeof field>;
+
+interface ClaudeUiTextStyle {
+    color?: string;
+    backgroundColor?: string;
+    size?: 'body' | 'caption' | 'footnote' | 'heading' | 'title';
+    weight?: 'bold' | 'medium' | 'regular' | 'semibold';
+    dir?: 'ltr' | 'rtl';
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strikethrough?: boolean;
+    mono?: boolean;
+    tabular?: boolean;
+    dimColor?: boolean;
+    inverse?: boolean;
+}
+
+type ClaudeUiViewRequest = ({
+    type: 'CLAUDE_PROMPT_AUTOCOMPLETE';
+    threadId: string;
+    mountId: string;
+} & ClaudePromptCompletionRequest) | ({
+    type: 'CLAUDE_PROMPT_EDIT';
+    threadId: string;
+    mountId: string;
+} & ClaudePromptEdit) | {
     type: 'CLAUDE_UI_MOUNT';
     threadId: string;
     mountId: string;
@@ -1251,11 +1622,16 @@ type ClaudeUiViewRequest = {
     type: 'CLAUDE_UI_UNMOUNT';
     threadId: string;
     mountId: string;
-} | {
+} | ({
+    type: 'CLAUDE_UI_FIELD';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiFieldEvent) | {
     type: 'CLAUDE_UI_PRESS';
     threadId: string;
     mountId: string;
     actionId: string;
+    href?: string;
 };
 
 interface CliServiceType {
@@ -1370,6 +1746,11 @@ interface CliServiceType {
         readSettings(): Promise<Record<string, any>>;
         /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
         writeSettings(settings: Record<string, any>): Promise<void>;
+        /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
+        getModels(opts?: {
+            cwd?: string;
+            includeUnsupportedModels?: boolean;
+        }): Promise<ClaudeModelCatalog>;
         /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
         listSkills(): Promise<Array<{
             name: string;
@@ -4775,6 +5156,16 @@ type OutgoingTerminalEvents =
 };
 
 type OutgoingThreadsEvents = {
+    type: 'CLAUDE_PROMPT_COMPLETIONS';
+    threadId: string;
+    mountId: string;
+    result: ClaudePromptCompletionReply;
+} | {
+    type: 'CLAUDE_PROMPT_STATE';
+    threadId: string;
+    mountId: string;
+    result: ClaudePromptReply;
+} | {
     type: 'CLAUDE_UI_STATE';
     threadId: string;
     mountId: string;
@@ -5289,6 +5680,10 @@ interface QueryHandle {
     getMcpStatus(): Promise<ClaudeMcpStatus>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */
     getContextUsage(): Promise<ClaudeContextUsage>;
+    /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
+    getModels(): Promise<ClaudeModelCatalog>;
+    /** Acknowledges selection only; effective-model metadata comes from native turns. */
+    setModel(model: string): Promise<void>;
     /** Change the running CLI policy and return its acknowledged permission mode. */
     setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     /** Close stdin and wait for the child to exit. */
@@ -5319,6 +5714,8 @@ interface QueryOptions {
     signal?: AbortSignal;
     cliPath?: string;
     model?: string;
+    /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
+    includeUnsupportedModels?: boolean;
     fallbackModel?: string;
     effort?: Effort;
     thinking?: Thinking;
@@ -6030,6 +6427,11 @@ interface ThreadsContext {
     nativeUiViews: Record<string, {
         threadId: string;
         state: ClaudeUiMountState;
+        prompt?: ClaudePromptReply;
+        promptRevision?: number;
+        completions?: ClaudePromptCompletionReply;
+        completionRevision?: number;
+        completionEditRevision?: number;
     }>;
     currentThread: AgentThreadData | null;
     recentThreadIds: string[];
@@ -6836,6 +7238,22 @@ declare function createClaudeUiControls(initialized: Promise<ClaudeInitializatio
         surfaces: z.ZodArray<z.ZodEnum<["terminal", "desktop", "mobile", "vscode"]>, "many">;
     }, z.ZodTypeAny, "passthrough">>;
     render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult>;
+    /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
+    promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame>;
+    /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
+    promptAutocomplete(options: ClaudeUiPromptAutocomplete): Promise<ClaudeUiPromptCompletions>;
+    /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
+    input(options: ClaudeUiInput): Promise<z.objectOutputType<{
+        handled: z.ZodBoolean;
+        element: z.ZodOptional<z.ZodString>;
+        value: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
+    /** Native validates membership against the Select options in the current drawing. */
+    select(options: ClaudeUiSelect): Promise<z.objectOutputType<{
+        handled: z.ZodBoolean;
+        element: z.ZodOptional<z.ZodString>;
+        value: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>;
     /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
     press(options: ClaudeUiPress): Promise<z.objectOutputType<{
         handled: z.ZodBoolean;
@@ -6986,6 +7404,35 @@ declare const featureServices: {
     };
 };
 
+declare const field: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    plugin: z.ZodString;
+    handle: z.ZodNumber;
+    key: z.ZodOptional<z.ZodString>;
+    component: z.ZodOptional<z.ZodString>;
+    instance_id: z.ZodOptional<z.ZodString>;
+    value: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    value: string;
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    component?: string | undefined;
+    instance_id?: string | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    value: string;
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    component?: string | undefined;
+    instance_id?: string | undefined;
+}>;
+
 /**
  * Threads Repository
  */
@@ -7051,6 +7498,39 @@ declare const flowsQueries: {
 };
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
+
+declare const input: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    plugin: z.ZodString;
+    handle: z.ZodNumber;
+    key: z.ZodOptional<z.ZodString>;
+    component: z.ZodOptional<z.ZodString>;
+    instance_id: z.ZodOptional<z.ZodString>;
+    value: z.ZodString;
+} & {
+    kind: z.ZodEnum<["change", "submit"]>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    value: string;
+    kind: "change" | "submit";
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    component?: string | undefined;
+    instance_id?: string | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    value: string;
+    kind: "change" | "submit";
+    plugin: string;
+    handle: number;
+    key?: string | undefined;
+    component?: string | undefined;
+    instance_id?: string | undefined;
+}>;
 
 declare const libraryCommands: {
     /** Follows every write above, until the returned function is called */
@@ -7214,12 +7694,343 @@ declare const press: z.ZodObject<{
     href?: string | undefined;
 }>;
 
+declare const promptAutocomplete: z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+}>;
+
 declare const promptCommands: {
     create: (data: _apackdev_sdk_repositories.PromptInput) => _apackdev_sdk.PromptEntity;
     update: (id: _apackdev_sdk.EARS.EntityId, updates: Partial<_apackdev_sdk_repositories.PromptInput>) => void;
     /** Marks the prompt deleted */
     delete: (id: _apackdev_sdk.EARS.EntityId) => void;
 };
+
+declare const promptCompletions: z.ZodObject<{
+    suggestions: z.ZodArray<z.ZodObject<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    start: z.ZodOptional<z.ZodNumber>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    suggestions: z.ZodArray<z.ZodObject<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    start: z.ZodOptional<z.ZodNumber>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    suggestions: z.ZodArray<z.ZodObject<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        text: z.ZodString;
+        label: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    start: z.ZodOptional<z.ZodNumber>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">>;
+
+declare const promptEdit: z.ZodEffects<z.ZodObject<{
+    client_id: z.ZodString;
+    surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    by: z.ZodEnum<["person", "app"]>;
+    key: z.ZodOptional<z.ZodObject<{
+        key: z.ZodString;
+        ctrl: z.ZodOptional<z.ZodLiteral<true>>;
+        shift: z.ZodOptional<z.ZodLiteral<true>>;
+        meta: z.ZodOptional<z.ZodLiteral<true>>;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    }, {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    }>>;
+}, "strict", z.ZodTypeAny, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+    by: "app" | "person";
+    key?: {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    } | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+    by: "app" | "person";
+    key?: {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    } | undefined;
+}>, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+    by: "app" | "person";
+    key?: {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    } | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    text: string;
+    cursor: number;
+    by: "app" | "person";
+    key?: {
+        key: string;
+        shift?: true | undefined;
+        ctrl?: true | undefined;
+        meta?: true | undefined;
+    } | undefined;
+}>;
+
+declare const promptFrame: z.ZodEffects<z.ZodObject<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">>, z.objectOutputType<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    text: z.ZodString;
+    cursor: z.ZodNumber;
+    decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        start: z.ZodNumber;
+        end: z.ZodNumber;
+        color: z.ZodOptional<z.ZodString>;
+        backgroundColor: z.ZodOptional<z.ZodString>;
+        dimColor: z.ZodOptional<z.ZodBoolean>;
+        bold: z.ZodOptional<z.ZodBoolean>;
+        italic: z.ZodOptional<z.ZodBoolean>;
+        underline: z.ZodOptional<z.ZodBoolean>;
+        strikethrough: z.ZodOptional<z.ZodBoolean>;
+        virtualText: z.ZodOptional<z.ZodString>;
+    }, z.ZodTypeAny, "passthrough">>, "many">>;
+    superseded: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.ZodTypeAny, "passthrough">>;
 
 /**
  * Prompts Repository: the SDK's prompt repository (`promptRepository`), which owns their reads and writes, as the
