@@ -1,11 +1,11 @@
 <template>
-  <div v-if="node.kind === 'box'" class="min-w-0 native-box" :style="boxStyle" :data-native-plugin="node.plugin">
+  <div v-if="node.kind === 'box'" class="min-w-0 native-box" :style="boxStyle" :data-native-border-dim="node.paint?.borderDimColor === true ? 'true' : undefined" :data-native-plugin="node.plugin">
     <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </div>
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
-  <span v-else-if="node.kind === 'text'" class="whitespace-pre-wrap break-words" :class="textClasses" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></span>
+  <span v-else-if="node.kind === 'text'" class="whitespace-pre-wrap break-words" :class="textClasses" :style="textPaint" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></span>
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :class="node.href ? 'underline text-blue-400 focus-visible:outline focus-visible:outline-blue-400' : undefined" @click.prevent="node.href && openLink(node.href)">
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
   </component>
@@ -27,6 +27,7 @@
 import { computed, type CSSProperties } from 'vue'
 import { openLink } from '@apackdev/sdk/fe'
 import NativeUiSvg from './NativeUiSvg.vue'
+import { claudeUiColor, claudeUiBoxPaint } from './native-ui-paint.ts'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
@@ -49,8 +50,9 @@ const boxStyle = computed<CSSProperties>(() => {
       Object.assign(result, name.endsWith('X') ? { [`${base}Left`]: converted, [`${base}Right`]: converted } : { [`${base}Top`]: converted, [`${base}Bottom`]: converted })
     } else Object.assign(result, { [name]: converted })
   }
-  return result
+  return { ...result, ...claudeUiBoxPaint(props.node.paint) }
 })
+const textPaint = computed<CSSProperties>(() => props.node.kind === 'text' ? { color: claudeUiColor(props.node.style?.color), backgroundColor: claudeUiColor(props.node.style?.backgroundColor) } : {})
 const textClasses = computed(() => {
   if (props.node.kind !== 'text') return []
   const style = props.node.style ?? {}
@@ -64,3 +66,8 @@ const emit = defineEmits<{ press: [actionId: string, href?: string]; field: [eve
 const textSizes = { caption: 'text-[10px]', footnote: 'text-xs', body: 'text-sm', heading: 'text-base', title: 'text-lg' }
 const textWeights = { regular: 'font-normal', medium: 'font-medium', semibold: 'font-semibold', bold: 'font-bold' }
 </script>
+
+<style scoped>
+.native-box { border-color: var(--native-border-color, currentColor); }
+.native-box[data-native-border-dim="true"] { border-color: color-mix(in srgb, var(--native-border-color, currentColor) 60%, transparent); }
+</style>

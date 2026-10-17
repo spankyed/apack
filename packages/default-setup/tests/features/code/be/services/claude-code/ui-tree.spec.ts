@@ -123,3 +123,12 @@ it('rejects interactive descendants and malformed Button presentation', () => {
   for (const children of [[button()], [{ type: 'Text', children: [button()] }], 'Run']) expect(() => createClaudeUiDrawing({ ...base, children })).toThrow()
   for (const props of [{ variant: 'danger' }, { dimColor: 'yes' }, { role: 'admin' }, { autoFocus: false }]) expect(() => createClaudeUiDrawing({ ...base, props: { label: 'Run', ...props } })).toThrow()
 })
+
+
+it('retains native Text colors and Box paint as data while rejecting invalid property types', () => {
+  const paint = { borderStyle: 'round', borderColor: 'warning', borderDimColor: true, backgroundColor: 'rgb(1, 2, 3)' }
+  expect(createClaudeUiDrawing({ type: 'Box', props: paint, children: [{ type: 'Text', props: { color: 'success', backgroundColor: 'navy' }, children: ['Painted'] }] }).tree)
+    .toEqual({ kind: 'box', paint, children: [{ kind: 'text', text: 'Painted', style: { color: 'success', backgroundColor: 'navy' } }] })
+  for (const props of [{ borderColor: 1 }, { borderStyle: {} }, { backgroundColor: [] }, { borderDimColor: 'true' }]) expect(() => createClaudeUiDrawing({ type: 'Box', props })).toThrow()
+  expect(() => createClaudeUiDrawing({ type: 'Text', props: { color: {} } })).toThrow()
+})

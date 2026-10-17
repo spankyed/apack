@@ -73,6 +73,12 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
             style[name] = props[name]
           }
         }
+        for (const name of ['color', 'backgroundColor'] as const) {
+          if (props[name] !== undefined) {
+            if (typeof props[name] !== 'string') throw new ClaudeProtocolError('native Text color is invalid')
+            style[name] = props[name]
+          }
+        }
         const choices = { size: ['caption', 'footnote', 'body', 'heading', 'title'], weight: ['regular', 'medium', 'semibold', 'bold'], dir: ['ltr', 'rtl'] } as const
         for (const name of ['size', 'weight', 'dir'] as const) {
           const candidate = props[name]
@@ -89,7 +95,18 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const props = value.props ?? {}
       if (!record(props)) throw new ClaudeProtocolError('native Box props are invalid')
       const layout = readClaudeUiBoxLayout(props)
-      return { kind: 'box', children: children.map(visit), ...(layout ? { layout } : {}), ...attribution }
+      const paint: NonNullable<Extract<ClaudeUiNode, { kind: 'box' }>['paint']> = {}
+      for (const name of ['borderStyle', 'borderColor', 'backgroundColor'] as const) {
+        if (props[name] !== undefined) {
+          if (typeof props[name] !== 'string') throw new ClaudeProtocolError('native Box paint is invalid')
+          paint[name] = props[name]
+        }
+      }
+      if (props.borderDimColor !== undefined) {
+        if (typeof props.borderDimColor !== 'boolean') throw new ClaudeProtocolError('native Box border dim is invalid')
+        paint.borderDimColor = props.borderDimColor
+      }
+      return { kind: 'box', children: children.map(visit), ...(layout ? { layout } : {}), ...(Object.keys(paint).length ? { paint } : {}), ...attribution }
     }
     if (value.type === 'Link') {
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')

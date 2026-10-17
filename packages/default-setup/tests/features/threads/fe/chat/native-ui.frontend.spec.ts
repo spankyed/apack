@@ -1,5 +1,6 @@
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
+import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
@@ -247,4 +248,32 @@ it('renders inline Button content as one named action and focuses only on site e
   expect(dismiss.getAttribute('aria-label')).toBe('Dismiss controls')
   expect(dismiss.textContent?.trim()).toBe('×')
   dismiss.click(); expect(f.press).toHaveBeenLastCalledWith('close', undefined)
+})
+
+
+it('paints native Box and nested Text without applying border dimming to descendants', () => {
+  const f = mount({ nativeUi: { status: 'live', tree: { kind: 'box', paint: { borderStyle: 'round', borderColor: 'warning', borderDimColor: true, backgroundColor: 'navy' }, children: [
+    { kind: 'text', text: 'Outer', style: { color: 'success', backgroundColor: 'rgb(1, 2, 3)' }, children: [{ kind: 'text', text: ' inner', style: { color: 'rebeccapurple' } }] },
+  ] } } })
+  const box = f.root.querySelector<HTMLElement>('.native-box')!
+  expect(box.style.backgroundColor).toBe('navy')
+  expect(box.style.borderStyle).toBe('solid')
+  expect(box.style.borderRadius).toBe('0.375rem')
+  expect(box.getAttribute('data-native-border-dim')).toBe('true')
+  expect(box.style.opacity).toBe('')
+  expect(box.style.getPropertyValue('--native-border-color')).toBe('#facc15')
+  const outer = box.querySelector<HTMLElement>('span')!
+  expect(outer.style.color).toBe('rgb(74, 222, 128)')
+  expect(outer.style.backgroundColor).toBe('rgb(1, 2, 3)')
+  expect(outer.querySelector<HTMLElement>('span')!.style.color).toBe('rebeccapurple')
+})
+
+it('accepts browser colors while refusing strings that try to introduce CSS rules or resources', () => {
+  expect(claudeUiColor('rebeccapurple')).toBe('rebeccapurple')
+  expect(claudeUiColor('rgb(12, 34, 56)')).toBe('rgb(12, 34, 56)')
+  for (const value of ['red;position:fixed', 'url(https://example.com/a)', '<style>body{display:none}</style>', '__proto__']) expect(claudeUiColor(value)).toBeUndefined()
+  expect(claudeUiBoxPaint({ borderStyle: 'doubleSingle' })).toMatchObject({ borderTopStyle: 'double', borderLeftStyle: 'solid' })
+  expect(claudeUiBoxPaint({ borderStyle: 'singleDouble' })).toMatchObject({ borderTopStyle: 'solid', borderLeftStyle: 'double' })
+  expect(claudeUiBoxPaint({ borderStyle: 'quote' })).toMatchObject({ borderWidth: '0', borderLeftWidth: '2px' })
+  expect(claudeUiBoxPaint({ borderStyle: 'url(https://example.com)' }).borderStyle).toBeUndefined()
 })

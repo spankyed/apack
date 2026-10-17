@@ -36,7 +36,16 @@ export interface ClaudeUiBoxLayout {
   paddingRight?: ClaudeUiBoxLayout['gap']
 }
 
+export interface ClaudeUiBoxPaint {
+  borderStyle?: string
+  borderColor?: string
+  borderDimColor?: boolean
+  backgroundColor?: string
+}
+
 export interface ClaudeUiTextStyle {
+  color?: string
+  backgroundColor?: string
   size?: 'caption' | 'footnote' | 'body' | 'heading' | 'title'
   weight?: 'regular' | 'medium' | 'semibold' | 'bold'
   dir?: 'ltr' | 'rtl'
@@ -54,7 +63,7 @@ export type ClaudeUiNode =
   | { kind: 'text'; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
   | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
-  | { kind: 'box'; layout?: ClaudeUiBoxLayout; children: ClaudeUiNode[]; plugin?: string }
+  | { kind: 'box'; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
   | { kind: 'button'; label: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
