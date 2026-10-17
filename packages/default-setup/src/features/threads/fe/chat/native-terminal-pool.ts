@@ -19,8 +19,8 @@ export function mountNativeTerminal(ownerId: string, container: HTMLElement, inp
       if (!old.element.isConnected) { old.term.dispose(); entries.delete(id) }
     }
     const element = document.createElement('div'); element.className = 'h-full w-full'
-    const term = new Terminal({ fontSize: 13, fontFamily: 'Menlo, Monaco, monospace', cursorBlink: true, scrollback: 5000,
-      allowProposedApi: false, theme: { background: '#1c1c1c', foreground: '#d4d4d4', cursor: '#d4d4d4' } })
+    const term = new Terminal({ fontSize: 13, fontFamily: 'Menlo, Monaco, monospace', lineHeight: 1.15, cursorBlink: true, scrollback: 5000,
+      allowProposedApi: false, theme: { background: '#191919', foreground: '#d4d0ca', cursor: '#d3aa8e', selectionBackground: '#b68e7340' } })
     const fit = new FitAddon(); term.loadAddon(fit)
     entry = { term, fit, element, sequence: 0, replaying: false }
     entries.set(ownerId, entry); container.append(element); term.open(element)

@@ -1,28 +1,49 @@
 <template>
-  <section :class="active ? ['flex min-h-0 flex-1 flex-col bg-[#1c1c1c]', expanded ? 'fixed inset-x-0 bottom-0 top-10 z-40' : ''] : 'flex shrink-0 justify-end px-4 py-1'" aria-label="Claude native interface">
-    <div v-if="!active" class="flex items-center gap-3">
-      <span v-if="view?.problem" role="status" class="text-xs text-red-300">{{ view.problem }}</span>
-      <button type="button" class="rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" :disabled="busy || view?.opening" @click="open">{{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}</button>
+  <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+    <div v-if="!active" class="native-launch__actions">
+      <span v-if="view?.problem" role="status" class="native-problem">{{ view.problem }}</span>
+      <button type="button" class="native-button native-button--launch" :disabled="busy || view?.opening" @click="open">
+        <span aria-hidden="true" class="native-command">›_</span>
+        {{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}
+      </button>
     </div>
     <template v-else>
-      <header class="flex shrink-0 items-center gap-3 border-b border-white/[0.06] px-4 py-2 text-xs text-neutral-400">
-        <span class="flex-1 font-medium text-neutral-200">Claude Code <span class="ml-2 font-normal text-neutral-500">Native interface</span></span>
-        <span role="status">{{ view?.state?.status }}</span>
-        <button type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
-        <button v-if="ended" type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="dismissed = true">Back to conversation</button>
-        <button v-else type="button" class="rounded-md px-2 py-1 hover:bg-white/5 hover:text-white" @click="stop">Stop session</button>
+      <header class="native-header">
+        <div class="native-identity">
+          <span class="native-mark" aria-hidden="true">›_</span>
+          <div class="native-heading">
+            <h2>Claude Code <span class="native-interface-label">Native interface</span></h2>
+            <p :title="view?.state?.cwd">{{ workspaceName }}</p>
+          </div>
+        </div>
+        <div class="native-controls">
+          <span role="status" class="native-state" :class="{ 'native-state--live': view?.state?.status === 'live', 'native-state--error': view?.state?.status === 'error' }">
+            <span aria-hidden="true" />{{ stateLabel }}
+          </span>
+          <button type="button" class="native-button native-button--size" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
+          <button v-if="ended" type="button" class="native-button native-button--return" @click="dismissed = true">Back to conversation <span aria-hidden="true">↗</span></button>
+          <button v-else type="button" class="native-button native-button--stop" @click="stop"><span class="native-stop-icon" aria-hidden="true" />Stop session</button>
+        </div>
       </header>
-      <div ref="viewport" class="min-h-36 min-w-0 flex-1 overflow-hidden p-3" aria-label="Claude terminal" />
-      <div class="max-h-48 shrink-0 overflow-y-auto border-t border-white/[0.06] px-4 py-3 text-xs">
-        <NativeStatusText v-if="view?.state?.mainStatus" data-testid="native-main-status" class="block leading-5 text-neutral-300" :text="view.state.mainStatus" />
-        <ul v-if="view?.state?.tasks.length" aria-label="Native Claude agents" class="mt-2 space-y-1.5">
-          <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-neutral-400">
-            <span class="font-medium text-neutral-300">{{ task.name }}</span><span>{{ task.status }}</span>
-            <NativeStatusText v-if="task.statusText" :text="task.statusText" />
-          </li>
-        </ul>
-        <p v-if="view?.problem" role="alert" class="mt-2 text-red-300">{{ view.problem }}</p>
+      <div class="native-console">
+        <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
       </div>
+      <footer v-if="view?.state?.mainStatus || view?.state?.tasks.length || view?.problem" class="native-activity">
+        <div v-if="view?.state?.mainStatus" class="native-summary">
+          <span class="native-section-label">Session status</span>
+          <NativeStatusText data-testid="native-main-status" class="native-summary__text" :text="view.state.mainStatus" />
+        </div>
+        <div v-if="view?.state?.tasks.length" class="native-agents">
+          <div class="native-section-label">Agents <span class="native-count">{{ view.state.tasks.length }}</span></div>
+          <ul aria-label="Native Claude agents" class="native-agent-list">
+            <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="native-agent">
+              <div class="native-agent__heading"><span class="native-agent__name">{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
+              <NativeStatusText v-if="task.statusText" class="native-agent__detail" :text="task.statusText" />
+            </li>
+          </ul>
+        </div>
+        <p v-if="view?.problem" role="alert" class="native-problem">{{ view.problem }}</p>
+      </footer>
     </template>
   </section>
 </template>
@@ -39,6 +60,12 @@ const actor: ThreadsState = usePlugin()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
+const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
+const stateLabel = computed(() => {
+  const state = view.value?.state
+  if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
+  return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
+})
 const expanded = ref(true)
 const dismissed = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
@@ -72,3 +99,64 @@ watch([view, active], async ([value, showing]) => {
 renew(); const heartbeat = setInterval(renew, 10000)
 onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false) })
 </script>
+
+<style scoped>
+.native-launch { display: flex; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
+.native-launch__actions { display: flex; align-items: center; gap: 12px; }
+.native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
+.native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+.native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }
+.native-identity { display: flex; align-items: center; min-width: 0; gap: 12px; }
+.native-mark { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid #b68e7333; border-radius: 11px; background: #b68e7310; color: #d3aa8e; font: 600 21px ui-monospace, monospace; }
+.native-heading { min-width: 0; }
+.native-heading h2 { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
+.native-interface-label { color: #82807d; font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.native-heading p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px 0 0; color: #8e8b86; font-size: 11px; }
+.native-controls { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
+.native-state { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; color: #a29e98; white-space: nowrap; font-size: 11px; }
+.native-state > span { width: 6px; height: 6px; border-radius: 50%; background: #827e78; }
+.native-state--live > span { background: #99bea2; box-shadow: 0 0 0 3px #99bea210; }
+.native-state--error { color: #e9a3a0; }
+.native-state--error > span { background: currentColor; }
+.native-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 5px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #a9a5a0; font-size: 11px; line-height: 18px; transition: background .15s, color .15s, border-color .15s; }
+.native-button:hover { background: #ffffff08; color: #f0ece7; }
+.native-button:focus-visible { outline: 2px solid #d3aa8e; outline-offset: 3px; }
+.native-button:disabled { opacity: .4; cursor: not-allowed; }
+.native-button--launch { border-color: #ffffff0a; }
+.native-command { color: #c7a38a; font-family: ui-monospace, monospace; font-size: 15px; }
+.native-button--stop { border-color: #ffffff12; background: #ffffff03; color: #c3b8b1; }
+.native-button--stop:hover { border-color: #c9797340; background: #c9797310; color: #edb6af; }
+.native-stop-icon { width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
+.native-button--return { border-color: #b68e7333; color: #d3aa8e; }
+.native-console { display: flex; flex: 1; min-height: 144px; min-width: 0; overflow: hidden; border: 1px solid #ffffff12; border-radius: 12px; background: var(--console-bg); box-shadow: 0 8px 30px #00000020; }
+.native-viewport { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 20px; }
+.native-viewport :deep(.xterm) { height: 100%; }
+.native-viewport :deep(.xterm-viewport) { scrollbar-width: thin; scrollbar-color: #ffffff20 transparent; }
+.native-activity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex-shrink: 0; gap: 16px 28px; max-height: 180px; overflow: auto; padding: 16px 4px 2px; }
+.native-section-label { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; color: #797773; font-size: 10px; font-weight: 500; letter-spacing: .04em; }
+.native-count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 5px; background: #ffffff08; color: #aaa59f; font-size: 10px; letter-spacing: 0; }
+.native-summary__text { display: block; font-size: 11px; line-height: 1.65; color: #bbb6af; overflow-wrap: anywhere; }
+.native-agent-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.native-agent { min-width: 0; border-left: 2px solid #b68e7340; padding: 2px 0 2px 10px; }
+.native-agent__heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.native-agent__name { color: #d1ccc5; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.native-agent__state { color: #a7b9aa; font-size: 10px; }
+.native-agent__detail { display: block; margin-top: 3px; color: #8f8a84; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.native-problem { grid-column: 1 / -1; margin: 0; color: #e9a3a0; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .native-session { padding: 12px; }
+  .native-session--expanded { left: 0; }
+  .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
+  .native-identity { flex: 1; }
+  .native-controls { margin-left: auto; gap: 4px; }
+  .native-state { margin-right: 4px; }
+  .native-interface-label { display: none; }
+  .native-viewport { padding: 12px; }
+  .native-activity { gap: 12px; padding-top: 12px; }
+}
+@media (max-width: 440px) {
+  .native-controls { width: 100%; justify-content: flex-end; }
+  .native-state { margin-right: auto; }
+  .native-activity { grid-template-columns: minmax(0, 1fr); max-height: 160px; }
+}
+</style>
