@@ -281,6 +281,8 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-code-diff.png') });
   await codePreview.click(); await expect(nativeDiff).toHaveCount(0);
   expect(await snapshot()).toEqual(before);
+  // Give the pointer-resize journey room beyond the narrow composer screenshot.
+  await appPage.setViewportSize({ width: 1400, height: 1100 });
   await strip.getByRole('button', { name: 'Open panes', exact: true }).click();
   const panel = card.locator('[data-native-pane-panel]');
   await expect(panel).toBeVisible();
@@ -322,6 +324,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-pane-resize.png') });
   await panel.getByRole('button', { name: 'Use requested pane height', exact: true }).click();
   await expect(paneResize).toHaveAttribute('aria-valuenow', '6'); await expect.poll(measuredPaneRows).toBe(6);
+  await appPage.setViewportSize({ width: 680, height: 900 });
   await strip.getByRole('button', { name: 'Show native notice', exact: true }).click();
   const nativeNotices = card.getByRole('region', { name: 'Native plugin notices', exact: true });
   await expect(nativeNotices.locator('[data-native-plugin-status]')).toHaveCount(1);

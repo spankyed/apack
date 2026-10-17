@@ -1,10 +1,10 @@
 <template>
   <div class="w-full max-w-2xl">
-    <div class="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.015] animate-fade-in">
+    <div class="overflow-hidden rounded-xl border border-white/[0.06] bg-transparent animate-fade-in">
       <!-- Header -->
-      <div class="flex items-center gap-2.5 px-4 py-4">
+      <div class="flex items-center gap-2.5 px-4 py-3">
         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-400"><Wrench :size="15" class="text-neutral-400" /></span>
-        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code</h3>
         <button
           v-if="content.sessionId"
           @click="openConversation"
