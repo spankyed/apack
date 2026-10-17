@@ -74,9 +74,9 @@ export type ClaudeUiNode =
   | { kind: 'box'; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
-  | { kind: 'button'; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
-  | { kind: 'input'; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
-  | { kind: 'select'; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
+  | { kind: 'button'; focusId?: string; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
+  | { kind: 'input'; focusId?: string; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
+  | { kind: 'select'; focusId?: string; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }
 
 export type ClaudePromptEdit = Omit<import('./ui-controls.ts').ClaudeUiPromptEdit, 'client_id' | 'surface'> & { revision: number }
@@ -97,3 +97,7 @@ export type ClaudeUiMountState =
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
 
+
+/** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
+export type ClaudeUiFocusEvent = { revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }
+export type ClaudeUiFocusReply = { revision: number; moved: boolean; focusId: string | null; deny?: string }

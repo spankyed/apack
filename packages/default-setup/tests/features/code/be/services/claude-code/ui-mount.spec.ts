@@ -11,16 +11,17 @@ const rendered = (handle = 1) => ({ tree: { type: 'Button', props: { label: 'Run
 function fixture() {
   const done = deferred<void>()
   const states: ClaudeUiMountState[] = []
+  const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
   const owner = { handle: { ui }, done: done.promise, subscribe(listener: (event: StreamLine) => void) { listeners.add(listener); return () => { listeners.delete(listener) } } }
-  const mount = () => mountClaudeUi({ owner, isCurrent: () => current, publish: state => { states.push(state) } })
+  const mount = () => mountClaudeUi({ owner, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
   const invalidate = () => { for (const listener of listeners) listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' } as StreamLine) }
   const action = () => { const last = states.at(-1); if (last?.status !== 'live' || last.tree.kind !== 'button' || !last.tree.actionId) throw new Error('expected live button'); return last.tree.actionId }
-  return { mount, ui, states, done, listeners, invalidate, action, replace: () => { current = false } }
+  return { mount, ui, states, focusRequests, done, listeners, invalidate, action, replace: () => { current = false } }
 }
 
 beforeEach(() => { vi.useFakeTimers() })
@@ -259,4 +260,43 @@ it('scopes autocomplete to the current owner and ignores rows overtaken by edits
   delayed.resolve({ suggestions: [{ text: 'stale', label: 'Stale' }], start: 0 }); await expect(editing).resolves.toBeUndefined()
   await view.dispose()
   await expect(view.autocompletePrompt({ revision: 4, text: 'tok', cursor: 3 })).resolves.toBeUndefined()
+})
+
+
+it('routes only current mount focus identities and drops late replies after redraw or newer focus', async () => {
+  const f = fixture(), view = f.mount()
+  await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const latest = () => { const state = f.states.at(-1); if (state?.status !== 'live' || state.tree.kind !== 'button' || !state.tree.focusId) throw Error('missing focus identity'); return state.tree.focusId }
+  const focusId = latest(), event = { revision: 1, isHeld: true, by: 'person' as const, focusId }
+  f.ui.focus.mockResolvedValueOnce({ moved: true, element: { plugin: 'fixture', key: 'run' } })
+  await expect(view.focus(event)).resolves.toEqual({ revision: 1, moved: true, focusId })
+  expect(f.ui.focus).toHaveBeenCalledWith(expect.objectContaining({ component: 'AbovePrompt', instance_id: 'above-prompt', element: { plugin: 'fixture', key: 'run' } }))
+  await expect(view.focus({ ...event, revision: 2, focusId: 'foreign' })).resolves.toBeUndefined()
+  expect(f.ui.focus).toHaveBeenCalledTimes(1)
+  const pending = deferred<{ moved: boolean; element: { plugin: string; key: string } | null }>()
+  f.ui.focus.mockImplementationOnce(() => pending.promise)
+  const old = view.focus({ ...event, revision: 3 }); await Promise.resolve()
+  await expect(view.focus({ ...event, revision: 4, focusId: null, isHeld: false })).resolves.toEqual({ revision: 4, moved: true, focusId: null })
+  pending.resolve({ moved: true, element: { plugin: 'fixture', key: 'run' } }); await expect(old).resolves.toBeUndefined()
+  const redraw = deferred<{ moved: boolean; element: { plugin: string; key: string } | null }>()
+  f.ui.focus.mockImplementationOnce(() => redraw.promise)
+  const obsolete = view.focus({ ...event, revision: 5 }); await Promise.resolve()
+  f.invalidate(); await vi.advanceTimersByTimeAsync(50)
+  redraw.resolve({ moved: true, element: { plugin: 'fixture', key: 'run' } }); await expect(obsolete).resolves.toBeUndefined()
+  expect(latest()).not.toBe(focusId)
+  await expect(view.focus({ ...event, revision: 6 })).resolves.toBeUndefined()
+  await view.dispose()
+})
+
+it('scopes plugin focus pushes to the attached client, canonical site and live drawing', async () => {
+  const f = fixture(), view = f.mount()
+  await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const clientId = (f.ui.attach.mock.calls[0] as unknown as [{ client_id: string }])[0].client_id
+  const push = { type: 'system', subtype: 'ui_focus', client_id: clientId, component: 'AbovePrompt', instance_id: 'above-prompt', plugin: 'fixture', key: 'run' }
+  const deliver = (value: object) => { for (const listener of f.listeners) listener(value as StreamLine) }
+  for (const change of [{ client_id: 'foreign' }, { component: 'Pane' }, { instance_id: 'foreign' }, { plugin: 'foreign' }, { key: 'unknown' }]) deliver({ ...push, ...change })
+  expect(f.focusRequests).toEqual([])
+  deliver(push); expect(f.focusRequests).toHaveLength(1)
+  f.invalidate(); deliver(push); expect(f.focusRequests).toHaveLength(1)
+  await view.dispose(); deliver(push); expect(f.focusRequests).toHaveLength(1)
 })

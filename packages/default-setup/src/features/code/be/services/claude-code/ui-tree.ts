@@ -7,6 +7,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  focusables: ReadonlyMap<string, { plugin: string; key: string }>
   links: ReadonlyMap<string, ReadonlySet<string> | undefined>
   fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>
   tree: ClaudeUiNode
@@ -52,6 +53,13 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   validateBudget(tree)
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
   const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
+  const focusables = new Map<string, { plugin: string; key: string }>()
+  function focusIdentity(plugin: string, key: unknown): { focusId?: string } {
+    if (plugin.length > 256 || typeof key !== 'string' || key.length > 256) return {}
+    const focusId = randomUUID()
+    focusables.set(focusId, { plugin, key })
+    return { focusId }
+  }
   const links = new Map<string, ReadonlySet<string> | undefined>()
   const identities = new Set<string>()
   let nodes = 0
@@ -177,7 +185,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const actionId = [...(previous?.fields ?? [])].find(([, field]) => field.type === type && field.plugin === press.plugin && field.key === props.key)?.[0] ?? randomUUID()
       const field = { type, plugin: press.plugin, handle: press.handle, key: props.key } as const
       const label = typeof props.label === 'string' ? { label: props.label } : {}
-      const common = { actionId, revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
+      const common = { actionId, ...focusIdentity(press.plugin, props.key), revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
       if (type === 'input') {
         if (props.rows !== undefined && (typeof props.rows !== 'number' || !Number.isSafeInteger(props.rows) || props.rows < 1)) throw new ClaudeProtocolError('native UI input rows are invalid')
         fields.set(actionId, field)
@@ -225,9 +233,9 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const actionId = randomUUID()
       actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle,
         ...(typeof value.props.key === 'string' ? { key: value.props.key } : {}) })
-      return { ...button, actionId }
+      return { ...button, actionId, ...focusIdentity(value.press.plugin, props.key) }
     }
     return { kind: 'unsupported', component: value.type, ...attribution }
   }
-  return { tree: visit(tree), actions, fields, links }
+  return { tree: visit(tree), actions, fields, links, focusables }
 }

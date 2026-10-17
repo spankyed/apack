@@ -3,19 +3,20 @@ import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import type { ClaudeConversation } from './conversation.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
 
-import type { ClaudeUiFieldEvent, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
+import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
-type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
+type UiOwner = Pick<ClaudeConversation, 'done' | 'subscribe'> & { handle: { ui: Pick<ClaudeUiControls, 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete'> } }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
 export function mountClaudeUi(options: {
   owner: UiOwner
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
+  requestFocus?(focusId: string): void
 }) {
   const { owner } = options
   const client = { client_id: `apack-${randomUUID()}`, surface: 'desktop' as const }
-  const instanceId = randomUUID()
+  const instanceId = 'above-prompt'
   let disposed = false
   let attached = false
   let attachmentError: string | undefined
@@ -26,6 +27,7 @@ export function mountClaudeUi(options: {
   let fieldDrawing: ClaudeUiDrawing | undefined
   const fieldRevisions = new Map<string, number>()
   const completedFields = new Map<string, number>()
+  let focusRevision = 0
   let promptRevision = 0
   let completionRevision = 0
   let generation = 0
@@ -111,6 +113,10 @@ export function mountClaudeUi(options: {
   publish({ status: 'connecting' })
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
+    if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
+      const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
+      if (target) { try { options.requestFocus?.(target[0]) } catch { /* closed presentation */ } }
+    }
     if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') invalidate()
   })
   const ready = (async () => {
@@ -128,6 +134,22 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async focus(event: ClaudeUiFocusEvent): Promise<ClaudeUiFocusReply | undefined> {
+      if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= focusRevision || typeof event.isHeld !== 'boolean' || !['person', 'auto'].includes(event.by)) return
+      focusRevision = event.revision
+      const snapshot = drawing, revision = event.revision, epoch = generation
+      const identity = typeof event.focusId === 'string' ? snapshot?.focusables.get(event.focusId) : event.focusId
+      if (typeof event.focusId === 'string' && !identity) return
+      await ready
+      if (!attached || !current() || revision !== focusRevision || epoch !== generation) return
+      const result = await owner.handle.ui.focus({ ...client, component: 'AbovePrompt', instance_id: instanceId,
+        is_held: event.isHeld, by: event.by, ...(identity !== undefined ? { element: identity } : {}) })
+      if (!current() || revision !== focusRevision || epoch !== generation || snapshot !== drawing) return
+      const target = result.element === null ? null : [...(drawing?.focusables ?? [])].find(([, candidate]) => candidate.plugin === result.element?.plugin && candidate.key === result.element.key)?.[0]
+      // An unrecognized native redirect must never focus a different view or an obsolete DOM node.
+      if (target === undefined) return
+      return { revision, moved: result.moved, focusId: target, ...(result.deny !== undefined ? { deny: result.deny } : {}) }
+    },
     async autocompletePrompt(event: ClaudePromptCompletionRequest): Promise<ClaudePromptCompletionReply | undefined> {
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= completionRevision) return
       completionRevision = event.revision
