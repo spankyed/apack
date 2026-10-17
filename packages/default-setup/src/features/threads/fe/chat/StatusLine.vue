@@ -9,6 +9,7 @@
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
+    <span v-if="hasContent" ref="cellMeasure" aria-hidden="true" class="pointer-events-none invisible fixed -left-[9999px] whitespace-pre font-mono text-[13px]">0000000000</span>
   </div>
 </template>
 
@@ -31,8 +32,8 @@ const displayPath = computed(() => {
   return segments.length > 2 ? `…/${segments.at(-1)}` : props.statusLine
 })
 const emit = defineEmits<{ click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
-const nativeSite = ref<HTMLElement | null>(null)
-const scroll = useClaudeSiteScroll({ element: nativeSite, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
+const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
+const scroll = useClaudeSiteScroll({ element: nativeSite, cellWidth: () => (cellMeasure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
 let focusRevision = 0
 let applyingFocus = false
 let autoEntering = false

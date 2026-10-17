@@ -99,6 +99,7 @@ export interface ClaudeUiScrollEvent {
   by: number
   rows: number
   contentRows: number
+  pointer?: { column: number; row: number }
   keyed: { id: string; top: number; bottom: number }[]
 }
 export interface ClaudeUiScrollState { serial: number; requestRevision?: number; offset: number; followEnd: boolean }

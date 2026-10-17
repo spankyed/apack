@@ -26,7 +26,7 @@ export function createClaudeSiteScroll(options: {
     })
     try {
       const result = await options.ui.scroll({ ...options.client, component: options.component, instance_id: options.instanceId,
-        offset: event.offset, by: event.by, body_rows: event.rows, content_rows: event.contentRows, ...(keyed.length || (targets && !event.keyed.length) ? { keyed } : {}) })
+        offset: event.offset, by: event.by, body_rows: event.rows, content_rows: event.contentRows, ...(event.pointer ? { pointer: event.pointer } : {}), ...(keyed.length || (targets && !event.keyed.length) ? { keyed } : {}) })
       if (current() && epoch === generation && event.revision === latest) {
         state = { serial: ++serial, requestRevision: event.revision, offset: Math.max(0, result.offset), followEnd: result.follow_end === true }
         options.publish(state)
@@ -39,11 +39,12 @@ export function createClaudeSiteScroll(options: {
     report(event: ClaudeUiScrollEvent) {
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= latest || !Number.isSafeInteger(event.by)
         || ![event.offset, event.rows, event.contentRows].every(value => Number.isSafeInteger(value) && value >= 0)
+        || (event.pointer !== undefined && (!event.pointer || !Number.isSafeInteger(event.pointer.column) || !Number.isSafeInteger(event.pointer.row)))
         || !Array.isArray(event.keyed) || event.keyed.length > 512 || event.keyed.some(item => !item || typeof item.id !== 'string' || !Number.isSafeInteger(item.top) || !Number.isSafeInteger(item.bottom) || item.top < 0 || item.bottom < item.top)) return
       const by = event.by + (pending?.by ?? 0)
       if (!Number.isSafeInteger(by)) return
       latest = event.revision
-      pending = { ...event, by }
+      pending = { ...event, by, ...(event.by === 0 && pending?.pointer ? { pointer: pending.pointer } : {}) }
       void pump()
     },
     receive(event: Record<string, unknown>) {

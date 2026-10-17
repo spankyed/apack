@@ -209,13 +209,17 @@ test('native extension fields, paint and hover work inside the actual composer',
   });
   await strip.getByRole('button', { name: 'Pane start', exact: true }).click();
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(0);
-  await paneSite.evaluate(element => { element.scrollTop = 40; element.dispatchEvent(new Event('scroll')); });
+  await paneSite.scrollIntoViewIfNeeded();
+  const wheelBounds = await paneSite.boundingBox(); expect(wheelBounds).not.toBeNull();
+  await appPage.mouse.move(wheelBounds!.x + wheelBounds!.width - 16, wheelBounds!.y + wheelBounds!.height - 16);
+  await appPage.mouse.wheel(0, 40);
   await expect.poll(async () => (await scrollState())?.offset).toBe(3);
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(60);
-  await paneSite.evaluate(element => { element.scrollTop = 120; element.dispatchEvent(new Event('scroll')); });
+  await appPage.mouse.wheel(0, 60);
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(60);
   const scrollEvents = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8'));
   expect(scrollEvents.some((event: any) => event.origin.kind === 'person' && event.by === 3)).toBe(true);
+  expect(scrollEvents.some((event: any) => event.origin.kind === 'person' && event.by === 2 && Number.isInteger(event.pointer?.column) && Number.isInteger(event.pointer?.row))).toBe(true);
   await strip.getByRole('button', { name: 'Reveal pane target', exact: true }).click();
   await expect.poll(() => paneSite.evaluate(element => {
     const target = [...element.querySelectorAll<HTMLElement>('span')].find(item => item.textContent === 'Native keyed target')?.getBoundingClientRect();
@@ -231,6 +235,17 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-pane-scroll.png') });
   await strip.getByRole('button', { name: 'Pane start', exact: true }).click();
   await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(0);
+  await paneSite.focus();
+  await paneSite.press('End');
+  await expect.poll(() => paneSite.evaluate(element => Math.abs(element.scrollTop - (element.scrollHeight - element.clientHeight)) < 1)).toBe(true);
+  await paneSite.press('Home');
+  await expect.poll(() => paneSite.evaluate(element => element.scrollTop)).toBe(0);
+  const beforeEdge = JSON.parse(await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8')).length;
+  await paneSite.press('ArrowUp');
+  await expect.poll(async () => {
+    const events = await readFile(join(workspace!, 'app-pane-scrolls.json'), 'utf8').then(JSON.parse).catch(() => []);
+    return events.slice(beforeEdge).some((event: any) => event.by === -1 && event.offset === 0 && event.pointer === undefined);
+  }).toBe(true);
   const closeA = panel.getByRole('button', { name: 'Close <Native review A>', exact: true });
   await closeA.click();
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'app-pane-closes.json'), 'utf8').catch(() => '[]')).length).toBe(1);
@@ -278,5 +293,5 @@ test('native extension fields, paint and hover work inside the actual composer',
   await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), before.threadId);
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
-  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
+  await writeFile(join(workspace!, 'composer-app-evidence.json'), JSON.stringify({ actualApp: true, nativeWheelPointer: true, nativeKeyboardScroll: true, nativeEdgeScrollHook: true, nativeScrollRewrite: true, nativeScrollDenial: true, nativeKeyedScrollPush: true, nativeFollowEndGrowth: true, nativePanesMounted: true, nativePaneFields: true, nativePaneAction: true, nativePaneCloseRefusal: true, nativePaneNoFocusTheft: true, nativePaneEscapeReturnsComposer: true, nativePaneLayoutMeasured: true, nativeCodeWrap: true, nativeCodeTruncate: true, nativeCodeDiff: true, nativeCodeLiteralMarkup: true, nativeCodeHiddenPath: true, nativePress: true, composerVerticalFit: true, shortComposerUsable: true, nativeFocusScrollScoped: true, longDraftScrolls: true, nativeSuggestionGhost: true, nativeSuggestionTab: true, nativeSuggestionRightArrow: true, nativeSuggestionNotSubmitted: true, nativeSuggestionPersonKeys: true, nativeSuggestionPopulatedRefused: true, nativePromptHostRead: true, nativePromptHostFill: true, nativePromptFillModes: true, nativeRichReplacement: true, nativeFillPaintSurvivesAdoption: true, nativeFillPaintClearedByEdit: true, nativeNumericHotkey: true, populatedDraftDigitPreserved: true, nativeFocusRedirect: true, nativePluginFocusPush: true, nativeFields: true, nativeSvg: true, nativeHover: true, draftPreserved: true, noPhantomTurn: true, narrowOverflowBounded: true, sameNativeProcess: true, detachRemount: true, hostInputs: 2, errors, geometry, shortGeometry }, null, 2));
 });

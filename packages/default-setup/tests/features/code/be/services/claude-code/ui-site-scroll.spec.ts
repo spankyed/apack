@@ -21,11 +21,11 @@ it('maps only current opaque keyed regions to native names and preserves denied 
 it('folds queued person deltas and publishes only the latest request', async () => {
   const f = fixture(); let answer!: (value: { moved: boolean; offset: number }) => void
   f.ui.scroll.mockImplementationOnce(() => new Promise(resolve => { answer = resolve }))
-  f.host.report(report(1, 1)); f.host.report(report(2, 2)); f.host.report(report(3, -1))
+  f.host.report(report(1, 1)); f.host.report({ ...report(2, 2), pointer: { column: 1, row: 2 } }); f.host.report({ ...report(3, -1), pointer: { column: 5, row: 4 } })
   expect(f.ui.scroll).toHaveBeenCalledTimes(1)
   answer({ moved: true, offset: 1 })
   await vi.waitFor(() => expect(f.ui.scroll).toHaveBeenCalledTimes(2))
-  expect(f.ui.scroll.mock.calls[1][0]).toMatchObject({ by: 1, offset: 3 })
+  expect(f.ui.scroll.mock.calls[1][0]).toMatchObject({ by: 1, offset: 3, pointer: { column: 5, row: 4 } })
   expect(f.publish).toHaveBeenCalledTimes(1); expect(f.host.state?.requestRevision).toBe(3)
   f.host.dispose()
 })
@@ -42,6 +42,7 @@ it('lets a matching plugin push supersede in-flight replies and pending older ge
 })
 it('ignores malformed reports and late output after disposal or owner replacement', async () => {
   const f = fixture(); f.host.report({ ...report(1), keyed: [{ id: 'a', top: 4, bottom: 3 }] })
+  f.host.report({ ...report(1), pointer: { column: NaN, row: 1 } })
   expect(f.ui.scroll).not.toHaveBeenCalled(); f.replace(); f.host.report(report(2)); expect(f.ui.scroll).not.toHaveBeenCalled()
   f.host.dispose(); f.host.receive({ type: 'system', subtype: 'ui_scroll', client_id: 'view', component: 'Pane', instance_id: 'review', offset: 2 })
   expect(f.publish).not.toHaveBeenCalled()

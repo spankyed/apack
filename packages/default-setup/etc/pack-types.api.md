@@ -1688,6 +1688,10 @@ interface ClaudeUiScrollEvent {
     by: number;
     rows: number;
     contentRows: number;
+    pointer?: {
+        column: number;
+        row: number;
+    };
     keyed: {
         id: string;
         top: number;

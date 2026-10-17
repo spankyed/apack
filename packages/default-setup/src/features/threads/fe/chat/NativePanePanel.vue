@@ -34,7 +34,7 @@ const shown = computed(() => props.panes.roster.shown_id)
 const activePane = computed(() => props.panes.roster.panes.find(pane => pane.id === shown.value))
 const title = computed(() => activePane.value?.title ?? 'Claude pane')
 const site = ref<HTMLElement | null>(null)
-const scroll = useClaudeSiteScroll({ element: site, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
+const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
 const hover = createClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
 let revision = 0, applying = false, held = false, autoEntering = false

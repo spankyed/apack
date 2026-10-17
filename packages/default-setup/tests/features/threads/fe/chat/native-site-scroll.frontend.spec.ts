@@ -49,3 +49,39 @@ it('applies native offsets without echo, reports gestures, preserves fractional 
     observers[0]([], {} as ResizeObserver); app.unmount(); expect(callbacks.size).toBe(0)
   } finally { if (root.firstChild) app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })
+
+it('reports wheel intent at edges with the latest pointer, supports scroll keys and leaves field input alone', async () => {
+  const callbacks = new Map<number, FrameRequestCallback>(); let frameId = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callbacks.set(++frameId, callback); return frameId })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => callbacks.delete(id))
+  const frame = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback(0)) }
+  const emit = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  const element = ref<HTMLElement | null>(null)
+  const app = createApp({ setup() { useClaudeSiteScroll({ element, state: () => undefined, cellWidth: () => 10, emit }); return () => h('div', { ref: element, style: { lineHeight: '20px' }, tabindex: 0 }, [h('textarea')]) } })
+  app.mount(root)
+  try {
+    await nextTick(); await nextTick()
+    const site = element.value!, field = site.querySelector('textarea')!
+    Object.defineProperties(site, { clientHeight: { value: 100 }, scrollHeight: { value: 400 } })
+    site.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100 }) as DOMRect
+    frame(); emit.mockClear()
+    const wheel = new WheelEvent('wheel', { deltaY: -40, clientX: 45, clientY: 25, bubbles: true, cancelable: true })
+    site.dispatchEvent(wheel); frame()
+    expect(wheel.defaultPrevented).toBe(true); expect(site.scrollTop).toBe(0)
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ by: -2, offset: 0, pointer: { column: 4, row: 1 } }))
+    site.dispatchEvent(new WheelEvent('wheel', { deltaY: 20, clientX: 25, clientY: 5, bubbles: true, cancelable: true }))
+    site.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, clientX: 65, clientY: 45, bubbles: true, cancelable: true })); frame()
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ by: 3, offset: 3, pointer: { column: 6, row: 2 } }))
+    site.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true })); frame()
+    expect(site.scrollTop).toBe(0); expect(emit.mock.lastCall![0]).toMatchObject({ by: -20, offset: 0 }); expect(emit.mock.lastCall![0].pointer).toBeUndefined()
+    site.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })); frame()
+    expect(emit.mock.lastCall![0]).toMatchObject({ by: -1, offset: 0 })
+    const count = emit.mock.calls.length
+    const edit = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }); field.dispatchEvent(edit)
+    const zoom = new WheelEvent('wheel', { deltaY: 20, ctrlKey: true, bubbles: true, cancelable: true }); site.dispatchEvent(zoom); frame()
+    expect(edit.defaultPrevented).toBe(false); expect(zoom.defaultPrevented).toBe(false); expect(emit).toHaveBeenCalledTimes(count)
+    Object.defineProperties(field, { clientHeight: { value: 20 }, scrollHeight: { value: 80 } })
+    const nested = new WheelEvent('wheel', { deltaY: 20, bubbles: true, cancelable: true }); field.dispatchEvent(nested); frame()
+    expect(nested.defaultPrevented).toBe(false); expect(emit).toHaveBeenCalledTimes(count)
+  } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
+})
