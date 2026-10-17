@@ -162,7 +162,11 @@
 
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
-          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+          <template v-for="part in nativeParts" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+            <NativeAssistantMessage v-if="part.kind === 'native'" :frame="part.frame"
+              @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+            <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
+          </template>
         </div>
 
         <!-- Other block types (approval, choice, etc.) render BELOW text -->
@@ -216,6 +220,9 @@
 import { computed, ref, onUpdated, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
+import NativeAssistantMessage from './NativeAssistantMessage.vue'
+import { claudeNativeMessageParts } from './native-message-parts.ts'
+import type { ClaudeUiAssistantFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
@@ -225,12 +232,15 @@ import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
 interface ChatMessageProps {
   message: MessageEntity
+  nativeFrames?: ClaudeUiAssistantFrame[]
   isTyping?: boolean
   isTail?: boolean
   isClaudeCodeThread?: boolean
 }
 
 interface ChatMessageEmits {
+  (e: 'native-ui-press', actionId: string, href?: string): void
+  (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'fork', messageId: string): void
@@ -247,6 +257,8 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 })
 
 const emit = defineEmits<ChatMessageEmits>()
+
+const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' ? props.nativeFrames : []))
 
 const expanded = ref(false)
 const forking = ref(false)

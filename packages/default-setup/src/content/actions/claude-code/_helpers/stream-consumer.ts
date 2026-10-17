@@ -343,6 +343,7 @@ export async function consumeStream(
         const projected = nativeMessages.accept(writer.text, {
           uuid: line.uuid,
           sessionId: line.session_id || nativeSessionId,
+          apiMessageId: line.message?.id,
           text: nativeText,
           parentToolUseId: line.parent_tool_use_id,
         });

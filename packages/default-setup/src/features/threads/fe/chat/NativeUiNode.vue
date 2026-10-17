@@ -1,13 +1,13 @@
 <template>
   <div v-if="node.kind === 'box'" :ref="hoverElement" class="min-w-0 native-box" :data-native-scroll-id="node.scrollId" :style="boxStyle" :data-native-border-dim="boxPaint?.borderDimColor === true ? 'true' : undefined" :data-native-plugin="node.plugin">
-    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
+    <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </div>
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
-  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="whitespace-pre-wrap break-words" :class="textClasses" :style="textPaint" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></span>
+  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="whitespace-pre-wrap break-words" :class="textClasses" :style="textPaint" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :class="node.href ? 'underline text-blue-400 focus-visible:outline focus-visible:outline-blue-400' : undefined" @click.prevent="node.href && openLink(node.href)">
-    <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" />
+    <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </component>
   <button v-else-if="node.kind === 'button'" :ref="hoverElement" :style="buttonPaint" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
     :aria-label="node.label" :aria-keyshortcuts="node.hotkey" :data-native-focus-id="node.focusId" :data-native-scroll-id="node.focusId" :data-native-hotkey="node.actionId ? node.hotkey : undefined" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
@@ -17,11 +17,12 @@
       buttonTextStyle.dimColor && 'opacity-60 hover:opacity-100 focus:opacity-100', node.role === 'dismiss' && 'ml-auto']"
     @click="node.actionId && emit('press', node.actionId)">
     <span v-if="node.role === 'dismiss'" aria-hidden="true">×</span>
-    <template v-else-if="node.children?.length"><NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></template>
+    <template v-else-if="node.children?.length"><NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></template>
     <template v-else>{{ node.label }}</template>
     <kbd v-if="node.hotkey" aria-hidden="true" class="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded border border-current/15 px-1 font-mono text-[10px] leading-none opacity-60">{{ node.hotkey.toUpperCase() }}</kbd>
   </button>
-  <span v-else-if="node.component !== 'engine'" class="text-neutral-500" :data-native-plugin="node.plugin">Unsupported Claude component: {{ node.component }}</span>
+  <slot v-else-if="node.component === 'engine'" name="engine" />
+  <span v-else class="text-neutral-500" :data-native-plugin="node.plugin">Unsupported Claude component: {{ node.component }}</span>
 </template>
 
 <script setup lang="ts">

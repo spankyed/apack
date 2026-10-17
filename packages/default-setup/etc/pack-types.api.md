@@ -1452,6 +1452,26 @@ interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' 
 
 type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
 
+interface ClaudeUiAssistantFrame extends ClaudeUiAssistantRow {
+    displayText: string;
+    body: {
+        status: 'error' | 'rendering';
+    } | {
+        status: 'live';
+        tree: ClaudeUiNode;
+    };
+}
+
+interface ClaudeUiAssistantRow {
+    messageId: string;
+    uuid: string;
+    sessionId: string;
+    text: string;
+    start: number;
+    end: number;
+    isFirstOfReply: boolean;
+}
+
 type ClaudeUiAttach = z.infer<typeof attach>;
 
 interface ClaudeUiBoxLayout {
@@ -1550,6 +1570,7 @@ type ClaudeUiMountState = ({
     panes?: ClaudeUiPanePresentation;
     scroll?: ClaudeUiScrollState;
     notices?: ClaudeUiNotices;
+    assistantMessages?: ClaudeUiAssistantFrame[];
 };
 
 type ClaudeUiNode = {
@@ -1778,6 +1799,7 @@ type ClaudeUiViewRequest = ({
     type: 'CLAUDE_UI_MOUNT';
     threadId: string;
     mountId: string;
+    messageIds?: string[];
 } | {
     type: 'CLAUDE_UI_UNMOUNT';
     threadId: string;

@@ -58,6 +58,9 @@
                   v-for="message in visibleMessages"
                   :key="message.id"
                   :message="message"
+                  :native-frames="nativeUiDrawing?.assistantMessages"
+                  @native-ui-press="pressNativeUi"
+                  @native-ui-field="editNativeUi"
                   :is-tail="isTailMessage(message)"
                   :is-claude-code-thread="!!currentThread?.context?.claudeCode"
                   @open-lightbox="openLightbox"
@@ -304,12 +307,16 @@ onMounted(() => {
     if (!threadId || !enabled) return
     const mount = { threadId, mountId: crypto.randomUUID() }
     nativeUiMount.value = mount
-    const renew = () => actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount })
+    const renew = () => actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id) })
     renew()
     heartbeat = setInterval(renew, 10000)
   }, { immediate: true })
 })
 onUnmounted(() => { stopNativeUiWatch?.(); detachNativeUi() })
+watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), () => {
+  const mount = nativeUiMount.value
+  if (mount) actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id) })
+}, { flush: 'post' })
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])

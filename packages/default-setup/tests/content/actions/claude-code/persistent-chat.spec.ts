@@ -158,7 +158,7 @@ it('preserves native assistant rows when one provider reply becomes several tran
   expect(replies.map(message => message.text)).toEqual(['Repeated text\nRepeated text']);
   expect(replies[0]?.text).toBe('Repeated text\nRepeated text');
   expect(replies[0]?.context).toMatchObject({ cliUuid: 'native-row-b', claudeNativeMessages: [
-    { uuid: 'native-row-a', sessionId: 'paired-session', text: 'Repeated text', start: 0, end: 13 },
-    { uuid: 'native-row-b', sessionId: 'paired-session', text: 'Repeated text', start: 14, end: 27 },
+    { uuid: 'native-row-a', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'Repeated text', start: 0, end: 13 },
+    { uuid: 'native-row-b', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'Repeated text', start: 14, end: 27 },
   ] });
 });

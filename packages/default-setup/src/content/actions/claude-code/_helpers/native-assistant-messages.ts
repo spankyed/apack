@@ -2,6 +2,7 @@
 export interface ClaudeNativeAssistantMessage {
   uuid: string;
   sessionId: string;
+  apiMessageId?: string;
   text: string;
   start: number;
   end: number;
@@ -13,7 +14,7 @@ export function createClaudeNativeMessageTracker() {
   let observedThrough = 0;
   const seen = new Set<string>();
   return {
-    accept(currentText: string, message: { uuid?: string; sessionId?: string; text: string; parentToolUseId?: string }) {
+    accept(currentText: string, message: { uuid?: string; sessionId?: string; apiMessageId?: string; text: string; parentToolUseId?: string }) {
       if (message.parentToolUseId || !message.text || (message.uuid && seen.has(message.uuid))) return { text: currentText, rows };
       if (message.uuid) seen.add(message.uuid);
       const pending = currentText.slice(observedThrough);
@@ -23,7 +24,7 @@ export function createClaudeNativeMessageTracker() {
         : pending === '\n' ? currentText + message.text : currentText;
       const end = text.length, start = end - message.text.length;
       if (message.uuid && message.sessionId && start >= observedThrough && text.slice(start, end) === message.text) {
-        rows = [...rows, { uuid: message.uuid, sessionId: message.sessionId, text: message.text, start, end }];
+        rows = [...rows, { uuid: message.uuid, sessionId: message.sessionId, text: message.text, start, end, ...(message.apiMessageId ? { apiMessageId: message.apiMessageId } : {}) }];
       }
       observedThrough = end;
       return { text, rows };
