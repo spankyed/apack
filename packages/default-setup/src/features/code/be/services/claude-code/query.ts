@@ -38,8 +38,8 @@ import { argsFromOptions } from './args.ts'
 import { PermissionModeSchema, type PermissionMode } from './types.ts'
 import { z } from 'zod'
 import { createControlRouter } from './control.ts'
-import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema, ClaudeFileRewindSchema, ClaudePlanSchema } from './host-controls.ts'
-import type { ClaudeInitialization, ClaudeContextUsage, ClaudeInterruptReceipt, ClaudeMcpStatus, ClaudeFileRewind, ClaudePlan } from './host-controls.ts'
+import { createHostControls, ClaudeInitializationSchema, ClaudeContextUsageSchema, ClaudeSettingsSchema, ClaudeInterruptReceiptSchema, ClaudeMcpStatusSchema, ClaudeFileRewindSchema, ClaudePlanSchema } from './host-controls.ts'
+import type { ClaudeInitialization, ClaudeContextUsage, ClaudeSettings, ClaudeInterruptReceipt, ClaudeMcpStatus, ClaudeFileRewind, ClaudePlan } from './host-controls.ts'
 import {
   ClaudeAbortError,
   type ClaudeCodeError,
@@ -62,6 +62,8 @@ import type {
 } from './types.ts'
 
 export interface QueryHandle {
+  /** Exact native child identity for owned process handoff and cleanup verification. */
+  readonly pid: number | undefined
   /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
   readonly ui: ClaudeUiControls
   /** Native commands, models and capabilities, available before a model turn. */
@@ -108,6 +110,8 @@ export interface QueryHandle {
   getContextUsage(): Promise<ClaudeContextUsage>
   /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
   getModels(): Promise<ClaudeModelCatalog>
+  /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
+  getSettings(): Promise<ClaudeSettings>
   /** Acknowledges selection only; effective-model metadata comes from native turns. */
   setModel(model: string): Promise<void>
   /** Change the running CLI policy and return its acknowledged permission mode. */
@@ -251,6 +255,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // ─── Public handle ────────────────────────────────────────────────────────
 
   return {
+    pid: stream.child.pid,
     ui: createClaudeUiControls(initialized, hostControls, promptHosts),
     initialized,
     sessionId: sessionId.promise,
@@ -310,6 +315,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     async getContextUsage(): Promise<ClaudeContextUsage> {
       await initialized
       return ClaudeContextUsageSchema.parse(await hostControls.request({ subtype: 'get_context_usage', detail: 'summary' }))
+    },
+
+    async getSettings(): Promise<ClaudeSettings> {
+      await initialized
+      return ClaudeSettingsSchema.parse(await hostControls.request({ subtype: 'get_settings' }))
     },
 
     async getModels(): Promise<ClaudeModelCatalog> {

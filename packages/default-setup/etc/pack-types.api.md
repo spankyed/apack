@@ -1327,6 +1327,61 @@ declare const ClaudeModelCatalogSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'columns' | 'env' | 'rows'>;
+
+interface ClaudeNativeTerminalOptions {
+    sessionId: string;
+    cwd: string;
+    settings: ClaudeSettings;
+    cliPath?: string;
+    env?: NodeJS.ProcessEnv;
+    columns?: number;
+    rows?: number;
+    model?: string;
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    appendSystemPrompt?: string;
+    addDir?: string[];
+    signal?: AbortSignal;
+}
+
+interface ClaudeNativeTerminalOwner {
+    readonly state: ClaudeNativeTerminalState;
+    readonly busy: boolean;
+    readonly done: Promise<void>;
+    /** Raw native terminal bytes, sequenced independently of presentation metadata. */
+    readonly output: readonly {
+        sequence: number;
+        text: string;
+    }[];
+    subscribe(listener: () => void): () => void;
+    input(ownerId: string, text: string): boolean;
+    resize(ownerId: string, columns: number, rows: number): boolean;
+    submit(text: string): Promise<void>;
+    close(): Promise<void>;
+    kill(): void;
+}
+
+interface ClaudeNativeTerminalState {
+    ownerId: string;
+    sessionId: string;
+    cwd: string;
+    status: 'error' | 'exited' | 'live' | 'starting';
+    pid?: number;
+    exitCode?: number;
+    mainStatus?: string;
+    tasks: ClaudeNativeTerminalTask[];
+    problem?: string;
+}
+
+/** Native task ids and terminal owners are independent of apack thread ids. */
+interface ClaudeNativeTerminalTask {
+    id: string;
+    name: string;
+    status: string;
+    statusText?: string;
+}
+
 interface ClaudeNestedAccounting {
     toolCallCount: number;
     mutatedPaths: string[];
@@ -1449,6 +1504,50 @@ interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' 
     messageUuid: string;
     cwd: string;
 }
+
+type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
+
+/** Native merged settings and source attribution; backend-only, never log or publish the values. */
+declare const ClaudeSettingsSchema: z.ZodObject<{
+    effective: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    sources: z.ZodArray<z.ZodObject<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    effective: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    sources: z.ZodArray<z.ZodObject<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    effective: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    sources: z.ZodArray<z.ZodObject<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        source: z.ZodString;
+        settings: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, z.ZodTypeAny, "passthrough">>, "many">;
+    applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, z.ZodTypeAny, "passthrough">>;
 
 type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
 
@@ -1934,6 +2033,9 @@ interface CliServiceType {
         getHandle(key: string): QueryHandle | undefined;
         /** Release an owned turn; idle process controls remain available until close/teardown. */
         clearHandle(key: string): void;
+        /** Explicitly move an idle live conversation into its native terminal interface. */
+        openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>;
+        getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined;
         /**
          * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
          * `claude --resume <sid> --rewind-files <uuid>` for file-rewind on revert.
@@ -5838,6 +5940,8 @@ type QualifiedSurfaceEvents = Qualified<'default-setup', OwnSurfaceEvents> & Hos
 type QualifiedSystemEvents = Qualified<'default-setup', PackSystemEvents> & HostSystemEvents;
 
 interface QueryHandle {
+    /** Exact native child identity for owned process handoff and cleanup verification. */
+    readonly pid: number | undefined;
     /** Structured native UI controls; requires initialized ui_surface_v1 capability. */
     readonly ui: ClaudeUiControls;
     /** Native commands, models and capabilities, available before a model turn. */
@@ -5892,6 +5996,8 @@ interface QueryHandle {
     getContextUsage(): Promise<ClaudeContextUsage>;
     /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
     getModels(): Promise<ClaudeModelCatalog>;
+    /** Effective native settings for an explicit same-session terminal handoff. Backend only. */
+    getSettings(): Promise<ClaudeSettings>;
     /** Acknowledges selection only; effective-model metadata comes from native turns. */
     setModel(model: string): Promise<void>;
     /** Change the running CLI policy and return its acknowledged permission mode. */

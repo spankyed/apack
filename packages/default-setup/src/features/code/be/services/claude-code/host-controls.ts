@@ -136,3 +136,11 @@ export const ClaudeFileRewindSchema = z.object({
   insertions: z.number().optional(), deletions: z.number().optional(), skippedLinks: z.number().optional(),
 }).passthrough()
 export type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>
+
+/** Native merged settings and source attribution; backend-only, never log or publish the values. */
+export const ClaudeSettingsSchema = z.object({
+  effective: z.record(z.string(), z.unknown()),
+  sources: z.array(z.object({ source: z.string(), settings: z.record(z.string(), z.unknown()) }).passthrough()),
+  applied: z.record(z.string(), z.unknown()).optional(),
+}).passthrough()
+export type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>

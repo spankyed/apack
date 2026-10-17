@@ -1,3 +1,6 @@
+import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
+import type { ClaudeNativeTerminalOwner } from './claude-code/terminal-owner.ts'
+import type { ClaudeNativeTerminalHandoffOptions } from './claude-code/handle-store.ts'
 import { getModels } from './claude-code/models.ts'
 import type { ClaudeModelCatalog } from './claude-code/host-controls.ts'
 import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
@@ -15,7 +18,7 @@ import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-co
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
-import { storeHandle, getHandle, clearHandle, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
+import { storeHandle, getHandle, clearHandle, openNativeTerminal, getNativeTerminal, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
 import { codexExec } from './codex/runner.ts'
 import type { CodexExecOptions, CodexExecResult } from './codex/runner.ts'
 import { testCli, isCliName } from '../utils/resolve-cli.ts'
@@ -86,6 +89,9 @@ export interface CliServiceType {
     getHandle(key: string): QueryHandle | undefined
     /** Release an owned turn; idle process controls remain available until close/teardown. */
     clearHandle(key: string): void
+    /** Explicitly move an idle live conversation into its native terminal interface. */
+    openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>
+    getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined
     /**
      * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
      * `claude --resume <sid> --rewind-files <uuid>` for file-rewind on revert.
@@ -206,6 +212,8 @@ function createCliService(): CliServiceType {
           prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous)
       },
       getConversation,
+      openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal) },
+      getNativeTerminal,
       isConversationBusy,
       isCurrentTurn,
       closeIdleConversation,
