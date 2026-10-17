@@ -1327,6 +1327,12 @@ declare const ClaudeModelCatalogSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+interface ClaudeNativeJournalBatch {
+    entries: ClaudeNativeJournalEntry[];
+    pending: boolean;
+    problems: string[];
+}
+
 interface ClaudeNativeJournalEntry {
     sessionId: string;
     row: Record<string, unknown>;
@@ -1371,12 +1377,14 @@ interface ClaudeNativeTerminalOwner {
     readonly state: ClaudeNativeTerminalState;
     readonly busy: boolean;
     readonly done: Promise<void>;
+    /** Register persistence work before the process exits; done waits for these callbacks. */
+    beforeRelease(listener: () => Promise<void>): void;
     /** Raw native terminal bytes, sequenced independently of presentation metadata. */
     readonly output: readonly {
         sequence: number;
         text: string;
     }[];
-    readJournal(): Promise<ClaudeNativeJournalEntry[]>;
+    readJournal(): Promise<ClaudeNativeJournalBatch>;
     readonly records: readonly {
         sequence: number;
         record: ClaudeNativeTerminalRecord;

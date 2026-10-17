@@ -2,11 +2,16 @@ import { open } from 'node:fs/promises'
 import { basename, isAbsolute } from 'node:path'
 export interface ClaudeNativeTranscript { sessionId: string; path: string }
 export interface ClaudeNativeJournalEntry { sessionId: string; row: Record<string, unknown> }
-/** Read completed JSONL rows incrementally. Native storage retains flags absent from session.append. */
+export interface ClaudeNativeJournalBatch {
+  entries: ClaudeNativeJournalEntry[]
+  pending: boolean
+  problems: string[]
+}
+/** Bounded batches retain complete rows around damaged data and expose unread bytes for final draining. */
 export function createClaudeNativeJournalReader() {
-  const cursors = new Map<string, { identity: string; offset: number; pending: Buffer[]; bytes: number }>()
-  return async (transcripts: readonly ClaudeNativeTranscript[]): Promise<ClaudeNativeJournalEntry[]> => {
-    const entries: ClaudeNativeJournalEntry[] = []
+  const cursors = new Map<string, { identity: string; offset: number; pending: Buffer[]; bytes: number; dropping: boolean; problems: Set<string> }>()
+  return async (transcripts: readonly ClaudeNativeTranscript[], options: { final?: boolean } = {}): Promise<ClaudeNativeJournalBatch> => {
+    const batch: ClaudeNativeJournalBatch = { entries: [], pending: false, problems: [] }
     for (const transcript of transcripts) {
       if (!isAbsolute(transcript.path) || basename(transcript.path) !== transcript.sessionId + '.jsonl' || !/^[a-f0-9-]{36}$/i.test(transcript.sessionId)) throw new Error('Native transcript identity is invalid')
       let file
@@ -15,7 +20,15 @@ export function createClaudeNativeJournalReader() {
         const stat = await file.stat(), identity = `${stat.dev}:${stat.ino}`
         let cursor = cursors.get(transcript.path)
         if (!cursor || cursor.identity !== identity || stat.size < cursor.offset) {
-          cursor = { identity, offset: 0, pending: [], bytes: 0 }; cursors.set(transcript.path, cursor)
+          cursor = { identity, offset: 0, pending: [], bytes: 0, dropping: false, problems: new Set() }; cursors.set(transcript.path, cursor)
+        }
+        const append = (part: Buffer) => {
+          if (cursor.dropping) return
+          cursor.bytes += part.length
+          if (cursor.bytes > 32 * 1024 * 1024) {
+            cursor.problems.add('Native transcript row exceeds the mirror limit')
+            cursor.pending = []; cursor.bytes = 0; cursor.dropping = true
+          } else cursor.pending.push(part)
         }
         let remaining = 2 * 1024 * 1024
         while (remaining > 0 && cursor.offset < stat.size) {
@@ -26,20 +39,25 @@ export function createClaudeNativeJournalReader() {
           let start = 0
           for (let at = 0; at < bytesRead; at++) {
             if (buffer[at] !== 10) continue
-            cursor.pending.push(buffer.subarray(start, at)); cursor.bytes += at - start
-            if (cursor.bytes > 32 * 1024 * 1024) throw new Error('Native transcript row exceeds the mirror limit')
-            const line = Buffer.concat(cursor.pending, cursor.bytes).toString('utf8'); cursor.pending = []; cursor.bytes = 0; start = at + 1
+            append(buffer.subarray(start, at))
+            const line = cursor.dropping ? '' : Buffer.concat(cursor.pending, cursor.bytes).toString('utf8')
+            cursor.pending = []; cursor.bytes = 0; cursor.dropping = false; start = at + 1
             if (!line.trim()) continue
-            const row: unknown = JSON.parse(line)
-            if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Native transcript row is not an object')
+            let row: unknown
+            try { row = JSON.parse(line) } catch { cursor.problems.add('Native transcript contains invalid JSON'); continue }
+            if (!row || typeof row !== 'object' || Array.isArray(row)) { cursor.problems.add('Native transcript row is not an object'); continue }
             const value = row as Record<string, unknown>
-            if (value.sessionId === transcript.sessionId) entries.push({ sessionId: transcript.sessionId, row: value })
+            if (value.sessionId === transcript.sessionId) batch.entries.push({ sessionId: transcript.sessionId, row: value })
           }
-          if (start < bytesRead) { cursor.pending.push(buffer.subarray(start, bytesRead)); cursor.bytes += bytesRead - start }
-          if (cursor.bytes > 32 * 1024 * 1024) throw new Error('Native transcript row exceeds the mirror limit')
+          if (start < bytesRead) append(buffer.subarray(start, bytesRead))
         }
+        const unread = cursor.offset < stat.size
+        batch.pending ||= unread
+        if (options.final && !unread && cursor.bytes) cursor.problems.add('Native transcript ended with an incomplete row')
+        batch.problems.push(...cursor.problems)
       } finally { await file.close() }
     }
-    return entries
+    batch.problems = [...new Set(batch.problems)]
+    return batch
   }
 }

@@ -1,5 +1,5 @@
 import { PermissionModeSchema } from './types.ts'
-import { createClaudeNativeJournalReader, type ClaudeNativeJournalEntry } from './terminal-journal.ts'
+import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -16,9 +16,11 @@ export interface ClaudeNativeTerminalOwner {
   readonly state: ClaudeNativeTerminalState
   readonly busy: boolean
   readonly done: Promise<void>
+  /** Register persistence work before the process exits; done waits for these callbacks. */
+  beforeRelease(listener: () => Promise<void>): void
   /** Raw native terminal bytes, sequenced independently of presentation metadata. */
   readonly output: readonly { sequence: number; text: string }[]
-  readJournal(): Promise<ClaudeNativeJournalEntry[]>
+  readJournal(): Promise<ClaudeNativeJournalBatch>
   readonly records: readonly { sequence: number; record: ClaudeNativeTerminalRecord }[]
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
@@ -63,6 +65,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
   let exitCode: number | undefined, stopping = false
+  const exitObservers: (() => Promise<void>)[] = []
+  let releasing = false
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
@@ -72,7 +76,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   async function finish(code: number) {
     if (closed) return
     closed = true; clearTimeout(hardStop); status = stopping || code === 0 ? 'exited' : 'error'; exitCode = code
-    try { await bridge.close() } finally { changed(); resolveDone() }
+    try { await bridge.close() } finally {
+      releasing = true
+      try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
+    }
   }
   function kill() {
     if (closed || !terminal) return
@@ -123,8 +130,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       get output() { return output },
       get records() { return bridge.session.records },
       async readJournal() {
-        const entries = await readJournal(bridge.transcripts)
-        for (const entry of entries) {
+        const batch = await readJournal(bridge.transcripts, { final: closed })
+        for (const entry of batch.entries) {
           const metadata = bridge.session.metadata
           if (entry.sessionId !== bridge.projection.sessionId || !metadata) continue
           if (entry.row.type === 'cost-state' && typeof entry.row.totalCostUSD === 'number' && Number.isFinite(entry.row.totalCostUSD) && entry.row.totalCostUSD >= 0) {
@@ -135,8 +142,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
             if (mode.success) bridge.session.update({ ...metadata, permissionMode: mode.data })
           }
         }
-        return entries
+        return batch
       }, done,
+      beforeRelease(listener) {
+        if (releasing) throw new Error('Native terminal has already started releasing its owner')
+        exitObservers.push(listener)
+      },
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
       input(id, text) { if (closed || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; terminal!.write(text); return true },
       resize(id, columns, rows) {

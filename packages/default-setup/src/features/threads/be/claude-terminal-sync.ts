@@ -14,7 +14,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
   const results = new Map<string, { text: string; error: boolean }>()
-  let stopped = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
+  let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
   const initial = repository.chatQueries.threadData(threadId)
   const toolIds = new Set<string>(), toolCounts = new Map<string, number>()
   if (initial?.context?.claudeCode?.sessionId) toolCounts.set(initial.context.claudeCode.sessionId, initial.context.claudeCode.toolCallCount ?? 0)
@@ -58,10 +58,11 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     if (inFlight) return inFlight
     inFlight = (async () => {
       try {
-        const entries = await owner.readJournal()
-        problem = undefined
+        const batch = await owner.readJournal()
+        journalPending = batch.pending
+        problem = batch.problems.length ? batch.problems.join('; ') : undefined
         if (!current() || !repository.threadQueries.byId(threadId)) return
-        for (const entry of entries) {
+        for (const entry of batch.entries) {
           const message = object(entry.row.message)
           if (entry.row.isSidechain === true || entry.row.agentId !== undefined || entry.row.parent_tool_use_id) continue
           if (entry.row.type === 'user' && Array.isArray(message?.content)) {
@@ -107,6 +108,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
         updateChatState(threadId, chatState)
       } catch (error) {
+        journalPending = false
         problem = error instanceof Error ? error.message : 'Native conversation history could not be synchronized'
         const thread = current() ? repository.threadQueries.byId(threadId) : undefined
         if (thread && thread.context?.claudeCode?.sessionError !== problem) {
@@ -119,5 +121,5 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   }
   const timer = setInterval(() => { if (!stopped) void flush() }, 250); timer.unref?.()
   void flush()
-  void owner.done.then(async () => { stopped = true; clearInterval(timer); await inFlight; await flush() })
+  owner.beforeRelease(async () => { stopped = true; clearInterval(timer); await inFlight; do { await flush() } while (journalPending && current()) })
 }
