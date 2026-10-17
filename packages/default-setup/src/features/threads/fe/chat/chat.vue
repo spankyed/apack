@@ -36,7 +36,7 @@
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
               </div>
-              <div v-else class="w-9/12 py-2 mx-auto space-y-1" ref="messagesContent">
+              <div v-else class="w-full max-w-4xl px-4 py-4 mx-auto space-y-3" ref="messagesContent">
                 <!-- Load older messages -->
                 <div v-if="messagePagination.hasMore" class="flex justify-center py-3">
                   <button
@@ -707,7 +707,7 @@ watch(messagesContent, (el, _, onCleanup) => {
     bottom: 0;
     left: 0;
     right: 15px;
-    height: 40px;
+    height: 12px;
     background: linear-gradient(to bottom, transparent, rgb(28 28 28));
     pointer-events: none;
     z-index: 5;

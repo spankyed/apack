@@ -4,11 +4,11 @@
       @submit.prevent="handleSubmit"
       @keydown.shift.tab.prevent="cyclePhase"
       @keydown.ctrl.tab.prevent="cycleMode"
-      class="@container mx-auto w-full max-w-4xl flex-shrink-0 overflow-visible px-4 pb-4"
+      class="@container mx-auto w-full max-w-4xl flex-shrink-0 overflow-visible px-4 pb-3 pt-2"
     >
       <div
         ref="inputCardRef"
-        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-xl border bg-[#222224]"
+        class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#252527]"
         :style="{ maxHeight: 'calc(var(--composer-available-height) - clamp(7rem, calc(var(--composer-available-height) * 0.3), 10rem))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
@@ -39,14 +39,14 @@
         </div>
 
         <!-- Editor container -->
-        <div class="relative w-full min-h-[80px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div class="relative w-full min-h-[64px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
             variant="chat"
             :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full min-h-[80px] rounded-xl px-4 py-4 pr-10 text-sm leading-6 focus:outline-none"
+            editor-class="w-full min-h-[64px] rounded-xl px-4 py-3 pr-10 text-sm leading-6 focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Buttons row -->
-        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 bg-[#222224] px-3 pb-3 pt-1.5 text-neutral-500">
+        <div class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 bg-[#252527] px-3 pb-2.5 pt-1.5 text-neutral-500">
           <!-- Left side buttons -->
           <div class="flex items-center min-w-0">
             <!-- Collapsed: ... dropdown menu (narrow) -->
@@ -817,9 +817,9 @@ const handleSubmit = async () => {
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input {
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.3);
-  &:focus-within { border-color: rgba(147, 180, 240, 0.3); }
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  &:focus-within { border-color: rgba(147, 180, 240, 0.45); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .inputCommandActive, .inputCommandActive:focus-within {

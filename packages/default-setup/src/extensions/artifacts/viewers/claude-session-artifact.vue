@@ -1,10 +1,10 @@
 <template>
   <div class="w-full max-w-2xl">
-    <div class="overflow-hidden rounded-lg border border-white/[0.06] animate-fade-in">
+    <div class="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.015] animate-fade-in">
       <!-- Header -->
-      <div class="flex items-center gap-2.5 px-4 py-3">
-        <span class="flex h-6 w-6 shrink-0 items-center justify-center text-neutral-400"><Wrench :size="15" class="text-neutral-400" /></span>
-        <h3 class="min-w-0 flex-1 truncate text-xs font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
+      <div class="flex items-center gap-2.5 px-4 py-4">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-400"><Wrench :size="15" class="text-neutral-400" /></span>
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code session</h3>
         <button
           v-if="content.sessionId"
           @click="openTerminalTab"
@@ -77,7 +77,7 @@
 
       <!-- Keep diagnostics available without dominating the conversation. -->
       <details class="group border-t border-white/[0.06] text-xs">
-        <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-neutral-400 transition-colors hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-blue-400 [&::-webkit-details-marker]:hidden">
+        <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-neutral-400 transition-colors hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-blue-400 [&::-webkit-details-marker]:hidden">
           <span class="min-w-0 flex-1 truncate font-medium text-neutral-300">{{ content.model || 'Model unavailable' }}</span>
           <span class="tabular-nums">{{ content.turns ?? 0 }} turns</span>
           <span class="tabular-nums">${{ (content.totalCostUsd ?? 0).toFixed(3) }}</span>
