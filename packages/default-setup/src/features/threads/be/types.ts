@@ -52,6 +52,7 @@ export interface ToolActivityBlockProps {
 export interface ThinkingBlockProps {
   /** Accumulated thinking text. */
   content: string;
+  nativeMessages?: readonly import('../../../content/actions/claude-code/_helpers/thinking-types.ts').ClaudeNativeThinkingMessage[];
   /** Collapsed header label (e.g. "Thinking…" or "Thought for 3s"). */
   label: string;
   /** Block state — drives spinner visibility. */

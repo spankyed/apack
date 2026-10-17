@@ -1,3 +1,5 @@
+import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
+import { isClaudeNarrationSignature } from './native-thinking.ts';
 /**
  * Throttled writer for the `thinking` block on a streaming chat message.
  *
@@ -14,7 +16,7 @@
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
-import type { ThinkingBlockProps } from './thinking-types.ts';
+import type { ThinkingBlockProps, ClaudeNativeThinkingMessage } from './thinking-types.ts';
 import { formatDuration } from './tool-activity-label.ts';
 
 export interface ThinkingWriterOptions {
@@ -24,6 +26,7 @@ export interface ThinkingWriterOptions {
 
 export interface ThinkingWriter {
   push(text: string): void;
+  acceptNativeMessage(message: { uuid?: string; sessionId?: string; apiMessageId?: string; text: string; signature?: unknown; parentToolUseId?: string }): void;
   flush(): void;
   finalise(): void;
   stopDirectWrites(writeWithOwner?: () => void): void;
@@ -39,6 +42,9 @@ export function createThinkingWriter(
 ): ThinkingWriter {
   const intervalMs = opts.intervalMs ?? 250;
   let buffer = '';
+  const native = createClaudeNativeMessageTracker({ separator: '\n\n', completePartial: true });
+  let nativeMessages: readonly ClaudeNativeThinkingMessage[] = [];
+  const summaries = new Set<string>();
   let segmentStartedAt: number | undefined;
   let thinkingElapsed = 0;
   let writeWithOwner: (() => void) | undefined;
@@ -56,7 +62,7 @@ export function createThinkingWriter(
     if (!buffer) return null;
     return {
       type: 'thinking',
-      props: { content: buffer, label: buildLabel(), state, defaultOpen: false },
+      props: { content: buffer, ...(nativeMessages.length ? { nativeMessages } : {}), label: buildLabel(), state, defaultOpen: false },
     };
   }
 
@@ -95,6 +101,17 @@ export function createThinkingWriter(
       segmentStartedAt ??= Date.now();
       buffer += text;
       schedule();
+    },
+
+    acceptNativeMessage(message): void {
+      if (message.parentToolUseId || !message.text) return;
+      const projected = native.accept(buffer, message);
+      if (projected.text !== buffer) {
+        state = 'streaming'; segmentStartedAt ??= Date.now(); buffer = projected.text;
+      }
+      if (projected.rows.length > nativeMessages.length && message.uuid && message.text.trim() && isClaudeNarrationSignature(message.signature)) summaries.add(message.uuid);
+      nativeMessages = projected.rows.map(row => ({ ...row, ...(summaries.has(row.uuid) ? { isSummary: true as const } : {}) }));
+      writeNow();
     },
 
     flush(): void {

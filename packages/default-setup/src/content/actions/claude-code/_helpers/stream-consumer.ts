@@ -284,6 +284,15 @@ export async function consumeStream(
           currentMessageHasCliUuid = true;
         }
         const blocks = line.message?.content || [];
+        const nativeThinking = blocks.filter((block: { type?: string; thinking?: unknown }) => block?.type === 'thinking' && typeof block.thinking === 'string');
+        if (nativeThinking.length) thinking.acceptNativeMessage({
+          uuid: nativeThinking.length === 1 ? line.uuid : undefined,
+          sessionId: line.session_id || nativeSessionId,
+          apiMessageId: line.message?.id,
+          text: nativeThinking.map((block: { thinking: string }) => block.thinking).join('\n\n'),
+          signature: nativeThinking.length === 1 ? nativeThinking[0].signature : undefined,
+          parentToolUseId: line.parent_tool_use_id,
+        });
         for (const block of blocks) {
           if (block?.type === 'tool_use') {
             if (block.name === 'ExitPlanMode') continue;

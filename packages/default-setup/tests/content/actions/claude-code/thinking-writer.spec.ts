@@ -29,3 +29,30 @@ it('publishes later thinking through the tool-activity owner without replacing i
   writer.finalise(); activity.finalise('done'); const completed = owned.mock.calls.length
   await vi.advanceTimersByTimeAsync(1000); expect(owned).toHaveBeenCalledTimes(completed)
 })
+
+it('captures eligible native summary ranges and heals partial or completed-only text without exposing signatures', () => {
+  const { writer } = fixture(), signature = 'Eg0KC0IJbmFycmF0aW9u'
+  writer.push('First')
+  writer.acceptNativeMessage({ uuid: 'summary-a', sessionId: 'session', apiMessageId: 'reply-a', text: 'First summary.', signature })
+  writer.finalise()
+  writer.acceptNativeMessage({ uuid: 'ordinary-b', sessionId: 'session', apiMessageId: 'reply-b', text: 'Ordinary thinking.', signature: 'not-a-narration-signature' })
+  const block = writer.buildBlock()!
+  expect(block.props.content).toBe('First summary.\n\nOrdinary thinking.')
+  expect(block.props.nativeMessages).toEqual([
+    { uuid: 'summary-a', sessionId: 'session', apiMessageId: 'reply-a', text: 'First summary.', start: 0, end: 14, isSummary: true },
+    { uuid: 'ordinary-b', sessionId: 'session', apiMessageId: 'reply-b', text: 'Ordinary thinking.', start: 16, end: 34 },
+  ])
+  expect(JSON.stringify(block)).not.toContain(signature)
+  writer.acceptNativeMessage({ uuid: 'summary-a', sessionId: 'session', text: 'First summary.', signature: 'changed' })
+  expect(writer.buildBlock()?.props.nativeMessages?.[0].isSummary).toBe(true)
+  writer.finalise()
+})
+
+it('does not grant summary identity to whitespace-only thinking or nested activity', () => {
+  const { writer, update } = fixture(), signature = 'Eg0KC0IJbmFycmF0aW9u'
+  writer.acceptNativeMessage({ uuid: 'child', sessionId: 'session', text: 'Child summary', signature, parentToolUseId: 'agent-tool' })
+  expect(writer.buildBlock()).toBeNull(); expect(update).not.toHaveBeenCalled()
+  writer.acceptNativeMessage({ uuid: 'empty', sessionId: 'session', text: '  ', signature })
+  expect(writer.buildBlock()?.props.nativeMessages?.[0].isSummary).toBeUndefined()
+  writer.finalise()
+})

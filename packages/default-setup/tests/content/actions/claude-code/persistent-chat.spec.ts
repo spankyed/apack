@@ -148,6 +148,8 @@ it('preserves native assistant rows when one provider reply becomes several tran
   expect(await chat({ threadId: id, text: 'paired reply', messageId: user.id }, services, {} as never, '')).toMatchObject({ streaming: true });
   events.write({ type: 'command_lifecycle', state: 'started', command_uuid: 'input-paired' });
   events.write({ type: 'system', subtype: 'init', session_id: 'paired-session', cwd: '/fixture' });
+  events.write({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'First' } } });
+  events.write({ type: 'assistant', uuid: 'native-summary', session_id: 'paired-session', message: { id: 'same-provider-id', content: [{ type: 'thinking', thinking: 'First summary.', signature: 'Eg0KC0IJbmFycmF0aW9u' }] } });
   events.write({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   events.write({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Repeated text' } } });
   events.write({ type: 'assistant', uuid: 'native-row-a', session_id: 'paired-session', message: { id: 'same-provider-id', content: [{ type: 'text', text: 'Repeated text' }] } });
@@ -159,6 +161,9 @@ it('preserves native assistant rows when one provider reply becomes several tran
   const replies = repository.chatQueries.threadData(id)?.messages?.filter(message => message.sender === 'assistant') ?? [];
   expect(replies.map(message => message.text)).toEqual(['Repeated text\nRepeated text']);
   expect(replies[0]?.text).toBe('Repeated text\nRepeated text');
+  expect(replies[0]?.blocks?.find(block => block.type === 'thinking')?.props).toMatchObject({ content: 'First summary.', state: 'done', nativeMessages: [
+    { uuid: 'native-summary', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'First summary.', start: 0, end: 14, isSummary: true },
+  ] });
   expect(replies[0]?.context).toMatchObject({ cliUuid: 'native-row-b', claudeNativeMessages: [
     { uuid: 'native-row-a', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'Repeated text', start: 0, end: 13 },
     { uuid: 'native-row-b', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'Repeated text', start: 14, end: 27 },
