@@ -26,6 +26,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── Model / behaviour ────────────────────────────────────────────────────
   if (opts.model) args.push('--model', opts.model)
+  if (opts.includeUnsupportedModels) args.push('--include-unsupported-models')
   if (opts.fallbackModel) args.push('--fallback-model', opts.fallbackModel)
   if (opts.effort) args.push('--effort', opts.effort)
   if (opts.thinking) args.push('--thinking', opts.thinking)

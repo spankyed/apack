@@ -1,3 +1,5 @@
+import { getModels } from './claude-code/models.ts'
+import type { ClaudeModelCatalog } from './claude-code/host-controls.ts'
 import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
 import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
 import type { ClaudePlan } from './claude-code/host-controls.ts'
@@ -94,6 +96,8 @@ export interface CliServiceType {
     readSettings(): Promise<Record<string, any>>
     /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
     writeSettings(settings: Record<string, any>): Promise<void>
+    /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
+    getModels(opts?: { cwd?: string; includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
     /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
     listSkills(): Promise<Array<{ name: string; scope: string; path: string }>>
     /** List memory/CLAUDE.md files from known locations. */
@@ -265,6 +269,9 @@ function createCliService(): CliServiceType {
           }
           throw err
         }
+      },
+      getModels(opts) {
+        return getModels({ cwd: opts?.cwd ?? resolveCwd(), ...(opts?.includeUnsupportedModels !== undefined ? { includeUnsupportedModels: opts.includeUnsupportedModels } : {}) })
       },
       async listSkills() {
         const results: Array<{ name: string; scope: string; path: string }> = []

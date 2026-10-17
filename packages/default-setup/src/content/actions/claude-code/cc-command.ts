@@ -57,6 +57,7 @@ const handlers: Record<string, Handler> = {
   config: handleConfig,
   status: handleStats,
   model: handleModel,
+  models: handleModels,
   memory: handleMemory,
   skills: handleSkills,
   stats: handleStats,
@@ -188,6 +189,26 @@ async function handleConfig(
     default:
       return { text: `Unknown config subcommand: ${subcommand}\nUsage: /cc-config get <key> | set <key> <value>` };
   }
+}
+
+async function handleModels(args: string[], services: Services, threadId?: string): Promise<{ text: string }> {
+  const includeUnsupportedModels = args.length === 2 && args[0] === 'start' && args[1] === '--include-unsupported-models';
+  if (!includeUnsupportedModels && (args.length > 1 || (args.length === 1 && args[0] !== 'start'))) return { text: 'Usage: cc-models [start [--include-unsupported-models]]' };
+  const prior = threadId ? getClaudeState(services, threadId) : undefined;
+  const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+  const conversation = threadId ? services.cli.claudeCode.getConversation(threadId) : undefined;
+  const handle = conversation?.owner.sessionCwd === cwd ? conversation.owner.handle : undefined;
+  if (!handle && args[0] !== 'start') return { text: 'No matching native conversation is running. Use cc-models start to read with a temporary native process. Starting and closing it can run configured session hooks.' };
+  const catalog = handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
+  const rows = catalog.models.map(model => {
+    const capabilities = [
+      ['Effort', model.supportsEffort], ['Adaptive thinking', model.supportsAdaptiveThinking],
+      ['Fast mode', model.supportsFastMode], ['Auto mode', model.supportsAutoMode], ['Thinking off', model.supportsThinkingOff],
+    ].filter(([, value]) => typeof value === 'boolean').map(([label, value]) => `${label}: ${value ? 'yes' : 'no'}`);
+    const details = [model.description, model.supportedEffortLevels ? `Effort levels: ${model.supportedEffortLevels.join(', ') || '(none)'}` : undefined, ...capabilities];
+    return `${model.value}: ${model.displayName}${model.resolvedModel ? ` (${model.resolvedModel})` : ''}${details.filter(Boolean).map(detail => `\n  ${detail}`).join('')}`;
+  });
+  return { text: `${rows.join('\n') || 'Native catalog is empty.'}\n\ncc-model writes the saved model setting; an active conversation can differ. This catalog is not an exhaustive list of custom model IDs and does not identify the active selection.` };
 }
 
 async function handleModel(

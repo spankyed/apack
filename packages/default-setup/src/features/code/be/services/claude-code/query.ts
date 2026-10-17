@@ -1,3 +1,4 @@
+import { ClaudeModelCatalogSchema, type ClaudeModelCatalog } from './host-controls.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudeUiControls, type ClaudeUiControls } from './ui-controls.ts'
 import { createBackgroundTaskTracker } from './background-tasks.ts'
@@ -104,6 +105,8 @@ export interface QueryHandle {
   getMcpStatus(): Promise<ClaudeMcpStatus>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
   getContextUsage(): Promise<ClaudeContextUsage>
+  /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
+  getModels(): Promise<ClaudeModelCatalog>
   /** Change the running CLI policy and return its acknowledged permission mode. */
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   /** Close stdin and wait for the child to exit. */
@@ -303,6 +306,11 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     async getContextUsage(): Promise<ClaudeContextUsage> {
       await initialized
       return ClaudeContextUsageSchema.parse(await hostControls.request({ subtype: 'get_context_usage', detail: 'summary' }))
+    },
+
+    async getModels(): Promise<ClaudeModelCatalog> {
+      await initialized
+      return ClaudeModelCatalogSchema.parse(await hostControls.request({ subtype: 'list_models' }))
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<PermissionMode> {

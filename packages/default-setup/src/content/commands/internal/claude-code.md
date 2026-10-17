@@ -7,6 +7,7 @@ name: Claude Code commands
 **cc-plan**: Show the current native plan without a model turn
 **cc-context**: Show context window usage breakdown
 **cc-status**: Show version and auth info
+**cc-models**: Read the matching native conversation catalog; `start` permits temporary discovery and session hooks. `start --include-unsupported-models` explicitly includes unknown account models.
 **cc-model**: Model name (optional, shows current if omitted)
 **cc-memory**: File name or add|remove <name>
 **cc-recap**: Summarize current conversation

@@ -2,11 +2,22 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { ClaudeProtocolError } from './errors.ts'
 
+/** Native catalog entries describe availability; custom model IDs may be absent. */
+export const ClaudeModelInfoSchema = z.object({
+  value: z.string(), displayName: z.string(), resolvedModel: z.string().optional(),
+  description: z.string().optional(), supportsEffort: z.boolean().optional(),
+  supportedEffortLevels: z.array(z.string()).optional(),
+  supportsAdaptiveThinking: z.boolean().optional(), supportsFastMode: z.boolean().optional(),
+  supportsAutoMode: z.boolean().optional(), supportsThinkingOff: z.boolean().optional(),
+}).passthrough()
+export const ClaudeModelCatalogSchema = z.object({ models: z.array(ClaudeModelInfoSchema) }).passthrough()
+export type ClaudeModelCatalog = z.infer<typeof ClaudeModelCatalogSchema>
+
 /** Metadata returned by the initialize exchange in Claude Code 2.1.299–2.1.301. */
 export const ClaudeInitializationSchema = z.object({
   commands: z.array(z.object({ name: z.string(), description: z.string().optional() }).passthrough()),
   agents: z.array(z.object({ name: z.string() }).passthrough()),
-  models: z.array(z.object({ value: z.string(), displayName: z.string() }).passthrough()),
+  models: z.array(ClaudeModelInfoSchema),
   claude_code_version: z.string().optional(),
   current_permission_mode: z.string().optional(),
   capabilities: z.array(z.string()).optional(),

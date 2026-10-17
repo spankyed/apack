@@ -327,6 +327,8 @@ export interface QueryOptions {
 
   // Model / behaviour
   model?: string
+  /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
+  includeUnsupportedModels?: boolean
   fallbackModel?: string
   effort?: Effort
   thinking?: Thinking

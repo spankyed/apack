@@ -1078,3 +1078,20 @@ it('rejects a native success subtype marked is_error while retaining its streame
   expect(events).toContainEqual(raw);
   await handle.close();
 });
+
+it('requests and validates native catalog metadata without dropping unknown capabilities', async () => {
+  const mock = makeMockStream(); vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle);
+  const handle = await query({}), init = mock.writes[0] as { request_id: string };
+  mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id, response: { commands: [], agents: [], models: [] } } });
+  await handle.initialized;
+  const catalog = handle.getModels(); await Promise.resolve();
+  const request = mock.writes[1] as { request_id: string; request: unknown };
+  expect(request.request).toEqual({subtype:'list_models'});
+  const response = {models:[{value:'custom',displayName:'Custom',supportedEffortLevels:['future'],futureCapability:true}]};
+  mock.pushEvent({type:'control_response',response:{subtype:'success',request_id:request.request_id,response}});
+  await expect(catalog).resolves.toEqual(response);
+  const invalid = handle.getModels(), rejected = expect(invalid).rejects.toThrow(); await Promise.resolve();
+  const next = mock.writes[2] as {request_id:string};
+  mock.pushEvent({type:'control_response',response:{subtype:'success',request_id:next.request_id,response:{models:[{value:'missing-name'}]}}});
+  await rejected; await handle.close();
+});
