@@ -15,7 +15,7 @@
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>
     </div>
     <NativeAgentComposer :draft="draft" :disabled="!active || returning || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
-      @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
+      @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
 <script setup lang="ts">

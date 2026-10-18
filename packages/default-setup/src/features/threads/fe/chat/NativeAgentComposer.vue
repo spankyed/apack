@@ -1,5 +1,5 @@
 <template>
-  <form class="mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit">
+  <form class="mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
     <StatusLine :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <TiptapEditor ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="emit('draft', $event)" @submit="submit" />
     <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
@@ -21,7 +21,7 @@ import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
 const props = defineProps<{ draft: string; disabled: boolean; mountId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<void> }>()
-const emit = defineEmits<{ draft: [text: string]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
+const emit = defineEmits<{ leave: []; draft: [text: string]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true
@@ -47,6 +47,13 @@ watch(() => props.hostRequest, request => {
   else if (request.kind === 'fill') emit('host', { requestId: request.requestId, kind: 'fill', filled: available && (bridge?.fillDraft(request.input, request.revision) ?? false) })
   else emit('host', { requestId: request.requestId, kind: 'suggest', shown: available && (bridge?.showSuggestion(request.text, request.revision) ?? false) })
 })
+function leaveEditor(event: KeyboardEvent) {
+  const editor = editorRef.value?.editor
+  if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || editor?.view.composing || !editor?.view.dom.contains(event.target as Node)) return
+  event.preventDefault(); event.stopPropagation()
+  if (offers.value.length) bridge?.dismissCompletions()
+  else if (!submitting.value) emit('leave')
+}
 async function submit() {
   if (props.disabled || submitting.value || !bridge) return
   const editor = editorRef.value?.editor, active = bridge
