@@ -105,6 +105,8 @@ test('reviews native plans and preserves original mode, context and session choi
     await section.getByRole('button', { name: 'Stop session', exact: true }).click()
     await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
   }
+  const back = section.getByRole('button', { name: 'Back to conversation', exact: true })
+  if (await back.isVisible()) await back.click()
   const finalSessionId = (await context()).sessionId
   const journals: Record<string, any[]> = {}
   for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
