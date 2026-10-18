@@ -148,13 +148,14 @@ async function initialize(){
   const questionOptions=await import('/$bunfs/root/chunk-hdxpvbx1.js');
   const questionText=await import('/$bunfs/root/chunk-xh5v0djg.js');
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
+  const paths=await import('/$bunfs/root/chunk-27d659a1.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths};
   engine.I9e.onInvalidate(instances=>{for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText};
+  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths};
  })();
  return initializing;
 }
@@ -399,7 +400,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_bash_dialogs'){
   const d=nativeDialog(n,'permission_bash');if(!d.item)return {dialogs:[]};
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'Bash',command:d.payload.input.command,...(typeof d.payload.description==='string'?{description:d.payload.description}:{}),...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'Bash',cwd:n.paths.ce(),command:d.payload.input.command,...(typeof d.payload.description==='string'?{description:d.payload.description}:{}),...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
  }
  if(request.subtype==='apack_answer_bash_dialog'){
   abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_bash');

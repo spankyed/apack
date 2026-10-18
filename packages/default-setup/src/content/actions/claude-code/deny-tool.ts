@@ -35,7 +35,9 @@ export async function action(params: Record<string, unknown>, services: Services
       return { success: false, reason: 'Native approval expired' };
     }
     try {
-      await owner.answerReadDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      else if (pending.toolName === 'Read') await owner.answerReadDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      else throw new Error('Unsupported native approval');
     } catch {
       expirePendingControlRequest(services, threadId, requestId);
       return { success: false, reason: 'Native approval changed or could not be answered' };

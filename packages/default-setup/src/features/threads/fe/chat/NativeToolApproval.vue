@@ -1,12 +1,14 @@
 <template>
-  <section class="native-read-approval" aria-label="Native Read approval" data-testid="native-read-approval">
+  <section class="native-tool-approval" :aria-label="`${toolName} approval`" :data-testid="toolName === 'Read' ? 'native-read-approval' : 'native-bash-approval'">
     <header>
       <span class="eyebrow">Permission needed</span>
       <h2>{{ title }}</h2>
     </header>
-    <div class="details" tabindex="0" aria-label="Read request details">
+    <div class="details" tabindex="0" :aria-label="`${toolName} request details`">
       <p class="question">{{ question }}</p>
-      <code data-testid="native-read-path">{{ filePath }}</code>
+      <p v-if="cwd" class="reason">Working directory</p>
+      <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
+      <code :data-testid="toolName === 'Read' ? 'native-read-path' : 'native-bash-command'">{{ toolName === 'Read' ? filePath : command }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
       <details>
         <summary>Add a reason for denying</summary>
@@ -17,7 +19,7 @@
       <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="decisions">
         <button type="button" class="deny" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">Deny</button>
-        <button type="button" class="approve" :disabled="disabled" @click="$emit('respond', { approved: true })">Approve</button>
+        <button type="button" class="approve" :disabled="disabled" @click="$emit('respond', { approved: true })">{{ toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
@@ -25,19 +27,19 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-defineProps<{ title: string; question: string; filePath: string; reason?: string; disabled: boolean }>()
+defineProps<{ toolName: 'Read' | 'Bash'; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 defineEmits<{ respond: [response: { approved: boolean; reason?: string }]; pause: [] }>()
 const feedback = ref('')
 </script>
 
 <style scoped>
-.native-read-approval { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
+.native-tool-approval { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
 header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
 .eyebrow { color: #b8a887; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .details { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
 .question { margin: 0 0 6px; color: #aaa; }
-code { display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
+code { white-space: pre-wrap; display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
 .reason { margin: 8px 0; color: #aaa; overflow-wrap: anywhere; }
 details { margin-top: 10px; color: #aaa; }
 summary { cursor: pointer; font-size: 11px; }

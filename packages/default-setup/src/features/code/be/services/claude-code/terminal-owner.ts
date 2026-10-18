@@ -1,3 +1,4 @@
+import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
@@ -34,6 +35,8 @@ export interface ClaudeNativeTerminalOwner {
   renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>
   getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>
   answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
+  getBashDialogs(): Promise<ClaudeNativeBashDialog[]>
+  answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>
   getReadDialogs(): Promise<ClaudeNativeReadDialog[]>
   answerReadDialog(response: ClaudeNativeReadDialogResponse): Promise<void>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
@@ -193,6 +196,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native question was not acknowledged')
+      },
+      async getBashDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_bash_dialogs' }) as { dialogs?: unknown }
+        if (closed) return []
+        return ClaudeNativeBashDialogsSchema.parse(result.dialogs)
+      },
+      async answerBashDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native Bash approval session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_bash_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native Bash approval was not acknowledged')
       },
       async getReadDialogs() {
         if (closed || !bridge.ready) return []

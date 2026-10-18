@@ -72,11 +72,12 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         journalPending = batch.pending
         problem = batch.problems.length ? batch.problems.join('; ') : undefined
         const reads = await owner.getReadDialogs()
+        const bashes = await owner.getBashDialogs()
         const questions = await owner.getQuestionDialogs()
         if (!current() || !repository.threadQueries.byId(threadId)) return
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
-        const dialog = reads.at(0) ?? questions.at(0)
+        const dialog = reads.at(0) ?? bashes.at(0) ?? questions.at(0)
         const nativeControl = object(priorControl?.nativeTerminal)
         const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
         if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
@@ -86,17 +87,19 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           let pendingControlRequest = nativeControl ? undefined : priorControl
           if (dialog && dialog.sessionId === owner.state.sessionId) {
             const isRead = dialog.toolName === 'Read'
-            const input = isRead ? dialog.input : dialog.shownInput
-            const title = isRead ? dialog.title : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
-            const message = isRead ? sendBlockMessage({ threadId, text: title, blocks: [
-              { type: 'prompt', props: { content: dialog.question } },
-              { type: 'tool-input', props: { toolName: 'Read', input } },
+            const isToolApproval = dialog.toolName !== 'AskUserQuestion'
+            const question = isToolApproval ? isRead ? dialog.question : 'Run this shell command?' : undefined
+            const input = isToolApproval ? dialog.input : dialog.shownInput
+            const title = isToolApproval ? isRead ? dialog.title : dialog.description ?? 'Run shell command' : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
+            const message = isToolApproval ? sendBlockMessage({ threadId, text: title, blocks: [
+              { type: 'prompt', props: { content: question } },
+              { type: 'tool-input', props: { toolName: dialog.toolName, input } },
               { type: 'approval', props: { requireReason: false, allowReason: true, autoAcceptOption: false } },
             ], forkable: false, autoHide: true, asUser: true }) : sendBlockMessage({ threadId, text: title,
               blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
             pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
               nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, requestId: dialog.requestId,
-                title, ...(isRead ? { question: dialog.question, reason: dialog.reason } : { presentation: dialog.presentation }) } }
+                title, ...(isToolApproval ? { question, reason: dialog.reason, ...(dialog.toolName === 'Bash' ? { cwd: dialog.cwd } : {}) } : { presentation: dialog.presentation }) } }
           }
           if (pendingControlRequest !== priorControl) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }

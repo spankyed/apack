@@ -32,7 +32,7 @@
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
-          <div v-show="!pendingNativeRead && !pendingNativeQuestion" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!pendingNativeApproval && !pendingNativeQuestion" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -79,9 +79,9 @@
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
-          <div v-if="pendingNativeRead" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeReadApproval :key="pendingNativeRead.messageId" v-bind="pendingNativeRead"
-              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeRead!.messageId, response })"
+          <div v-if="pendingNativeApproval" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+            <NativeToolApproval :key="pendingNativeApproval.messageId" v-bind="pendingNativeApproval"
+              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
@@ -92,7 +92,7 @@
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div v-show="!pendingNativeRead && !pendingNativeQuestion" class="flex-shrink-0 w-full" :class="$style.inputContainer">
+          <div v-show="!pendingNativeApproval && !pendingNativeQuestion" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -205,7 +205,7 @@ import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
-import NativeReadApproval from './NativeReadApproval.vue'
+import NativeToolApproval from './NativeToolApproval.vue'
 import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
 import { ClaudeQuestionPresentationSchema } from '#features/code/common/native-question.ts'
 import RecentThreads from './recent-threads.vue'
@@ -392,16 +392,16 @@ const statusLineCwd = computed(() => {
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
-const pendingNativeRead = computed(() => {
+const pendingNativeApproval = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
-    approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown };
-    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; question?: unknown; reason?: unknown };
+    approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown; command?: unknown };
+    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; cwd?: unknown; question?: unknown; reason?: unknown };
   } | undefined
   const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
-  if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'Read' || typeof pending.approvalMessageId !== 'string' || typeof pending.originalInput?.file_path !== 'string') return undefined
+  if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || !['Read', 'Bash'].includes(String(pending?.toolName)) || typeof pending.approvalMessageId !== 'string' || (pending?.toolName === 'Read' ? typeof pending.originalInput?.file_path !== 'string' : typeof pending.originalInput?.command !== 'string')) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   if (!message) return undefined
-  return { messageId: pending.approvalMessageId, filePath: pending.originalInput.file_path,
+  return { messageId: pending.approvalMessageId, toolName: pending.toolName as 'Read' | 'Bash', filePath: pending.originalInput?.file_path as string | undefined, command: pending.originalInput?.command as string | undefined, cwd: typeof native.cwd === 'string' ? native.cwd : undefined,
     title: typeof native.title === 'string' ? native.title : 'Read file',
     question: typeof native.question === 'string' ? native.question : 'Allow this read?',
     reason: typeof native.reason === 'string' ? native.reason : undefined,

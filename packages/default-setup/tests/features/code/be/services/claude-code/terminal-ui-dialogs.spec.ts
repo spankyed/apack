@@ -13,7 +13,7 @@ function fixture() {
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
-    originalContext: binding, initialize: async () => ({ questionOptions: { q: () => nativeSessionId } }), AbortController, randomUUID,
+    originalContext: binding, initialize: async () => ({ questionOptions: { q: () => nativeSessionId }, paths: { ce: () => '/workspace' } }), AbortController, randomUUID,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_read_dialogs' }, new AbortController())).dialogs[0]

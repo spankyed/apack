@@ -57,3 +57,21 @@ export interface ClaudeNativeQuestionHoldRequest {
   clientId: string
   renderToken: string
 }
+
+/** A one-time native Bash decision; command and working directory are presentation only. */
+export const ClaudeNativeBashDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('Bash'),
+  command: z.string().max(262144), cwd: z.string().min(1).max(16384),
+  description: z.string().max(4000).optional(), reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativeBashDialogsSchema = z.array(ClaudeNativeBashDialogSchema).max(1)
+export type ClaudeNativeBashDialog = z.infer<typeof ClaudeNativeBashDialogSchema>
+export interface ClaudeNativeBashDialogResponse {
+  id: string
+  revision: string
+  sessionId: string
+  decision: 'allow' | 'deny'
+  feedback?: string
+}
