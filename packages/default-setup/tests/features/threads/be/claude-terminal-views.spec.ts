@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
-function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput']) {
+function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput'], beforeViewChange?: Parameters<typeof createClaudeTerminalViews>[0]['beforeViewChange']) {
   const listeners = new Set<() => void>()
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
@@ -12,7 +12,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
   const accepted = vi.fn()
-  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput, accepted })
+  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput, accepted, beforeViewChange })
   const send = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
   return { owner, output, listeners, open, views, send, accepted, setCurrent(value?: ClaudeNativeTerminalOwner) { current = value } }
 }
@@ -177,5 +177,22 @@ it.each(['send', 'input'] as const)('admits only bounded %s task input through t
     expect(operation === 'input' ? f.send.mock.calls.at(-1)![0].task?.input : f.send.mock.calls.at(-1)![0].task?.sent).toEqual(operation === 'input' ? input : true)
     expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('agent-a', operation, request.text)
     f.views.handle(request, 'one', f.send); expect(f.owner.operateTask).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})
+
+it.each([false, true])('awaits prompt host release and rechecks owner replacement (%s)', async replacement => {
+  let finish!: () => void
+  const release = vi.fn(() => new Promise<void>(resolve => { finish = resolve })), f = fixture(undefined, release)
+  f.owner.state.tasks.push({ id: 'agent', name: 'Worker', status: 'running' })
+  vi.mocked(f.owner.operateTask).mockResolvedValue({ view: { taskId: 'agent' } })
+  try {
+    f.views.handle(mount, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent', revision: 1, operation: 'foreground' }, 'window', f.send)
+    await vi.waitFor(() => expect(release).toHaveBeenCalledWith('window', 'thread'))
+    expect(f.owner.operateTask).not.toHaveBeenCalled()
+    if (replacement) f.setCurrent(undefined)
+    finish()
+    if (replacement) { await new Promise(resolve => setTimeout(resolve, 0)); expect(f.owner.operateTask).not.toHaveBeenCalled() }
+    else await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].task).toMatchObject({ status: 'done', operation: 'foreground', view: { taskId: 'agent' } }))
   } finally { f.views.clear() }
 })

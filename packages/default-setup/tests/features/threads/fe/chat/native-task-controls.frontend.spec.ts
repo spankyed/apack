@@ -9,8 +9,8 @@ async function fixture() {
   const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false } })
   let revision = 1
   const operate = vi.fn(() => ++revision), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ setup() { provide(claudeTaskControls, { ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
-  root.querySelector<HTMLButtonElement>('button')!.click(); await nextTick()
+  app = createApp({ setup() { provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
+  ;[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'View Agent conversation')!.click(); await nextTick()
   const input = root.querySelector<HTMLTextAreaElement>('textarea')!
   async function type(text: string) { input.value = text; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
   async function send() { root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await nextTick() }
@@ -36,7 +36,7 @@ it('closes only the task conversation on Escape and preserves its unsent text', 
   expect(f.root.querySelector('textarea')).toBe(f.input)
   const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); f.input.dispatchEvent(escape); await nextTick()
   expect(escape.defaultPrevented).toBe(true); expect(f.root.querySelector('textarea')).toBeNull()
-  const toggle = f.root.querySelector<HTMLButtonElement>('button')!; expect(document.activeElement).toBe(toggle)
+  const toggle = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'View Agent conversation')!; expect(document.activeElement).toBe(toggle)
   toggle.click(); await nextTick(); expect(f.root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Unsent Agent instruction')
 })
 
@@ -57,4 +57,13 @@ it('uses human replies when supported and clears only their exact queued receipt
   expect(f.operate).toHaveBeenLastCalledWith(expect.anything(), 'input', 'Human reply')
   f.state.value = { ...f.state.value, operation: 'input', revision: 3, status: 'done', input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }; await nextTick()
   expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Agent resumed with your reply')
+})
+
+it('opens the bound native Agent through the app control', async () => {
+  const f = await fixture()
+  const open = [...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Open Agent')!
+  open.click(); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner', sessionId: 'session' }), 'foreground')
+  f.state.value = { ownerId: 'owner', taskId: 'agent', revision: 2, operation: 'foreground', status: 'pending' }; await nextTick()
+  expect(open.disabled).toBe(true)
 })

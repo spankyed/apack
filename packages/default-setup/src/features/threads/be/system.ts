@@ -2,7 +2,7 @@ import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
-import { handleClaudeUiView } from './claude-ui.ts';
+import { handleClaudeUiView, releaseClaudeUiViews } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
@@ -27,6 +27,7 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
 const terminalViews = createClaudeTerminalViews({
+  beforeViewChange: releaseClaudeUiViews,
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),

@@ -1,7 +1,7 @@
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { PassThrough } from 'node:stream'
 import { randomUUID } from 'node:crypto'
-import { handleClaudeUiView, clearClaudeUiViews } from '#features/threads/be/claude-ui.ts'
+import { handleClaudeUiView, clearClaudeUiViews, releaseClaudeUiViews } from '#features/threads/be/claude-ui.ts'
 import { openConversation, killAllHandles, closeIdleConversation } from '#features/code/be/services/claude-code/handle-store.ts'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
@@ -197,4 +197,20 @@ it('does not retarget an Agent mount to the parent print conversation when its t
   handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'window', delivery)
   handleClaudeUiView({ ...mount, mountId: randomUUID() }, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
   expect(ui.attach).toHaveBeenCalledOnce()
+})
+
+it('awaits native detach acknowledgments for this window while preserving other windows', async () => {
+  const { ui } = await native(), first = reply(), second = reply()
+  handleClaudeUiView(mount, 'selecting-window', first); handleClaudeUiView(mount, 'other-window', second)
+  await vi.advanceTimersByTimeAsync(100)
+  let finish!: () => void
+  ui.detach.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ detached: true, surfaces: [] }) }))
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'selecting-window', first)
+  let released = false
+  const release = releaseClaudeUiViews('selecting-window', 'thread').then(() => { released = true })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(released).toBe(false); expect(ui.detach).toHaveBeenCalledOnce()
+  expect(second.mock.calls.at(-1)?.[0]).toMatchObject({ state: { status: 'live' } })
+  finish(); await release; expect(released).toBe(true)
+  expect(ui.detach).toHaveBeenCalledOnce()
 })

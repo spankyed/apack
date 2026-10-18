@@ -1,6 +1,7 @@
 <template>
   <div v-if="controls && controls.ownerId.value === task.ownerId" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
     <div class="flex flex-wrap items-center gap-2">
+      <button v-if="controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
       <button ref="toggle" type="button" :aria-expanded="shown" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ shown ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
       <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || task.status !== 'running'" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : 'Stop Agent' }}</button>
     </div>

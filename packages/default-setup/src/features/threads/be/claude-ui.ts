@@ -30,6 +30,18 @@ interface ClaudeUiView {
   mount?: ReturnType<typeof mountClaudeUi>
 }
 const views = new Map<string, ClaudeUiView>()
+const retiring = new Set<{ client: string; threadId: string; done: Promise<void> }>()
+function retire(view: ClaudeUiView): void {
+  if (!view.mount) return
+  const entry = { client: view.client, threadId: view.threadId, done: view.mount.dispose() }
+  retiring.add(entry)
+  void entry.done.finally(() => retiring.delete(entry)).catch(() => {})
+}
+/** Release only this window's hosts, including detachments already started by unmount. */
+export async function releaseClaudeUiViews(client: string, threadId: string): Promise<void> {
+  for (const [key, view] of views) if (view.client === client && view.threadId === threadId) drop(key, view)
+  await Promise.all([...retiring].filter(view => view.client === client && view.threadId === threadId).map(view => view.done))
+}
 let timer: ReturnType<typeof setInterval> | undefined
 const validId = (id: string) => /^[0-9a-f-]{36}$/i.test(id)
 const keyOf = (client: string, mountId: string) => JSON.stringify([client, mountId])
@@ -43,14 +55,14 @@ function drop(key: string, view: ClaudeUiView): void {
   view.pendingPrompt?.finish()
   // A stopped thread can remain visible; explicitly retire the frontend drawing as well.
   try { publish(view, { status: 'disconnected' }) } catch { /* window already closed */ }
-  void view.mount?.dispose().catch(() => {})
+  retire(view)
   if (!views.size && timer) { clearInterval(timer); timer = undefined }
 }
 function bind(key: string, view: ClaudeUiView): void {
   const owner = getClaudeUiOwner(view.threadId, view.nativeView)
   if (owner === view.owner) { view.mount?.refreshTranscript(); return }
   view.pendingPrompt?.finish()
-  void view.mount?.dispose().catch(() => {})
+  retire(view)
   view.mount = undefined
   view.owner = owner
   if (!owner) { publish(view, { status: 'disconnected' }); return }

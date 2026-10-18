@@ -28,10 +28,11 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection" @active="nativeTerminalActive = $event" />
+        <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)] ?? ''" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="focusedAgent = undefined" />
         <!-- Shrinkable content area -->
-        <div v-show="!nativeTerminalActive && !focusedAgent" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
+        <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
           <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -242,6 +243,7 @@ import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
 const shell = useShell()
+const agentSelection = ref<{ threadId: string; mountId: string; ownerId: string; sessionId: string; taskId: string; revision: number }>()
 const nativeTerminalActive = ref(false)
 watch(nativeTerminalActive, (active, previous) => {
   if (previous && !active) void nextTick(() => forceScrollToBottom())
@@ -376,9 +378,9 @@ function pressNativeUi(actionId: string, href?: string) {
   if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 onMounted(() => {
-  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.revision], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
+  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.revision, () => !!agentSelection.value], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
     detachNativeUi()
-    if (!threadId || !enabled || terminalActive || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
+    if (!threadId || !enabled || terminalActive || agentSelection.value || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
     const mount = { threadId, mountId: crypto.randomUUID() }
     nativeUiMount.value = mount
     const renew = renewNativeUi
@@ -413,7 +415,7 @@ const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
 })
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
-const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([, view]) => view.threadId === currentThread.value?.id && view.state?.status === 'live'))
+const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const agentPending = ref(false), agentReturning = ref(false)
 const agentScrollPositions = ref<Record<string, ClaudeAgentScrollPosition>>({})
 function saveAgentScrollPosition(target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition) { agentScrollPositions.value[agentDraftKey(target)] = position }
@@ -421,7 +423,8 @@ const agentDrafts = ref<Record<string, string>>({})
 const agentDraftKey = (target: ClaudeNativeAgentUiTarget) => JSON.stringify([target.ownerId, target.sessionId, target.taskId])
 function saveAgentDraft(target: ClaudeNativeAgentUiTarget, text: string) { agentDrafts.value[agentDraftKey(target)] = text }
 const focusedAgent = ref<{ target: ClaudeNativeAgentUiTarget; name: string; statusText?: string }>()
-watch([taskView, agentReturning], ([lease, returning]) => {
+watch([taskView, agentReturning, agentSelection], ([lease, returning, selecting]) => {
+  if (selecting) return
   const owner = lease?.[1].state, selected = owner?.view
   if (owner && selected?.kind === 'agent' && selected.taskId) {
     const task = owner.tasks.find(task => task.id === selected.taskId)
@@ -431,14 +434,27 @@ watch([taskView, agentReturning], ([lease, returning]) => {
   } else if (!returning && (!owner || selected?.kind === 'main' || focusedAgent.value?.target.ownerId !== owner.ownerId)) focusedAgent.value = undefined
 }, { immediate: true })
 let taskRevision = 0
+watch([agentSelection, nativeTerminalViews, () => currentThread.value?.id], ([request, views, threadId]) => {
+  if (!request) return
+  const view = views[request.mountId], owner = view?.state, result = view?.task
+  if (threadId !== request.threadId || !owner || owner.ownerId !== request.ownerId || owner.sessionId !== request.sessionId || owner.status !== 'live') { agentSelection.value = undefined; return }
+  if (result?.revision !== request.revision || result.ownerId !== request.ownerId || result.taskId !== request.taskId || result.operation !== 'foreground' || result.status === 'pending') return
+  if (result.status === 'error' || result.status === 'done' && result.view?.taskId === request.taskId && owner.view?.kind === 'agent' && owner.view.taskId === request.taskId) agentSelection.value = undefined
+})
 provide(claudeTaskControls, {
+  foregroundAvailable: computed(() => !nativeTerminalActive.value && !agentSelection.value && !pendingNativeSend.value && !agentPending.value && taskView.value?.[1].state?.view?.kind === 'main'),
   ownerId: computed(() => taskView.value?.[1].state?.ownerId),
   state: computed(() => taskView.value?.[1].task),
   operate(task, operation, text) {
     const lease = taskView.value, owner = lease?.[1].state, threadId = currentThread.value?.id
-    if (!lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
+    if (agentSelection.value || !lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
     const revision = taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1
     const request = { type: 'CLAUDE_TERMINAL_TASK' as const, threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, revision }
+    if (operation === 'foreground') {
+      if (nativeTerminalActive.value || pendingNativeSend.value || agentPending.value || owner.view?.kind !== 'main') return
+      agentSelection.value = { threadId, mountId: lease[0], ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: task.id, revision }
+      detachNativeUi()
+    }
     actor.send((operation === 'send' || operation === 'input') ? { ...request, operation, text: text ?? '' } : { ...request, operation })
     return revision
   },

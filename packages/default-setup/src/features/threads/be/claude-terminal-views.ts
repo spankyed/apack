@@ -68,6 +68,7 @@ export function createClaudeTerminalViews(dependencies: {
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
+  beforeViewChange?(client: string, threadId: string): Promise<void>
   prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
   const views = new Map<string, View>()
@@ -137,7 +138,12 @@ export function createClaudeTerminalViews(dependencies: {
         const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(target.task?.taskId === event.taskId ? { details: target.task.details } : {}) }
         target.task = task; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.task === task
-        void ((event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation)).then(result => {
+        void Promise.resolve().then(async () => {
+          if (event.operation === 'foreground') await dependencies.beforeViewChange?.(target.client, event.threadId)
+          if (!current()) return undefined
+          return (event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation)
+        }).then(result => {
+          if (!result) return
           if (!current()) return
           if (event.operation === 'foreground' && result.view?.taskId !== event.taskId || event.operation === 'background' && result.view?.taskId !== null || event.operation === 'input' && !result.input || event.operation === 'send' && result.sent !== true || event.operation === 'stop' && result.stopped !== true || event.operation === 'inspect' && result.details?.taskId !== event.taskId) throw new Error('Native task response did not match')
           target.task = { ...task, status: 'done', sent: result.sent, view: result.view, input: result.input, details: result.details ?? task.details }; publish(key, target)
