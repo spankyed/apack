@@ -375,6 +375,21 @@ function questionPresentation(n,payload){
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_owner_snapshot'){
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native owner is not bound');
+  const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js');
+  const sessionId=String(globals.q());
+  if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native owner session changed');
+  const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
+  const effective=settings.ut(),policy=settings.me('policySettings')??{};
+  const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
+  const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
+  // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
+  const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
+  const turn=n.runtime.lpe();
+  return {sessionId,metadata:{cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true}]:[]})};
+ }
  if(request.subtype==='apack_read_dialogs'){
   const d=nativeDialog(n,'permission_file');if(!d.item)return {dialogs:[]};
   const p=d.payload;
