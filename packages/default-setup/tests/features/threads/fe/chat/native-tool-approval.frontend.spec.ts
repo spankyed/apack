@@ -32,3 +32,13 @@ it('keeps the Bash command and working directory literal and offers only a one-t
     expect(respond).toHaveBeenCalledWith({ approved: true })
   } finally { app.unmount(); root.remove() }
 })
+
+it.each([false, true])('shows literal file changes or the native withheld warning: %s', withheld => {
+  const root = document.createElement('div'); document.body.append(root)
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Edit', title: 'Edit file', question: 'Allow edit?', filePath: '/fixture', disabled: false, review: withheld ? { withheld: true, notice: 'Cannot review this change' } : { withheld: false, before: '<script>before</script>', after: '<img>after', replaceAll: true } }) }); app.mount(root)
+  try {
+    expect(root.querySelector('script,img')).toBeNull()
+    if (withheld) { expect(root.textContent).toContain('Cannot review this change'); expect(root.querySelector('[data-testid="native-file-before"],[data-testid="native-file-after"]')).toBeNull() }
+    else { expect(root.querySelector('[data-testid="native-file-before"]')?.textContent).toBe('<script>before</script>'); expect(root.querySelector('[data-testid="native-file-after"]')?.textContent).toBe('<img>after'); expect(root.textContent).toContain('Replace all matching occurrences') }
+  } finally { app.unmount(); root.remove() }
+})

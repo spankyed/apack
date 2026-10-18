@@ -1,12 +1,21 @@
 <template>
-  <section class="native-tool-approval" :aria-label="`${toolName} approval`" :data-testid="toolName === 'Read' ? 'native-read-approval' : 'native-bash-approval'">
+  <section class="native-tool-approval" :aria-label="`${toolName} approval`" :data-testid="`native-${toolName.toLowerCase()}-approval`">
     <header>
       <span class="eyebrow">Permission needed</span>
       <h2>{{ title }}</h2>
     </header>
     <div class="details" tabindex="0" :aria-label="`${toolName} request details`">
       <p class="question">{{ question }}</p>
-      <code :data-testid="toolName === 'Read' ? 'native-read-path' : 'native-bash-command'">{{ toolName === 'Read' ? filePath : command }}</code>
+      <code :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
+      <section v-if="review" class="change-review" aria-label="Proposed file change" data-testid="native-file-review">
+        <p v-if="review.withheld" role="note">{{ review.notice || 'Claude withheld the proposed change; it cannot be reviewed here.' }}</p>
+        <template v-else>
+          <p v-if="review.notice" role="note">{{ review.notice }}</p>
+          <template v-if="review.before !== undefined"><p class="change-label">Before</p><code data-testid="native-file-before" class="before">{{ review.before }}</code></template>
+          <p class="change-label">{{ review.before === undefined ? 'New file' : 'After' }}</p><code data-testid="native-file-after" class="after">{{ review.after }}</code>
+          <p v-if="review.replaceAll" role="note">Replace all matching occurrences</p>
+        </template>
+      </section>
       <p v-if="cwd" class="reason">Working directory</p>
       <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
@@ -27,7 +36,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-defineProps<{ toolName: 'Read' | 'Bash'; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+import type { ClaudeFileApprovalReview } from '#features/code/common/native-file-approval.ts'
+defineProps<{ toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 defineEmits<{ respond: [response: { approved: boolean; reason?: string }]; pause: [] }>()
 const feedback = ref('')
 </script>
@@ -40,6 +50,10 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .details { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
 .question { margin: 0 0 6px; color: #aaa; }
 code { white-space: pre-wrap; display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
+.change-review { margin-top: 10px; }
+.change-label { margin: 8px 0 4px; color: #aaa; }
+code.before { border-left: 2px solid #d28c8c; }
+code.after { border-left: 2px solid #8fba99; }
 .reason { margin: 8px 0; color: #aaa; overflow-wrap: anywhere; }
 details { margin-top: 10px; color: #aaa; }
 summary { cursor: pointer; font-size: 11px; }

@@ -66,31 +66,31 @@ describe('CC: Deny Tool', () => {
 
 });
 
-it.each([true, false])('answers only the matching terminal owner, matching: %s', async matching => {
+it.each(['Read', 'Write', 'Edit'].flatMap(toolName => [true, false].map(matching => ({ toolName, matching }))))('answers native $toolName only for the matching owner: $matching', async ({ toolName, matching }) => {
   const { id } = setup('current');
   repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: {
-    requestId: 'current', toolName: 'Read', approvalMessageId: 'approval', originalInput: { file_path: '/original' },
+    requestId: 'current', toolName, approvalMessageId: 'approval', originalInput: { file_path: '/original' },
     nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog-1', revision: 'revision' },
   } } } });
-  const answerReadDialog = vi.fn(async () => {}), respond = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerReadDialog })), getHandle: vi.fn(() => ({ respond })) } as never });
+  const answerFileDialog = vi.fn(async () => {}), respond = vi.fn();
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerFileDialog })), getHandle: vi.fn(() => ({ respond })) } as never });
   mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() });
   const result = await action({ threadId: id, requestId: 'current', originalInput: { file_path: '/tampered' }, response: { autoAccept: true, reason: 'No thanks' } }, services);
   expect(result.success).toBe(matching);
   expect(respond).not.toHaveBeenCalled();
-  if (matching) expect(answerReadDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', decision: 'deny', feedback: 'No thanks' });
-  else expect(answerReadDialog).not.toHaveBeenCalled();
+  if (matching) expect(answerFileDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', decision: 'deny', feedback: 'No thanks' });
+  else expect(answerFileDialog).not.toHaveBeenCalled();
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.autoAcceptEdits).toBeUndefined();
 });
 
 it.each([true, false])('routes a native Bash decision only to its owning process: %s', async matching => {
   const { id } = setup('current');
   repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', toolName: 'Bash', approvalMessageId: 'approval', originalInput: { command: 'original' }, nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'bash', revision: 'revision' } } } } });
-  const answerBashDialog = vi.fn(async () => {}), answerReadDialog = vi.fn(), respond = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerBashDialog, answerReadDialog })), getHandle: vi.fn(() => ({ respond })) } as never });
+  const answerBashDialog = vi.fn(async () => {}), answerFileDialog = vi.fn(), respond = vi.fn();
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerBashDialog, answerFileDialog })), getHandle: vi.fn(() => ({ respond })) } as never });
   mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() });
   const result = await action({ threadId: id, requestId: 'current', originalInput: { command: 'tampered' }, response: { autoAccept: true } }, services);
-  expect(result.success).toBe(matching); expect(answerReadDialog).not.toHaveBeenCalled(); expect(respond).not.toHaveBeenCalled();
+  expect(result.success).toBe(matching); expect(answerFileDialog).not.toHaveBeenCalled(); expect(respond).not.toHaveBeenCalled();
   if (matching) expect(answerBashDialog).toHaveBeenCalledWith({ id: 'bash', revision: 'revision', sessionId: 'session', decision: 'deny', feedback: undefined });
   else expect(answerBashDialog).not.toHaveBeenCalled();
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.autoAcceptEdits).toBeUndefined();

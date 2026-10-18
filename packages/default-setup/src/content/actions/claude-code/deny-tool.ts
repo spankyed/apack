@@ -36,7 +36,7 @@ export async function action(params: Record<string, unknown>, services: Services
     }
     try {
       if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
-      else if (pending.toolName === 'Read') await owner.answerReadDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
       else throw new Error('Unsupported native approval');
     } catch {
       expirePendingControlRequest(services, threadId, requestId);

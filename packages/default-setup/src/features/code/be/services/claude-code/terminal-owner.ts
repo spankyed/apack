@@ -1,5 +1,5 @@
 import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
-import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
+import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeFileDialogsSchema, type ClaudeNativeFileDialog, type ClaudeNativeFileDialogResponse } from './terminal-dialogs.ts'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
@@ -37,8 +37,8 @@ export interface ClaudeNativeTerminalOwner {
   answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
   getBashDialogs(): Promise<ClaudeNativeBashDialog[]>
   answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>
-  getReadDialogs(): Promise<ClaudeNativeReadDialog[]>
-  answerReadDialog(response: ClaudeNativeReadDialogResponse): Promise<void>
+  getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
+  answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
   setModel(model: string): Promise<string>
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
@@ -208,15 +208,15 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_bash_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native Bash approval was not acknowledged')
       },
-      async getReadDialogs() {
+      async getFileDialogs() {
         if (closed || !bridge.ready) return []
-        const result = await bridge.uiTransport.request({ subtype: 'apack_read_dialogs' }) as { dialogs?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_file_dialogs' }) as { dialogs?: unknown }
         if (closed) return []
-        return ClaudeNativeReadDialogsSchema.parse(result.dialogs)
+        return ClaudeNativeFileDialogsSchema.parse(result.dialogs)
       },
-      async answerReadDialog(response) {
+      async answerFileDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native approval session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_read_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
       },
       async getModels(options) {

@@ -300,7 +300,7 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?payload?.toolName==='Read'&&payload.operationType==='read':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
@@ -409,16 +409,19 @@ async function control(request,abort){
   const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
   d.store.answer(d.item.id,result);dialogRevisions.delete('permission_bash');return {answered:true};
  }
- if(request.subtype==='apack_read_dialogs'){
+ if(request.subtype==='apack_file_dialogs'){
   const d=nativeDialog(n,'permission_file');if(!d.item)return {dialogs:[]};
   const p=d.payload;
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:'Read',title:p.title??'Read file',question:p.question?.kind==='plain'?p.question.text:'Allow this read?',...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
+  const content=p.content,isWrite=['Write','Edit'].includes(p.toolName);
+  const withheld=p.contentWithheld===true||content?.kind==='no-changes';
+  const review=isWrite?{withheld,...(typeof content?.message==='string'?{notice:content.message}:typeof content?.notice==='string'?{notice:content.notice}:{}),...(!withheld?(content.kind==='file-write-diff'?{...(content.fileExists?{before:content.oldContent}:{}),after:content.content}:{before:content.edits[0].old_string,after:content.edits[0].new_string,replaceAll:content.edits[0].replace_all===true}):{})}:undefined;
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:p.toolName,title:p.title??'File permission',question:p.question?.kind==='plain'?p.question.text:p.question?.kind==='file-action'?'Allow Claude to '+p.question.verbPhrase+' '+p.question.fileName+'?':'Allow this file operation?',...(review?{review}:{}),...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
  }
- if(request.subtype==='apack_answer_read_dialog'){
+ if(request.subtype==='apack_answer_file_dialog'){
   abort.signal.throwIfAborted();
   const d=nativeDialog(n,'permission_file');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native approval changed or expired');
-  if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native Read decision');
+  if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native file decision');
   const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
   // The native requestDialog validates and dispatches this result through its original ask path.
   d.store.answer(d.item.id,result);dialogRevisions.delete('permission_file');

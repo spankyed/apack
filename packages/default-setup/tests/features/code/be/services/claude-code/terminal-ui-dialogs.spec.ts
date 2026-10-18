@@ -16,8 +16,8 @@ function fixture() {
     originalContext: binding, initialize: async () => ({ questionOptions: { q: () => nativeSessionId }, paths: { ce: () => '/workspace' } }), AbortController, randomUUID,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
-  const snapshot = async () => (await control({ subtype: 'apack_read_dialogs' }, new AbortController())).dialogs[0]
-  const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_read_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
+  const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
+  const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_file_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
   return { state, item, answer, snapshot, reply, control, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
 }
 
@@ -66,4 +66,24 @@ it.each(['command', 'classifier', 'session', 'native session'] as const)('refuse
   if (change === 'native session') f.replaceNativeSession()
   await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
   expect(f.answer).not.toHaveBeenCalled()
+})
+
+it.each(['Write', 'Edit'] as const)('retains original %s review/input and refuses a changed proposal', async toolName => {
+  const f = fixture()
+  const input = toolName === 'Write' ? { file_path: '/original', content: 'after' } : { file_path: '/original', old_string: 'before', new_string: 'after' }
+  const content = toolName === 'Write' ? { kind: 'file-write-diff', fileExists: true, oldContent: 'before', content: 'after' } : { kind: 'file-edit-diff', edits: [{ old_string: 'before', new_string: 'after', replace_all: true }] }
+  const payload = Object.assign(f.item.payload, { toolName, operationType: 'write', input, content, contentWithheld: false })
+  const dialog = await f.snapshot()
+  expect(dialog.review).toEqual({ withheld: false, before: 'before', after: 'after', ...(toolName === 'Edit' ? { replaceAll: true } : {}) })
+  payload.contentWithheld = true
+  await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
+  const withheld = await f.snapshot()
+  expect(withheld.review).toEqual({ withheld: true })
+  await f.reply(withheld, { updatedInput: { file_path: '/tampered', content: 'tampered' } })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'allow', updatedInput: input })
+})
+it('preserves the native withheld-content warning without leaking before/after text', async () => {
+  const f = fixture()
+  Object.assign(f.item.payload, { toolName: 'Write', operationType: 'write', contentWithheld: true, content: { kind: 'no-changes', message: 'Proposed content is too large to show' } })
+  expect((await f.snapshot()).review).toEqual({ withheld: true, notice: 'Proposed content is too large to show' })
 })
