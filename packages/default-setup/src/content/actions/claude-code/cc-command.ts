@@ -38,7 +38,6 @@ type Handler = (
 
 const PASSTHROUGH: Record<string, { cmd: string; defaultArgs?: string[] }> = {
   doctor: { cmd: 'doctor' },
-  mcp:    { cmd: 'mcp', defaultArgs: ['list'] },
   agents: { cmd: 'agents' },
 };
 
@@ -54,6 +53,7 @@ function makePassthroughHandler(spec: { cmd: string; defaultArgs?: string[] }): 
 // ── Handler registry ────────────────────────────────────────────────
 
 const handlers: Record<string, Handler> = {
+  mcp: handleMcp,
   sessions: handleSessions,
   config: handleConfig,
   status: handleStats,
@@ -301,6 +301,28 @@ async function handleStats(
   ];
   if (settings.model) lines.push(`Model: ${settings.model}`);
   return { text: lines.join('\n'), data: { version, auth, settings } };
+}
+
+async function handleMcp(args: string[], services: Services, threadId?: string) {
+  const status = args.length === 0 || args[0] === 'list' || args[0] === 'status';
+  if (status && args.length > 1) return { text: 'Usage: cc-mcp [status|list]' };
+  if (status && threadId) {
+    const native = services.cli.claudeCode.getNativeTerminal(threadId);
+    const conversation = native ? undefined : services.cli.claudeCode.getConversation(threadId);
+    const owner = native ?? conversation?.owner.handle;
+    if (owner) {
+      const sessionId = native?.state.sessionId ?? conversation?.owner.sessionId;
+      const result = await owner.getMcpStatus();
+      if (native ? services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId
+        : services.cli.claudeCode.getConversation(threadId) !== conversation || conversation?.owner.sessionId !== sessionId)
+        return { text: 'The Claude conversation changed while reading MCP status.' };
+      const rows = result.mcpServers.map(server => `${server.name}: ${server.status}${server.serverInfo ? ` — ${server.serverInfo.name} ${server.serverInfo.version}` : ''}${server.tools?.length ? `\n  Tools: ${server.tools.map(tool => tool.name).join(', ')}` : ''}`);
+      return { text: `Live MCP connections:\n${rows.join('\n') || 'No MCP servers in this conversation.'}`, data: result };
+    }
+  }
+  if (args[0] === 'status') return { text: 'No live Claude conversation. Use cc-mcp list to inspect saved configuration.' };
+  const output = await makePassthroughHandler({ cmd: 'mcp', defaultArgs: ['list'] })(args, services, threadId);
+  return status ? { ...output, text: `Saved MCP configuration:\n${output.text}` } : output;
 }
 
 async function handleRename(

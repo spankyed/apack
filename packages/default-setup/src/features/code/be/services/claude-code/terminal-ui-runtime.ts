@@ -143,6 +143,7 @@ async function initialize(){
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
+  const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
   const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
@@ -164,7 +165,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,rename,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={gate,engine,session,roster,schemas,runtime,rename,mcp,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -514,6 +515,14 @@ async function control(request,abort){
   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
+ }
+ if(request.subtype==='apack_mcp_status'){
+  const expected=request.session_id;
+  if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native MCP session changed');
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native MCP status is not ready');
+  const context=binding.toolContext(abort);
+  return {mcpServers:n.mcp.Q_n({connections:context.options.mcpClients,tools:context.options.tools})};
  }
  if(request.subtype==='apack_rename_session'){
   if(typeof request.title!=='string')throw Error('Native title must be a string');

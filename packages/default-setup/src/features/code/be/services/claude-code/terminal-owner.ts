@@ -13,7 +13,7 @@ import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
-import { ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
+import { ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
 export interface ClaudeNativeTerminalOwner {
@@ -42,6 +42,7 @@ export interface ClaudeNativeTerminalOwner {
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
+  getMcpStatus(): Promise<ClaudeMcpStatus>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
   renameSession(title: string): Promise<{ title: string; message: string }>
   setModel(model: string): Promise<string>
@@ -233,6 +234,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native approval session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
+      },
+      async getMcpStatus() {
+        if (closed) throw new Error('Native terminal closed')
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_mcp_status', session_id: sessionId })
+        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native MCP session changed while reading status')
+        return ClaudeMcpStatusSchema.parse(result)
       },
       async getModels(options) {
         if (closed) throw new Error('Native terminal closed')
