@@ -68,6 +68,7 @@ export interface ClaudeUiHover {
 
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
+  | { kind: 'client'; id: string; pointer: boolean; keys: boolean; layout?: Pick<ClaudeUiBoxLayout,'width'|'height'|'flexGrow'>; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'text'; hover?: ClaudeUiHover; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
   | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
@@ -162,3 +163,5 @@ export type ClaudePromptHostResponse = { requestId: string } & (
   | { kind: 'fill'; filled: boolean }
   | { kind: 'suggest'; shown: boolean }
 )
+
+export interface ClaudeUiClientEvent { id: string; sequence: number; event: import('./ui-controls.ts').ClaudeUiClientInput }

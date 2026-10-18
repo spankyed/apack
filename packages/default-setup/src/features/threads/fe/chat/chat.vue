@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const quotes = [
   '"If a chatbot speaks in a forest and no one reads the output, does it still hallucinate?"',
@@ -206,6 +206,7 @@ function rotateQuote() {
   randomQuote.value = next;
 }
 
+import { claudeClientInput } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
@@ -343,6 +344,7 @@ function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) 
 let heartbeat: ReturnType<typeof setInterval> | undefined
 let stopNativeUiWatch: (() => void) | undefined
 function detachNativeUi() {
+  nativeClientSequence=0
   if (heartbeat) clearInterval(heartbeat)
   heartbeat = undefined
   const mount = nativeUiMount.value
@@ -352,6 +354,12 @@ function detachNativeUi() {
   if (mount) { actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount }); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount }) }
   pendingNativeSend?.reject(new Error('Claude conversation view changed')); pendingNativeSend = undefined
 }
+let nativeClientSequence=0
+provide(claudeClientInput,(id,event)=>{
+ const mount=nativeUiMount.value;if(!mount)return
+ const sequence=++nativeClientSequence
+ actor.send({type:'CLAUDE_UI_CLIENT',...mount,id,sequence,event})
+})
 function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
   const mount = nativeUiMount.value
   if (mount) actor.send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })

@@ -2,6 +2,7 @@
   <div v-if="node.kind === 'box'" :ref="hoverElement" class="min-w-0 native-box" :data-native-scroll-id="node.scrollId" :style="boxStyle" :data-native-border-dim="boxPaint?.borderDimColor === true ? 'true' : undefined" :data-native-plugin="node.plugin">
     <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </div>
+  <NativeUiClient v-else-if="node.kind === 'client'" :key="node.id" :node="node"><NativeUiNode v-for="(child,index) in node.children" :key="index" :node="child" @press="(id,href)=>emit('press',id,href)" @field="emit('field',$event)" /></NativeUiClient>
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
@@ -28,6 +29,7 @@
 <script setup lang="ts">
 import { computed, inject, provide, ref, onBeforeUnmount, onUpdated, type ComponentPublicInstance, type CSSProperties } from 'vue'
 import { openLink } from '@apackdev/sdk/fe'
+import NativeUiClient from './NativeUiClient.vue'
 import NativeUiSvg from './NativeUiSvg.vue'
 import { claudeUiBoxPaint, claudeUiTextPaint, claudeTextPaint, type ClaudeTextPaint } from './native-ui-paint.ts'
 import { claudeHoverSurface, claudeHoverBox } from './native-ui-hover.ts'

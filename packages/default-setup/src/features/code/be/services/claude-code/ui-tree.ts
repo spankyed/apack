@@ -7,6 +7,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  clientInstances: ReadonlySet<string>
   scrollTargets: ReadonlyMap<string, { plugin: string; key: string }>
   focusables: ReadonlyMap<string, { plugin: string; key: string }>
   links: ReadonlyMap<string, ReadonlySet<string> | undefined>
@@ -52,6 +53,7 @@ function validateBudget(tree: unknown): void {
 /** Translate observed nodes only. Native props, engine refs and executable modules never cross this boundary. */
 export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing): ClaudeUiDrawing {
   validateBudget(tree)
+  const clientInstances = new Set<string>()
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
   const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
   const scrollBoxes = new Map<string, { plugin: string; key: string }>()
@@ -71,6 +73,12 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     if (!record(value) || typeof value.type !== 'string') throw new ClaudeProtocolError('native UI node must have a component type')
     const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : inheritedPlugin
     const attribution = plugin === undefined ? {} : { plugin }
+    if (value.type === 'NativeClient') {
+      const props=value.props
+      if(!record(props)||typeof props.id!=='string'||!/^[a-f0-9-]{36}$/i.test(props.id)||!Array.isArray(value.children)||typeof props.pointer!=='boolean'||typeof props.keys!=='boolean')throw new ClaudeProtocolError('Invalid native Client presentation')
+      clientInstances.add(props.id)
+      return {kind:'client',id:props.id,pointer:props.pointer,keys:props.keys,layout:readClaudeUiBoxLayout(props),children:value.children.map(child=>visit(child,plugin)),...attribution}
+    }
     if (value.type === 'Box' || value.type === 'Text') {
       const children = value.children ?? []
       if (!Array.isArray(children)) throw new ClaudeProtocolError('native UI container must have children')
@@ -246,5 +254,5 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   const counts = new Map<string, number>()
   for (const [, identity] of targets) { const key = JSON.stringify(identity); counts.set(key, (counts.get(key) ?? 0) + 1) }
   const scrollTargets = new Map(targets.filter(([, identity]) => counts.get(JSON.stringify(identity)) === 1))
-  return { tree: result, actions, fields, links, focusables, scrollTargets }
+  return { tree: result, clientInstances, actions, fields, links, focusables, scrollTargets }
 }

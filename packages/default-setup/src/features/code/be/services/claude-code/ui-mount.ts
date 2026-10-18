@@ -14,7 +14,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -77,13 +77,13 @@ export function mountClaudeUi(options: {
     scheduled = setTimeout(() => { scheduled = undefined; void render() }, 50)
   }
   function retireDrawing(): void {
-    if (!fieldDrawing?.fields.size) { publish({ status: 'rendering' }); return }
+    if (!fieldDrawing || !fieldDrawing.fields.size && !fieldDrawing.clientInstances.size) { publish({ status: 'rendering' }); return }
     function retire(node: import('./ui-presentation.ts').ClaudeUiNode): import('./ui-presentation.ts').ClaudeUiNode {
       if (node.kind === 'button' || node.kind === 'markdown') {
         const { actionId: _, ...inert } = node
         return inert
       }
-      if (node.kind === 'box' || node.kind === 'link') return { ...node, children: node.children.map(retire) }
+      if (node.kind === 'box' || node.kind === 'link' || node.kind === 'client') return { ...node, children: node.children.map(retire) }
       if (node.kind === 'text' && node.children) return { ...node, children: node.children.map(retire) }
       return node
     }
@@ -111,7 +111,7 @@ export function mountClaudeUi(options: {
       if (!current() || revision !== generation) return
       drawing = createClaudeUiDrawing(result.tree, fieldDrawing)
       function stamp(node: import('./ui-presentation.ts').ClaudeUiNode): void {
-        if (node.kind === 'box') node.children.forEach(stamp)
+        if (node.kind === 'box' || node.kind === 'client') node.children.forEach(stamp)
         else if (node.kind === 'input' || node.kind === 'select') node.revision = completed.get(node.actionId) ?? 0
       }
       stamp(drawing.tree)
@@ -239,6 +239,10 @@ export function mountClaudeUi(options: {
       } catch (error) {
         if (current() && revision === promptRevision) return { revision, status: 'error', message: error instanceof Error ? error.message : 'Native composer edit failed' }
       }
+    },
+    async clientEvent(event: import('./ui-presentation.ts').ClaudeUiClientEvent) {
+      if(!current()||!attached)return {handled:false}
+      return owner.handle.ui.clientEvent({...event,client_id:client.client_id})
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
       if (question.ownsField(event.actionId)) return question.field(event)

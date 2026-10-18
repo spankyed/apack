@@ -14,9 +14,9 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
-    render: vi.fn(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
+    render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
   const owner = { handle: { ui }, done: done.promise, subscribe(listener: (event: StreamLine) => void) { listeners.add(listener); return () => { listeners.delete(listener) } } }
   const mount = (promptHost?: ClaudePromptHost) => mountClaudeUi({ owner, promptHost, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
@@ -136,7 +136,7 @@ describe('native UI mounted lifecycle', () => {
     await view.dispose(); pending.resolve(rendered()); await Promise.resolve()
     expect(f.states.at(-1)).toEqual({ status: 'disconnected' })
     expect(f.states.some(state => state.status === 'live')).toBe(false)
-    const other = f.mount(); f.ui.render.mockResolvedValueOnce({ ...rendered(), tree: { type: 'Button' } } as ReturnType<typeof rendered>)
+    const other = f.mount(); f.ui.render.mockResolvedValueOnce({ ...rendered(), tree: { type: 'Button' } })
     await other.ready; await vi.advanceTimersByTimeAsync(50)
     expect(f.states.at(-1)).toMatchObject({ status: 'error' })
     await other.dispose()
@@ -147,7 +147,7 @@ describe('native UI mounted lifecycle', () => {
 it('routes keyed field edits through invalidation and rejects foreign or removed field authority', async () => {
   const f = fixture()
   const field = { type: 'Input', props: { key: 'draft', value: '', rows: 2 }, press: { plugin: 'fixture', handle: 7 } }
-  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field })
   const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   const live = f.states.at(-1)!
   if (live.status !== 'live' || live.tree.kind !== 'input') throw new Error('expected input')
@@ -164,7 +164,7 @@ it('routes keyed field edits through invalidation and rejects foreign or removed
 it('checks select membership before native dispatch and retires it on disposal', async () => {
   const f = fixture()
   const field = { type: 'Select', props: { key: 'pick', options: [{ value: 'a' }, { value: 'b' }] }, press: { plugin: 'fixture', handle: 8 } }
-  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field })
   const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   const live = f.states.at(-1)!
   if (live.status !== 'live' || live.tree.kind !== 'select') throw new Error('expected select')
@@ -211,7 +211,7 @@ it('keeps a native edit failure separate from mounted controls and delivers supe
 it('forwards only authorized Markdown URLs to the native callback and retires them after a click', async () => {
   const f = fixture()
   const doc = { type: 'Markdown', props: { key: 'doc', text: '[Open](https://example.com/)', pressableLinks: ['https://example.com/'] }, press: { plugin: 'fixture', handle: 9 } }
-  f.ui.render.mockResolvedValue({ ...rendered(), tree: doc } as unknown as ReturnType<typeof rendered>)
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: doc })
   const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   const live = f.states.at(-1)!
   if (live.status !== 'live' || live.tree.kind !== 'markdown' || !live.tree.actionId) throw new Error('expected Markdown')
@@ -229,7 +229,7 @@ it('forwards only authorized Markdown URLs to the native callback and retires th
 it('stamps rendered field replacements only after native callbacks finish and refuses replayed edits', async () => {
   const f = fixture(), pending = deferred<{ handled: boolean }>()
   const field = { type: 'Input', props: { key: 'draft', value: '', submitLabel: 'send' }, press: { plugin: 'fixture', handle: 7 } }
-  f.ui.render.mockResolvedValue({ ...rendered(), tree: field } as unknown as ReturnType<typeof rendered>)
+  f.ui.render.mockResolvedValue({ ...rendered(), tree: field })
   f.ui.input.mockImplementationOnce(() => pending.promise)
   const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   const latest = () => { const live = f.states.at(-1)!; if (live.status !== 'live' || live.tree.kind !== 'input') throw new Error('expected input'); return live.tree }
@@ -307,7 +307,7 @@ it('keeps fields mounted but retires visible button authority until fresh redraw
   const f = fixture()
   f.ui.render.mockResolvedValue({ ...rendered(), tree: { type: 'Box', children: [rendered().tree,
     { type: 'Input', props: { key: 'draft', value: '' }, press: { plugin: 'fixture', handle: 7 } },
-  ] } } as unknown as ReturnType<typeof rendered>)
+  ] } })
   const view = f.mount(); await view.ready; await vi.advanceTimersByTimeAsync(50)
   const tree = () => { const state = f.states.at(-1); if (state?.status !== 'live' || state.tree.kind !== 'box') throw Error('expected retained tree'); return state.tree }
   const oldButton = tree().children[0], field = tree().children[1]
@@ -346,4 +346,17 @@ it('holds native toast lifetime with the shown pane and releases it after its na
   await vi.advanceTimersByTimeAsync(0); expect(f.states.at(-1)?.notices?.toasts).toHaveLength(1)
   await vi.advanceTimersByTimeAsync(1001); expect(f.states.at(-1)?.notices).toBeUndefined()
   await view.dispose()
+})
+
+it('keeps a Client container mounted during native redraws and routes its scoped input',async()=>{
+ const f=fixture(),id='9b08a63e-78f6-46c5-9134-c6c64de30937'
+ f.ui.render.mockResolvedValue({tree:{type:'NativeClient',props:{id,pointer:true,keys:true,width:30,height:3},children:[{type:'Button',props:{label:'Run',key:'run'},press:{plugin:'fixture',handle:1}}]},props:{},rewritten:true,hooked:true})
+ const mount=f.mount();await mount.ready
+ await vi.waitFor(()=>expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client',id}}))
+ f.invalidate()
+ expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client',id,children:[{kind:'button'}]}})
+ const state=f.states.at(-1);if(state?.status==='live'&&state.tree.kind==='client')expect('actionId' in state.tree.children[0]!).toBe(false)
+ await mount.clientEvent({id,sequence:1,event:{kind:'key',key:'x'}})
+ expect(f.ui.clientEvent).toHaveBeenCalledWith(expect.objectContaining({id,sequence:1,event:{kind:'key',key:'x'}}))
+ await mount.dispose();expect(await mount.clientEvent({id,sequence:2,event:{kind:'key',key:'y'}})).toEqual({handled:false})
 })

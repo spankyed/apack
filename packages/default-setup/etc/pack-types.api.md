@@ -2291,9 +2291,15 @@ interface ClaudeNativeTerminalOwner {
     answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>;
     getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
     answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>;
+    getMcpStatus(): Promise<ClaudeMcpStatus>;
+    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
     getModels(options?: {
         includeUnsupportedModels?: boolean;
     }): Promise<ClaudeModelCatalog>;
+    renameSession(title: string): Promise<{
+        title: string;
+        message: string;
+    }>;
     setModel(model: string): Promise<string>;
     setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>;
@@ -2683,6 +2689,14 @@ interface ClaudeUiBoxPaint {
     backgroundColor?: string;
 }
 
+interface ClaudeUiClientEvent {
+    id: string;
+    sequence: number;
+    event: ClaudeUiClientInput;
+}
+
+type ClaudeUiClientInput = z.infer<typeof clientInput>;
+
 type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
 
 type ClaudeUiFieldEvent = {
@@ -2739,6 +2753,14 @@ type ClaudeUiMountState = ({
 };
 
 type ClaudeUiNode = {
+    kind: 'client';
+    id: string;
+    pointer: boolean;
+    keys: boolean;
+    layout?: Pick<ClaudeUiBoxLayout, 'flexGrow' | 'height' | 'width'>;
+    children: ClaudeUiNode[];
+    plugin?: string;
+} | {
     kind: 'text';
     hover?: ClaudeUiHover;
     text: string;
@@ -3027,6 +3049,10 @@ type ClaudeUiViewRequest = ({
     threadId: string;
     mountId: string;
 } | ({
+    type: 'CLAUDE_UI_CLIENT';
+    threadId: string;
+    mountId: string;
+} & ClaudeUiClientEvent) | ({
     type: 'CLAUDE_UI_FIELD';
     threadId: string;
     mountId: string;
@@ -7100,6 +7126,7 @@ interface QueryHandle {
     getPlan(): Promise<ClaudePlan>;
     /** Read live MCP server and tool status without a model turn. */
     getMcpStatus(): Promise<ClaudeMcpStatus>;
+    controlMcpServer(serverName: string, operation: 'disable' | 'enable' | 'reconnect'): Promise<ClaudeMcpStatus>;
     /** Read structured context usage; summary avoids per-category token-count API calls. */
     getContextUsage(): Promise<ClaudeContextUsage>;
     /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
@@ -8653,6 +8680,83 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
+declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
+    kind: z.ZodLiteral<"resize">;
+    columns: z.ZodNumber;
+    rows: z.ZodNumber;
+}, "strict", z.ZodTypeAny, {
+    kind: "resize";
+    columns: number;
+    rows: number;
+}, {
+    kind: "resize";
+    columns: number;
+    rows: number;
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"key">;
+    key: z.ZodEffects<z.ZodString, string, string>;
+    ctrl: z.ZodOptional<z.ZodLiteral<true>>;
+    shift: z.ZodOptional<z.ZodLiteral<true>>;
+    meta: z.ZodOptional<z.ZodLiteral<true>>;
+}, "strict", z.ZodTypeAny, {
+    key: string;
+    kind: "key";
+    shift?: true | undefined;
+    ctrl?: true | undefined;
+    meta?: true | undefined;
+}, {
+    key: string;
+    kind: "key";
+    shift?: true | undefined;
+    ctrl?: true | undefined;
+    meta?: true | undefined;
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"pointer">;
+    type: z.ZodEnum<["down", "move", "up", "enter", "leave"]>;
+    x: z.ZodNumber;
+    y: z.ZodNumber;
+    fine: z.ZodOptional<z.ZodObject<{
+        x: z.ZodNumber;
+        y: z.ZodNumber;
+    }, "strict", z.ZodTypeAny, {
+        x: number;
+        y: number;
+    }, {
+        x: number;
+        y: number;
+    }>>;
+    button: z.ZodOptional<z.ZodEnum<["left", "middle", "right"]>>;
+    ctrl: z.ZodOptional<z.ZodLiteral<true>>;
+    shift: z.ZodOptional<z.ZodLiteral<true>>;
+    alt: z.ZodOptional<z.ZodLiteral<true>>;
+}, "strict", z.ZodTypeAny, {
+    type: "down" | "enter" | "leave" | "move" | "up";
+    kind: "pointer";
+    x: number;
+    y: number;
+    shift?: true | undefined;
+    ctrl?: true | undefined;
+    fine?: {
+        x: number;
+        y: number;
+    } | undefined;
+    button?: "left" | "middle" | "right" | undefined;
+    alt?: true | undefined;
+}, {
+    type: "down" | "enter" | "leave" | "move" | "up";
+    kind: "pointer";
+    x: number;
+    y: number;
+    shift?: true | undefined;
+    ctrl?: true | undefined;
+    fine?: {
+        x: number;
+        y: number;
+    } | undefined;
+    button?: "left" | "middle" | "right" | undefined;
+    alt?: true | undefined;
+}>]>;
+
 /**
  * Create a new artifact and notify the frontend (with side effects)
  *
@@ -8689,6 +8793,14 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean): {
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
 declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>): {
+    clientEvent(options: {
+        client_id: string;
+        id: string;
+        sequence: number;
+        event: ClaudeUiClientInput;
+    }): Promise<{
+        handled: boolean;
+    }>;
     /** Register only a mounted composer; registration alone does not attach or create a process. */
     servePrompt(id: string, host: ClaudePromptHost): () => void;
     /** Advertise only reverse APIs the attached view can actually answer. */

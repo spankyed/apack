@@ -114,7 +114,7 @@ function focusNativeUi(event: FocusEvent) {
   try { site.querySelector<HTMLElement>('[data-native-autofocus="true"]')?.focus() } finally { autoEntering = false }
 }
 function visible(node: ClaudeUiNode): boolean {
-  if (node.kind === 'box' || node.kind === 'link') return node.children.some(visible)
+  if (node.kind === 'box' || node.kind === 'link' || node.kind === 'client') return node.children.some(visible)
   if (node.kind === 'text') return !!node.text.trim() || !!node.children?.some(visible)
   return node.kind !== 'unsupported' || node.component !== 'engine'
 }

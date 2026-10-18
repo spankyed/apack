@@ -3,6 +3,12 @@ import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host
 import { ClaudeProtocolError } from './errors.ts'
 import type { ClaudeInitialization, createHostControls } from './host-controls.ts'
 
+const clientPointer = z.object({kind:z.literal('pointer'),type:z.enum(['down','move','up','enter','leave']),x:z.number().int().min(-1000000).max(1000000),y:z.number().int().min(-1000000).max(1000000),fine:z.object({x:z.number().finite().min(-1000000).max(1000000),y:z.number().finite().min(-1000000).max(1000000)}).strict().optional(),button:z.enum(['left','middle','right']).optional(),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),alt:z.literal(true).optional()}).strict()
+const clientInput = z.discriminatedUnion('kind',[
+ z.object({kind:z.literal('resize'),columns:z.number().int().min(0).max(100000),rows:z.number().int().min(0).max(100000)}).strict(),
+ z.object({kind:z.literal('key'),key:z.string().min(1).max(32).refine(key=>key!=='escape'),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),meta:z.literal(true).optional()}).strict(),clientPointer,
+])
+export type ClaudeUiClientInput = z.infer<typeof clientInput>
 const clientId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const surface = z.enum(['desktop', 'mobile', 'vscode'])
 const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
@@ -89,6 +95,10 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     return controls.request(value)
   }
   return {
+    async clientEvent(options: {client_id:string;id:string;sequence:number;event:ClaudeUiClientInput}) {
+      const valid=z.object({client_id:clientId,id:z.string().uuid(),sequence:z.number().int().positive().safe(),event:clientInput}).strict().parse(options)
+      return z.object({handled:z.boolean()}).parse(await request({subtype:'apack_ui_client',...valid}))
+    },
     /** Register only a mounted composer; registration alone does not attach or create a process. */
     servePrompt(id: string, host: ClaudePromptHost): () => void {
       if (!promptHosts) throw new ClaudeProtocolError('native composer reply transport is unavailable')

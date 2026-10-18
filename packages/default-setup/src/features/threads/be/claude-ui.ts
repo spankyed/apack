@@ -171,6 +171,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     return
   }
   if (event.type === 'CLAUDE_UI_UNMOUNT') { if (view) drop(key, view); return }
+  if(event.type==='CLAUDE_UI_CLIENT'){
+    if(!view||!validId(event.id))return
+    bind(key,view)
+    void view.mount?.clientEvent({id:event.id,sequence:event.sequence,event:event.event}).catch(()=>{})
+    return
+  }
   if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {
     if (!view || !validId(event.actionId)) return
     bind(key, view)
