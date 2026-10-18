@@ -10,7 +10,7 @@
     <details v-if="state?.agent?.metadata" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400"><summary class="cursor-pointer py-1">Agent details</summary><div class="max-h-36 overflow-y-auto overscroll-contain py-2"><NativeAgentDetails :details="state.agent" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
-    <div v-show="!panelActive" class="relative min-h-0 flex-1">
+    <div v-show="!panelActive && !outputActive" class="relative min-h-0 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
@@ -24,9 +24,14 @@
     </div>
     <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="transcriptScroll.latest()" />
     </div>
-    <section v-if="state?.agentInput?.status === 'command_output' && state.agentInput.output" aria-label="Native command output" class="mx-4 mb-3 max-h-48 shrink-0 overflow-auto overscroll-contain rounded-xl border border-white/10 bg-white/[0.025] p-3">
-      <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">/{{ state.agentInput.output.commandName }}</p>
-      <pre :class="state.agentInput.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.agentInput.output.text }}</pre>
+    <section v-if="outputActive && state?.agentInput?.output" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
+      <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+        <span class="text-xs text-neutral-400">/{{ state.agentInput.output.commandName }}</span>
+        <button type="button" class="shrink-0 rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="dismissOutput">Back to messages</button>
+      </header>
+      <div class="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
+        <pre :class="state.agentInput.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.agentInput.output.text }}</pre>
+      </div>
     </section>
     <p v-if="state?.agentInput?.status === 'blocked'" role="status" class="mx-4 mb-2 text-xs text-amber-200">{{ state.agentInput.problem }}</p>
     <section v-if="commandActive && state?.agentInput?.command" ref="commandPanel" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">
@@ -71,6 +76,9 @@ const selectedOwner = computed(() => {
 })
 const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
+const dismissedOutput = ref<string>()
+const outputActive = computed(() => state.value?.agentInput?.status === 'command_output' && !!state.value.agentInput.output && state.value.agentInput.output.messageId !== dismissedOutput.value)
+function dismissOutput() { dismissedOutput.value = state.value?.agentInput?.output?.messageId; void nextTick(() => transcriptViewport.value?.focus({ preventScroll: true })) }
 const panelActive = computed(() => state.value?.agentInput?.status === 'panel')
 const commandActive = computed(() => panelActive.value || commandSending.value || state.value?.agentInput?.status === 'confirmation' || state.value?.agentInput?.status === 'deciding')
 let commandFocusOwned = false

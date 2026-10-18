@@ -75,6 +75,9 @@ it('renders native command output as bounded plain text outside the worker trans
   const output = f.root.querySelector('[aria-label="Native command output"]')!
   expect(output.textContent).toContain('<script>untrusted output</script>')
   expect(output.querySelector('script')).toBeNull()
+  f.button('Back to messages').click(); await nextTick()
+  expect(f.root.querySelector('[aria-label="Native command output"]')).toBeNull()
+  expect(document.activeElement).toBe(f.root.querySelector('[aria-label="Agent transcript"]'))
   expect(f.root.querySelector('[aria-label="Agent transcript"]')!.textContent).not.toContain('Original second line')
   expect(f.button('Back to conversation').disabled).toBe(false)
   expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(false)
