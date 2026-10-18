@@ -182,6 +182,7 @@ async function initialize(){
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
+  const taskResume=await import('/$bunfs/root/chunk-jg0h78vk.js');
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
@@ -205,7 +206,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,taskControls,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,taskControls,taskResume,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }

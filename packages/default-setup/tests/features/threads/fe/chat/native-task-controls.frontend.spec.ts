@@ -6,7 +6,7 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren() })
 async function fixture() {
   const task = { id: 'agent', ownerId: 'owner', sessionId: 'session', status: 'running' }
-  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, messages: [], truncated: false } })
+  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false } })
   let revision = 1
   const operate = vi.fn(() => ++revision), root = document.createElement('div'); document.body.append(root)
   app = createApp({ setup() { provide(claudeTaskControls, { ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
@@ -48,4 +48,13 @@ it('shows original native detail values, failed status and explicit shortened pr
   expect(f.root.querySelector('summary')?.textContent).toBe('Agent prompt')
   expect(f.root.querySelector('details')?.textContent).toContain('Original task prompt')
   expect(f.root.textContent).toContain('Prompt preview shortened.'); expect(f.root.querySelector('[role="alert"]')?.textContent).toContain('Native failure')
+})
+
+it('uses human replies when supported and clears only their exact queued receipt', async () => {
+  const f = await fixture(); f.state.value.details!.canInput = true; await nextTick()
+  expect(f.input.getAttribute('aria-label')).toBe('Reply to this Agent')
+  await f.type('Human reply'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.anything(), 'input', 'Human reply')
+  f.state.value = { ...f.state.value, operation: 'input', revision: 3, status: 'done', input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }; await nextTick()
+  expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Agent resumed with your reply')
 })

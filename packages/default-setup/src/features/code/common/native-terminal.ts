@@ -27,6 +27,7 @@ export interface ClaudeNativeTaskDetails {
   taskId: string
   name: string
   status: string
+  canInput: boolean
   canMessage: boolean
   metadata?: {
     prompt?: string
@@ -42,3 +43,5 @@ export interface ClaudeNativeTaskDetails {
   messages: { role: 'user' | 'assistant'; text: string }[]
   truncated: boolean
 }
+
+export interface ClaudeNativeTaskInputReceipt { messageId: string; mode: 'queued' | 'resumed' }

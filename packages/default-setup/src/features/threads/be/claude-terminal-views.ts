@@ -11,15 +11,16 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
-  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' } | { operation: 'send'; text: string }))
+  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' } | { operation: 'send' | 'input'; text: string }))
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
 export interface ClaudeTerminalTaskState {
   ownerId: string
   taskId: string
   revision: number
-  operation: 'inspect' | 'stop' | 'send'
+  operation: 'inspect' | 'stop' | 'send' | 'input'
   status: 'pending' | 'done' | 'error'
+  input?: import('#features/code/common/native-terminal.ts').ClaudeNativeTaskInputReceipt
   sent?: boolean
   details?: import('#features/code/common/native-terminal.ts').ClaudeNativeTaskDetails
   problem?: string
@@ -130,15 +131,15 @@ export function createClaudeTerminalViews(dependencies: {
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
       if (event.type === 'CLAUDE_TERMINAL_TASK') {
-        if (!['inspect', 'stop', 'send'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || !owner.state.tasks.some(task => task.id === event.taskId)) return
-        if (event.operation === 'send' && (typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384)) return
+        if (!['inspect', 'stop', 'send', 'input'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || !owner.state.tasks.some(task => task.id === event.taskId)) return
+        if ((event.operation === 'send' || event.operation === 'input') && (typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384)) return
         const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(target.task?.taskId === event.taskId ? { details: target.task.details } : {}) }
         target.task = task; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.task === task
-        void (event.operation === 'send' ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation)).then(result => {
+        void ((event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation)).then(result => {
           if (!current()) return
-          if (event.operation === 'send' && result.sent !== true || event.operation === 'stop' && result.stopped !== true || event.operation === 'inspect' && result.details?.taskId !== event.taskId) throw new Error('Native task response did not match')
-          target.task = { ...task, status: 'done', sent: result.sent, details: result.details ?? task.details }; publish(key, target)
+          if (event.operation === 'input' && !result.input || event.operation === 'send' && result.sent !== true || event.operation === 'stop' && result.stopped !== true || event.operation === 'inspect' && result.details?.taskId !== event.taskId) throw new Error('Native task response did not match')
+          target.task = { ...task, status: 'done', sent: result.sent, input: result.input, details: result.details ?? task.details }; publish(key, target)
         }).catch(error => {
           if (!current()) return
           target.task = { ...task, status: 'error', problem: error instanceof Error ? error.message : 'Native task operation failed' }; publish(key, target)

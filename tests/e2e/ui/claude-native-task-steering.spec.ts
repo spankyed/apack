@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('sends instructions to the existing native Agent and reads its reply', async ({ app, appPage, electronApp }, testInfo) => {
+test('replies to the native Agent while running and resumes it after completion', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
@@ -78,16 +78,18 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   await conversation.getByText('Agent prompt',{exact:true}).click()
   await conversation.scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-task-message-before.png')})
-  const message=conversation.getByRole('textbox',{name:'Message this Agent',exact:true})
+  const message=conversation.getByRole('textbox',{name:'Reply to this Agent',exact:true})
   await expect(message).toBeVisible()
   await message.fill('NativeAgentSteerFixture: acknowledge this instruction in the same Agent.')
   await message.press('Escape');await expect(message).toHaveCount(0)
   await row.getByRole('button',{name:'View Agent conversation',exact:true}).click()
   await expect(message).toHaveValue('NativeAgentSteerFixture: acknowledge this instruction in the same Agent.')
   expect((await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status).toBe('running')
-  await conversation.getByRole('button',{name:'Send to Agent',exact:true}).click()
-  await expect(row).toContainText('Message sent to Agent',{timeout:10000})
+  await conversation.getByRole('button',{name:'Reply to Agent',exact:true}).click()
+  await expect(row).toContainText('Reply queued for Agent',{timeout:10000})
   await expect(message).toHaveValue('')
+  const queuedReceipt=(await context()).native.task.input
+  expect(queuedReceipt.mode).toBe('queued'); expect(queuedReceipt.messageId).toBeTruthy()
   const refresh=conversation.getByRole('button',{name:'Refresh conversation',exact:true})
   await expect.poll(async()=>{
     if(await refresh.isEnabled())await refresh.click()
@@ -102,13 +104,27 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   await expect(conversation.locator('[aria-label="Agent details"]')).toContainText('Tokens')
   await conversation.locator('[aria-label="Agent details"]').scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-task-details-completed.png')})
+  await message.fill('NativeAgentSteerFixture: resume the same Agent for a second instruction.')
+  await conversation.getByRole('button',{name:'Reply to Agent',exact:true}).click()
+  await expect(row).toContainText('Agent resumed with your reply',{timeout:10000})
+  const resumeReceipt=(await context()).native.task.input
+  expect(resumeReceipt.mode).toBe('resumed'); expect(resumeReceipt.messageId).toBeTruthy()
+  await expect(message).toHaveValue('')
+  await expect.poll(async()=>{
+    if(await refresh.isEnabled())await refresh.click()
+    return await conversation.locator('article').filter({hasText:'ChildSteeringObserved'}).count()
+  },{timeout:25000,intervals:[500]}).toBe(2)
+  await expect.poll(async()=>{
+    if(await refresh.isEnabled())await refresh.click()
+    return (await context()).native.task?.details?.status
+  },{timeout:10000,intervals:[500]}).toBe('completed')
   const acceptedDetails=(await context()).native.task.details
   const transcript=(await conversation.locator('article').allTextContents()).join('\n')
   expect(transcript.indexOf('Return the synthetic worker marker only.')).toBeLessThan(transcript.indexOf('NativeAgentSteerFixture'))
   expect(transcript.indexOf('NativeAgentSteerFixture')).toBeLessThan(transcript.indexOf('ChildSteeringObserved'))
   expect(await row.getAttribute('data-native-agent-id')).toBe(taskId)
   await expect(composer).toHaveText('Keep this draft while messaging the Agent')
-  const reply=conversation.getByText('ChildSteeringObserved',{exact:true})
+  const reply=conversation.getByText('ChildSteeringObserved',{exact:true}).last()
   await reply.scrollIntoViewIfNeeded()
   await expect.poll(()=>reply.evaluate(element=>{const b=element.getBoundingClientRect();return element.contains(document.elementFromPoint(b.left+b.width/2,b.top+b.height/2))})).toBe(true)
   await appPage.screenshot({path:testInfo.outputPath('apack-native-task-message-reply.png')})
@@ -130,5 +146,5 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentDetails:true,nativeAgentDetailsSnapshot:acceptedDetails,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentHumanInput:true,nativeAgentResume:true,queuedReceipt,resumeReceipt,nativeAgentDetails:true,nativeAgentDetailsSnapshot:acceptedDetails,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
 })

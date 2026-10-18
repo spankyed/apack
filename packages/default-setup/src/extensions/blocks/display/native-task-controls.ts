@@ -4,5 +4,5 @@ export interface ClaudeTaskIdentity { id: string; ownerId: string; sessionId: st
 export const claudeTaskControls: InjectionKey<{
   ownerId: ComputedRef<string | undefined>
   state: ComputedRef<ClaudeTerminalTaskState | undefined>
-  operate(task: ClaudeTaskIdentity, operation: 'inspect' | 'stop' | 'send', text?: string): number | undefined
+  operate(task: ClaudeTaskIdentity, operation: 'inspect' | 'stop' | 'send' | 'input', text?: string): number | undefined
 }> = Symbol('Claude native task controls')

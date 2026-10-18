@@ -163,17 +163,19 @@ it('admits task controls only for the leased window, exact owner, live task and 
   } finally { f.views.clear() }
 })
 
-it('sends only bounded task messages through the current lease and confirms native delivery', async () => {
+it.each(['send', 'input'] as const)('admits only bounded %s task input through the current lease and exact native receipt', async operation => {
   const f = fixture(); f.owner.state.tasks.push({ id: 'agent-a', name: 'worker', status: 'running' })
-  vi.mocked(f.owner.operateTask).mockResolvedValue({ sent: true })
-  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent-a', revision: 1, operation: 'send', text: 'Keep working on this instruction' } as const
+  const input = { messageId: randomUUID(), mode: 'queued' as const }
+  vi.mocked(f.owner.operateTask).mockResolvedValue(operation === 'input' ? { input } : { sent: true })
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent-a', revision: 1, operation, text: 'Keep working on this instruction' } as const
   try {
     f.views.handle(mount, 'one', f.send)
     f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, text: ' ' }, 'one', f.send); f.views.handle({ ...request, text: 'x'.repeat(16385) }, 'one', f.send)
     expect(f.owner.operateTask).not.toHaveBeenCalled()
     f.views.handle(request, 'one', f.send)
-    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].task?.sent).toBe(true))
-    expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('agent-a', 'send', request.text)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].task?.status).toBe('done'))
+    expect(operation === 'input' ? f.send.mock.calls.at(-1)![0].task?.input : f.send.mock.calls.at(-1)![0].task?.sent).toEqual(operation === 'input' ? input : true)
+    expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('agent-a', operation, request.text)
     f.views.handle(request, 'one', f.send); expect(f.owner.operateTask).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })

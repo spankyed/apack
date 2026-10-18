@@ -417,7 +417,7 @@ provide(claudeTaskControls, {
     if (!lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
     const revision = taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1
     const request = { type: 'CLAUDE_TERMINAL_TASK' as const, threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, revision }
-    actor.send(operation === 'send' ? { ...request, operation, text: text ?? '' } : { ...request, operation })
+    actor.send((operation === 'send' || operation === 'input') ? { ...request, operation, text: text ?? '' } : { ...request, operation })
     return revision
   },
 })
