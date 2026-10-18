@@ -111,9 +111,11 @@ test('inspects and stops the existing native Agent from app controls', async ({ 
   await expect(focused.getByRole('form',{name:'Agent message'}).locator('[contenteditable]')).toHaveText('Keep this worker draft after Stop')
   await expect(focused.getByRole('button',{name:'Stop Agent',exact:true})).toBeDisabled()
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  const parentTurnsBefore=(await context()).turns
   await composer.fill('Continue the same native parent after stopping its selected worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
+  await expect.poll(async()=>(await context()).turns).toBe(parentTurnsBefore+1)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   expect((await context()).sessionId).toBe(sessionId)
   await appPage.screenshot({path:testInfo.outputPath('apack-focused-agent-stop-parent-continued.png')})
