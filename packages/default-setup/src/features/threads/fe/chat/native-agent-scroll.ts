@@ -31,7 +31,7 @@ export function useClaudeAgentScroll(options: {
   function reconcile() {
     frame = undefined
     const element = options.viewport.value
-    if (!element || !options.active() || !element.clientHeight) return
+    if (!element || !options.active() || !element.clientHeight || !element.querySelector('[data-native-agent-message]')) return
     if (following.value) element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
     else {
       const anchor = [...element.querySelectorAll<HTMLElement>('[data-native-agent-message]')]
@@ -40,7 +40,9 @@ export function useClaudeAgentScroll(options: {
         ? element.scrollTop + anchor.getBoundingClientRect().top - element.getBoundingClientRect().top - position.anchor.offset
         : position.top
     }
-    capture()
+    // Keep the requested reading anchor while native frames hydrate or temporarily shrink.
+    // Only a reader gesture may replace it with a newly chosen position.
+    if (following.value) capture()
   }
   function schedule() { if (frame === undefined) frame = requestAnimationFrame(reconcile) }
   function intent(event: Event) {

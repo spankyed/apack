@@ -48,15 +48,18 @@ it('restores a saved native message anchor without changing keyboard focus', asy
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const root = document.createElement('div'), editor = document.createElement('input')
   document.body.append(root, editor); editor.focus()
-  const viewport = ref<HTMLElement>(), content = ref<HTMLElement>()
+  const viewport = ref<HTMLElement>(), content = ref<HTMLElement>(), ready = ref(false)
+  const save = vi.fn()
   const app = createApp({ setup() {
-    useClaudeAgentScroll({ viewport, content, active: () => true, initial: { following: false, top: 90, anchor: { uuid: 'saved', offset: -12 } }, save: () => {} })
-    return () => h('div', { ref: viewport }, h('div', { ref: content }, h('article', { 'data-native-agent-message': 'saved' })))
+    useClaudeAgentScroll({ viewport, content, active: () => true, initial: { following: false, top: 90, anchor: { uuid: 'saved', offset: -12 } }, save })
+    return () => h('div', { ref: viewport }, h('div', { ref: content }, ready.value ? h('article', { 'data-native-agent-message': 'saved' }) : null))
   } }); app.mount(root)
   try {
     await nextTick()
     Object.defineProperties(viewport.value!, { clientHeight: { value: 100 }, scrollHeight: { value: 900 } })
     viewport.value!.getBoundingClientRect = () => ({ top: 10 }) as DOMRect
+    frame?.(0); expect(save).not.toHaveBeenCalled()
+    ready.value = true; await nextTick()
     content.value!.firstElementChild!.getBoundingClientRect = () => ({ top: 210 - viewport.value!.scrollTop, bottom: 410 - viewport.value!.scrollTop }) as DOMRect
     frame?.(0)
     expect(viewport.value!.scrollTop).toBe(212)
