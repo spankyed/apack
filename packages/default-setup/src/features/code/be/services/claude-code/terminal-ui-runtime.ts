@@ -280,9 +280,42 @@ function drainCompletion(n,clientId,state){
   if(completions.get(clientId)===state)drainCompletion(n,clientId,state);
  });
 }
+// A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
+let readDialogRevision;
+function readDialog(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
+ const context=binding.toolContext(new AbortController()),store=context.dialogStore;
+ const sessionId=JSON.parse(readFileSync(configUrl,'utf8')).sessionId;
+ const open=store.getState().open;
+ // Other native dialogs retain their original interface until their contracts are integrated.
+ const item=open.length===1?open[0]:undefined,payload=item?.payload;
+ if(item?.kind!=='permission_file'||payload?.toolName!=='Read'||payload.operationType!=='read'||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
+  readDialogRevision=undefined;return {store,sessionId};
+ }
+ const fingerprint=JSON.stringify(payload);
+ if(readDialogRevision?.fingerprint!==fingerprint||readDialogRevision?.item!==item||readDialogRevision?.payload!==payload||readDialogRevision?.sessionId!==sessionId)
+  readDialogRevision={item,payload,sessionId,fingerprint,revision:randomUUID()};
+ return {store,sessionId,...readDialogRevision};
+}
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_read_dialogs'){
+  const d=readDialog(n);if(!d.item)return {dialogs:[]};
+  const p=d.payload;
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:'Read',title:p.title??'Read file',question:p.question?.kind==='plain'?p.question.text:'Allow this read?',input:p.input}]};
+ }
+ if(request.subtype==='apack_answer_read_dialog'){
+  abort.signal.throwIfAborted();
+  const d=readDialog(n);
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native approval changed or expired');
+  if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native Read decision');
+  const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
+  // The native requestDialog validates and dispatches this result through its original ask path.
+  d.store.answer(d.item.id,result);readDialogRevision=undefined;
+  return {answered:true};
+ }
  if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};
  if(request.subtype==='apack_set_model'){
   if(typeof request.model!=='string'||!request.model.trim()||request.model.length>256)throw Error('Invalid native model selection');

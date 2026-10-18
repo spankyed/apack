@@ -27,6 +27,24 @@ export async function action(params: Record<string, unknown>, services: Services
     updateChatState(services, threadId as EntityId, 'idle');
     return { success: true };
   }
+  if (pending.nativeTerminal) {
+    const owner = services.cli.claudeCode.getNativeTerminal(threadId);
+    const native = pending.nativeTerminal;
+    if (!owner || owner.state.ownerId !== native.ownerId || owner.state.sessionId !== native.sessionId) {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval expired' };
+    }
+    try {
+      await owner.answerReadDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+    } catch {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval changed or could not be answered' };
+    }
+    if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
+      persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+    return { success: true };
+  }
+
   const handle = services.cli.claudeCode.getHandle(threadId);
   if (!handle) {
     expirePendingControlRequest(services, threadId, requestId);

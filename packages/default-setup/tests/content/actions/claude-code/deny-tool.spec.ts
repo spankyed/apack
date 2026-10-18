@@ -65,3 +65,20 @@ describe('CC: Deny Tool', () => {
   });
 
 });
+
+it.each([true, false])('answers only the matching terminal owner, matching: %s', async matching => {
+  const { id } = setup('current');
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: {
+    requestId: 'current', toolName: 'Read', approvalMessageId: 'approval', originalInput: { file_path: '/original' },
+    nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog-1', revision: 'revision' },
+  } } } });
+  const answerReadDialog = vi.fn(async () => {}), respond = vi.fn();
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerReadDialog })), getHandle: vi.fn(() => ({ respond })) } as never });
+  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() });
+  const result = await action({ threadId: id, requestId: 'current', originalInput: { file_path: '/tampered' }, response: { autoAccept: true, reason: 'No thanks' } }, services);
+  expect(result.success).toBe(matching);
+  expect(respond).not.toHaveBeenCalled();
+  if (matching) expect(answerReadDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', decision: 'deny', feedback: 'No thanks' });
+  else expect(answerReadDialog).not.toHaveBeenCalled();
+  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.autoAcceptEdits).toBeUndefined();
+});

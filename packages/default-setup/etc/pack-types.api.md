@@ -1343,6 +1343,46 @@ interface ClaudeNativeJournalEntry {
     row: Record<string, unknown>;
 }
 
+type ClaudeNativeReadDialog = z.infer<typeof ClaudeNativeReadDialogSchema>;
+
+interface ClaudeNativeReadDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    decision: 'allow' | 'deny';
+    feedback?: string;
+}
+
+/** A one-time Read decision; native retains policy, input and dialog lifecycle ownership. */
+declare const ClaudeNativeReadDialogSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    requestId: z.ZodString;
+    toolName: z.ZodLiteral<"Read">;
+    title: z.ZodString;
+    question: z.ZodString;
+    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+}, "strip", z.ZodTypeAny, {
+    id: string;
+    title: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: "Read";
+    question: string;
+    input: Record<string, unknown>;
+}, {
+    id: string;
+    title: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: "Read";
+    question: string;
+    input: Record<string, unknown>;
+}>;
+
 interface ClaudeNativeSessionMetadata {
     cwd: string;
     model: string;
@@ -1400,6 +1440,8 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
+    getReadDialogs(): Promise<ClaudeNativeReadDialog[]>;
+    answerReadDialog(response: ClaudeNativeReadDialogResponse): Promise<void>;
     getModels(options?: {
         includeUnsupportedModels?: boolean;
     }): Promise<ClaudeModelCatalog>;

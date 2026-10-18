@@ -40,6 +40,24 @@ export async function action(
     return { success: false, reason: 'approval is no longer pending' };
   }
 
+  if (pending.nativeTerminal) {
+    const owner = services.cli.claudeCode.getNativeTerminal(threadId);
+    const native = pending.nativeTerminal;
+    if (!owner || owner.state.ownerId !== native.ownerId || owner.state.sessionId !== native.sessionId) {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval expired' };
+    }
+    try {
+      await owner.answerReadDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
+    } catch {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native approval changed or could not be answered' };
+    }
+    if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
+      persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+    return { success: true };
+  }
+
   const handle = (services.cli as any).claudeCode.getHandle(threadId);
 
   if (!handle) {
