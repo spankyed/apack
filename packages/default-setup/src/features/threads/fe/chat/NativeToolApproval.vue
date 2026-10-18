@@ -6,9 +6,9 @@
     </header>
     <div class="details" tabindex="0" :aria-label="`${toolName} request details`">
       <p class="question">{{ question }}</p>
+      <code :data-testid="toolName === 'Read' ? 'native-read-path' : 'native-bash-command'">{{ toolName === 'Read' ? filePath : command }}</code>
       <p v-if="cwd" class="reason">Working directory</p>
       <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
-      <code :data-testid="toolName === 'Read' ? 'native-read-path' : 'native-bash-command'">{{ toolName === 'Read' ? filePath : command }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
       <details>
         <summary>Add a reason for denying</summary>

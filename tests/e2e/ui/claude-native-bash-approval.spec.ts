@@ -73,6 +73,8 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await expect(panel.getByTestId('native-bash-command')).toBeInViewport()
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-bash-command.png') })
   await appPage.setViewportSize({ width: 680, height: 600 })
+  await panel.locator('.details').evaluate(element => { element.scrollTop = 0 })
+  await expect.poll(() => panel.getByTestId('native-bash-command').evaluate(element => { const command = element.getBoundingClientRect(), details = element.parentElement!.getBoundingClientRect(); return command.top >= details.top && command.bottom <= details.bottom })).toBe(true)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-bash-compact.png') })
   await panel.getByRole('button', { name: 'Allow once', exact: true }).click()
   await expect(panel).toBeHidden()
