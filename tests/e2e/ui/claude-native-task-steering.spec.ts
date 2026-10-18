@@ -244,9 +244,36 @@ test('replies to the native Agent while running and resumes it after completion'
   await jumpToLatest.click()
   await expect.poll(replyInViewport).toBe(true)
   await expect(jumpToLatest).toBeHidden()
-  await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  const readParentJournal=async()=>{
+    for(const bucket of await readdir(join(workspace!,'.claude/projects'))){
+      try{return (await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').flatMap((line,index,lines)=>{try{return[JSON.parse(line)]}catch(error){if(index===lines.length-1)return[];throw error}})}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+    }
+    return[]
+  }
+  const beforeCompact=(await readParentJournal()).filter(row=>row.type==='system'&&row.subtype==='compact_boundary').length
+  const beforeConfirmedWorkerMessages=await focused.locator('[data-native-agent-message]').count()
+  await agentComposer.fill('/compact')
+  await expect(agentComposer).toHaveText('/compact')
+  await focused.getByRole('button',{name:'Send to Agent',exact:true}).click()
+  await expect(commandPanel).toBeVisible()
+  await commandPanel.getByRole('button',{name:'Run /compact on the main conversation',exact:true}).click()
+  await expect(commandPanel).toBeHidden()
+  await expect.poll(async()=>(await readParentJournal()).filter(row=>row.type==='system'&&row.subtype==='compact_boundary').length,{timeout:20000}).toBe(beforeCompact+1)
+  const compactBoundary=(await readParentJournal()).filter(row=>row.type==='system'&&row.subtype==='compact_boundary').at(-1)
+  expect(compactBoundary.uuid).toBeTruthy()
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  expect((await context()).sessionId).toBe(sessionId)
+  const viewAfterConfirmedCompact=(await context()).native.state.view
+  if(viewAfterConfirmedCompact.kind==='agent'){
+    expect(viewAfterConfirmedCompact.taskId).toBe(taskId)
+    await expect(agentComposer).toHaveText('')
+    await expect(focused.locator('[data-native-agent-message]')).toHaveCount(beforeConfirmedWorkerMessages)
+    await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  }else expect(viewAfterConfirmedCompact.kind).toBe('main')
+  await writeFile(join(workspace!,'native-agent-command-confirmed.json'),JSON.stringify({compactBoundary,beforeCompact,sessionId,boundNativePid,taskId,viewAfterConfirmedCompact,originalWorkerTranscriptUnchanged:true},null,2))
   await expect(focused).toBeHidden()
   await expect(composer).toHaveText('Keep this draft while messaging the Agent')
+  await appPage.screenshot({path:testInfo.outputPath('apack-native-agent-confirmed-compact.png')})
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   expect((await context()).native.state.status).toBe('live')
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
@@ -258,5 +285,5 @@ test('replies to the native Agent while running and resumes it after completion'
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeViewObserved:true,nativeViewParentHeld:true,nativeViewMainReturn:true,nativeFocusedAgent:true,nativeAppAgentSelection:true,nativeFocusedInputReview:true,nativeAgentCommandBlock:true,nativeAgentCommandConfirmation:true,nativeAgentCommandCancel:true,nativeFocusedReply:true,nativeAgentTranscriptFollowing:true,nativeAgentReadingPositionRestored:true,nativeFocusedEscape:true,nativeAgentDraftRestored:true,nativeAgentDraftRead:true,nativeAgentMessageHook:true,focusedReceipt,selectedView,nativeAgentHumanInput:true,nativeAgentResume:true,queuedReceipt,resumeReceipt,nativeAgentDetails:true,nativeAgentDetailsSnapshot:acceptedDetails,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeViewObserved:true,nativeViewParentHeld:true,nativeViewMainReturn:true,nativeFocusedAgent:true,nativeAppAgentSelection:true,nativeFocusedInputReview:true,nativeAgentCommandBlock:true,nativeAgentCommandConfirmation:true,nativeAgentCommandCancel:true,nativeAgentCommandConfirmedCompact:true,nativeFocusedReply:true,nativeAgentTranscriptFollowing:true,nativeAgentReadingPositionRestored:true,nativeFocusedEscape:true,nativeAgentDraftRestored:true,nativeAgentDraftRead:true,nativeAgentMessageHook:true,focusedReceipt,selectedView,nativeAgentHumanInput:true,nativeAgentResume:true,queuedReceipt,resumeReceipt,nativeAgentDetails:true,nativeAgentDetailsSnapshot:acceptedDetails,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
 })
