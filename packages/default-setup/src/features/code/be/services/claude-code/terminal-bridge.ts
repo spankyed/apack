@@ -75,11 +75,14 @@ export async function createClaudeTerminalBridge(options: {
         if (typeof value.message !== 'string') return reply(400, {})
         observerProblem = value.message.slice(0, 1000); projection.clearOutput(); options.changed(); return reply(200, {})
       }
+      if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, pending?.entered ? { id: pending.id } : {}) : reply(409, {})
       if (request.url === '/poll') {
+        if (value.directOwner === true && value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean')) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
+        if (value.directOwner === true) busy = value.turn !== null
         const previous = { ...generations }
         const mainChanged = changedSession || value.statusCommand !== undefined && mainCommand !== value.statusCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
         const subChanged = changedSession || value.subagentCommand !== undefined && subagentCommand !== value.subagentCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
@@ -114,7 +117,7 @@ export async function createClaudeTerminalBridge(options: {
         ready = true; options.changed()
         if (pending && !pending.sent && pending.sessionId === projection.sessionId) {
           const submission = pending; submission.sent = true
-          if (ui.hasPromptHosts || submission.images.length) {
+          if (value.directOwner === true || ui.hasPromptHosts || submission.images.length) {
             try {
               const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id, allow_empty: submission.images.length > 0 }))
               if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})

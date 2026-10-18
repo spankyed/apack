@@ -190,7 +190,12 @@ function promptOutcome(n,id){
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
  const messages=(originalContext??n.runtime.ey())?.messages?.()??[];
  const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
- if(!message)return {};
+ if(!message){
+  const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
+  if(candidates.length!==1)return {};
+  const row=candidates[0],content=typeof row.message.content==='string'?[{type:'text',text:row.message.content}]:row.message.content;
+  return {accepted:{uuid:row.uuid,door:'prompt',origin:row.origin??{kind:'native'},message:{type:'user',content}}};
+ }
  const ending=message.promptSubmitEnding.ending;
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
 }
@@ -381,14 +386,15 @@ async function control(request,abort){
   const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js');
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native owner session changed');
-  const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
+  if(request.policy_only===true)return {policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
-  return {sessionId,metadata:{cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true}]:[]})};
+  return {sessionId,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
  if(request.subtype==='apack_read_dialogs'){
   const d=nativeDialog(n,'permission_file');if(!d.item)return {dialogs:[]};
@@ -571,4 +577,46 @@ const server=http.createServer(async(request,response)=>{
  }catch{reply(400,{});}
 });
 await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.uiSocketPath,resolve);});server.unref();
+
+
+async function ownerPost(path,body){
+ return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Error('Native owner broker refused');resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:config.sessionId,...body}));});
+}
+function ownerAgents(facts){
+ const result=new Map();
+ for(const task of facts){
+  // Frozen native zln projection; task identity comes from the original flt export.
+  let status=task.status;
+  if(status==='running'&&(task.awaitingPlanApproval||task.isIdle))status='waiting';
+  else if(status==='completed')status=task.finalizing?'running':task.keepaliveReasons.some(reason=>reason!=='flag:idle-window')?'waiting':task.name||task.keepaliveReasons.length?'idle':'completed';
+  else if(status==='paused')status='idle';
+  const prior=result.get(task.id);if(prior&&['running','waiting','idle'].includes(prior.status))continue;
+  result.set(task.id,{id:task.id,type:task.type,status});
+ }
+ return [...result.values()];
+}
+let ownerReading=false,ownerIndependent=false;
+const ownerTimer=setInterval(async()=>{
+ if(ownerReading)return;ownerReading=true;
+ try{
+  const gate=await control({subtype:'apack_owner_snapshot',policy_only:true},new AbortController());
+  if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
+  if(!ownerIndependent)return;
+  const snapshot=await control({subtype:'apack_owner_snapshot'},new AbortController());
+  const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};
+  const command=await ownerPost('/poll',body);
+  await ownerPost('/transcript',{path:snapshot.transcriptPath});
+  if(command.id){
+   let filled=command.prepared===true;
+   if(!filled)filled=(await control({subtype:'apack_prepare_prompt',text:command.text,submission_id:command.id},new AbortController())).filled===true;
+   await ownerPost('/result',{id:command.id,filled});
+  }
+  const pending=await ownerPost('/owner-pending',{});
+  if(pending.id){
+   const outcome=await control({subtype:'apack_prompt_outcome',submission_id:pending.id},new AbortController());
+   if(outcome.drop)await ownerPost('/submission',{id:pending.id,drop:outcome.drop});
+   else if(outcome.accepted){await ownerPost('/append',{...outcome.accepted,submissionId:pending.id});await ownerPost('/submission',{id:pending.id,accepted:true});}
+  }
+ }catch{}finally{ownerReading=false;}
+},250);ownerTimer.unref();
 `
