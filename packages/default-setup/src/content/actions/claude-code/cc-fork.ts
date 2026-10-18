@@ -86,5 +86,7 @@ async function handleFork(
     forkFrom: {sessionId: state.sessionId, cliUuid: lastAssistant.context.cliUuid},
   });
 
+  services.chat.openThreadChatAndRefreshRecent(newThreadId);
+
   return { text: `Forked to: ${forkTopic}`, skipMessage: true, success: true };
 }

@@ -9,10 +9,10 @@ function fixture(validate = vi.fn(async () => {})) {
   repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'native-session',cwd:'/fixture'}}});
   repository.chatCommands.addMessage({threadId:id,sender:'assistant',text:'Original',context:{cliUuid:'native-assistant'}});
   const create = vi.fn((opts: {topic:string;instructions:string})=>repository.threadCommands.create(opts));
-  const notify = vi.fn();
+  const notify = vi.fn(), open = vi.fn();
   mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn() } as never});
-  mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify});
-  return {id,create,notify,validate};
+  mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify,openThreadChatAndRefreshRecent:open});
+  return {id,create,notify,validate,open};
 }
 it('rejects unavailable native history before creating or copying a thread', async () => {
   const f = fixture(vi.fn(async()=>{throw Error('No message found');}));
@@ -33,6 +33,8 @@ it('validates the native boundary before creating a fork with matching session s
   const newId=f.create.mock.results[0].value.id;
   expect(repository.threadQueries.byId(newId)?.context).toMatchObject({claudeCode:{sessionId:'native-session',forkFrom:{sessionId:'native-session',cliUuid:'native-assistant'}}});
   expect(repository.chatQueries.threadData(newId)?.messages).toHaveLength(1);
+  expect(f.open).toHaveBeenCalledWith(newId);
+  expect(f.open.mock.invocationCallOrder[0]).toBeGreaterThan(f.create.mock.invocationCallOrder[0]!);
 });
 it('rejects a source changed while native validation was pending', async () => {
   let release!:()=>void;
