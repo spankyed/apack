@@ -102,10 +102,19 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
       return z.discriminatedUnion('kind', [
         z.object({ kind: z.literal('input'), messageId: z.string().uuid(), previousStatus: z.string().max(64) }).strict(),
         z.object({ kind: z.literal('review'), text: z.string().max(16384), removed: z.number().int().positive() }).strict(),
+        z.object({ kind: z.literal('panel'), id: z.string().uuid(), commandName: z.string().max(256) }).strict(),
         z.object({ kind: z.literal('command_output'), messageId: z.string().uuid(), commandName: z.string().max(256), text: z.string().min(1).max(65536), outcome: z.string().max(128).optional() }).strict(),
         z.object({ kind: z.literal('blocked'), message: z.string().max(16384) }).strict(),
         z.object({ kind: z.literal('confirmation'), id: z.string().uuid(), title: z.string().max(16384), confirmLabel: z.string().max(16384), commandName: z.string().max(256).optional() }).strict(),
       ]).parse(await request({ subtype: 'apack_ui_agent_dispatch', ...valid }))
+    },
+    async agentPanel(options: { client_id: string; panel_id: string } & ({ operation: 'read' | 'close' } | { operation: 'input'; text: string })) {
+      const valid = z.discriminatedUnion('operation', [
+        z.object({ client_id: clientId, panel_id: z.string().uuid(), operation: z.enum(['read', 'close']) }).strict(),
+        z.object({ client_id: clientId, panel_id: z.string().uuid(), operation: z.literal('input'), text: z.string().min(1).max(4096) }).strict(),
+      ]).parse(options)
+      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent panel capability is unavailable')
+      return z.object({ open: z.boolean() }).strict().parse(await request({ subtype: 'apack_ui_agent_panel', ...valid }))
     },
     async answerAgentCommand(options: { client_id: string; command_id: string; decision: 'confirm' | 'cancel' }) {
       const valid = z.object({ client_id: clientId, command_id: z.string().uuid(), decision: z.enum(['confirm', 'cancel']) }).strict().parse(options)

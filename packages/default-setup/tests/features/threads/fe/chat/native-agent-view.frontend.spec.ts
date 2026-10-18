@@ -4,14 +4,15 @@ import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-ter
 import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 const send = vi.fn()
 let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
+vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {}, focus: () => {}, detach: () => {} }) }))
 vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => ({ send }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<input aria-label="Agent draft" :disabled="disabled" />' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { template: '<div />' } }))
-beforeEach(() => { send.mockClear(); context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
-afterEach(() => { app?.unmount(); document.body.replaceChildren() })
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); send.mockClear(); context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
+afterEach(() => { app?.unmount(); vi.unstubAllGlobals(); document.body.replaceChildren() })
 async function mount() {
   const root = document.createElement('div'); document.body.append(root)
   const pending = vi.fn(), returned = vi.fn()
@@ -77,4 +78,17 @@ it('renders native command output as bounded plain text outside the worker trans
   expect(f.root.querySelector('[aria-label="Agent transcript"]')!.textContent).not.toContain('Original second line')
   expect(f.button('Back to conversation').disabled).toBe(false)
   expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(false)
+})
+
+it('gives the original panel ownership and restores the editor after native closure', async () => {
+  const f = await mount(), panelId = '12345678-1234-1234-1234-123456789abc'
+  context.nativeUiViews[f.ui].state.agentInput = { revision: 9, status: 'panel', panel: { id: panelId, commandName: 'usage' } }; await nextTick(); await nextTick()
+  expect(f.root.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Native /usage panel')
+  expect(f.button('Back to conversation').disabled).toBe(true)
+  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(true)
+  f.button('Close panel').click()
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'CLAUDE_UI_AGENT_PANEL', revision: 9, panelId }))
+  context.nativeUiViews[f.ui].state.agentInput = { revision: 9, status: 'panel_done' }; await nextTick(); await nextTick()
+  expect(f.root.querySelector('[role="dialog"]')).toBeNull()
+  expect(document.activeElement).toBe(f.root.querySelector('input'))
 })

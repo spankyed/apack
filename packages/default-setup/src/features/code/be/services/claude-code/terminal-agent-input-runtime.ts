@@ -2,17 +2,19 @@
 export const claudeTerminalAgentInputRuntime = String.raw`
 let agentDispatch;
 const agentCommandHosts=new WeakMap(),agentCommandDialogs=new Map();
-function installAgentCommandObserver(context){
+function installAgentCommandObserver(context,n){
  const host=context.localJsx;if(!host||typeof host.show!=='function'||agentCommandHosts.has(host))return;
  const original=host.show;
  host.show=function(element,options){
   const request=agentDispatch,props=element?.props;
+  const panel=request&&!request.dialog&&element?.type===n.settingsPanel.Xye&&typeof props?.onClose==='function';
   const capture=request&&!request.dialog&&typeof props?.title==='string'&&typeof props?.confirmLabel==='string'&&typeof props?.onConfirm==='function'&&typeof props?.onCancel==='function';
   const handle=Reflect.apply(original,this,arguments);
-  if(capture){
-   const entry={id:randomUUID(),clientId:request.clientId,taskId:request.taskId,sessionId:request.sessionId,sequence:request.sequence,title:props.title,confirmLabel:props.confirmLabel,commandName:options?.commandName,confirm:props.onConfirm,cancel:props.onCancel,closed:false,current:request.current,restore:request.restore};
+  if(capture||panel){
+   const entry={kind:panel?'panel':'confirmation',id:randomUUID(),nodeId:handle.nodeId,store:context.dialogStore,clientId:request.clientId,taskId:request.taskId,sessionId:request.sessionId,sequence:request.sequence,title:props.title,confirmLabel:props.confirmLabel,commandName:options?.commandName,confirm:props.onConfirm,cancel:panel?()=>props.onClose('Settings dialog dismissed',{display:'system'}):props.onCancel,closed:false,current:request.current,restore:request.restore};
    request.dialog=entry;agentCommandDialogs.set(entry.id,entry);
-   entry.done=Promise.resolve(handle.closed).then(async()=>{entry.closed=true;agentCommandDialogs.delete(entry.id);await entry.restore();});
+   entry.done=Promise.resolve(handle.closed).then(async()=>{await entry.restore();entry.closed=true;if(entry.kind!=='panel')agentCommandDialogs.delete(entry.id);});
+   for(const [id,old] of agentCommandDialogs)if(agentCommandDialogs.size>16&&old.closed)agentCommandDialogs.delete(id);
    void entry.done.catch(()=>{});
   }
   return handle;
@@ -21,15 +23,31 @@ function installAgentCommandObserver(context){
 }
 async function answerNativeAgentCommand(n,request){
  const entry=agentCommandDialogs.get(request.command_id);
- if(!entry||entry.clientId!==request.client_id||entry.closed||entry.answered||!['confirm','cancel'].includes(request.decision))throw Error('Native command confirmation expired');
+ if(!entry||entry.kind!=='confirmation'||entry.clientId!==request.client_id||entry.closed||entry.answered||!['confirm','cancel'].includes(request.decision))throw Error('Native command confirmation expired');
  entry.current();if(request.decision==='confirm')await n.gate._Jo('desktop');entry.current();entry.answered=true;
  try{await (request.decision==='confirm'?entry.confirm:entry.cancel)();await entry.done;return {answered:true};}
  catch(error){if(!entry.closed)entry.answered=false;throw error;}
+}
+async function nativeAgentPanel(n,request){
+ await n.gate._Jo('desktop');
+ const entry=agentCommandDialogs.get(request.panel_id);
+ if(!entry||entry.kind!=='panel'||entry.clientId!==request.client_id)throw Error('Native command panel expired');
+ entry.current();
+ if(request.operation==='read')return {open:!entry.closed};
+ if(entry.closed||entry.answered)throw Error('Native command panel expired');
+ const shown=entry.store.getState().open.some(item=>item.kind==='local_jsx'&&item.payload?.nodeId===entry.nodeId);
+ if(!shown)throw Error('Native command panel is no longer shown');
+ if(request.operation==='close'){entry.answered=true;try{await entry.cancel();await entry.done;}catch(error){if(!entry.closed)entry.answered=false;throw error;}return {open:false};}
+ if(request.operation!=='input'||typeof request.text!=='string'||!request.text.length||request.text.length>4096)throw Error('Invalid native panel input');
+ // Deliver synchronously to the original mounted terminal listeners after checking its live dialog.
+ process.stdin.unshift(request.text);process.stdin.emit('readable');
+ return {open:!entry.closed};
 }
 async function retireNativeAgentCommands(clientId){
  const retired=[];
  for(const entry of agentCommandDialogs.values())if((clientId===undefined||entry.clientId===clientId)&&!entry.answered&&!entry.closed){entry.answered=true;try{entry.cancel();retired.push(entry.done);}catch{entry.closed=true;agentCommandDialogs.delete(entry.id);} }
  await Promise.allSettled(retired);
+ for(const [id,entry] of agentCommandDialogs)if((clientId===undefined||entry.clientId===clientId)&&entry.closed)agentCommandDialogs.delete(id);
 }
 async function dispatchNativeAgentInput(n,request,abort){
  await n.gate._Jo('desktop');
@@ -57,7 +75,7 @@ async function dispatchNativeAgentInput(n,request,abort){
  const expectedRun=command?.type==='local'?n.engine.Cie(command,parsed.args):undefined;
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
  const operation={clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,current:viewCurrent,restore,dialog:undefined};
- agentDispatch=operation;installAgentCommandObserver(context);
+ agentDispatch=operation;installAgentCommandObserver(context,n);
  try{
   await composer.write(text,'replace');current();
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
@@ -65,7 +83,7 @@ async function dispatchNativeAgentInput(n,request,abort){
   const deadline=Date.now()+4000;
   while(Date.now()<deadline){
    current();
-   if(operation.dialog){const value=operation.dialog;return {kind:'confirmation',id:value.id,title:value.title,confirmLabel:value.confirmLabel,commandName:value.commandName};}
+   if(operation.dialog){const value=operation.dialog;if(value.kind==='panel')return {kind:'panel',id:value.id,commandName:value.commandName};return {kind:'confirmation',id:value.id,title:value.title,confirmLabel:value.confirmLabel,commandName:value.commandName};}
    const rows=context.taskRegistry.getTranscript(task.id)?.messages??[];
    const row=rows.find(row=>!before.has(row.uuid)&&row.type==='user'&&row.isMeta!==true&&row.origin?.kind==='human'&&row.message?.content===text);
    if(row)return {kind:'input',messageId:row.uuid,previousStatus:task.status};

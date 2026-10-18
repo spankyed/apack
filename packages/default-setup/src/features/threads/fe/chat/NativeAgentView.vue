@@ -9,7 +9,8 @@
     </header>
     <details v-if="state?.agent?.metadata" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400"><summary class="cursor-pointer py-1">Agent details</summary><div class="max-h-36 overflow-y-auto overscroll-contain py-2"><NativeAgentDetails :details="state.agent" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
-    <div class="relative min-h-0 flex-1">
+    <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
+    <div v-show="!panelActive" class="relative min-h-0 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
@@ -35,7 +36,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer ref="agentComposer" :draft="draft" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
+    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
       @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
@@ -48,6 +49,7 @@ import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import NativeAgentDetails from '#extensions/blocks/display/NativeAgentDetails.vue'
 import NativeAgentComposer from './NativeAgentComposer.vue'
+import NativeCommandPanel from './NativeCommandPanel.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
@@ -69,7 +71,8 @@ const selectedOwner = computed(() => {
 })
 const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
-const commandActive = computed(() => commandSending.value || state.value?.agentInput?.status === 'confirmation' || state.value?.agentInput?.status === 'deciding')
+const panelActive = computed(() => state.value?.agentInput?.status === 'panel')
+const commandActive = computed(() => panelActive.value || commandSending.value || state.value?.agentInput?.status === 'confirmation' || state.value?.agentInput?.status === 'deciding')
 let commandFocusOwned = false
 let commandDraft: { revision: number; text: string } | undefined
 const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
@@ -108,6 +111,7 @@ watch(() => state.value?.agentInput, value => {
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
   if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); transcriptScroll.latest(request.scrollIntent); request.resolve() }
+  else if (value.status === 'panel' && value.panel) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
   else if (value.status === 'command_output' && value.output) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
   else if (value.status === 'confirmation' && value.command) { commandDraft = { revision: request.revision, text: request.text }; request.resolve({ commandPending: true }); void nextTick(() => cancelCommand.value?.focus({ preventScroll: true })) }
   else if (value.status === 'review' && value.review) request.resolve(value.review)
@@ -144,6 +148,15 @@ function decideCommand(decision: 'confirm' | 'cancel') {
   commandFocusOwned = !!commandPanel.value?.contains(document.activeElement)
   commandSending.value = true; emit('pending', true); problem.value = undefined
   actor.send({ type: 'CLAUDE_UI_AGENT_COMMAND', ...identity(), revision: input.revision, commandId: input.command.id, decision })
+}
+watch(panelActive, (value, previous) => { if (previous && !value) void nextTick(() => { if (props.active) agentComposer.value?.focus() }) })
+function panelInput(text?: string) {
+  const input = state.value?.agentInput
+  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({ type: 'CLAUDE_UI_AGENT_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
+}
+function panelResize(size: { columns: number; rows: number }) {
+  const ownerId = selectedOwner.value?.ownerId
+  if (panelActive.value && ownerId) actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...terminalIdentity(), ownerId, ...size })
 }
 watch(commandActive, value => emit('pending', value || pending.value || returning.value || stopping.value))
 function escape(event: KeyboardEvent) { if (!event.isComposing && !event.defaultPrevented && !pending.value) { event.preventDefault(); event.stopPropagation(); if (commandActive.value) decideCommand('cancel'); else returnToParent() } }

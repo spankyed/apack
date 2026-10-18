@@ -240,3 +240,14 @@ it('preserves native scroll denial/follow-end and validates site geometry before
   await expect(f.ui.scroll({ ...options, body_rows: -1 })).rejects.toThrow()
   expect(f.writes).toHaveLength(1); f.controls.close()
 })
+
+it('fences panel transport capability and refuses payload on read operations', async () => {
+  const request = vi.fn(async () => ({ open: true })), panel_id = '12345678-1234-1234-1234-123456789abc'
+  const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  await expect(ui.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })).resolves.toEqual({ open: true })
+  expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_panel', client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })
+  await expect(ui.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'read', text: 'forged' } as never)).rejects.toThrow()
+  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  await expect(print.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'close' })).rejects.toThrow('capability')
+  expect(request).toHaveBeenCalledOnce()
+})

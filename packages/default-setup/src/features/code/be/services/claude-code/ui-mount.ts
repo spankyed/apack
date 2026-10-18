@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -57,6 +57,7 @@ export function mountClaudeUi(options: {
   let agentProblem: string | undefined
   let agentReading = false
   let agentTimer: ReturnType<typeof setInterval> | undefined
+  let panelQueue = Promise.resolve()
   let agentInput: ClaudeUiMountState['agentInput']
   async function refreshAgent() {
     if (!owner.readAgent || agentReading || !current()) return
@@ -64,7 +65,14 @@ export function mountClaudeUi(options: {
     try {
       const next = await owner.readAgent()
       if (!current()) return
-      agent = next; agentProblem = undefined; messages.refresh(); publish(lastState)
+      agent = next; agentProblem = undefined
+      const panelState = agentInput
+      if (panelState?.status === 'panel' && panelState.panel) {
+        const result = await owner.handle.ui.agentPanel({ client_id: client.client_id, panel_id: panelState.panel.id, operation: 'read' })
+        if (!current()) return
+        if (agentInput === panelState && !result.open) agentInput = { revision: panelState.revision, status: 'panel_done' }
+      }
+      messages.refresh(); publish(lastState)
     } catch (error) { if (current()) { agentProblem = error instanceof Error ? error.message : 'Agent conversation could not refresh'; publish(lastState) } }
     finally { agentReading = false }
   }
@@ -214,7 +222,7 @@ export function mountClaudeUi(options: {
     ready,
     dispose,
     async submitAgent(revision: number, text: string) {
-      if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding'].includes(agentInput?.status ?? '')) return
+      if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) return
       agentInput = { revision, status: 'pending' }; publish(lastState)
       try {
         await ready
@@ -222,12 +230,22 @@ export function mountClaudeUi(options: {
         const result = await owner.handle.ui.submitAgent({ client_id: client.client_id, text })
         if (!current()) return
         if (result.kind === 'review') agentInput = { revision, status: 'review', review: { text: result.text, removed: result.removed } }
+        else if (result.kind === 'panel') agentInput = { revision, status: 'panel', panel: { id: result.id, commandName: result.commandName } }
         else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: { messageId: result.messageId, commandName: result.commandName, text: result.text, ...(result.outcome ? { outcome: result.outcome } : {}) } }
         else if (result.kind === 'blocked') agentInput = { revision, status: 'blocked', problem: result.message }
         else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: { id: result.id, title: result.title, confirmLabel: result.confirmLabel, ...(result.commandName ? { commandName: result.commandName } : {}) } }
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }
         publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
+    agentPanel(revision: number, panelId: string, text?: string) {
+      panelQueue = panelQueue.then(async () => {
+        if (!current() || !owner.nativeView || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId) return
+        const result = await owner.handle.ui.agentPanel({ client_id: client.client_id, panel_id: panelId, ...(text !== undefined ? { operation: 'input' as const, text } : { operation: 'close' as const }) })
+        if (!current()) return
+        if (!result.open && agentInput?.panel?.id === panelId) { agentInput = { revision, status: 'panel_done' }; publish(lastState) }
+      }).catch(error => { if (current()) { agentProblem = error instanceof Error ? error.message : 'Native command panel failed'; publish(lastState) } })
+      return panelQueue
     },
     async answerAgentCommand(revision: number, commandId: string, decision: 'confirm' | 'cancel') {
       if (!current() || !owner.nativeView || agentInput?.status !== 'confirmation' || agentInput.revision !== revision || agentInput.command?.id !== commandId) return
