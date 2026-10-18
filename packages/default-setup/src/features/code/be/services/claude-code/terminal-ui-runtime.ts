@@ -143,13 +143,15 @@ async function initialize(){
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
+  const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
+  const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog};
   engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions};
+  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog};
  })();
  return initializing;
 }
@@ -279,8 +281,27 @@ function drainCompletion(n,clientId,state){
  });
 }
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
-async function control(request){
+async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};
+ if(request.subtype==='apack_set_model'){
+  if(typeof request.model!=='string'||!request.model.trim()||request.model.length>256)throw Error('Invalid native model selection');
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native model controls are not ready');
+  const context=binding.toolContext(abort),sessionId=JSON.parse(readFileSync(configUrl,'utf8')).sessionId,deadline=Date.now()+4000;
+  const current=()=>{abort.signal.throwIfAborted();if(Date.now()>deadline||JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==sessionId)throw Error('Native model selection expired or changed session');};
+  return n.runtime.DS(context.session,async()=>{
+   current();
+   const validation=await n.models.dRe(request.model,context.storageV5,context.credentials,{deadlineMs:2500});
+   current();if(!validation.ok)throw Error(validation.message);
+   if(n.models.Ooe(validation.model))throw Error('This model requires native interactive consent; choose it with /model in the native interface');
+   const hooks=await n.models.SC(context.session,context.getAppState,validation.model,'sdk',{signal:abort.signal});
+   current();if(hooks.decision!=='proceed')throw Error(n.models.BKe(hooks));
+   const notice=await n.models.jKe(context.session,validation.model,context.getAppState,context.setAppState,false,'sdk',validation.substitutedFrom,context.storageV5);
+   const state=context.getAppState(),selection=state.mainLoopModelForSession??state.mainLoopModel??'default';
+   return {selection,notice};
+  });
+ }
  if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
  if(request.subtype==='apack_get_permission_mode'||request.subtype==='apack_set_permission_mode'){
@@ -366,6 +387,7 @@ async function control(request){
  return result===undefined?{handled:false}:{handled:true,element:result.element,...(value.subtype!=='ui_press'?{value:result.value}:{})};
 }
 const server=http.createServer(async(request,response)=>{
+ const abort=new AbortController();response.once('close',()=>abort.abort());
  const reply=(status,value)=>{if(response.destroyed)return;response.writeHead(status,{'content-type':'application/json'});response.end(JSON.stringify(value));};
  if(request.method!=='POST'||request.url!=='/control'||request.headers['x-apack-native-token']!==config.token)return reply(403,{});
  let body;
@@ -379,7 +401,7 @@ const server=http.createServer(async(request,response)=>{
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
    if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
-   const result=await control(body.request);
+   const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
   }catch(error){reply(400,{...identity,error:String(error?.message??error)});}finally{inFlight--;}

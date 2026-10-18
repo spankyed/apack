@@ -153,6 +153,20 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(composerStatus.locator('[style*="color"]').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-normal-composer-before-send.png') })
   const composer = card.locator('[contenteditable="true"]')
+  async function sendHostCommand(name: string, args = '') {
+    await composer.fill('')
+    await composer.pressSequentially('/' + name)
+    const popup = appPage.locator('.command-suggestion-popup')
+    await popup.getByText('/' + name, { exact: true }).click()
+    if (args) await composer.pressSequentially(args)
+    await card.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect(composer).toHaveText('')
+  }
+  await sendHostCommand('cc-models')
+  await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('This catalog is not an exhaustive list'))).toBe(true)
+  await sendHostCommand('cc-model', 'haiku')
+  await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
+
   await composer.fill('DropNativeHistoryFixture')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(card).toContainText('Native history fixture refused', { timeout: 10000 })
@@ -162,6 +176,9 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(composer).toHaveText('', { timeout: 10000 })
   await expect.poll(async () => (await context()).messages.filter((message: any) => message.sender === 'user' && message.text === 'NativeComposerAcceptedFixture').length).toBe(1)
   await expect.poll(async () => (await context()).native.state.busy, { timeout: 15000 }).toBe(false)
+  await sendHostCommand('cc-model', 'default')
+  await expect.poll(async () => (await context()).claude.modelOverride).toBe('default')
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-model-controls.png') })
   const imageData = (await readFile(join(workspace!, 'native-app-image.png'))).toString('base64')
   await card.evaluate((element, data) => {
     const bytes = Uint8Array.from(atob(data), character => character.charCodeAt(0))
@@ -280,7 +297,8 @@ test('hands one conversation to the native terminal and displays its main and ag
   const nativeUser = synchronized.messages.find((message: any) => message.context?.cliUuid === accepted.uuid)
   expect(nativeUser.text).toBe(accepted.message.content)
   expect(nativeUser.context.claudeNativeUserMessage.origin.kind).toBe('composer')
-  expect(synchronized.messages.filter((message: any) => message.sender === 'user')).toHaveLength(6)
+  expect(synchronized.messages.filter((message: any) => message.sender === 'user' && !message.isCommand)).toHaveLength(6)
+  expect(synchronized.messages.filter((message: any) => message.isCommand)).toHaveLength(3)
   expect(synchronized.messages.some((message: any) => message.text.includes('DropNativeHistoryFixture') || message.text.includes('RewriteNativeHistoryFixture'))).toBe(false)
   expect(synchronized.messages.filter((message: any) => message.context?.claudeTerminalMessage).length).toBeGreaterThanOrEqual(4)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-returned-history.png') })
@@ -297,5 +315,5 @@ test('hands one conversation to the native terminal and displays its main and ag
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, normalComposerContextReference: true, nativeExternalFilePermission: true, nativePermissionModeAcknowledged: true, nativePausedWhileWorking: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, nativeAgentToolRowStatus: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, normalComposerContextReference: true, nativeExternalFilePermission: true, nativePermissionModeAcknowledged: true, nativePausedWhileWorking: true, nativeModelCommandControls: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, nativeAgentToolRowStatus: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })

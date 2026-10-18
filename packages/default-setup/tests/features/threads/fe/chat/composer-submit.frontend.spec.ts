@@ -1,3 +1,4 @@
+import { commandSuggestionPlugin } from '#extensions/tiptap/command-suggestion-plugin.ts'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import type { ClaudePromptReply, ClaudePromptCompletionReply, ClaudeUiMountState } from '#generated/types.ts'
@@ -297,3 +298,14 @@ it('retains a native draft until acceptance and keeps a rejected draft retryable
   await nextTick(); f.submit()
   await vi.waitFor(() => expect(editor.state.doc.textContent).toBe(''))
 })
+
+it('routes an explicitly selected app command through the app while a native owner is attached', async () => {
+  const f = mount(async () => undefined), nativeSubmit = vi.fn(async () => {});
+  f.state.nativeSubmit = nativeSubmit; await nextTick();
+  editor.registerPlugin(commandSuggestionPlugin(editor, () => [{ name: 'cc-model', placeholder: 'Model' }]));
+  editor.commands.setContent('/cc-model haiku');
+  f.submit();
+  await vi.waitFor(() => expect(f.command).toHaveBeenCalledWith('cc-model', 'haiku', {}));
+  expect(nativeSubmit).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
+  expect(editor.state.doc.textContent).toBe('');
+});

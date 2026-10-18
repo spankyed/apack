@@ -111,7 +111,8 @@ export async function action(
 
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
-  const model = requestedModel ?? prior?.modelOverride;
+  const selection = requestedModel ?? prior?.modelOverride;
+  const model = selection === 'default' ? undefined : selection;
   if (prior?.historyError) {
     services.chat.sendBlockMessage({threadId, text: `Cannot continue after a failed history change: ${prior.historyError} Reset or resume a session before continuing.`, blocks: [], forkable: false});
     return {success: false, error: 'history change unresolved'};

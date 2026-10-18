@@ -10,7 +10,7 @@ import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
-import type { ClaudeSettings } from './host-controls.ts'
+import { ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
 export interface ClaudeNativeTerminalOwner {
@@ -18,6 +18,7 @@ export interface ClaudeNativeTerminalOwner {
   readonly uiTransport: import('./terminal-ui.ts').ClaudeTerminalUiTransport
   readonly state: ClaudeNativeTerminalState
   readonly busy: boolean
+  readonly modelSelection?: string
   readonly done: Promise<void>
   /** Register persistence work before the process exits; done waits for these callbacks. */
   beforeRelease(listener: () => Promise<void>): void
@@ -28,6 +29,8 @@ export interface ClaudeNativeTerminalOwner {
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
+  getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
+  setModel(model: string): Promise<string>
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
@@ -68,7 +71,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
-  let exitCode: number | undefined, stopping = false
+  let exitCode: number | undefined, stopping = false, changingModel = false
+  let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
   let resolveDone!: () => void
@@ -130,8 +134,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
-      get busy() { return !closed && (bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
+      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get modelSelection() { return modelSelection },
+      get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport: bridge.uiTransport,
@@ -160,6 +165,22 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
       },
+      async getModels(options) {
+        if (closed) throw new Error('Native terminal closed')
+        return ClaudeModelCatalogSchema.parse(await bridge.uiTransport.request({ subtype: 'apack_list_models', include_unsupported_models: options?.includeUnsupportedModels === true }))
+      },
+      async setModel(model) {
+        if (closed || changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
+        changingModel = true; changed()
+        const sessionId = bridge.projection.sessionId
+        try {
+          const result = await bridge.uiTransport.request({ subtype: 'apack_set_model', model }) as { selection?: unknown }
+          if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing model')
+          if (typeof result?.selection !== 'string' || !result.selection) throw new Error('Native model selection was not acknowledged')
+          modelSelection = result.selection
+          return modelSelection
+        } finally { changingModel = false; changed() }
+      },
       async setPermissionMode(mode) {
         if (closed) throw new Error('Native terminal closed')
         const sessionId = bridge.projection.sessionId
@@ -170,7 +191,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
         return accepted
       },
-      submit(text, images) { return bridge.submit(text, images) },
+      submit(text, images) { if (changingModel) return Promise.reject(new Error('Native model selection is changing; your draft was retained')); return bridge.submit(text, images) },
       kill,
       async close() { if (!closed) kill(); await done },
     }

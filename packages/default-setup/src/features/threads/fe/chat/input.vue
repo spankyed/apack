@@ -790,22 +790,20 @@ const handleSubmit = async () => {
       ...(contextRefs.length > 0 ? { context: contextRefs } : {}),
     }
 
-    // Check if this is a command submission
-    if (props.nativeSubmit) {
-      await props.nativeSubmit(md, references)
-      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
-    } else if (cmdState?.active && cmdState.selectedCommand) {
+    // Explicitly selected app commands stay on the app command route under either owner.
+    if (cmdState?.active && cmdState.selectedCommand) {
       const commandName = cmdState.selectedCommand.name
       const prefix = `/${commandName} `
       const bodyText = md.startsWith(prefix) ? md.slice(prefix.length) : md.slice(`/${commandName}`.length)
       emit('send-command', commandName, bodyText.trim(), references)
-
-      // Deactivate command plugin
       if (editor.state.doc === doc) {
         const { tr } = editor.state
         tr.setMeta(commandSuggestionKey, { deactivate: true })
         editor.view.dispatch(tr)
       }
+    } else if (props.nativeSubmit) {
+      await props.nativeSubmit(md, references)
+      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
     } else {
       emit('send-message', md, references)
     }

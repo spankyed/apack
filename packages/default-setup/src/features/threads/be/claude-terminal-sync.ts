@@ -121,7 +121,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const chatState = problem || nativeError || state.status === 'error' ? 'error' : owner.busy ? 'working' : state.status === 'exited' || state.lastTurn?.reason === 'aborted' ? 'paused' : 'success'
         const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId,
           ...(prior.sessionId && prior.sessionId !== state.sessionId ? { previousSessionIds: [...new Set([...previous, prior.sessionId])] } : {}),
-          ...(metadata ? { model: metadata.model, modelOverride: metadata.model, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
+          ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }
         repository.threadCommands.update(threadId, { context })
         broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })

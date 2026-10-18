@@ -8,7 +8,7 @@ function setup(owner?: object) {
   const { id } = repository.threadCommands.create({ topic: 'Model', instructions: '', tags: [] });
   repository.threadCommands.update(id, { context: { claudeCode: { cwd: '/selected', model: 'observed-sonnet', modelOverride: 'sonnet' } } });
   const settings = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getConversation: vi.fn(() => owner ? { owner } : undefined), getWorkingDir: vi.fn(() => '/selected'), writeSettings: settings } as never });
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(), getConversation: vi.fn(() => owner ? { owner } : undefined), getWorkingDir: vi.fn(() => '/selected'), writeSettings: settings } as never });
   mockService<Services, 'chat'>('chat', { sendBlockMessage: vi.fn() });
   return { id, settings, state: () => repository.threadQueries.byId(id)?.context?.claudeCode };
 }
@@ -63,4 +63,30 @@ it.each([true, false])('replays input queued during a model acknowledgement (acc
   settle();
   await command;
   expect(replay).toHaveBeenCalledWith('Claude Code Chat', expect.objectContaining({ threadId: f.id, text: 'queued during validation' }));
+});
+
+it('uses the native terminal owner and saves its canonical acknowledgement', async () => {
+  const f = setup();
+  let acknowledge!: (value: string) => void;
+  const native = { state: { cwd: '/selected', sessionId: 'session' }, busy: false, setModel: vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; })) };
+  vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(native as never);
+  const changing = run(f.id, 'HAIKU');
+  await vi.waitFor(() => expect(native.setModel).toHaveBeenCalledWith('HAIKU'));
+  expect(f.state()?.modelOverride).toBe('sonnet');
+  acknowledge('haiku');
+  expect((await changing).text).toContain('selection accepted: haiku');
+  expect(f.state()).toMatchObject({ modelOverride: 'haiku', model: 'observed-sonnet' });
+  expect(f.settings).not.toHaveBeenCalled();
+});
+it.each(['busy', 'refusal', 'replacement'])('retains selection when native model control encounters %s', async kind => {
+  const f = setup();
+  const native = { state: { cwd: '/selected', sessionId: 'session' }, busy: kind === 'busy', setModel: vi.fn(async () => {
+    if (kind === 'refusal') throw new Error('Native model policy refused');
+    vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(undefined);
+    return 'haiku';
+  }) };
+  vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(native as never);
+  await run(f.id, 'haiku');
+  expect(f.state()?.modelOverride).toBe('sonnet');
+  expect(native.setModel).toHaveBeenCalledTimes(kind === 'busy' ? 0 : 1);
 });

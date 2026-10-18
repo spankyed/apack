@@ -13,7 +13,7 @@ function setup(cwd?: string) {
  const catalog = { models: [{ value: 'native-alias', displayName: 'Native choice', resolvedModel: 'native-id', supportedEffortLevels: ['future-effort'] }] };
  const live = vi.fn().mockResolvedValue(catalog), fresh = vi.fn().mockResolvedValue(catalog);
  mockService<Services, 'cli'>('cli', { claudeCode: {
-  getWorkingDir: () => '/selected', getConversation: () => cwd ? { owner: { sessionCwd: cwd, handle: { getModels: live } } } : undefined,
+  getNativeTerminal: vi.fn(), getWorkingDir: () => '/selected', getConversation: () => cwd ? { owner: { sessionCwd: cwd, handle: { getModels: live } } } : undefined,
   getModels: fresh,
  } as never });
  mockService<Services, 'chat'>('chat', { sendBlockMessage: vi.fn() });
@@ -62,7 +62,7 @@ it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native c
   const options={cwd:root,includeUnsupportedModels:true,cliPath:process.env.CLAUDE_CATALOG_TEST_BINARY,env:{PATH:process.env.PATH,HOME:join(root,'home'),CLAUDE_CONFIG_DIR:config,ANTHROPIC_BASE_URL:`http://127.0.0.1:${address.port}`,DISABLE_AUTOUPDATER:'1',CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1'}};
   handle=await query({...options,keepStdinOpen:true,noSessionPersistence:true}); await handle.initialized;
   const native=await handle.getModels(); expect(native.models.length).toBeGreaterThan(0);
-  setup(root); mockService<Services,'cli'>('cli',{claudeCode:{getWorkingDir:()=>root,getConversation:()=>({owner:{sessionCwd:root,handle}})} as never});
+  setup(root); mockService<Services,'cli'>('cli',{claudeCode:{getNativeTerminal:()=>undefined,getWorkingDir:()=>root,getConversation:()=>({owner:{sessionCwd:root,handle}})} as never});
   const result=await run();
   for(const model of native.models) expect(result.text).toContain(`${model.value}: ${model.displayName}`);
   await handle.close(); handle=undefined;
@@ -70,3 +70,14 @@ it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native c
   expect(requests).toBe(0); expect(await readFile(settings,'utf8')).toBe(before);
  } finally {await handle?.close(); await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())); await rm(root,{recursive:true,force:true});}
 },15000);
+
+it('reads the current terminal catalog without a discovery process', async () => {
+ const f=setup();
+ const getModels=vi.fn(async()=>({models:[{value:'native-new',displayName:'Native new model',disabled:true}]}));
+ vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue({state:{cwd:'/selected',sessionId:'session'},getModels} as never);
+ const result=await run();
+ expect(result.text).toContain('native-new: Native new model');
+ expect(result.text).toContain('[unavailable]');
+ expect(getModels).toHaveBeenCalledWith({includeUnsupportedModels:false});
+ expect(f.fresh).not.toHaveBeenCalled();expect(f.live).not.toHaveBeenCalled();
+});

@@ -1383,6 +1383,7 @@ interface ClaudeNativeTerminalOwner {
     readonly uiTransport: ClaudeTerminalUiTransport;
     readonly state: ClaudeNativeTerminalState;
     readonly busy: boolean;
+    readonly modelSelection?: string;
     readonly done: Promise<void>;
     /** Register persistence work before the process exits; done waits for these callbacks. */
     beforeRelease(listener: () => Promise<void>): void;
@@ -1399,6 +1400,10 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
+    getModels(options?: {
+        includeUnsupportedModels?: boolean;
+    }): Promise<ClaudeModelCatalog>;
+    setModel(model: string): Promise<string>;
     setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>;
     close(): Promise<void>;

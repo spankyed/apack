@@ -29,7 +29,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
     setModel: vi.fn(async () => {}),
   } as unknown as QueryHandle;
   const opened = vi.fn(async (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume));
-  mockService<Services, 'cli'>('cli', { claudeCode: { openConversation: opened, getConversation: store.getConversation,
+  mockService<Services, 'cli'>('cli', { claudeCode: { openConversation: opened, getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation,
     isConversationBusy: store.isConversationBusy, closeIdleConversation: store.closeIdleConversation,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
     sessionExists: vi.fn(async () => true),
@@ -134,7 +134,7 @@ it('preserves native assistant rows when one provider reply becomes several tran
   } as unknown as QueryHandle;
   mockService<Services, 'cli'>('cli', { claudeCode: {
     openConversation: (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume),
-    getConversation: store.getConversation, isConversationBusy: store.isConversationBusy,
+    getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, isConversationBusy: store.isConversationBusy,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
     sessionExists: vi.fn(async () => true),
   } as never });

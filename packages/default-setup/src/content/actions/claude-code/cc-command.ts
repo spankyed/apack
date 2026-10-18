@@ -198,16 +198,20 @@ async function handleModels(args: string[], services: Services, threadId?: strin
   const prior = threadId ? getClaudeState(services, threadId) : undefined;
   const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
   const conversation = threadId ? services.cli.claudeCode.getConversation(threadId) : undefined;
+  const native = threadId ? services.cli.claudeCode.getNativeTerminal(threadId) : undefined;
+  const matchingNative = native?.state.cwd === cwd ? native : undefined;
   const handle = conversation?.owner.sessionCwd === cwd ? conversation.owner.handle : undefined;
-  if (!handle && args[0] !== 'start') return { text: 'No matching native conversation is running. Use cc-models start to read with a temporary native process. Starting and closing it can run configured session hooks.' };
-  const catalog = handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
+  if (!matchingNative && !handle && args[0] !== 'start') return { text: 'No matching native conversation is running. Use cc-models start to read with a temporary native process. Starting and closing it can run configured session hooks.' };
+  const nativeSessionId = matchingNative?.state.sessionId;
+  const catalog = matchingNative ? await matchingNative.getModels({ includeUnsupportedModels }) : handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
+  if (matchingNative && (services.cli.claudeCode.getNativeTerminal(threadId!) !== matchingNative || matchingNative.state.sessionId !== nativeSessionId)) return { text: 'Claude conversation changed while reading its model catalog.' };
   const rows = catalog.models.map(model => {
     const capabilities = [
       ['Effort', model.supportsEffort], ['Adaptive thinking', model.supportsAdaptiveThinking],
       ['Fast mode', model.supportsFastMode], ['Auto mode', model.supportsAutoMode], ['Thinking off', model.supportsThinkingOff],
     ].filter(([, value]) => typeof value === 'boolean').map(([label, value]) => `${label}: ${value ? 'yes' : 'no'}`);
     const details = [model.description, model.supportedEffortLevels ? `Effort levels: ${model.supportedEffortLevels.join(', ') || '(none)'}` : undefined, ...capabilities];
-    return `${model.value}: ${model.displayName}${model.resolvedModel ? ` (${model.resolvedModel})` : ''}${details.filter(Boolean).map(detail => `\n  ${detail}`).join('')}`;
+    return `${model.value}: ${model.displayName}${model.disabled === true ? ' [unavailable]' : ''}${model.resolvedModel ? ` (${model.resolvedModel})` : ''}${details.filter(Boolean).map(detail => `\n  ${detail}`).join('')}`;
   });
   return { text: `${rows.join('\n') || 'Native catalog is empty.'}\n\nUse cc-model <alias or model id> for this thread; acknowledged selection and last reported model are separate. This catalog is not an exhaustive list of custom model IDs and does not identify the active selection.` };
 }
@@ -222,6 +226,17 @@ async function handleModel(
   if (args.length === 0) return { text: `Selected: ${prior?.modelOverride || 'default'}\nLast reported: ${prior?.model || '(not yet reported)'}` };
   if (args.length !== 1) return { text: 'Usage: cc-model <alias or model id>' };
   const selection = args[0]!;
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (native) {
+    if (native.busy) return { text: 'Wait for the Claude conversation to become idle before changing model.' };
+    const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+    if (native.state.cwd !== cwd) return { text: 'The native conversation directory does not match this project.' };
+    const sessionId = native.state.sessionId;
+    const accepted = await native.setModel(selection);
+    if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId) return { text: 'Claude conversation changed while choosing the model.' };
+    persistClaudeState(services, threadId, { modelOverride: accepted });
+    return { text: `Model selection accepted: ${accepted}. The next turn will report the effective model.` };
+  }
   const conversation = services.cli.claudeCode.getConversation(threadId);
   if (conversation) {
     if (conversation.owner.busy) return { text: 'Wait for the Claude conversation to become idle before changing model.' };
