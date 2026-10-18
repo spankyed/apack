@@ -100,13 +100,22 @@ test('renames through the owning native and print processes with original title 
   expect(JSON.stringify(nativeReminder.message.content)).toContain(title)
   expect((await context()).messages.some((m: any) => m.context?.cliUuid === nativeReminder.uuid)).toBe(false)
 
+  await composer.fill('Continue after the native rename reminder.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
+  let titleJournal: Buffer | undefined
+  for(const bucket of await readdir(join(workspace!,'.claude/projects'))){
+    try {titleJournal=await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'));break} catch(error:any){if(error.code!=='ENOENT')throw error}
+  }
+  expect(titleJournal).toBeDefined()
+  expect(titleJournal!.length).toBeGreaterThan(8192)
+  expect(titleJournal!.subarray(0,4096).toString('utf8')).not.toContain('"customTitle"')
+  expect(titleJournal!.subarray(-4096).toString('utf8')).not.toContain('"customTitle"')
+  await writeFile(join(workspace!,'native-title-discovery-journal.jsonl'),titleJournal!)
   await command('cc-resume', title)
   await expect.poll(async () => (await context()).messages.some((m: any) => m.text === 'Continuing the existing app conversation for this Claude Code session.')).toBe(true)
   expect((await context()).threadId).toBe(sourceThreadId)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  await composer.fill('Continue after the native rename reminder.')
-  await card.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-session-rename.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
@@ -123,5 +132,5 @@ test('renames through the owning native and print processes with original title 
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
   await appPage.screenshot({ path: testInfo.outputPath('apack-print-session-rename.png') })
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'rename', nativeOwnerRename: true, nativeRenameReminder: true, nativeReminderUuid: nativeReminder.uuid, printOwnerRename: true, nativeTitlePersisted: true, nativeTitleDiscovery: true, sameNativeOwner: true, resumedPrintSameSession: true, title, printTitle, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'rename', nativeOwnerRename: true, nativeRenameReminder: true, nativeReminderUuid: nativeReminder.uuid, printOwnerRename: true, nativeTitlePersisted: true, nativeTitleDiscovery: true, nativeLongJournalTitleDiscovery: true, nativeTitleOutsideEdgeChunks: true, titleJournalBytes: titleJournal!.length, sameNativeOwner: true, resumedPrintSameSession: true, title, printTitle, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

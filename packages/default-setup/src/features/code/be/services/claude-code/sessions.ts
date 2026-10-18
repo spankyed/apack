@@ -95,69 +95,28 @@ export interface SessionViewOptions {
 
 // ─── Internals ────────────────────────────────────────────────────────────────
 
-const CHUNK_SIZE = 4096
-
-/**
- * Extract a session title from a JSONL file by reading head + tail chunks.
- * Mirrors the CLI's `parseSessionInfoFromLite()` pattern — checks for
- * `customTitle` first, falls back to `aiTitle`.
- */
-async function extractTitle(filePath: string, fileSize: number): Promise<string | undefined> {
-  let fh: fs.promises.FileHandle | undefined
-  try {
-    fh = await fs.promises.open(filePath, 'r')
-    const headBuf = Buffer.alloc(Math.min(CHUNK_SIZE, fileSize))
-    await fh.read(headBuf, 0, headBuf.length, 0)
-    const head = headBuf.toString('utf8')
-
-    let tail = head
-    if (fileSize > CHUNK_SIZE) {
-      const tailBuf = Buffer.alloc(Math.min(CHUNK_SIZE, fileSize))
-      await fh.read(tailBuf, 0, tailBuf.length, fileSize - tailBuf.length)
-      tail = tailBuf.toString('utf8')
-    }
-
-    // Check tail first (titles are appended), then head
-    return extractJsonField(tail, 'customTitle')
-      ?? extractJsonField(head, 'customTitle')
-      ?? extractJsonField(tail, 'aiTitle')
-      ?? extractJsonField(head, 'aiTitle')
-  } catch {
-    return undefined
-  } finally {
-    await fh?.close()
-  }
-}
-
-/** Extract a JSON string field value by simple string search (no full parse). */
-function extractJsonField(text: string, key: string): string | undefined {
-  for (const pattern of [`"${key}":"`, `"${key}": "`]) {
-    const idx = text.lastIndexOf(pattern)
-    if (idx < 0) continue
-    const start = idx + pattern.length
-    let i = start
-    while (i < text.length) {
-      if (text[i] === '\\') { i += 2; continue }
-      if (text[i] === '"') return text.slice(start, i)
-      i++
-    }
-  }
-  return undefined
-}
-
-/** Read all sessions from a bucket directory. `cwd` is stored on each SessionInfo for context. */
-/** Bucket names are lossy; the journal is the authority for the project path. */
-async function readSessionCwd(file: string): Promise<string | undefined> {
-  const input = fs.createReadStream(file, { encoding: 'utf8' });
-  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+/** Stream native metadata without retaining transcript rows or guessing from bucket names. */
+async function readSessionMetadata(file: string, sessionId: string): Promise<{ cwd?: string; title?: string }> {
+  const input = fs.createReadStream(file, { encoding: 'utf8' })
+  const lines = readline.createInterface({ input, crlfDelay: Infinity })
+  let cwd: string | undefined
+  let customTitle: string | undefined
+  let aiTitle: string | undefined
   try {
     for await (const line of lines) {
-      try {
-        const row = JSON.parse(line);
-        if (typeof row?.cwd === 'string' && path.isAbsolute(row.cwd)) return row.cwd;
-      } catch { /* A damaged row does not hide later native project metadata. */ }
+      let row: SessionTranscriptEntry
+      try { row = JSON.parse(line) } catch { continue }
+      if (!row || typeof row !== 'object') continue
+      if (!cwd && typeof row.cwd === 'string' && path.isAbsolute(row.cwd)) cwd = row.cwd
+      if (row.sessionId !== sessionId) continue
+      if (row.type === 'custom-title' && typeof row.customTitle === 'string') customTitle = row.customTitle
+      if (row.type === 'ai-title' && typeof row.aiTitle === 'string') aiTitle = row.aiTitle
     }
-  } finally { lines.close(); input.destroy(); }
+    return { cwd, title: customTitle || aiTitle || undefined }
+  } finally {
+    lines.close()
+    input.destroy()
+  }
 }
 
 async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo[]> {
@@ -177,12 +136,16 @@ async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo
     const stat = await fs.promises.stat(file).catch(() => null)
     if (!stat) continue
     const id = name.replace(/\.jsonl$/, '')
-    const title = await extractTitle(file, stat.size)
+    let metadata: Awaited<ReturnType<typeof readSessionMetadata>>
+    try { metadata = await readSessionMetadata(file, id) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
     infos.push({
       id,
       file,
-      cwd: cwd ?? await readSessionCwd(file),
-      title,
+      cwd: cwd ?? metadata.cwd,
+      title: metadata.title,
       modifiedAt: stat.mtime,
       size: stat.size,
     })
