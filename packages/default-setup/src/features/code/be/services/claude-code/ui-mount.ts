@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -60,10 +60,10 @@ export function mountClaudeUi(options: {
   let panelQueue = Promise.resolve()
   let agentInput: ClaudeUiMountState['agentInput']
   async function refreshAgent() {
-    if (!owner.readAgent || agentReading || !current()) return
+    if (agentReading || !current() || !owner.readAgent && agentInput?.status !== 'panel') return
     agentReading = true
     try {
-      const next = await owner.readAgent()
+      const next = owner.readAgent ? await owner.readAgent() : undefined
       if (!current()) return
       agent = next; agentProblem = undefined
       const panelState = agentInput
@@ -209,7 +209,7 @@ export function mountClaudeUi(options: {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach({ ...client, ...((options.nativeView ?? owner.nativeView) ? { native_view: options.nativeView ?? owner.nativeView } : {}) })
       attached = true
-      if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); await panes?.start(); if (owner.readAgent && current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
+      if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); await panes?.start(); if (current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
@@ -221,6 +221,45 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async submitParentCommand(revision: number, text: string, hasReferences: boolean): Promise<import('./ui-controls.ts').ClaudeParentCommandResult> {
+      await ready
+      if (owner.nativeView || !attached || !current()) throw new Error('Claude composer is not attached')
+      if (!Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) throw new Error('A native command is pending')
+      const prepared = await owner.handle.ui.prepareParentCommand({ client_id: client.client_id, text })
+      if (prepared.kind !== 'prepared') { if (current()) { agentInput = undefined; publish(lastState) } return prepared }
+      if (hasReferences) throw new Error('Remove attachments or references before running a native command')
+      if (!current()) throw new Error('Claude composer changed before command execution')
+      agentInput = { revision, status: 'pending' }; publish(lastState)
+      const ticket = { client_id: client.client_id, command_id: prepared.id }
+      try {
+      let startError: unknown
+      try { await owner.handle.ui.startParentCommand(ticket) } catch (error) { startError = error }
+      // Execution is single-use. Read the held ticket even if reset invalidates this drawing.
+      let retryUntil = Date.now() + 2000
+      for (;;) {
+        let outcome
+        try { outcome = await owner.handle.ui.readParentCommand(ticket) }
+        catch (error) {
+          const message = error instanceof Error ? error.message : ''
+          if (Date.now() >= retryUntil || !/owner changed before its reply|reply identity does not match|session changed during UI request/.test(message)) throw error
+          await new Promise(resolve => setTimeout(resolve, 50)); continue
+        }
+        retryUntil = Date.now() + 2000
+        if (outcome.kind === 'running') { await new Promise(resolve => setTimeout(resolve, 50)); continue }
+        if (outcome.kind === 'failed') throw new Error(outcome.message)
+        if (outcome.kind === 'prepared') throw startError ?? new Error('Native command did not start')
+        const result = outcome.result
+        if (current()) {
+          if (result.kind === 'panel') agentInput = { revision, status: 'panel', panel: { id: result.id, commandName: result.commandName } }
+          else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: result }
+          else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: result }
+          else agentInput = { revision, status: 'done' }
+          publish(lastState)
+        }
+        return result
+      }
+      } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command failed' }; publish(lastState) } throw error }
+    },
     async submitAgent(revision: number, text: string) {
       if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) return
       agentInput = { revision, status: 'pending' }; publish(lastState)
@@ -240,7 +279,7 @@ export function mountClaudeUi(options: {
     },
     agentPanel(revision: number, panelId: string, text?: string) {
       panelQueue = panelQueue.then(async () => {
-        if (!current() || !owner.nativeView || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId) return
+        if (!current() || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId) return
         const result = await owner.handle.ui.agentPanel({ client_id: client.client_id, panel_id: panelId, ...(text !== undefined ? { operation: 'input' as const, text } : { operation: 'close' as const }) })
         if (!current()) return
         if (!result.open && agentInput?.panel?.id === panelId) { agentInput = { revision, status: 'panel_done' }; publish(lastState) }
@@ -248,7 +287,7 @@ export function mountClaudeUi(options: {
       return panelQueue
     },
     async answerAgentCommand(revision: number, commandId: string, decision: 'confirm' | 'cancel') {
-      if (!current() || !owner.nativeView || agentInput?.status !== 'confirmation' || agentInput.revision !== revision || agentInput.command?.id !== commandId) return
+      if (!current() || agentInput?.status !== 'confirmation' || agentInput.revision !== revision || agentInput.command?.id !== commandId) return
       const command = agentInput.command
       agentInput = { revision, status: 'deciding', command, decision }; publish(lastState)
       try {

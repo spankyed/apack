@@ -155,12 +155,12 @@ function decideCommand(decision: 'confirm' | 'cancel') {
   if (!uiMount.value || commandSending.value || input?.status !== 'confirmation' || !input.command) return
   commandFocusOwned = !!commandPanel.value?.contains(document.activeElement)
   commandSending.value = true; emit('pending', true); problem.value = undefined
-  actor.send({ type: 'CLAUDE_UI_AGENT_COMMAND', ...identity(), revision: input.revision, commandId: input.command.id, decision })
+  actor.send({ type: 'CLAUDE_UI_COMMAND_DECISION', ...identity(), revision: input.revision, commandId: input.command.id, decision })
 }
 watch(panelActive, (value, previous) => { if (previous && !value) void nextTick(() => { if (props.active) agentComposer.value?.focus() }) })
 function panelInput(text?: string) {
   const input = state.value?.agentInput
-  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({ type: 'CLAUDE_UI_AGENT_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
+  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
 }
 function panelResize(size: { columns: number; rows: number }) {
   const ownerId = selectedOwner.value?.ownerId

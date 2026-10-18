@@ -203,6 +203,7 @@
 </template>
 
 <script setup lang="ts">
+import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
@@ -274,7 +275,7 @@ const props = defineProps<{
   statusLineCwd?: string
   nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
-  nativeSubmit?: (text: string, references: MessageReferences) => Promise<void>
+  nativeSubmit?: (text: string, references: MessageReferences) => Promise<ClaudeComposerSubmitResult>
   nativeUi?: ClaudeUiMountState
 }>()
 
@@ -347,6 +348,15 @@ watch(() => props.nativeUi?.panes?.roster.focus_requested_id, id => {
 const nativeCompletions = ref<(import('#generated/types.ts').ClaudePromptCompletionRow & { offerId: string })[]>([])
 const submitting = ref(false)
 const submissionProblem = ref<string>()
+let pendingNativeCommand: { revision: number; accept(): void } | undefined
+watch(() => props.nativeUi?.agentInput, state => {
+  if (state?.status !== 'command_done' && state?.status !== 'error') return
+  const pending = pendingNativeCommand
+  if (!pending || pending.revision !== state.revision) return
+  pendingNativeCommand = undefined
+  if (state.status === 'command_done' && state.decision === 'confirm') pending.accept()
+})
+defineExpose({ focus: focusComposer })
 let composerEpoch = 0
 watch([() => props.currentThread?.id, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })
@@ -805,7 +815,20 @@ const handleSubmit = async () => {
         editor.view.dispatch(tr)
       }
     } else if (props.nativeSubmit) {
-      await props.nativeSubmit(md, references)
+      const result = await props.nativeSubmit(md, references)
+      if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+      if (result && 'review' in result) {
+        if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').setContent(result.review.text).run(); submissionProblem.value = `Removed ${result.review.removed} invisible characters. Review and send again.` }
+        return
+      }
+      if (result && 'commandPending' in result) {
+        pendingNativeCommand = { revision: result.revision, accept() {
+          if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
+          sentHistory.value.push(md); saveHistory(sentHistory.value)
+          if (editor.state.doc === doc) { editor.chain().setMeta('claude-prompt-by', 'app').clearContent(true).run(); messageContent.value = ''; hasTextContent.value = false; attachments.clear() }
+        } }
+        return
+      }
       if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor) return
     } else {
       emit('send-message', md, references)

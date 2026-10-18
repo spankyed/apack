@@ -33,8 +33,10 @@
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)] ?? ''" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="focusedAgent = undefined" />
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
+          <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
+          <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <!-- Agent Chat Content -->
-          <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!mainCommandView && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -99,9 +101,9 @@
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
-            <ChatInput
-              :disabled="!!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
+          <div v-show="!mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
+            <ChatInput ref="mainComposer"
+              :disabled="mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
               :disabled-reason="taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -215,6 +217,8 @@ import { claudeClientInput } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
+import NativeMainCommand from './NativeMainCommand.vue'
+import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
@@ -378,7 +382,7 @@ function pressNativeUi(actionId: string, href?: string) {
   if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 onMounted(() => {
-  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.revision, () => !!agentSelection.value], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
+  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
     detachNativeUi()
     if (!threadId || !enabled || terminalActive || agentSelection.value || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
     const mount = { threadId, mountId: crypto.randomUUID() }
@@ -461,6 +465,31 @@ provide(claudeTaskControls, {
 })
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const mainComposer = ref<InstanceType<typeof ChatInput>>()
+const mainCommand = computed(() => nativeUiDrawing.value?.agentInput)
+const mainDismissedRevision = ref<number>(), mainOutputExpanded = ref(false)
+const mainOutputDismissed = computed(() => mainCommand.value?.revision === mainDismissedRevision.value)
+const mainPanelActive = computed(() => mainCommand.value?.status === 'panel')
+const mainCommandActive = computed(() => mainPanelActive.value || ['pending', 'confirmation', 'deciding'].includes(mainCommand.value?.status ?? ''))
+const mainCommandView = computed(() => mainPanelActive.value || mainCommand.value?.status === 'command_output' && !mainOutputDismissed.value)
+function dismissMainOutput() { mainDismissedRevision.value = mainCommand.value?.revision; mainOutputExpanded.value = false; void nextTick(() => mainComposer.value?.focus()) }
+function mainPanel(text?: string) {
+  const mount = nativeUiMount.value, state = mainCommand.value
+  if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...mount, revision: state.revision, panelId: state.panel.id, ...(text !== undefined ? { text } : {}) })
+}
+function mainPanelResize(size: { columns: number; rows: number }) {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (mount && owner) actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...mount, ownerId: owner.ownerId, ...size })
+}
+function mainCommandDecision(decision: 'confirm' | 'cancel') {
+  const mount = nativeUiMount.value, state = mainCommand.value
+  if (mount && state?.command) actor.send({ type: 'CLAUDE_UI_COMMAND_DECISION', ...mount, revision: state.revision, commandId: state.command.id, decision })
+}
+watch(() => mainCommand.value?.status, (status, before) => {
+  if (before === 'panel' && status !== 'panel' || before === 'deciding' && status !== 'deciding') void nextTick(() => mainComposer.value?.focus())
+  if (status !== 'command_output') mainOutputExpanded.value = false
+})
+
 const pendingNativeApproval = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown; command?: unknown };
@@ -515,8 +544,8 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
 }
 
 let nativeSendRevision = 0
-const pendingNativeSend = ref<{ ownerId: string; revision: number; resolve(): void; reject(error: Error): void }>()
-function submitNativeMessage(text: string, references: MessageReferences): Promise<void> {
+const pendingNativeSend = ref<{ ownerId: string; revision: number; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
+function submitNativeMessage(text: string, references: MessageReferences): Promise<ClaudeComposerSubmitResult> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
@@ -535,7 +564,11 @@ watch(nativeComposerView, view => {
   const result = view.submission
   if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision || result.status === 'pending') return
   pendingNativeSend.value = undefined
-  if (result.status === 'accepted') pending.resolve()
+  if (result.status === 'accepted') {
+    if (result.command?.kind === 'review') pending.resolve({ review: result.command })
+    else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
+    else pending.resolve()
+  }
   else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
 })
 const statusLine = computed(() => {

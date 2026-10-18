@@ -472,8 +472,8 @@ export type AgentSettings = ThreadsSettings['chat'];
 // System-private entity type
 
 export type ClaudeUiViewRequest =
-  | { type: 'CLAUDE_UI_AGENT_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
-  | { type: 'CLAUDE_UI_AGENT_COMMAND'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
+  | { type: 'CLAUDE_UI_COMMAND_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
+  | { type: 'CLAUDE_UI_COMMAND_DECISION'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
   | { type: 'CLAUDE_UI_AGENT_INPUT'; threadId: string; mountId: string; revision: number; text: string }
   | ({ type: 'CLAUDE_PROMPT_HOST_RESPONSE'; threadId: string; mountId: string } & import('#generated/types.ts').ClaudePromptHostResponse)
   | ({ type: 'CLAUDE_UI_FOCUS'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent)

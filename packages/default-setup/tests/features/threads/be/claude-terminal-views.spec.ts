@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
-function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput'], beforeViewChange?: Parameters<typeof createClaudeTerminalViews>[0]['beforeViewChange']) {
+function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput'], beforeViewChange?: Parameters<typeof createClaudeTerminalViews>[0]['beforeViewChange'], command?: Parameters<typeof createClaudeTerminalViews>[0]['command']) {
   const listeners = new Set<() => void>()
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
@@ -12,7 +12,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
   const accepted = vi.fn()
-  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput, accepted, beforeViewChange })
+  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput, accepted, beforeViewChange, command })
   const send = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
   return { owner, output, listeners, open, views, send, accepted, setCurrent(value?: ClaudeNativeTerminalOwner) { current = value } }
 }
@@ -102,7 +102,7 @@ it('discards receipts after owner replacement', async () => {
   try {
     f.views.handle(mount, 'one', f.send)
     f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Old draft' }, 'one', f.send)
-    await Promise.resolve(); const count = f.send.mock.calls.length
+    await vi.waitFor(() => expect(f.owner.submit).toHaveBeenCalledOnce()); const count = f.send.mock.calls.length
     f.setCurrent(); resolve({ sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Old accepted prompt' })
     await Promise.resolve(); await Promise.resolve()
     expect(f.send).toHaveBeenCalledTimes(count)
@@ -194,5 +194,18 @@ it.each([false, true])('awaits prompt host release and rechecks owner replacemen
     finish()
     if (replacement) { await new Promise(resolve => setTimeout(resolve, 0)); expect(f.owner.operateTask).not.toHaveBeenCalled() }
     else await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].task).toMatchObject({ status: 'done', operation: 'foreground', view: { taskId: 'agent' } }))
+  } finally { f.views.clear() }
+})
+
+it('returns the submitting window native command outcome without a fabricated human receipt', async () => {
+  const command = vi.fn(async () => ({ kind: 'command_complete' as const, commandName: 'clear', messageId: randomUUID(), sessionId: randomUUID() }))
+  const f = fixture(undefined, undefined, command)
+  try {
+    f.views.handle(mount, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: '/clear' }, 'window', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({ status: 'accepted', command: { kind: 'command_complete' } }))
+    expect(command).toHaveBeenCalledExactlyOnceWith('window', 'thread', mount.mountId, 1, '/clear', false)
+    expect(f.owner.submit).not.toHaveBeenCalled(); expect(f.accepted).not.toHaveBeenCalled()
+    expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
   } finally { f.views.clear() }
 })

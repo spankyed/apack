@@ -88,6 +88,17 @@ export type ClaudeUiPromptCompletions = z.infer<typeof promptCompletions>
 export type ClaudeUiPromptFrame = z.infer<typeof promptFrame>
 export type ClaudeUiRenderResult = z.infer<typeof renderResult>
 
+const parentCommandResult = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('not_command') }).strict(),
+  z.object({ kind: z.literal('review'), text: z.string().max(32768), removed: z.number().int().positive() }).strict(),
+  z.object({ kind: z.literal('panel'), id: z.string().uuid(), commandName: z.string().max(256) }).strict(),
+  z.object({ kind: z.literal('command_output'), messageId: z.string().uuid(), commandName: z.string().max(256), text: z.string().min(1).max(65536), outcome: z.string().max(128).optional() }).strict(),
+  z.object({ kind: z.literal('blocked'), message: z.string().max(16384) }).strict(),
+  z.object({ kind: z.literal('confirmation'), id: z.string().uuid(), title: z.string().max(16384), confirmLabel: z.string().max(16384), commandName: z.string().max(256).optional() }).strict(),
+  z.object({ kind: z.literal('command_complete'), commandName: z.string().max(256), messageId: z.string().uuid(), boundaryId: z.string().uuid().optional(), sessionId: z.string().uuid().optional(), conversationId: z.string().uuid().optional() }).strict(),
+])
+export type ClaudeParentCommandResult = z.infer<typeof parentCommandResult>
+
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
 export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>) {
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
@@ -96,6 +107,22 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     return controls.request(value)
   }
   return {
+    async prepareParentCommand(options: { client_id: string; text: string }) {
+      const valid = z.object({ client_id: clientId, text: z.string().min(1).max(32768) }).strict().parse(options)
+      return z.union([z.object({ kind: z.literal('prepared'), id: z.string().uuid() }).strict(), parentCommandResult]).parse(await request({ subtype: 'apack_ui_parent_command', operation: 'prepare', ...valid }))
+    },
+    async startParentCommand(options: { client_id: string; command_id: string }) {
+      const valid = z.object({ client_id: clientId, command_id: z.string().uuid() }).strict().parse(options)
+      return z.object({ kind: z.literal('running'), id: z.string().uuid() }).strict().parse(await request({ subtype: 'apack_ui_parent_command', operation: 'start', ...valid }))
+    },
+    async readParentCommand(options: { client_id: string; command_id: string }) {
+      const valid = z.object({ client_id: clientId, command_id: z.string().uuid() }).strict().parse(options)
+      return z.discriminatedUnion('kind', [
+        z.object({ kind: z.enum(['prepared', 'running']), id: z.string().uuid() }).strict(),
+        z.object({ kind: z.literal('finished'), id: z.string().uuid(), result: parentCommandResult }).strict(),
+        z.object({ kind: z.literal('failed'), id: z.string().uuid(), message: z.string() }).strict(),
+      ]).parse(await request({ subtype: 'apack_ui_parent_command', operation: 'read', ...valid }))
+    },
     async submitAgent(options: { client_id: string; text: string }) {
       const valid = z.object({ client_id: clientId, text: z.string().min(1).max(16384).refine(text => !!text.trim()) }).strict().parse(options)
       if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')

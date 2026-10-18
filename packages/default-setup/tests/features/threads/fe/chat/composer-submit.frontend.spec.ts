@@ -36,7 +36,7 @@ beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window,
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<void>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
   editor.commands.setContent('first')
@@ -317,4 +317,29 @@ it('retains the parent draft and explains why a native Agent view holds its comp
   await f.submit(); await nextTick()
   expect(f.send).not.toHaveBeenCalled(); expect(editor.state.doc.textContent).toBe('Retained parent draft')
   expect(f.root.textContent).toContain('Return to the main conversation in the native interface')
+})
+
+
+it('keeps native admission review unsent and does not replace typing added during review', async () => {
+  const f = mount(async () => undefined)
+  f.state.nativeSubmit = vi.fn(async () => ({ review: { text: 'Reviewed text', removed: 1 } }))
+  await nextTick(); f.submit()
+  await vi.waitFor(() => expect(editor.state.doc.textContent).toBe('Reviewed text'))
+  expect(f.send).not.toHaveBeenCalled(); expect(f.root.textContent).toContain('Review and send again')
+  let finish!: (result: import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult) => void
+  f.state.nativeSubmit = vi.fn(() => new Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>(resolve => { finish = resolve }))
+  await nextTick(); f.submit(); await vi.waitFor(() => expect(f.state.nativeSubmit).toHaveBeenCalledOnce())
+  editor.commands.insertContent(' newer')
+  finish({ review: { text: 'Old reviewed response', removed: 1 } })
+  await nextTick(); await nextTick()
+  expect(editor.state.doc.textContent).toBe('Reviewed text newer')
+})
+it.each(['confirm', 'cancel'] as const)('clears only a confirmed unchanged native command draft (%s)', async decision => {
+  const f = mount(async () => undefined)
+  f.state.nativeSubmit = vi.fn(async () => ({ commandPending: true as const, revision: 1 }))
+  await nextTick(); f.submit(); await vi.waitFor(() => expect(f.state.nativeSubmit).toHaveBeenCalledOnce()); await nextTick()
+  expect(editor.state.doc.textContent).toBe('first')
+  f.state.nativeUi = { status: 'connecting', agentInput: { revision: 1, status: 'command_done', decision } }
+  await nextTick()
+  expect(editor.state.doc.textContent).toBe(decision === 'confirm' ? '' : 'first')
 })

@@ -14,7 +14,7 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { agentPanel: vi.fn(async (_options: unknown) => ({ open: false })), answerAgentCommand: vi.fn(async (_options: unknown) => ({ answered: true as const })), submitAgent: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['submitAgent']>(async () => ({ kind: 'input' as const, messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'running' })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
+  const ui = { prepareParentCommand: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['prepareParentCommand']>(async () => ({ kind: 'not_command' })), startParentCommand: vi.fn(async () => ({ kind: 'running' as const, id: '12345678-1234-1234-1234-123456789abc' })), readParentCommand: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['readParentCommand']>(async () => ({ kind: 'finished', id: '12345678-1234-1234-1234-123456789abc', result: { kind: 'command_complete', commandName: 'clear', messageId: '12345678-1234-1234-1234-123456789abc' } })), agentPanel: vi.fn(async (_options: unknown) => ({ open: false })), answerAgentCommand: vi.fn(async (_options: unknown) => ({ answered: true as const })), submitAgent: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['submitAgent']>(async () => ({ kind: 'input' as const, messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'running' })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -438,4 +438,38 @@ it('keeps native panel input scoped and blocks worker submission until original 
   expect(f.ui.agentPanel).toHaveBeenCalledWith(expect.objectContaining({ panel_id: panelId, operation: 'close' }))
   expect(f.states.at(-1)?.agentInput).toEqual({ revision: 1, status: 'panel_done' })
   await mount.dispose()
+})
+
+
+it('classifies ordinary main input without execution and refuses to discard command references', async () => {
+  const f = fixture(), view = f.mount(); await view.ready
+  expect(await view.submitParentCommand(1, 'Ordinary prompt', true)).toEqual({ kind: 'not_command' })
+  expect(f.ui.startParentCommand).not.toHaveBeenCalled()
+  f.ui.prepareParentCommand.mockResolvedValueOnce({ kind: 'prepared', id: '12345678-1234-1234-1234-123456789abc' })
+  await expect(view.submitParentCommand(2, '/clear', true)).rejects.toThrow('attachments or references')
+  expect(f.ui.startParentCommand).not.toHaveBeenCalled()
+  await view.dispose()
+})
+it('reads a held main command ticket after a lost start reply and retires its old drawing without replaying execution', async () => {
+  const f = fixture(), view = f.mount(); await view.ready
+  const id = '12345678-1234-1234-1234-123456789abc'
+  f.ui.prepareParentCommand.mockResolvedValueOnce({ kind: 'prepared', id })
+  f.ui.startParentCommand.mockRejectedValueOnce(new Error('Native UI owner changed before its reply'))
+  f.ui.readParentCommand.mockImplementationOnce(async () => { f.replace(); return { kind: 'finished', id, result: { kind: 'command_complete', commandName: 'clear', messageId: id, sessionId: id } } })
+  expect(await view.submitParentCommand(1, '/clear', false)).toMatchObject({ kind: 'command_complete', sessionId: id })
+  expect(f.ui.startParentCommand).toHaveBeenCalledOnce(); expect(f.ui.readParentCommand).toHaveBeenCalledWith({ client_id: f.ui.attach.mock.calls[0]![0].client_id, command_id: id })
+  expect(f.states.at(-1)?.status).toBe('disconnected')
+  await view.dispose()
+})
+it('polls and closes original command panels in a main mount without an Agent transcript', async () => {
+  const f = fixture(), view = f.mount(); await view.ready
+  const id = '12345678-1234-1234-1234-123456789abc'
+  f.ui.prepareParentCommand.mockResolvedValueOnce({ kind: 'prepared', id })
+  f.ui.readParentCommand.mockResolvedValueOnce({ kind: 'finished', id, result: { kind: 'panel', id, commandName: 'help' } })
+  await view.submitParentCommand(1, '/help', false)
+  expect(f.states.at(-1)?.agentInput?.status).toBe('panel')
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(f.ui.agentPanel).toHaveBeenCalledWith(expect.objectContaining({ panel_id: id, operation: 'read' }))
+  expect(f.states.at(-1)?.agentInput?.status).toBe('panel_done')
+  await view.dispose()
 })

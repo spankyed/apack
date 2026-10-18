@@ -2,7 +2,7 @@ import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
-import { handleClaudeUiView, releaseClaudeUiViews } from './claude-ui.ts';
+import { submitClaudeParentCommand, handleClaudeUiView, releaseClaudeUiViews } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
@@ -28,6 +28,7 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
 const terminalViews = createClaudeTerminalViews({
   beforeViewChange: releaseClaudeUiViews,
+  command: submitClaudeParentCommand,
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),
@@ -80,7 +81,7 @@ export const threadsSystem = setup({
       if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_TASK') terminalViews.handle(event, client, reply);
     },
     claudeUiView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_UI_AGENT_PANEL' || event.type === 'CLAUDE_UI_AGENT_COMMAND' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
+      if (event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
     },
     // ---- Thread management actions ----
     sendThreadsConnectedData: () => {
@@ -907,8 +908,8 @@ export const threadsSystem = setup({
       CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_TASK: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
-      CLAUDE_UI_AGENT_PANEL: { actions: 'claudeUiView' },
-      CLAUDE_UI_AGENT_COMMAND: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_PANEL: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_DECISION: { actions: 'claudeUiView' },
       CLAUDE_UI_AGENT_INPUT: { actions: 'claudeUiView' },
       CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },

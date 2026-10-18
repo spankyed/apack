@@ -113,6 +113,15 @@ function bind(key: string, view: ClaudeUiView): void {
   })
 }
 
+/** Route only through the submitting window's existing native UI attachment. */
+export async function submitClaudeParentCommand(client: string, threadId: string, mountId: string, revision: number, text: string, hasReferences: boolean) {
+  const key = keyOf(client, mountId), view = views.get(key)
+  if (!view || view.threadId !== threadId || view.nativeView || view.expires <= Date.now()) throw new Error('Claude composer is not attached')
+  bind(key, view)
+  if (!view.mount) throw new Error('Claude composer is not attached')
+  return view.mount.submitParentCommand(revision, text, hasReferences)
+}
+
 /** Delivery identity owns each mount. A heartbeat renews its lease without launching a process. */
 export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, reply?: Reply<OutgoingThreadsEvents>): void {
   if (!client || !reply || !validId(event.mountId) || !event.threadId || event.threadId.length > 256) return
@@ -134,13 +143,13 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
-  if (event.type === 'CLAUDE_UI_AGENT_PANEL') {
-    if (!view?.nativeView || !validId(event.panelId) || event.text !== undefined && (typeof event.text !== 'string' || !event.text.length || event.text.length > 4096)) return
+  if (event.type === 'CLAUDE_UI_COMMAND_PANEL') {
+    if (!view || !validId(event.panelId) || event.text !== undefined && (typeof event.text !== 'string' || !event.text.length || event.text.length > 4096)) return
     bind(key, view); void view.mount?.agentPanel(event.revision, event.panelId, event.text)
     return
   }
-  if (event.type === 'CLAUDE_UI_AGENT_COMMAND') {
-    if (!view?.nativeView || !validId(event.commandId) || !['confirm', 'cancel'].includes(event.decision)) return
+  if (event.type === 'CLAUDE_UI_COMMAND_DECISION') {
+    if (!view || !validId(event.commandId) || !['confirm', 'cancel'].includes(event.decision)) return
     bind(key, view); void view.mount?.answerAgentCommand(event.revision, event.commandId, event.decision)
     return
   }
