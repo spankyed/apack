@@ -1,11 +1,24 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskControl(n,binding,request,abort,current){
  current();
- if(typeof request.task_id!=='string'||request.task_id.length>256||!['inspect','stop'].includes(request.operation))throw Error('Invalid native task operation');
+ if(typeof request.task_id!=='string'||request.task_id.length>256||!['inspect','stop','send'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  const matches=Object.values(registry.all()).filter(task=>n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
- const task=matches[0];
+ const task=matches[0],canMessage=typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
+ if(request.operation==='send'){
+  if(!canMessage)throw Error('Agent messaging is not available in this session');
+  if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent message must contain 1 to 16384 characters');
+  const to=task.type==='in_process_teammate'?task.identity.agentName:request.task_id;
+  const call={type:'tool_use',id:'toolu_apack_'+randomUUID().replaceAll('-',''),name:'SendMessage',input:{to,message:request.text}};
+  const assistant=n.runtime._d({content:[call],isVirtual:true});let result,error;
+  for await(const value of n.runtime.Z2(call,assistant,binding.canUseTool,context,()=>new Date().toISOString())){
+   const row=value?.message;if(row?.type!=='user')continue;
+   for(const block of row.message?.content??[])if(block.type==='tool_result'&&block.tool_use_id===call.id){result=row.toolUseResult;error=block.is_error===true||row.toolDenialKind!==undefined?block.content:undefined;}
+  }
+  current();if(error!==undefined||result?.success!==true)throw Error(typeof error==='string'?error:'The native SendMessage tool did not confirm delivery');
+  return {sent:true};
+ }
  if(request.operation==='stop'){
   await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});
   current();return {stopped:true};
@@ -29,5 +42,5 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
   if(text.length>budget){text=text.slice(-budget);truncated=true;}
   messages.unshift({role:row.type,text});budget-=text.length;if(!budget)break;
  }
- return {details:{taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,messages,truncated}};
+ return {details:{taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,messages,truncated}};
 }`

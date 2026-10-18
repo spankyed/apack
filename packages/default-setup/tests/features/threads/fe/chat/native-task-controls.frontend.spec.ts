@@ -1,0 +1,41 @@
+import { createApp, h, ref, computed, provide, nextTick, type App } from 'vue'
+import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
+import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
+import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
+let app: App | undefined
+afterEach(() => { app?.unmount(); document.body.replaceChildren() })
+async function fixture() {
+  const task = { id: 'agent', ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', taskId: 'agent', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, messages: [], truncated: false } })
+  let revision = 1
+  const operate = vi.fn(() => ++revision), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() { provide(claudeTaskControls, { ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
+  root.querySelector<HTMLButtonElement>('button')!.click(); await nextTick()
+  const input = root.querySelector<HTMLTextAreaElement>('textarea')!
+  async function type(text: string) { input.value = text; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
+  async function send() { root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await nextTick() }
+  return { root, input, state, operate, type, send }
+}
+it('retains an unsent message when native delivery is refused', async () => {
+  const f = await fixture(); await f.type('User instruction'); await f.send()
+  expect(f.operate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'agent', ownerId: 'owner' }), 'send', 'User instruction')
+  f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'error', problem: 'Native refusal' }; await nextTick()
+  expect(f.input.value).toBe('User instruction'); expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Native refusal')
+})
+it('clears only the submitted text after its exact receipt and preserves typing during delivery', async () => {
+  const f = await fixture(); await f.type('First instruction'); await f.send(); await f.type('New unsent text')
+  f.state.value = { ...f.state.value, revision: 3, operation: 'send', status: 'done', sent: true }; await nextTick()
+  expect(f.input.value).toBe('New unsent text')
+  await f.send(); f.state.value = { ...f.state.value, revision: 4, operation: 'send', status: 'done', sent: true }; await nextTick()
+  expect(f.input.value).toBe(''); expect(f.root.textContent).toContain('Message sent to Agent')
+})
+
+it('closes only the task conversation on Escape and preserves its unsent text', async () => {
+  const f = await fixture(); await f.type('Unsent Agent instruction'); f.input.focus()
+  const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }); f.input.dispatchEvent(composing); await nextTick()
+  expect(f.root.querySelector('textarea')).toBe(f.input)
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); f.input.dispatchEvent(escape); await nextTick()
+  expect(escape.defaultPrevented).toBe(true); expect(f.root.querySelector('textarea')).toBeNull()
+  const toggle = f.root.querySelector<HTMLButtonElement>('button')!; expect(document.activeElement).toBe(toggle)
+  toggle.click(); await nextTick(); expect(f.root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Unsent Agent instruction')
+})

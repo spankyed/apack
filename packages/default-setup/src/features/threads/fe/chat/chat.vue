@@ -412,10 +412,13 @@ let taskRevision = 0
 provide(claudeTaskControls, {
   ownerId: computed(() => taskView.value?.[1].state?.ownerId),
   state: computed(() => taskView.value?.[1].task),
-  operate(task, operation) {
+  operate(task, operation, text) {
     const lease = taskView.value, owner = lease?.[1].state, threadId = currentThread.value?.id
     if (!lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
-    actor.send({ type: 'CLAUDE_TERMINAL_TASK', threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, operation, revision: taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1 })
+    const revision = taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1
+    const request = { type: 'CLAUDE_TERMINAL_TASK' as const, threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, revision }
+    actor.send(operation === 'send' ? { ...request, operation, text: text ?? '' } : { ...request, operation })
+    return revision
   },
 })
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })

@@ -1,7 +1,7 @@
 <template>
-  <div v-if="controls && controls.ownerId.value === task.ownerId" class="mt-2 min-w-0">
+  <div v-if="controls && controls.ownerId.value === task.ownerId" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
     <div class="flex flex-wrap items-center gap-2">
-      <button type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ shown ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
+      <button ref="toggle" type="button" :aria-expanded="shown" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="showConversation">{{ shown ? 'Hide Agent conversation' : 'View Agent conversation' }}</button>
       <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || task.status !== 'running'" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : 'Stop Agent' }}</button>
     </div>
     <p v-if="state?.status === 'error'" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
@@ -13,16 +13,34 @@
         <pre class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ message.text }}</pre>
       </article>
       <p v-if="state.details.truncated" class="text-neutral-500">Conversation preview shortened.</p>
+      <form v-if="state.details.canMessage" class="mt-3 border-t border-white/10 pt-3" @submit.prevent="sendMessage">
+        <label class="block text-[11px] text-neutral-400">Message this Agent
+          <textarea v-model="draft" aria-label="Message this Agent" maxlength="16384" rows="2" class="mt-1 block w-full resize-y rounded border border-white/10 bg-neutral-900/40 px-2 py-1.5 text-xs text-neutral-200 focus:border-blue-400/50 focus:outline-none" />
+        </label>
+        <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && state.operation === 'send' ? 'Sending…' : 'Send to Agent' }}</button>
+      </form>
     </section>
+    <p v-if="state?.status === 'done' && state.operation === 'send' && state.sent" role="status" class="mt-2 text-[11px] text-neutral-400">Message sent to Agent</p>
   </div>
 </template>
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
 const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()
 const controls = inject(claudeTaskControls, undefined)
 const state = computed(() => { const value = controls?.state.value; return value?.ownerId === props.task.ownerId && value.taskId === props.task.id ? value : undefined })
-const shown = ref(false)
+const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
+let submitted: { revision: number; text: string } | undefined
+watch(state, value => { if (submitted && value?.status === 'done' && value.operation === 'send' && value.sent && value.revision === submitted.revision && draft.value === submitted.text) draft.value = '' })
+function sendMessage() {
+  if (!draft.value.trim() || pending.value) return
+  const text = draft.value, revision = controls?.operate(props.task, 'send', text)
+  if (revision !== undefined) submitted = { revision, text }
+}
 const pending = computed(() => controls?.state.value?.status === 'pending')
+function leaveConversation(event: KeyboardEvent) {
+  if (event.isComposing || event.defaultPrevented || !shown.value) return
+  event.preventDefault(); event.stopPropagation(); shown.value = false; toggle.value?.focus({ preventScroll: true })
+}
 function showConversation() { shown.value = !shown.value; if (shown.value) controls?.operate(props.task, 'inspect') }
 </script>

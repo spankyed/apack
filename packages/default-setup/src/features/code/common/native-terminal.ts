@@ -27,6 +27,7 @@ export interface ClaudeNativeTaskDetails {
   taskId: string
   name: string
   status: string
+  canMessage: boolean
   messages: { role: 'user' | 'assistant'; text: string }[]
   truncated: boolean
 }
