@@ -1,3 +1,4 @@
+import { ClaudeQuestionPresentationSchema } from '../../../common/native-question.ts'
 import { z } from 'zod'
 
 /** A one-time Read decision; native retains policy, input and dialog lifecycle ownership. */
@@ -23,6 +24,7 @@ export const ClaudeNativeQuestionDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
   requestId: z.string().min(1).max(256), toolName: z.literal('AskUserQuestion'),
   shownInput: z.record(z.string(), z.unknown()),
+  presentation: ClaudeQuestionPresentationSchema,
 })
 export const ClaudeNativeQuestionDialogsSchema = z.array(ClaudeNativeQuestionDialogSchema).max(1)
 export type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>

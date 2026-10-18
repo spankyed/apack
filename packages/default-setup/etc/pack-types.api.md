@@ -1362,6 +1362,47 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
     requestId: z.ZodString;
     toolName: z.ZodLiteral<"AskUserQuestion">;
     shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    presentation: z.ZodObject<{
+        previewFormat: z.ZodNullable<z.ZodString>;
+        extendedQuestions: z.ZodBoolean;
+        optionalDescriptions: z.ZodBoolean;
+        previews: z.ZodArray<z.ZodObject<{
+            question: z.ZodString;
+            option: z.ZodString;
+            kind: z.ZodEnum<["full", "withheld", "empty"]>;
+            markdown: z.ZodOptional<z.ZodString>;
+        }, "strip", z.ZodTypeAny, {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }, {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }>, "many">;
+    }, "strip", z.ZodTypeAny, {
+        previewFormat: string | null;
+        extendedQuestions: boolean;
+        optionalDescriptions: boolean;
+        previews: {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }[];
+    }, {
+        previewFormat: string | null;
+        extendedQuestions: boolean;
+        optionalDescriptions: boolean;
+        previews: {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }[];
+    }>;
 }, "strip", z.ZodTypeAny, {
     id: string;
     revision: string;
@@ -1369,6 +1410,17 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
     requestId: string;
     toolName: "AskUserQuestion";
     shownInput: Record<string, unknown>;
+    presentation: {
+        previewFormat: string | null;
+        extendedQuestions: boolean;
+        optionalDescriptions: boolean;
+        previews: {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }[];
+    };
 }, {
     id: string;
     revision: string;
@@ -1376,6 +1428,17 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
     requestId: string;
     toolName: "AskUserQuestion";
     shownInput: Record<string, unknown>;
+    presentation: {
+        previewFormat: string | null;
+        extendedQuestions: boolean;
+        optionalDescriptions: boolean;
+        previews: {
+            question: string;
+            kind: "empty" | "full" | "withheld";
+            option: string;
+            markdown?: string | undefined;
+        }[];
+    };
 }>;
 
 type ClaudeNativeReadDialog = z.infer<typeof ClaudeNativeReadDialogSchema>;

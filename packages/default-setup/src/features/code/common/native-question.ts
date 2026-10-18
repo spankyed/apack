@@ -18,3 +18,9 @@ export interface ClaudeQuestionAnswer {
   response?: string
   followUp?: boolean
 }
+
+export const ClaudeQuestionPresentationSchema = z.object({
+  previewFormat: z.string().nullable(), extendedQuestions: z.boolean(), optionalDescriptions: z.boolean(),
+  previews: z.array(z.object({ question: z.string(), option: z.string(), kind: z.enum(['full', 'withheld', 'empty']), markdown: z.string().optional() })).max(16),
+})
+export type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>

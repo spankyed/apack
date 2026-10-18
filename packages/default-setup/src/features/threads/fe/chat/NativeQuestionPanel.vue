@@ -13,9 +13,11 @@
         </label>
         <template v-if="selectedPreview">
           <p class="muted">Option preview</p>
-          <pre data-testid="native-question-preview">{{ selectedPreview }}</pre>
+          <div v-if="presentation?.previewFormat === 'markdown'" data-testid="native-question-preview"><TiptapEditor mode="viewer" variant="chat" :model-value="selectedPreview" /></div>
+          <pre v-else data-testid="native-question-preview">{{ selectedPreview }}</pre>
         </template>
       </template>
+      <p v-if="previewWithheld" class="muted" data-testid="native-question-preview-withheld">Preview cannot be shown in full. Compare the option labels and descriptions.</p>
       <label class="answer">
         <span>{{ current.kind === 'number' ? current.unit ? `Value (${current.unit})` : 'Value' : current.kind === 'text' ? 'Your answer' : 'Or write your own answer' }}</span>
         <input v-if="current.kind === 'number'" ref="numberInput" type="number" :value="state.custom" :min="current.min" :max="current.max" :step="current.step ?? 'any'" :disabled="disabled" @input="setNumber" />
@@ -38,8 +40,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; disabled: boolean; error?: string }>()
+import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
+import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
+const props = defineProps<{ card: Record<string, unknown>; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation }>()
 const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; pause: [] }>()
 const parsed = computed(() => { const value = ClaudeQuestionCardSchema.safeParse(props.card); return value.success ? value.data : undefined })
 const generalResponse = ref('')
@@ -48,7 +51,14 @@ const drafts = reactive<{ selected: string[]; custom: string; notes: string }[]>
 watch(() => JSON.stringify(props.card), () => { const card = parsed.value; generalResponse.value = ''; step.value = 0; drafts.splice(0, drafts.length, ...(card?.questions.map(question => ({ selected: [], custom: question.kind === 'number' && question.defaultValue !== undefined ? String(question.defaultValue) : '', notes: '' })) ?? [])) }, { immediate: true })
 const current = computed(() => parsed.value?.questions[step.value])
 const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', notes: '' })
-const selectedPreview = computed(() => current.value?.options.find(option => state.value.selected.includes(option.label) && option.preview)?.preview)
+function previewFor(question: string, option: string, original?: string) {
+  if (!props.presentation) return original
+  const preview = props.presentation.previews.find(item => item.question === question && item.option === option)
+  return preview?.kind === 'full' ? preview.markdown : undefined
+}
+const selectedOption = computed(() => current.value?.options.find(option => state.value.selected.includes(option.label) && option.preview))
+const selectedPreview = computed(() => current.value && selectedOption.value ? previewFor(current.value.question, selectedOption.value.label, selectedOption.value.preview) : undefined)
+const previewWithheld = computed(() => current.value && selectedOption.value && props.presentation?.previews.some(item => item.question === current.value!.question && item.option === selectedOption.value!.label && item.kind === 'withheld'))
 function choose(label: string) {
   if (props.disabled || !current.value) return
   const draft = state.value
@@ -63,7 +73,8 @@ function submit(followUp = false) {
     const draft = drafts[index]
     if (draft.custom.trim()) answers[question.question] = draft.custom.trim()
     else if (draft.selected.length) answers[question.question] = question.multiSelect ? [...draft.selected] : draft.selected[0]
-    const preview = question.options.find(option => draft.selected.includes(option.label) && option.preview)?.preview
+    const selected = question.options.find(option => draft.selected.includes(option.label) && option.preview)
+    const preview = selected && previewFor(question.question, selected.label, selected.preview) ? selected.preview : undefined
     if (preview || draft.notes.trim()) annotations[question.question] = { ...(preview ? { preview } : {}), ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}) }
   })
   emit('respond', { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) })

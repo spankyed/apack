@@ -85,7 +85,7 @@
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionPanel :key="pendingNativeQuestion.messageId" :card="pendingNativeQuestion.card" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error"
+            <NativeQuestionPanel :key="pendingNativeQuestion.messageId" :card="pendingNativeQuestion.card" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :presentation="pendingNativeQuestion.presentation"
               @respond="answer => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeQuestion!.messageId, response: { nativeQuestionAnswer: answer } })"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
@@ -206,6 +206,7 @@ import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
 import NativeReadApproval from './NativeReadApproval.vue'
 import NativeQuestionPanel from './NativeQuestionPanel.vue'
+import { ClaudeQuestionPresentationSchema } from '#features/code/common/native-question.ts'
 import RecentThreads from './recent-threads.vue'
 import InlineTabBar from './inline-tab-bar.vue'
 import AgentCanvas from '#features/threads/fe/canvas/agent/canvas.vue'
@@ -409,12 +410,13 @@ const pendingNativeRead = computed(() => {
 const pendingNativeQuestion = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: Record<string, unknown>;
-    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; problem?: unknown };
+    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; problem?: unknown; presentation?: unknown };
   } | undefined
   const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'AskUserQuestion' || typeof pending.approvalMessageId !== 'string' || !pending.originalInput) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
-  return message ? { messageId: pending.approvalMessageId, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
+  const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
+  return message ? { messageId: pending.approvalMessageId, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
 let nativeSendRevision = 0

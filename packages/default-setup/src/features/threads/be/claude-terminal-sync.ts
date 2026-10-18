@@ -96,7 +96,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
             pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
               nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision,
-                title, ...(isRead ? { question: dialog.question, reason: dialog.reason } : {}) } }
+                title, ...(isRead ? { question: dialog.question, reason: dialog.reason } : { presentation: dialog.presentation }) } }
           }
           if (pendingControlRequest !== priorControl) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }

@@ -1,9 +1,10 @@
 import { createApp, h, reactive, nextTick } from 'vue'
+import type { ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
 import NativeQuestionPanel from '#features/threads/fe/chat/NativeQuestionPanel.vue'
 
-function mount(card: Record<string, unknown>) {
+function mount(card: Record<string, unknown>, presentation?: ClaudeQuestionPresentation) {
   const root = document.createElement('div'); document.body.append(root)
-  const props = reactive({ card, disabled: false }), respond = vi.fn(), pause = vi.fn()
+  const props = reactive({ card, presentation, disabled: false }), respond = vi.fn(), pause = vi.fn()
   const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onPause: pause }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   const input = async (selector: string, text: string) => { const element = root.querySelector<HTMLInputElement>(selector)!; element.value = text; element.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
@@ -40,5 +41,19 @@ it('preserves unknown-format discoverability and disables navigation while a rep
     expect(f.root.textContent).toContain('Use native interface'); expect(f.button('Submit answers')).toBeUndefined()
     f.button('Cancel').click(); expect(f.pause).toHaveBeenCalledOnce()
     f.props.disabled = true; await nextTick(); expect(f.button('Cancel').disabled).toBe(true)
+  } finally { f.close() }
+})
+
+it.each(['withheld', 'empty'] as const)('honors native %s preview projection without submitting its original content', async kind => {
+  const f = mount({ questions: [{ question: 'First?', header: 'First', options: [option('Alpha', 'Original must not be drawn'), option('Beta')] }] }, {
+    previewFormat: 'markdown', extendedQuestions: false, optionalDescriptions: false,
+    previews: [{ question: 'First?', option: 'Alpha', kind }],
+  })
+  try {
+    f.root.querySelector<HTMLInputElement>('input[type=radio]')!.click(); await nextTick()
+    expect(f.root.textContent).not.toContain('Original must not be drawn')
+    expect(!!f.root.querySelector('[data-testid="native-question-preview-withheld"]')).toBe(kind === 'withheld')
+    f.button('Submit answers').click()
+    expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} })
   } finally { f.close() }
 })

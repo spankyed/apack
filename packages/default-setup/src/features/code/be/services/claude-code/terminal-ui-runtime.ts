@@ -145,14 +145,16 @@ async function initialize(){
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
   const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
+  const questionOptions=await import('/$bunfs/root/chunk-hdxpvbx1.js');
+  const questionText=await import('/$bunfs/root/chunk-xh5v0djg.js');
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText};
   engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool};
+  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText};
  })();
  return initializing;
 }
@@ -302,6 +304,16 @@ function nativeDialog(n,kind){
  dialogRevisions.set(kind,revision);
  return {store,sessionId,...revision};
 }
+function questionPresentation(n,payload){
+ const previews=[];
+ for(const question of payload.questions)for(const option of question.options??[]){
+  if(typeof option.preview!=='string')continue;
+  // Frozen terminal h4 producer: its 2000-character display cap and native text helpers.
+  const kind=option.preview.length>2000?'withheld':!n.questionText.zL(option.preview)?'empty':n.questionText.VL(option.preview)?'withheld':'full';
+  previews.push({question:question.question,option:option.label,kind,...(kind==='full'?{markdown:n.questionText._gt(option.preview)}:{})});
+ }
+ return {previewFormat:n.questionOptions.yjr()??null,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews};
+}
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request,abort){
  const n=await initialize();
@@ -322,7 +334,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_question_dialogs'){
   const d=nativeDialog(n,'permission_ask_user_question');if(!d.item)return {dialogs:[]};
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'AskUserQuestion',shownInput:n.questionTool.shownCardInput(d.payload.input)}]};
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'AskUserQuestion',shownInput:n.questionTool.shownCardInput(d.payload.input),presentation:questionPresentation(n,d.payload)}]};
  }
  if(request.subtype==='apack_answer_question_dialog'){
   abort.signal.throwIfAborted();
