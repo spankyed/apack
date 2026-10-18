@@ -48,3 +48,21 @@ describe('CC: Answer Question', () => {
   });
 
 });
+
+it.each(['matching', 'replaced', 'refused'])('routes native card answers through only the matching owner (%s)', async mode => {
+  const { id, respond } = setup('current')
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName: 'AskUserQuestion',
+    originalInput: { questions: [{ question: 'Original?' }] }, nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog-1', revision: 'revision' } } } } })
+  const answerQuestionDialog = vi.fn(async () => { if (mode === 'refused') throw Error('Native refused') }), update = vi.fn()
+  mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ respond })), getNativeTerminal: vi.fn(() => ({ state: { ownerId: mode === 'replaced' ? 'replacement' : 'owner', sessionId: 'session' }, answerQuestionDialog })) } as never })
+  mockService<Services, 'chat'>('chat', { updateMessageState: update, sendBlockMessage: vi.fn() })
+  const answer = { answers: { 'Original?': ['Alpha', 'Beta'] }, annotations: { 'Original?': { notes: 'A note' } } }
+  const result = await action({ threadId: id, requestId: 'current', originalInput: { questions: [] }, response: { nativeQuestionAnswer: answer } }, services)
+  expect(result.success).toBe(mode === 'matching'); expect(respond).not.toHaveBeenCalled()
+  if (mode === 'replaced') expect(answerQuestionDialog).not.toHaveBeenCalled()
+  else expect(answerQuestionDialog).toHaveBeenCalledWith({ id: 'dialog-1', revision: 'revision', sessionId: 'session', answer })
+  if (mode === 'refused') {
+    expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toMatchObject({ requestId: 'current' })
+    expect(update).toHaveBeenCalledWith('approval', { responseTimestamp: undefined, blockResponse: undefined })
+  }
+})

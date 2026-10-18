@@ -37,6 +37,27 @@ export async function action(
     return { success: false, reason: 'question is no longer pending' };
   }
 
+  if (pending.nativeTerminal) {
+    const native = pending.nativeTerminal, owner = services.cli.claudeCode.getNativeTerminal(threadId);
+    if (!owner || owner.state.ownerId !== native.ownerId || owner.state.sessionId !== native.sessionId) {
+      expirePendingControlRequest(services, threadId, requestId);
+      return { success: false, reason: 'Native question expired' };
+    }
+    try {
+      if (!response || typeof response !== 'object' || !response.nativeQuestionAnswer || typeof response.nativeQuestionAnswer !== 'object') throw new Error('Missing native card answer');
+      await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer });
+    } catch {
+      if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId) {
+        services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: undefined, blockResponse: undefined });
+        persistClaudeState(services, threadId, { pendingControlRequest: { ...pending, nativeTerminal: { ...native, problem: 'Claude Code did not accept that answer. Review it and try again.' } } });
+      }
+      return { success: false, reason: 'Native question changed or did not accept the answer' };
+    }
+    if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
+      persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+    return { success: true };
+  }
+
   const handle = (services.cli as any).claudeCode.getHandle(threadId);
 
   if (!handle) {

@@ -107,7 +107,7 @@ it('retires inline approval on native payload replacement and exit without dupli
   const dialog = { id: 'dialog-1', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sessionId, requestId: 'tool-read', toolName: 'Read' as const,
     title: 'Read file', question: 'Allow this read?', input: { file_path: '/outside/fixture.txt' } }
   const getReadDialogs = vi.fn(async () => [dialog])
-  const owner = { getReadDialogs, state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,
+  const owner = { getQuestionDialogs: vi.fn(async () => []), getReadDialogs, state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,
     readJournal: vi.fn(async () => ({ entries: [], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')

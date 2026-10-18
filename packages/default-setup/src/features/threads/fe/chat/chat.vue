@@ -32,7 +32,7 @@
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
-          <div v-show="!pendingNativeRead" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!pendingNativeRead && !pendingNativeQuestion" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -84,9 +84,14 @@
               @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeRead!.messageId, response })"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
+          <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+            <NativeQuestionPanel :key="pendingNativeQuestion.messageId" :card="pendingNativeQuestion.card" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error"
+              @respond="answer => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeQuestion!.messageId, response: { nativeQuestionAnswer: answer } })"
+              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
+          </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div v-show="!pendingNativeRead" class="flex-shrink-0 w-full" :class="$style.inputContainer">
+          <div v-show="!pendingNativeRead && !pendingNativeQuestion" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -200,6 +205,7 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
 import NativeReadApproval from './NativeReadApproval.vue'
+import NativeQuestionPanel from './NativeQuestionPanel.vue'
 import RecentThreads from './recent-threads.vue'
 import InlineTabBar from './inline-tab-bar.vue'
 import AgentCanvas from '#features/threads/fe/canvas/agent/canvas.vue'
@@ -398,6 +404,17 @@ const pendingNativeRead = computed(() => {
     question: typeof native.question === 'string' ? native.question : 'Allow this read?',
     reason: typeof native.reason === 'string' ? native.reason : undefined,
     disabled: !!message.responseTimestamp }
+})
+
+const pendingNativeQuestion = computed(() => {
+  const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
+    approvalMessageId?: unknown; toolName?: unknown; originalInput?: Record<string, unknown>;
+    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; problem?: unknown };
+  } | undefined
+  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'AskUserQuestion' || typeof pending.approvalMessageId !== 'string' || !pending.originalInput) return undefined
+  const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
+  return message ? { messageId: pending.approvalMessageId, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
 let nativeSendRevision = 0

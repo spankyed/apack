@@ -47,7 +47,7 @@ export interface QueuedMessage {
 
 export interface PendingControlRequest {
   /** Correlation for the original live terminal dialog, never a print control request. */
-  nativeTerminal?: { ownerId: string; sessionId: string; dialogId: string; revision: string; title?: string; question?: string; reason?: string };
+  nativeTerminal?: { ownerId: string; sessionId: string; dialogId: string; revision: string; title?: string; question?: string; reason?: string; problem?: string };
   /** The CLI's request_id for the control_response. */
   requestId: string;
   /** The messageId of the approval/choice block sent to the user. */

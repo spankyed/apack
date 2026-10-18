@@ -71,11 +71,12 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const batch = await owner.readJournal()
         journalPending = batch.pending
         problem = batch.problems.length ? batch.problems.join('; ') : undefined
-        const dialogs = await owner.getReadDialogs()
+        const reads = await owner.getReadDialogs()
+        const questions = await owner.getQuestionDialogs()
         if (!current() || !repository.threadQueries.byId(threadId)) return
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
-        const dialog = dialogs[0]
+        const dialog = reads.at(0) ?? questions.at(0)
         const nativeControl = object(priorControl?.nativeTerminal)
         const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
         if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
@@ -84,13 +85,18 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         if (!priorControl || nativeControl && !sameDialog) {
           let pendingControlRequest = nativeControl ? undefined : priorControl
           if (dialog && dialog.sessionId === owner.state.sessionId) {
-            const message = sendBlockMessage({ threadId, text: dialog.title, blocks: [
+            const isRead = dialog.toolName === 'Read'
+            const input = isRead ? dialog.input : dialog.shownInput
+            const title = isRead ? dialog.title : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
+            const message = isRead ? sendBlockMessage({ threadId, text: title, blocks: [
               { type: 'prompt', props: { content: dialog.question } },
-              { type: 'tool-input', props: { toolName: 'Read', input: dialog.input } },
+              { type: 'tool-input', props: { toolName: 'Read', input } },
               { type: 'approval', props: { requireReason: false, allowReason: true, autoAcceptOption: false } },
-            ], forkable: false, autoHide: true, asUser: true })
-            pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: 'Read', originalInput: dialog.input,
-              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, title: dialog.title, question: dialog.question, reason: dialog.reason } }
+            ], forkable: false, autoHide: true, asUser: true }) : sendBlockMessage({ threadId, text: title,
+              blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
+            pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
+              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision,
+                title, ...(isRead ? { question: dialog.question, reason: dialog.reason } : {}) } }
           }
           if (pendingControlRequest !== priorControl) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }

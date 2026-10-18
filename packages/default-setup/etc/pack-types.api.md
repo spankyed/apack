@@ -368,9 +368,11 @@ type BlockMessageOptions = BlockMessageBase & AutoHideOptions;
  * assuming the union is exhaustive; the event-level and field-level types use
  * the union, because every emit matches one of its arms.
  */
-type BlockResponse = 
+type BlockResponse = {
+    nativeQuestionAnswer: ClaudeQuestionAnswer;
+}
 /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
-{
+ | {
     approved: boolean;
     reason?: string;
 }
@@ -1400,21 +1402,21 @@ declare const ClaudeNativeReadDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     id: string;
     title: string;
+    question: string;
     revision: string;
     sessionId: string;
     requestId: string;
     toolName: "Read";
-    question: string;
     input: Record<string, unknown>;
     reason?: string | undefined;
 }, {
     id: string;
     title: string;
+    question: string;
     revision: string;
     sessionId: string;
     requestId: string;
     toolName: "Read";
-    question: string;
     input: Record<string, unknown>;
     reason?: string | undefined;
 }>;
@@ -1635,6 +1637,16 @@ type ClaudePromptReply = {
     status: 'error';
     message: string;
 };
+
+interface ClaudeQuestionAnswer {
+    answers?: Record<string, string | string[]>;
+    annotations?: Record<string, {
+        preview?: string;
+        notes?: string;
+    }>;
+    response?: string;
+    followUp?: boolean;
+}
 
 interface ClaudeSessionContextOptions extends Pick<QueryOptions, 'cliPath' | 'env' | 'signal'> {
     sessionId: string;
