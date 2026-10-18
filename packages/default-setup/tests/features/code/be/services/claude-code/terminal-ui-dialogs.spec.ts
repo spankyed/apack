@@ -4,6 +4,7 @@ import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/
 
 function fixture() {
   let sessionId = '11111111-1111-4111-8111-111111111111'
+  let nativeSessionId = sessionId
   const item = { id: 'dialog-1', kind: 'permission_file', payload: { requestId: 'read-1', toolName: 'Read', operationType: 'read', input: { file_path: '/original' } } }
   const state = { open: [item] }
   const answer = vi.fn(() => { state.open = [] })
@@ -12,12 +13,12 @@ function fixture() {
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
-    originalContext: binding, initialize: async () => ({}), AbortController, randomUUID,
+    originalContext: binding, initialize: async () => ({ questionOptions: { q: () => nativeSessionId } }), AbortController, randomUUID,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_read_dialogs' }, new AbortController())).dialogs[0]
   const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_read_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
-  return { state, item, answer, snapshot, reply, replaceSession() { sessionId = randomUUID() } }
+  return { state, item, answer, snapshot, reply, control, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
 }
 
 it('allows only the original native input once, ignoring arbitrary permission updates', async () => {
@@ -42,4 +43,27 @@ it('passes only native denial feedback and rejects unsupported decisions', async
   await expect(f.reply(d, { decision: 'always_allow' })).rejects.toThrow('Invalid')
   await f.reply(d, { decision: 'deny', feedback: 'No thanks' })
   expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny', feedback: 'No thanks' })
+})
+
+function bashFixture() {
+  const f = fixture(); f.item.kind = 'permission_bash'
+  const payload = Object.assign(f.item.payload, { toolName: 'Bash', command: 'printf original', classifierState: 'none', input: { command: 'printf original', description: 'Fixture command' } })
+  const snapshot = async () => (await f.control({ subtype: 'apack_bash_dialogs' }, new AbortController())).dialogs[0]
+  const reply = (dialog: any, extra = {}) => f.control({ subtype: 'apack_answer_bash_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...extra }, new AbortController())
+  return { ...f, payload, snapshot, reply }
+}
+it('allows the original Bash input once and ignores attempted command replacement', async () => {
+  const f = bashFixture(), dialog = await f.snapshot()
+  await f.reply(dialog, { updatedInput: { command: 'tampered' }, permissionUpdates: ['untrusted'] })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'allow', updatedInput: { command: 'printf original', description: 'Fixture command' } })
+  await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
+})
+it.each(['command', 'classifier', 'session', 'native session'] as const)('refuses a Bash decision after native %s changes', async change => {
+  const f = bashFixture(), dialog = await f.snapshot()
+  if (change === 'command') f.payload.input.command = 'printf changed'
+  if (change === 'classifier') f.payload.classifierState = 'checking'
+  if (change === 'session') f.replaceSession()
+  if (change === 'native session') f.replaceNativeSession()
+  await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
+  expect(f.answer).not.toHaveBeenCalled()
 })
