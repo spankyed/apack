@@ -76,6 +76,7 @@ test('keeps long native status and model catalog usable in compact windows', asy
   await writeFile(join(workspace!,'status-mode.txt'),'long')
   await expect(status).toContainText('NativeLongStatusEnd',{timeout:10000})
   await expect(status.locator('[style*="color"]').first()).toHaveCSS('color','rgb(74, 222, 128)')
+  const geometry: any[]=[]
   for(const height of [600,900]){
     await appPage.setViewportSize({width:680,height})
     await status.focus()
@@ -84,6 +85,10 @@ test('keeps long native status and model catalog usable in compact windows', asy
     expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.width+1)
     expect(sizes.height).toBeLessThanOrEqual(96)
     expect(sizes.scrollHeight).toBeGreaterThan(sizes.height)
+    const cardSize=await card.evaluate(element=>({height:element.clientHeight,scrollHeight:element.scrollHeight}))
+    expect(cardSize.scrollHeight).toBeLessThanOrEqual(cardSize.height+1)
+    geometry.push({viewportHeight:height,status:sizes,card:cardSize})
+    await appPage.screenshot({path:testInfo.outputPath('apack-long-native-status-start-'+height+'.png')})
     await status.press('Control+End')
     await expect.poll(()=>status.evaluate(element=>element.scrollTop+element.clientHeight>=element.scrollHeight-2)).toBe(true)
     await status.press('Escape')
@@ -95,7 +100,18 @@ test('keeps long native status and model catalog usable in compact windows', asy
   await command('cc-models')
   await expect.poll(async()=> (await context()).messages.some((m:any)=>m.text.includes('NativeCatalogLabelStart')&&m.text.includes('NativeCatalogDescriptionEnd'))).toBe(true)
   const catalog=appPage.getByText(/NativeCatalogLabelStart/).last()
-  await catalog.scrollIntoViewIfNeeded()
+  await catalog.evaluate(element=>{
+    const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node:Node|null
+    while((node=walker.nextNode())){
+      const index=node.textContent?.indexOf('NativeCatalogLabelStart')??-1
+      if(index<0)continue
+      const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+23)
+      for(let parent=element.parentElement;parent;parent=parent.parentElement){
+        if(/auto|scroll/.test(getComputedStyle(parent).overflowY)&&parent.scrollHeight>parent.clientHeight){parent.scrollTop+=range.getBoundingClientRect().top-parent.getBoundingClientRect().top-8;break}
+      }
+      break
+    }
+  })
   const content=await catalog.evaluate(element=>({width:element.clientWidth,scrollWidth:element.scrollWidth}))
   expect(content.scrollWidth).toBeLessThanOrEqual(content.width+1)
   await appPage.screenshot({path:testInfo.outputPath('apack-long-native-catalog.png')})
@@ -112,5 +128,5 @@ test('keeps long native status and model catalog usable in compact windows', asy
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeLongStatus:true,nativeKeyboardStatusScroll:true,nativeCompactComposerControls:true,nativeLongModelCatalog:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeLongStatus:true,nativeKeyboardStatusScroll:true,nativeCompactComposerControls:true,nativeLongModelCatalog:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,geometry,browserErrors:errors},null,2))
 })
