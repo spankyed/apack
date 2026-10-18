@@ -195,18 +195,7 @@ function selectCommand(cmd: PackCommand) {
   selectedIndex.value = 0
 }
 
-function deactivateAndClean() {
-  const state = suggestionState.value
-  if (!state) return
 
-  const from = COMMAND_TRIGGER_POS
-  const to = props.editor.state.selection.head
-
-  const { tr } = props.editor.state
-  tr.delete(from, to)
-  tr.setMeta(commandSuggestionKey, { deactivate: true })
-  props.editor.view.dispatch(tr)
-}
 </script>
 
 <style scoped>
