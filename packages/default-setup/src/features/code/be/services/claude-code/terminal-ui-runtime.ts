@@ -142,13 +142,14 @@ async function initialize(){
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
+  const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions};
   engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime};
+  return native={gate,engine,session,roster,schemas,runtime,permissions};
  })();
  return initializing;
 }
@@ -282,6 +283,17 @@ async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
+ if(request.subtype==='apack_set_permission_mode'){
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native permission controls are not ready');
+  const context=binding.toolContext(new AbortController());
+  const before=context.getAppState().toolPermissionContext;
+  const result=n.permissions.bC(request.mode,before,update=>context.setToolPermissionContext(update));
+  if(!result.ok)throw Error(result.error);
+  const mode=context.getAppState().toolPermissionContext.mode;
+  if(mode!==result.mode)throw Error('Native permission mode was not applied');
+  return {mode};
+ }
  if(request.subtype==='apack_prompt_outcome')return promptOutcome(n,request.submission_id);
  if(request.subtype==='apack_terminal_draft'){
   if(preparedPrompt?.id!==request.submission_id)throw Error('Native prepared prompt identity changed');

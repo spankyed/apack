@@ -34,9 +34,11 @@ export async function action(
   if (!modes.includes(mode as PermissionMode)) return { success: false, reason: 'invalid permission mode' };
 
   const handle = services.cli.claudeCode.getHandle(threadId);
-  if (handle) {
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  const control = native ?? handle;
+  if (control) {
     try {
-      mode = await handle.setPermissionMode(mode as PermissionMode);
+      mode = await control.setPermissionMode(mode as PermissionMode);
     } catch (error) {
       return { success: false, reason: error instanceof Error ? error.message : String(error) };
     }
@@ -45,7 +47,8 @@ export async function action(
   const current = getClaudeState(services, threadId);
   if (!current) return { success: false, reason: 'claude state removed while changing mode' };
   const currentHandle = services.cli.claudeCode.getHandle(threadId);
-  if (handle && currentHandle && currentHandle !== handle) {
+  const currentNative = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (control && (currentNative ?? currentHandle) !== control || !control && currentNative) {
     return { success: false, reason: 'active Claude session changed while changing mode' };
   }
   const updates: Record<string, unknown> = { permissionMode: mode };

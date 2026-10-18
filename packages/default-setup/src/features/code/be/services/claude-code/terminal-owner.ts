@@ -28,6 +28,7 @@ export interface ClaudeNativeTerminalOwner {
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
+  setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
   kill(): void
@@ -158,6 +159,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       resize(id, columns, rows) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
+      },
+      async setPermissionMode(mode) {
+        if (closed) throw new Error('Native terminal closed')
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_set_permission_mode', mode })
+        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing permission mode')
+        const accepted = PermissionModeSchema.parse((result as { mode?: unknown })?.mode)
+        const metadata = bridge.session.metadata
+        if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
+        return accepted
       },
       submit(text, images) { return bridge.submit(text, images) },
       kill,

@@ -42,6 +42,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
     readJournal: () => read([{ sessionId, path }], { final: exited }),
     subscribe: () => () => {}, input: () => false, resize: () => false, close: async () => {}, kill() {},
     submit: async () => { throw new Error('No prompt submission in this fixture') },
+    setPermissionMode: async mode => mode,
   }
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true)

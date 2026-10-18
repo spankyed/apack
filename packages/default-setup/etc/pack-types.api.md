@@ -1399,6 +1399,7 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
+    setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>;
     close(): Promise<void>;
     kill(): void;
