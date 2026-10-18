@@ -1,5 +1,5 @@
 <template>
-  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
+  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @click.capture="capturedClick" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
     <slot />
     <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre">0000000000</span>
   </div>
@@ -13,11 +13,13 @@ const props=defineProps<{node:Extract<ClaudeUiNode,{kind:'client'}>}>()
 const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),measure=ref<HTMLElement|null>(null)
 const dimension=(value:number|string|undefined,unit:string)=>typeof value==='number'?`${value}${unit}`:value
 const style=computed<CSSProperties>(()=>({width:dimension(props.node.layout?.width,'ch')??'fit-content',height:dimension(props.node.layout?.height,'lh'),flexGrow:props.node.layout?.flexGrow,maxWidth:'100%'}))
+let suppressPointerClick=false
 let observer:ResizeObserver|undefined,frame:number|undefined,lastLayout='',captured:HTMLElement|undefined,pointerId:number|undefined,pending:Extract<ClaudeUiClientInput,{kind:'pointer'}>|undefined
 const cell=()=>({width:Math.max(1,(measure.value?.getBoundingClientRect().width??80)/10),height:Math.max(1,Number.parseFloat(region.value?getComputedStyle(region.value).lineHeight:'')||20)})
 function layout(){frame=undefined;const element=region.value;if(!element)return;const size=cell(),event={kind:'resize' as const,columns:Math.floor(element.clientWidth/size.width),rows:Math.floor(element.clientHeight/size.height)},encoded=JSON.stringify(event);if(encoded!==lastLayout){lastLayout=encoded;send?.(props.node.id,event)}}
 function schedule(){if(frame===undefined)frame=requestAnimationFrame(()=>{layout();flush()})}
 function flush(){if(pending){send?.(props.node.id,pending);pending=undefined}}
+function capturedClick(event:MouseEvent){if(suppressPointerClick&&event.detail>0){suppressPointerClick=false;event.preventDefault();event.stopImmediatePropagation();focusClient(event)}}
 function focusClient(event:MouseEvent){if(props.node.keys&&event.target instanceof HTMLElement&&!event.target.closest('input,textarea,select'))region.value?.focus({preventScroll:true})}
 function key(event:KeyboardEvent){
  if(!props.node.keys||event.target!==region.value||event.isComposing||event.key==='Process'||event.key==='Dead'||event.key==='Escape')return
@@ -33,13 +35,18 @@ function pointer(event:PointerEvent){
  const buttons=['left','middle','right'] as const,button=(type==='down'||type==='up'||pointerId!==undefined)?buttons[event.button]??(event.buttons&1?'left':event.buttons&2?'right':event.buttons&4?'middle':undefined):undefined
  const input:Extract<ClaudeUiClientInput,{kind:'pointer'}>={kind:'pointer',type,x:Math.floor(x),y:Math.floor(y),...(!['enter','leave'].includes(type)?{fine:{x,y}}:{}),...(button?{button}:{}),...(event.ctrlKey?{ctrl:true}:{}),...(event.shiftKey?{shift:true}:{}),...(event.altKey?{alt:true}:{})}
  if(type==='down'){
+  suppressPointerClick=false
   const target=event.target instanceof HTMLElement?event.target:region.value
   if(!target.closest('button,input,textarea,select,a'))region.value.focus({preventScroll:true})
   target.setPointerCapture?.(event.pointerId);captured=target;pointerId=event.pointerId
  }
  if(type==='move'){pending=input;schedule()}else{flush();send?.(props.node.id,input)}
  if(pointerId!==undefined){event.stopPropagation();if(type==='move')event.preventDefault()}
- if(type==='up')release()
+ if(type==='up'){
+  const action=captured?.closest('button,a'),hit=action&&document.elementFromPoint(event.clientX,event.clientY)
+  suppressPointerClick=!!action&&!action.contains(hit||null)
+  release()
+ }
 }
 function release(){if(pointerId!==undefined&&captured?.hasPointerCapture?.(pointerId))captured.releasePointerCapture(pointerId);captured=undefined;pointerId=undefined}
 function cancel(){flush();if(pointerId!==undefined)send?.(props.node.id,{kind:'pointer',type:'up',x:0,y:0});release()}

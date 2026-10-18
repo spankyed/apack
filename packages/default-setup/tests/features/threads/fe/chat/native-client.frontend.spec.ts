@@ -38,3 +38,19 @@ it('gives the Client keyboard focus after its button click while leaving nested 
  const {region,root}=await mount();root.querySelector('button')!.click();expect(document.activeElement).toBe(region)
  const input=root.querySelector('textarea')!;input.focus();input.click();expect(document.activeElement).toBe(input)
 })
+
+it('does not activate a captured child button when the pointer is released outside it',async()=>{
+ const {region,root}=await mount(),button=root.querySelector('button')!,press=vi.fn(),original=document.elementFromPoint
+ button.addEventListener('click',press)
+ try{
+  document.elementFromPoint=()=>document.body
+  button.dispatchEvent(pointer('pointerdown',{pointerId:7,clientX:10,clientY:10,button:0,buttons:1,bubbles:true}))
+  button.dispatchEvent(pointer('pointerup',{pointerId:7,clientX:200,clientY:200,button:0,bubbles:true}))
+  button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}))
+  expect(press).not.toHaveBeenCalled();expect(document.activeElement).toBe(region)
+  document.elementFromPoint=()=>button
+  button.dispatchEvent(pointer('pointerdown',{pointerId:8,clientX:10,clientY:10,button:0,buttons:1,bubbles:true}))
+  button.dispatchEvent(pointer('pointerup',{pointerId:8,clientX:10,clientY:10,button:0,bubbles:true}))
+  button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}));expect(press).toHaveBeenCalledTimes(1)
+ }finally{document.elementFromPoint=original}
+})
