@@ -7,6 +7,14 @@ export interface ClaudeNativeTerminalTask {
 }
 export type ClaudeNativeTerminalView = { kind: 'main'; revision: number } | { kind: 'agent'; revision: number; registryId: string; taskId?: string }
 
+/** One observed Agent selection in one native process. A mount cannot change targets. */
+export interface ClaudeNativeAgentUiTarget {
+  ownerId: string
+  sessionId: string
+  revision: number
+  taskId: string
+}
+
 export interface ClaudeNativeTerminalState {
   /** Original native selected view, independent of the app thread. Undefined until observed. */
   view?: ClaudeNativeTerminalView

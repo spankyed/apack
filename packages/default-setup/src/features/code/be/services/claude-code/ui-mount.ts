@@ -10,6 +10,7 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
 export interface ClaudeUiOwner {
+  readonly nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
   readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string

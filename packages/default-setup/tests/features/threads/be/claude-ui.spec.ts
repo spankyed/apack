@@ -186,3 +186,15 @@ it('keeps toast dismissal scoped to the requesting window, thread and current no
   handleClaudeUiView(event, 'first', first)
   expect(toasts(first)).toHaveLength(0); expect(toasts(second)).toHaveLength(1)
 })
+
+it('does not retarget an Agent mount to the parent print conversation when its target disappears', async () => {
+  const { ui } = await native(); const delivery = reply()
+  const selected = { ...mount, nativeView: { ownerId: 'native-owner', sessionId: 'native-session', revision: 2, taskId: 'native-agent' } }
+  handleClaudeUiView(selected, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).not.toHaveBeenCalled()
+  handleClaudeUiView(mount, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).not.toHaveBeenCalled()
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'window', delivery)
+  handleClaudeUiView({ ...mount, mountId: randomUUID() }, 'window', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).toHaveBeenCalledOnce()
+})

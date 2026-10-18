@@ -1331,6 +1331,14 @@ declare const ClaudeModelCatalogSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+/** One observed Agent selection in one native process. A mount cannot change targets. */
+interface ClaudeNativeAgentUiTarget {
+    ownerId: string;
+    sessionId: string;
+    revision: number;
+    taskId: string;
+}
+
 type ClaudeNativeBashDialog = z.infer<typeof ClaudeNativeBashDialogSchema>;
 
 interface ClaudeNativeBashDialogResponse {
@@ -3117,6 +3125,7 @@ type ClaudeUiViewRequest = ({
     type: 'CLAUDE_UI_MOUNT';
     threadId: string;
     mountId: string;
+    nativeView?: ClaudeNativeAgentUiTarget;
     messageIds?: string[];
     userExpansion?: Record<string, boolean>;
     thinkingExpansion?: Record<string, number[]>;

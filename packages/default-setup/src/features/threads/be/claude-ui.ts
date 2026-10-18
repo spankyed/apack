@@ -18,6 +18,7 @@ interface ClaudeUiView {
   client: string
   threadId: string
   mountId: string
+  nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget
   expires: number
   messageIds: Set<string>
   userExpansion: Map<string, boolean>
@@ -46,7 +47,7 @@ function drop(key: string, view: ClaudeUiView): void {
   if (!views.size && timer) { clearInterval(timer); timer = undefined }
 }
 function bind(key: string, view: ClaudeUiView): void {
-  const owner = getClaudeUiOwner(view.threadId)
+  const owner = getClaudeUiOwner(view.threadId, view.nativeView)
   if (owner === view.owner) { view.mount?.refreshTranscript(); return }
   view.pendingPrompt?.finish()
   void view.mount?.dispose().catch(() => {})
@@ -60,7 +61,7 @@ function bind(key: string, view: ClaudeUiView): void {
     return result
   }
   function dispatch(request: ClaudePromptHostOperation, signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostResponse | undefined> {
-    if (signal.aborted || Date.now() >= expiresAt || views.get(key) !== view || view.owner !== owner || getClaudeUiOwner(view.threadId) !== owner) return Promise.resolve(undefined)
+    if (signal.aborted || Date.now() >= expiresAt || views.get(key) !== view || view.owner !== owner || getClaudeUiOwner(view.threadId, view.nativeView) !== owner) return Promise.resolve(undefined)
     // Queue each view's requests so Vue cannot collapse two host operations into one state update.
     if (view.pendingPrompt) return Promise.resolve(undefined)
     return new Promise(resolve => {
@@ -81,7 +82,7 @@ function bind(key: string, view: ClaudeUiView): void {
     async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
-  view.mount = mountClaudeUi({ owner, promptHost,
+  view.mount = mountClaudeUi({ owner, promptHost, nativeView: owner.nativeView,
     question: () => {
       const raw = repository.threadQueries.byId(view.threadId as EntityId)?.context?.claudeCode?.pendingControlRequest
       if (!raw || typeof raw !== 'object') return undefined
@@ -91,8 +92,8 @@ function bind(key: string, view: ClaudeUiView): void {
       if (![pending.approvalMessageId, native.dialogId, native.revision, native.sessionId, native.requestId].every(value => typeof value === 'string')) return undefined
       return { messageId: pending.approvalMessageId as string, id: native.dialogId as string, revision: native.revision as string, sessionId: native.sessionId as string, requestId: native.requestId as string }
     },
-    messages: () => view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.thinkingExpansion) : [],
-    isCurrent: () => views.get(key) === view && getClaudeUiOwner(view.threadId) === owner,
+    messages: () => !view.nativeView && view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.thinkingExpansion) : [],
+    isCurrent: () => views.get(key) === view && getClaudeUiOwner(view.threadId, view.nativeView) === owner,
     requestFocus: (focusId, revision, paneId) => {
       if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId, ...(paneId ? { paneId } : {}) } })
     },
@@ -106,9 +107,14 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (event.type === 'CLAUDE_UI_MOUNT' && event.messageIds !== undefined && (!Array.isArray(event.messageIds) || !event.messageIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256))) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.userExpansion !== undefined && (!event.userExpansion || typeof event.userExpansion !== 'object' || Array.isArray(event.userExpansion) || !Object.entries(event.userExpansion).every(([id, value]) => id.length > 0 && id.length <= 256 && typeof value === 'boolean'))) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.thinkingExpansion !== undefined && (!event.thinkingExpansion || typeof event.thinkingExpansion !== 'object' || Array.isArray(event.thinkingExpansion) || !Object.entries(event.thinkingExpansion).every(([id, indices]) => id.length > 0 && id.length <= 256 && Array.isArray(indices) && indices.every(index => Number.isSafeInteger(index) && index >= 0)))) return
+  if (event.type === 'CLAUDE_UI_MOUNT' && event.nativeView !== undefined) {
+    const target = event.nativeView
+    if (!target || typeof target !== 'object' || ![target.ownerId, target.sessionId, target.taskId].every(id => typeof id === 'string' && id.length > 0 && id.length <= 256) || !Number.isSafeInteger(target.revision) || target.revision < 1) return
+  }
   const key = keyOf(client, event.mountId)
   let view = views.get(key)
   if (view && view.threadId !== event.threadId) return
+  if (view && event.type === 'CLAUDE_UI_MOUNT' && (view.nativeView?.ownerId !== event.nativeView?.ownerId || view.nativeView?.sessionId !== event.nativeView?.sessionId || view.nativeView?.revision !== event.nativeView?.revision || view.nativeView?.taskId !== event.nativeView?.taskId)) return
   if (view && view.expires <= Date.now()) { drop(key, view); view = undefined }
   if (event.type === 'CLAUDE_PROMPT_HOST_RESPONSE') {
     if (!view) return
@@ -140,7 +146,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     const target = view, mount = target.mount
     if (!mount) return
     void mount.focus(event).then(result => {
-      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId) === target.owner) target.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: target.threadId, mountId: target.mountId, result })
+      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) target.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: target.threadId, mountId: target.mountId, result })
     }).catch(() => { /* focus failure must not replace or disable the live drawing */ })
     return
   }
@@ -151,7 +157,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (!mount) return
     const { type: _, threadId: __, mountId: ___, ...box } = event
     void mount.autocompletePrompt(box).then(result => {
-      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId) === target.owner) {
+      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) {
         target.reply({ type: 'CLAUDE_PROMPT_COMPLETIONS', threadId: target.threadId, mountId: target.mountId, result })
       }
     }).catch(() => { /* delivery connection closed */ })
@@ -164,7 +170,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (!mount) return
     const { type: _, threadId: __, mountId: ___, ...box } = event
     void mount.editPrompt(box).then(result => {
-      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId) === target.owner) {
+      if (result && views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) {
         target.reply({ type: 'CLAUDE_PROMPT_STATE', threadId: target.threadId, mountId: target.mountId, result })
       }
     }).catch(() => { /* delivery connection closed */ })
@@ -184,13 +190,13 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     const mount = target.mount
     const operation = event.type === 'CLAUDE_UI_PRESS' ? mount?.press(event.actionId, event.href) : mount?.field(event)
     void operation?.catch(error => {
-      if (views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId) === target.owner) publish(target, { status: 'error', message: error instanceof Error ? error.message : 'Native UI action failed' })
+      if (views.get(key) === target && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) publish(target, { status: 'error', message: error instanceof Error ? error.message : 'Native UI action failed' })
     })
     return
   }
   if (!view) {
     if (views.size >= 256 || [...views.values()].filter(item => item.client === client).length >= 16) return
-    view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, messageIds: new Set(), userExpansion: new Map(), thinkingExpansion: new Map(), reply, state: { status: 'disconnected' } }
+    view = { client, threadId: event.threadId, mountId: event.mountId, nativeView: event.nativeView ? { ...event.nativeView } : undefined, expires: 0, messageIds: new Set(), userExpansion: new Map(), thinkingExpansion: new Map(), reply, state: { status: 'disconnected' } }
     views.set(key, view)
   }
   if (event.messageIds !== undefined) {
