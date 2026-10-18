@@ -314,18 +314,26 @@ async function handleRename(
   const sessionId = ccState?.sessionId;
   if (!sessionId) return { text: 'No active session — run a Claude Code turn first.' };
 
-  let newTitle: string;
-
-  if (args.length > 0) {
-    newTitle = args.join(' ');
+  let newTitle: string, nativeNotice: string | undefined;
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (native) {
+    if (native.state.sessionId !== sessionId) return { text: 'The native conversation changed. Retry rename on the current session.' };
+    const result = await native.renameSession(args.join(' '));
+    if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId)
+      return { text: 'The native conversation changed before rename could be reflected in this thread.' };
+    newTitle = result.title; nativeNotice = result.message;
   } else {
-    newTitle = await generateTitle(services, threadId);
+    newTitle = args.length > 0 ? args.join(' ') : await generateTitle(services, threadId);
+    const conversation = services.cli.claudeCode.getConversation(threadId);
+    if (conversation) {
+      await conversation.owner.handle.renameSession(newTitle, sessionId);
+      if (services.cli.claudeCode.getConversation(threadId) !== conversation || getClaudeState(services, threadId)?.sessionId !== sessionId)
+        return { text: 'The Claude conversation changed before rename could be reflected in this thread.' };
+    }
+    else await services.cli.claudeCode.renameSession(sessionId, newTitle, {
+      ...(ccState.cwd && { cwd: ccState.cwd }),
+    });
   }
-
-  // /rename is REPL-only — doesn't work via `claude -p`. Use direct JSONL rename.
-  await services.cli.claudeCode.renameSession(sessionId, newTitle, {
-    ...(ccState.cwd && { cwd: ccState.cwd }),
-  });
 
   services.repository.threadCommands.update(threadId as any, { topic: newTitle });
   services.emitter.broadcastToSurface('default-setup/threads', {
@@ -334,7 +342,7 @@ async function handleRename(
     updates: { topic: newTitle },
   });
 
-  return { text: `Renamed to: ${newTitle}` };
+  return { text: nativeNotice ?? `Renamed to: ${newTitle}` };
 }
 
 async function generateTitle(services: Services, threadId: string): Promise<string> {

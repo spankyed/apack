@@ -142,6 +142,7 @@ async function initialize(){
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
+  const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
   const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
@@ -163,7 +164,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={gate,engine,session,roster,schemas,runtime,rename,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -513,6 +514,17 @@ async function control(request,abort){
   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
+ }
+ if(request.subtype==='apack_rename_session'){
+  if(typeof request.title!=='string')throw Error('Native title must be a string');
+  const expected=request.session_id;
+  const current=()=>{abort.signal.throwIfAborted();if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native rename session changed');};
+  current();
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native rename controls are not ready');
+  const result=await n.rename.Qar(request.title,binding.toolContext(abort),true);
+  current();if(typeof result.newName!=='string'||!result.newName)throw Error(result.message??'Native rename was refused');
+  return {title:result.newName,message:result.message};
  }
  if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};
  if(request.subtype==='apack_set_model'){

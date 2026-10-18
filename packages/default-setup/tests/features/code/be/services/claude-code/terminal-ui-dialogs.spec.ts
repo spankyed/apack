@@ -12,7 +12,7 @@ function fixture() {
   let appState = { settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
   const context = { dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
-  const native = { questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: (value: unknown) => value }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+  const native = { rename: { Qar: vi.fn(async () => ({ newName: 'Native title', message: 'Renamed' })) }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: (value: unknown) => value }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
@@ -130,3 +130,11 @@ it('passes an edited, reviewable plan through the native tool input only', async
   await f.reply(dialog, { plan: '# Reviewed revision', feedback: 'Proceed carefully' })
   expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'allow', updatedInput: { plan: '# Reviewed revision' }, permissionUpdates: [{ type: 'setMode', mode: 'default', destination: 'session' }], feedback: 'Proceed carefully' })
 })
+
+it('runs original native rename only for the current native and observer session',async()=>{
+ const f=fixture(),request={subtype:'apack_rename_session',session_id:'11111111-1111-4111-8111-111111111111',title:'Requested'}
+ expect(await f.control(request,new AbortController())).toEqual({title:'Native title',message:'Renamed'})
+ expect(f.native.rename.Qar).toHaveBeenCalledWith('Requested',f.context,true)
+ f.replaceNativeSession();await expect(f.control(request,new AbortController())).rejects.toThrow('session changed')
+ expect(f.native.rename.Qar).toHaveBeenCalledOnce()
+});

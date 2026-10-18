@@ -43,6 +43,7 @@ export interface ClaudeNativeTerminalOwner {
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
+  renameSession(title: string): Promise<{ title: string; message: string }>
   setModel(model: string): Promise<string>
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>
@@ -236,6 +237,14 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async getModels(options) {
         if (closed) throw new Error('Native terminal closed')
         return ClaudeModelCatalogSchema.parse(await bridge.uiTransport.request({ subtype: 'apack_list_models', include_unsupported_models: options?.includeUnsupportedModels === true }))
+      },
+      async renameSession(title) {
+        if (closed) throw new Error('Native terminal closed')
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_rename_session', title, session_id: sessionId }) as { title?: unknown; message?: unknown }
+        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while renaming')
+        if (typeof result.title !== 'string' || !result.title || typeof result.message !== 'string') throw new Error('Native rename was not acknowledged')
+        return { title: result.title, message: result.message }
       },
       async setModel(model) {
         if (closed || changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
