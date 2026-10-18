@@ -13,17 +13,17 @@ const client = { client_id: 'fixture-ui', surface: 'desktop' as const }
 
 describe('native UI transport', () => {
   it('keeps native admission review distinct from a delivered Agent message', async () => {
-    const request = vi.fn(async () => ({ review: { text: '', removed: 1 } }))
+    const request = vi.fn(async () => ({ kind: 'review', text: '', removed: 1 }))
     const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
     const result = await ui.submitAgent({ client_id: 'agent-ui', text: '\u200b' })
-    expect(result).toEqual({ review: { text: '', removed: 1 } }); expect(result).not.toHaveProperty('input')
+    expect(result).toEqual({ kind: 'review', text: '', removed: 1 }); expect(result).not.toHaveProperty('input')
   })
 
   it('retains Agent reply text and validates the original native human receipt', async () => {
-    const request = vi.fn(async () => ({ input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }))
+    const request = vi.fn(async () => ({ kind: 'input', messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'completed' }))
     const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
-    await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ input: { mode: 'resumed' } })
-    expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_input', client_id: 'agent-ui', text: '  Keep whitespace  ' })
+    await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ kind: 'input', messageId: '12345678-1234-1234-1234-123456789abc' })
+    expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_dispatch', client_id: 'agent-ui', text: '  Keep whitespace  ' })
     await expect(ui.submitAgent({ client_id: 'agent-ui', text: ' ' })).rejects.toThrow()
     const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
     await expect(print.submitAgent({ client_id: 'parent-ui', text: 'Do not send' })).rejects.toThrow('capability is unavailable')

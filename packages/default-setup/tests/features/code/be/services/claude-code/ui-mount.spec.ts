@@ -14,7 +14,7 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { submitAgent: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['submitAgent']>(async () => ({ input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'queued' as const } })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
+  const ui = { answerAgentCommand: vi.fn(async (_options: unknown) => ({ answered: true as const })), submitAgent: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['submitAgent']>(async () => ({ kind: 'input' as const, messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'running' })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -387,12 +387,31 @@ it('uses Agent snapshots and publishes exact native input receipts only on the s
   expect(f.states.at(-1)?.agent?.messages[0]?.uuid).toBe('native-user')
   await mount.submitAgent(1, 'User reply')
   expect(f.ui.submitAgent).toHaveBeenCalledOnce()
-  expect(f.states.at(-1)?.agentInput).toMatchObject({ revision: 1, status: 'done', receipt: { mode: 'queued' } })
+  expect(f.states.at(-1)?.agentInput).toMatchObject({ revision: 1, status: 'done', receipt: { messageId: '12345678-1234-1234-1234-123456789abc' } })
   await mount.submitAgent(1, 'Duplicate reply'); expect(f.ui.submitAgent).toHaveBeenCalledOnce()
-  f.ui.submitAgent.mockResolvedValueOnce({ review: { text: 'Clean reply', removed: 1 } })
+  f.ui.submitAgent.mockResolvedValueOnce({ kind: 'review', text: 'Clean reply', removed: 1 })
   await mount.submitAgent(2, 'Invisible reply')
   expect(f.states.at(-1)?.agentInput).toEqual({ revision: 2, status: 'review', review: { text: 'Clean reply', removed: 1 } })
   expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
   f.replace(); await mount.submitAgent(3, 'Stale reply'); expect(f.ui.submitAgent).toHaveBeenCalledTimes(2)
+  await mount.dispose()
+})
+
+it('keeps confirmation separate from worker receipts and admits only its matching decision', async () => {
+  const f = fixture(), commandId = '12345678-1234-1234-1234-123456789abc'
+  Object.assign(f.owner, { nativeView: { session_id: 'session', revision: 2, agent_id: 'agent' } })
+  f.ui.submitAgent.mockResolvedValueOnce({ kind: 'confirmation', id: commandId, title: 'Original native confirmation', confirmLabel: 'Run original command' })
+  const mount = f.mount(); await mount.ready; await mount.submitAgent(1, '/compact')
+  expect(f.states.at(-1)?.agentInput).toMatchObject({ revision: 1, status: 'confirmation', command: { id: commandId } })
+  expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
+  await mount.submitAgent(2, 'Do not submit behind the modal'); expect(f.ui.submitAgent).toHaveBeenCalledOnce()
+  await mount.answerAgentCommand(1, 'foreign-command', 'confirm'); expect(f.ui.answerAgentCommand).not.toHaveBeenCalled()
+  const answer = deferred<{ answered: true }>(); f.ui.answerAgentCommand.mockReturnValueOnce(answer.promise)
+  const deciding = mount.answerAgentCommand(1, commandId, 'cancel')
+  expect(f.states.at(-1)?.agentInput?.status).toBe('deciding')
+  await mount.answerAgentCommand(1, commandId, 'confirm'); expect(f.ui.answerAgentCommand).toHaveBeenCalledOnce()
+  answer.resolve({ answered: true }); await deciding
+  expect(f.states.at(-1)?.agentInput).toMatchObject({ status: 'command_done', decision: 'cancel' })
+  expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
   await mount.dispose()
 })

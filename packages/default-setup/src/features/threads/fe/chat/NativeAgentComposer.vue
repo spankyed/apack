@@ -7,7 +7,7 @@
     </div>
     <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     <div class="flex items-center justify-between gap-3 px-4 pb-3">
-      <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Connecting to Agent input' : 'Enter to send · Shift+Enter for a new line' }}</span>
+      <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
       <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : 'Send to Agent' }}</button>
     </div>
   </form>
@@ -21,7 +21,7 @@ import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ draft: string; disabled: boolean; mountId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | void> }>()
+const props = defineProps<{ draft: string; disabled: boolean; mountId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
@@ -66,6 +66,7 @@ async function submit() {
     if (!text.trim()) return
     const doc = editor.state.doc
     const review = await props.send(text)
+    if (review && 'commandPending' in review) return
     if (review) {
       const applied = alive && !editor.isDestroyed && editor.state.doc === doc && bridge === active && active.fillDraft({ mode: 'replace', text: review.text }, active.revision)
       if (alive) problem.value = applied ? `Removed ${review.removed} invisible character${review.removed === 1 ? '' : 's'}. Review the message before sending.` : 'The earlier message contained invisible characters. Your newer draft was kept; review it before sending.'
@@ -75,5 +76,6 @@ async function submit() {
   } catch (error) { if (alive) problem.value = error instanceof Error ? error.message : 'Agent message could not be sent' }
   finally { submitting.value = false; emit('pending', false) }
 }
+defineExpose({ focus: () => editorRef.value?.editor?.commands.focus() })
 onBeforeUnmount(() => { alive = false; bridge?.dispose() })
 </script>

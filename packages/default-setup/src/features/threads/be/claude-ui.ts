@@ -134,6 +134,11 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_AGENT_COMMAND') {
+    if (!view?.nativeView || !validId(event.commandId) || !['confirm', 'cancel'].includes(event.decision)) return
+    bind(key, view); void view.mount?.answerAgentCommand(event.revision, event.commandId, event.decision)
+    return
+  }
   if (event.type === 'CLAUDE_UI_AGENT_INPUT') {
     if (!view?.nativeView || typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384) return
     bind(key, view)

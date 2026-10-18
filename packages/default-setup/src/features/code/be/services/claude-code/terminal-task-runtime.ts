@@ -4,6 +4,7 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
  if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  if(request.operation==='background'){
+  await retireNativeAgentCommands();current();
   const selected=context.getAppState().viewingAgentTaskId;
   const selectedTask=selected===undefined?undefined:registry.get(selected);
   if(selectedTask&&(n.runtime.flt(selectedTask)?.id??selected)!==request.task_id)throw Error('A different native Agent is selected');

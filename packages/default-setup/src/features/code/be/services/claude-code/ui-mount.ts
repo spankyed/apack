@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -214,17 +214,28 @@ export function mountClaudeUi(options: {
     ready,
     dispose,
     async submitAgent(revision: number, text: string) {
-      if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || agentInput?.status === 'pending') return
+      if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding'].includes(agentInput?.status ?? '')) return
       agentInput = { revision, status: 'pending' }; publish(lastState)
       try {
         await ready
         if (!attached || !current()) return
         const result = await owner.handle.ui.submitAgent({ client_id: client.client_id, text })
         if (!current()) return
-        if ('review' in result) agentInput = { revision, status: 'review', review: result.review }
-        else agentInput = { revision, status: 'done', receipt: result.input }
+        if (result.kind === 'review') agentInput = { revision, status: 'review', review: { text: result.text, removed: result.removed } }
+        else if (result.kind === 'blocked') agentInput = { revision, status: 'blocked', problem: result.message }
+        else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: { id: result.id, title: result.title, confirmLabel: result.confirmLabel, ...(result.commandName ? { commandName: result.commandName } : {}) } }
+        else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }
         publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
+    async answerAgentCommand(revision: number, commandId: string, decision: 'confirm' | 'cancel') {
+      if (!current() || !owner.nativeView || agentInput?.status !== 'confirmation' || agentInput.revision !== revision || agentInput.command?.id !== commandId) return
+      const command = agentInput.command
+      agentInput = { revision, status: 'deciding', command, decision }; publish(lastState)
+      try {
+        await owner.handle.ui.answerAgentCommand({ client_id: client.client_id, command_id: commandId, decision })
+        if (current()) { agentInput = { revision, status: 'command_done', command, decision }; publish(lastState); void refreshAgent() }
+      } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Native command decision failed' }; publish(lastState) } }
     },
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },

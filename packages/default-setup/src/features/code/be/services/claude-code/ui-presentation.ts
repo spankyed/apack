@@ -147,7 +147,7 @@ export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { agent?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails; agentProblem?: string; agentInput?: { revision: number; status: 'pending' | 'done' | 'error' | 'review'; receipt?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; review?: import('../../../common/native-terminal.ts').ClaudeNativeAgentInputReview; problem?: string }; panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
+) & { agent?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails; agentProblem?: string; agentInput?: { revision: number; status: 'pending' | 'done' | 'error' | 'review' | 'blocked' | 'confirmation' | 'deciding' | 'command_done'; receipt?: { messageId: string }; command?: import('../../../common/native-terminal.ts').ClaudeNativeAgentCommandConfirmation; decision?: 'confirm' | 'cancel'; review?: import('../../../common/native-terminal.ts').ClaudeNativeAgentInputReview; problem?: string }; panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

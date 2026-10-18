@@ -1555,6 +1555,7 @@ const threadsState = setup({
     CLAUDE_UI_PANE: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
+    CLAUDE_UI_AGENT_COMMAND: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_UI_AGENT_INPUT: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_UI_CLIENT: { actions: ({context,event})=>{if(context.nativeUiViews[event.mountId]?.threadId===event.threadId)sendToSystem(id,event)} },
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {

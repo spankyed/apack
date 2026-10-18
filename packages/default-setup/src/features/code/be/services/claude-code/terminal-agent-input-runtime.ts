@@ -22,7 +22,7 @@ function installAgentCommandObserver(context){
 async function answerNativeAgentCommand(n,request){
  const entry=agentCommandDialogs.get(request.command_id);
  if(!entry||entry.clientId!==request.client_id||entry.closed||entry.answered||!['confirm','cancel'].includes(request.decision))throw Error('Native command confirmation expired');
- entry.current();entry.answered=true;
+ entry.current();if(request.decision==='confirm')await n.gate._Jo('desktop');entry.current();entry.answered=true;
  try{await (request.decision==='confirm'?entry.confirm:entry.cancel)();await entry.done;return {answered:true};}
  catch(error){if(!entry.closed)entry.answered=false;throw error;}
 }

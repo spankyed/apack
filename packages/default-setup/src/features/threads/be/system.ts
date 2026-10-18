@@ -907,6 +907,7 @@ export const threadsSystem = setup({
       CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_TASK: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
+      CLAUDE_UI_AGENT_COMMAND: { actions: 'claudeUiView' },
       CLAUDE_UI_AGENT_INPUT: { actions: 'claudeUiView' },
       CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },

@@ -20,7 +20,7 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
 vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => null } }))
 beforeEach(() => startFeTestRuntime())
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
-async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | void> = async () => {}, connected = false) {
+async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false) {
   const leave = vi.fn(), draft = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const state = reactive({ draft: 'Unsent Agent draft', prompt: undefined as ClaudePromptReply | undefined })
   const edit = (value: ClaudePromptEdit) => { state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } }
@@ -41,7 +41,7 @@ it('keeps composition and other native controls outside the composer navigation 
 })
 
 it('adopts the cleaned draft for review and requires another explicit submission', async () => {
-  const send = vi.fn(async (): Promise<ClaudeNativeAgentInputReview | void> => ({ text: 'Clean Agent draft', removed: 1 }))
+  const send = vi.fn(async (): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> => ({ text: 'Clean Agent draft', removed: 1 }))
   const f = await mount(send, true)
   f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   await vi.waitFor(() => expect(f.root.textContent).toContain('Review the message before sending'))
@@ -58,4 +58,14 @@ it('preserves newer typing when native admission returns a cleaned older draft',
   finish({ text: 'Older clean message', removed: 1 })
   await vi.waitFor(() => expect(f.root.textContent).toContain('Your newer draft was kept'))
   expect(editor.state.doc.textContent).toContain('newer text'); expect(send).toHaveBeenCalledOnce()
+})
+
+it('retains the exact draft when native submission opens a command confirmation', async () => {
+  const send = vi.fn(async () => ({ commandPending: true as const }))
+  const f = await mount(send, true)
+  f.root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+  await nextTick()
+  expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+  expect(f.draft).not.toHaveBeenCalledWith('')
 })

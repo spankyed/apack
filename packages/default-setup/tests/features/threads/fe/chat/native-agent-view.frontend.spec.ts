@@ -3,11 +3,11 @@ import NativeAgentView from '#features/threads/fe/chat/NativeAgentView.vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 const send = vi.fn()
-let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
+let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
 vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => ({ send }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))
-vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled'], template: '<input aria-label="Agent draft" :disabled="disabled" />' } }))
+vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<input aria-label="Agent draft" :disabled="disabled" />' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { template: '<div />' } }))
 beforeEach(() => { send.mockClear(); context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
@@ -22,7 +22,7 @@ async function mount() {
   context.nativeUiViews[ui] = { state: { agent: { taskId: 'agent', name: 'Worker', status: 'running', canInput: true, canMessage: false, messages: [], truncated: false, metadata: { prompt: 'Original prompt', promptTruncated: false, model: 'native-model', effort: 'high', elapsedMs: 1234, tokenCount: 42, toolUseCount: 2, errorTruncated: false } } } }
   await nextTick()
   const button = (text: string) => [...root.querySelectorAll('button')].find(element => element.textContent === text)!
-  return { root, terminal, owner, pending, returned, button }
+  return { root, ui, terminal, owner, pending, returned, button }
 }
 it('stops only the selected worker, rejects unrelated acknowledgments and retains parent navigation', async () => {
   const f = await mount(); f.button('Stop Agent').click(); await nextTick()
@@ -52,4 +52,18 @@ it('refuses stale selection/session and exposes native stop refusal without leav
   context.nativeTerminalViews[f.terminal] = { ...context.nativeTerminalViews[f.terminal], task: { ...request, status: 'error', problem: 'Native worker stop refused' } }; await nextTick()
   expect(f.root.querySelector('[role="alert"]')!.textContent).toBe('Native worker stop refused')
   expect(f.button('Stop Agent').disabled).toBe(false); expect(f.returned).not.toHaveBeenCalled()
+})
+
+it('owns Escape for native confirmation and restores the Agent editor after cancellation', async () => {
+  const f = await mount(), commandId = '12345678-1234-1234-1234-123456789abc'
+  context.nativeUiViews[f.ui].state.agentInput = { revision: 7, status: 'confirmation', command: { id: commandId, title: 'Original parent confirmation', confirmLabel: 'Run on parent' } }; await nextTick()
+  const cancel = f.button('Cancel'); cancel.focus()
+  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(true)
+  expect(f.button('Back to conversation').disabled).toBe(true)
+  cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'CLAUDE_UI_AGENT_COMMAND', revision: 7, commandId, decision: 'cancel' }))
+  expect(send.mock.calls.some(([value]) => value.type === 'CLAUDE_TERMINAL_TASK')).toBe(false)
+  context.nativeUiViews[f.ui].state.agentInput = { revision: 7, status: 'command_done', decision: 'cancel' }; await nextTick(); await nextTick()
+  expect(f.root.querySelector<HTMLInputElement>('input')!.disabled).toBe(false)
+  expect(document.activeElement).toBe(f.root.querySelector('input'))
 })
