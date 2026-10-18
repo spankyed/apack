@@ -92,6 +92,9 @@ test('keeps native status, submissions and history available under managed-only 
     await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-disabled.png') })
     await policyEnabled(true)
     await expect(agentRow).toContainText('AppNativeAgent running', { timeout: 10000 })
+    const restoredStatus = agentRow.getByText(/AppNativeAgent running/).first()
+    await restoredStatus.scrollIntoViewIfNeeded()
+    await expect(restoredStatus).toBeInViewport()
     await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-restored.png') })
   }
 
