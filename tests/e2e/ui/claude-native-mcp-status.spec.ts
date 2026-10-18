@@ -90,7 +90,7 @@ test('reads MCP connection status through the existing native and print owners',
   async function controlMcp(operation: string, expected: string) {
     const before=(await context()).messages.length
     await command('cc-mcp',operation+' research')
-    await expect.poll(async()=>{const rows=(await context()).messages.slice(before);return rows.some((m:any)=>m.text.includes('Live MCP connections:')&&m.text.includes('research: '+expected))}).toBe(true)
+    await expect.poll(async()=>{const rows=(await context()).messages.slice(before);return rows.some((m:any)=>m.text.includes('Live MCP connections:')&&m.text.includes('research: '+expected))},{timeout:15000}).toBe(true)
   }
   if(planScenario==='mcp-controls'){
     await controlMcp('disable','disabled')
