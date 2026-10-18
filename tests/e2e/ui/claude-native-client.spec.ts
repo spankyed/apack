@@ -59,6 +59,7 @@ test('runs native Client state props input and lifetime inside the app', async (
   await expect(region).toContainText('label=initial')
   await expect(region).toContainText('count=0')
   await expect.poll(()=>region.textContent()).not.toContain('room=0x0')
+  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-initial.png')})
   const id=await region.getAttribute('data-native-client')
   await region.getByRole('button',{name:'Increment Client',exact:true}).click()
   await expect(region).toContainText('count=1')

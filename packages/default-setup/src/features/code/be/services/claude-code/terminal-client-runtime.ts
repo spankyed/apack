@@ -24,6 +24,9 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
    entry.enabled=true;
    const snapshot=entry.instance.getSnapshot();
+   entry.frameRefs=new Map();
+   const remember=node=>{if(!node||typeof node!=='object')return;if(node.press&&['Button','Input','Select','Markdown'].includes(node.type))entry.frameRefs.set(node.press.handle,{type:node.type,key:node.props?.key,plugin:node.press.plugin});if(Array.isArray(node.children))node.children.forEach(remember);};
+   if(snapshot.status==='drawn')remember(snapshot.tree);
    const children=snapshot.status==='drawn'?[snapshot.tree]:[{type:'Text',children:[snapshot.status==='failed'?snapshot.text:'Loading native module…']}];
    return {type:'NativeClient',props:{id:entry.token,...(props.width!==undefined?{width:props.width}:{}),...(props.height!==undefined?{height:props.height}:{}),...(props.flexGrow!==undefined?{flexGrow:props.flexGrow}:{}),pointer:entry.instance.acceptsPointer(),keys:entry.instance.acceptsKeys()},part:{plugin},children};
   };
@@ -51,5 +54,18 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
   }else throw Error('Invalid native Client operation');
   return {handled:true};
  }
- return {render,event,suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
+ function action(client,value){
+  for(const entry of entries.values()){
+   const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
+   if(!ref||ref.plugin!==value.plugin)continue;
+   if(!entry.enabled||ref.key!==value.key)return false;
+   const type=value.subtype==='ui_press'?['Button','Markdown']:value.subtype==='ui_input'?['Input']:['Select'];
+   if(!type.includes(ref.type))return false;
+   const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
+   const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===ref.type&&node.press?.plugin===ref.plugin&&(typeof ref.key==='string'?node.props?.key===ref.key:node.press.handle===value.handle))matches.push(node);for(const child of node.children??[])find(child);};
+   find(snapshot.tree);
+   return matches.length===1?{handle:matches[0].press.handle}:false;
+  }
+ }
+ return {render,event,action,suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
 }`

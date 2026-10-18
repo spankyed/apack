@@ -730,7 +730,8 @@ async function control(request,abort){
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
- const args={plugin:value.plugin,handle:value.handle,surface:'desktop',...(value.key!==undefined?{element:value.key}:{}),...(value.component!==undefined?{component:value.component}:{}),...(value.instance_id!==undefined?{requestId:value.instance_id}:{})};
+ const clientAction=n.nativeClients.action(clientId,value);if(clientAction===false)return {handled:false};
+ const args={plugin:value.plugin,handle:clientAction?.handle??value.handle,surface:'desktop',...(value.key!==undefined?{element:value.key}:{}),...(value.component!==undefined?{component:value.component}:{}),...(value.instance_id!==undefined?{requestId:value.instance_id}:{})};
  const result=value.subtype==='ui_press'?await n.engine.I9e.press({...args,...(value.href!==undefined?{link:{href:value.href}}:{})}):value.subtype==='ui_input'?await n.engine.I9e.input({...args,kind:value.kind,value:value.value}):await n.engine.I9e.select({...args,value:value.value});
  return result===undefined?{handled:false}:{handled:true,element:result.element,...(value.subtype!=='ui_press'?{value:result.value}:{})};
 }
