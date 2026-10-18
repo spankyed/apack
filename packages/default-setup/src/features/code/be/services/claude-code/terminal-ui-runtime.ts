@@ -363,14 +363,14 @@ function questionCanonicalAnswer(n,dialog,request){
  return n.questionTool.admitCardAnswer(original,answer);
 }
 function questionPresentation(n,payload){
- const previews=[];
+ const previewFormat=n.questionOptions.yjr()??null,previews=[];
  for(const question of payload.questions)for(const option of question.options??[]){
   if(typeof option.preview!=='string')continue;
   // Frozen terminal h4 producer: its 2000-character display cap and native text helpers.
   const kind=option.preview.length>2000?'withheld':!n.questionText.zL(option.preview)?'empty':n.questionText.VL(option.preview)?'withheld':'full';
-  previews.push({question:question.question,option:option.label,kind,...(kind==='full'?{markdown:n.questionText._gt(option.preview)}:{})});
+  previews.push({question:question.question,option:option.label,kind,...(kind==='full'?(previewFormat==='html'?{html:option.preview}:{markdown:n.questionText._gt(option.preview)}):{})});
  }
- return {previewFormat:n.questionOptions.yjr()??null,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews};
+ return {previewFormat,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews};
 }
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request,abort){

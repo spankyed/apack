@@ -13,7 +13,8 @@
         </label>
         <template v-if="selectedPreview">
           <p class="muted">Option preview</p>
-          <div v-if="viewPresentation?.previewFormat === 'markdown'" data-testid="native-question-preview"><TiptapEditor mode="viewer" variant="chat" :model-value="selectedPreview" /></div>
+          <NativeQuestionHtmlPreview v-if="viewPresentation?.previewFormat === 'html'" :fragment="selectedPreview" />
+          <div v-else-if="viewPresentation?.previewFormat === 'markdown'" data-testid="native-question-preview"><TiptapEditor mode="viewer" variant="chat" :model-value="selectedPreview" /></div>
           <pre v-else data-testid="native-question-preview">{{ selectedPreview }}</pre>
         </template>
       </template>
@@ -40,6 +41,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
 const props = defineProps<{ card: Record<string, unknown>; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
@@ -60,7 +62,7 @@ const state = computed(() => drafts[step.value] ?? { selected: [], custom: '', n
 function previewFor(question: string, option: string, original?: string) {
   if (!viewPresentation.value) return original
   const preview = viewPresentation.value.previews.find(item => item.question === question && item.option === option)
-  return preview?.kind === 'full' ? preview.markdown : undefined
+  return preview?.kind === 'full' ? viewPresentation.value.previewFormat === 'html' ? preview.html : preview.markdown : undefined
 }
 const selectedOption = computed(() => current.value?.options.find(option => state.value.selected.includes(option.label) && option.preview))
 const selectedPreview = computed(() => current.value && selectedOption.value ? previewFor(current.value.question, selectedOption.value.label, selectedOption.value.preview) : undefined)

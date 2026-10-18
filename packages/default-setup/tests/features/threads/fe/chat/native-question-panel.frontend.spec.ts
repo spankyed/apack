@@ -73,3 +73,22 @@ it('adopts pre-input rewrites but freezes the displayed card and token after fir
     expect(f.respond).toHaveBeenCalledWith({ answers: { 'Displayed?': 'Kept draft' }, annotations: {} })
   } finally { f.close() }
 })
+
+it('renders a native HTML preview in an opaque scriptless frame and submits the original annotation', async () => {
+  const html = '<div style="color:orange"><strong>HTML option</strong><img src="https://preview.invalid/leak" onerror="top.poisoned=true"><a href="https://preview.invalid/nav">Link</a></div>'
+  const f = mount({ questions: [{ question: 'HTML?', header: 'HTML', options: [option('Alpha', html), option('Beta')] }] }, {
+    previewFormat: 'html', extendedQuestions: false, optionalDescriptions: false,
+    previews: [{ question: 'HTML?', option: 'Alpha', kind: 'full', html }],
+  })
+  try {
+    f.root.querySelector<HTMLInputElement>('input[type=radio]')!.click(); await nextTick()
+    const frame = f.root.querySelector('iframe')!
+    expect(frame.getAttribute('sandbox')).toBe('')
+    expect(frame.srcdoc).toContain('<strong>HTML option</strong>')
+    expect(frame.srcdoc).toContain("script-src 'none'")
+    expect(frame.srcdoc).not.toMatch(/preview\.invalid|onerror|poisoned/)
+    expect(f.root.querySelector('strong')?.textContent).not.toBe('HTML option')
+    f.button('Submit answers').click()
+    expect(f.respond).toHaveBeenCalledWith({ answers: { 'HTML?': 'Alpha' }, annotations: { 'HTML?': { preview: html } } })
+  } finally { f.close() }
+})
