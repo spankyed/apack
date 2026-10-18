@@ -146,6 +146,20 @@ function extractJsonField(text: string, key: string): string | undefined {
 }
 
 /** Read all sessions from a bucket directory. `cwd` is stored on each SessionInfo for context. */
+/** Bucket names are lossy; the journal is the authority for the project path. */
+async function readSessionCwd(file: string): Promise<string | undefined> {
+  const input = fs.createReadStream(file, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      try {
+        const row = JSON.parse(line);
+        if (typeof row?.cwd === 'string' && path.isAbsolute(row.cwd)) return row.cwd;
+      } catch { /* A damaged row does not hide later native project metadata. */ }
+    }
+  } finally { lines.close(); input.destroy(); }
+}
+
 async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo[]> {
   let files: string[]
   try {
@@ -167,7 +181,7 @@ async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo
     infos.push({
       id,
       file,
-      cwd,
+      cwd: cwd ?? await readSessionCwd(file),
       title,
       modifiedAt: stat.mtime,
       size: stat.size,
@@ -202,9 +216,7 @@ export async function listAll(opts: { limit?: number } = {}): Promise<SessionInf
   for (const d of dirents) {
     if (!d.isDirectory()) continue
     const bucketPath = path.join(projectsDir, d.name)
-    // Best-effort cwd: derive from bucket dir name (replace leading hyphens with slashes)
-    const approxCwd = '/' + d.name.replace(/^-/, '').replace(/-/g, '/')
-    let sessions = await listBucket(bucketPath, approxCwd)
+    let sessions = await listBucket(bucketPath)
     if (opts.limit) {
       sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
       sessions = sessions.slice(0, opts.limit)

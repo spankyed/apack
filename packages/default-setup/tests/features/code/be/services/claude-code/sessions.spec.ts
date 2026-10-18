@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { listAll } from '#features/code/be/services/claude-code/sessions.ts'
 /**
  * Tests for `encodeProjectPath` — the cwd-to-bucket encoder used by
  * `claudeCode.sessions.list()`.
@@ -67,3 +71,17 @@ describe('encodeProjectPath', () => {
       .toBe('-Users-spankyed-Develop-Projects-apack')
   })
 })
+
+it('all-session discovery uses the native journal cwd instead of guessing from a lossy bucket name', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'native-session-dirs-'))
+ vi.stubEnv('CLAUDE_CONFIG_DIR',directory)
+ try {
+  const cwd='/private/tmp/project-with-hyphens.and spaces'
+  const bucket=join(directory,'projects',encodeProjectPath(cwd));await mkdir(bucket,{recursive:true})
+  await writeFile(join(bucket,'native-session.jsonl'),'malformed\n'+JSON.stringify({type:'user',cwd,message:{role:'user',content:'Hello'}})+'\n')
+  await writeFile(join(bucket,'unknown-session.jsonl'),JSON.stringify({type:'user',message:{role:'user',content:'Unknown project'}})+'\n')
+  const sessions=await listAll()
+  expect(sessions.find(s=>s.id==='native-session')?.cwd).toBe(cwd)
+  expect(sessions.find(s=>s.id==='unknown-session')?.cwd).toBeUndefined()
+ } finally {vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true})}
+});
