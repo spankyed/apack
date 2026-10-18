@@ -8,7 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('keeps native status, submissions and history available under managed-only hooks', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { restriction } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { restriction, transition } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -55,6 +55,22 @@ test('keeps native status, submissions and history available under managed-only 
   else await expect(status).toContainText('AppNativeMain ' + sessionId)
   await appPage.setViewportSize({ width: 680, height: 600 })
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
+  const ownerIdentity = { pid: (await context()).native.state.pid, ownerId: (await context()).native.state.ownerId }
+  const policyFile = join(workspace!, 'policy/managed-settings.json')
+  const policy = transition ? JSON.parse(await readFile(policyFile, 'utf8')) : undefined
+  async function policyEnabled(enabled: boolean) {
+    await writeFile(policyFile, JSON.stringify({ ...policy, ...(enabled ? {} : { disableAllHooks: true }) }))
+    if (enabled) await expect(status).toContainText('AppNativeMain ' + sessionId, { timeout: 10000 })
+    else await expect(status).toHaveCount(0, { timeout: 10000 })
+    const current = await context()
+    expect(current.native.state.pid).toBe(ownerIdentity.pid); expect(current.native.state.ownerId).toBe(ownerIdentity.ownerId); expect(current.native.state.sessionId).toBe(sessionId)
+  }
+  if (transition) {
+    await policyEnabled(false)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-policy-disabled.png') })
+    await policyEnabled(true)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-policy-restored.png') })
+  }
   const composer = card.locator('[contenteditable="true"]')
   await composer.fill('NativeManagedParentFixture')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
@@ -69,6 +85,16 @@ test('keeps native status, submissions and history available under managed-only 
   await agentRow.scrollIntoViewIfNeeded()
   await expect(agentRow).toBeInViewport()
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-status.png') })
+  if (transition) {
+    await policyEnabled(false)
+    await expect(agentRow).not.toContainText('AppNativeAgent', { timeout: 10000 })
+    expect((await context()).native.state.tasks.some((task: any) => task.id === nativeAgentId && task.status === 'running' && task.statusText === undefined)).toBe(true)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-disabled.png') })
+    await policyEnabled(true)
+    await expect(agentRow).toContainText('AppNativeAgent running', { timeout: 10000 })
+    await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-restored.png') })
+  }
+
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   if (restriction) expect((await context()).native.state.tasks.every((task: any) => task.statusText === undefined)).toBe(true)
@@ -103,5 +129,5 @@ test('keeps native status, submissions and history available under managed-only 
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, nativePolicyTransitions: !!transition, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })
