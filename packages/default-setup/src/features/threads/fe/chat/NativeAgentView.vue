@@ -5,7 +5,9 @@
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || !terminal?.state" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
     </header>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
-    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
+    <div class="relative min-h-0 flex-1">
+    <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
+      <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
       <article v-for="message in state?.agent?.messages ?? []" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
         <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ message.role === 'user' ? 'You' : name }}</p>
@@ -13,6 +15,9 @@
         <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
       </article>
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>
+      </div>
+    </div>
+    <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="transcriptScroll.latest()" />
     </div>
     <NativeAgentComposer :draft="draft" :disabled="!active || returning || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
       @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
@@ -23,13 +28,18 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
+import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
+import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
-const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; active: boolean }>()
-const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; pending: [value: boolean]; returning: [value: boolean]; returned: [] }>()
+const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; active: boolean; scrollPosition?: ClaudeAgentScrollPosition }>()
+const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; pending: [value: boolean]; returning: [value: boolean]; returned: []; scrollPosition: [target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition] }>()
+const transcriptViewport = ref<HTMLElement>(), transcriptContent = ref<HTMLElement>()
+const scrollTarget = props.target
+const transcriptScroll = useClaudeAgentScroll({ viewport: transcriptViewport, content: transcriptContent, active: () => props.active, initial: props.scrollPosition, save: position => emit('scrollPosition', scrollTarget, position) })
 const actor: ThreadsState = usePlugin(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
 const context = useSelector(actor, state => state.context)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
@@ -38,7 +48,7 @@ const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
 const pending = ref(false), returning = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0
-let submission: { revision: number; text: string; resolve(review?: ClaudeNativeAgentInputReview): void; reject(error: Error): void } | undefined
+let submission: { revision: number; text: string; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview): void; reject(error: Error): void } | undefined
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
 function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
@@ -53,12 +63,12 @@ function setPending(value: boolean) { pending.value = value; emit('pending', val
 function send(text: string): Promise<ClaudeNativeAgentInputReview | void> {
   if (!uiMount.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
   const request = ++revision
-  return new Promise((resolve, reject) => { submission = { revision: request, text, resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
+  return new Promise((resolve, reject) => { submission = { revision: request, text, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
 }
 watch(() => state.value?.agentInput, value => {
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
-  if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
+  if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); transcriptScroll.latest(request.scrollIntent); request.resolve() }
   else if (value.status === 'review' && value.review) request.resolve(value.review)
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
 })
