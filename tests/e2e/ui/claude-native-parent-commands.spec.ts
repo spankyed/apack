@@ -59,7 +59,7 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
     return Object.values(c.nativeTerminalViews).map((v: any) => v.submission).filter(Boolean).sort((a: any, b: any) => b.revision - a.revision)[0] as any
   })
   await appPage.setViewportSize({ width: 680, height: 600 })
-  async function sendNative(text: string) { await composer.fill(text); await expect(composer).toHaveText(text); await card.getByRole('button', { name: 'Send', exact: true }).click() }
+  async function sendNative(text: string) { const before = (await submission())?.revision ?? 0; await composer.fill(text); await expect(composer).toHaveText(text); await card.getByRole('button', { name: 'Send', exact: true }).click(); await expect.poll(async () => (await submission())?.revision ?? 0).toBeGreaterThan(before) }
   await sendNative('Populate the native conversation before parent command verification.')
   await expect(composer).toHaveText('')
   await expect.poll(async () => (await context()).native.state.lastTurn?.reason, { timeout: 20000 }).toBe('answer')
