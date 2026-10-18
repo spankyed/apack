@@ -9,7 +9,7 @@ function fixture() {
   const answer = vi.fn(() => { state.open = [] })
   const store = { getState: () => state, answer }
   const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
-  const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=new Map();')
+  const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=new Map(),questionFrames=new Map();')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
     originalContext: binding, initialize: async () => ({}), AbortController, randomUUID,

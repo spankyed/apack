@@ -150,7 +150,7 @@ async function initialize(){
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
   const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText};
-  engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
+  engine.I9e.onInvalidate(instances=>{for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
@@ -284,7 +284,7 @@ function drainCompletion(n,clientId,state){
  });
 }
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
-const dialogRevisions=new Map();
+const dialogRevisions=new Map(),questionFrames=new Map();
 function nativeDialog(n,kind){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
@@ -303,6 +303,41 @@ function nativeDialog(n,kind){
   revision={item,payload,sessionId,fingerprint,revision:randomUUID()};
  dialogRevisions.set(kind,revision);
  return {store,sessionId,...revision};
+}
+// Frozen terminal nrt/Yyo contract: native schema first, then presentation-only relabel bounds.
+function questionShownInput(n,payload,questions){
+ const original=n.questionTool.shownCardInput(payload.input),asked=original.questions;
+ const parsed=n.questionTool.inputSchema.safeParse({questions});
+ if(!parsed.success)return original;
+ const drawn=parsed.data.questions;
+ if(drawn.length!==asked.length)return original;
+ for(let index=0;index<asked.length;index++){
+  const before=asked[index],after=drawn[index];
+  if((after.multiSelect??false)!==(before.multiSelect??false))return original;
+  for(const field of ['label','preview'])if(JSON.stringify(after.options.map(option=>option[field]))!==JSON.stringify(before.options.map(option=>option[field])))return original;
+  if(drawn.some((question,other)=>other!==index&&question.question===after.question)||asked.some((question,other)=>other!==index&&question.question===after.question))return original;
+ }
+ return {...original,questions:drawn};
+}
+function questionCanonicalAnswer(n,dialog,request){
+ const original=n.questionTool.shownCardInput(dialog.payload.input);
+ if(request.render_token===undefined)return n.questionTool.admitCardAnswer(original,request.answer);
+ const frame=[...questionFrames.values()].find(frame=>frame.token===request.render_token);
+ if(!frame||!clients.has(frame.client)||frame.item!==dialog.item||frame.revision!==dialog.revision||frame.sessionId!==dialog.sessionId)throw Error('Native question drawing changed or expired');
+ const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
+ if(admitted.kind!=='admitted')return admitted;
+ const remap=values=>{
+  if(values===undefined)return values;
+  const mapped=Object.create(null);
+  for(const [question,value]of Object.entries(values)){
+   const index=frame.shownInput.questions.findIndex(candidate=>candidate.question===question);
+   if(index<0)throw Error('Native question answer has no original identity');
+   mapped[original.questions[index].question]=value;
+  }
+  return mapped;
+ };
+ const answer={...original,answers:remap(admitted.input.answers),...(admitted.input.annotations!==undefined?{annotations:remap(admitted.input.annotations)}:{}),...(admitted.input.response!==undefined?{response:admitted.input.response}:{}),...(admitted.input.followUp!==undefined?{followUp:admitted.input.followUp}:{})};
+ return n.questionTool.admitCardAnswer(original,answer);
 }
 function questionPresentation(n,payload){
  const previews=[];
@@ -340,8 +375,7 @@ async function control(request,abort){
   abort.signal.throwIfAborted();
   const d=nativeDialog(n,'permission_ask_user_question');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
-  const shown=n.questionTool.shownCardInput(d.payload.input);
-  const admitted=n.questionTool.admitCardAnswer(shown,request.answer);
+  const admitted=questionCanonicalAnswer(n,d,request);
   if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
@@ -389,6 +423,12 @@ async function control(request,abort){
   return {...box,images};
  }
  if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true);
+ let boundQuestion;
+ if(request.subtype==='apack_render_question_dialog'){
+  abort.signal.throwIfAborted();boundQuestion=nativeDialog(n,'permission_ask_user_question');
+  if(!boundQuestion.item||request.id!==boundQuestion.item.id||request.revision!==boundQuestion.revision||request.session_id!==boundQuestion.sessionId)throw Error('Native question changed or expired');
+  request={subtype:'ui_render',surface:'desktop',client_id:request.client_id,component:'AskUserQuestion',instance_id:boundQuestion.payload.requestId,props:{},...(request.viewport?{viewport:request.viewport}:{})};
+ }
  const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
  const value=n.schemas[schema]().parse(request);
@@ -409,6 +449,7 @@ async function control(request,abort){
  if(value.subtype==='ui_detach'){
   for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
+  questionFrames.delete(clientId);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -437,12 +478,23 @@ async function control(request,abort){
  if(value.subtype==='ui_render'){
   if(!clients.has(clientId))throw Error('Native UI client is not attached to this owner');
   await n.gate._Jo('desktop');
-  const props={...value.props};
+  const question=boundQuestion;
+  const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if((value.component==='ToolUse'||value.component==='ToolResult')&&typeof props.tool_use_id!=='string')props.tool_use_id=value.instance_id;
   if(typeof props.output==='string'&&props.output.length>65536)props.output=props.output.slice(0,65536);
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
+  let questionFrame;
+  if(question){
+   abort.signal.throwIfAborted();
+   const current=nativeDialog(n,'permission_ask_user_question');
+   if(!clients.has(clientId)||current.item!==question.item||current.revision!==question.revision)throw Error('Native question changed while rendering');
+   const shownInput=questionShownInput(n,question.payload,result.props.questions),token=randomUUID();
+   if(!questionFrames.has(clientId)&&questionFrames.size>=64)questionFrames.delete(questionFrames.keys().next().value);
+   questionFrames.set(clientId,{client:clientId,token,item:question.item,revision:question.revision,sessionId:question.sessionId,requestId:question.payload.requestId,shownInput});
+   questionFrame={token,dialogId:question.item.id,revision:question.revision,shownInput};
+  }
   recordDrawing(n,value,result.tree);
-  return {tree:result.tree,props:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(questionFrame?{question:questionFrame}:{}),tree:result.tree,props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
@@ -464,7 +516,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();questionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});

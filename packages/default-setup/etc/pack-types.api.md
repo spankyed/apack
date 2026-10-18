@@ -1352,6 +1352,7 @@ interface ClaudeNativeQuestionDialogResponse {
     revision: string;
     sessionId: string;
     answer: Record<string, unknown>;
+    renderToken?: string;
 }
 
 /** Native owns the shown card and answer admission, including richer form fields. */
@@ -1440,6 +1441,127 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
         }[];
     };
 }>;
+
+type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>;
+
+interface ClaudeNativeQuestionRenderRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    clientId: string;
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean;
+    };
+}
+
+declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    question: z.ZodObject<{
+        token: z.ZodString;
+        dialogId: z.ZodString;
+        revision: z.ZodString;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "strip", z.ZodTypeAny, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    question: z.ZodObject<{
+        token: z.ZodString;
+        dialogId: z.ZodString;
+        revision: z.ZodString;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "strip", z.ZodTypeAny, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    question: z.ZodObject<{
+        token: z.ZodString;
+        dialogId: z.ZodString;
+        revision: z.ZodString;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "strip", z.ZodTypeAny, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }>;
+}, z.ZodTypeAny, "passthrough">>, z.objectOutputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    question: z.ZodObject<{
+        token: z.ZodString;
+        dialogId: z.ZodString;
+        revision: z.ZodString;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "strip", z.ZodTypeAny, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    tree: z.ZodUnknown;
+    props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    rewritten: z.ZodBoolean;
+    hooked: z.ZodBoolean;
+    question: z.ZodObject<{
+        token: z.ZodString;
+        dialogId: z.ZodString;
+        revision: z.ZodString;
+        shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    }, "strip", z.ZodTypeAny, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }, {
+        revision: string;
+        shownInput: Record<string, unknown>;
+        token: string;
+        dialogId: string;
+    }>;
+}, z.ZodTypeAny, "passthrough">>;
 
 type ClaudeNativeReadDialog = z.infer<typeof ClaudeNativeReadDialogSchema>;
 
@@ -1541,6 +1663,7 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
+    renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>;
     getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>;
     answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>;
     getReadDialogs(): Promise<ClaudeNativeReadDialog[]>;

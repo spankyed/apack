@@ -33,4 +33,18 @@ export interface ClaudeNativeQuestionDialogResponse {
   revision: string
   sessionId: string
   answer: Record<string, unknown>
+  renderToken?: string
 }
+
+export interface ClaudeNativeQuestionRenderRequest {
+  id: string
+  revision: string
+  sessionId: string
+  clientId: string
+  viewport?: { columns: number; rows: number; isFullscreen?: boolean }
+}
+export const ClaudeNativeQuestionRenderSchema = z.object({
+  tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(),
+  question: z.object({ token: z.string().uuid(), dialogId: z.string(), revision: z.string().uuid(), shownInput: z.record(z.string(), z.unknown()) }),
+}).passthrough().refine(value => value.tree !== undefined, 'Native question drawing must contain a tree')
+export type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>
