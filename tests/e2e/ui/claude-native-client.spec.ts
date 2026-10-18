@@ -93,6 +93,8 @@ test('runs native Client state props input and lifetime inside the app', async (
     await expect(left).toContainText('key=space');await expect(right).toContainText('key=none')
     await a.scrollIntoViewIfNeeded()
     await appPage.screenshot({path:testInfo.outputPath('apack-native-client-fields-wide.png')})
+    await left.getByRole('combobox').scrollIntoViewIfNeeded()
+    await appPage.screenshot({path:testInfo.outputPath('apack-native-client-fields-choices.png')})
     await appPage.setViewportSize({width:680,height:900})
     await expect(a).toHaveValue('日本語');await expect(b).toHaveValue('RightDraft')
     await b.scrollIntoViewIfNeeded()
