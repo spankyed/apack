@@ -47,47 +47,50 @@
         v-for="(entry, index) in entries"
         :key="entry.id || index"
         :data-native-agent-id="entry.nativeAgent?.id"
-        class="px-3 py-1.5 text-xs flex items-center gap-2 border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
+        class="px-3 py-2 text-xs border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
         :class="{ 'opacity-50 line-through': entry.status === 'denied' }"
       >
-        <!-- Status icon -->
-        <Check v-if="entry.status === 'ok'" class="w-3 h-3 text-emerald-500 flex-shrink-0" />
-        <Loader2 v-else-if="entry.status === 'running'" class="w-3 h-3 text-neutral-400 animate-spin flex-shrink-0" />
-        <X v-else-if="entry.status === 'denied'" class="w-3 h-3 text-neutral-500 flex-shrink-0" />
-        <AlertCircle v-else-if="entry.status === 'error'" class="w-3 h-3 text-red-500 flex-shrink-0" />
+        <div class="flex min-w-0 items-center gap-2">
+          <!-- Status icon -->
+          <Check v-if="entry.status === 'ok'" class="w-3 h-3 text-emerald-500 flex-shrink-0" />
+          <Loader2 v-else-if="entry.status === 'running'" class="w-3 h-3 text-neutral-400 animate-spin flex-shrink-0" />
+          <X v-else-if="entry.status === 'denied'" class="w-3 h-3 text-neutral-500 flex-shrink-0" />
+          <AlertCircle v-else-if="entry.status === 'error'" class="w-3 h-3 text-red-500 flex-shrink-0" />
 
-        <!-- Tool name -->
-        <span class="font-mono text-neutral-300 min-w-[4.5rem] flex-shrink-0">{{ entry.tool }}</span>
+          <!-- Tool name -->
+          <span class="font-mono text-neutral-300 min-w-[4.5rem] flex-shrink-0">{{ entry.tool }}</span>
 
-        <!-- Summaries -->
-        <div class="flex-1 min-w-0">
-          <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
-            <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
-          </JsonHoverPopup>
-          <JsonHoverPopup
-            v-if="entry.outputSummary && entry.status !== 'running'"
-            :value="entry.details?.output || entry.details?.error"
-            :label="`${entry.tool} output`"
-            width="trigger"
-          >
-            <div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div>
-          </JsonHoverPopup>
-        </div>
-
-        <div v-if="entry.nativeAgent" class="min-w-0 flex-1 border-l border-neutral-700 pl-2" aria-label="Native agent status">
-          <div class="flex items-center gap-2 text-[10px] text-neutral-500">
-            <span class="truncate">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
+          <!-- Summaries -->
+          <div class="flex-1 min-w-0">
+            <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
+              <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
+            </JsonHoverPopup>
+            <JsonHoverPopup
+              v-if="entry.outputSummary && entry.status !== 'running'"
+              :value="entry.details?.output || entry.details?.error"
+              :label="`${entry.tool} output`"
+              width="trigger"
+            >
+              <div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div>
+            </JsonHoverPopup>
           </div>
-          <NativeStatusText v-if="entry.nativeAgent.statusText" class="mt-0.5 text-[10px]" :text="entry.nativeAgent.statusText" />
-        </div>
 
-        <!-- Duration badge -->
-        <span v-if="entry.durationMs != null" class="text-neutral-500 text-[10px] tabular-nums flex-shrink-0 min-w-[2.5rem] text-right">
-          {{ formatDuration(entry.durationMs) }}
-        </span>
-        <span v-else-if="entry.status === 'running'" class="text-neutral-500 text-[10px] flex-shrink-0">
-          running
-        </span>
+          <!-- Duration badge -->
+          <span v-if="entry.durationMs != null" class="text-neutral-500 text-[10px] tabular-nums flex-shrink-0 min-w-[2.5rem] text-right">
+            {{ formatDuration(entry.durationMs) }}
+          </span>
+          <span v-else-if="entry.status === 'running'" class="text-neutral-500 text-[10px] flex-shrink-0">
+            running
+          </span>
+        </div>
+        <section v-if="entry.nativeAgent" class="mt-2 min-w-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-2" aria-label="Native agent status">
+          <div class="flex min-w-0 items-center justify-between gap-2 text-[10px] text-neutral-500">
+            <span class="min-w-0 truncate" :title="entry.nativeAgent.name">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
+          </div>
+          <div v-if="entry.nativeAgent.statusText" role="status" :aria-label="`Claude agent ${entry.nativeAgent.name} status`" tabindex="0" class="mt-1 max-h-28 min-w-0 overflow-y-auto overscroll-contain rounded text-[11px] leading-4 focus-visible:outline focus-visible:outline-blue-400" data-testid="native-agent-status-text">
+            <NativeStatusText :text="entry.nativeAgent.statusText" />
+          </div>
+        </section>
       </div>
     </div>
   </div>
