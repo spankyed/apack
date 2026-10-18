@@ -102,7 +102,8 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   await expect(conversation.locator('[aria-label="Agent details"]')).toContainText('Tokens')
   await conversation.locator('[aria-label="Agent details"]').scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-task-details-completed.png')})
-  const transcript=(await conversation.textContent())!
+  const acceptedDetails=(await context()).native.task.details
+  const transcript=(await conversation.locator('article').allTextContents()).join('\n')
   expect(transcript.indexOf('Return the synthetic worker marker only.')).toBeLessThan(transcript.indexOf('NativeAgentSteerFixture'))
   expect(transcript.indexOf('NativeAgentSteerFixture')).toBeLessThan(transcript.indexOf('ChildSteeringObserved'))
   expect(await row.getAttribute('data-native-agent-id')).toBe(taskId)
@@ -129,5 +130,5 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentDetails:true,nativeAgentDetailsSnapshot:(await context()).native?.task?.details,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentDetails:true,nativeAgentDetailsSnapshot:acceptedDetails,nativeAgentMessageReceipt:true,nativeAgentMessageObserved:true,nativeAgentReply:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,taskId,browserErrors:errors},null,2))
 })
