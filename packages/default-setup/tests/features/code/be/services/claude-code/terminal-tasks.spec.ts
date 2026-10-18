@@ -4,7 +4,7 @@ function fixture() {
   const tasks = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
   const registry = { all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
   const context = { taskRegistry: registry, session: {}, storageV5: {}, getAppState: vi.fn(), setAppState: vi.fn() }
-  const stop = vi.fn(async () => {}), saved = vi.fn(async () => [{ uuid: 'saved', type: 'user', message: { content: 'Task instruction' } }, { uuid: 'hidden', type: 'user', isMeta: true, message: { content: 'Hidden context' } }])
+  const stop = vi.fn(async () => {}), saved = vi.fn(async (): Promise<Record<string, unknown>[]> => [{ uuid: 'saved', type: 'user', message: { content: 'Task instruction' } }, { uuid: 'hidden', type: 'user', isMeta: true, message: { content: 'Hidden context' } }])
   const canUseTool = vi.fn(), tools = [{ name: 'SendMessage' }]
   let denied = false
   const message = vi.fn((value: unknown) => value)
@@ -45,4 +45,24 @@ it('preserves native messaging refusal and refuses empty, oversized or unavailab
   await expect(f.request('send', 'agent-a', vi.fn(), 'x'.repeat(16385))).rejects.toThrow('1 to 16384')
   f.tools.length = 0; await expect(f.request('send')).rejects.toThrow('not available')
   expect(f.runner).not.toHaveBeenCalled()
+})
+
+it('retains received coordinator instructions and live transcript order across overlapping saved rows', async () => {
+  const f = fixture()
+  const first = { uuid: 'first', type: 'user', message: { content: 'Initial task' } }
+  const instruction = { uuid: 'instruction', type: 'user', isMeta: true, origin: { kind: 'coordinator' }, message: { content: 'Sent instruction' } }
+  const reply = { uuid: 'reply', type: 'assistant', message: { content: [{ type: 'text', text: 'Agent reply' }] } }
+  f.saved.mockResolvedValue([reply, first])
+  f.registry.getTranscript.mockReturnValue({ messages: [first, instruction, reply] } as ReturnType<typeof f.registry.getTranscript>)
+  expect((await f.request('inspect')).details.messages.map((message: { text: string }) => message.text)).toEqual(['Initial task', 'Sent instruction', 'Agent reply'])
+})
+
+it('orders saved-only coordinator messages by native timestamps between live prompt and reply', async () => {
+  const f = fixture()
+  const first = { uuid: 'first', type: 'user', timestamp: '2026-10-18T12:00:00Z', message: { content: 'Initial task' } }
+  const instruction = { uuid: 'instruction', type: 'user', timestamp: '2026-10-18T12:00:01Z', isMeta: true, origin: { kind: 'coordinator' }, message: { content: 'Sent instruction' } }
+  const reply = { uuid: 'reply', type: 'assistant', timestamp: '2026-10-18T12:00:02Z', message: { content: [{ type: 'text', text: 'Agent reply' }] } }
+  f.saved.mockResolvedValue([instruction])
+  f.registry.getTranscript.mockReturnValue({ messages: [first, reply] } as ReturnType<typeof f.registry.getTranscript>)
+  expect((await f.request('inspect')).details.messages.map((message: { text: string }) => message.text)).toEqual(['Initial task', 'Sent instruction', 'Agent reply'])
 })

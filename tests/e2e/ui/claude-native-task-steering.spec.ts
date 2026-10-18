@@ -88,6 +88,9 @@ test('sends instructions to the existing native Agent and reads its reply', asyn
   },{timeout:25000,intervals:[1000]}).toBe(true)
   await expect(conversation).toContainText('NativeAgentSteerFixture')
   await expect(conversation).toContainText('ChildSteeringObserved')
+  const transcript=(await conversation.textContent())!
+  expect(transcript.indexOf('Return the synthetic worker marker only.')).toBeLessThan(transcript.indexOf('NativeAgentSteerFixture'))
+  expect(transcript.indexOf('NativeAgentSteerFixture')).toBeLessThan(transcript.indexOf('ChildSteeringObserved'))
   expect(await row.getAttribute('data-native-agent-id')).toBe(taskId)
   await expect(composer).toHaveText('Keep this draft while messaging the Agent')
   await conversation.scrollIntoViewIfNeeded()

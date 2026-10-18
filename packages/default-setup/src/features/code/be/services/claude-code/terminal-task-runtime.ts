@@ -26,10 +26,13 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
  const live=registry.getTranscript(task.id)?.messages??[];
  const saved=typeof binding.savedAgentMessages==='function'?await binding.savedAgentMessages(request.task_id):[];
  current();
- const unique=new Map();for(const row of [...saved??[],...live])if(row?.uuid)unique.set(row.uuid,row);
- let budget=131072,truncated=unique.size>100;const messages=[];
- for(const row of [...unique.values()].slice(-100).reverse()){
-  if(!['user','assistant'].includes(row.type)||row.isMeta===true||row.isVirtual===true)continue;
+ const liveIds=new Set(live.map(row=>row?.uuid));
+ const unique=new Map();for(const row of [...(saved??[]).filter(row=>!liveIds.has(row?.uuid)),...live])if(row?.uuid)unique.set(row.uuid,row);
+ const rows=[...unique.values()];
+ if(rows.every(row=>typeof row.timestamp==='string'&&Number.isFinite(Date.parse(row.timestamp))))rows.sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+ let budget=131072,truncated=rows.length>100;const messages=[];
+ for(const row of rows.slice(-100).reverse()){
+  if(!['user','assistant'].includes(row.type)||row.isMeta===true&&!(row.type==='user'&&row.origin?.kind==='coordinator')||row.isVirtual===true)continue;
   const content=row.message?.content;let parts=[];
   if(typeof content==='string')parts=[content];
   else if(Array.isArray(content))for(const block of content){
