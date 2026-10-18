@@ -59,3 +59,18 @@ it('retires a late-created terminal when teardown wins during startup', async ()
   runThreadTeardown('thread'); resolve(native); await rejected
   expect(native.kill).toHaveBeenCalledOnce(); expect(prepared.dispose).toHaveBeenCalledOnce(); expect(getNativeTerminal('thread')).toBeUndefined()
 })
+
+it('drains the detached native owner before a replacement print process can spawn', async () => {
+  await printOwner(); const native = terminal()
+  native.kill.mockImplementation(() => {})
+  mocks.prepare.mockResolvedValueOnce({start:vi.fn(async()=>native),dispose:vi.fn(async()=>{})})
+  await openNativeTerminal('thread',{},mocks.prepare)
+  runThreadTeardown('thread')
+  const events = new PassThrough({objectMode:true})
+  const handle = {events,close:vi.fn(async()=>{events.end()}),kill:vi.fn(()=>events.end())} as unknown as QueryHandle
+  const spawn = vi.fn(async()=>handle)
+  const replacement = openConversation('thread','replacement',spawn,async()=>{})
+  await Promise.resolve();expect(spawn).not.toHaveBeenCalled()
+  await native.close();const owner = await replacement
+  expect(spawn).toHaveBeenCalledOnce();await owner.close()
+})

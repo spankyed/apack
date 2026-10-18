@@ -9,6 +9,7 @@ const activeHandles = new Map<string, QueryHandle>()
 const conversations = new Map<string, { owner: ClaudeConversation; launchKey: string }>()
 const starting = new Map<string, object>()
 const terminals = new Map<string, ClaudeNativeTerminalOwner>()
+const draining = new Map<string, Promise<void>>()
 const terminalTransitions = new Map<string, AbortController>()
 
 function stop(key: string): void {
@@ -17,6 +18,12 @@ function stop(key: string): void {
   const terminal = terminals.get(key); terminals.delete(key); terminal?.kill()
   const owner = conversations.get(key)?.owner
   conversations.delete(key)
+  const done = terminal?.done ?? owner?.done
+  if (done) {
+    const pending = Promise.all([draining.get(key), done]).then(() => {}, () => {})
+    draining.set(key, pending)
+    void pending.finally(() => { if (draining.get(key) === pending) draining.delete(key) })
+  }
   const handle = activeHandles.get(key)
   activeHandles.delete(key)
   try { if (owner) owner.kill(); else handle?.kill() } catch { /* already gone */ }
@@ -29,6 +36,8 @@ export async function openConversation(key: string, launchKey: string, spawn: ()
   const ticket = {}
   starting.set(key, ticket)
   try {
+    await draining.get(key)
+    if (starting.get(key) !== ticket) throw new Error('Claude conversation startup was cancelled')
     const handle = await spawn()
     if (starting.get(key) !== ticket) { handle.kill(); throw new Error('Claude conversation startup was cancelled') }
     const owner = createClaudeConversation(handle, consumeAutonomous, accountedCostUsd)
@@ -50,6 +59,7 @@ export function isConversationBusy(key: string): boolean {
   return starting.has(key) || !!conversations.get(key)?.owner.busy || !!terminals.get(key)?.busy || activeHandles.has(key)
 }
 export async function closeIdleConversation(key: string): Promise<boolean> {
+  await draining.get(key)
   if (isConversationBusy(key)) return false
   const conversation = conversations.get(key)
   if (conversation) await conversation.owner.close()

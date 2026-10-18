@@ -15,7 +15,8 @@ registerThreadHistoryValidator(async (request, signal) => {
     if (messages.some(message => message.context?.cliUuid)) throw new Error('The native session for this history is unavailable.')
     return
   }
-  if (!await services.cli.claudeCode.closeIdleConversation(request.threadId)) throw new Error('Pause the current turn before changing history.')
+  const terminal = services.cli.claudeCode.getNativeTerminal(request.threadId)
+  if (terminal ? services.cli.claudeCode.isConversationBusy(request.threadId) : !await services.cli.claudeCode.closeIdleConversation(request.threadId)) throw new Error('Pause the current turn before changing history.')
   if (state.isRunning || services.cli.claudeCode.getHandle(request.threadId)) throw new Error('Pause the current turn before changing history.')
   if (request.restoreFiles) {
     if (!state.cwd) throw new Error('The native session project directory is unavailable.')
