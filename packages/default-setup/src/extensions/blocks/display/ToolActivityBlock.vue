@@ -105,7 +105,7 @@ import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
-import NativeTaskControls from '#features/threads/fe/chat/NativeTaskControls.vue'
+import NativeTaskControls from './NativeTaskControls.vue'
 import NativeStatusText from './NativeStatusText.vue'
 
 interface ArtifactRef {

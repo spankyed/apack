@@ -206,7 +206,7 @@ function rotateQuote() {
   randomQuote.value = next;
 }
 
-import { claudeTaskControls } from './native-task-controls.ts'
+import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
 import { claudeClientInput } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'

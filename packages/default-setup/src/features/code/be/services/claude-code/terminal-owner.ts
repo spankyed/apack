@@ -154,7 +154,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     return {
       get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
-      get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) },
+      get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport: bridge.uiTransport,
@@ -272,7 +272,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         return { title: result.title, message: result.message }
       },
       async setModel(model) {
-        if (closed || changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'stopped'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
+        if (closed || changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
         changingModel = true; changed()
         const sessionId = bridge.projection.sessionId
         try {
