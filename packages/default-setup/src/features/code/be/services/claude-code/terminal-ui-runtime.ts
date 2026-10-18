@@ -1,3 +1,4 @@
+import { claudeTerminalParentCommandRuntime } from './terminal-parent-command-runtime.ts'
 import { claudeTerminalAgentInputRuntime } from './terminal-agent-input-runtime.ts'
 import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
@@ -138,6 +139,7 @@ function paneRoster(n){
 ${claudeTerminalClientRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
+${claudeTerminalParentCommandRuntime}
 function nativeThemeTree(n,tree){
  const palette=n.themeResolver.UKe(n.themePreferences.lEn());
  const paint=value=>{
@@ -521,8 +523,8 @@ function nativeViewFacts(n,binding,abort){
 }
 async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
- if(request.subtype==='apack_ui_parent_command')return dispatchNativeParentCommand(n,request,abort);
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);

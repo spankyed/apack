@@ -51,8 +51,7 @@ async function retireNativeAgentCommands(clientId){
  for(const [id,entry] of agentCommandDialogs)if((clientId===undefined||entry.clientId===clientId)&&entry.closed)agentCommandDialogs.delete(id);
 }
 async function dispatchNativeAgentInput(n,request,abort){return dispatchNativeInput(n,request,abort,false);}
-async function dispatchNativeParentCommand(n,request,abort){return dispatchNativeInput(n,request,abort,true);}
-async function dispatchNativeInput(n,request,abort,main){
+async function dispatchNativeInput(n,request,abort,main,parentTicket){
  await n.gate._Jo('desktop');
  if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');
  if(agentDispatch||[...agentCommandDialogs.values()].some(entry=>!entry.closed))throw Error('A native Agent submission or command is pending');
@@ -78,15 +77,27 @@ async function dispatchNativeInput(n,request,abort,main){
  const priorNotices=new Set(notices());
  const parentBefore=new Set((binding.messages?.()??[]).map(row=>row.uuid));
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
- const operation={clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
+ if(parentTicket&&command.type==='local')observeNativeParentCommand(command);
+ const operation={native:n,parentTicket,commandDefinition:command,clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
   await composer.write(text,'replace');current();
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
   current();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
   const deadline=Date.now()+4000;
-  while(Date.now()<deadline){
-   current();
+  while(parentTicket||Date.now()<deadline){
+   if(parentTicket){
+    abort.signal.throwIfAborted();
+    const run=parentTicket.lifecycle;
+    if(run?.failed)throw Error('Original native command failed after dispatch; do not retry automatically');
+    if(run?.reset&&!run.returned){await new Promise(resolve=>setTimeout(resolve,20));continue;}
+    parentCommandScope(n,parentTicket,true);
+    if(run?.returned&&run.commandMessageId){
+     if(run.reset&&run.sessionAfter!==facts.sessionId)return {kind:'command_complete',commandName:expectedRun.command,messageId:run.commandMessageId,sessionId:run.sessionAfter,conversationId:run.reset.conversationId};
+     if(run.resultType==='compact'&&run.boundaryId&&(binding.messages?.()??[]).some(row=>row.uuid===run.boundaryId&&row.type==='system'&&row.subtype==='compact_boundary'))return {kind:'command_complete',commandName:expectedRun.command,messageId:run.commandMessageId,boundaryId:run.boundaryId};
+     if(run.emptyText)return {kind:'command_complete',commandName:expectedRun.command,messageId:run.commandMessageId};
+    }
+   }else current();
    if(operation.dialog){const value=operation.dialog;if(value.kind==='panel')return {kind:'panel',id:value.id,commandName:value.commandName};return {kind:'confirmation',id:value.id,title:value.title,confirmLabel:value.confirmLabel,commandName:value.commandName};}
    const rows=task?context.taskRegistry.getTranscript(task.id)?.messages??[]:[];
    const row=rows.find(row=>!before.has(row.uuid)&&row.type==='user'&&row.isMeta!==true&&row.origin?.kind==='human'&&row.message?.content===text);

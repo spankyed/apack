@@ -1,8 +1,9 @@
+import { claudeTerminalParentCommandRuntime } from '#features/code/be/services/claude-code/terminal-parent-command-runtime.ts'
 import { randomUUID } from 'node:crypto'
 import { claudeTerminalAgentInputRuntime } from '#features/code/be/services/claude-code/terminal-agent-input-runtime.ts'
 
 function fixture(main = false) {
-  let draft = '', sequence = 1, panelShown = false, finish!: () => void
+  let draft = '', sequence = 1, sessionId = 'session', panelShown = false, finish!: () => void
   const messageId = randomUUID(), rows: unknown[] = [], parentRows: unknown[] = [], notices: { current?: unknown } = {}
   const cancel = vi.fn(() => finish()), confirm = vi.fn(() => finish())
   const localJsx = { show: vi.fn((_element: unknown, _options: unknown) => { panelShown = true; return { nodeId: 'native-node', closed: new Promise<void>(resolve => { finish = () => { panelShown = false; resolve() } }) } }) }
@@ -10,8 +11,10 @@ function fixture(main = false) {
   const task = { id: 'registry', type: 'local_agent', status: 'completed' }
   const context = { dialogStore: { dismiss: dismissPanel, getState: () => ({ open: panelShown ? [{ id: 'native-dialog', kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
   const composer = { read: vi.fn(async () => ({ text: draft })), write: vi.fn(async (text: string) => { draft = text }) }
-  const binding = { messages: () => parentRows, commands: () => [], composer, toolContext: () => context, savedAgentMessages: async () => [] }
-  const native = { commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: (name: string) => ({ type: name === 'context' ? 'local-jsx' : 'local', name }), Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
+  const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
+  const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: name === 'context' ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
+  const binding = { messages: () => parentRows, commands: () => [...commands.values()], composer, toolContext: () => context, savedAgentMessages: async () => [] }
+  const native = { questionOptions: { q: () => sessionId }, commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: command, Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
   const enter = vi.fn(async () => {
     if (draft === '/compact') localJsx.show({ props: { title: 'Original parent confirmation', confirmLabel: 'Original confirm', onConfirm: confirm, onCancel: cancel } }, { commandName: 'compact' })
     else if (draft === '/usage') localJsx.show({ type: () => {}, props: {} }, { commandName: 'usage' })
@@ -21,15 +24,15 @@ function fixture(main = false) {
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
     return { entered: true }
   })
-  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', claudeTerminalAgentInputRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parent:dispatchNativeParentCommand };')
-  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId: 'session', sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }) as {
+  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', claudeTerminalAgentInputRuntime + claudeTerminalParentCommandRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parentOperation:nativeParentCommand };')
+  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId, sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }) as {
     dispatch(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<{ kind: string; id: string; messageId: string; message: string }>
-    parent(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<unknown>
+    parentOperation(n: unknown, request: { client_id: string; operation: string; text?: string; command_id?: string }): Promise<{ kind: string; id: string; result?: Record<string, unknown> }>
     answer(n: unknown, request: { client_id: string; command_id: string; decision: string }): Promise<unknown>
     panel(n: unknown, request: { client_id: string; panel_id: string; operation: string; text?: string }): Promise<{ open: boolean }>
     retire(client: string): Promise<void>
   }
-  return { controller, native, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
+  return { controller, native, module, command, changeSession: (id: string) => { sessionId = id; sequence++ }, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
 }
 it('correlates the original human UUID and leaves native blocking policy in the dispatcher', async () => {
   const f = fixture()
@@ -104,12 +107,78 @@ it('does not acknowledge an unrelated original panel as the submitted command', 
 
 it('dispatches parent local commands while leaving ordinary prompts on their original bridge', async () => {
   const f = fixture(true)
-  expect(await f.controller.parent(f.native, { client_id: 'client', text: 'Ordinary parent prompt' }, new AbortController())).toEqual({ kind: 'not_command' })
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', text: 'Ordinary parent prompt', operation: 'prepare' })).toEqual({ kind: 'not_command' })
   expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
-  expect(await f.controller.parent(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' })
+  const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', text: '/context', operation: 'prepare' }), ticket = { client_id: 'client', command_id: prepared.id }
+  await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
+  await vi.waitFor(async () => expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' } }))
   expect(f.rows).toHaveLength(0)
   await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Worker input' }, new AbortController())).rejects.toThrow('No native Agent')
   const selected = fixture()
-  await expect(selected.controller.parent(selected.native, { client_id: 'client', text: '/help' }, new AbortController())).rejects.toThrow('main view')
+  await expect(selected.controller.parentOperation(selected.native, { client_id: 'client', text: '/help', operation: 'prepare' })).rejects.toThrow('main view')
   expect(selected.enter).not.toHaveBeenCalled()
+})
+
+
+it('prepares without Enter, refuses duplicate/foreign execution, and waits beyond the RPC window for the applied compact boundary', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), boundaryId = randomUUID(), commandMessageUuid = randomUUID()
+    let finish!: (value: unknown) => void
+    f.module.call.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    f.enter.mockImplementationOnce(async () => { void f.command('compact').load().then(module => module.call('', { commandMessageUuid })); f.setDraft(''); return { entered: true } })
+    const request = { client_id: 'client', operation: 'prepare', text: '/compact' }
+    const prepared = await f.controller.parentOperation(f.native, request)
+    expect(prepared.kind).toBe('prepared'); expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+    const ticket = { client_id: 'client', command_id: prepared.id }
+    await expect(f.controller.parentOperation(f.native, { ...ticket, client_id: 'foreign', operation: 'start' })).rejects.toThrow('expired')
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).toMatchObject({ kind: 'running' })
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).rejects.toThrow('already used')
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    finish({ type: 'compact', compactionResult: { boundaryMarker: { type: 'system', subtype: 'compact_boundary', uuid: boundaryId, compactMetadata: { trigger: 'manual' } } } })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'running' })
+    f.parentRows.push({ type: 'system', subtype: 'compact_boundary', uuid: boundaryId })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_complete', commandName: 'compact', messageId: commandMessageUuid, boundaryId } })
+    expect(f.enter).toHaveBeenCalledOnce()
+  } finally { vi.useRealTimers() }
+})
+
+it('follows only the original clear reset, keeps conversation and saved-session identities distinct, and rejects later view changes', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), commandMessageUuid = randomUUID(), conversationId = randomUUID(), nextSession = randomUUID()
+    const query = vi.fn(), context = { commandMessageUuid, onQueryEvent: query }
+    f.module.call.mockImplementationOnce(async () => { context.onQueryEvent({ type: 'conversation_reset', newConversationId: conversationId }); f.changeSession(nextSession); return { type: 'text', value: '' } })
+    f.enter.mockImplementationOnce(async () => { void f.command('clear').load().then(module => module.call('', context)); f.setDraft(''); return { entered: true } })
+    const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/clear' }), ticket = { client_id: 'client', command_id: prepared.id }
+    await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' }); await vi.advanceTimersByTimeAsync(20)
+    expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_complete', messageId: commandMessageUuid, sessionId: nextSession, conversationId } })
+    expect(query).toHaveBeenCalledOnce(); expect(context.onQueryEvent).toBe(query)
+    f.move()
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).rejects.toThrow('session or selection changed')
+  } finally { vi.useRealTimers() }
+})
+
+
+it('leaves ordinary prompts and admission review outside ticket execution', async () => {
+  const f = fixture(true)
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: 'Ordinary prompt' })).toEqual({ kind: 'not_command' })
+  f.native.runtime.GYt = text => ({ input: text.replace('hidden', ''), removed: { removedTotal: 6 } })
+  expect(await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/contexthidden' })).toEqual({ kind: 'review', text: '/context', removed: 6 })
+  expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+})
+
+it('expires unused tickets before Enter and does not authorize unrelated session changes', async () => {
+  vi.useFakeTimers()
+  try {
+    const f = fixture(true), prepared = await f.controller.parentOperation(f.native, { client_id: 'client', operation: 'prepare', text: '/clear' }), ticket = { client_id: 'client', command_id: prepared.id }
+    await vi.advanceTimersByTimeAsync(30001)
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })).rejects.toThrow('expired')
+    expect(f.enter).not.toHaveBeenCalled()
+    f.changeSession(randomUUID())
+    await expect(f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).rejects.toThrow('session or selection changed')
+  } finally { vi.useRealTimers() }
 })
