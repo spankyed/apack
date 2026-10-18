@@ -5,6 +5,7 @@
  * parsing, message import, and session artifact setup plumbing.
  */
 
+import { importedSessionCost } from './_helpers/session-import.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z } from '#generated/services.ts';
 import type { ThreadsSettings } from '#generated/types.ts';
@@ -229,6 +230,7 @@ async function handleResume(
   persistClaudeState(services, targetThreadId, {
     sessionId,
     historyError: undefined,
+    totalCostUsd: importedSessionCost(transcript),
     cwd: (session as any).cwd || '',
     sessionWorktree: false,
   });
@@ -347,7 +349,7 @@ async function handleImport(
         startedAt: now,
         lastTurnAt: now,
         turns: 0,
-        totalCostUsd: 0,
+        totalCostUsd: importedSessionCost(transcript),
         toolCallCount: 0,
         permissionMode: 'default',
       };

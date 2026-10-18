@@ -19,7 +19,7 @@ for (const live of [false, true]) it(`reopens the represented session without du
 it('does not reopen a staged fork as the original saved session', async () => {
  const fork=repository.threadCommands.create({topic:'Pending fork',instructions:''})
  repository.threadCommands.update(fork.id,{context:{claudeCode:{sessionId:'native-session',cwd:'/fixture',forkFrom:{sessionId:'native-session'}}}})
- const transcript=vi.fn(async()=>[]),open=vi.fn(),create=vi.fn((opts:{topic:string;instructions:string})=>repository.threadCommands.create(opts))
+ const transcript=vi.fn(async()=>[{type:'cost-state',totalCostUSD:1.25}]),open=vi.fn(),create=vi.fn((opts:{topic:string;instructions:string})=>repository.threadCommands.create(opts))
  mockService<Services,'cli'>('cli',{claudeCode:{listSessions:vi.fn(async()=>[{id:'native-session',cwd:'/fixture'}]),viewSession:transcript,getNativeTerminal:vi.fn(),getConversation:vi.fn()} as never})
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn(),openThreadChatAndRefreshRecent:open,createThreadAndNotify:create})
@@ -29,4 +29,15 @@ it('does not reopen a staged fork as the original saved session', async () => {
  expect(open).toHaveBeenCalledWith(imported)
  expect(repository.threadQueries.byId(fork.id)?.context?.claudeCode?.forkFrom).toBeDefined()
  expect(repository.threadQueries.byId(imported)?.context?.claudeCode?.forkFrom).toBeUndefined()
+ expect(repository.threadQueries.byId(imported)?.context?.claudeCode?.totalCostUsd).toBe(1.25)
 })
+
+it('bulk import retains native cumulative cost without charging a new turn', async () => {
+ const caller=repository.threadCommands.create({topic:'Import',instructions:''})
+ const transcript=[{type:'cost-state',totalCostUSD:0.5},{type:'cost-state',totalCostUSD:1.25},{type:'cost-state',totalCostUSD:-1},{type:'cost-state',totalCostUSD:Number.NaN}]
+ mockService<Services,'cli'>('cli',{claudeCode:{listSessions:vi.fn(async()=>[{id:'saved-native',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
+ mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn(()=>({messageId:'Message-progress' as const})),updateMessageState:vi.fn()})
+ await action({command:'cc-import',threadId:caller.id},services,{} as never,'')
+ const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='saved-native')
+ expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',totalCostUsd:1.25})
+});
