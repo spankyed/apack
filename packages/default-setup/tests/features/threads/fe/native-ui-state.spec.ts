@@ -2,7 +2,8 @@ import { createActor } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
 import threadsState from '#features/threads/fe/state.ts'
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
-afterAll(startFeTestRuntime({ client: { send() {} } }))
+const sent = vi.fn()
+afterAll(startFeTestRuntime({ client: { send: sent } }))
 
 it('ignores another view/thread and late replies after unmount without reviving a closed slot', () => {
   const actor = createActor(threadsState).start()
@@ -88,5 +89,17 @@ it('routes only the current prompt host response and retires requests when the o
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toEqual(request)
   actor.send({ type: 'CLAUDE_UI_STATE', ...identity, state: { status: 'disconnected' } })
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toBeUndefined()
+  actor.stop()
+})
+
+it('forwards an Agent input once for its mounted thread and refuses foreign or retired slots', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'agent-view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity, nativeView: { ownerId: 'owner', sessionId: 'session', revision: 2, taskId: 'agent' } })
+  sent.mockClear()
+  const input = { type: 'CLAUDE_UI_AGENT_INPUT' as const, ...identity, revision: 1, text: 'User reply' }
+  actor.send({ ...input, threadId: 'foreign' }); actor.send(input)
+  actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity }); actor.send({ ...input, revision: 2 })
+  const inputs = sent.mock.calls.filter(call => JSON.stringify(call).includes('CLAUDE_UI_AGENT_INPUT'))
+  expect(inputs).toHaveLength(1); expect(JSON.stringify(inputs)).toContain('User reply')
   actor.stop()
 })

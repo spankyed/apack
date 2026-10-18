@@ -15,7 +15,7 @@
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>
     </div>
     <NativeAgentComposer :draft="draft" :disabled="!active || returning || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
-      @draft="emit('draft', $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
+      @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
 <script setup lang="ts">
@@ -29,7 +29,7 @@ import type { ThreadsState } from '../state.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
 const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; active: boolean }>()
-const emit = defineEmits<{ draft: [text: string]; pending: [value: boolean]; returning: [value: boolean]; returned: [] }>()
+const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; pending: [value: boolean]; returning: [value: boolean]; returned: [] }>()
 const actor: ThreadsState = usePlugin(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
 const context = useSelector(actor, state => state.context)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
@@ -58,7 +58,7 @@ function send(text: string): Promise<void> {
 watch(() => state.value?.agentInput, value => {
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
-  if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', ''); request.resolve() }
+  if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
 })
 function returnToParent() {

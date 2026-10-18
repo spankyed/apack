@@ -152,6 +152,7 @@ test('replies to the native Agent while running and resumes it after completion'
   await agentComposer.fill('/cc-reset')
   await expect(appPage.locator('.command-suggestion-popup')).toBeHidden()
   await agentComposer.fill('NativeAgentSteerFixture: reply from the focused Agent composer.')
+  await appPage.screenshot({path:testInfo.outputPath('apack-focused-agent-before-send.png')})
   await focused.getByRole('button',{name:'Send to Agent',exact:true}).click()
   await expect(agentComposer).toHaveText('')
   await expect.poll(async()=>focused.getByRole('region',{name:'Agent transcript'}).getByText('ChildSteeringObserved',{exact:true}).count(),{timeout:20000}).toBe(3)
