@@ -1622,8 +1622,12 @@
                 "value": "Show version and auth info"
               },
               {
+                "key": "cc-models",
+                "value": "Read the matching native conversation catalog; `start` permits temporary discovery and session hooks. `start --include-unsupported-models` explicitly includes unknown account models."
+              },
+              {
                 "key": "cc-model",
-                "value": "Model name (optional, shows current if omitted)"
+                "value": "Select this thread's model through its idle native conversation, or stage it for the next launch. With no argument, show selected and last reported model."
               },
               {
                 "key": "cc-memory",
