@@ -184,18 +184,32 @@ async function handleResume(
 
   const sessionId = session.id;
 
+  const represented = services.repository.threadQueries.all().filter(candidate => {
+    const state = candidate.context?.claudeCode;
+    return !state?.forkFrom && !state?.revertTo && !state?.forkPending;
+  });
+  const liveSession = (id: string) => services.cli.claudeCode.getNativeTerminal(id)?.state.sessionId
+    ?? services.cli.claudeCode.getConversation(id)?.owner.sessionId;
+  const existing = represented.find(candidate => liveSession(candidate.id) === sessionId)
+    ?? represented.find(candidate => !liveSession(candidate.id) && candidate.context?.claudeCode?.sessionId === sessionId);
+  if (existing) {
+    const text = 'Continuing the existing app conversation for this Claude Code session.';
+    services.chat.sendBlockMessage({ threadId: existing.id, text, blocks: [] });
+    services.chat.openThreadChatAndRefreshRecent(existing.id);
+    return { text, skipMessage: true };
+  }
+
   // Fetch transcript for message import — use the session's own cwd bucket
   const transcript = await services.cli.claudeCode.viewSession(sessionId, { cwd: (session as any).cwd });
 
-  // Determine target thread — only spawn a new one if the current thread
-  // has real conversation (not just command/system messages).
+  // Preserve existing conversation and staged history when importing an unrepresented session.
   const existingMessages = services.repository.threadQueries.messages(threadId as any);
-  const hasRealMessages = existingMessages?.some((m: any) =>
+  const requiresNewThread = !!(prior?.forkFrom || prior?.revertTo || prior?.forkPending) || existingMessages?.some((m: any) =>
     m.sender === 'user' && !m.isCommand
   );
   let targetThreadId = threadId;
 
-  if (hasRealMessages) {
+  if (requiresNewThread) {
     const title = (session as any).title || 'Resumed session';
     const { id: newThreadId } = services.chat.createThreadAndNotify({
       topic: title,
@@ -225,7 +239,7 @@ async function handleResume(
   const sessionTitle = (session as any).title || '(untitled)';
   const confirmText = `Session resumed: **${sessionTitle}** (${importedCount} messages imported)\nSend a message to continue.`;
 
-  if (hasRealMessages) {
+  if (requiresNewThread) {
     // New thread: send confirmation there and navigate
     services.chat.sendBlockMessage({
       threadId: targetThreadId as any,
