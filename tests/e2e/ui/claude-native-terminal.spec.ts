@@ -139,6 +139,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(agentToolRow).toContainText('AppNativeAgent completed', { timeout: 10000 })
   await agentToolRow.scrollIntoViewIfNeeded()
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-agent-tool-completed.png') })
+  await expect.poll(async () => { const state = await context(); return [state.claude.permissionMode, state.native.state.session.permissionMode] }).toEqual(['acceptEdits', 'acceptEdits'])
   await appPage.locator('summary').filter({ hasText: 'Details' }).click()
   await appPage.getByTitle('Approve every edit (safe default)', { exact: true }).click()
   await expect.poll(async () => { const state = await context(); return [state.claude.permissionMode, state.native.state.session.permissionMode] }).toEqual(['default', 'default'])

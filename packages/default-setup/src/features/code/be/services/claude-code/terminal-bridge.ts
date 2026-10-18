@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { createClaudeTerminalStatus } from './terminal-status.ts'
 import { claudeTerminalStatusRuntime } from './terminal-status-runtime.ts'
 import type { ClaudeSettings } from './host-controls.ts'
+import { PermissionModeSchema } from './types.ts'
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'"
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
@@ -93,7 +94,17 @@ export async function createClaudeTerminalBridge(options: {
           if (event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
         if (changedSession) { session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
-        if (value.metadata !== undefined) session.update(value.metadata)
+        if (value.metadata !== undefined) {
+          session.update(value.metadata)
+          if (session.metadata?.permissionMode === undefined) {
+            const sessionId = projection.sessionId
+            try {
+              const result = object(await ui.transport.request({ subtype: 'apack_get_permission_mode' }))
+              const mode = PermissionModeSchema.safeParse(result?.mode)
+              if (mode.success && session.metadata && projection.sessionId === sessionId) session.update({ ...session.metadata, permissionMode: mode.data })
+            } catch { /* Native terminal host may not be bound yet; the next poll retries. */ }
+          }
+        }
         if (!observerPid && (mainCommand || subagentCommand) && !observerProblem) observerProblem = 'Native helper output could not be observed in this terminal'
         if (pending?.entered && pending.prepared) {
           const submission = pending

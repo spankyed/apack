@@ -283,11 +283,12 @@ async function control(request){
  const n=await initialize();
  if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
- if(request.subtype==='apack_set_permission_mode'){
+ if(request.subtype==='apack_get_permission_mode'||request.subtype==='apack_set_permission_mode'){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native permission controls are not ready');
   const context=binding.toolContext(new AbortController());
   const before=context.getAppState().toolPermissionContext;
+  if(request.subtype==='apack_get_permission_mode')return {mode:before.mode};
   const result=n.permissions.bC(request.mode,before,update=>context.setToolPermissionContext(update));
   if(!result.ok)throw Error(result.error);
   const mode=context.getAppState().toolPermissionContext.mode;
