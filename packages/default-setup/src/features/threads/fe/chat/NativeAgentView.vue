@@ -24,9 +24,9 @@
     </div>
     <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="transcriptScroll.latest()" />
     </div>
-    <section v-if="state?.agentInput?.status === 'command_output' && state.agentInput.output" aria-label="Native command output" class="mx-4 mb-3 max-h-48 shrink-0 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-white/[0.025] p-3">
+    <section v-if="state?.agentInput?.status === 'command_output' && state.agentInput.output" aria-label="Native command output" class="mx-4 mb-3 max-h-48 shrink-0 overflow-auto overscroll-contain rounded-xl border border-white/10 bg-white/[0.025] p-3">
       <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">/{{ state.agentInput.output.commandName }}</p>
-      <pre class="whitespace-pre-wrap break-words text-xs leading-relaxed text-neutral-300">{{ state.agentInput.output.text }}</pre>
+      <pre :class="state.agentInput.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.agentInput.output.text }}</pre>
     </section>
     <p v-if="state?.agentInput?.status === 'blocked'" role="status" class="mx-4 mb-2 text-xs text-amber-200">{{ state.agentInput.problem }}</p>
     <section v-if="commandActive && state?.agentInput?.command" ref="commandPanel" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">

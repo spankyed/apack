@@ -6,16 +6,17 @@ function fixture() {
   const messageId = randomUUID(), rows: unknown[] = [], parentRows: unknown[] = [], notices: { current?: unknown } = {}
   const cancel = vi.fn(() => finish()), confirm = vi.fn(() => finish())
   const localJsx = { show: vi.fn((_element: unknown, _options: unknown) => { panelShown = true; return { nodeId: 'native-node', closed: new Promise<void>(resolve => { finish = () => { panelShown = false; resolve() } }) } }) }
-  const closePanel = vi.fn(() => finish()), stdin = { unshift: vi.fn(), emit: vi.fn() }
+  const dismissPanel = vi.fn((_id: string) => finish()), stdin = { unshift: vi.fn(), emit: vi.fn() }
   const task = { id: 'registry', type: 'local_agent', status: 'completed' }
-  const context = { dialogStore: { getState: () => ({ open: panelShown ? [{ kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
+  const context = { dialogStore: { dismiss: dismissPanel, getState: () => ({ open: panelShown ? [{ id: 'native-dialog', kind: 'local_jsx', payload: { nodeId: 'native-node' } }] : [] }) }, localJsx, getAppState: () => ({ notifications: notices }), taskRegistry: { all: () => ({ registry: task }), getTranscript: () => ({ messages: rows }) } }
   const composer = { read: vi.fn(async () => ({ text: draft })), write: vi.fn(async (text: string) => { draft = text }) }
   const binding = { messages: () => parentRows, commands: () => [], composer, toolContext: () => context, savedAgentMessages: async () => [] }
-  const native = { settingsPanel: { Xye: () => {} }, commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: (name: string) => ({ type: 'local', name }), Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
+  const native = { commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: (name: string) => ({ type: name === 'context' ? 'local-jsx' : 'local', name }), Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
   const enter = vi.fn(async () => {
     if (draft === '/compact') localJsx.show({ props: { title: 'Original parent confirmation', confirmLabel: 'Original confirm', onConfirm: confirm, onCancel: cancel } }, { commandName: 'compact' })
-    else if (draft === '/usage') localJsx.show({ type: native.settingsPanel.Xye, props: { onClose: closePanel } }, { commandName: 'usage' })
+    else if (draft === '/usage') localJsx.show({ type: () => {}, props: {} }, { commandName: 'usage' })
     else if (draft === '/model haiku') notices.current = { key: 'agent-view-command-notice', segments: [{ text: 'Original block notice' }] }
+    else if (draft === '/context') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Native Context usage', commandRun: { command: 'context', args: '' } }); draft = '' }
     else if (draft === '/cost') { parentRows.push({ uuid: messageId, type: 'system', subtype: 'local_command', content: 'Original cost output', commandRun: { command: 'cost', args: '' } }); draft = '' }
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
     return { entered: true }
@@ -27,7 +28,7 @@ function fixture() {
     panel(n: unknown, request: { client_id: string; panel_id: string; operation: string; text?: string }): Promise<{ open: boolean }>
     retire(client: string): Promise<void>
   }
-  return { controller, native, composer, enter, cancel, confirm, closePanel, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
+  return { controller, native, composer, enter, cancel, confirm, dismissPanel, localJsx, notices, stdin, messageId, rows, parentRows, draft: () => draft, setDraft: (value: string) => { draft = value }, move: () => { sequence++ } }
 }
 it('correlates the original human UUID and leaves native blocking policy in the dispatcher', async () => {
   const f = fixture()
@@ -65,7 +66,7 @@ it('returns a new matching parent command result without treating it as worker i
   expect(f.draft()).toBe('')
 })
 
-it('scopes live panel input and original close by client, selection and lifecycle', async () => {
+it('scopes live panel input and original store dismissal by client, selection and lifecycle', async () => {
   const f = fixture(), result = await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController())
   expect(result.kind).toBe('panel')
   const request = { client_id: 'client', panel_id: result.id }
@@ -74,10 +75,28 @@ it('scopes live panel input and original close by client, selection and lifecycl
   await f.controller.panel(f.native, { ...request, operation: 'input', text: 'x' })
   expect(f.stdin.unshift).toHaveBeenCalledWith('x'); expect(f.stdin.emit).toHaveBeenCalledWith('readable')
   expect(await f.controller.panel(f.native, { ...request, operation: 'close' })).toEqual({ open: false })
-  expect(f.closePanel).toHaveBeenCalledOnce(); expect(f.rows).toHaveLength(0)
+  expect(f.dismissPanel).toHaveBeenCalledWith('native-dialog'); expect(f.rows).toHaveLength(0)
   await expect(f.controller.panel(f.native, { ...request, operation: 'input', text: 'late' })).rejects.toThrow('expired')
   await expect(f.controller.panel(f.native, { ...request, operation: 'close' })).rejects.toThrow('expired')
   const next = await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController()); f.move()
   await expect(f.controller.panel(f.native, { ...request, panel_id: next.id, operation: 'input', text: 'stale' })).rejects.toThrow('selection changed')
-  await f.controller.retire('client'); expect(f.closePanel).toHaveBeenCalledTimes(2)
+  await f.controller.retire('client'); expect(f.dismissPanel).toHaveBeenCalledTimes(2)
+})
+
+it('observes JSX command text completion without requiring a panel or worker receipt', async () => {
+  const f = fixture()
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' })
+  expect(f.rows).toHaveLength(0)
+})
+
+it('does not acknowledge an unrelated original panel as the submitted command', async () => {
+  const f = fixture()
+  f.enter.mockImplementationOnce(async () => {
+    f.localJsx.show({ props: {} }, { commandName: 'foreign-command' })
+    f.notices.current = { key: 'agent-view-command-notice', text: 'Original command block' }
+    return { entered: true }
+  })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController())).toMatchObject({ kind: 'blocked', message: 'Original command block' })
+  f.dismissPanel('native-dialog')
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: 'Human reply' }, new AbortController())).toMatchObject({ kind: 'input' })
 })
