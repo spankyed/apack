@@ -99,7 +99,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     async submitAgent(options: { client_id: string; text: string }) {
       const valid = z.object({ client_id: clientId, text: z.string().min(1).max(16384).refine(text => !!text.trim()) }).strict().parse(options)
       if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
-      return z.object({ input: z.object({ messageId: z.string().uuid(), mode: z.enum(['queued', 'resumed']) }) }).parse(await request({ subtype: 'apack_ui_agent_input', ...valid }))
+      return z.union([z.object({ input: z.object({ messageId: z.string().uuid(), mode: z.enum(['queued', 'resumed']) }) }).strict(), z.object({ review: z.object({ text: z.string().max(16384), removed: z.number().int().positive() }).strict() }).strict()]).parse(await request({ subtype: 'apack_ui_agent_input', ...valid }))
     },
     async clientEvent(options: {client_id:string;id:string;sequence:number;event:ClaudeUiClientInput}) {
       const valid=z.object({client_id:clientId,id:z.string().uuid(),sequence:z.number().int().positive().safe(),event:clientInput}).strict().parse(options)

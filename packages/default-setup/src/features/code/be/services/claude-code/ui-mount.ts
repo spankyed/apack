@@ -57,7 +57,7 @@ export function mountClaudeUi(options: {
   let agentProblem: string | undefined
   let agentReading = false
   let agentTimer: ReturnType<typeof setInterval> | undefined
-  let agentInput: { revision: number; status: 'pending' | 'done' | 'error'; receipt?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; problem?: string } | undefined
+  let agentInput: ClaudeUiMountState['agentInput']
   async function refreshAgent() {
     if (!owner.readAgent || agentReading || !current()) return
     agentReading = true
@@ -221,7 +221,9 @@ export function mountClaudeUi(options: {
         if (!attached || !current()) return
         const result = await owner.handle.ui.submitAgent({ client_id: client.client_id, text })
         if (!current()) return
-        agentInput = { revision, status: 'done', receipt: result.input }; publish(lastState); void refreshAgent()
+        if ('review' in result) agentInput = { revision, status: 'review', review: result.review }
+        else agentInput = { revision, status: 'done', receipt: result.input }
+        publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
     },
     refreshTranscript: () => { messages.refresh(); question.refresh() },

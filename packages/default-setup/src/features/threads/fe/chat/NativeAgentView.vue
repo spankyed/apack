@@ -26,7 +26,7 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
-import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
+import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import type { ClaudePromptEdit, ClaudePromptCompletionRequest, ClaudePromptHostResponse, ClaudeUiFieldEvent, ClaudeUiScrollEvent, ClaudeUiFocusEvent } from '#generated/types.ts'
 const props = defineProps<{ threadId: string; target: ClaudeNativeAgentUiTarget; name: string; statusText?: string; draft: string; active: boolean }>()
 const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: string]; pending: [value: boolean]; returning: [value: boolean]; returned: [] }>()
@@ -38,7 +38,7 @@ const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
 const pending = ref(false), returning = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0
-let submission: { revision: number; text: string; resolve(): void; reject(error: Error): void } | undefined
+let submission: { revision: number; text: string; resolve(review?: ClaudeNativeAgentInputReview): void; reject(error: Error): void } | undefined
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
 function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
@@ -50,7 +50,7 @@ function detach() {
 }
 watch(() => props.active, active => { detach(); if (active) { uiMount.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000) } }, { immediate: true })
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value) }
-function send(text: string): Promise<void> {
+function send(text: string): Promise<ClaudeNativeAgentInputReview | void> {
   if (!uiMount.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
   const request = ++revision
   return new Promise((resolve, reject) => { submission = { revision: request, text, resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
@@ -59,6 +59,7 @@ watch(() => state.value?.agentInput, value => {
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
   if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
+  else if (value.status === 'review' && value.review) request.resolve(value.review)
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
 })
 function returnToParent() {

@@ -57,3 +57,5 @@ export interface ClaudeNativeTaskDetails {
 }
 
 export interface ClaudeNativeTaskInputReceipt { messageId: string; mode: 'queued' | 'resumed' }
+
+export interface ClaudeNativeAgentInputReview { text: string; removed: number }

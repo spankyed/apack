@@ -524,7 +524,10 @@ async function control(request,abort){
   const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,abort);
   if(facts.view.kind!=='agent'||!facts.view.taskId)throw Error('No native Agent is selected');
   const current=()=>{abort.signal.throwIfAborted();if(facts.sessionId!==String(n.questionOptions.q())||facts.sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native task session changed');};
-  return nativeTaskControl(n,binding,{operation:'input',task_id:facts.view.taskId,text:request.text},abort,current);
+  if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
+  const prepared=n.runtime.GYt(request.text,{});
+  if(prepared.removed.removedTotal>0)return {review:{text:prepared.input,removed:prepared.removed.removedTotal}};
+  return nativeTaskControl(n,binding,{operation:'input',task_id:facts.view.taskId,text:prepared.input.trimEnd()},abort,current);
  }
  if(request.subtype==='apack_parent_prompt_state'){
   const binding=originalContext??n.runtime.ey();
