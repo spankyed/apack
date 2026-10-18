@@ -59,7 +59,9 @@ test('keeps native status, submissions and history available under managed-only 
   const nativeAgentId = (await context()).native.state.tasks.find((task: any) => task.status === 'running').id
   const agentRow = appPage.locator(`[data-native-agent-id="${nativeAgentId}"]`)
   await expect(agentRow).toContainText('AppNativeAgent running')
+  await appPage.setViewportSize({ width: 680, height: 900 })
   await agentRow.scrollIntoViewIfNeeded()
+  await expect(agentRow).toBeInViewport()
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-status.png') })
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
