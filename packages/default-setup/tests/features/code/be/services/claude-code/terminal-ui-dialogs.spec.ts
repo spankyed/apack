@@ -9,16 +9,20 @@ function fixture() {
   const state = { open: [item] }
   const answer = vi.fn(() => { state.open = [] })
   const store = { getState: () => state, answer }
-  const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
+  let appState = { settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
+  const context = { dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
+  const binding = { surface: 'terminal', toolContext: () => context }
+  const native = { questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: (value: unknown) => value }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
-    originalContext: binding, initialize: async () => ({ questionOptions: { q: () => nativeSessionId }, paths: { ce: () => '/workspace' } }), AbortController, randomUUID,
+    originalContext: binding, initialize: async () => native, AbortController, randomUUID,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
   const reply = (dialog: any, overrides = {}) => control({ subtype: 'apack_answer_file_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, decision: 'allow', ...overrides }, new AbortController())
-  return { state, item, answer, snapshot, reply, control, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
+  return { state, item, answer, snapshot, reply, control, native, context, replaceNativeSession() { nativeSessionId = randomUUID() }, replaceSession() { sessionId = randomUUID() } }
 }
 
 it('allows only the original native input once, ignoring arbitrary permission updates', async () => {
@@ -86,4 +90,43 @@ it('preserves the native withheld-content warning without leaking before/after t
   const f = fixture()
   Object.assign(f.item.payload, { toolName: 'Write', operationType: 'write', contentWithheld: true, content: { kind: 'no-changes', message: 'Proposed content is too large to show' } })
   expect((await f.snapshot()).review).toEqual({ withheld: true, notice: 'Proposed content is too large to show' })
+})
+
+function planFixture() {
+  const f = fixture()
+  f.item.kind = 'permission_exit_plan_mode_v2'
+  Object.assign(f.item.payload, { toolName: 'ExitPlanMode', plan: '# Original plan', planFilePath: '/private/plan.md', input: {} })
+  const snapshot = async () => (await f.control({ subtype: 'apack_plan_dialogs' }, new AbortController())).dialogs[0]
+  const reply = (dialog: any, extra = {}) => f.control({ subtype: 'apack_answer_plan_dialog', id: dialog.id, revision: dialog.revision, session_id: dialog.sessionId, choice: 'yes-default-keep-context', ...extra }, new AbortController())
+  return { ...f, snapshot, reply }
+}
+it('constructs native plan mode updates and ignores arbitrary host permission updates', async () => {
+  const f = planFixture(), dialog = await f.snapshot()
+  await f.reply(dialog, { permissionUpdates: [{ mode: 'bypassPermissions' }], updatedInput: { plan: 'tampered' } })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'allow', updatedInput: {}, permissionUpdates: [{ type: 'setMode', mode: 'default', destination: 'session' }] })
+  await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
+})
+it('expires plan choices when native eligibility changes and withholds unsafe plans', async () => {
+  const f = planFixture(), dialog = await f.snapshot()
+  f.context.getAppState().toolPermissionContext.isAutoModeAvailable = false
+  await expect(f.reply(dialog)).rejects.toThrow('changed or expired')
+  Object.assign(f.item.payload, { plan: 'UNSAFE plan' })
+  const withheld = await f.snapshot()
+  expect(withheld.presentation.plan).toBe(''); expect(withheld.presentation.choices).toEqual([])
+  await expect(f.reply(withheld)).rejects.toThrow('unavailable')
+  await f.reply(withheld, { choice: 'no', feedback: 'Shorter plan please' })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny', feedback: 'Shorter plan please' })
+})
+it('queues native clear-context continuation and resolves with the native denial-shaped result', async () => {
+  const f = planFixture(); f.context.getAppState().settings.showClearContextOnPlanAccept = true
+  const dialog = await f.snapshot()
+  await f.reply(dialog, { choice: 'yes-auto-clear-context', feedback: 'Keep the tests' })
+  expect(f.context.getAppState()).toMatchObject({ initialMessage: { clearContext: true, resetTrigger: 'plan_mode_exit', mode: 'auto', message: { content: expect.stringContaining('# Original plan') } } })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'deny' })
+})
+it('passes an edited, reviewable plan through the native tool input only', async () => {
+  const f = planFixture(), dialog = await f.snapshot()
+  await expect(f.reply(dialog, { plan: 'UNSAFE replacement' })).rejects.toThrow('cannot be reviewed')
+  await f.reply(dialog, { plan: '# Reviewed revision', feedback: 'Proceed carefully' })
+  expect(f.answer).toHaveBeenCalledWith('dialog-1', { behavior: 'allow', updatedInput: { plan: '# Reviewed revision' }, permissionUpdates: [{ type: 'setMode', mode: 'default', destination: 'session' }], feedback: 'Proceed carefully' })
 })

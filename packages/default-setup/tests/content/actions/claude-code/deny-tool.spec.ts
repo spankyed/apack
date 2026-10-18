@@ -95,3 +95,15 @@ it.each([true, false])('routes a native Bash decision only to its owning process
   else expect(answerBashDialog).not.toHaveBeenCalled();
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.autoAcceptEdits).toBeUndefined();
 });
+
+it.each(['EnterPlanMode', 'ExitPlanMode'].flatMap(toolName => [true, false].map(matching => ({ toolName, matching }))))('routes native $toolName only to its current owner: $matching', async ({ toolName, matching }) => {
+  const { id } = setup('current')
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', toolName, approvalMessageId: 'approval', originalInput: {}, nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'plan', revision: 'revision' } } } } })
+  const answerPlanDialog = vi.fn(async () => {}), respond = vi.fn()
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => ({ state: { ownerId: matching ? 'owner' : 'replacement', sessionId: 'session' }, answerPlanDialog })), getHandle: vi.fn(() => ({ respond })) } as never })
+  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() })
+  const result = await action({ threadId: id, requestId: 'current', response: { choice: 'yes-default-keep-context', reason: 'Keep tests', plan: '# Reviewed', clearContext: true } }, services)
+  expect(result.success).toBe(matching); expect(respond).not.toHaveBeenCalled()
+  if (matching) expect(answerPlanDialog).toHaveBeenCalledWith({ id: 'plan', revision: 'revision', sessionId: 'session', choice: 'no', feedback: 'Keep tests', })
+  else expect(answerPlanDialog).not.toHaveBeenCalled()
+})

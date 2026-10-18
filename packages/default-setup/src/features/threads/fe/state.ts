@@ -194,7 +194,7 @@ type UIEvent =
   | { type: 'CLOSE_ACTIVE_TAB' }
   | { type: 'SELECT_ARTIFACT'; artifactId: string }
   | { type: 'SET_MODE'; mode: string }
-  | { type: 'SET_PHASE'; phase: string }
+  | { type: 'SET_PHASE'; phase: string; threadId?: string }
   | { type: 'RESPOND_TO_BLOCK_INTERACTION'; messageId: string; response: BlockResponse }
   | { type: 'UPDATE_MESSAGE_STATE'; messageId: string; responseTimestamp?: number; blockResponse?: BlockResponse; asideText?: string; context?: Record<string, unknown>; compacted?: boolean }
   | { type: 'MESSAGE_ADDED'; threadId: string; message: MessageEntity }
@@ -754,7 +754,9 @@ const threadsState = setup({
       return { mode: newMode, phase: newPhase, phaseByModeName: updatedPhaseByModeName };
     }),
     setPhase: assign(({ context, event }) => {
-      const newPhase = typeOf('SET_PHASE', event).phase;
+      const change = typeOf('SET_PHASE', event);
+      if (change.threadId && change.threadId !== context.currentThread?.id) return {};
+      const newPhase = change.phase;
       return {
         phase: newPhase,
         phaseByModeName: { ...context.phaseByModeName, [context.mode]: newPhase }

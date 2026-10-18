@@ -149,13 +149,21 @@ async function initialize(){
   const questionText=await import('/$bunfs/root/chunk-xh5v0djg.js');
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   const paths=await import('/$bunfs/root/chunk-27d659a1.js');
+  const planConsent=await import('/$bunfs/root/chunk-3m4t81ea.js');
+  const planAuto=await import('/$bunfs/root/chunk-5c94ftfz.js');
+  const planNormalize=await import('/$bunfs/root/chunk-gpwdwjeb.js');
+  const planTool=await import('/$bunfs/root/chunk-rhvre9pz.js');
+  const planTeams=await import('/$bunfs/root/chunk-tt5gpzxk.js');
+  const planStore=await import('/$bunfs/root/chunk-ehw6t5ag.js');
+  const planProactivity=await import('/$bunfs/root/chunk-ck4jw7jw.js');
+
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
   engine.I9e.onInvalidate(instances=>{for(const[client,frame]of questionFrames)if(!instances||instances.some(item=>item.surface==='desktop'&&item.component==='AskUserQuestion'&&item.requestId===frame.requestId))questionFrames.delete(client);try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths};
+  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -300,16 +308,66 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
  let revision=dialogRevisions.get(kind);
- const fingerprint=JSON.stringify(payload);
+ const planFacts=['permission_enter_plan_mode','permission_exit_plan_mode_v2'].includes(kind)?planPresentation(n,context,payload):undefined;
+ const fingerprint=JSON.stringify([payload,planFacts]);
  if(revision?.fingerprint!==fingerprint||revision?.item!==item||revision?.payload!==payload||revision?.sessionId!==sessionId)
   revision={item,payload,sessionId,fingerprint,revision:randomUUID()};
  dialogRevisions.set(kind,revision);
- return {store,sessionId,...revision};
+ return {store,context,planFacts,sessionId,...revision};
+}
+// Frozen iCe/xit: constructor-produced mode rows and original native reset/message helpers.
+function planPresentation(n,context,payload){
+ const state=context.getAppState(),permission=state.toolPermissionContext,enter=payload.toolName==='EnterPlanMode';
+ const raw=enter?'':payload.plan,empty=raw.trim()==='',withheld=!empty&&(raw.length>200000||n.questionText.VL(raw));
+ const choices=[],auto=permission.isAutoModeAvailable===true&&n.runtime.ty(),bypass=permission.isBypassPermissionsModeAvailable===true;
+ const add=(value,label,mode,clearContext=false)=>{const row=mode==='auto'?n.planConsent.Y_n('exit-plan-resume'):n.planConsent.kTe(mode,{isBypassPermissionsModeAvailable:bypass});if(row&&n.planConsent.hv(row))choices.push({value,label,mode,clearContext});};
+ if(enter)add('yes','Enter plan mode','plan');
+ else if(empty)add('yes','Exit plan mode','default');
+ else if(!withheld){
+  const mode=bypass?'bypassPermissions':auto?'auto':'acceptEdits',label=mode==='bypassPermissions'?'bypass permissions':mode==='auto'?'use auto mode':'auto-accept edits';
+  if(state.settings.showClearContextOnPlanAccept===true&&n.paths.Ar()===null)add(mode==='auto'?'yes-auto-clear-context':mode==='bypassPermissions'?'yes-bypass-permissions':'yes-accept-edits','Clear context and '+label,mode,true);
+  add(mode==='auto'?'yes-resume-auto-mode':'yes-accept-edits-keep-context','Keep context and '+label,mode);
+  add('yes-default-keep-context','Keep context and manually approve edits','default');
+ }
+ return {plan:withheld?'':raw,...(typeof payload.planFilePath==='string'?{planFilePath:payload.planFilePath}:{}),empty,withheld,choices,initialChoice:state.proactivityLevel==='ask'&&n.planProactivity.BG()&&choices.some(option=>option.value==='yes-default-keep-context')&&!choices.some(option=>option.value==='yes-resume-auto-mode')?'yes-default-keep-context':choices[0]?.value??'',
+  permissionMode:permission.mode,prePlanMode:permission.prePlanMode,autoActive:n.planAuto.yp()};
+}
+async function answerPlan(n,d,request){
+ if(request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native plan feedback');
+ const feedback=request.feedback?.trim();
+ if(request.choice==='no'){d.store.answer(d.item.id,{behavior:'deny',...(feedback?{feedback}:{})});return;}
+ const option=d.planFacts.choices.find(option=>option.value===request.choice);
+ if(!option)throw Error('Native plan choice is unavailable');
+ const enter=d.payload.toolName==='EnterPlanMode',edited=request.plan!==undefined&&request.plan!==d.payload.plan;
+ if(request.plan!==undefined&&(enter||d.planFacts.empty||typeof request.plan!=='string'||request.plan.length>200000||n.questionText.VL(request.plan)))throw Error('Native plan cannot be reviewed');
+ const plan=edited?request.plan:d.payload.plan,state=d.context.getAppState(),permission=state.toolPermissionContext;
+ if(enter){const row=n.planConsent.kTe('plan');if(!row||!n.planConsent.hv(row))throw Error('Native plan entry is unavailable');n.questionOptions.Sye(permission.mode,'plan');d.store.answer(d.item.id,{behavior:'allow',updatedInput:{},permissionUpdates:row.applies});return;}
+ if(option.mode!=='auto'&&n.planAuto.yp()){
+  n.planAuto.Fx(false);n.questionOptions.EN(true);
+  d.context.setAppState(current=>({...current,toolPermissionContext:{...n.planNormalize.vSe(current.toolPermissionContext),prePlanMode:undefined}}));
+ }
+ if(option.clearContext){
+  if(edited&&typeof d.payload.planFilePath==='string'){await n.planStore.ATo(d.payload.planFilePath,plan,d.context.storageV5);n.runtime.rat(d.context.storageV5);if(await n.planStore.bYe(d.context.agentId,d.context.storageV5)!==plan)throw Error('Native revised plan could not be saved');if(nativeDialog(n,d.item.kind).revision!==d.revision)throw Error('Native plan changed while saving');}
+  const pointer=n.runtime.Cf(d.sessionId),teamHint=n.planTool.Cxn(n.planTeams.is());
+  // Original xit queues the native reset, then resolves this tool as denied.
+  d.context.setAppState(current=>({...current,initialMessage:{message:{...n.runtime.Ae({content:'Implement the following plan:\n\n'+plan+'\n\nIf you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: '+pointer+teamHint+(feedback?'\n\nUser feedback on this plan: '+feedback:''),origin:{kind:'auto-continuation'}}),planContent:plan,queueSkipAttachments:true},clearContext:true,resetTrigger:'plan_mode_exit',mode:option.mode}}));
+  if(option.mode==='auto')n.planAuto.Fx(true);
+  n.questionOptions.x$(true);d.store.answer(d.item.id,{behavior:'deny'});return;
+ }
+ n.questionOptions.x$(true);n.questionOptions.s3(true);
+ let row;
+ if(option.mode==='auto'){
+  n.planAuto.Fx(true);
+  d.context.setAppState(current=>({...current,toolPermissionContext:n.planNormalize.nV({...current.toolPermissionContext,mode:'auto',prePlanMode:undefined,startupModeDecidedByProactivityLevel:undefined})}));
+  row=n.planConsent.Y_n('exit-plan-resume');
+ }else row=n.planConsent.kTe(option.mode,{isBypassPermissionsModeAvailable:permission.isBypassPermissionsModeAvailable===true});
+ if(!row||!n.planConsent.hv(row))throw Error('Native plan choice is no longer available');
+ d.store.answer(d.item.id,{behavior:'allow',updatedInput:edited?{plan}:{},permissionUpdates:row.applies,...(feedback?{feedback}:{})});
 }
 // Frozen terminal nrt/Yyo contract: native schema first, then presentation-only relabel bounds.
 function questionShownInput(n,payload,questions){
@@ -387,7 +445,7 @@ async function control(request,abort){
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native owner is not bound');
   const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js');
   const sessionId=String(globals.q());
-  if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native owner session changed');
+  if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
   if(request.policy_only===true)return {policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
@@ -397,6 +455,16 @@ async function control(request,abort){
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
   return {sessionId,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
+ }
+ if(request.subtype==='apack_plan_dialogs'){
+  let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
+  const{permissionMode,prePlanMode,autoActive,...presentation}=d.planFacts;
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,input:d.payload.input,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{})}]};
+ }
+ if(request.subtype==='apack_answer_plan_dialog'){
+  abort.signal.throwIfAborted();let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
+  await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_bash_dialogs'){
   const d=nativeDialog(n,'permission_bash');if(!d.item)return {dialogs:[]};
@@ -596,7 +664,7 @@ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(c
 
 
 async function ownerPost(path,body){
- return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Error('Native owner broker refused');resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:config.sessionId,...body}));});
+ return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Error('Native owner broker refused');resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:JSON.parse(readFileSync(configUrl,'utf8')).sessionId,...body}));});
 }
 function ownerAgents(facts){
  const result=new Map();
@@ -615,10 +683,10 @@ let ownerReading=false,ownerIndependent=false;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
-  const gate=await control({subtype:'apack_owner_snapshot',policy_only:true},new AbortController());
+  const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
   if(!ownerIndependent)return;
-  const snapshot=await control({subtype:'apack_owner_snapshot'},new AbortController());
+  const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};
   const command=await ownerPost('/poll',body);
   await ownerPost('/transcript',{path:snapshot.transcriptPath});

@@ -42,7 +42,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
     readJournal: () => read([{ sessionId, path }], { final: exited }),
     subscribe: () => () => {}, input: () => false, resize: () => false, close: async () => {}, kill() {},
     submit: async () => { throw new Error('No prompt submission in this fixture') },
-    setPermissionMode: async mode => mode, holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), answerFileDialog: vi.fn(async () => {}), getModels: async () => ({ models: [] }), setModel: async model => model,
+    setPermissionMode: async mode => mode, holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), answerFileDialog: vi.fn(async () => {}), getModels: async () => ({ models: [] }), setModel: async model => model,
   }
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
@@ -59,7 +59,7 @@ it.each([false, true])('retains receipt-bound references when journal arrives be
   const entry = (id: string) => ({ sessionId, row: { sessionId, uuid: id, type: 'user', message: { content: 'Native rewritten text' } } })
   let release!: () => Promise<void>, active = true
   const readJournal = vi.fn(async () => ({ entries: journalFirst ? [entry(uuid), entry(otherUuid)] : [], pending: false, problems: [] }))
-  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
+  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
     readJournal, beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   const history = syncClaudeTerminalThread('thread' as EntityId, owner, () => active)
@@ -85,7 +85,7 @@ it.each([true, false])('joins native task status only to its structured Agent re
   const result = { sessionId, row: { sessionId, uuid: '88888888-8888-8888-8888-888888888888', type: 'user', sourceToolAssistantUUID: matching ? uuid : 'foreign', toolUseResult: { agentId }, message: { content: [{ type: 'tool_result', tool_use_id: 'agent-tool', content: 'Launched' }] } } }
   let release!: () => Promise<void>
   const tasks = [{ id: agentId, name: 'worker', status: 'running', statusText: 'Native progress' }]
-  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks }, busy: false,
+  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks }, busy: false,
     readJournal: vi.fn(async () => ({ entries: [assistant, result], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
@@ -102,14 +102,16 @@ it.each([true, false])('joins native task status only to its structured Agent re
   } finally { await release() }
 })
 
-it.each(['Read', 'Bash'] as const)('retires %s approval on native payload replacement and exit without duplication', async toolName => {
+it.each(['Read', 'Bash', 'ExitPlanMode'] as const)('retires %s approval on native payload replacement and exit without duplication', async toolName => {
   let release!: () => Promise<void>
   const dialog = { id: 'dialog-1', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sessionId, requestId: 'tool-read', toolName: 'Read' as const,
     title: 'Read file', question: 'Allow this read?', input: { file_path: '/outside/fixture.txt' } }
   const bashDialog = { id: dialog.id, revision: dialog.revision, sessionId, requestId: 'tool-bash', toolName: 'Bash' as const, command: 'printf original', cwd: '/workspace', input: { command: 'printf original' } }
+  const planDialog = { id: dialog.id, revision: dialog.revision, sessionId, requestId: 'tool-plan', toolName: 'ExitPlanMode' as const, input: {}, presentation: { plan: '# Original plan', empty: false, withheld: false, choices: [] } }
+  const getPlanDialogs = vi.fn(async () => toolName === 'ExitPlanMode' ? [planDialog] : [])
   const getFileDialogs = vi.fn(async () => toolName === 'Read' ? [dialog] : [])
   const getBashDialogs = vi.fn(async () => toolName === 'Bash' ? [bashDialog] : [])
-  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), getBashDialogs, answerBashDialog: vi.fn(async () => {}), getFileDialogs, state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,
+  const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), getPlanDialogs, answerPlanDialog: vi.fn(async () => {}), getBashDialogs, answerBashDialog: vi.fn(async () => {}), getFileDialogs, state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,
     readJournal: vi.fn(async () => ({ entries: [], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
@@ -120,10 +122,12 @@ it.each(['Read', 'Bash'] as const)('retires %s approval on native payload replac
   expect(fake.messages).toHaveLength(1)
   dialog.revision = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   bashDialog.revision = dialog.revision
+  planDialog.revision = dialog.revision
   await vi.waitFor(() => expect(fake.messages).toHaveLength(2))
   expect(fake.messages[0]).toMatchObject({ blockResponse: { cancelled: true } })
   getFileDialogs.mockResolvedValue([])
   getBashDialogs.mockResolvedValue([])
+  getPlanDialogs.mockResolvedValue([])
   await release()
   expect(fake.messages[1]).toMatchObject({ blockResponse: { cancelled: true } })
   expect(fake.thread.context.claudeCode).toMatchObject({ pendingControlRequest: undefined })

@@ -35,7 +35,8 @@ export async function action(params: Record<string, unknown>, services: Services
       return { success: false, reason: 'Native approval expired' };
     }
     try {
-      if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
+      if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: 'no', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined,  });
+      else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
       else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
       else throw new Error('Unsupported native approval');
     } catch {

@@ -1,3 +1,4 @@
+import { ClaudeNativePlanDialogsSchema, type ClaudeNativePlanDialog, type ClaudeNativePlanDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeFileDialogsSchema, type ClaudeNativeFileDialog, type ClaudeNativeFileDialogResponse } from './terminal-dialogs.ts'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
@@ -37,6 +38,8 @@ export interface ClaudeNativeTerminalOwner {
   answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
   getBashDialogs(): Promise<ClaudeNativeBashDialog[]>
   answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>
+  getPlanDialogs(): Promise<ClaudeNativePlanDialog[]>
+  answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
@@ -196,6 +199,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native question was not acknowledged')
+      },
+      async getPlanDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_plan_dialogs' }) as { dialogs?: unknown }
+        if (closed) return []
+        return ClaudeNativePlanDialogsSchema.parse(result.dialogs)
+      },
+      async answerPlanDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native plan session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_plan_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, choice: response.choice, feedback: response.feedback, plan: response.plan }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native plan decision was not acknowledged')
       },
       async getBashDialogs() {
         if (closed || !bridge.ready) return []

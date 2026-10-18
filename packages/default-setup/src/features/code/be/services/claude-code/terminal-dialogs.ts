@@ -1,3 +1,4 @@
+import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema } from '../../../common/native-file-approval.ts'
 import { ClaudeQuestionPresentationSchema } from '../../../common/native-question.ts'
 import { z } from 'zod'
@@ -76,4 +77,16 @@ export interface ClaudeNativeBashDialogResponse {
   sessionId: string
   decision: 'allow' | 'deny'
   feedback?: string
+}
+
+/** Frozen native plan choices; the host never supplies permission updates or reset state. */
+export const ClaudeNativePlanDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['EnterPlanMode', 'ExitPlanMode']),
+  presentation: ClaudePlanPresentationSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativePlanDialogsSchema = z.array(ClaudeNativePlanDialogSchema).max(1)
+export type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>
+export interface ClaudeNativePlanDialogResponse {
+  id: string; revision: string; sessionId: string; choice: string; feedback?: string; plan?: string
 }

@@ -30,7 +30,7 @@ export async function action(
     requestId: string;
     toolName?: string;
     originalInput?: Record<string, unknown>;
-    response?: { autoAccept?: boolean };
+    response?: { autoAccept?: boolean; choice?: string; reason?: string; plan?: string };
   };
 
   if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
@@ -48,13 +48,15 @@ export async function action(
       return { success: false, reason: 'Native approval expired' };
     }
     try {
-      if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
+      if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: typeof response?.choice === 'string' ? response.choice : '', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined, plan: typeof response?.plan === 'string' ? response.plan : undefined });
+      else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
       else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
       else throw new Error('Unsupported native approval');
     } catch {
       expirePendingControlRequest(services, threadId, requestId);
       return { success: false, reason: 'Native approval changed or could not be answered' };
     }
+    if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') services.emitter.broadcastToPlugin('default-setup/threads', { type: 'SET_PHASE', threadId, phase: pending.toolName === 'EnterPlanMode' ? 'Plan' : 'Edit' });
     if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
       persistClaudeState(services, threadId, { pendingControlRequest: undefined });
     return { success: true };

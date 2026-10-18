@@ -32,7 +32,7 @@
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
-          <div v-show="!pendingNativeApproval && !pendingNativeQuestion" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -84,6 +84,11 @@
               @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
+          <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+            <NativePlanPanel :key="pendingNativePlan.messageId" v-bind="pendingNativePlan"
+              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
+              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
+          </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error"
               @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
@@ -92,7 +97,7 @@
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div v-show="!pendingNativeApproval && !pendingNativeQuestion" class="flex-shrink-0 w-full" :class="$style.inputContainer">
+          <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -206,6 +211,8 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
 import NativeToolApproval from './NativeToolApproval.vue'
+import NativePlanPanel from './NativePlanPanel.vue'
+import { ClaudePlanPresentationSchema } from '#features/code/common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema } from '#features/code/common/native-file-approval.ts'
 import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
 import { ClaudeQuestionPresentationSchema } from '#features/code/common/native-question.ts'
@@ -407,6 +414,15 @@ const pendingNativeApproval = computed(() => {
     question: typeof native.question === 'string' ? native.question : 'Allow this read?',
     reason: typeof native.reason === 'string' ? native.reason : undefined,
     disabled: !!message.responseTimestamp }
+})
+
+const pendingNativePlan = computed(() => {
+  const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as { approvalMessageId?: unknown; toolName?: unknown; nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; plan?: unknown; reason?: unknown } } | undefined
+  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || !['EnterPlanMode', 'ExitPlanMode'].includes(String(pending?.toolName)) || typeof pending.approvalMessageId !== 'string') return undefined
+  const presentation = ClaudePlanPresentationSchema.safeParse(native.plan), message = allMessages.value.find(message => message.id === pending.approvalMessageId)
+  if (!presentation.success || !message) return undefined
+  return { messageId: pending.approvalMessageId, entering: pending.toolName === 'EnterPlanMode', presentation: presentation.data, reason: typeof native.reason === 'string' ? native.reason : undefined, disabled: !!message.responseTimestamp }
 })
 
 const pendingNativeQuestion = computed(() => {

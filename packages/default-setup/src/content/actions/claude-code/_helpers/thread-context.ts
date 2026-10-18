@@ -47,7 +47,7 @@ export interface QueuedMessage {
 
 export interface PendingControlRequest {
   /** Correlation for the original live terminal dialog, never a print control request. */
-  nativeTerminal?: { ownerId: string; sessionId: string; dialogId: string; revision: string; requestId?: string; title?: string; review?: import('#features/code/common/native-file-approval.ts').ClaudeFileApprovalReview; cwd?: string; question?: string; reason?: string; problem?: string; presentation?: import('#features/code/common/native-question.ts').ClaudeQuestionPresentation };
+  nativeTerminal?: { ownerId: string; sessionId: string; dialogId: string; revision: string; requestId?: string; title?: string; plan?: import('#features/code/common/native-plan.ts').ClaudePlanPresentation; review?: import('#features/code/common/native-file-approval.ts').ClaudeFileApprovalReview; cwd?: string; question?: string; reason?: string; problem?: string; presentation?: import('#features/code/common/native-question.ts').ClaudeQuestionPresentation };
   /** The CLI's request_id for the control_response. */
   requestId: string;
   /** The messageId of the approval/choice block sent to the user. */

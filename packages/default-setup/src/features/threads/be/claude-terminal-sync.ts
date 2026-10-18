@@ -74,10 +74,11 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const reads = await owner.getFileDialogs()
         const bashes = await owner.getBashDialogs()
         const questions = await owner.getQuestionDialogs()
+        const plans = await owner.getPlanDialogs()
         if (!current() || !repository.threadQueries.byId(threadId)) return
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
-        const dialog = reads.at(0) ?? bashes.at(0) ?? questions.at(0)
+        const dialog = reads.at(0) ?? bashes.at(0) ?? questions.at(0) ?? plans.at(0)
         const nativeControl = object(priorControl?.nativeTerminal)
         const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
         if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
@@ -86,11 +87,12 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         if (!priorControl || nativeControl && !sameDialog) {
           let pendingControlRequest = nativeControl ? undefined : priorControl
           if (dialog && dialog.sessionId === owner.state.sessionId) {
-            const isFile = dialog.toolName !== 'Bash' && dialog.toolName !== 'AskUserQuestion'
+            const isPlan = dialog.toolName === 'EnterPlanMode' || dialog.toolName === 'ExitPlanMode'
+            const isFile = dialog.toolName === 'Read' || dialog.toolName === 'Write' || dialog.toolName === 'Edit'
             const isToolApproval = dialog.toolName !== 'AskUserQuestion'
-            const question = isToolApproval ? isFile ? dialog.question : 'Run this shell command?' : undefined
+            const question = isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode?' : 'Review this plan before continuing' : isToolApproval ? isFile ? dialog.question : 'Run this shell command?' : undefined
             const input = isToolApproval ? dialog.input : dialog.shownInput
-            const title = isToolApproval ? isFile ? dialog.title : dialog.description ?? 'Run shell command' : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
+            const title = isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode' : 'Review plan' : isToolApproval ? 'title' in dialog ? dialog.title : 'description' in dialog ? dialog.description ?? 'Run shell command' : 'Claude Code needs a decision' : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
             const message = isToolApproval ? sendBlockMessage({ threadId, text: title, blocks: [
               { type: 'prompt', props: { content: question } },
               { type: 'tool-input', props: { toolName: dialog.toolName, input } },
@@ -99,7 +101,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
             pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
               nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, requestId: dialog.requestId,
-                title, ...(isToolApproval ? { question, reason: dialog.reason, ...(isFile && dialog.review ? { review: dialog.review } : {}), ...(dialog.toolName === 'Bash' ? { cwd: dialog.cwd } : {}) } : { presentation: dialog.presentation }) } }
+                title, ...(isToolApproval ? { question, reason: dialog.reason, ...(isFile && dialog.review ? { review: dialog.review } : {}), ...(isPlan ? { plan: dialog.presentation } : {}), ...(dialog.toolName === 'Bash' ? { cwd: dialog.cwd } : {}) } : { presentation: dialog.presentation }) } }
           }
           if (pendingControlRequest !== priorControl) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }

@@ -71,7 +71,7 @@ export async function action(
     ? undefined
     : pending.toolName;
 
-  const clearContext = response?.clearContext === true;
+  const clearContext = !pending.nativeTerminal && response?.clearContext === true;
 
   return {
     success: true,
