@@ -96,7 +96,9 @@ function handleClickOutside(event: MouseEvent) {
   if (!isPopupVisible.value) return
   const target = event.target as Node
   if (popupEl.value?.contains(target)) return
-  deactivateAndClean()
+  const tr = props.editor.state.tr
+  tr.setMeta(commandSuggestionPluginKey, { deactivate: true })
+  props.editor.view.dispatch(tr)
 }
 
 watch(isPopupVisible, (visible) => {
