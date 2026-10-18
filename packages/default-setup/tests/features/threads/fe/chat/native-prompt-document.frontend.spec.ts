@@ -81,7 +81,7 @@ it('ignores retired replies and preserves the draft on unrepresentable native ch
   editor.commands.setContent('safe')
   const send = vi.fn(), problem = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, problem)
-  bridge.receive({ revision: 1, status: 'applied', frame: { text: '**safe**', cursor: 4 } })
+  bridge.receive({ revision: 1, status: 'applied', frame: { text: '**safe**', cursor: 1 } })
   expect(serialize(editor.state.doc)).toBe('safe')
   expect(problem).toHaveBeenLastCalledWith(expect.stringContaining('cannot be represented'))
   bridge.dispose()
@@ -363,5 +363,54 @@ it('honors an actual native cursor change while a range was selected', () => {
   bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: 0 } })
   expect(editor.state.selection.empty).toBe(true)
   expect(editor.state.selection.head).toBe(findClaudePromptPosition(editor.state.doc, 0, serialize))
+  bridge.dispose()
+})
+
+
+it.each(['**safe**', '# Heading\n\nBody', '* first\n* second', 'before\n\n```ts\nconst x = 1\n```'])('applies a native structural Markdown rewrite: %s', text => {
+  editor.commands.setContent('seed')
+  const send = vi.fn(), problem = vi.fn(), bridge = bindClaudePromptEditor(editor, send, problem)
+  bridge.receive({ revision: send.mock.lastCall![0].revision, status: 'applied', frame: { text, cursor: text.includes('```') ? text.indexOf('const x = 1') + 11 : text.length } })
+  const expected = text.startsWith('* first') ? '- first\n- second' : text
+  expect(serialize(editor.state.doc)).toBe(expected)
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  if (expected !== text) expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ by: 'app', text: expected }))
+  expect(editor.state.doc.toJSON()).not.toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+  bridge.dispose()
+})
+it('refuses a structural reply during composition without replacing the composing draft', async () => {
+  editor.commands.setContent('composing')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  Object.defineProperty(editor.view, 'composing', { configurable: true, value: true })
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text: '**changed**', cursor: 5 } })
+  expect(serialize(editor.state.doc)).toBe('composing')
+  expect(await bridge.settle()).toBe(false)
+  bridge.dispose()
+})
+it('retains unchanged reference attributes when native Markdown adds surrounding block structure', () => {
+  editor.destroy()
+  const reference = Node.create({ name: 'reference', group: 'inline', inline: true, atom: true,
+    addAttributes: () => ({ id: { default: 'ref-id' }, label: { default: 'Note' }, retained: { default: 'parsed' } }),
+    parseHTML: () => [{ tag: 'a[href="ref:ref-id"]' }], renderHTML: () => ['a', { href: 'ref:ref-id' }, 'Note'],
+    addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('[Note](ref:ref-id)') } } }),
+  })
+  editor = new Editor({ extensions: [StarterKit, Markdown, reference], content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello ' }, { type: 'reference', attrs: { retained: 'original' } }, { type: 'text', text: ' after' }] }] } })
+  const original = editor.state.doc.firstChild!.child(1), send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const text = '# Heading\n\nhello [Note](ref:ref-id) after'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length } })
+  expect(serialize(editor.state.doc)).toBe(text)
+  let retained: unknown
+  editor.state.doc.descendants(node => { if (node.type.name === 'reference') retained = node.attrs })
+  expect(retained).toEqual(original.attrs)
+  bridge.dispose()
+})
+
+it('keeps the native draft when styling offsets cannot survive Markdown normalization', () => {
+  editor.commands.setContent('safe')
+  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
+  const text = '* first\n* second'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 2, end: 7, color: 'red' }] } })
+  expect(serialize(editor.state.doc)).toBe('safe')
+  expect(problem).toHaveBeenLastCalledWith(expect.stringContaining('styling cannot be mapped'))
   bridge.dispose()
 })

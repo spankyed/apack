@@ -1,4 +1,5 @@
-import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Transform } from '@tiptap/pm/transform'
+import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 export interface ClaudePromptDocument {
   text: string
@@ -10,7 +11,7 @@ export interface ClaudePromptDocument {
 export type ClaudePromptSerializer = (doc: ProseMirrorNode) => string
 
 /** Locate a caret in the submitted Markdown without mistaking a document offset for text. */
-export function captureClaudePromptDocument(doc: ProseMirrorNode, position: number, serialize: ClaudePromptSerializer): ClaudePromptDocument | undefined {
+export function captureClaudePromptDocument(doc: ProseMirrorNode, position: number, serialize: ClaudePromptSerializer, marks?: readonly Mark[]): ClaudePromptDocument | undefined {
   if (!Number.isInteger(position) || position < 0 || position > doc.content.size) return
   const resolved = doc.resolve(position)
   if (!resolved.parent.isTextblock) return
@@ -21,7 +22,7 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   }
   let marker = '\uE000apackCursor\uE001'
   while (text.includes(marker)) marker += '\uE002'
-  const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, resolved.marks())), 0, 0))
+  const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, marks ?? resolved.marks())), 0, 0))
   const encoded = serialize(marked)
   const cursor = encoded.indexOf(marker)
   if (cursor < 0 || encoded.indexOf(marker, cursor + marker.length) >= 0 || encoded.slice(0, cursor) + encoded.slice(cursor + marker.length) !== text) return
@@ -52,7 +53,7 @@ export function findClaudePromptPosition(doc: ProseMirrorNode, offset: number, s
 }
 
 /** Keep original nodes/marks and reference attributes when the native rewrite is representable. */
-export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer): { doc: ProseMirrorNode; position: number } | undefined {
+function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer): { doc: ProseMirrorNode; position: number } | undefined {
   if (!Number.isInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > frame.text.length) return
   const original = snapshot.text
   let start = 0
@@ -73,4 +74,67 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
   }
   const position = frame.cursor === snapshot.cursor && doc === snapshot.doc ? snapshot.position : findClaudePromptPosition(doc, frame.cursor, serialize)
   return position === undefined ? undefined : { doc, position }
+}
+
+
+/** Apply native Markdown structure through the editor schema while retaining unchanged atom attributes. */
+export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode): { doc: ProseMirrorNode; position: number; storedMarks?: readonly Mark[]; normalized?: boolean } | undefined {
+  const textOnly = rewriteClaudePromptText(snapshot, frame, serialize)
+  if (textOnly || !parse || !Number.isInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > frame.text.length) return textOnly
+  try {
+    const originalAtoms = new Map<string, ProseMirrorNode[]>()
+    let unmappable = false
+    const token = (doc: ProseMirrorNode, node: ProseMirrorNode, position: number): string | undefined => {
+      const start = captureClaudePromptDocument(doc, position, serialize), end = captureClaudePromptDocument(doc, position + node.nodeSize, serialize)
+      return start && end && end.cursor > start.cursor ? start.text.slice(start.cursor, end.cursor) : undefined
+    }
+    snapshot.doc.descendants((node, position) => {
+      if (!node.isAtom || node.isText) return
+      const text = token(snapshot.doc, node, position)
+      if (!text) { unmappable = true; return false }
+      const atoms = originalAtoms.get(text) ?? []; atoms.push(node); originalAtoms.set(text, atoms)
+      return false
+    })
+    if (unmappable) return
+    const parsed = parse(frame.text)
+    let marker = '\uE000apackNativeCursor\uE001'
+    while (frame.text.includes(marker)) marker += '\uE002'
+    const marked = parse(frame.text.slice(0, frame.cursor) + marker + frame.text.slice(frame.cursor))
+    let markerPosition: number | undefined, markerMarks: readonly Mark[] = [], markerCount = 0
+    marked.descendants((node, position) => {
+      if (!node.isText) return
+      const index = node.text!.indexOf(marker)
+      if (index < 0) return
+      markerCount += node.text!.split(marker).length - 1
+      markerPosition = position + index; markerMarks = node.marks
+    })
+    if (markerCount !== 1 || markerPosition === undefined) return
+    let doc = new Transform(marked).delete(markerPosition, markerPosition + marker.length).doc
+    // The marker must not change Markdown interpretation (e.g. inside a fence delimiter).
+    if (!doc.eq(parsed)) return
+    const replacements = new Map<number, ProseMirrorNode>(), used = new Map<string, number>()
+    doc.descendants((node, position) => {
+      if (!node.isAtom || node.isText) return
+      const text = token(doc, node, position), originals = text ? originalAtoms.get(text) : undefined
+      if (originals) {
+        const index = used.get(text!) ?? 0, original = originals[index]
+        if (!original || original.type !== node.type) { unmappable = true; return false }
+        replacements.set(position, node.type.create(original.attrs, node.content, node.marks)); used.set(text!, index + 1)
+      }
+      return false
+    })
+    if (unmappable || [...originalAtoms].some(([text, atoms]) => used.get(text) !== atoms.length)) return
+    const restore = (node: ProseMirrorNode, start: number): ProseMirrorNode => {
+      const replacement = replacements.get(start)
+      if (replacement) return replacement
+      if (!node.childCount) return node
+      const children: ProseMirrorNode[] = []
+      node.forEach((child, offset) => children.push(restore(child, start + offset + (node.type.name === 'doc' ? 0 : 1))))
+      return node.copy(Fragment.from(children))
+    }
+    doc = restore(doc, 0)
+    const canonical = captureClaudePromptDocument(doc, markerPosition, serialize, markerMarks)
+    if (!canonical) return
+    return { doc, position: markerPosition, storedMarks: markerMarks, normalized: canonical.text !== frame.text || canonical.cursor !== frame.cursor }
+  } catch { return }
 }
