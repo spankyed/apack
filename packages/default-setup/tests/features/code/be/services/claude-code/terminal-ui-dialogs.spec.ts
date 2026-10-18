@@ -12,7 +12,9 @@ function fixture() {
   let appState = { settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
   const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
-  const native = { mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+  let disabled = false
+  const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (_name: string) => {disabled = !disabled}), isDisabled = vi.fn(() => disabled)
+  const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
@@ -157,3 +159,34 @@ it('uses original native MCP formatting with live clients/tools and refuses a fo
  f.replaceNativeSession();await expect(f.control(request,new AbortController())).rejects.toThrow('session changed')
  expect(f.native.mcp.Q_n).toHaveBeenCalledOnce()
 });
+
+function mcpControlFixture() {
+ const f=fixture(); Object.assign(f.context,{options:{mcpClients:[{name:'research',type:'connected'}],tools:[]}})
+ const request={subtype:'apack_mcp_control',session_id:'11111111-1111-4111-8111-111111111111',server_name:'research',operation:'reconnect'}
+ return {...f,request,run:(extra={})=>f.control({...request,...extra},new AbortController())}
+}
+it('uses registered original reconnect and idempotent native enable/disable callbacks',async()=>{
+ const f=mcpControlFixture(),reconnect=f.native.mcpControls.Mot(),toggle=f.native.mcpControls.urs()
+ await f.run();expect(reconnect).toHaveBeenCalledWith('research')
+ await f.run({operation:'enable'});expect(toggle).not.toHaveBeenCalled()
+ await f.run({operation:'disable'});await f.run({operation:'disable'});expect(toggle).toHaveBeenCalledTimes(1)
+ await f.run({operation:'enable'});expect(toggle).toHaveBeenCalledTimes(2)
+})
+it('rejects unknown servers and changed sessions before native mutation',async()=>{
+ const f=mcpControlFixture();await expect(f.run({server_name:'foreign'})).rejects.toThrow('not found')
+ f.replaceNativeSession();await expect(f.run()).rejects.toThrow('session changed')
+ expect(f.native.mcpControls.Mot()).not.toHaveBeenCalled();expect(f.native.mcpControls.urs()).not.toHaveBeenCalled()
+})
+it('preserves original policy refusal and releases the in-flight control slot',async()=>{
+ const f=mcpControlFixture();f.native.mcpControls.Mot().mockRejectedValueOnce(new Error('blocked by enterprise managed policy'))
+ await expect(f.run()).rejects.toThrow('enterprise managed policy');await f.run()
+ expect(f.native.mcpControls.Mot()).toHaveBeenCalledTimes(2)
+})
+it('refuses overlapping mutations and stale results after a session changes',async()=>{
+ const f=mcpControlFixture();let resolve!:()=>void
+ f.native.mcpControls.Mot().mockImplementationOnce(()=>new Promise<any>(r=>{resolve=()=>r({client:{type:'connected'}})}))
+ const pending=f.run();await vi.waitFor(()=>expect(resolve).toBeTypeOf('function'))
+ await expect(f.run({operation:'disable'})).rejects.toThrow('in progress')
+ f.replaceSession();resolve();await expect(pending).rejects.toThrow('session changed')
+ expect(f.native.mcpControls.urs()).not.toHaveBeenCalled()
+})

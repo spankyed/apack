@@ -144,6 +144,7 @@ async function initialize(){
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
+  const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
   const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
@@ -165,7 +166,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,rename,mcp,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={gate,engine,session,roster,schemas,runtime,rename,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -301,6 +302,7 @@ function drainCompletion(n,clientId,state){
 }
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
 const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
+let mcpControlActive=false;
 function nativeDialog(n,kind){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
@@ -515,6 +517,26 @@ async function control(request,abort){
   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
+ }
+ if(request.subtype==='apack_mcp_control'){
+  const expected=request.session_id;
+  const current=()=>{abort.signal.throwIfAborted();if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native MCP session changed');};
+  current();
+  if(typeof request.server_name!=='string'||!request.server_name.trim()||!['reconnect','enable','disable'].includes(request.operation))throw Error('Invalid native MCP control');
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native MCP controls are not ready');
+  const options=()=>binding.toolContext(abort).options;
+  if(!options().mcpClients.some(client=>client.name===request.server_name))throw Error('Native MCP server not found');
+  if(mcpControlActive)throw Error('Another native MCP control is in progress');
+  mcpControlActive=true;try{
+  const reconnect=n.mcpControls.Mot(),toggle=n.mcpControls.urs(),disabled=n.mcpControls.Z_e();
+  if(typeof reconnect!=='function'||typeof toggle!=='function'||typeof disabled!=='function')throw Error('Native MCP controls are not ready');
+  if(request.operation==='reconnect')await reconnect(request.server_name);
+  else if(disabled(request.server_name)===(request.operation==='enable'))await toggle(request.server_name);
+  current();
+  if(reconnect!==n.mcpControls.Mot()||toggle!==n.mcpControls.urs())throw Error('Native MCP owner changed');
+  const context=options();return {mcpServers:n.mcp.Q_n({connections:context.mcpClients,tools:context.tools})};
+  }finally{mcpControlActive=false;}
  }
  if(request.subtype==='apack_mcp_status'){
   const expected=request.session_id;

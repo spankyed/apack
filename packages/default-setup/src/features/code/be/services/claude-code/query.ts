@@ -106,6 +106,7 @@ export interface QueryHandle {
   getPlan(): Promise<ClaudePlan>
   /** Read live MCP server and tool status without a model turn. */
   getMcpStatus(): Promise<ClaudeMcpStatus>
+  controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   /** Read structured context usage; summary avoids per-category token-count API calls. */
   getContextUsage(): Promise<ClaudeContextUsage>
   /** Descriptive native availability; custom IDs may be absent. Does not change selection. */
@@ -179,6 +180,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
 
   // Verified against pinned 2.1.299/2.1.300 binaries: initialization returns native metadata
   // without a user prompt. Route the response independently from the public event consumer.
+  let mcpControlActive = false
   const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations })
     .then(value => ClaudeInitializationSchema.parse(value))
   initialized.catch(() => {})
@@ -308,6 +310,19 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
     async getPlan(): Promise<ClaudePlan> {
       await initialized
       return ClaudePlanSchema.parse(await hostControls.request({ subtype: 'get_plan' }))
+    },
+
+    async controlMcpServer(serverName, operation): Promise<ClaudeMcpStatus> {
+      if (!serverName.trim() || !['reconnect', 'enable', 'disable'].includes(operation)) throw new Error('Invalid MCP control')
+      if (mcpControlActive) throw new Error('Another MCP control is in progress')
+      mcpControlActive = true
+      try {
+        await initialized
+        await hostControls.request(operation === 'reconnect'
+          ? { subtype: 'mcp_reconnect', serverName }
+          : { subtype: 'mcp_toggle', serverName, enabled: operation === 'enable' })
+        return ClaudeMcpStatusSchema.parse(await hostControls.request({ subtype: 'mcp_status' }))
+      } finally { mcpControlActive = false }
     },
 
     async getMcpStatus(): Promise<ClaudeMcpStatus> {

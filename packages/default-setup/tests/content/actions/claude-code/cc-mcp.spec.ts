@@ -30,3 +30,15 @@ it('distinguishes no live owner from saved configuration without starting one fo
  const f=fixture();expect((await f.run('status')).text).toContain('No live Claude conversation');expect(f.exec).not.toHaveBeenCalled()
  expect((await f.run('list')).text).toContain('Saved MCP configuration:');expect(f.exec).toHaveBeenCalledWith(['mcp','list'])
 })
+
+it.each(['reconnect','enable','disable'])('routes %s to the live owner without a configuration process',async operation=>{
+ const f=fixture(),controlMcpServer=vi.fn(async()=>({mcpServers:[{name:'research',status:operation==='disable'?'disabled':'connected'}]}))
+ f.get.mockReturnValue({state:{sessionId:'native'},controlMcpServer})
+ expect((await f.run(operation+' research')).text).toContain('research: ')
+ expect(controlMcpServer).toHaveBeenCalledWith('research',operation);expect(f.exec).not.toHaveBeenCalled()
+})
+it('requires a live owner and one exact server name for mutations',async()=>{
+ const f=fixture();expect((await f.run('enable research')).text).toContain('No live Claude conversation')
+ expect((await f.run('reconnect')).text).toContain('Usage:');expect((await f.run('disable research extra')).text).toContain('Usage:')
+ expect(f.exec).not.toHaveBeenCalled()
+})

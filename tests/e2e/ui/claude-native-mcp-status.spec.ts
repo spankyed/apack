@@ -87,6 +87,22 @@ test('reads MCP connection status through the existing native and print owners',
   await appPage.setViewportSize({width:680,height:900})
   await appPage.getByText(/Live MCP connections:/).last().scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-mcp-status.png')})
+  async function controlMcp(operation: string, expected: string) {
+    const before=(await context()).messages.length
+    await command('cc-mcp',operation+' research')
+    await expect.poll(async()=>{const rows=(await context()).messages.slice(before);return rows.some((m:any)=>m.text.includes('Live MCP connections:')&&m.text.includes('research: '+expected))}).toBe(true)
+  }
+  if(planScenario==='mcp-controls'){
+    await controlMcp('disable','disabled')
+    await controlMcp('disable','disabled')
+    await appPage.getByText(/Live MCP connections:/).last().scrollIntoViewIfNeeded()
+    await appPage.screenshot({path:testInfo.outputPath('apack-native-mcp-disabled.png')})
+    await controlMcp('enable','connected')
+    await controlMcp('enable','connected')
+    await controlMcp('reconnect','connected')
+    expect((await context()).native.state.ownerId).toBe(boundOwnerId)
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  }
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
@@ -95,11 +111,21 @@ test('reads MCP connection status through the existing native and print owners',
   await composer.fill('Continue after native MCP status.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.claude.chatState === 'success' && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
+  const beforePrintStatus=(await context()).messages.length
   await command('cc-mcp', 'list')
-  await expect.poll(async () => (await context()).messages.filter((m: any) => m.text.includes('Live MCP connections:') && m.text.includes('research: connected') && m.text.includes('echo')).length).toBe(2)
+  await expect.poll(async () => (await context()).messages.slice(beforePrintStatus).some((m: any) => m.text.includes('Live MCP connections:') && m.text.includes('research: connected') && m.text.includes('echo'))).toBe(true)
   expect((await context()).sessionId).toBe(sessionId)
   await appPage.getByText(/Live MCP connections:/).last().scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-print-mcp-status.png')})
+  if(planScenario==='mcp-controls'){
+    await controlMcp('disable','disabled')
+    await controlMcp('disable','disabled')
+    await controlMcp('enable','connected')
+    await controlMcp('enable','connected')
+    await controlMcp('reconnect','connected')
+    await appPage.getByText(/Live MCP connections:/).last().scrollIntoViewIfNeeded()
+    await appPage.screenshot({path:testInfo.outputPath('apack-print-mcp-reconnected.png')})
+  }
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({actualAppGui:true,nativePlanScenario:'mcp-status',nativeMcpStatus:true,printMcpStatus:true,nativeMcpToolObserved:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,...planScenario==='mcp-controls'?{nativeMcpControls:true,printMcpControls:true,mcpIdempotentCommands:true}:{},nativeMcpStatus:true,printMcpStatus:true,nativeMcpToolObserved:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 })

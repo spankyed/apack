@@ -26,3 +26,5 @@ name: Claude Code commands
 **cc-agents**: List configured agents
 **cc-bypass**: Toggle bypass permissions mode
 **cc-goal**: <condition> | clear | (no args for status)
+
+`/cc-mcp reconnect <server>`, `/cc-mcp enable <server>` and `/cc-mcp disable <server>` control the current live conversation through Claude’s native connection manager. Enable/disable requests are idempotent. Without a live owner they do not launch a configuration process. Native trust and managed-policy restrictions still apply.

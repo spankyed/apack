@@ -305,14 +305,16 @@ async function handleStats(
 
 async function handleMcp(args: string[], services: Services, threadId?: string) {
   const status = args.length === 0 || args[0] === 'list' || args[0] === 'status';
+  const operation = args[0] === 'reconnect' || args[0] === 'enable' || args[0] === 'disable' ? args[0] : undefined;
+  if (operation && (args.length !== 2 || !args[1]?.trim())) return { text: 'Usage: cc-mcp reconnect|enable|disable <server-name>' };
   if (status && args.length > 1) return { text: 'Usage: cc-mcp [status|list]' };
-  if (status && threadId) {
+  if ((status || operation) && threadId) {
     const native = services.cli.claudeCode.getNativeTerminal(threadId);
     const conversation = native ? undefined : services.cli.claudeCode.getConversation(threadId);
     const owner = native ?? conversation?.owner.handle;
     if (owner) {
       const sessionId = native?.state.sessionId ?? conversation?.owner.sessionId;
-      const result = await owner.getMcpStatus();
+      const result = operation ? await owner.controlMcpServer(args[1]!, operation) : await owner.getMcpStatus();
       if (native ? services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId
         : services.cli.claudeCode.getConversation(threadId) !== conversation || conversation?.owner.sessionId !== sessionId)
         return { text: 'The Claude conversation changed while reading MCP status.' };
@@ -320,6 +322,7 @@ async function handleMcp(args: string[], services: Services, threadId?: string) 
       return { text: `Live MCP connections:\n${rows.join('\n') || 'No MCP servers in this conversation.'}`, data: result };
     }
   }
+  if (operation) return { text: 'No live Claude conversation. Start a conversation before controlling its MCP connections.' };
   if (args[0] === 'status') return { text: 'No live Claude conversation. Use cc-mcp list to inspect saved configuration.' };
   const output = await makePassthroughHandler({ cmd: 'mcp', defaultArgs: ['list'] })(args, services, threadId);
   return status ? { ...output, text: `Saved MCP configuration:\n${output.text}` } : output;
