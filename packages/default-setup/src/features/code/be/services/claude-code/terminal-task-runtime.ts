@@ -6,7 +6,7 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
  if(request.operation==='background'){
   const selected=context.getAppState().viewingAgentTaskId;
   const selectedTask=selected===undefined?undefined:registry.get(selected);
-  if(selectedTask&&n.runtime.flt(selectedTask)?.id!==request.task_id)throw Error('A different native Agent is selected');
+  if(selectedTask&&(n.runtime.flt(selectedTask)?.id??selected)!==request.task_id)throw Error('A different native Agent is selected');
   if(typeof binding.view?.show!=='function'||await binding.view.show({})!=='shown')throw Error('Native main view is unavailable');
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};

@@ -5,7 +5,11 @@ export interface ClaudeNativeTerminalTask {
   status: string
   statusText?: string
 }
+export type ClaudeNativeTerminalView = { kind: 'main'; revision: number } | { kind: 'agent'; revision: number; registryId: string; taskId?: string }
+
 export interface ClaudeNativeTerminalState {
+  /** Original native selected view, independent of the app thread. Undefined until observed. */
+  view?: ClaudeNativeTerminalView
   ownerId: string
   sessionId: string
   cwd: string

@@ -22,7 +22,7 @@ it('restores the native terminal registrations when a remote drawing retires', (
   const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();')
   const end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
   const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({recordDrawing,dropSite})`, {
-    Map, Set, AbortController, Promise, clients: new Set(['app']), publish() {},
+    Map, Set, AbortController, Promise, clients: new Set(['app']), clientViewCurrent: (_native: unknown, id: string) => id === 'app', publish() {},
   }) as { recordDrawing(native: unknown, request: unknown, tree: unknown): void; dropSite(native: unknown, key: string): void }
   const previousScroll = {}, previousFocus = {}, scrolls = new Map<string, unknown>([['AbovePrompt:above-prompt', previousScroll]]), focuses = new Map<string, unknown>([['AbovePrompt:above-prompt', previousFocus]])
   const native = { runtime: { f4: 'above-prompt', kV: (component: string, id: string) => `${component}:${id}`, xbe: () => scrolls, Eat: () => focuses, k7t: () => ({ emit() {} }) }, session: { Ket: () => [] } }
@@ -32,4 +32,20 @@ it('restores the native terminal registrations when a remote drawing retires', (
   api.dropSite(native, 'AbovePrompt:above-prompt')
   expect(scrolls.get('AbovePrompt:above-prompt')).toBe(previousScroll)
   expect(focuses.get('AbovePrompt:above-prompt')).toBe(previousFocus)
+})
+
+it('fences native desktop clients by the selected native registry view and session', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const clientViews=new Map();')
+  const end = claudeTerminalUiRuntime.indexOf('async function askHost(', start)
+  const state: { viewingAgentTaskId?: string } = {}; let session = 'session-one'
+  const binding = { surface: 'terminal', toolContext: () => ({ getAppState: () => state }) }
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({clientViews,clientViewCurrent})`, { originalContext: binding, Map, AbortController }) as { clientViews: Map<string, string>; clientViewCurrent(native: unknown, id: string): boolean }
+  const native = { questionOptions: { q: () => session } }
+  api.clientViews.set('parent', JSON.stringify([session, null]))
+  expect(api.clientViewCurrent(native, 'parent')).toBe(true)
+  state.viewingAgentTaskId = 'registry-agent'
+  expect(api.clientViewCurrent(native, 'parent')).toBe(false)
+  api.clientViews.set('agent', JSON.stringify([session, 'registry-agent']))
+  expect(api.clientViewCurrent(native, 'agent')).toBe(true)
+  session = 'session-two'; expect(api.clientViewCurrent(native, 'agent')).toBe(false)
 })

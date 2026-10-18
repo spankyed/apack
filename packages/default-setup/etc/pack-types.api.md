@@ -1355,8 +1355,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     revision: string;
     sessionId: string;
     requestId: string;
@@ -1366,8 +1366,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     revision: string;
     sessionId: string;
     requestId: string;
@@ -2362,6 +2362,8 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    /** Original native selected view, independent of the app thread. Undefined until observed. */
+    view?: ClaudeNativeTerminalView;
     ownerId: string;
     sessionId: string;
     cwd: string;
@@ -2389,6 +2391,16 @@ interface ClaudeNativeTerminalTask {
     status: string;
     statusText?: string;
 }
+
+type ClaudeNativeTerminalView = {
+    kind: 'main';
+    revision: number;
+} | {
+    kind: 'agent';
+    revision: number;
+    registryId: string;
+    taskId?: string;
+};
 
 interface ClaudeNestedAccounting {
     toolCallCount: number;

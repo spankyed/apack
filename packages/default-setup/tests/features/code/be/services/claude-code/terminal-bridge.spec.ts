@@ -218,3 +218,23 @@ it('refreshes native UI mode changes after the initial poll and uses direct owne
   expect(bridge!.session.metadata?.permissionMode).toBe('auto')
   expect(control).toHaveBeenCalledTimes(2)
 })
+
+it('publishes native view revisions only from its current process/session and refuses stale observations', async () => {
+  await create()
+  const main = { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } }
+  expect((await request('/native-view', { ...main, pid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/native-view', main)).status).toBe(200)
+  expect(bridge!.view).toEqual({ kind: 'main', revision: 1 })
+  const agent = { ...main, sequence: 3, view: { kind: 'agent', registryId: 'registry-a', taskId: 'agent-a' } }
+  expect((await request('/native-view', agent)).status).toBe(200)
+  expect((await request('/native-view', main)).status).toBe(409)
+  expect((await request('/native-view', { ...main, sequence: 3 })).status).toBe(409)
+  expect((await request('/native-view', agent)).status).toBe(200)
+  expect(bridge!.view).toEqual({ kind: 'agent', revision: 3, registryId: 'registry-a', taskId: 'agent-a' })
+  const otherSession = '22222222-2222-2222-2222-222222222222'
+  await request('/poll', { sessionId: otherSession, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
+  expect(bridge!.view).toBeUndefined()
+  expect((await request('/native-view', agent)).status).toBe(409)
+  expect((await request('/native-view', { ...main, sessionId: otherSession, sequence: 4 })).status).toBe(200)
+  expect(bridge!.view).toEqual({ kind: 'main', revision: 4 })
+})

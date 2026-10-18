@@ -1,0 +1,47 @@
+import { createApp, h, ref, computed, nextTick, type App } from 'vue'
+import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
+import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
+const actor = vi.hoisted(() => ({ send: vi.fn() }))
+const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
+vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => actor }))
+vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
+vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
+let app: App | undefined
+beforeEach(() => { actor.send.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
+async function fixture() {
+  const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', busy: false, onActive: active }) }); app.mount(root)
+  const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
+  const snapshot: ClaudeTerminalViewSnapshot = { opening: false, output: [], state: { ownerId: 'owner', sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [{ id: 'agent-a', name: 'Worker', status: 'running' }], view: { kind: 'agent', revision: 2, registryId: 'registry-a', taskId: 'agent-a' } } }
+  function publish(value: ClaudeTerminalViewSnapshot) { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { ...value, threadId: 'thread' } as ClaudeTerminalViewSnapshot } } } }
+  publish(snapshot); await nextTick()
+  root.querySelector<HTMLButtonElement>('button')!.click(); await nextTick()
+  const back = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('Back to conversation'))!
+  return { root, active, snapshot, publish, back }
+}
+it('keeps the native terminal visible until the exact main-view receipt is acknowledged', async () => {
+  const f = await fixture(); expect(f.root.textContent).toContain('Viewing Agent · Worker')
+  f.back.click(); await nextTick()
+  const request = actor.send.mock.calls.at(-1)![0]
+  expect(request).toMatchObject({ operation: 'background', taskId: 'agent-a', ownerId: 'owner', revision: 1 })
+  expect(f.active).toHaveBeenLastCalledWith(true)
+  const main = { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 } }
+  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', taskId: 'agent-a', revision: 2, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(true)
+  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(false)
+})
+it('retains the native terminal and reports a rejected return instead of exposing the parent composer', async () => {
+  const f = await fixture(); f.back.click(); await nextTick()
+  f.publish({ ...f.snapshot, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'background', status: 'error', problem: 'A different native Agent is selected' } }); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(true)
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('A different native Agent is selected')
+})
+
+it('allows leaving an exited native owner even if a task receipt was still pending', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' }, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'input', status: 'pending' } }); await nextTick()
+  expect(f.back.disabled).toBe(false); f.back.click(); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(false)
+})

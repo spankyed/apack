@@ -309,3 +309,12 @@ it('routes an explicitly selected app command through the app while a native own
   expect(nativeSubmit).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
   expect(editor.state.doc.textContent).toBe('');
 });
+
+it('retains the parent draft and explains why a native Agent view holds its composer', async () => {
+  const f = mount(vi.fn(async () => undefined))
+  editor.commands.setContent('<p>Retained parent draft</p>')
+  Object.assign(f.state, { disabled: true, disabledReason: 'Return to the main conversation in the native interface' }); await nextTick()
+  await f.submit(); await nextTick()
+  expect(f.send).not.toHaveBeenCalled(); expect(editor.state.doc.textContent).toBe('Retained parent draft')
+  expect(f.root.textContent).toContain('Return to the main conversation in the native interface')
+})

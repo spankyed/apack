@@ -47,6 +47,7 @@ function dropSite(n,key){
  for(const [registry,entry,previous] of [[n.runtime.xbe(),site.scrollEntry,site.previousScroll],[n.runtime.Eat(),site.focusEntry,site.previousFocus]])if(registry.get(key)===entry){if(previous)registry.set(key,previous);else registry.delete(key);}
 }
 function refreshSite(n,site){
+ if(!clientViewCurrent(n,site.clientId))return;
  const key=n.runtime.kV(site.component,site.id),scrolls=n.runtime.xbe(),focuses=n.runtime.Eat();
  if(scrolls.get(key)!==site.scrollEntry)site.previousScroll=scrolls.get(key);
  if(focuses.get(key)!==site.focusEntry)site.previousFocus=focuses.get(key);
@@ -212,8 +213,16 @@ async function initialize(){
  return initializing;
 }
 let originalContext,wrappedContext,releaseHostGateway,hostSequence=0;
+const clientViews=new Map();
+function clientViewKey(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal')return undefined;
+ return JSON.stringify([String(n.questionOptions.q()),binding.toolContext(new AbortController()).getAppState().viewingAgentTaskId??null]);
+}
+function clientViewCurrent(n,id){return !!n&&clientViews.has(id)&&clientViews.get(id)===clientViewKey(n);}
+
 async function askHost(subtype,args){
- if(!clients.has(args.clientId))return undefined;
+ if(!clients.has(args.clientId)||!clientViewCurrent(native,args.clientId))return undefined;
  const current=JSON.parse(readFileSync(configUrl,'utf8')),id=randomUUID();
  return new Promise(resolve=>{
   const request=http.request({socketPath:config.socketPath,path:'/ui-host',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:4500},response=>{
@@ -484,8 +493,23 @@ function questionPresentation(n,payload){
  return {previewFormat,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews};
 }
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
+let nativeViewSequence=0,nativeViewKey;
+function nativeViewFacts(n,binding,abort){
+ const context=binding.toolContext(abort),selected=context.getAppState().viewingAgentTaskId;
+ const task=selected===undefined?undefined:context.taskRegistry.get(selected),identity=task?n.runtime.flt(task):undefined;
+ const view=selected===undefined?{kind:'main'}:{kind:'agent',registryId:selected,...(identity?{taskId:identity.id}:{})};
+ const sessionId=String(n.questionOptions.q()),key=JSON.stringify([sessionId,view]);
+ if(key!==nativeViewKey){nativeViewKey=key;nativeViewSequence++;}
+ return {sessionId,view,sequence:nativeViewSequence};
+}
 async function control(request,abort){
  const n=await initialize();
+ if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
+ if(request.subtype==='apack_parent_prompt_state'){
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native parent view is unavailable');
+  return {main:binding.toolContext(abort).getAppState().viewingAgentTaskId===undefined};
+ }
  if(request.subtype==='apack_owner_snapshot'){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native owner is not bound');
@@ -493,14 +517,15 @@ async function control(request,abort){
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
-  if(request.policy_only===true)return {policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  const facts=nativeViewFacts(n,binding,abort),view=facts.view;
+  if(request.policy_only===true)return {...facts,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
-  return {sessionId,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
+  return {sessionId,view,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
  if(request.subtype==='apack_plan_dialogs'){
   let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
@@ -568,7 +593,9 @@ async function control(request,abort){
    if(clients.size)throw Error('Detach desktop prompt handlers before selecting a native Agent view');
    if((await ownerPost('/owner-pending',{})).pending)throw Error('A native parent prompt is pending');
   }
-  return nativeTaskControl(n,binding,request,abort,current);
+  const result=await nativeTaskControl(n,binding,request,abort,current);
+  if(result.view)await ownerPost('/native-view',{...nativeViewFacts(n,binding,abort),pid:process.pid});
+  return result;
  }
  if(request.subtype==='apack_mcp_control'){
   const expected=request.session_id;
@@ -679,12 +706,15 @@ async function control(request,abort){
  if(n.gate.Uvn(value.subtype,()=>facts))throw Error('Native UI eligibility refused this operation');
  const clientId=value.client_id;
  if(value.subtype==='ui_attach'){
+  if(nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view.kind!=='main')throw Error('Desktop parent UI cannot attach to a native Agent view');
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
   const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
   installNotices(n,n.runtime.ey());
   if(answers.length)installHosts(n);
-  clients.add(clientId);
-  try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);}catch(error){clients.delete(clientId);throw error;}
+  const viewKey=clientViewKey(n);
+  if(clients.has(clientId)&&clientViews.get(clientId)!==viewKey)throw Error('Detach the previous native view before attaching again');
+  clients.add(clientId);clientViews.set(clientId,viewKey);
+  try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);if(clientViewKey(n)!==viewKey)throw Error('Native selected view changed during attachment');}catch(error){clients.delete(clientId);clientViews.delete(clientId);try{await n.session.d2t(clientId,'detach');}catch{}if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);throw error;}
   replayNotices();
   return {surfaces:n.runtime.lY()};
  }
@@ -693,6 +723,7 @@ async function control(request,abort){
   for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
   forgetQuestionClient(clientId);
+  clientViews.delete(clientId);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -766,7 +797,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
@@ -792,11 +823,13 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false;
+let ownerReading=false,ownerIndependent=false,reportedView;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
+  const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
+  if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
   if(native)refreshNativeTheme(native);
   if(!ownerIndependent)return;

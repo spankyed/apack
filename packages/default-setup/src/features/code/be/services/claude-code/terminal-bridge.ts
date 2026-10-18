@@ -34,6 +34,8 @@ export async function createClaudeTerminalBridge(options: {
   const projection = createClaudeTerminalStatus(options.sessionId)
   const session = createClaudeTerminalSession(options.sessionId)
   const transcripts: ClaudeNativeTranscript[] = []
+  let nativeViewSequence = 0
+  let nativeView: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView | undefined
   let observerPid: number | undefined, observerProblem: string | undefined
   let mainCommand = command(options.settings.effective.statusLine) ?? null
   let subagentCommand = command(options.settings.effective.subagentStatusLine) ?? null
@@ -96,7 +98,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if (event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
+        if (changedSession) { nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
           session.update(value.metadata)
           // Native dialogs and terminal shortcuts can change mode without a host command.
@@ -154,6 +156,15 @@ export async function createClaudeTerminalBridge(options: {
         return reply(200, {})
       }
       if (value.sessionId !== projection.sessionId) return reply(409, {})
+      if (request.url === '/native-view') {
+        const view = object(value.view)
+        if (value.pid !== observerPid || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1 || (value.sequence as number) < nativeViewSequence || !view || !['main', 'agent'].includes(String(view.kind)) || view.kind === 'agent' && (typeof view.registryId !== 'string' || !view.registryId || view.registryId.length > 256 || view.taskId !== undefined && (typeof view.taskId !== 'string' || !view.taskId || view.taskId.length > 256))) return reply(409, {})
+        const next: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView = view.kind === 'main' ? { kind: 'main', revision: value.sequence as number } : { kind: 'agent', revision: value.sequence as number, registryId: view.registryId as string, ...(typeof view.taskId === 'string' ? { taskId: view.taskId } : {}) }
+        if (value.sequence === nativeViewSequence && JSON.stringify(next) !== JSON.stringify(nativeView)) return reply(409, {})
+        nativeViewSequence = value.sequence as number
+        if (JSON.stringify(next) !== JSON.stringify(nativeView)) { nativeView = next; options.changed() }
+        return reply(200, {})
+      }
       if (request.url === '/ui-ready') {
         await ui.transport.request({ subtype: 'apack_observe_notices' }); return reply(200, {})
       }
@@ -250,6 +261,7 @@ export async function createClaudeTerminalBridge(options: {
       directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport: ui.transport,
       get problem() { return observerProblem },
       get nativePid() { return observerPid },
+      get view() { return nativeView },
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
       get busy() { return busy || !!pending },
@@ -263,7 +275,7 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },

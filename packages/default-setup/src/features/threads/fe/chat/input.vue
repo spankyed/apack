@@ -38,13 +38,15 @@
             :file="file" removable @remove="removeFile(index)" class="flex-shrink-0" />
         </div>
 
+        <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
+
         <!-- Editor container -->
         <div class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
             variant="chat"
-            :placeholder="disabled ? 'API keys required to use chat' : 'Message Agent'"
+            :placeholder="disabled ? disabledReason ?? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
             editor-class="w-full min-h-[88px] rounded-xl px-5 py-4 pr-10 text-sm leading-6 focus:outline-none"
             @submit="handleSubmit"
@@ -255,6 +257,7 @@ const props = defineProps<{
   quickPromptNumberKeyInserts?: boolean
   quickPromptCursor?: { x: number; y: number } | null
   disabled?: boolean
+  disabledReason?: string
   /** Text to prefill the input with (e.g., on revert). Consumed once on change. */
   prefillText?: string
   /** Attachments to prefill the input with (e.g., on revert). Consumed once on change. */

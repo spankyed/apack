@@ -28,7 +28,7 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend" @active="nativeTerminalActive = $event" />
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
@@ -99,6 +99,8 @@
           <!-- Input -->
           <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
+              :disabled="!!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
+              :disabled-reason="taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
               :current-mode="currentMode"
               :current-phase="currentPhase"
@@ -353,7 +355,7 @@ function detachNativeUi() {
   nativeUserExpansion.value = {}
   nativeThinkingExpansion.value = {}
   if (mount) { actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount }); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount }) }
-  pendingNativeSend?.reject(new Error('Claude conversation view changed')); pendingNativeSend = undefined
+  pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
 let nativeClientSequence=0
 provide(claudeClientInput,(id,event)=>{
@@ -370,9 +372,9 @@ function pressNativeUi(actionId: string, href?: string) {
   if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 onMounted(() => {
-  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode], ([threadId, enabled]) => {
+  stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.revision], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
     detachNativeUi()
-    if (!threadId || !enabled) return
+    if (!threadId || !enabled || terminalActive || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
     const mount = { threadId, mountId: crypto.randomUUID() }
     nativeUiMount.value = mount
     const renew = renewNativeUi
@@ -477,26 +479,26 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
 }
 
 let nativeSendRevision = 0
-let pendingNativeSend: { ownerId: string; revision: number; resolve(): void; reject(error: Error): void } | undefined
+const pendingNativeSend = ref<{ ownerId: string; revision: number; resolve(): void; reject(error: Error): void }>()
 function submitNativeMessage(text: string, references: MessageReferences): Promise<void> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
-  if (!mount || !owner || pendingNativeSend) return Promise.reject(new Error('Claude input is not ready'))
+  if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
-    pendingNativeSend = { ownerId: owner.ownerId, revision, resolve, reject }
+    pendingNativeSend.value = { ownerId: owner.ownerId, revision, resolve, reject }
     actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references })
     pendingScrollOnSend.value = true
   })
 }
 watch(nativeComposerView, view => {
-  const pending = pendingNativeSend
+  const pending = pendingNativeSend.value
   if (!pending) return
   if (view?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(view.state.status)) {
-    pendingNativeSend = undefined; pending.reject(new Error('Claude conversation owner changed')); return
+    pendingNativeSend.value = undefined; pending.reject(new Error('Claude conversation owner changed')); return
   }
   const result = view.submission
   if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision || result.status === 'pending') return
-  pendingNativeSend = undefined
+  pendingNativeSend.value = undefined
   if (result.status === 'accepted') pending.resolve()
   else pending.reject(new Error(result.problem ?? 'Claude did not accept the message'))
 })

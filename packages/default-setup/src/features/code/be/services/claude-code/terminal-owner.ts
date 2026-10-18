@@ -151,9 +151,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.signal?.aborted) kill()
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
-    let requestedNativeView: { sessionId: string; taskId: string } | undefined
+    let changingView = false, preparingParent = false
     return {
-      get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
       get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
@@ -179,7 +179,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         exitObservers.push(listener)
       },
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
-      input(id, text) { if (closed || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; terminal!.write(text); return true },
+      input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; terminal!.write(text); return true },
       resize(id, columns, rows) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
@@ -242,11 +242,14 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async operateTask(taskId, operation, text) {
         if (closed || operation !== 'background' && !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
         const sessionId = bridge.projection.sessionId
-        const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation, ...((operation === 'send' || operation === 'input') ? { text } : {}) })
-        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native task session changed')
-        const parsed = ClaudeNativeTaskResultSchema.parse(result)
-        if (parsed.view) requestedNativeView = parsed.view.taskId ? { sessionId, taskId: parsed.view.taskId } : undefined
-        return parsed
+        const viewChange = operation === 'foreground' || operation === 'background'
+        if (viewChange && (changingView || preparingParent)) throw new Error('Native view or parent input is changing')
+        if (viewChange) { changingView = true; changed() }
+        try {
+          const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation, ...((operation === 'send' || operation === 'input') ? { text } : {}) })
+          if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native task session changed')
+          return ClaudeNativeTaskResultSchema.parse(result)
+        } finally { if (viewChange) { changingView = false; changed() } }
       },
       async controlMcpServer(serverName, operation) {
         if (closed) throw new Error('Native terminal closed')
@@ -296,7 +299,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
         return accepted
       },
-      submit(text, images) { if (requestedNativeView?.sessionId === bridge.projection.sessionId) return Promise.reject(new Error('Return to the native main view before submitting a parent prompt')); if (changingModel) return Promise.reject(new Error('Native model selection is changing; your draft was retained')); return bridge.submit(text, images) },
+      async submit(text, images) {
+        if (changingModel || changingView || preparingParent) throw new Error('Native input is changing; your draft was retained')
+        const sessionId = bridge.projection.sessionId; preparingParent = true; changed()
+        try {
+          const state = await bridge.uiTransport.request({ subtype: 'apack_parent_prompt_state' })
+          if (closed || sessionId !== bridge.projection.sessionId) throw new Error('Native input session changed')
+          if (!state || typeof state !== 'object' || !('main' in state) || state.main !== true) throw new Error('Return to the native main view before submitting a parent prompt')
+          return await bridge.submit(text, images)
+        } finally { preparingParent = false; changed() }
+      },
       kill,
       async close() { if (!closed) kill(); await done },
     }

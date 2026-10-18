@@ -2,7 +2,7 @@
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <div v-if="!active" class="native-launch__actions">
       <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
-      <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening" @click="open">
+      <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}
       </button>
@@ -14,6 +14,7 @@
           <div class="native-heading">
             <h2>Claude Code <span class="native-interface-label">Native interface</span></h2>
             <p :title="view?.state?.cwd">{{ workspaceName }}</p>
+            <p v-if="selectedAgent" role="status">Viewing Agent · {{ selectedAgent }}</p>
           </div>
         </div>
         <div class="native-controls">
@@ -21,10 +22,11 @@
             <span aria-hidden="true" />{{ stateLabel }}
           </span>
           <button type="button" class="native-button native-button--size" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
-          <button v-if="active" type="button" class="native-button native-button--return" @click="dismissed = true">Back to conversation <span aria-hidden="true">↗</span></button>
+          <button v-if="active" type="button" class="native-button native-button--return" :disabled="!ended && (!!returning || view?.task?.status === 'pending')" @click="returnToConversation">Back to conversation <span aria-hidden="true">↗</span></button>
           <button v-if="!ended" type="button" class="native-button native-button--stop" @click="stop"><span class="native-stop-icon" aria-hidden="true" />Stop session</button>
         </div>
       </header>
+      <p v-if="returnProblem" role="alert" class="native-problem">{{ returnProblem }}</p>
       <div class="native-console">
         <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
       </div>
@@ -56,7 +58,7 @@ import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
-const props = defineProps<{ threadId: string; busy: boolean }>()
+const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
 const actor: ThreadsState = usePlugin()
 const mountId = crypto.randomUUID()
@@ -68,6 +70,27 @@ const stateLabel = computed(() => {
   if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
   return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
 })
+const selectedAgent = computed(() => { const state = view.value?.state; return state?.view?.kind === 'agent' ? state.tasks.find(task => task.id === (state.view?.kind === 'agent' ? state.view.taskId : undefined))?.name ?? state.view.taskId ?? 'Unavailable Agent' : undefined })
+const returning = ref<{ ownerId: string; revision: number }>(), returnProblem = ref<string>()
+function returnToConversation() {
+  const state = view.value?.state
+  if (!state || ended.value) { dismissed.value = true; return }
+  if (returning.value || view.value?.task?.status === 'pending') return
+  const revision = (view.value?.task?.revision ?? 0) + 1
+  returning.value = { ownerId: state.ownerId, revision }; returnProblem.value = undefined
+  const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, taskId, revision, operation: 'background' })
+}
+watch(view, value => {
+  const request = returning.value
+  if (!request) return
+  if (value?.state?.ownerId !== request.ownerId || ended.value) { returning.value = undefined; returnProblem.value = 'Native owner changed'; return }
+  const result = value.task
+  if (result?.revision !== request.revision || result.operation !== 'background' || result.status === 'pending') return
+  returning.value = undefined
+  if (result.status === 'done' && result.view?.taskId === null && value.state.view?.kind === 'main') dismissed.value = true
+  else returnProblem.value = result.problem ?? 'The native view changed; return again'
+})
 const expanded = ref(true)
 const dismissed = ref(false)
 const requested = ref(false)
@@ -78,7 +101,7 @@ let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: Resi
 let attachedOwner: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
 function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
-function open() { requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
+function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
 function stop() { const ownerId = view.value?.state?.ownerId; if (ownerId) actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId }) }
 function detach() { observer?.disconnect(); observer = undefined; terminal?.detach(); terminal = undefined; attachedOwner = undefined }
 watch(active, value => emit('active', value), { immediate: true })
