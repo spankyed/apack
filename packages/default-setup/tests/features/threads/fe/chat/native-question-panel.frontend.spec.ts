@@ -4,11 +4,11 @@ import NativeQuestionPanel from '#features/threads/fe/chat/NativeQuestionPanel.v
 
 function mount(card: Record<string, unknown>, presentation?: ClaudeQuestionPresentation) {
   const root = document.createElement('div'); document.body.append(root)
-  const props = reactive({ card, presentation, disabled: false }), respond = vi.fn(), pause = vi.fn()
-  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onPause: pause }) }); app.mount(root)
+  const props = reactive({ card, presentation, disabled: false, renderToken: 'initial-token' }), respond = vi.fn(), pause = vi.fn(), started = vi.fn()
+  const app = createApp({ render: () => h(NativeQuestionPanel, { ...props, onRespond: respond, onPause: pause, onStarted: started }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   const input = async (selector: string, text: string) => { const element = root.querySelector<HTMLInputElement>(selector)!; element.value = text; element.dispatchEvent(new Event('input', { bubbles: true })); await nextTick() }
-  return { root, props, respond, pause, button, input, close() { app.unmount(); root.remove() } }
+  return { root, props, respond, pause, started, button, input, close() { app.unmount(); root.remove() } }
 }
 const option = (label: string, preview?: string) => ({ label, description: label + ' description', ...(preview ? { preview } : {}) })
 it('retains custom/multi/annotation drafts across navigation and identical owner projections', async () => {
@@ -55,5 +55,21 @@ it.each(['withheld', 'empty'] as const)('honors native %s preview projection wit
     expect(!!f.root.querySelector('[data-testid="native-question-preview-withheld"]')).toBe(kind === 'withheld')
     f.button('Submit answers').click()
     expect(f.respond).toHaveBeenCalledWith({ answers: { 'First?': 'Alpha' }, annotations: {} })
+  } finally { f.close() }
+})
+
+it('adopts pre-input rewrites but freezes the displayed card and token after first input', async () => {
+  const questions = (question: string) => ({ questions: [{ question, header: 'First', options: [option('Alpha'), option('Beta')] }] })
+  const f = mount(questions('Original?'))
+  try {
+    f.props.card = questions('Displayed?'); f.props.renderToken = 'displayed-token'; await nextTick()
+    expect(f.root.textContent).toContain('Displayed?')
+    await f.input('.answer textarea', 'Kept draft')
+    f.props.card = questions('Later?'); f.props.renderToken = 'later-token'; await nextTick()
+    expect(f.root.textContent).toContain('Displayed?'); expect(f.root.textContent).not.toContain('Later?')
+    expect(f.root.querySelector<HTMLTextAreaElement>('.answer textarea')?.value).toBe('Kept draft')
+    f.button('Submit answers').click()
+    expect(f.started).toHaveBeenCalledExactlyOnceWith('displayed-token')
+    expect(f.respond).toHaveBeenCalledWith({ answers: { 'Displayed?': 'Kept draft' }, annotations: {} })
   } finally { f.close() }
 })

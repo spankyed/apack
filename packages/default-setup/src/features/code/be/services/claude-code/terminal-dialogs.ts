@@ -34,6 +34,7 @@ export interface ClaudeNativeQuestionDialogResponse {
   sessionId: string
   answer: Record<string, unknown>
   renderToken?: string
+  draftStarted?: boolean
 }
 
 export interface ClaudeNativeQuestionRenderRequest {
@@ -45,6 +46,14 @@ export interface ClaudeNativeQuestionRenderRequest {
 }
 export const ClaudeNativeQuestionRenderSchema = z.object({
   tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(),
-  question: z.object({ token: z.string().uuid(), dialogId: z.string(), revision: z.string().uuid(), shownInput: z.record(z.string(), z.unknown()) }),
+  question: z.object({ token: z.string().uuid(), dialogId: z.string(), revision: z.string().uuid(), shownInput: z.record(z.string(), z.unknown()), presentation: ClaudeQuestionPresentationSchema }),
 }).passthrough().refine(value => value.tree !== undefined, 'Native question drawing must contain a tree')
 export type ClaudeNativeQuestionRender = z.infer<typeof ClaudeNativeQuestionRenderSchema>
+
+export interface ClaudeNativeQuestionHoldRequest {
+  id: string
+  revision: string
+  sessionId: string
+  clientId: string
+  renderToken: string
+}

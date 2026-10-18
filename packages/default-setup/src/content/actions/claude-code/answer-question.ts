@@ -45,7 +45,7 @@ export async function action(
     }
     try {
       if (!response || typeof response !== 'object' || !response.nativeQuestionAnswer || typeof response.nativeQuestionAnswer !== 'object') throw new Error('Missing native card answer');
-      await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer });
+      await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer, ...(typeof response.nativeQuestionRenderToken === 'string' ? { renderToken: response.nativeQuestionRenderToken, draftStarted: response.nativeQuestionDraftStarted === true } : {}) });
     } catch {
       if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId) {
         services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: undefined, blockResponse: undefined });

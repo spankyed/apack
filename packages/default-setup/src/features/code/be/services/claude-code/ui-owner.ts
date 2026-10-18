@@ -20,6 +20,7 @@ export function getClaudeUiOwner(threadId: string): ClaudeUiOwner | undefined {
       done: native.done,
       get sessionId() { return native.state.sessionId },
       subscribe: listener => native.uiTransport.subscribe(listener),
+      question: { ownerId: native.state.ownerId, render: native.renderQuestionDialog, hold: native.holdQuestionDialog },
       handle: { ui: createClaudeUiControls(initialized, native.uiTransport, native.uiTransport.promptHosts) },
     }
     nativeOwners.set(native, owner)

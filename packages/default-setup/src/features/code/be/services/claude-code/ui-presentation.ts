@@ -135,11 +135,18 @@ export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   body: { status: 'rendering' | 'error' } | { status: 'live'; tree: ClaudeUiNode }
 }
 
+export interface ClaudeUiQuestionRow { messageId: string; id: string; revision: string; sessionId: string; requestId: string }
+export interface ClaudeUiQuestionFrame {
+  messageId: string; id: string; revision: string; draftActionId: string; token?: string;
+  shownInput?: Record<string, unknown>;
+  presentation?: import('../../../common/native-question.ts').ClaudeQuestionPresentation;
+  body: { status: 'rendering' } | { status: 'live'; tree: ClaudeUiNode } | { status: 'error'; message: string }
+}
 export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[] }
+) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

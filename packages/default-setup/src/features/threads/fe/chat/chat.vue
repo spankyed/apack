@@ -85,8 +85,9 @@
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativeQuestionPanel :key="pendingNativeQuestion.messageId" :card="pendingNativeQuestion.card" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :presentation="pendingNativeQuestion.presentation"
-              @respond="answer => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeQuestion!.messageId, response: { nativeQuestionAnswer: answer } })"
+            <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error"
+              @press="pressNativeUi" @field="editNativeUi" @started="startNativeQuestionDraft"
+              @respond="answerNativeQuestion"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
           </div>
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
@@ -205,7 +206,7 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
 import NativeReadApproval from './NativeReadApproval.vue'
-import NativeQuestionPanel from './NativeQuestionPanel.vue'
+import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
 import { ClaudeQuestionPresentationSchema } from '#features/code/common/native-question.ts'
 import RecentThreads from './recent-threads.vue'
 import InlineTabBar from './inline-tab-bar.vue'
@@ -416,8 +417,24 @@ const pendingNativeQuestion = computed(() => {
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'AskUserQuestion' || typeof pending.approvalMessageId !== 'string' || !pending.originalInput) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
-  return message ? { messageId: pending.approvalMessageId, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
+  const frame = nativeUiDrawing.value?.question
+  return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
+
+const nativeQuestionDraft = ref<{ messageId: string; token: string }>()
+function startNativeQuestionDraft(token?: string) {
+  const question = pendingNativeQuestion.value
+  if (!question?.frame || !token || nativeQuestionDraft.value?.messageId === question.messageId) return
+  nativeQuestionDraft.value = { messageId: question.messageId, token }
+  editNativeUi({ actionId: question.frame.draftActionId, revision: 1, kind: 'change', value: token })
+}
+function answerNativeQuestion(answer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer) {
+  const question = pendingNativeQuestion.value
+  if (!question?.frame) return
+  const token = nativeQuestionDraft.value?.messageId === question.messageId ? nativeQuestionDraft.value.token : question.frame.token
+  if (!token) return
+  actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
+}
 
 let nativeSendRevision = 0
 let pendingNativeSend: { ownerId: string; revision: number; resolve(): void; reject(error: Error): void } | undefined

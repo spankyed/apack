@@ -1,3 +1,4 @@
+import { createClaudeQuestionHost } from './ui-question-host.ts'
 import { createClaudeTranscriptMessageHost } from './ui-transcript-messages.ts'
 import { createClaudeUiNotices } from './ui-notices.ts'
 import { createClaudeSiteScroll } from './ui-site-scroll.ts'
@@ -9,6 +10,7 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
 export interface ClaudeUiOwner {
+  readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
@@ -21,6 +23,7 @@ export function mountClaudeUi(options: {
   isCurrent(): boolean
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number, paneId?: string): void
+  question?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined
   messages?(): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
 }) {
@@ -51,6 +54,8 @@ export function mountClaudeUi(options: {
 
   const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => options.messages?.() ?? [], publish: () => publish(lastState) })
 
+  const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => options.question?.(), current, publish: () => publish(lastState) })
+
   const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
 
   function publish(state: ClaudeUiMountState): void {
@@ -58,7 +63,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(messages.state.length ? { transcriptMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(question.state ? { question: question.state } : {}), ...(messages.state.length ? { transcriptMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -131,6 +136,7 @@ export function mountClaudeUi(options: {
     scroll.dispose()
     notices.dispose()
     messages.dispose()
+    question.dispose()
     stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
     fieldRevisions.clear()
@@ -156,6 +162,7 @@ export function mountClaudeUi(options: {
     const line = event as Record<string, unknown>
     notices.receive(line)
     messages.receive(line)
+    question.receive(line)
     panes?.receive(line)
     scroll.receive(line)
     if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
@@ -169,7 +176,7 @@ export function mountClaudeUi(options: {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
       await owner.handle.ui.attach(client)
       attached = true
-      if (current()) { invalidate(); messages.start(); await panes?.start() }
+      if (current()) { invalidate(); messages.start(); question.start(); await panes?.start() }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
@@ -181,7 +188,7 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
-    refreshTranscript: () => messages.refresh(),
+    refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
     scroll(event: import('./ui-presentation.ts').ClaudeUiScrollEvent) { if (event.paneId) panes?.scroll(event); else scroll.report(event) },
     pane(event: import('./ui-presentation.ts').ClaudeUiPaneEvent) { return panes?.operate(event) },
@@ -234,6 +241,7 @@ export function mountClaudeUi(options: {
       }
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
+      if (question.ownsField(event.actionId)) return question.field(event)
       if (messages.ownsField(event.actionId)) return messages.field(event)
       if (panes?.ownsField(event.actionId)) return panes.field(event)
       if (!current() || !Number.isSafeInteger(event.revision) || event.revision <= (fieldRevisions.get(event.actionId) ?? 0) || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
@@ -253,6 +261,7 @@ export function mountClaudeUi(options: {
     },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */
     async press(actionId: string, href?: string): Promise<{ handled: boolean }> {
+      if (question.ownsAction(actionId)) return question.press(actionId, href)
       if (messages.ownsAction(actionId)) return messages.press(actionId, href)
       if (panes?.ownsAction(actionId)) return panes.press(actionId, href)
       if (!current() || pressing) return { handled: false }

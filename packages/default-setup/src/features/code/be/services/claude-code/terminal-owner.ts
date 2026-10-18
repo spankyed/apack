@@ -1,4 +1,4 @@
-import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
+import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
@@ -30,6 +30,7 @@ export interface ClaudeNativeTerminalOwner {
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
+  holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>
   renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>
   getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>
   answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
@@ -171,6 +172,11 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
       },
+      async holdQuestionDialog(request) {
+        if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_hold_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, render_token: request.renderToken }) as { held?: unknown }
+        if (result.held !== true) throw new Error('Native question draft was not acknowledged')
+      },
       async renderQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_render_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, viewport: request.viewport })
@@ -185,7 +191,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerQuestionDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, render_token: response.renderToken }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer, render_token: response.renderToken, draft_started: response.draftStarted }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native question was not acknowledged')
       },
       async getReadDialogs() {

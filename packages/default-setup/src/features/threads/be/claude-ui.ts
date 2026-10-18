@@ -82,6 +82,15 @@ function bind(key: string, view: ClaudeUiView): void {
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost,
+    question: () => {
+      const raw = repository.threadQueries.byId(view.threadId as EntityId)?.context?.claudeCode?.pendingControlRequest
+      if (!raw || typeof raw !== 'object') return undefined
+      const pending = raw as { toolName?: unknown; approvalMessageId?: unknown; nativeTerminal?: Record<string, unknown> }
+      const native = pending.nativeTerminal
+      if (pending.toolName !== 'AskUserQuestion' || !native || native.ownerId !== owner.question?.ownerId || native.sessionId !== owner.sessionId) return undefined
+      if (![pending.approvalMessageId, native.dialogId, native.revision, native.sessionId, native.requestId].every(value => typeof value === 'string')) return undefined
+      return { messageId: pending.approvalMessageId as string, id: native.dialogId as string, revision: native.revision as string, sessionId: native.sessionId as string, requestId: native.requestId as string }
+    },
     messages: () => view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.thinkingExpansion) : [],
     isCurrent: () => views.get(key) === view && getClaudeUiOwner(view.threadId) === owner,
     requestFocus: (focusId, revision, paneId) => {

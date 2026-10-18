@@ -118,7 +118,7 @@ export interface MessageReferences {
  * the union, because every emit matches one of its arms.
  */
 export type BlockResponse =
-  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer }
+  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
   /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
   | { approved: boolean; reason?: string }
   /** Cancel path: InteractionContainer `handleCancel`. */

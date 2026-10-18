@@ -284,7 +284,7 @@ function drainCompletion(n,clientId,state){
  });
 }
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
-const dialogRevisions=new Map(),questionFrames=new Map();
+const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
 function nativeDialog(n,kind){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
@@ -319,10 +319,33 @@ function questionShownInput(n,payload,questions){
  }
  return {...original,questions:drawn};
 }
+function rememberQuestionFrame(frame){
+ for(const[token,previous]of questionFrameHistory)if(previous.client===frame.client&&(previous.item!==frame.item||previous.revision!==frame.revision))questionFrameHistory.delete(token);
+ questionFrameHistory.set(frame.token,frame);
+ const owned=[...questionFrameHistory.values()].filter(previous=>previous.client===frame.client);
+ for(const previous of owned.slice(0,Math.max(0,owned.length-32)))questionFrameHistory.delete(previous.token);
+}
+function holdQuestionFrame(dialog,token,client){
+ const frame=questionFrameHistory.get(token);
+ if(!frame||frame.client!==client||!clients.has(client)||frame.item!==dialog.item||frame.revision!==dialog.revision||frame.sessionId!==dialog.sessionId)throw Error('Native question draft drawing changed or expired');
+ const prior=frozenQuestionFrames.get(client);
+ if(prior&&prior.item===dialog.item&&prior.revision===dialog.revision)return prior;
+ frozenQuestionFrames.set(client,frame);return frame;
+}
+function forgetQuestionClient(client){
+ questionFrames.delete(client);frozenQuestionFrames.delete(client);
+ for(const[token,frame]of questionFrameHistory)if(frame.client===client)questionFrameHistory.delete(token);
+}
 function questionCanonicalAnswer(n,dialog,request){
  const original=n.questionTool.shownCardInput(dialog.payload.input);
  if(request.render_token===undefined)return n.questionTool.admitCardAnswer(original,request.answer);
- const frame=[...questionFrames.values()].find(frame=>frame.token===request.render_token);
+ let frame=[...questionFrames.values(),...frozenQuestionFrames.values()].find(frame=>frame.token===request.render_token);
+ if(request.draft_started===true){
+  const issued=questionFrameHistory.get(request.render_token);
+  const held=issued&&holdQuestionFrame(dialog,request.render_token,issued.client);
+  if(!held||held.token!==request.render_token)throw Error('Native question draft belongs to another drawing');
+  frame=held;
+ }
  if(!frame||!clients.has(frame.client)||frame.item!==dialog.item||frame.revision!==dialog.revision||frame.sessionId!==dialog.sessionId)throw Error('Native question drawing changed or expired');
  const admitted=n.questionTool.admitCardAnswer(frame.shownInput,request.answer);
  if(admitted.kind!=='admitted')return admitted;
@@ -370,6 +393,11 @@ async function control(request,abort){
  if(request.subtype==='apack_question_dialogs'){
   const d=nativeDialog(n,'permission_ask_user_question');if(!d.item)return {dialogs:[]};
   return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'AskUserQuestion',shownInput:n.questionTool.shownCardInput(d.payload.input),presentation:questionPresentation(n,d.payload)}]};
+ }
+ if(request.subtype==='apack_hold_question_dialog'){
+  abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_ask_user_question');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
+  holdQuestionFrame(d,request.render_token,request.client_id);return {held:true};
  }
  if(request.subtype==='apack_answer_question_dialog'){
   abort.signal.throwIfAborted();
@@ -449,7 +477,7 @@ async function control(request,abort){
  if(value.subtype==='ui_detach'){
   for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
-  questionFrames.delete(clientId);
+  forgetQuestionClient(clientId);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -488,10 +516,14 @@ async function control(request,abort){
    abort.signal.throwIfAborted();
    const current=nativeDialog(n,'permission_ask_user_question');
    if(!clients.has(clientId)||current.item!==question.item||current.revision!==question.revision)throw Error('Native question changed while rendering');
-   const shownInput=questionShownInput(n,question.payload,result.props.questions),token=randomUUID();
+   const prior=frozenQuestionFrames.get(clientId);
+   const held=prior?.item===question.item&&prior.revision===question.revision?prior:undefined;
+   if(!held)frozenQuestionFrames.delete(clientId);
+   const shownInput=held?.shownInput??questionShownInput(n,question.payload,result.props.questions),token=held?.token??randomUUID();
    if(!questionFrames.has(clientId)&&questionFrames.size>=64)questionFrames.delete(questionFrames.keys().next().value);
-   questionFrames.set(clientId,{client:clientId,token,item:question.item,revision:question.revision,sessionId:question.sessionId,requestId:question.payload.requestId,shownInput});
-   questionFrame={token,dialogId:question.item.id,revision:question.revision,shownInput};
+   const frame={client:clientId,token,item:question.item,revision:question.revision,sessionId:question.sessionId,requestId:question.payload.requestId,shownInput};
+   questionFrames.set(clientId,frame);rememberQuestionFrame(frame);
+   questionFrame={token,dialogId:question.item.id,revision:question.revision,shownInput,presentation:questionPresentation(n,{...question.payload,questions:shownInput.questions})};
   }
   recordDrawing(n,value,result.tree);
   return {...(questionFrame?{question:questionFrame}:{}),tree:result.tree,props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
@@ -516,7 +548,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();questionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){if(native){for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
