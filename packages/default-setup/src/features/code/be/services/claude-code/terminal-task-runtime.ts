@@ -5,11 +5,14 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  const matches=Object.values(registry.all()).filter(task=>n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
- const task=matches[0],canMessage=typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
+ const task=matches[0],liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
+ const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
+ const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
  if(request.operation==='send'){
+  if(endedTeammateAddress)throw Error('No live teammate of this session has that address');
   if(!canMessage)throw Error('Agent messaging is not available in this session');
   if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent message must contain 1 to 16384 characters');
-  const to=task.type==='in_process_teammate'?task.identity.agentName:request.task_id;
+  const to=liveTeammate?task.identity.agentName:request.task_id;
   const call={type:'tool_use',id:'toolu_apack_'+randomUUID().replaceAll('-',''),name:'SendMessage',input:{to,message:request.text}};
   const assistant=n.runtime._d({content:[call],isVirtual:true});let result,error;
   for await(const value of n.runtime.Z2(call,assistant,binding.canUseTool,context,()=>new Date().toISOString())){

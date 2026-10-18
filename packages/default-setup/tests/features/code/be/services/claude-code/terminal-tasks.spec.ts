@@ -1,7 +1,7 @@
 import vm from 'node:vm'
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
 function fixture() {
-  const tasks = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
+  const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
   const registry = { all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
   const context = { taskRegistry: registry, session: {}, storageV5: {}, getAppState: vi.fn(), setAppState: vi.fn() }
   const stop = vi.fn(async () => {}), saved = vi.fn(async (): Promise<Record<string, unknown>[]> => [{ uuid: 'saved', type: 'user', message: { content: 'Task instruction' } }, { uuid: 'hidden', type: 'user', isMeta: true, message: { content: 'Hidden context' } }])
@@ -65,4 +65,17 @@ it('orders saved-only coordinator messages by native timestamps between live pro
   f.saved.mockResolvedValue([instruction])
   f.registry.getTranscript.mockReturnValue({ messages: [first, reply] } as ReturnType<typeof f.registry.getTranscript>)
   expect((await f.request('inspect')).details.messages.map((message: { text: string }) => message.text)).toEqual(['Initial task', 'Sent instruction', 'Agent reply'])
+})
+
+it('uses a teammate name only for a live record and keeps ended opaque identities exact', async () => {
+  const f = fixture(); Object.assign(f.tasks[0], { type: 'in_process_teammate', identity: { agentName: 'worker' } })
+  await f.request('send'); expect(f.runner.mock.calls[0][0]).toEqual(expect.objectContaining({ input: { to: 'worker', message: 'User instruction' } }))
+  f.tasks[0].status = 'completed'; f.runner.mockClear()
+  await f.request('send'); expect(f.runner.mock.calls[0][0]).toEqual(expect.objectContaining({ input: { to: 'agent-a', message: 'User instruction' } }))
+})
+it('refuses an ended teammate address so a reused name cannot receive the old task message', async () => {
+  const f = fixture(); Object.assign(f.tasks[0], { type: 'in_process_teammate', agentId: 'worker@team', status: 'completed', identity: { agentName: 'worker' } })
+  expect((await f.request('inspect', 'worker@team')).details.canMessage).toBe(false)
+  await expect(f.request('send', 'worker@team')).rejects.toThrow('No live teammate')
+  expect(f.runner).not.toHaveBeenCalled()
 })
