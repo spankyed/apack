@@ -11,8 +11,18 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
+  | { type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string; operation: 'inspect' | 'stop' }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
+export interface ClaudeTerminalTaskState {
+  ownerId: string
+  taskId: string
+  revision: number
+  operation: 'inspect' | 'stop'
+  status: 'pending' | 'done' | 'error'
+  details?: import('#features/code/common/native-terminal.ts').ClaudeNativeTaskDetails
+  problem?: string
+}
 export interface ClaudeTerminalSubmissionState {
   ownerId: string
   revision: number
@@ -21,6 +31,7 @@ export interface ClaudeTerminalSubmissionState {
   problem?: string
 }
 export type ClaudeTerminalViewSnapshot = {
+  task?: ClaudeTerminalTaskState
   submission?: ClaudeTerminalSubmissionState
   state?: ClaudeNativeTerminalState
   opening: boolean
@@ -44,6 +55,7 @@ interface View {
   opening: boolean
   problem?: string
   queued?: boolean
+  task?: ClaudeTerminalTaskState
   submission?: ClaudeTerminalSubmissionState
   submissionRevision?: number
 }
@@ -66,13 +78,13 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, submission: view.submission, opening: view.opening, problem: view.problem, output: [...output] })
+        state: view.owner?.state, task: view.task, submission: view.submission, opening: view.opening, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.task = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -116,7 +128,21 @@ export function createClaudeTerminalViews(dependencies: {
       }
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
-      if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
+      if (event.type === 'CLAUDE_TERMINAL_TASK') {
+        if (!['inspect', 'stop'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || !owner.state.tasks.some(task => task.id === event.taskId)) return
+        const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(target.task?.taskId === event.taskId ? { details: target.task.details } : {}) }
+        target.task = task; publish(key, target)
+        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.task === task
+        void owner.operateTask(event.taskId, event.operation).then(result => {
+          if (!current()) return
+          if (event.operation === 'stop' && result.stopped !== true || event.operation === 'inspect' && result.details?.taskId !== event.taskId) throw new Error('Native task response did not match')
+          target.task = { ...task, status: 'done', details: result.details ?? task.details }; publish(key, target)
+        }).catch(error => {
+          if (!current()) return
+          target.task = { ...task, status: 'error', problem: error instanceof Error ? error.message : 'Native task operation failed' }; publish(key, target)
+        })
+      }
+      else if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
           || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length) || event.text.length > 32768) return
         const references = event.references ? structuredClone(event.references) : undefined

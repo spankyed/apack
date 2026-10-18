@@ -66,7 +66,7 @@
               <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
             </JsonHoverPopup>
             <JsonHoverPopup
-              v-if="entry.outputSummary && entry.status !== 'running'"
+              v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent"
               :value="entry.details?.output || entry.details?.error"
               :label="`${entry.tool} output`"
               width="trigger"
@@ -90,6 +90,7 @@
           <div role="status" :aria-label="`Claude agent ${entry.nativeAgent.name} status`" :tabindex="entry.nativeAgent.statusText ? 0 : -1" class="mt-1 max-h-28 min-w-0 overflow-y-auto overscroll-contain rounded text-[11px] leading-4 focus-visible:outline focus-visible:outline-blue-400" data-testid="native-agent-status-text">
             <NativeStatusText v-if="entry.nativeAgent.statusText" :text="entry.nativeAgent.statusText" />
           </div>
+          <NativeTaskControls v-if="entry.nativeAgent.ownerId && entry.nativeAgent.sessionId" :task="{ ...entry.nativeAgent, ownerId: entry.nativeAgent.ownerId, sessionId: entry.nativeAgent.sessionId }" />
         </section>
       </div>
     </div>
@@ -104,6 +105,7 @@ import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
+import NativeTaskControls from '#features/threads/fe/chat/NativeTaskControls.vue'
 import NativeStatusText from './NativeStatusText.vue'
 
 interface ArtifactRef {

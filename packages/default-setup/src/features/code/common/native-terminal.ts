@@ -22,3 +22,11 @@ export interface ClaudeNativeTerminalState {
   tasks: ClaudeNativeTerminalTask[]
   problem?: string
 }
+
+export interface ClaudeNativeTaskDetails {
+  taskId: string
+  name: string
+  status: string
+  messages: { role: 'user' | 'assistant'; text: string }[]
+  truncated: boolean
+}

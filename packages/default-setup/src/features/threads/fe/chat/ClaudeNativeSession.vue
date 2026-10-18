@@ -39,6 +39,7 @@
             <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="native-agent">
               <div class="native-agent__heading"><span class="native-agent__name">{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
               <NativeStatusText v-if="task.statusText" class="native-agent__detail" :text="task.statusText" />
+              <NativeTaskControls :task="{ ...task, ownerId: view.state.ownerId, sessionId: view.state.sessionId }" />
             </li>
           </ul>
         </div>
@@ -53,6 +54,7 @@ import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
+import NativeTaskControls from './NativeTaskControls.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()

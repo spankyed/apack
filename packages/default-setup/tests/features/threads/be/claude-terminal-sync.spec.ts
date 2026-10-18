@@ -42,7 +42,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
     readJournal: () => read([{ sessionId, path }], { final: exited }),
     subscribe: () => () => {}, input: () => false, resize: () => false, close: async () => {}, kill() {},
     submit: async () => { throw new Error('No prompt submission in this fixture') },
-    setPermissionMode: async mode => mode, holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), answerFileDialog: vi.fn(async () => {}), controlMcpServer: vi.fn(async () => ({mcpServers:[]})), getMcpStatus: vi.fn(async () => ({mcpServers:[]})), getModels: async () => ({ models: [] }), renameSession: vi.fn(async (title: string) => ({ title, message: 'Renamed' })), setModel: async model => model,
+    setPermissionMode: async mode => mode, holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), answerFileDialog: vi.fn(async () => {}), controlMcpServer: vi.fn(async () => ({mcpServers:[]})), operateTask: vi.fn(async () => ({ stopped: true })), getMcpStatus: vi.fn(async () => ({mcpServers:[]})), getModels: async () => ({ models: [] }), renameSession: vi.fn(async (title: string) => ({ title, message: 'Renamed' })), setModel: async model => model,
   }
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
@@ -93,10 +93,10 @@ it.each([true, false])('joins native task status only to its structured Agent re
   const entries = () => (fake.messages[0]?.blocks as { props: { entries: { nativeAgent?: unknown }[] } }[])[0].props.entries
   try {
     await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
-    expect(entries()[0].nativeAgent).toEqual(matching ? tasks[0] : undefined)
+    expect(entries()[0].nativeAgent).toEqual(matching ? { ...tasks[0], ownerId: 'owner', sessionId } : undefined)
     expect(entries()[1].nativeAgent).toBeUndefined()
     tasks[0] = { ...tasks[0], status: 'completed', statusText: 'Finished' }
-    await vi.waitFor(() => expect(entries()[0].nativeAgent).toEqual(matching ? tasks[0] : undefined))
+    await vi.waitFor(() => expect(entries()[0].nativeAgent).toEqual(matching ? { ...tasks[0], ownerId: 'owner', sessionId } : undefined))
     tasks.length = 0
     await vi.waitFor(() => expect(entries()[0].nativeAgent).toBeUndefined())
   } finally { await release() }

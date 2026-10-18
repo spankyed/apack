@@ -42,11 +42,11 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       if (block.type !== 'tool-activity') continue
       const entries = block.props.entries as ToolActivityEntry[]
       for (const item of entries) {
-        if (item.tool === 'Agent') agentRows.set(key, entry)
+        if (item.tool === 'Agent') { agentRows.set(key, entry); const input = object(item.details?.input); if (typeof input?.description === 'string') item.summary = input.description }
         const result = results.get(JSON.stringify([row.sessionId, item.id]))
         if (item.tool === 'Agent' && result?.agentId && result.assistantUuid === row.uuid && owner.state.sessionId === row.sessionId) {
           const agent = owner.state.tasks.find(agent => agent.id === result.agentId)
-          if (agent) item.nativeAgent = { ...agent }
+          if (agent) item.nativeAgent = { ...agent, ownerId: owner.state.ownerId, sessionId: owner.state.sessionId }
         }
         if (result) { item.status = result.error ? 'error' : 'ok'; item.outputSummary = result.text.slice(0, 200); item.details = { ...item.details, output: result.text } }
         else if (['exited', 'error'].includes(owner.state.status)) { item.status = 'error'; item.details = { ...item.details, error: 'Native session ended before a result was recorded' } }

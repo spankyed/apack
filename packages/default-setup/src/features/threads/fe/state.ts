@@ -1568,13 +1568,14 @@ const threadsState = setup({
     CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeTerminalViews[event.mountId]; if (view?.threadId !== event.threadId) return {};
       const sameOwner = view.state?.ownerId === event.state?.ownerId;
       const output = [...(sameOwner ? view.output : []), ...event.output];
       let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
-      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, state: event.state, submission: event.submission, opening: event.opening, problem: event.problem, output: output.slice(from) } } };
+      return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, state: event.state, task: event.task, submission: event.submission, opening: event.opening, problem: event.problem, output: output.slice(from) } } };
     }) },
     CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}

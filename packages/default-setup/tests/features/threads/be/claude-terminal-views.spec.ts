@@ -7,6 +7,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
     subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }),
+    operateTask: vi.fn(async () => ({ stopped: true })),
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
@@ -145,5 +146,19 @@ it('persists accepted reference identity after the submitting view detaches', as
     const receipt = { sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Accepted file context' }
     finish(receipt)
     await vi.waitFor(() => expect(f.accepted).toHaveBeenCalledExactlyOnceWith(f.owner, receipt, { files: [{ ...references.files[0], name: 'example.ts' }] }))
+  } finally { f.views.clear() }
+})
+
+it('admits task controls only for the leased window, exact owner, live task and fresh revision', async () => {
+  const f = fixture(); f.owner.state.tasks.push({ id: 'agent-a', name: 'worker', status: 'running' })
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent-a', revision: 1, operation: 'stop' } as const
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, ownerId: 'old-owner' }, 'one', f.send); f.views.handle({ ...request, taskId: 'foreign' }, 'one', f.send)
+    expect(f.owner.operateTask).not.toHaveBeenCalled()
+    f.views.handle(request, 'one', f.send); f.views.handle(request, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].task?.status).toBe('done'))
+    expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('agent-a', 'stop')
+    f.views.handle(request, 'one', f.send); expect(f.owner.operateTask).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })

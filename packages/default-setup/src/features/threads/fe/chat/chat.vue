@@ -206,6 +206,7 @@ function rotateQuote() {
   randomQuote.value = next;
 }
 
+import { claudeTaskControls } from './native-task-controls.ts'
 import { claudeClientInput } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
@@ -406,6 +407,17 @@ const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
 })
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
+const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([, view]) => view.threadId === currentThread.value?.id && view.state?.status === 'live'))
+let taskRevision = 0
+provide(claudeTaskControls, {
+  ownerId: computed(() => taskView.value?.[1].state?.ownerId),
+  state: computed(() => taskView.value?.[1].task),
+  operate(task, operation) {
+    const lease = taskView.value, owner = lease?.[1].state, threadId = currentThread.value?.id
+    if (!lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
+    actor.send({ type: 'CLAUDE_TERMINAL_TASK', threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, operation, revision: taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1 })
+  },
+})
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 const pendingNativeApproval = computed(() => {

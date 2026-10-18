@@ -1,3 +1,4 @@
+import { ClaudeNativeTaskResultSchema } from './terminal-tasks.ts'
 import { ClaudeNativePlanDialogsSchema, type ClaudeNativePlanDialog, type ClaudeNativePlanDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type ClaudeNativeQuestionRenderRequest, type ClaudeNativeQuestionHoldRequest, ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeFileDialogsSchema, type ClaudeNativeFileDialog, type ClaudeNativeFileDialogResponse } from './terminal-dialogs.ts'
@@ -42,6 +43,7 @@ export interface ClaudeNativeTerminalOwner {
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
+  operateTask(taskId: string, operation: 'inspect' | 'stop'): Promise<{ stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
@@ -235,6 +237,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native approval session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
+      },
+      async operateTask(taskId, operation) {
+        if (closed || !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation })
+        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native task session changed')
+        return ClaudeNativeTaskResultSchema.parse(result)
       },
       async controlMcpServer(serverName, operation) {
         if (closed) throw new Error('Native terminal closed')

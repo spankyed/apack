@@ -1,3 +1,4 @@
+import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
 export const claudeTerminalUiRuntime = String.raw`import http from 'node:http';
@@ -133,6 +134,7 @@ function paneRoster(n){
  return {panes:visible.map(pane=>({id:pane.id,title:pane.title,plugin:pane.plugin,...(pane.closeOnEscape?{close_on_escape:true}:{}),...(pane.holdToasts?{hold_toasts:true}:{}),...(pane.rows!==undefined?{rows:pane.rows}:{}),...(pane.columns!==undefined?{columns:pane.columns}:{})})),shown_id:hidden.has(state.shownId)?visible.at(-1)?.id??null:state.shownId,focused_id:hidden.has(state.focusedId)?null:state.focusedId,focus_requested_id:hidden.has(state.focusRequest)?null:state.focusRequest};
 }
 ${claudeTerminalClientRuntime}
+${claudeTerminalTaskRuntime}
 function nativeThemeTree(n,tree){
  const palette=n.themeResolver.UKe(n.themePreferences.lEn());
  const paint=value=>{
@@ -179,6 +181,7 @@ async function initialize(){
   const themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
+  const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
@@ -202,7 +205,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,taskControls,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -553,6 +556,12 @@ async function control(request,abort){
   // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
   d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
+ }
+ if(request.subtype==='apack_task_control'){
+  const expected=request.session_id;
+  const current=()=>{abort.signal.throwIfAborted();if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native task session changed');};
+  const binding=originalContext??n.runtime.ey();if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native task controls are not ready');
+  return nativeTaskControl(n,binding,request,abort,current);
  }
  if(request.subtype==='apack_mcp_control'){
   const expected=request.session_id;
