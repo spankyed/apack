@@ -12,6 +12,20 @@ function fixture(capabilities: string[] = ['ui_surface_v1']) {
 const client = { client_id: 'fixture-ui', surface: 'desktop' as const }
 
 describe('native UI transport', () => {
+  it('requires terminal-owner capability before advertising a selected Agent prompt host', async () => {
+    const request = vi.fn(async () => ({ surfaces: ['desktop'] }))
+    const target = { session_id: 'native-session', revision: 4, agent_id: 'agent-one' }
+    const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+    await expect(print.attach({ ...client, native_view: target })).rejects.toThrow('Agent UI attachment capability')
+    expect(request).not.toHaveBeenCalled()
+    const terminal = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+    await expect(terminal.attach({ ...client, native_view: target })).resolves.toEqual({ surfaces: ['desktop'] })
+    expect(request).toHaveBeenCalledWith({ subtype: 'ui_attach', ...client, native_view: target, answers: [] })
+    await expect(terminal.attach({ ...client, surface: 'mobile', native_view: target })).rejects.toThrow('requires desktop')
+    await expect(terminal.attach({ ...client, native_view: { ...target, revision: 0 } })).rejects.toThrow()
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
   it('gates on initialization without requiring a system/init event or a model turn', async () => {
     let ready!: (value: { commands: []; agents: []; models: []; capabilities: string[] }) => void
     const initialized = new Promise<{ commands: []; agents: []; models: []; capabilities: string[] }>(resolve => { ready = resolve })

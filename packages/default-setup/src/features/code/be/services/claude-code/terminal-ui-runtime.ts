@@ -217,9 +217,22 @@ const clientViews=new Map();
 function clientViewKey(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal')return undefined;
- return JSON.stringify([String(n.questionOptions.q()),binding.toolContext(new AbortController()).getAppState().viewingAgentTaskId??null]);
+ const facts=nativeViewFacts(n,binding,new AbortController());
+ return JSON.stringify([facts.sessionId,facts.sequence,facts.view]);
 }
 function clientViewCurrent(n,id){return !!n&&clientViews.has(id)&&clientViews.get(id)===clientViewKey(n);}
+function clientAttachmentViewKey(n,expected){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal')throw Error('Native UI view is unavailable');
+ const facts=nativeViewFacts(n,binding,new AbortController());
+ if(expected===undefined){if(facts.view.kind!=='main')throw Error('Desktop parent UI cannot attach to a native Agent view');}
+ else{
+  if(!expected||typeof expected!=='object'||Array.isArray(expected)||Object.keys(expected).length!==3||typeof expected.session_id!=='string'||!Number.isSafeInteger(expected.revision)||expected.revision<1||typeof expected.agent_id!=='string'||!expected.agent_id||expected.agent_id.length>256)throw Error('Invalid native Agent UI attachment');
+  if(expected.session_id!==facts.sessionId||expected.revision!==facts.sequence||facts.view.kind!=='agent'||facts.view.taskId!==expected.agent_id)throw Error('Native Agent UI selection changed');
+ }
+ return JSON.stringify([facts.sessionId,facts.sequence,facts.view]);
+}
+
 
 async function askHost(subtype,args){
  if(!clients.has(args.clientId)||!clientViewCurrent(native,args.clientId))return undefined;
@@ -668,7 +681,7 @@ async function control(request,abort){
    return {selection,notice};
   });
  }
- if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
+ if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1','apack_native_view_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
  if(request.subtype==='apack_get_permission_mode'||request.subtype==='apack_set_permission_mode'){
   const binding=originalContext??n.runtime.ey();
@@ -706,12 +719,11 @@ async function control(request,abort){
  if(n.gate.Uvn(value.subtype,()=>facts))throw Error('Native UI eligibility refused this operation');
  const clientId=value.client_id;
  if(value.subtype==='ui_attach'){
-  if(nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view.kind!=='main')throw Error('Desktop parent UI cannot attach to a native Agent view');
+  const viewKey=clientAttachmentViewKey(n,request.native_view);
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
   const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
   installNotices(n,n.runtime.ey());
   if(answers.length)installHosts(n);
-  const viewKey=clientViewKey(n);
   if(clients.has(clientId)&&clientViews.get(clientId)!==viewKey)throw Error('Detach the previous native view before attaching again');
   clients.add(clientId);clientViews.set(clientId,viewKey);
   try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);if(clientViewKey(n)!==viewKey)throw Error('Native selected view changed during attachment');}catch(error){clients.delete(clientId);clientViews.delete(clientId);try{await n.session.d2t(clientId,'detach');}catch{}if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);throw error;}
@@ -752,11 +764,18 @@ async function control(request,abort){
  if(value.subtype==='ui_render'){
   if(!clients.has(clientId))throw Error('Native UI client is not attached to this owner');
   await n.gate._Jo('desktop');
+  if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
   const question=boundQuestion;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
+  if(value.component==='AbovePrompt'||value.component==='Pane'){
+   const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
+   if(selected.kind==='agent'&&!selected.taskId)throw Error('Native selected Agent is no longer available');
+   props.view=selected.kind==='main'?{}:{agentId:selected.taskId};
+  }
   if((value.component==='ToolUse'||value.component==='ToolResult')&&typeof props.tool_use_id!=='string')props.tool_use_id=value.instance_id;
   if(typeof props.output==='string'&&props.output.length>65536)props.output=props.output.slice(0,65536);
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
+  if(!clientViewCurrent(n,clientId))throw Error('Native UI selection changed while rendering');
   let questionFrame;
   if(question){
    abort.signal.throwIfAborted();

@@ -34,18 +34,49 @@ it('restores the native terminal registrations when a remote drawing retires', (
   expect(focuses.get('AbovePrompt:above-prompt')).toBe(previousFocus)
 })
 
-it('fences native desktop clients by the selected native registry view and session', () => {
+function nativeViews() {
   const start = claudeTerminalUiRuntime.indexOf('const clientViews=new Map();')
   const end = claudeTerminalUiRuntime.indexOf('async function askHost(', start)
+  const factsStart = claudeTerminalUiRuntime.indexOf('let nativeViewSequence=0,nativeViewKey;')
+  const factsEnd = claudeTerminalUiRuntime.indexOf('async function control(', factsStart)
   const state: { viewingAgentTaskId?: string } = {}; let session = 'session-one'
-  const binding = { surface: 'terminal', toolContext: () => ({ getAppState: () => state }) }
-  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({clientViews,clientViewCurrent})`, { originalContext: binding, Map, AbortController }) as { clientViews: Map<string, string>; clientViewCurrent(native: unknown, id: string): boolean }
-  const native = { questionOptions: { q: () => session } }
-  api.clientViews.set('parent', JSON.stringify([session, null]))
+  const tasks = new Map([['registry-agent', { id: 'registry-agent', agentId: 'agent-one' }], ['registry-other', { id: 'registry-other', agentId: 'agent-two' }]])
+  const binding = { surface: 'terminal', toolContext: () => ({ getAppState: () => state, taskRegistry: { get: (id: string) => tasks.get(id) } }) }
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};${claudeTerminalUiRuntime.slice(factsStart, factsEnd)};({clientViews,clientViewCurrent,clientAttachmentViewKey})`, { originalContext: binding, Map, AbortController }) as {
+    clientViews: Map<string, string>; clientViewCurrent(native: unknown, id: string): boolean
+    clientAttachmentViewKey(native: unknown, expected?: unknown): string
+  }
+  const native = { questionOptions: { q: () => session }, runtime: { flt: (task: { agentId: string }) => ({ id: task.agentId }) } }
+  return { api, native, state, tasks, session(value: string) { session = value } }
+}
+
+it('retires clients across selection round trips instead of reviving old parent or Agent callbacks', () => {
+  const { api, native, state, session } = nativeViews()
+  api.clientViews.set('parent', api.clientAttachmentViewKey(native))
   expect(api.clientViewCurrent(native, 'parent')).toBe(true)
   state.viewingAgentTaskId = 'registry-agent'
   expect(api.clientViewCurrent(native, 'parent')).toBe(false)
-  api.clientViews.set('agent', JSON.stringify([session, 'registry-agent']))
+  api.clientViews.set('agent', api.clientAttachmentViewKey(native, { session_id: 'session-one', revision: 2, agent_id: 'agent-one' }))
   expect(api.clientViewCurrent(native, 'agent')).toBe(true)
-  session = 'session-two'; expect(api.clientViewCurrent(native, 'agent')).toBe(false)
+  delete state.viewingAgentTaskId
+  expect(api.clientViewCurrent(native, 'agent')).toBe(false)
+  expect(api.clientViewCurrent(native, 'parent')).toBe(false)
+  state.viewingAgentTaskId = 'registry-agent'
+  expect(api.clientViewCurrent(native, 'agent')).toBe(false)
+  session('session-two'); expect(api.clientViewCurrent(native, 'agent')).toBe(false)
+})
+
+it('requires the exact observed Agent attachment and refuses stale, foreign, retired or implicit parent targets', () => {
+  const { api, native, state, tasks } = nativeViews()
+  api.clientAttachmentViewKey(native)
+  state.viewingAgentTaskId = 'registry-agent'
+  expect(() => api.clientAttachmentViewKey(native)).toThrow('Desktop parent UI')
+  const target = { session_id: 'session-one', revision: 2, agent_id: 'agent-one' }
+  expect(api.clientAttachmentViewKey(native, target)).toBeTruthy()
+  for (const invalid of [{ ...target, revision: 1 }, { ...target, session_id: 'foreign' }, { ...target, agent_id: 'registry-agent' }, { ...target, agent_id: 'agent-two' }]) {
+    expect(() => api.clientAttachmentViewKey(native, invalid)).toThrow('selection changed')
+  }
+  expect(() => api.clientAttachmentViewKey(native, { ...target, unexpected: true })).toThrow('Invalid native Agent')
+  tasks.delete('registry-agent')
+  expect(() => api.clientAttachmentViewKey(native, target)).toThrow('selection changed')
 })

@@ -13,7 +13,8 @@ const clientId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const surface = z.enum(['desktop', 'mobile', 'vscode'])
 const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
 const viewport = z.object({ columns: z.number().int().positive(), rows: z.number().int().positive(), isFullscreen: z.boolean().optional() }).strict()
-const attach = z.object({ client_id: clientId, surface, viewport: viewport.optional() }).strict()
+const nativeView = z.object({ session_id: z.string().min(1).max(256), revision: z.number().int().positive().safe(), agent_id: z.string().min(1).max(256) }).strict()
+const attach = z.object({ client_id: clientId, surface, viewport: viewport.optional(), native_view: nativeView.optional() }).strict().refine(value => !value.native_view || value.surface === 'desktop', 'native Agent UI requires desktop')
 const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.unknown()), viewport: viewport.optional() }).strict()
 const press = z.object({ client_id: clientId, surface, plugin: z.string(), handle: z.number().int().safe(), key: z.string().optional(), href: z.string().max(2048).optional() }).strict()
 // Frozen 2.1.302 ui_input/ui_select schemas: whole-field text, keyed redraw identity.
@@ -107,6 +108,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     /** Advertise only reverse APIs the attached view can actually answer. */
     async attach(options: ClaudeUiAttach) {
       const valid = attach.parse(options)
+      if (valid.native_view && !(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native Agent UI attachment capability is unavailable')
       return z.object({ surfaces }).passthrough().parse(await request({ subtype: 'ui_attach', ...valid, answers: valid.surface === 'desktop' ? promptHosts?.answers(valid.client_id) ?? [] : [] }))
     },
     async detach(id: string) {

@@ -26,6 +26,7 @@ export function mountClaudeUi(options: {
   question?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined
   messages?(): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
+  nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
 }) {
   const { owner } = options
   const client = { client_id: `apack-${randomUUID()}`, surface: 'desktop' as const }
@@ -177,7 +178,7 @@ export function mountClaudeUi(options: {
   const ready = (async () => {
     try {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
-      await owner.handle.ui.attach(client)
+      await owner.handle.ui.attach({ ...client, ...(options.nativeView ? { native_view: options.nativeView } : {}) })
       attached = true
       if (current()) { invalidate(); messages.start(); question.start(); await panes?.start() }
     } catch (error) {

@@ -1355,8 +1355,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     sessionId: string;
     requestId: string;
@@ -1366,8 +1366,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     sessionId: string;
     requestId: string;
@@ -8505,7 +8505,7 @@ declare function addMessagesToThread(params: {
     }>;
 }): void;
 
-declare const attach: z.ZodObject<{
+declare const attach: z.ZodEffects<z.ZodObject<{
     client_id: z.ZodString;
     surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
     viewport: z.ZodOptional<z.ZodObject<{
@@ -8521,6 +8521,19 @@ declare const attach: z.ZodObject<{
         rows: number;
         isFullscreen?: boolean | undefined;
     }>>;
+    native_view: z.ZodOptional<z.ZodObject<{
+        session_id: z.ZodString;
+        revision: z.ZodNumber;
+        agent_id: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    }, {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    }>>;
 }, "strict", z.ZodTypeAny, {
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
@@ -8529,6 +8542,11 @@ declare const attach: z.ZodObject<{
         rows: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
+    native_view?: {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    } | undefined;
 }, {
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
@@ -8536,6 +8554,37 @@ declare const attach: z.ZodObject<{
         columns: number;
         rows: number;
         isFullscreen?: boolean | undefined;
+    } | undefined;
+    native_view?: {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    } | undefined;
+}>, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+    native_view?: {
+        session_id: string;
+        revision: number;
+        agent_id: string;
+    } | undefined;
+}, {
+    client_id: string;
+    surface: "desktop" | "mobile" | "vscode";
+    viewport?: {
+        columns: number;
+        rows: number;
+        isFullscreen?: boolean | undefined;
+    } | undefined;
+    native_view?: {
+        session_id: string;
+        revision: number;
+        agent_id: string;
     } | undefined;
 }>;
 
