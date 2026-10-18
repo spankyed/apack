@@ -52,7 +52,7 @@ it('restores a saved native message anchor without changing keyboard focus', asy
   const save = vi.fn()
   const app = createApp({ setup() {
     useClaudeAgentScroll({ viewport, content, active: () => true, initial: { following: false, top: 90, anchor: { uuid: 'saved', offset: -12 } }, save })
-    return () => h('div', { ref: viewport }, h('div', { ref: content }, ready.value ? h('article', { 'data-native-agent-message': 'saved' }) : null))
+    return () => h('div', { ref: viewport }, h('div', { ref: content }, ready.value ? [h('article', { 'data-native-agent-message': 'saved' })] : []))
   } }); app.mount(root)
   try {
     await nextTick()
