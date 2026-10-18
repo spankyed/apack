@@ -7,20 +7,7 @@
     <p v-if="state?.status === 'error'" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
     <section v-if="shown && state?.details" aria-label="Agent conversation" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
       <button type="button" class="mb-2 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'inspect')">Refresh conversation</button>
-      <dl v-if="state.details.metadata" aria-label="Agent details" class="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-white/10 pb-3 text-[11px]">
-        <dt class="text-neutral-500">Status</dt><dd class="m-0 text-neutral-300">{{ state.details.status === 'killed' ? 'Stopped' : state.details.status }}</dd>
-        <template v-if="state.details.metadata.model"><dt class="text-neutral-500">Model</dt><dd class="m-0 break-words text-neutral-300 [overflow-wrap:anywhere]">{{ state.details.metadata.model }}</dd></template>
-        <template v-if="state.details.metadata.effort"><dt class="text-neutral-500">Effort</dt><dd class="m-0 text-neutral-300">{{ state.details.metadata.effort }}</dd></template>
-        <template v-if="state.details.metadata.elapsedMs !== undefined"><dt class="text-neutral-500">Elapsed at refresh</dt><dd class="m-0 text-neutral-300">{{ Math.floor(state.details.metadata.elapsedMs / 1000) }}s</dd></template>
-        <template v-if="state.details.metadata.tokenCount !== undefined"><dt class="text-neutral-500">Tokens</dt><dd class="m-0 text-neutral-300">{{ state.details.metadata.tokenCount.toLocaleString() }}</dd></template>
-        <template v-if="state.details.metadata.toolUseCount !== undefined"><dt class="text-neutral-500">Tools</dt><dd class="m-0 text-neutral-300">{{ state.details.metadata.toolUseCount.toLocaleString() }}</dd></template>
-      </dl>
-      <details v-if="state.details.metadata?.prompt" class="mb-3">
-        <summary class="cursor-pointer text-neutral-400">Agent prompt</summary>
-        <pre class="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ state.details.metadata.prompt }}</pre>
-        <p v-if="state.details.metadata.promptTruncated" class="text-neutral-500">Prompt preview shortened.</p>
-      </details>
-      <div v-if="state.details.status === 'failed' && state.details.metadata?.error" role="alert" class="mb-3 whitespace-pre-wrap text-red-300 [overflow-wrap:anywhere]">{{ state.details.metadata.error }}<p v-if="state.details.metadata.errorTruncated">Error preview shortened.</p></div>
+      <NativeAgentDetails :details="state.details" />
       <p v-if="!state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
       <article v-for="message in state.details.messages" :key="message.uuid" class="mb-3 last:mb-0">
         <div class="mb-1 text-[10px] uppercase text-neutral-500">{{ message.role }}</div>
@@ -39,6 +26,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import NativeAgentDetails from './NativeAgentDetails.vue'
 import { computed, inject, ref, watch } from 'vue'
 import { claudeTaskControls, type ClaudeTaskIdentity } from './native-task-controls.ts'
 const props = defineProps<{ task: ClaudeTaskIdentity & { status: string } }>()

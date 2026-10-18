@@ -1,9 +1,13 @@
 <template>
   <section v-show="active" aria-label="Focused Agent conversation" class="flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
     <header class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
-      <div class="min-w-0"><p class="mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
-      <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || !terminal?.state" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
+      <div class="min-w-0"><p class="mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
+      <div class="flex shrink-0 flex-wrap justify-end gap-2">
+      <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || !selectedOwner || selectedTask?.status !== 'running'" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
+      <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
+      </div>
     </header>
+    <details v-if="state?.agent?.metadata" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400"><summary class="cursor-pointer py-1">Agent details</summary><div class="max-h-36 overflow-y-auto overscroll-contain py-2"><NativeAgentDetails :details="state.agent" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <div class="relative min-h-0 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
@@ -19,7 +23,7 @@
     </div>
     <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="transcriptScroll.latest()" />
     </div>
-    <NativeAgentComposer :draft="draft" :disabled="!active || returning || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
+    <NativeAgentComposer :draft="draft" :disabled="!active || !selectedOwner || returning || stopping || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
       @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
@@ -30,6 +34,7 @@ import { usePlugin } from '@apackdev/sdk/fe'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
+import NativeAgentDetails from '#extensions/blocks/display/NativeAgentDetails.vue'
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
@@ -46,8 +51,13 @@ const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMo
 const state = computed(() => snapshot.value?.state)
 const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame => [frame.uuid, frame])))
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
-const pending = ref(false), returning = ref(false), problem = ref<string>()
-let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0
+const selectedOwner = computed(() => {
+  const owner = terminal.value?.state, selected = owner?.view
+  return owner?.status === 'live' && owner.ownerId === props.target.ownerId && owner.sessionId === props.target.sessionId && selected?.kind === 'agent' && selected.taskId === props.target.taskId && selected.revision === props.target.revision ? owner : undefined
+})
+const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
+const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
+let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0, stopRevision = 0
 let submission: { revision: number; text: string; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview): void; reject(error: Error): void } | undefined
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
@@ -59,9 +69,9 @@ function detach() {
   submission?.reject(Error('Agent view changed before acknowledgment')); submission = undefined
 }
 watch(() => props.active, active => { detach(); if (active) { uiMount.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000) } }, { immediate: true })
-function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value) }
+function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value) }
 function send(text: string): Promise<ClaudeNativeAgentInputReview | void> {
-  if (!uiMount.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
+  if (!uiMount.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
   const request = ++revision
   return new Promise((resolve, reject) => { submission = { revision: request, text, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
 }
@@ -73,15 +83,26 @@ watch(() => state.value?.agentInput, value => {
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
 })
 function returnToParent() {
-  const owner = terminal.value?.state
-  if (!owner || owner.ownerId !== props.target.ownerId || pending.value || returning.value) return
+  const owner = selectedOwner.value
+  if (!owner || pending.value || returning.value || stopping.value) return
   returning.value = true; emit('returning', true); emit('pending', true); problem.value = undefined
-  returnRevision = Math.max(returnRevision, terminal.value?.task?.revision ?? 0) + 1
+  returnRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
   actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
+}
+function stopAgent() {
+  const owner = selectedOwner.value
+  if (!owner || selectedTask.value?.status !== 'running' || pending.value || returning.value || stopping.value) return
+  stopping.value = true; emit('pending', true); problem.value = undefined
+  stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
 }
 watch(terminal, view => {
   const result = view?.task
-  if (!returning.value || result?.revision !== returnRevision || result.ownerId !== props.target.ownerId || result.operation !== 'background' || result.status === 'pending') return
+  if (stopping.value && result?.revision === stopRevision && result.ownerId === props.target.ownerId && result.taskId === props.target.taskId && result.operation === 'stop' && result.status !== 'pending') {
+    stopping.value = false; emit('pending', pending.value || returning.value)
+    if (result.status === 'error') problem.value = result.problem ?? 'Agent could not be stopped'
+  }
+  if (!returning.value || result?.revision !== returnRevision || result.ownerId !== props.target.ownerId || result.taskId !== props.target.taskId || result.operation !== 'background' || result.status === 'pending') return
   if (result.status === 'done' && result.view?.taskId === null && view?.state?.view?.kind === 'main') { returning.value = false; emit('returning', false); emit('pending', false); emit('returned') }
   else if (result.status === 'error') { returning.value = false; problem.value = result.problem; emit('returning', false); emit('pending', false) }
 })
