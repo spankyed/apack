@@ -34,7 +34,7 @@ const terminalViews = createClaudeTerminalViews({
     const owner = await services.cli.claudeCode.openNativeTerminal(key);
     terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
       const current = services.cli.claudeCode.getNativeTerminal(key);
-      return current === owner || (!current && !services.cli.claudeCode.getConversation(key));
+      return current === owner;
     }));
     return owner;
   },
