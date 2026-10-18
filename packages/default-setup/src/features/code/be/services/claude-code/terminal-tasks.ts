@@ -1,5 +1,6 @@
 import { z } from 'zod'
 export const ClaudeNativeTaskResultSchema = z.object({
+  view: z.object({ taskId: z.string().min(1).max(256).nullable() }).optional(),
   sent: z.boolean().optional(),
   input: z.object({ messageId: z.string().uuid(), mode: z.enum(['queued', 'resumed']) }).optional(),
   stopped: z.boolean().optional(),

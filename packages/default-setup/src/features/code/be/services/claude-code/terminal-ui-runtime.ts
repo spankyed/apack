@@ -183,6 +183,7 @@ async function initialize(){
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
   const taskResume=await import('/$bunfs/root/chunk-jg0h78vk.js');
+  const taskInputGate=await import('/$bunfs/root/chunk-ysbnj2tj.js');
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
@@ -206,7 +207,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,taskControls,taskResume,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -256,6 +257,7 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
  if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
+ if(context.toolContext(new AbortController()).getAppState().viewingAgentTaskId!==undefined)throw Error('Return to the native main view before submitting a parent prompt');
  const prior=(await composer.read()).text;
  if(prior&&prior!==preparedPrompt?.text)return {filled:false};
  const before=new Set((context.messages?.()??[]).map(row=>row.uuid));
@@ -562,6 +564,10 @@ async function control(request,abort){
   const expected=request.session_id;
   const current=()=>{abort.signal.throwIfAborted();if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native task session changed');};
   const binding=originalContext??n.runtime.ey();if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native task controls are not ready');
+  if(request.operation==='foreground'){
+   if(clients.size)throw Error('Detach desktop prompt handlers before selecting a native Agent view');
+   if((await ownerPost('/owner-pending',{})).pending)throw Error('A native parent prompt is pending');
+  }
   return nativeTaskControl(n,binding,request,abort,current);
  }
  if(request.subtype==='apack_mcp_control'){

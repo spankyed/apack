@@ -75,7 +75,7 @@ export async function createClaudeTerminalBridge(options: {
         if (typeof value.message !== 'string') return reply(400, {})
         observerProblem = value.message.slice(0, 1000); projection.clearOutput(); options.changed(); return reply(200, {})
       }
-      if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, pending?.entered ? { id: pending.id } : {}) : reply(409, {})
+      if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, { pending: !!pending, ...(pending?.entered ? { id: pending.id } : {}) }) : reply(409, {})
       if (request.url === '/poll') {
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})

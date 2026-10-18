@@ -2,8 +2,12 @@ import vm from 'node:vm'
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
 function fixture() {
   const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
-  const registry = { all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
-  const context = { taskRegistry: registry, session: {}, storageV5: {}, getAppState: vi.fn(), setAppState: vi.fn() }
+  const registry = { get: (id: string) => tasks.find(task => task.id === id), all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
+  const messageQueue = { getCommandQueueSnapshot: vi.fn(() => []) }, getMessages = vi.fn(() => [])
+  const liveGate = vi.fn((_queue: unknown, read: () => unknown) => read)
+  const nativeState: { viewingAgentTaskId?: string } = {}
+  const show = vi.fn(async (value: { agentId?: string }) => { nativeState.viewingAgentTaskId = value.agentId === undefined ? undefined : tasks.find(task => task.agentId === value.agentId)?.id; return 'shown' })
+  const context = { messageQueue, getMessages, taskRegistry: registry, session: {}, storageV5: {}, getAppState: vi.fn(() => nativeState), setAppState: vi.fn() }
   const stop = vi.fn(async () => {}), saved = vi.fn(async (): Promise<Record<string, unknown>[]> => [{ uuid: 'saved', type: 'user', message: { content: 'Task instruction' } }, { uuid: 'hidden', type: 'user', isMeta: true, message: { content: 'Hidden context' } }])
   const pin = vi.fn(), append = vi.fn(), queue = vi.fn(), raceQueue = vi.fn(() => true)
   class ResumeRace extends Error {}
@@ -14,8 +18,8 @@ function fixture() {
   const message = vi.fn((value: unknown) => value)
   const runner = vi.fn(async function* (call: { id: string }, _assistant: unknown, _permission: unknown, _context: unknown, _clock: unknown) { yield { message: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: call.id, ...(denied ? { is_error: true, content: 'Native refusal' } : {}) }] }, toolUseResult: { success: !denied } } } })
   const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { randomUUID: () => '12345678-1234-1234-1234-123456789abc' }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
-  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ runtime: { Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
-  return { pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
+  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ runtime: { Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
+  return { show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
 }
 it('stops the exact native registry task through the original user-stop callback', async () => {
   const f = fixture(); expect(await f.request('stop')).toEqual({ stopped: true })
@@ -114,7 +118,8 @@ it('queues human input with native transcript identity without requiring the Sen
 it('resumes ended Agents with original permission context and preserves native refusal', async () => {
   const f = fixture(); f.tasks[0].status = 'completed'
   expect((await f.request('input')).input.mode).toBe('resumed')
-  expect(f.resume).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'registry-a', promptOrigin: { kind: 'human' }, toolUseContext: f.context, canUseTool: f.canUseTool, userInitiated: true }))
+  expect(f.liveGate).toHaveBeenCalledWith(f.messageQueue, f.getMessages)
+  expect(f.resume).toHaveBeenCalledWith(expect.objectContaining({ liveTranscript: f.getMessages, agentId: 'registry-a', promptOrigin: { kind: 'human' }, toolUseContext: f.context, canUseTool: f.canUseTool, userInitiated: true }))
   f.setResumeResult({ deniedByPlugin: 'Managed restriction' }); await expect(f.request('input')).rejects.toThrow('Managed restriction')
   expect(f.queue).not.toHaveBeenCalled(); expect(f.raceQueue).not.toHaveBeenCalled()
 })
@@ -131,4 +136,34 @@ it('deduplicates native human envelopes against visible live human messages and 
   expect((await f.request('inspect')).details.messages).toEqual([{ role: 'user', text: 'Typed reply' }])
   f.registry.getTranscript.mockReturnValue({ messages: [] })
   expect((await f.request('inspect')).details.messages).toEqual([{ role: 'user', text: 'Native envelope: Typed reply' }])
+})
+
+it('refuses ended input before native transcript writes when its live queue context is unavailable', async () => {
+  const f = fixture(); f.tasks[0].status = 'completed'
+  Object.assign(f.context, { messageQueue: undefined })
+  await expect(f.request('input')).rejects.toThrow('Native live transcript context is unavailable')
+  expect(f.pin).not.toHaveBeenCalled(); expect(f.append).not.toHaveBeenCalled(); expect(f.resume).not.toHaveBeenCalled()
+})
+
+it('uses original native view selection and returns only after exact registry selection', async () => {
+  const f = fixture()
+  expect(await f.request('foreground')).toEqual({ view: { taskId: 'agent-a' } })
+  expect(f.show).toHaveBeenCalledWith({ agentId: 'agent-a' }); expect(f.nativeState.viewingAgentTaskId).toBe('registry-a')
+  expect(await f.request('background')).toEqual({ view: { taskId: null } })
+  expect(f.show).toHaveBeenLastCalledWith({}); expect(f.nativeState.viewingAgentTaskId).toBeUndefined()
+})
+it('refuses native selection denial, moved selection and foreign return requests', async () => {
+  const f = fixture(); f.show.mockResolvedValueOnce('hidden')
+  await expect(f.request('foreground')).rejects.toThrow('unavailable')
+  f.show.mockResolvedValueOnce('shown'); await expect(f.request('foreground')).rejects.toThrow('moved')
+  f.nativeState.viewingAgentTaskId = 'registry-a'
+  await expect(f.request('background', 'other-agent')).rejects.toThrow('different native Agent')
+  expect(f.show).toHaveBeenCalledTimes(2)
+})
+
+it('returns from a retired native view safely but refuses empty task identity', async () => {
+  const f = fixture(); f.nativeState.viewingAgentTaskId = 'retired-task'
+  await expect(f.request('background', '')).rejects.toThrow('Invalid native task operation')
+  expect(f.show).not.toHaveBeenCalled()
+  expect(await f.request('background')).toEqual({ view: { taskId: null } })
 })

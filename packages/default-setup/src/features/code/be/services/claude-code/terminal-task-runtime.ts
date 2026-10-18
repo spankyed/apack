@@ -1,17 +1,32 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskControl(n,binding,request,abort,current){
  current();
- if(typeof request.task_id!=='string'||request.task_id.length>256||!['inspect','stop','send','input'].includes(request.operation))throw Error('Invalid native task operation');
+ if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
+ if(request.operation==='background'){
+  const selected=context.getAppState().viewingAgentTaskId;
+  const selectedTask=selected===undefined?undefined:registry.get(selected);
+  if(selectedTask&&n.runtime.flt(selectedTask)?.id!==request.task_id)throw Error('A different native Agent is selected');
+  if(typeof binding.view?.show!=='function'||await binding.view.show({})!=='shown')throw Error('Native main view is unavailable');
+  current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
+  return {view:{taskId:null}};
+ }
  const matches=Object.values(registry.all()).filter(task=>n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
- const task=matches[0],liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
+ const task=matches[0];
+ if(request.operation==='foreground'){
+  if(typeof binding.view?.show!=='function'||await binding.view.show({agentId:request.task_id})!=='shown')throw Error('Native Agent view is unavailable');
+  current();if(context.getAppState().viewingAgentTaskId!==task.id)throw Error('Native view moved during selection');
+  return {view:{taskId:request.task_id}};
+ }
+ const liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
  const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
  const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
  const canInput=task.type==='local_agent'&&!task.resuming&&['running','completed','failed','killed'].includes(task.status);
  if(request.operation==='input'){
   if(!canInput)throw Error('This Agent cannot accept user input now');
   if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
+  if(task.status!=='running'&&(typeof context.messageQueue?.getCommandQueueSnapshot!=='function'||typeof context.getMessages!=='function'))throw Error('Native live transcript context is unavailable');
   n.runtime.Dhs(task.id,registry);
   const message=n.runtime.Ae({content:request.text,origin:{kind:'human'}});
   n.runtime.WXt(task.id,message,registry);
@@ -19,7 +34,7 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
   if(task.status==='running')n.runtime.jXt(task.id,request.text,registry,{isMeta:true,origin:{kind:'human'},shownAs:message.uuid});
   else{
    try{
-    const result=await n.taskResume.MQ({agentId:task.id,prompt:request.text,promptIsMeta:true,promptOrigin:{kind:'human'},toolUseContext:context,canUseTool:binding.canUseTool,userInitiated:true});
+    const result=await n.taskResume.MQ({agentId:task.id,prompt:request.text,promptIsMeta:true,promptOrigin:{kind:'human'},toolUseContext:context,liveTranscript:n.taskInputGate.ekt(context.messageQueue,context.getMessages),canUseTool:binding.canUseTool,userInitiated:true});
     if(n.taskResume.Y$(result))throw Error('Native Agent resume refused: '+result.deniedByPlugin);
     mode='resumed';
    }catch(error){

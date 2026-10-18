@@ -43,7 +43,7 @@ export interface ClaudeNativeTerminalOwner {
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
-  operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input', text?: string): Promise<{ sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
+  operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background', text?: string): Promise<{ view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
   getMcpStatus(): Promise<ClaudeMcpStatus>
   controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
@@ -151,6 +151,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.signal?.aborted) kill()
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
+    let requestedNativeView: { sessionId: string; taskId: string } | undefined
     return {
       get state() { return { ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
@@ -239,11 +240,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
       },
       async operateTask(taskId, operation, text) {
-        if (closed || !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
+        if (closed || operation !== 'background' && !bridge.projection.tasks.some(task => task.id === taskId)) throw new Error('Native task owner expired')
         const sessionId = bridge.projection.sessionId
         const result = await bridge.uiTransport.request({ subtype: 'apack_task_control', session_id: sessionId, task_id: taskId, operation, ...((operation === 'send' || operation === 'input') ? { text } : {}) })
         if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native task session changed')
-        return ClaudeNativeTaskResultSchema.parse(result)
+        const parsed = ClaudeNativeTaskResultSchema.parse(result)
+        if (parsed.view) requestedNativeView = parsed.view.taskId ? { sessionId, taskId: parsed.view.taskId } : undefined
+        return parsed
       },
       async controlMcpServer(serverName, operation) {
         if (closed) throw new Error('Native terminal closed')
@@ -293,7 +296,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
         return accepted
       },
-      submit(text, images) { if (changingModel) return Promise.reject(new Error('Native model selection is changing; your draft was retained')); return bridge.submit(text, images) },
+      submit(text, images) { if (requestedNativeView?.sessionId === bridge.projection.sessionId) return Promise.reject(new Error('Return to the native main view before submitting a parent prompt')); if (changingModel) return Promise.reject(new Error('Native model selection is changing; your draft was retained')); return bridge.submit(text, images) },
       kill,
       async close() { if (!closed) kill(); await done },
     }
