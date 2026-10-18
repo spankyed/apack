@@ -10,9 +10,10 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
-  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput })
+  const accepted = vi.fn()
+  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput, accepted })
   const send = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
-  return { owner, output, listeners, open, views, send, setCurrent(value?: ClaudeNativeTerminalOwner) { current = value } }
+  return { owner, output, listeners, open, views, send, accepted, setCurrent(value?: ClaudeNativeTerminalOwner) { current = value } }
 }
 afterEach(() => vi.useRealTimers())
 it('requires the live window lease, matching thread and current owner for terminal controls', () => {
@@ -127,5 +128,22 @@ it('resolves image-only references before native submission and retains owner fe
     f.setCurrent(); finish(input)
     await Promise.resolve(); await Promise.resolve()
     expect(f.owner.submit).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})
+
+it('persists accepted reference identity after the submitting view detaches', async () => {
+  const f = fixture(async text => ({ text, images: [] }))
+  let finish!: (receipt: { sessionId: string; uuid: string; text: string }) => void
+  vi.mocked(f.owner.submit).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const references = { files: [{ name: 'example.ts', path: '/project/example.ts', typeLabel: 'TypeScript', isImage: false }] }
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: '', references }, 'one', f.send)
+    await vi.waitFor(() => expect(f.owner.submit).toHaveBeenCalledOnce())
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
+    references.files[0].name = 'new draft name'
+    const receipt = { sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Accepted file context' }
+    finish(receipt)
+    await vi.waitFor(() => expect(f.accepted).toHaveBeenCalledExactlyOnceWith(f.owner, receipt, { files: [{ ...references.files[0], name: 'example.ts' }] }))
   } finally { f.views.clear() }
 })

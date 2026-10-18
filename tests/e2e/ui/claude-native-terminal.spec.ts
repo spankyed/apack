@@ -155,8 +155,10 @@ test('hands one conversation to the native terminal and displays its main and ag
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('', { timeout: 15000 })
   await expect(card.getByTitle('native-red 1.png', { exact: true })).toHaveCount(0)
-  await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'user' && message.text.includes('NativeComposerImageFixture') && message.references?.images?.length === 1)).toBe(true)
+  await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'user' && message.text.includes('NativeComposerImageFixture') && message.references?.images?.length === 1 && message.references.images[0].name === 'native-red 1.png')).toBe(true)
   await expect.poll(async () => (await context()).native.state.busy, { timeout: 15000 }).toBe(false)
+  await expect(section.getByTitle('native-red 1.png', { exact: true })).toBeVisible()
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-image-history.png') })
   await appPage.setViewportSize({ width: 680, height: 600 })
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeVisible()
   const statusGeometry = await composerStatus.evaluate(element => {

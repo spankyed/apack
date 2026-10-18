@@ -52,6 +52,7 @@ interface View {
 export function createClaudeTerminalViews(dependencies: {
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string): Promise<ClaudeNativeTerminalOwner>
+  accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
   prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
   const views = new Map<string, View>()
@@ -117,7 +118,8 @@ export function createClaudeTerminalViews(dependencies: {
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
       if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
-          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !event.references?.images?.length || event.text.length > 32768) return
+          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length) || event.text.length > 32768) return
+        const references = event.references ? structuredClone(event.references) : undefined
         target.submissionRevision = event.revision
         const submission: ClaudeTerminalSubmissionState = { ownerId: event.ownerId, revision: event.revision, status: 'pending' }
         target.submission = submission; publish(key, target)
@@ -125,12 +127,15 @@ export function createClaudeTerminalViews(dependencies: {
         void Promise.resolve().then(async () => {
           if (!current()) return undefined
           if (!dependencies.prepareInput && event.references && Object.values(event.references).some(value => value?.length)) throw new Error('Native references could not be prepared')
-          const input = dependencies.prepareInput ? await dependencies.prepareInput(event.text, event.references) : { text: event.text, images: [] }
+          const input = dependencies.prepareInput ? await dependencies.prepareInput(event.text, references) : { text: event.text, images: [] }
           if (!current()) return undefined
           return input.images.length ? owner.submit(input.text, input.images) : owner.submit(input.text)
         }).then(receipt => {
-          if (!current() || !receipt) return
+          if (!receipt || dependencies.get(event.threadId) !== owner) return
           if (receipt.sessionId !== owner.state.sessionId) throw new Error('Native prompt receipt belongs to another session')
+          // Persistence follows the accepted owner, even if the submitting window detached.
+          if (references) dependencies.accepted?.(owner, receipt, references)
+          if (!current()) return
           target.submission = { ...submission, status: 'accepted', receipt }; publish(key, target)
         }).catch(error => {
           if (!current()) return

@@ -25,15 +25,17 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
+const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
 const terminalViews = createClaudeTerminalViews({
+  accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),
   async open(key) {
     const owner = await services.cli.claudeCode.openNativeTerminal(key);
-    syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
+    terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
       const current = services.cli.claudeCode.getNativeTerminal(key);
       return current === owner || (!current && !services.cli.claudeCode.getConversation(key));
-    });
+    }));
     return owner;
   },
 });

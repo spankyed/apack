@@ -5682,6 +5682,7 @@ type OutgoingThreadsEvents = ClaudeTerminalViewReply | {
 } | {
     type: 'UPDATE_MESSAGE_STATE';
     messageId: string;
+    references?: MessageReferences;
     text?: string;
     blocks?: BlockConfig[];
     responseTimestamp?: number;
@@ -7599,7 +7600,7 @@ declare const chatCommands: {
     };
     readonly updateMessageState: (params: {
         messageId: EARS.EntityId;
-        updates: Partial<Pick<MessageEntity, "blockResponse" | "blocks" | "compacted" | "context" | "forkable" | "responseTimestamp" | "status" | "text">>;
+        updates: Partial<Pick<MessageEntity, "blockResponse" | "blocks" | "compacted" | "context" | "forkable" | "references" | "responseTimestamp" | "status" | "text">>;
     }) => {
         messageId: EARS.EntityId;
         updatedAt: number;
@@ -9237,7 +9238,7 @@ declare function updateChatState(threadId: EARS.EntityId, chatState: string): vo
  *   text: 'Updated message content'
  * });
  */
-declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'responseTimestamp' | 'status' | 'text'>>): void;
+declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'status' | 'text'>>): void;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {

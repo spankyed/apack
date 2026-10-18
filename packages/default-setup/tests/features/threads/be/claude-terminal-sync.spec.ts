@@ -19,7 +19,7 @@ vi.mock('#generated/repository.ts', () => ({ repository: {
   },
   threadCommands: { update: (_: unknown, updates: { context: Record<string, unknown> }) => { fake.thread.context = updates.context } },
 } }))
-vi.mock('#features/threads/be/services/chat.ts', () => ({ updateMessageState: vi.fn() }))
+vi.mock('#features/threads/be/services/chat.ts', () => ({ updateMessageState: vi.fn((id: string, updates: Record<string, unknown>) => { Object.assign(fake.messages.find(message => message.id === id)!, updates) }) }))
 vi.mock('#features/threads/be/services/threads.ts', () => ({ updateChatState: vi.fn() }))
 const sessionId = '11111111-1111-1111-1111-111111111111'
 let directory: string
@@ -51,4 +51,29 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
   expect(fake.messages.map(message => (message.context as Record<string, unknown>).cliUuid)).toEqual(['22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444'])
   expect(fake.messages.at(-1)?.text).toBe('Final native answer')
   expect(fake.thread.context.claudeCode).toMatchObject(damaged ? { chatState: 'error', sessionError: 'Native transcript contains invalid JSON' } : { chatState: 'paused', sessionError: undefined })
+})
+
+it.each([false, true])('retains receipt-bound references when journal arrives before receipt: %s', async journalFirst => {
+  const uuid = '55555555-5555-5555-5555-555555555555', otherUuid = '66666666-6666-6666-6666-666666666666'
+  const entry = (id: string) => ({ sessionId, row: { sessionId, uuid: id, type: 'user', message: { content: 'Native rewritten text' } } })
+  let release!: () => Promise<void>, active = true
+  const readJournal = vi.fn(async () => ({ entries: journalFirst ? [entry(uuid), entry(otherUuid)] : [], pending: false, problems: [] }))
+  const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
+    readJournal, beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  const history = syncClaudeTerminalThread('thread' as EntityId, owner, () => active)
+  await vi.waitFor(() => expect(readJournal).toHaveBeenCalled())
+  // Allow the first journal batch to be persisted before attaching the receipt.
+  await Promise.resolve()
+  const references = { images: [{ name: 'original.png', url: 'media://message/original.png' }], files: [{ name: 'source.ts', path: '/project/source.ts', typeLabel: 'TypeScript', isImage: false }] }
+  history.acceptSubmission({ sessionId, uuid, text: 'Native rewritten text' }, references)
+  references.images[0].name = 'mutated later'
+  readJournal.mockResolvedValue({ entries: [entry(uuid), entry(otherUuid)], pending: false, problems: [] })
+  await release()
+  expect(fake.messages).toHaveLength(2)
+  expect(fake.messages[0]).toMatchObject({ text: 'Native rewritten text', references: { images: [{ name: 'original.png' }], files: [{ name: 'source.ts' }] } })
+  expect(fake.messages[1].references).toBeUndefined()
+  active = false
+  history.acceptSubmission({ sessionId, uuid, text: '' }, { images: [{ name: 'stale', url: 'media://stale/x' }] })
+  expect((fake.messages[0].references as typeof references).images[0].name).toBe('original.png')
 })

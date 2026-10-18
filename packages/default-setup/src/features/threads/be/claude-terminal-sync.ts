@@ -6,12 +6,14 @@ import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts'
 import { updateMessageState } from './services/chat.ts'
 import { updateChatState } from './services/threads.ts'
-import type { ToolActivityEntry } from './types.ts'
+import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
+import type { MessageReferences, ToolActivityEntry } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
 export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean) {
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
+  const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
   const results = new Map<string, { text: string; error: boolean }>()
   let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
@@ -32,6 +34,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     const row = projectClaudeTerminalHistory(entry)
     if (!row) return
     const key = JSON.stringify([row.sessionId, row.uuid]), existing = nativeMessages.get(key)
+    const references = row.sender === 'user' ? acceptedReferences.get(key) ?? row.references : row.references
     if (existing && !existing.terminal) return
     for (const block of row.blocks) {
       if (block.type !== 'tool-activity') continue
@@ -44,9 +47,9 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       }
       block.props.state = entries.some(item => item.status === 'running') ? 'streaming' : entries.some(item => item.status === 'error') ? 'error' : 'done'
     }
-    if (existing) updateMessageState(existing.id, { text: row.text, blocks: row.blocks, context: row.context })
+    if (existing) updateMessageState(existing.id, { text: row.text, blocks: row.blocks, context: row.context, ...(references ? { references } : {}) })
     else {
-      const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references: row.references })
+      const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references })
       // addMessage trims the human entry path; a native row's exact text is already accepted.
       if (result.text !== row.text) repository.chatCommands.updateMessageState({ messageId: result.id, updates: { text: row.text } })
       nativeMessages.set(key, { id: result.id, terminal: true })
@@ -122,4 +125,13 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const timer = setInterval(() => { if (!stopped) void flush() }, 250); timer.unref?.()
   void flush()
   owner.beforeRelease(async () => { stopped = true; clearInterval(timer); await inFlight; do { await flush() } while (journalPending && current()) })
+  return {
+    acceptSubmission(receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences) {
+      if (!current() || receipt.sessionId !== owner.state.sessionId) return
+      const key = JSON.stringify([receipt.sessionId, receipt.uuid]), retained = structuredClone(references)
+      acceptedReferences.set(key, retained)
+      const existing = nativeMessages.get(key)
+      if (existing?.terminal) updateMessageState(existing.id, { references: retained })
+    },
+  }
 }

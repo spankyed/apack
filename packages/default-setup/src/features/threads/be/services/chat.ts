@@ -255,7 +255,7 @@ export function updateMessageBlockResponse(
  */
 export function updateMessageState(
   messageId: EARS.EntityId,
-  updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
+  updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted' | 'references'>>
 ): void {
   let result;
   try {

@@ -155,6 +155,15 @@
             :file="file" class="flex-shrink-0" />
         </div>
 
+        <div v-if="message.references?.context?.length" class="mb-2 flex flex-wrap gap-1.5" aria-label="Attached context">
+          <span v-for="reference in message.references.context" :key="`${reference.refType}:${reference.refId}`"
+            :title="`${reference.refType}: ${reference.label}`"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-700/50 bg-neutral-900/60 px-2 py-1 text-xs text-neutral-300">
+            <span v-if="reference.shortCode" class="shrink-0 font-mono text-neutral-500">{{ reference.shortCode }}</span>
+            <span class="truncate">{{ reference.label }}</span>
+          </span>
+        </div>
+
         <!-- Tool-activity blocks render ABOVE text so the work log
              appears before the model's commentary, not after it. -->
         <template v-for="entry in aboveTextBlocks" :key="entry.blockIndex">
