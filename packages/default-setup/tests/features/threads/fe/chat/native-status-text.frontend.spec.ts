@@ -1,4 +1,4 @@
-import { parseClaudeStatus } from '#features/threads/fe/chat/native-status-text.ts'
+import { parseClaudeStatus } from '#extensions/blocks/display/native-status-text.ts'
 it('retains multiline text and carries colors and emphasis across lines until reset', () => {
   const spans = parseClaudeStatus('\x1b[31;1mMain\nSecond\x1b[0m normal')
   expect(spans).toEqual([{ text: 'Main\nSecond', style: { color: '#f87171', fontWeight: '600' } }, { text: ' normal', style: {} }])

@@ -53,7 +53,7 @@ import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
-import NativeStatusText from './NativeStatusText.vue'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
 const actor: ThreadsState = usePlugin()

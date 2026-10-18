@@ -24,7 +24,7 @@ import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#gene
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
-import NativeStatusText from './NativeStatusText.vue'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 const hover = createClaudeHoverSurface()
