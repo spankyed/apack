@@ -238,3 +238,22 @@ it('publishes native view revisions only from its current process/session and re
   expect((await request('/native-view', { ...main, sessionId: otherSession, sequence: 4 })).status).toBe(200)
   expect(bridge!.view).toEqual({ kind: 'main', revision: 4 })
 })
+
+it('fences shared PTY Enter by native main or Agent view and refuses pending parent input', async () => {
+  const enter = vi.fn(); await create(enter)
+  const main = { sessionId: session, pid: process.pid, kind: 'main', revision: 1 }
+  expect((await request('/view-enter', main)).status).toBe(409)
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } })
+  expect((await request('/view-enter', { ...main, pid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/view-enter', { ...main, kind: 'agent', taskId: 'agent' })).status).toBe(409)
+  expect((await request('/view-enter', main)).status).toBe(200)
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 2, view: { kind: 'agent', registryId: 'registry', taskId: 'agent' } })
+  expect((await request('/view-enter', main)).status).toBe(409)
+  expect((await request('/view-enter', { ...main, kind: 'agent', revision: 2, taskId: 'foreign' })).status).toBe(409)
+  const agent = { ...main, kind: 'agent', revision: 2, taskId: 'agent' }
+  expect((await request('/view-enter', agent)).status).toBe(200)
+  const pending = bridge!.submit('Unrelated parent draft'), rejected = expect(pending).rejects.toThrow('closed')
+  expect((await request('/view-enter', agent)).status).toBe(409)
+  expect(enter).toHaveBeenCalledTimes(2)
+  await bridge!.close(); await rejected
+})

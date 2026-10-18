@@ -50,42 +50,45 @@ async function retireNativeAgentCommands(clientId){
  await Promise.allSettled(retired);
  for(const [id,entry] of agentCommandDialogs)if((clientId===undefined||entry.clientId===clientId)&&entry.closed)agentCommandDialogs.delete(id);
 }
-async function dispatchNativeAgentInput(n,request,abort){
+async function dispatchNativeAgentInput(n,request,abort){return dispatchNativeInput(n,request,abort,false);}
+async function dispatchNativeParentCommand(n,request,abort){return dispatchNativeInput(n,request,abort,true);}
+async function dispatchNativeInput(n,request,abort,main){
  await n.gate._Jo('desktop');
  if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');
  if(agentDispatch||[...agentCommandDialogs.values()].some(entry=>!entry.closed))throw Error('A native Agent submission or command is pending');
  const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,abort);
- if(facts.view.kind!=='agent'||!facts.view.taskId)throw Error('No native Agent is selected');
+ if(main?facts.view.kind!=='main':facts.view.kind!=='agent'||!facts.view.taskId)throw Error(main?'Return to the native main view before running a parent command':'No native Agent is selected');
  const identityCurrent=()=>{const now=nativeViewFacts(n,binding,new AbortController());if(now.sessionId!==facts.sessionId||now.sequence!==facts.sequence)throw Error('Native Agent selection changed');};
  const viewCurrent=()=>{identityCurrent();if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');};
  const current=()=>{abort.signal.throwIfAborted();viewCurrent();};
- if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
+ if(typeof request.text!=='string'||!request.text.trim()||request.text.length>(main?32768:16384))throw Error('Native input is empty or too long');
  const prepared=n.runtime.GYt(request.text,{});
- if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
  const text=prepared.input.trimEnd(),context=binding.toolContext(abort),composer=binding.composer;
- const task=Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
- if(!task||task.type!=='local_agent'||task.resuming)throw Error('This Agent cannot accept input now');
+ const parsed=n.commandInput.IS(text),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());
+ const expectedRun=command&&['local','local-jsx'].includes(command.type)?n.engine.Cie(command,parsed.args):undefined;
+ if(main&&!expectedRun)return {kind:'not_command'};
+ if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
+ const task=main?undefined:Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
+ if(!main&&(!task||task.type!=='local_agent'||task.resuming))throw Error('This Agent cannot accept input now');
  const original=await composer.read();current();
  if(original.text)throw Error('The native terminal has an unsent draft; your app draft was retained');
- const saved=await binding.savedAgentMessages(facts.view.taskId);current();
- const before=new Set([...(saved??[]),...(context.taskRegistry.getTranscript(task.id)?.messages??[])].map(row=>row.uuid));
+ const saved=main?[]:await binding.savedAgentMessages(facts.view.taskId);current();
+ const before=new Set([...(saved??[]),...(task?context.taskRegistry.getTranscript(task.id)?.messages??[]:[])].map(row=>row.uuid));
  const notices=()=>{const state=context.getAppState();return [state.notifications?.current,...(state.notifications?.queue??[])].filter(Boolean);};
  const priorNotices=new Set(notices());
  const parentBefore=new Set((binding.messages?.()??[]).map(row=>row.uuid));
- const parsed=n.commandInput.IS(text),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());
- const expectedRun=command&&['local','local-jsx'].includes(command.type)?n.engine.Cie(command,parsed.args):undefined;
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
  const operation={clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,commandName:expectedRun?.command,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
  try{
   await composer.write(text,'replace');current();
   if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
-  current();await ownerPost('/agent-enter',{pid:process.pid,taskId:facts.view.taskId,revision:facts.sequence});
+  current();await ownerPost('/view-enter',{pid:process.pid,kind:facts.view.kind,taskId:facts.view.taskId,revision:facts.sequence});
   const deadline=Date.now()+4000;
   while(Date.now()<deadline){
    current();
    if(operation.dialog){const value=operation.dialog;if(value.kind==='panel')return {kind:'panel',id:value.id,commandName:value.commandName};return {kind:'confirmation',id:value.id,title:value.title,confirmLabel:value.confirmLabel,commandName:value.commandName};}
-   const rows=context.taskRegistry.getTranscript(task.id)?.messages??[];
+   const rows=task?context.taskRegistry.getTranscript(task.id)?.messages??[]:[];
    const row=rows.find(row=>!before.has(row.uuid)&&row.type==='user'&&row.isMeta!==true&&row.origin?.kind==='human'&&row.message?.content===text);
    if(row)return {kind:'input',messageId:row.uuid,previousStatus:task.status};
    if(expectedRun){

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { claudeTerminalAgentInputRuntime } from '#features/code/be/services/claude-code/terminal-agent-input-runtime.ts'
 
-function fixture() {
+function fixture(main = false) {
   let draft = '', sequence = 1, panelShown = false, finish!: () => void
   const messageId = randomUUID(), rows: unknown[] = [], parentRows: unknown[] = [], notices: { current?: unknown } = {}
   const cancel = vi.fn(() => finish()), confirm = vi.fn(() => finish())
@@ -21,9 +21,10 @@ function fixture() {
     else { rows.push({ uuid: messageId, type: 'user', origin: { kind: 'human' }, message: { content: draft } }); draft = '' }
     return { entered: true }
   })
-  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', claudeTerminalAgentInputRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel };')
-  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId: 'session', sequence, view: { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }) as {
+  const make = new Function('randomUUID', 'clients', 'clientViewCurrent', 'nativeViewFacts', 'originalContext', 'ownerPost', 'process', claudeTerminalAgentInputRuntime + '\nreturn { dispatch:dispatchNativeAgentInput, answer:answerNativeAgentCommand, retire:retireNativeAgentCommands, panel:nativeAgentPanel, parent:dispatchNativeParentCommand };')
+  const controller = make(randomUUID, new Set(['client']), () => true, () => ({ sessionId: 'session', sequence, view: main ? { kind: 'main' } : { kind: 'agent', taskId: 'agent' } }), binding, enter, { stdin }) as {
     dispatch(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<{ kind: string; id: string; messageId: string; message: string }>
+    parent(n: unknown, request: { client_id: string; text: string }, abort: AbortController): Promise<unknown>
     answer(n: unknown, request: { client_id: string; command_id: string; decision: string }): Promise<unknown>
     panel(n: unknown, request: { client_id: string; panel_id: string; operation: string; text?: string }): Promise<{ open: boolean }>
     retire(client: string): Promise<void>
@@ -99,4 +100,16 @@ it('does not acknowledge an unrelated original panel as the submitted command', 
   expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/usage' }, new AbortController())).toMatchObject({ kind: 'blocked', message: 'Original command block' })
   f.dismissPanel('native-dialog')
   expect(await f.controller.dispatch(f.native, { client_id: 'client', text: 'Human reply' }, new AbortController())).toMatchObject({ kind: 'input' })
+})
+
+it('dispatches parent local commands while leaving ordinary prompts on their original bridge', async () => {
+  const f = fixture(true)
+  expect(await f.controller.parent(f.native, { client_id: 'client', text: 'Ordinary parent prompt' }, new AbortController())).toEqual({ kind: 'not_command' })
+  expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
+  expect(await f.controller.parent(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' })
+  expect(f.rows).toHaveLength(0)
+  await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Worker input' }, new AbortController())).rejects.toThrow('No native Agent')
+  const selected = fixture()
+  await expect(selected.controller.parent(selected.native, { client_id: 'client', text: '/help' }, new AbortController())).rejects.toThrow('main view')
+  expect(selected.enter).not.toHaveBeenCalled()
 })

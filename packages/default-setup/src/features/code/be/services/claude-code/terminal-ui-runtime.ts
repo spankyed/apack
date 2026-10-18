@@ -522,6 +522,7 @@ function nativeViewFacts(n,binding,abort){
 async function control(request,abort){
  const n=await initialize();
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
+ if(request.subtype==='apack_ui_parent_command')return dispatchNativeParentCommand(n,request,abort);
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
