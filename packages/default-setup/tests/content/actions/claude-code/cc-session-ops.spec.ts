@@ -1,3 +1,4 @@
+import { action as welcome } from '../../../../src/content/actions/onboarding/steps/handle-welcome-step.ts'
 import { action as onboardImport } from '../../../../src/content/actions/onboarding/steps/handle-cc-import-threads-step.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
 import { importedSessionMetadata } from '../../../../src/content/actions/claude-code/_helpers/session-import.ts'
@@ -63,4 +64,16 @@ it('onboarding imports the same native metadata into thread context and remains 
  expect(repository.chatQueries.threadData(imported!.id)?.messages?.map(m=>m.context?.cliUuid)).toEqual(['native-user','native-answer'])
  await onboardImport({threadId:caller.id,response:['cc']},services)
  expect(repository.threadQueries.all().filter(t=>t.context?.claudeCode?.sessionId==='onboarding-native')).toHaveLength(1)
+});
+
+it('offers saved local Claude sessions during onboarding even when authentication is unavailable', async () => {
+ const caller=repository.threadCommands.create({topic:'Onboarding',instructions:''})
+ repository.threadCommands.update(caller.id,{context:{onboarding:{step:'welcome',threadId:caller.id,pendingMessageId:'Message-choice',data:{}}}})
+ const list=vi.fn(async()=>[{id:'local-session',cwd:'/fixture'}]),choice=vi.fn(()=>({messageId:'Message-choice' as const}))
+ mockService<Services,'cli'>('cli',{testCli:vi.fn(async(provider:string)=>(provider==='claude-code'?{success:true as const,resolvedPath:'/fixture/claude'}:{success:false as const,error:'Not installed'})),claudeCode:{authStatus:vi.fn(async()=>({authenticated:false})),listAllSessions:list} as never})
+ mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
+ mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn(),sendChoiceBlock:choice})
+ await welcome({threadId:caller.id},services)
+ expect(list).toHaveBeenCalled();expect(choice).toHaveBeenCalledWith(expect.objectContaining({choices:[{id:'/fixture',label:'fixture',description:'/fixture'}]}))
+ expect(repository.threadQueries.byId(caller.id)?.context?.onboarding).toMatchObject({step:'projects',data:{authenticated:false,ccSessionCount:1}})
 });
