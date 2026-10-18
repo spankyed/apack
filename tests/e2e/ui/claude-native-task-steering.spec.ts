@@ -250,6 +250,8 @@ test('replies to the native Agent while running and resumes it after completion'
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   await expect(focused).toBeVisible()
   await expect(focused.getByRole('form',{name:'Agent message'}).locator('[contenteditable]')).toHaveText('Keep this Agent draft across views')
+  await writeFile(join(workspace!,'native-agent-reading-return.json'),JSON.stringify({readingTop,readingAnchor,restored:await focusedTranscript.evaluate(element=>({top:element.scrollTop,height:element.clientHeight,scrollHeight:element.scrollHeight,rows:[...element.querySelectorAll<HTMLElement>('[data-native-agent-message]')].map(row=>({uuid:row.dataset.nativeAgentMessage,offset:row.getBoundingClientRect().top-element.getBoundingClientRect().top}))})),jumpVisible:await jumpToLatest.isVisible()}))
+  await appPage.screenshot({path:testInfo.outputPath('apack-focused-agent-reading-return-diagnostic.png')})
   await expect(jumpToLatest).toBeVisible()
   await expect.poll(()=>focusedTranscript.evaluate((element,anchor)=>{const row=[...element.querySelectorAll<HTMLElement>('[data-native-agent-message]')].find(row=>row.dataset.nativeAgentMessage===anchor.uuid);return row?row.getBoundingClientRect().top-element.getBoundingClientRect().top:undefined},readingAnchor)).toBeCloseTo(readingAnchor.offset,0)
   await appPage.screenshot({path:testInfo.outputPath('apack-focused-agent-draft-restored.png')})
