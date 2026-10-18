@@ -3,7 +3,7 @@ import { services, type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { action } from '../../../../src/content/actions/claude-code/pause-turn.ts';
 
-function setup(kind: 'native' | 'print' | 'idle', pending = false) {
+function setup(kind: 'native' | 'print' | 'idle', pending = false, busy = kind === 'native') {
   const { id } = repository.threadCommands.create({ topic: 'Pause ownership', instructions: '', tags: [] });
   repository.threadCommands.update(id, { context: { claudeCode: { isRunning: kind === 'print',
     ...(pending ? { pendingControlRequest: { requestId: 'permission', toolName: 'Write', approvalMessageId: 'approval' } } : {}),
@@ -11,7 +11,7 @@ function setup(kind: 'native' | 'print' | 'idle', pending = false) {
   const native = { kill: vi.fn() }, print = { kill: vi.fn() };
   const getNativeTerminal = vi.fn(() => kind === 'native' ? native : undefined);
   const clearHandle = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal, getHandle: vi.fn(() => kind === 'print' ? print : undefined), isConversationBusy: vi.fn(() => kind === 'native'), clearHandle } as never });
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal, getHandle: vi.fn(() => kind === 'print' ? print : undefined), isConversationBusy: vi.fn(() => busy), clearHandle } as never });
   mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
@@ -30,4 +30,12 @@ it('leaves an idle thread alone', async () => {
   const f = setup('idle');
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, noop: true });
   expect(f.native.kill).not.toHaveBeenCalled(); expect(f.print.kill).not.toHaveBeenCalled(); expect(f.clearHandle).not.toHaveBeenCalled();
+});
+
+it('honors Pause for the native owner before the next busy-state poll arrives', async () => {
+  const f = setup('native', false, false);
+  await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true });
+  expect(f.native.kill).toHaveBeenCalledOnce();
+  expect(f.print.kill).not.toHaveBeenCalled();
+  expect(f.clearHandle).toHaveBeenCalledWith(f.id);
 });

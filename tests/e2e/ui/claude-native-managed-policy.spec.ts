@@ -103,6 +103,7 @@ test('keeps native status, submissions and history available under managed-only 
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('', { timeout: 15000 })
   await expect.poll(async () => readFile(join(workspace!, 'native-pause-ready.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify({ ready: true }))
+  await writeFile(join(workspace!, 'native-pause-before.json'), JSON.stringify((await context()).native.state, null, 2))
   await card.getByTitle('Pause agent work', { exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
   const stopped = await context()

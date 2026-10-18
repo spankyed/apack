@@ -24,9 +24,9 @@ export async function action(
 
   if (!threadId) return { success: false, reason: 'missing threadId' };
 
-  // No-op if nothing is running.
+  // Busy metadata can lag submission; an explicit Pause targets the owning native process.
   const prior = getClaudeState(services, threadId);
-  if (!prior?.isRunning && !prior?.pendingControlRequest && !services.cli.claudeCode.getHandle(threadId) && !services.cli.claudeCode.isConversationBusy(threadId)) {
+  if (!prior?.isRunning && !prior?.pendingControlRequest && !services.cli.claudeCode.getNativeTerminal(threadId) && !services.cli.claudeCode.getHandle(threadId) && !services.cli.claudeCode.isConversationBusy(threadId)) {
     return { success: true, noop: true };
   }
 

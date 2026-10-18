@@ -12,7 +12,7 @@ import { actionLabel, writeDefaultFlows } from '../../_support/flows.ts'
 it("pauses a running Claude Code turn: CC: Pause Turn's event, log entry and thread row", async () => {
   writeDefaultFlows()
   // No CLI process runs in the test
-  mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: () => undefined, clearHandle: vi.fn() } } as never)
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => undefined, getHandle: () => undefined, isConversationBusy: () => false, clearHandle: vi.fn() } } as never)
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() })
   vi.spyOn(console, 'info').mockImplementation(() => {})
   const { id } = repository.threadCommands.create({ topic: 'A running turn', instructions: '' })
