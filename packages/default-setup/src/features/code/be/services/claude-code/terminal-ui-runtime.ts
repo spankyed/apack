@@ -131,6 +131,36 @@ function paneRoster(n){
  const hidden=new Set(state.open.filter(pane=>!visible.includes(pane)).map(pane=>pane.id));
  return {panes:visible.map(pane=>({id:pane.id,title:pane.title,plugin:pane.plugin,...(pane.closeOnEscape?{close_on_escape:true}:{}),...(pane.holdToasts?{hold_toasts:true}:{}),...(pane.rows!==undefined?{rows:pane.rows}:{}),...(pane.columns!==undefined?{columns:pane.columns}:{})})),shown_id:hidden.has(state.shownId)?visible.at(-1)?.id??null:state.shownId,focused_id:hidden.has(state.focusedId)?null:state.focusedId,focus_requested_id:hidden.has(state.focusRequest)?null:state.focusRequest};
 }
+function nativeThemeTree(n,tree){
+ const palette=n.themeResolver.UKe(n.themePreferences.lEn());
+ const paint=value=>{
+  if(!value||typeof value!=='object'||Array.isArray(value))return value;
+  const result={...value};
+  for(const key of ['color','backgroundColor','borderColor'])if(typeof result[key]==='string'&&Object.hasOwn(palette,result[key]))result[key]=palette[result[key]];
+  return result;
+ };
+ const visit=(value,inheritedColor,inheritedBackground,parentType)=>{
+  if(typeof value==='string')return parentType==='Box'?{type:'Text',props:{color:inheritedColor??palette.text},children:[value]}:value;
+  if(!value||typeof value!=='object'||Array.isArray(value))return value;
+  const themed=['Text','Box','Button'].includes(value.type),props=themed?paint(value.props??{}):value.props;
+  let color=inheritedColor,background=inheritedBackground;
+  if(value.type==='Text'){
+   props.color??=inheritedColor??palette.text;color=props.color;
+   if(props.inverse===true)props.backgroundColor??=inheritedBackground??palette.inverseText;
+  }
+  if(themed&&props?.backgroundColor!==undefined)background=props.backgroundColor;
+  return {...value,...(themed?{props}:{}),...(themed&&value.hover?{hover:paint(value.hover)}:{}),...(Array.isArray(value.children)?{children:value.children.map(child=>visit(child,color,background,value.type))}:{})};
+ };
+ return visit(tree);
+}
+let nativeThemeSnapshot;
+function refreshNativeTheme(n){
+ if(!clients.size)return;
+ const next=JSON.stringify(n.themeResolver.UKe(n.themePreferences.lEn()));
+ if(nativeThemeSnapshot===next)return;
+ const changed=nativeThemeSnapshot!==undefined;nativeThemeSnapshot=next;
+ if(changed)publish({type:'system',subtype:'ui_invalidate',event:'ui.render'});
+}
 async function initialize(){
  if(native)return native;
  if(initializing)return initializing;
@@ -142,6 +172,8 @@ async function initialize(){
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
+  const themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');
+  const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const mcp=await import('/$bunfs/root/chunk-7m5psxad.js');
   const mcpControls=await import('/$bunfs/root/chunk-aen4nr7w.js');
@@ -166,7 +198,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,rename,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={gate,engine,session,roster,schemas,runtime,themeResolver,themePreferences,rename,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -686,8 +718,9 @@ async function control(request,abort){
    questionFrames.set(clientId,frame);rememberQuestionFrame(frame);
    questionFrame={token,dialogId:question.item.id,revision:question.revision,shownInput,presentation:questionPresentation(n,{...question.payload,questions:shownInput.questions})};
   }
+  refreshNativeTheme(n);
   recordDrawing(n,value,result.tree);
-  return {...(questionFrame?{question:questionFrame}:{}),tree:result.tree,props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(questionFrame?{question:questionFrame}:{}),tree:nativeThemeTree(n,result.tree),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
@@ -741,6 +774,7 @@ const ownerTimer=setInterval(async()=>{
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
+  if(native)refreshNativeTheme(native);
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};

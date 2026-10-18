@@ -1,7 +1,8 @@
+import { parseClaudeStatus } from '#extensions/blocks/display/native-status-text.ts'
 import type { CSSProperties, ComputedRef, InjectionKey } from 'vue'
 import type { ClaudeUiBoxPaint, ClaudeUiTextStyle } from '#features/code/be/services/claude-code/ui-presentation.ts'
 
-// App defaults for native semantic names. The native custom theme is not exported by ui_render.
+// Fallback for owners that do not export resolved native paint. The terminal adapter resolves its active native theme before transport.
 const palette: Record<string, string> = {
   text: '#e5e5e5', inverseText: '#171717', inactive: '#737373', subtle: '#a3a3a3', suggestion: '#a3a3a3',
   remember: '#c084fc', success: '#4ade80', error: '#f87171', warning: '#facc15', merged: '#c084fc',
@@ -15,6 +16,14 @@ const palette: Record<string, string> = {
 export function claudeUiColor(value: string | undefined): string | undefined {
   if (!value) return
   if (Object.hasOwn(palette, value)) return palette[value]
+  const ansi = ['black','red','green','yellow','blue','magenta','cyan','white','blackBright','redBright','greenBright','yellowBright','blueBright','magentaBright','cyanBright','whiteBright']
+  const named = value.startsWith('ansi:') ? ansi.indexOf(value.slice(5)) : -1
+  const indexed = /^ansi256\((\d{1,3})\)$/.exec(value)
+  if (named >= 0 || indexed) {
+    const index = named >= 0 ? named : Number(indexed![1])
+    if (index > 255) return
+    return parseClaudeStatus(`\x1b[38;5;${index}mX`)[0]?.style.color
+  }
   const style = document.createElement('span').style
   style.color = value
   return style.color || undefined

@@ -12,7 +12,7 @@ async function mount(props: { statusLine?: string; cwd?: string; nativeUi?: Clau
   const state = reactive(props)
   const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h('form', { onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
+  app = createApp({ render: () => h('form', { 'data-onboarding-id': 'agent-chat-input', onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
     h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus, onFocusReport: focusReport }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
   if (expand) { root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')?.click(); await nextTick() }
@@ -423,8 +423,8 @@ it('reveals a native focus redirect inside its own scroll site without scrolling
     const site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = f.root.querySelector<HTMLTextAreaElement>('[data-native-focus-id="second"]')!
     vi.spyOn(site, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 300, 50))
     vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 180, 100, 30))
-    const outsideScroll = document.documentElement.scrollTop
     f.root.querySelector<HTMLButtonElement>('[data-native-focus-id="first"]')!.focus()
+    const outsideScroll = document.documentElement.scrollTop
     f.state.nativeFocus = { revision: 1, moved: true, focusId: 'second' }; await nextTick()
     expect(document.activeElement).toBe(field); expect(site.scrollTop).toBe(60)
     expect(document.documentElement.scrollTop).toBe(outsideScroll)
@@ -478,4 +478,12 @@ it('starts session tools collapsed and expands them without submitting or replac
   expect(toggle.getAttribute('aria-expanded')).toBe('true'); expect(site.style.display).not.toBe('none')
   toggle.click(); await nextTick()
   expect(site.style.display).toBe('none'); expect(editor.value).toBe('Unsent draft'); expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('maps native ANSI theme color forms through the same bounded status palette',()=>{
+ expect(claudeUiColor('ansi:blue')).toBe('#60a5fa')
+ expect(claudeUiColor('ansi:whiteBright')).toBe('#fafafa')
+ expect(claudeUiColor('ansi256(196)')).toBe('rgb(255, 0, 0)')
+ expect(claudeUiColor('ansi256(999)')).toBeUndefined()
+ expect(claudeUiColor('ansi:not-a-color')).toBeUndefined()
 })
