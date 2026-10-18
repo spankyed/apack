@@ -8,7 +8,7 @@
         <span>Session tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
     </div>
-    <div v-if="nativeStatus" role="status" data-testid="composer-native-status" class="mt-1 max-h-24 min-w-0 shrink-0 overflow-y-auto text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
+    <div v-if="nativeStatus" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-24 min-w-0 shrink-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
     <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-56 min-h-16 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
