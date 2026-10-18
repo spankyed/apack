@@ -80,7 +80,8 @@ test('imports unrepresented saved native history with its project and accounting
   const checkpoint = (await context()).messages.filter((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.').at(-1)
   expect(checkpoint.context.cliUuid).toBeTruthy()
   await expect.poll(async () => (await context()).claude.turns).toBe(2)
-  const nativeCost = (await context()).claude.totalCostUsd
+  const nativeFacts = (await context()).claude
+  const nativeCost = nativeFacts.totalCostUsd
   expect(nativeCost).toBeGreaterThan(0)
   await command('cc-reset')
   await expect.poll(async () => (await context()).claude).toBeUndefined()
@@ -94,6 +95,12 @@ test('imports unrepresented saved native history with its project and accounting
   expect(imported.messages.filter((m: any) => m.context?.cliUuid === checkpoint.context.cliUuid)).toHaveLength(1)
   await writeFile(join(workspace!, 'import-before-continuation.json'), JSON.stringify({nativeCost,imported}, null, 2))
   expect(imported.claude.totalCostUsd).toBe(nativeCost)
+  expect(imported.claude.model).toBe(nativeFacts.model)
+  expect(imported.claude.turns).toBe(2)
+  expect(imported.claude.startedAt).toBeGreaterThan(0)
+  expect(imported.claude.lastTurnAt).toBeGreaterThanOrEqual(imported.claude.startedAt)
+  await expect(appPage.getByText('Model unavailable', { exact: true })).toHaveCount(0)
+  await expect(appPage.getByText('2 turns', { exact: true })).toBeVisible()
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-session-import.png') })
   await composer.fill('Continue after importing the saved native conversation.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
@@ -105,5 +112,5 @@ test('imports unrepresented saved native history with its project and accounting
   expect(continued.claude.totalCostUsd).toBe(nativeTotal)
   expect(continued.claude.cwd).toBe(workspace)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'import', nativeSavedSessionImport: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'import', nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, browserErrors: errors }, null, 2))
 })

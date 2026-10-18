@@ -1,3 +1,6 @@
+import { action as onboardImport } from '../../../../src/content/actions/onboarding/steps/handle-cc-import-threads-step.ts'
+import { chatService } from '#features/threads/be/services/chat.ts'
+import { importedSessionMetadata } from '../../../../src/content/actions/claude-code/_helpers/session-import.ts'
 import { expect, it, vi } from 'vitest'
 import { mockService } from '@apackdev/testing/harness'
 import { services, type Services } from '#generated/services.ts'
@@ -40,4 +43,24 @@ it('bulk import retains native cumulative cost without charging a new turn', asy
  await action({command:'cc-import',threadId:caller.id},services,{} as never,'')
  const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='saved-native')
  expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',totalCostUsd:1.25})
+});
+
+it('projects native model, turn UUIDs, tools and timestamps without counting tool-result or meta inputs', () => {
+ const user={type:'user',uuid:'human',timestamp:'2026-10-18T01:00:00Z',message:{content:'Hello'}}
+ expect(importedSessionMetadata([user,user,{type:'user',uuid:'tool',message:{content:[{type:'tool_result'}]}},{type:'user',isMeta:true,message:{content:'Meta'}},{type:'assistant',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'tool_use',id:'tool-id'}]}},{type:'assistant',message:{model:'<synthetic>',content:[{type:'tool_use',id:'tool-id'}]}},{type:'cost-state',totalCostUSD:1.25}])).toEqual({model:'native-model',turns:1,toolCallCount:1,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z'),totalCostUsd:1.25})
+});
+
+it('onboarding imports the same native metadata into thread context and remains idempotent', async () => {
+ const caller=repository.threadCommands.create({topic:'Onboarding',instructions:''})
+ repository.threadCommands.update(caller.id,{context:{onboarding:{step:'import-threads',threadId:caller.id,pendingMessageId:'Message-choice',data:{ccSessionCount:1}}}})
+ const transcript=[{type:'user',uuid:'native-user',timestamp:'2026-10-18T01:00:00Z',message:{role:'user',content:'Hello'}},{type:'assistant',uuid:'native-answer',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'text',text:'Answer'}]}},{type:'cost-state',totalCostUSD:1.25}]
+ mockService<Services,'cli'>('cli',{claudeCode:{listAllSessions:vi.fn(async()=>[{id:'onboarding-native',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
+ mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
+ mockService<Services,'chat'>('chat',{...chatService,sendChoiceBlock:vi.fn(()=>({messageId:'Message-choice' as const})),sendRecentThreadsRefresh:vi.fn()})
+ await onboardImport({threadId:caller.id,response:['cc']},services)
+ const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='onboarding-native')
+ expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',model:'native-model',turns:1,totalCostUsd:1.25,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z')})
+ expect(repository.chatQueries.threadData(imported!.id)?.messages?.map(m=>m.context?.cliUuid)).toEqual(['native-user','native-answer'])
+ await onboardImport({threadId:caller.id,response:['cc']},services)
+ expect(repository.threadQueries.all().filter(t=>t.context?.claudeCode?.sessionId==='onboarding-native')).toHaveLength(1)
 });

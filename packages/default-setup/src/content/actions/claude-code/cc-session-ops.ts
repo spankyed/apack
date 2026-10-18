@@ -5,7 +5,7 @@
  * parsing, message import, and session artifact setup plumbing.
  */
 
-import { importedSessionCost } from './_helpers/session-import.ts';
+import { importedSessionMetadata } from './_helpers/session-import.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z } from '#generated/services.ts';
 import type { ThreadsSettings } from '#generated/types.ts';
@@ -230,7 +230,7 @@ async function handleResume(
   persistClaudeState(services, targetThreadId, {
     sessionId,
     historyError: undefined,
-    totalCostUsd: importedSessionCost(transcript),
+    ...importedSessionMetadata(transcript),
     cwd: (session as any).cwd || '',
     sessionWorktree: false,
   });
@@ -339,19 +339,9 @@ async function handleImport(
       // Using persistClaudeState + ensureSessionMarker would emit THREAD_UPDATED
       // + ARTIFACT_ADDED per thread, causing an event storm that crashes the frontend.
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
-      const now = Date.now();
       const ccState = {
-        sessionId: session.id,
-        sessionWorktree: false,
-        cwd: (session as any).cwd || undefined,
-        chatState: 'idle',
-        model: '',
-        startedAt: now,
-        lastTurnAt: now,
-        turns: 0,
-        totalCostUsd: importedSessionCost(transcript),
-        toolCallCount: 0,
-        permissionMode: 'default',
+        sessionId: session.id, sessionWorktree: false, cwd: (session as any).cwd || undefined,
+        chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript),
       };
 
       // Write full session state to thread context (source of truth).

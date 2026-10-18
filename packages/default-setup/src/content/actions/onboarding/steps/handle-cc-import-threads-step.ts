@@ -1,3 +1,4 @@
+import { importedSessionMetadata } from '../../claude-code/_helpers/session-import.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { EntityId, Services } from '#generated/services.ts';
@@ -167,19 +168,15 @@ async function importCcSessions(services: Services, toImport: any[]) {
 
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       services.repository.threadCommands.update(newThreadId, {
-        context: { ...thread?.context, claudeCode: { sessionId: session.id, cwd: cwd || undefined } },
+        context: { ...thread?.context, claudeCode: { sessionId: session.id, cwd: cwd || undefined,
+          sessionWorktree: false, chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript) } },
         tags: [...(thread?.tags || ['imported']), 'claude-code'],
       });
 
       services.repository.chatCommands.createArtifact({
         artifactType: 'claude-session',
         title: 'Claude Code session',
-        content: {
-          sessionId: session.id, model: '', cwd,
-          startedAt: Date.now(), lastTurnAt: Date.now(), turns: 0,
-          totalCostUsd: 0, chatState: 'idle',
-          toolCallCount: 0, permissionMode: 'default',
-        },
+        content: {},
         threadId: newThreadId,
       });
     } catch { /* skip individual failures */ }
