@@ -55,8 +55,12 @@ test('renders the original saved custom theme and live reload without replacing 
   await input.pressSequentially('/theme')
   await input.press('Enter')
   await expect.poll(async () => (await context()).native.output.map((chunk: any) => chunk.text).join('')).toContain('Research')
+  await writeFile(join(workspace!, 'native-theme-picker-output.txt'), (await context()).native.output.map((chunk: any) => chunk.text).join(''))
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-picker.png') })
   // Original picker order: auto, six builtins, then user themes. Onboarding saved dark.
-  for (let index = 0; index < 6; index++) await input.press('ArrowDown')
+  for (let index = 0; index < 6; index++) { await input.press('ArrowDown'); await appPage.waitForTimeout(100) }
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-picker-selected.png') })
+  await writeFile(join(workspace!, 'native-theme-selected-output.txt'), (await context()).native.output.map((chunk: any) => chunk.text).join(''))
   await input.press('Enter')
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/.claude.json'), 'utf8')).theme).toBe('custom:research')
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
