@@ -1327,6 +1327,11 @@ declare const ClaudeModelCatalogSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
 }, z.ZodTypeAny, "passthrough">>;
 
+interface ClaudeNativeImage {
+    mediaType: 'image/gif' | 'image/jpeg' | 'image/png' | 'image/webp';
+    data: string;
+}
+
 interface ClaudeNativeJournalBatch {
     entries: ClaudeNativeJournalEntry[];
     pending: boolean;
@@ -1394,7 +1399,7 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
-    submit(text: string): Promise<ClaudeNativeSubmissionReceipt>;
+    submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>;
     close(): Promise<void>;
     kill(): void;
 }
@@ -1647,6 +1652,7 @@ type ClaudeTerminalViewRequest = {
     ownerId: string;
     revision: number;
     text: string;
+    references?: MessageReferences;
 } | {
     type: 'CLAUDE_TERMINAL_INPUT';
     ownerId: string;

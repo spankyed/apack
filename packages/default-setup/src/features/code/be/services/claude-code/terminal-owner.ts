@@ -1,7 +1,7 @@
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
-import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
+import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import * as pty from 'node-pty'
@@ -28,7 +28,7 @@ export interface ClaudeNativeTerminalOwner {
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
-  submit(text: string): Promise<ClaudeNativeSubmissionReceipt>
+  submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
   kill(): void
 }
@@ -74,6 +74,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
   const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
+    pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\x1b[200~' + path + '\x1b[201~') },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
   let hardStop: ReturnType<typeof setTimeout> | undefined
   async function finish(code: number) {
@@ -158,7 +159,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
       },
-      submit(text) { return bridge.submit(text) },
+      submit(text, images) { return bridge.submit(text, images) },
       kill,
       async close() { if (!closed) kill(); await done },
     }

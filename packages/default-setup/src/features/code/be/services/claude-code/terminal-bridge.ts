@@ -3,7 +3,7 @@ import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 import { basename, isAbsolute } from 'node:path'
 import type { ClaudeNativeTranscript } from './terminal-journal.ts'
-import { createClaudeTerminalSession, parseClaudeTerminalMetadata, type ClaudeNativeSubmissionReceipt } from './terminal-session.ts'
+import { createClaudeTerminalSession, parseClaudeTerminalMetadata, type ClaudeNativeSubmissionReceipt, type ClaudeNativeImage } from './terminal-session.ts'
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, writeFile, rename, rm } from 'node:fs/promises'
@@ -24,6 +24,7 @@ export async function createClaudeTerminalBridge(options: {
   bunOptions?: string
   ownsProcess?(pid: number): Promise<boolean>
   changed(): void
+  pasteImage?(path: string): void
   enter(): void
 }) {
   const directory = await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'cc-app-'))
@@ -49,7 +50,7 @@ export async function createClaudeTerminalBridge(options: {
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
-  let pending: { id: string; sessionId: string; text: string; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
+  let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
     if (!current) return
@@ -102,11 +103,33 @@ export async function createClaudeTerminalBridge(options: {
         ready = true; options.changed()
         if (pending && !pending.sent && pending.sessionId === projection.sessionId) {
           const submission = pending; submission.sent = true
-          if (ui.hasPromptHosts) {
+          if (ui.hasPromptHosts || submission.images.length) {
             try {
-              const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id }))
+              const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id, allow_empty: submission.images.length > 0 }))
               if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})
               if (result?.filled !== true) { settle(new Error('Native terminal draft could not be prepared; the app draft was retained')); return reply(200, {}) }
+              for (const [index, image] of submission.images.entries()) {
+                if (!options.pasteImage) throw new Error('Native image input is unavailable')
+                if (pending !== submission) throw new Error('Native image submission was retired')
+                const extension = image.mediaType.slice('image/'.length)
+                const path = join(directory, submission.id + '-' + index + '.' + extension)
+                try {
+                  await writeFile(path, Buffer.from(image.data, 'base64'), { mode: 0o600, flag: 'wx' })
+                  const before = object(await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
+                  if (pending !== submission) throw new Error('Native image submission was retired')
+                  options.pasteImage(path)
+                  const deadline = Date.now() + 5000
+                  let attached = false
+                  while (pending === submission && Date.now() < deadline) {
+                    const draft = object(await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
+                    if (typeof draft?.images === 'number' && typeof before?.images === 'number' && draft.images > before.images) { attached = true; break }
+                    await new Promise(resolve => setTimeout(resolve, 25))
+                  }
+                  if (!attached) throw new Error('Native image could not be attached; the app draft was retained')
+                  await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id, remember: true })
+                } finally { await rm(path, { force: true }) }
+              }
+              if (pending !== submission || submission.sessionId !== projection.sessionId) return reply(200, {})
               submission.prepared = true
               return reply(200, { id: submission.id, text: submission.text, prepared: true })
             } catch (error) { if (pending === submission) settle(error instanceof Error ? error : new Error('Native terminal draft could not be prepared')); return reply(200, {}) }
@@ -215,11 +238,12 @@ export async function createClaudeTerminalBridge(options: {
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
       get busy() { return busy || !!pending },
-      submit(text: string): Promise<ClaudeNativeSubmissionReceipt> {
-        if (closed || !ready || pending || busy || !text.trim() || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+      submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
+        if (closed || !ready || pending || busy || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => settle(new Error('Native prompt bridge timed out')), 5000); timer.unref()
-          pending = { id: randomUUID(), sessionId: projection.sessionId, text, sent: false, timer, resolve, reject }
+          const timer = setTimeout(() => settle(new Error('Native prompt bridge timed out')), images.length ? 30000 : 5000); timer.unref()
+          pending = { id: randomUUID(), sessionId: projection.sessionId, text, images: images.map(image => ({ ...image })), sent: false, timer, resolve, reject }
         })
       },
       async close() {

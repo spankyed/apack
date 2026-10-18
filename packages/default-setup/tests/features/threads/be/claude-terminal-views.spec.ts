@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createClaudeTerminalViews, type ClaudeTerminalViewReply } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mount = { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: randomUUID() } as const
-function fixture() {
+function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0]['prepareInput']) {
   const listeners = new Set<() => void>()
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
@@ -10,7 +10,7 @@ function fixture() {
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
   const open = vi.fn(async () => owner)
-  const views = createClaudeTerminalViews({ get: () => current, open })
+  const views = createClaudeTerminalViews({ get: () => current, open, prepareInput })
   const send = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
   return { owner, output, listeners, open, views, send, setCurrent(value?: ClaudeNativeTerminalOwner) { current = value } }
 }
@@ -104,5 +104,28 @@ it('discards receipts after owner replacement', async () => {
     f.setCurrent(); resolve({ sessionId: f.owner.state.sessionId, uuid: randomUUID(), text: 'Old accepted prompt' })
     await Promise.resolve(); await Promise.resolve()
     expect(f.send).toHaveBeenCalledTimes(count)
+  } finally { f.views.clear() }
+})
+
+
+it('resolves image-only references before native submission and retains owner fencing across preparation', async () => {
+  let finish!: (value: { text: string; images: { mediaType: 'image/png'; data: string }[] }) => void
+  const prepare = vi.fn(() => new Promise<{ text: string; images: { mediaType: 'image/png'; data: string }[] }>(resolve => { finish = resolve }))
+  const f = fixture(prepare)
+  const event = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT' as const, ownerId: f.owner.state.ownerId, revision: 1, text: '', references: { images: [{ name: 'pixel.png', url: 'media://fixture/pixel.png' }] } }
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(event, 'one', f.send)
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce())
+    expect(f.owner.submit).not.toHaveBeenCalled()
+    const input = { text: '[Image: pixel.png]', images: [{ mediaType: 'image/png' as const, data: 'YQ==' }] }
+    finish(input)
+    await vi.waitFor(() => expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith(input.text, input.images))
+    await vi.waitFor(() => expect(f.send.mock.lastCall![0].submission?.status).toBe('accepted'))
+    f.views.handle({ ...event, revision: 2 }, 'one', f.send)
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalledTimes(2))
+    f.setCurrent(); finish(input)
+    await Promise.resolve(); await Promise.resolve()
+    expect(f.owner.submit).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })

@@ -1,3 +1,4 @@
+import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
 import { registerThreadTeardown } from './thread-teardown.ts';
@@ -25,6 +26,7 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const terminalViews = createClaudeTerminalViews({
+  prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),
   async open(key) {
     const owner = await services.cli.claudeCode.openNativeTerminal(key);

@@ -188,8 +188,8 @@ function promptOutcome(n,id){
  const ending=message.promptSubmitEnding.ending;
  return {drop:typeof ending?.reason==='string'&&ending.reason?ending.reason:'Native prompt was not submitted'};
 }
-async function prepareTerminalPrompt(n,text,id){
- if(typeof text!=='string'||!text.trim()||text.length>32768)throw Error('Native terminal draft is invalid');
+async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
+ if(typeof text!=='string'||!allowEmpty&&!text.trim()||text.length>32768)throw Error('Native terminal draft is invalid');
  if(!n.gate.ioe({isRemoteTransport:false,redactsWhatItPersists:false}))throw Error('Native local UI eligibility refused this operation');
  const context=originalContext??n.runtime.ey(),composer=context?.composer;
  if(context?.surface!=='terminal'||!composer)throw Error('Native terminal composer is not bound');
@@ -283,7 +283,14 @@ async function control(request){
  if(request.subtype==='apack_ui_capabilities'){const facts={isRemoteTransport:false,redactsWhatItPersists:false,isAnySurfaceAttached:n.roster.Kw.list().length>0};return {capabilities:n.gate.Uvn('ui_attach',()=>facts)?[]:['ui_surface_v1']};}
  if(request.subtype==='apack_observe_notices'){installNotices(n,n.runtime.ey());return {observing:true};}
  if(request.subtype==='apack_prompt_outcome')return promptOutcome(n,request.submission_id);
- if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id);
+ if(request.subtype==='apack_terminal_draft'){
+  if(preparedPrompt?.id!==request.submission_id)throw Error('Native prepared prompt identity changed');
+  const box=await (originalContext??n.runtime.ey()).composer.read();
+  const images=[...box.text.matchAll(/\[image\s*#\d+\]/gi)].length;
+  if(request.remember===true)preparedPrompt.text=box.text;
+  return {...box,images};
+ }
+ if(request.subtype==='apack_prepare_prompt')return prepareTerminalPrompt(n,request.text,request.submission_id,request.allow_empty===true);
  const schema=schemaNames[request.subtype];
  if(!schema)throw Error('Native terminal UI operation is not integrated: '+request.subtype);
  const value=n.schemas[schema]().parse(request);

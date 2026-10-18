@@ -382,11 +382,10 @@ let pendingNativeSend: { ownerId: string; revision: number; resolve(): void; rej
 function submitNativeMessage(text: string, references: MessageReferences): Promise<void> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!mount || !owner || pendingNativeSend) return Promise.reject(new Error('Claude input is not ready'))
-  if (Object.values(references).some(value => Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null)) return Promise.reject(new Error('Native composer attachment and reference submission is not connected yet. Your draft is retained.'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
     pendingNativeSend = { ownerId: owner.ownerId, revision, resolve, reject }
-    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text })
+    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references })
     pendingScrollOnSend.value = true
   })
 }

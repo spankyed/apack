@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, readdir } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createClaudeTerminalBridge } from '#features/code/be/services/claude-code/terminal-bridge.ts'
 const session = '11111111-1111-1111-1111-111111111111'
@@ -17,8 +18,8 @@ async function request(path: string, body: unknown, token?: string) {
 async function observed(command = 'main') {
   return { sessionId: session, parentPid: process.pid, childPid: process.pid + 1, kind: 'main', command, generation: (await config()).generations.main, startedAt: '100', stdout: 'native output', code: 0, signal: null, truncated: false }
 }
-async function create(enter = () => {}) {
-  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'main' }, subagentStatusLine: { type: 'command', command: 'sub' } }, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter })
+async function create(enter = () => {}, pasteImage?: (path: string) => void) {
+  bridge = await createClaudeTerminalBridge({ sessionId: session, settings: { effective: { statusLine: { type: 'command', command: 'main' }, subagentStatusLine: { type: 'command', command: 'sub' } }, sources: [] }, ownsProcess: async pid => pid === process.pid, changed() {}, enter, pasteImage })
   await request('/observer-ready', { sessionId: session, pid: process.pid })
   await request('/poll', { sessionId: session, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
 }
@@ -159,4 +160,35 @@ it('accepts session-scoped native notices and refuses malformed or foreign updat
     expect(receive).toHaveBeenCalledExactlyOnceWith(event)
     expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, subtype: 'ui_status', text: null } })).status).toBe(200)
   } finally { unsubscribe() }
+})
+
+
+it('rejects malformed image data before reserving or entering a native prompt', async () => {
+  const enter = vi.fn(); await create(enter)
+  await expect(bridge!.submit('', [{ mediaType: 'image/png', data: '!' }])).rejects.toThrow('invalid')
+  expect(bridge!.busy).toBe(false); expect(enter).not.toHaveBeenCalled()
+})
+
+it('removes materialized images and retains the draft when native paste fails', async () => {
+  const enter = vi.fn(), paste = vi.fn((path: string) => {
+    expect(path.startsWith(bridge!.directory + '/')).toBe(true)
+    expect(readFileSync(path)).toEqual(Buffer.from('a'))
+    throw new Error('Fixture paste refused')
+  })
+  await create(enter, paste)
+  const conf = await config()
+  const native = http.createServer(async (request, response) => {
+    const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(chunk)
+    const body = JSON.parse(Buffer.concat(chunks).toString())
+    if (body.request.subtype === 'apack_prepare_prompt') expect(body.request.allow_empty).toBe(true)
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ id: body.id, pid: body.ownerPid, sessionId: body.sessionId, result: body.request.subtype === 'apack_prepare_prompt' ? { filled: true } : { text: '', cursor: 0, images: 0 } }))
+  })
+  await new Promise<void>(resolve => native.listen(conf.uiSocketPath, resolve))
+  try {
+    const result = expect(bridge!.submit('', [{ mediaType: 'image/png', data: 'YQ==' }])).rejects.toThrow('Fixture paste refused')
+    await request('/poll', { sessionId: session, agents: [] }); await result
+    expect(paste).toHaveBeenCalledOnce(); expect(enter).not.toHaveBeenCalled()
+    expect((await readdir(bridge!.directory)).filter(name => name.endsWith('.png'))).toEqual([])
+  } finally { native.closeAllConnections(); await new Promise<void>(resolve => native.close(() => resolve())) }
 })

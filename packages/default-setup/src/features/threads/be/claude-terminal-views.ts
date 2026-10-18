@@ -1,3 +1,5 @@
+import type { MessageReferences } from './types.ts'
+import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
@@ -6,7 +8,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_MOUNT' }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
-  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string }
+  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
@@ -50,6 +52,7 @@ interface View {
 export function createClaudeTerminalViews(dependencies: {
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string): Promise<ClaudeNativeTerminalOwner>
+  prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
   const views = new Map<string, View>()
   let timer: ReturnType<typeof setInterval> | undefined
@@ -114,14 +117,17 @@ export function createClaudeTerminalViews(dependencies: {
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
       if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
-          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() || event.text.length > 32768) return
+          || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !event.references?.images?.length || event.text.length > 32768) return
         target.submissionRevision = event.revision
         const submission: ClaudeTerminalSubmissionState = { ownerId: event.ownerId, revision: event.revision, status: 'pending' }
         target.submission = submission; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.submission === submission
-        void Promise.resolve().then(() => {
+        void Promise.resolve().then(async () => {
           if (!current()) return undefined
-          return owner.submit(event.text)
+          if (!dependencies.prepareInput && event.references && Object.values(event.references).some(value => value?.length)) throw new Error('Native references could not be prepared')
+          const input = dependencies.prepareInput ? await dependencies.prepareInput(event.text, event.references) : { text: event.text, images: [] }
+          if (!current()) return undefined
+          return input.images.length ? owner.submit(input.text, input.images) : owner.submit(input.text)
         }).then(receipt => {
           if (!current() || !receipt) return
           if (receipt.sessionId !== owner.state.sessionId) throw new Error('Native prompt receipt belongs to another session')

@@ -14,6 +14,7 @@ export interface ClaudeNativeTerminalRecord {
   origin: Record<string, unknown>
   message: { type: 'user' | 'assistant' | 'system' | 'attachment'; role?: 'user' | 'assistant'; isMeta?: true; content: { type: string; [key: string]: unknown }[] }
 }
+export interface ClaudeNativeImage { mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string }
 export interface ClaudeNativeSubmissionReceipt { sessionId: string; uuid: string; text: string }
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 export function parseClaudeTerminalMetadata(value: unknown): ClaudeNativeSessionMetadata | undefined {
