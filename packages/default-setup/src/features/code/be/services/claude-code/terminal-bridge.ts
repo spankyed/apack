@@ -77,12 +77,12 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, pending?.entered ? { id: pending.id } : {}) : reply(409, {})
       if (request.url === '/poll') {
-        if (value.directOwner === true && value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean')) return reply(400, {})
+        if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
-        if (value.directOwner === true) busy = value.turn !== null
+        if (value.directOwner === true) busy = value.busy as boolean
         const previous = { ...generations }
         const mainChanged = changedSession || value.statusCommand !== undefined && mainCommand !== value.statusCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
         const subChanged = changedSession || value.subagentCommand !== undefined && subagentCommand !== value.subagentCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix

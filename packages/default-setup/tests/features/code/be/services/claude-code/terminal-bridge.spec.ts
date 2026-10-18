@@ -195,11 +195,13 @@ it('removes materialized images and retains the draft when native paste fails', 
 
 it('validates direct-owner turn facts before changing busy state and fences pending reads by session', async () => {
   await create()
-  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, turn: { id: 'native-turn', cancelled: false } })).status).toBe(200)
+  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: true, turn: { id: 'native-turn', cancelled: false } })).status).toBe(200)
   expect(bridge!.busy).toBe(true)
-  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, turn: {} })).status).toBe(400)
+  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: {} })).status).toBe(400)
   expect(bridge!.busy).toBe(true)
   expect((await request('/owner-pending', { sessionId: '22222222-2222-2222-2222-222222222222' })).status).toBe(409)
-  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, turn: null })).status).toBe(200)
+  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: false, turn: null })).status).toBe(200)
   expect(bridge!.busy).toBe(false)
+  expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: true, turn: null })).status).toBe(200)
+  expect(bridge!.busy).toBe(true)
 })
