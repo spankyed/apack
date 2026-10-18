@@ -69,6 +69,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await expect(panel.getByTestId('native-file-review')).toContainText('too large to show')
       await expect(panel.getByTestId('native-file-before')).toHaveCount(0)
       await expect(panel.getByTestId('native-file-after')).toHaveCount(0)
+      await panel.getByTestId('native-file-review').scrollIntoViewIfNeeded()
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-withheld.png') })
     } else {
       await expect(panel.getByTestId('native-file-after')).toHaveText(after)
@@ -81,6 +82,8 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await panel.getByTestId('native-file-after').scrollIntoViewIfNeeded()
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-review-' + turn + '.png') })
       await appPage.setViewportSize({ width: 680, height: 600 })
+      await panel.getByTestId('native-file-after').scrollIntoViewIfNeeded()
+      await expect(panel.getByTestId('native-file-after')).toBeInViewport()
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-compact-' + turn + '.png') })
     }
     await panel.getByRole('button', { name: turn <= 3 ? 'Allow once' : turn === 7 ? 'Cancel' : 'Deny', exact: true }).click()
