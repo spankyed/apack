@@ -21,7 +21,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
@@ -190,10 +190,17 @@ test('hands one conversation to the native terminal and displays its main and ag
       delete fixture.nativeReferenceOpenDialog
     })
   }
-  await composer.fill('NativeReferenceReadFixture')
+  await composer.fill('NativeReferenceReadFixture ')
+  await composer.press('End')
+  await composer.pressSequentially('#')
+  const referencePopup = appPage.locator('.reference-suggestion-popup')
+  await referencePopup.getByText('Threads', { exact: true }).click()
+  const referenceTopic = (await context()).topic
+  await referencePopup.locator('.reference-suggestion-item').filter({ has: appPage.getByText(referenceTopic, { exact: true }) }).click()
+  await expect(referencePopup).toBeHidden()
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('', { timeout: 15000 })
-  await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'user' && message.text.includes('NativeReferenceReadFixture') && message.references?.files?.[0]?.path === reference.file)).toBe(true)
+  await expect.poll(async () => { const state = await context(); return state.messages.some((message: any) => message.sender === 'user' && message.text.includes('NativeReferenceReadFixture') && message.references?.files?.[0]?.path === reference.file && message.references?.context?.some((reference: any) => reference.refType === 'thread' && reference.refId === state.threadId)) }).toBe(true)
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   try {
     await expect.poll(async () => stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join('')).replace(/\s+/g, '').includes('Doyouwanttoproceed?'), { timeout: 15000 }).toBe(true)
@@ -210,6 +217,10 @@ test('hands one conversation to the native terminal and displays its main and ag
   await fileChip.scrollIntoViewIfNeeded()
   await expect(fileChip).toBeInViewport()
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-history.png') })
+  const contextChip = appPage.getByTitle(`thread: ${referenceTopic}`, { exact: true })
+  await contextChip.scrollIntoViewIfNeeded()
+  await expect(contextChip).toBeInViewport()
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-context-history.png') })
   await appPage.setViewportSize({ width: 680, height: 600 })
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeVisible()
   const statusGeometry = await composerStatus.evaluate(element => {
@@ -264,5 +275,5 @@ test('hands one conversation to the native terminal and displays its main and ag
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, nativeExternalFilePermission: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, normalComposerContextReference: true, nativeExternalFilePermission: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })
