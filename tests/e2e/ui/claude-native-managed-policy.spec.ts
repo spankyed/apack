@@ -8,6 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('keeps native status, submissions and history available under managed-only hooks', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
+  const { restriction } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -37,35 +38,41 @@ test('keeps native status, submissions and history available under managed-only 
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && navigated && !trusted) { trusted = true; await input.press('Enter') }
-    return native?.state?.status === 'live' && native?.state?.mainStatus?.includes('AppNativeMain ' + sessionId)
+    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
-  await expect(main).toContainText('AppNativeMain ' + sessionId)
-  await expect(main).toContainText('Second native status line')
-  await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
+  if (restriction) await expect(main).toHaveCount(0)
+  else {
+    await expect(main).toContainText('AppNativeMain ' + sessionId)
+    await expect(main).toContainText('Second native status line')
+    await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
+  }
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
-  await expect(status).toContainText('AppNativeMain ' + sessionId)
+  if (restriction) await expect(status).toHaveCount(0)
+  else await expect(status).toContainText('AppNativeMain ' + sessionId)
   await appPage.setViewportSize({ width: 680, height: 600 })
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
   const composer = card.locator('[contenteditable="true"]')
   await composer.fill('NativeManagedParentFixture')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('', { timeout: 15000 })
-  await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.statusText?.startsWith('AppNativeAgent running')), { timeout: 20000 }).toBe(true)
+  await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'running' && (restriction ? task.statusText === undefined : task.statusText?.startsWith('AppNativeAgent running'))), { timeout: 20000 }).toBe(true)
   await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
   const nativeAgentId = (await context()).native.state.tasks.find((task: any) => task.status === 'running').id
   const agentRow = appPage.locator(`[data-native-agent-id="${nativeAgentId}"]`)
-  await expect(agentRow).toContainText('AppNativeAgent running')
+  if (restriction) { await expect(agentRow).not.toContainText('AppNativeAgent'); await expect(agentRow).not.toContainText('ForbiddenUserHelper') }
+  else await expect(agentRow).toContainText('AppNativeAgent running')
   await appPage.setViewportSize({ width: 680, height: 900 })
   await agentRow.scrollIntoViewIfNeeded()
   await expect(agentRow).toBeInViewport()
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-status.png') })
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
-  await expect(agentRow).toContainText('AppNativeAgent completed')
+  if (restriction) expect((await context()).native.state.tasks.every((task: any) => task.statusText === undefined)).toBe(true)
+  else await expect(agentRow).toContainText('AppNativeAgent completed')
   await composer.fill('NativePauseFixture')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('', { timeout: 15000 })
@@ -96,5 +103,5 @@ test('keeps native status, submissions and history available under managed-only 
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })
