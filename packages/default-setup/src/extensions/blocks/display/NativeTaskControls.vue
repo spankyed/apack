@@ -16,7 +16,7 @@
         <template v-if="state.details.metadata.toolUseCount !== undefined"><dt class="text-neutral-500">Tools</dt><dd class="m-0 text-neutral-300">{{ state.details.metadata.toolUseCount.toLocaleString() }}</dd></template>
       </dl>
       <details v-if="state.details.metadata?.prompt" class="mb-3">
-        <summary class="cursor-pointer text-neutral-400">Original Agent prompt</summary>
+        <summary class="cursor-pointer text-neutral-400">Agent prompt</summary>
         <pre class="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ state.details.metadata.prompt }}</pre>
         <p v-if="state.details.metadata.promptTruncated" class="text-neutral-500">Prompt preview shortened.</p>
       </details>
