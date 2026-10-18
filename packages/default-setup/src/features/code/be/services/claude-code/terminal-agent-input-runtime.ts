@@ -1,0 +1,76 @@
+/** Authored correlation around the original terminal dispatcher; no copied command policy. */
+export const claudeTerminalAgentInputRuntime = String.raw`
+let agentDispatch;
+const agentCommandHosts=new WeakMap(),agentCommandDialogs=new Map();
+function installAgentCommandObserver(context){
+ const host=context.localJsx;if(!host||typeof host.show!=='function'||agentCommandHosts.has(host))return;
+ const original=host.show;
+ host.show=function(element,options){
+  const request=agentDispatch,props=element?.props;
+  const capture=request&&!request.dialog&&typeof props?.title==='string'&&typeof props?.confirmLabel==='string'&&typeof props?.onConfirm==='function'&&typeof props?.onCancel==='function';
+  const handle=Reflect.apply(original,this,arguments);
+  if(capture){
+   const entry={id:randomUUID(),clientId:request.clientId,taskId:request.taskId,sessionId:request.sessionId,sequence:request.sequence,title:props.title,confirmLabel:props.confirmLabel,commandName:options?.commandName,confirm:props.onConfirm,cancel:props.onCancel,closed:false,current:request.current,restore:request.restore};
+   request.dialog=entry;agentCommandDialogs.set(entry.id,entry);
+   entry.done=Promise.resolve(handle.closed).then(async()=>{entry.closed=true;agentCommandDialogs.delete(entry.id);await entry.restore();});
+   void entry.done.catch(()=>{});
+  }
+  return handle;
+ };
+ agentCommandHosts.set(host,original);
+}
+async function answerNativeAgentCommand(n,request){
+ const entry=agentCommandDialogs.get(request.command_id);
+ if(!entry||entry.clientId!==request.client_id||entry.closed||entry.answered||!['confirm','cancel'].includes(request.decision))throw Error('Native command confirmation expired');
+ entry.current();entry.answered=true;
+ try{await (request.decision==='confirm'?entry.confirm:entry.cancel)();await entry.done;return {answered:true};}
+ catch(error){if(!entry.closed)entry.answered=false;throw error;}
+}
+async function retireNativeAgentCommands(clientId){
+ const retired=[];
+ for(const entry of agentCommandDialogs.values())if((clientId===undefined||entry.clientId===clientId)&&!entry.answered&&!entry.closed){entry.answered=true;try{entry.cancel();retired.push(entry.done);}catch{entry.closed=true;agentCommandDialogs.delete(entry.id);} }
+ await Promise.allSettled(retired);
+}
+async function dispatchNativeAgentInput(n,request,abort){
+ await n.gate._Jo('desktop');
+ if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');
+ if(agentDispatch||[...agentCommandDialogs.values()].some(entry=>!entry.closed))throw Error('A native Agent submission or command is pending');
+ const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,abort);
+ if(facts.view.kind!=='agent'||!facts.view.taskId)throw Error('No native Agent is selected');
+ const identityCurrent=()=>{const now=nativeViewFacts(n,binding,new AbortController());if(now.sessionId!==facts.sessionId||now.sequence!==facts.sequence)throw Error('Native Agent selection changed');};
+ const viewCurrent=()=>{identityCurrent();if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');};
+ const current=()=>{abort.signal.throwIfAborted();viewCurrent();};
+ if(typeof request.text!=='string'||!request.text.trim()||request.text.length>16384)throw Error('Agent input must contain 1 to 16384 characters');
+ const prepared=n.runtime.GYt(request.text,{});
+ if(prepared.removed.removedTotal>0)return {kind:'review',text:prepared.input,removed:prepared.removed.removedTotal};
+ const text=prepared.input.trimEnd(),context=binding.toolContext(abort),composer=binding.composer;
+ const task=Object.values(context.taskRegistry.all()).find(value=>n.runtime.flt(value)?.id===facts.view.taskId);
+ if(!task||task.type!=='local_agent'||task.resuming)throw Error('This Agent cannot accept input now');
+ const original=await composer.read();current();
+ if(original.text)throw Error('The native terminal has an unsent draft; your app draft was retained');
+ const saved=await binding.savedAgentMessages(facts.view.taskId);current();
+ const before=new Set([...(saved??[]),...(context.taskRegistry.getTranscript(task.id)?.messages??[])].map(row=>row.uuid));
+ const notices=()=>{const state=context.getAppState();return [state.notifications?.current,...(state.notifications?.queue??[])].filter(Boolean);};
+ const priorNotices=new Set(notices());
+ const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
+ const operation={clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,current:viewCurrent,restore,dialog:undefined};
+ agentDispatch=operation;installAgentCommandObserver(context);
+ try{
+  await composer.write(text,'replace');current();
+  if((await composer.read()).text!==text)throw Error('Original native draft preparation was not acknowledged');
+  current();await ownerPost('/agent-enter',{pid:process.pid,taskId:facts.view.taskId,revision:facts.sequence});
+  const deadline=Date.now()+4000;
+  while(Date.now()<deadline){
+   current();
+   if(operation.dialog){const value=operation.dialog;return {kind:'confirmation',id:value.id,title:value.title,confirmLabel:value.confirmLabel,commandName:value.commandName};}
+   const rows=context.taskRegistry.getTranscript(task.id)?.messages??[];
+   const row=rows.find(row=>!before.has(row.uuid)&&row.type==='user'&&row.isMeta!==true&&row.origin?.kind==='human'&&row.message?.content===text);
+   if(row)return {kind:'input',messageId:row.uuid,previousStatus:task.status};
+   const notice=notices().find(value=>!priorNotices.has(value)&&value.key==='agent-view-command-notice');
+   if(notice){await restore();return {kind:'blocked',message:notice.text??notice.segments?.map(segment=>segment.text??'').join('')??'Native command was blocked'};}
+   await new Promise(resolve=>setTimeout(resolve,20));
+  }
+  throw Error('Original native submission had no acknowledged outcome; your app draft was retained');
+ }finally{if(agentDispatch===operation)agentDispatch=undefined;if(!operation.dialog)await restore();}
+}
+`

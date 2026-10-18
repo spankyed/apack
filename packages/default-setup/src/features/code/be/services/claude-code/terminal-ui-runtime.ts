@@ -1,3 +1,4 @@
+import { claudeTerminalAgentInputRuntime } from './terminal-agent-input-runtime.ts'
 import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
@@ -136,6 +137,7 @@ function paneRoster(n){
 }
 ${claudeTerminalClientRuntime}
 ${claudeTerminalTaskRuntime}
+${claudeTerminalAgentInputRuntime}
 function nativeThemeTree(n,tree){
  const palette=n.themeResolver.UKe(n.themePreferences.lEn());
  const paint=value=>{
@@ -518,6 +520,8 @@ function nativeViewFacts(n,binding,abort){
 async function control(request,abort){
  const n=await initialize();
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
+ if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
+ if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
  if(request.subtype==='apack_ui_agent_input'){
   await n.gate._Jo('desktop');
   if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');
@@ -742,6 +746,7 @@ async function control(request,abort){
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){
+  await retireNativeAgentCommands(clientId);
   n.nativeClients.detach(clientId);
   for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
@@ -827,7 +832,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
