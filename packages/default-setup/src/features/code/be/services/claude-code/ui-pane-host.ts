@@ -176,6 +176,7 @@ export function createClaudePaneHost(options: {
         if (!current() || generation !== epoch || drawing !== snapshot || focusRevisions.get(id) !== event.revision) return
         const result = await ui.focus({ ...client, component: 'Pane', instance_id: id, is_held: event.isHeld, by: event.by, ...(target !== undefined ? { element: target } : {}) })
         if (!current() || generation !== epoch || drawing !== snapshot || focusRevisions.get(id) !== event.revision) return
+        if (target === undefined) return
         const focusId = result.element === null ? null : [...snapshot.focusables].find(([, item]) => item.plugin === result.element?.plugin && item.key === result.element.key)?.[0]
         if (focusId === undefined) return
         return { paneId: id, revision: event.revision, moved: result.moved, focusId, ...(result.deny ? { deny: result.deny } : {}) }

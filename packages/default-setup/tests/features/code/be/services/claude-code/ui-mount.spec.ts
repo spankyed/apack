@@ -14,7 +14,7 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -353,6 +353,9 @@ it('keeps a Client container mounted during native redraws and routes its scoped
  f.ui.render.mockResolvedValue({tree:{type:'NativeClient',props:{id,pointer:true,keys:true,width:30,height:3},children:[{type:'Button',props:{label:'Run',key:'run'},press:{plugin:'fixture',handle:1}}]},props:{},rewritten:true,hooked:true})
  const mount=f.mount();await mount.ready
  await vi.waitFor(()=>expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client',id}}))
+ expect(await mount.focus({revision:1,isHeld:true,by:'person'})).toBeUndefined()
+ expect(f.ui.focus).toHaveBeenCalledWith(expect.objectContaining({is_held:true}))
+ expect(f.ui.focus.mock.calls.at(-1)?.[0]).not.toHaveProperty('element')
  f.invalidate()
  expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client',id,children:[{kind:'button'}]}})
  const state=f.states.at(-1);if(state?.status==='live'&&state.tree.kind==='client')expect('actionId' in state.tree.children[0]!).toBe(false)

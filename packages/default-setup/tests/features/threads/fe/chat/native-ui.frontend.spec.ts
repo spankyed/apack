@@ -487,3 +487,14 @@ it('maps native ANSI theme color forms through the same bounded status palette',
  expect(claudeUiColor('ansi256(999)')).toBeUndefined()
  expect(claudeUiColor('ansi:not-a-color')).toBeUndefined()
 })
+
+it('reports Client focus as a held site without selecting its surrounding native container',async()=>{
+ const id='9b08a63e-78f6-46c5-9134-c6c64de30937',tree={kind:'client' as const,id,keys:true,pointer:true,children:[{kind:'text' as const,text:'Native Client'}]}
+ const f=await mount({nativeUi:{status:'live',tree}})
+ const region=f.root.querySelector<HTMLElement>('[data-native-client]')!
+ region.focus()
+ expect(document.activeElement).toBe(region)
+ expect(f.focusReport).toHaveBeenLastCalledWith(expect.objectContaining({isHeld:true,focusId:undefined}))
+ f.state.nativeUi={status:'live',tree:{...tree,children:[{kind:'text',text:'Native Client redrawn'}]}};await nextTick()
+ expect(f.root.querySelector('[data-native-client]')).toBe(region);expect(document.activeElement).toBe(region)
+})

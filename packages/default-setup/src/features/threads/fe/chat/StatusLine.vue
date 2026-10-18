@@ -51,7 +51,7 @@ function reportFocusIn(event: FocusEvent) {
   if (applyingFocus || !site || event.target !== document.activeElement) return
   held = true
   const element = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
-  emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? null, by: autoEntering ? 'auto' : 'person' })
+  emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? (event.target === site ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function reportFocusOut(event: FocusEvent) {
   if (nativeSite.value?.contains(event.relatedTarget as Node | null)) return

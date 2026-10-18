@@ -205,6 +205,7 @@ export function mountClaudeUi(options: {
       const result = await owner.handle.ui.focus({ ...client, component: 'AbovePrompt', instance_id: instanceId,
         is_held: event.isHeld, by: event.by, ...(identity !== undefined ? { element: identity } : {}) })
       if (!current() || revision !== focusRevision || epoch !== generation || snapshot !== drawing) return
+      if (identity === undefined) return
       const target = result.element === null ? null : [...(drawing?.focusables ?? [])].find(([, candidate]) => candidate.plugin === result.element?.plugin && candidate.key === result.element.key)?.[0]
       // An unrecognized native redirect must never focus a different view or an obsolete DOM node.
       if (target === undefined) return
