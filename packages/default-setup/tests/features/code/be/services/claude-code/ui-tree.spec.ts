@@ -181,3 +181,21 @@ it('inherits native root ownership for nested scroll targets and honors a nested
   expect([...drawing.scrollTargets.values()]).toEqual([{ plugin: 'outer', key: 'outer-target' }, { plugin: 'inner', key: 'inner-target' }])
   expect(drawing.tree).toMatchObject({ kind: 'box', plugin: 'outer', children: [{ kind: 'box', plugin: 'outer', scrollId: expect.any(String) }, { kind: 'box', plugin: 'inner' }] })
 })
+
+it('isolates repeated field keys in separate Client instances while preserving each field across redraws',()=>{
+ const left='9b08a63e-78f6-46c5-9134-c6c64de30937',right='ea5a1bb0-1aa2-4273-959f-fc396615526b',replacement='17a0d431-59eb-4a22-aa23-a99724c9c5d3'
+ const fields=(handle:number)=>[{type:'Input',props:{key:'draft',value:'',rows:1},press:{plugin:'fixture',handle}},{type:'Select',props:{key:'choice',value:'a',options:[{value:'a'},{value:'b'}]},press:{plugin:'fixture',handle:handle+1}}]
+ const client=(id:string,handle:number)=>({type:'NativeClient',props:{id,pointer:false,keys:true},part:{plugin:'fixture'},children:fields(handle)})
+ const first=createClaudeUiDrawing({type:'Box',children:[client(left,1),client(right,3)]})
+ expect(first.fields.size).toBe(4)
+ const second=createClaudeUiDrawing({type:'Box',children:[client(left,11),client(right,13)]},first)
+ expect([...second.fields.keys()]).toEqual([...first.fields.keys()])
+ expect([...second.fields.values()].map(field=>[field.clientInstance,field.handle])).toEqual([[left,11],[left,12],[right,13],[right,14]])
+ const fresh=createClaudeUiDrawing({type:'Box',children:[client(replacement,21),client(right,23)]},second)
+ const leftOld=[...second.fields].filter(([,field])=>field.clientInstance===left).map(([id])=>id)
+ expect(leftOld.some(id=>fresh.fields.has(id))).toBe(false)
+ for(const [id,field]of second.fields)if(field.clientInstance===right)expect(fresh.fields.has(id)).toBe(true)
+ const duplicate=client(left,1);duplicate.children=[fields(1)[0]!,fields(2)[0]!]
+ expect(()=>createClaudeUiDrawing(duplicate)).toThrow('ambiguous')
+ expect(JSON.stringify(second.tree)).not.toMatch(/clientInstance|handle|requestId/)
+})

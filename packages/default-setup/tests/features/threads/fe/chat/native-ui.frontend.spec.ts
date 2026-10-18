@@ -498,3 +498,21 @@ it('reports Client focus as a held site without selecting its surrounding native
  f.state.nativeUi={status:'live',tree:{...tree,children:[{kind:'text',text:'Native Client redrawn'}]}};await nextTick()
  expect(f.root.querySelector('[data-native-client]')).toBe(region);expect(document.activeElement).toBe(region)
 })
+
+it('commits Client field IME text once and defers native replacements until composition ends',async()=>{
+ const input={kind:'input' as const,actionId:'client-ime',value:'initial',revision:0,rows:2,submitLabel:'send',autoFocus:false,label:'Client draft'}
+ const client=(value:string,revision:number)=>({kind:'client' as const,id:'9b08a63e-78f6-46c5-9134-c6c64de30937',pointer:false,keys:true,children:[{...input,value,revision}]})
+ const f=await mount({nativeUi:{status:'live',tree:client('initial',0)}})
+ const field=f.root.querySelector<HTMLTextAreaElement>('[aria-label="Client draft"]')!;field.focus()
+ field.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ field.value='preedit';field.dispatchEvent(Object.assign(new Event('input',{bubbles:true}),{isComposing:true}))
+ field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
+ expect(f.field).not.toHaveBeenCalled();expect(f.submit).not.toHaveBeenCalled()
+ f.state.nativeUi={status:'live',tree:client('server replacement',0)};await nextTick();expect(field.value).toBe('preedit')
+ field.value='完成';field.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'完成'}))
+ field.dispatchEvent(Object.assign(new Event('input',{bubbles:true}),{isComposing:false}))
+ expect(f.field).toHaveBeenCalledExactlyOnceWith({actionId:'client-ime',revision:1,kind:'change',value:'完成'})
+ f.state.nativeUi={status:'live',tree:client('完成!',1)};await nextTick();expect(field.value).toBe('完成!');expect(document.activeElement).toBe(field)
+ field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
+ expect(f.field).toHaveBeenLastCalledWith({actionId:'client-ime',revision:2,kind:'submit',value:'完成!'});expect(f.submit).not.toHaveBeenCalled()
+})

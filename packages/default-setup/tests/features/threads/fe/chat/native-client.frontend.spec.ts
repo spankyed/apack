@@ -7,7 +7,7 @@ const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
 async function mount(){
  const send=vi.fn(),root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick()
+ app=createApp({setup(){provide(claudeClientInput,send);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
  return {root,send,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
@@ -32,6 +32,8 @@ it('reports fractional region coordinates and retains pointer capture outside it
  region.dispatchEvent(pointer('pointerup',{pointerId:7,clientX:90,clientY:180,button:0,bubbles:true}))
  expect(send).toHaveBeenCalledWith(id,expect.objectContaining({type:'move',x:-2,y:4,fine:{x:-1.25,y:4}}))
  expect(release).toHaveBeenCalledWith(7)
+ region.dispatchEvent(pointer('pointerleave',{pointerId:7,clientX:300,clientY:300,bubbles:true}))
+ expect(send).toHaveBeenLastCalledWith(id,expect.objectContaining({type:'leave',x:-2,y:4}))
 })
 
 it('gives the Client keyboard focus after its button click while leaving nested text input local',async()=>{
@@ -53,4 +55,12 @@ it('does not activate a captured child button when the pointer is released outsi
   button.dispatchEvent(pointer('pointerup',{pointerId:8,clientX:10,clientY:10,button:0,bubbles:true}))
   button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}));expect(press).toHaveBeenCalledTimes(1)
  }finally{document.elementFromPoint=original}
+})
+
+it('uses native space naming and releases Client focus on control-C/control-D without delivering them',async()=>{
+ const {region,root,send}=await mount(),site=document.createElement('div');site.className='native-extension-surface';site.tabIndex=0;root.before(site);site.append(root)
+ region.focus();region.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true}))
+ expect(send).toHaveBeenCalledWith(id,{kind:'key',key:'space'});send.mockClear()
+ for(const key of ['c','d']){region.focus();const event=new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true,cancelable:true});region.dispatchEvent(event);expect(document.activeElement).toBe(site);expect(event.defaultPrevented).toBe(false)}
+ region.focus();region.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',bubbles:true,cancelable:true}));expect(send).not.toHaveBeenCalled()
 })

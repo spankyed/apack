@@ -12,7 +12,7 @@ export interface ClaudeUiDrawing {
   scrollTargets: ReadonlyMap<string, { plugin: string; key: string }>
   focusables: ReadonlyMap<string, { plugin: string; key: string }>
   links: ReadonlyMap<string, ReadonlySet<string> | undefined>
-  fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>
+  fields: ReadonlyMap<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; clientInstance?: string; options?: string[] }>
   tree: ClaudeUiNode
   /** Backend authority only: never serialize this map into plugin state or durable data. */
   actions: ReadonlyMap<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>
@@ -64,7 +64,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
     clientActions.set(id,{instance:clientScope,key,type,plugin});return id
   }
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
-  const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
+  const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; clientInstance?: string; options?: string[] }>()
   const scrollBoxes = new Map<string, { plugin: string; key: string }>()
   const focusables = new Map<string, { plugin: string; key: string }>()
   function focusIdentity(plugin: string, key: unknown): { focusId?: string } {
@@ -201,13 +201,13 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       for (const name of ['label', 'placeholder', 'value', 'submitLabel']) if (props[name] !== undefined && typeof props[name] !== 'string') throw new ClaudeProtocolError('native UI field has invalid text')
       if (typeof props.value === 'string' && props.value.length > 16384) throw new ClaudeProtocolError('native UI field text exceeds limit')
       const type = value.type === 'Input' ? 'input' : 'select'
-      const identity = JSON.stringify([type, press.plugin, props.key])
+      const identity = JSON.stringify([type, press.plugin, props.key, clientScope ?? null])
       if (identities.has(identity)) throw new ClaudeProtocolError('native UI field key is ambiguous')
       identities.add(identity)
-      const actionId = [...(previous?.fields ?? [])].find(([, field]) => field.type === type && field.plugin === press.plugin && field.key === props.key)?.[0] ?? randomUUID()
-      const field = { type, plugin: press.plugin, handle: press.handle, key: props.key } as const
+      const actionId = [...(previous?.fields ?? [])].find(([, field]) => field.type === type && field.plugin === press.plugin && field.key === props.key && field.clientInstance === clientScope)?.[0] ?? randomUUID()
+      const field = { type, plugin: press.plugin, handle: press.handle, key: props.key, ...(clientScope?{clientInstance:clientScope}:{}) } as const
       const label = typeof props.label === 'string' ? { label: props.label } : {}
-      const common = { actionId, ...focusIdentity(press.plugin, props.key), revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
+      const common = { actionId, ...(!clientScope?focusIdentity(press.plugin, props.key):{}), revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
       if (type === 'input') {
         if (props.rows !== undefined && (typeof props.rows !== 'number' || !Number.isSafeInteger(props.rows) || props.rows < 1)) throw new ClaudeProtocolError('native UI input rows are invalid')
         fields.set(actionId, field)

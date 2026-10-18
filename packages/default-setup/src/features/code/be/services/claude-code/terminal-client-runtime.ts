@@ -1,5 +1,5 @@
 /** Authored ownership bridge around the original native Client sandbox. */
-export const claudeTerminalClientRuntime = String.raw`function createNativeClientHost(createRegistry,invalidate){
+export const claudeTerminalClientRuntime = String.raw`function createNativeClientHost(createRegistry,invalidate,clientRequestId,callbacks){
  const entries=new Map(),tokens=new Map(),registries=new Map();
  const scopeOf=(client,component,requestId)=>JSON.stringify([client,component,requestId]);
  const drop=entry=>{entries.delete(entry.identity);tokens.delete(entry.token);entry.stop();entry.instance.release();if(![...entries.values()].some(other=>other.client===entry.client)){const registry=registries.get(entry.client);registries.delete(entry.client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}};
@@ -18,7 +18,7 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
     if(entries.size>=512)throw Error('Native Client instance limit reached');
     let registry=registries.get(client);if(!registry){registry=createRegistry();registries.set(client,registry);}
     const instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){const timer=setInterval(fn,ms);timer.unref();return()=>clearInterval(timer);}}});
-    entry={identity,scope,client,component,requestId,module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
+    entry={identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
     entry.stop=instance.subscribe(()=>{if(entries.get(identity)===entry)invalidate(entry);});
     entries.set(identity,entry);tokens.set(entry.token,entry);
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
@@ -54,6 +54,24 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
   }else throw Error('Invalid native Client operation');
   return {handled:true};
  }
+ async function dispatchAction(client,value){
+  for(const entry of entries.values()){
+   const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
+   if(!ref||ref.plugin!==value.plugin||typeof ref.key!=='string'||ref.type==='Markdown')continue;
+   if(!entry.enabled||ref.key!==value.key)return {handled:false};
+   const type=value.subtype==='ui_press'?'Button':value.subtype==='ui_input'?'Input':value.subtype==='ui_select'?'Select':undefined;
+   if(type!==ref.type)return {handled:false};
+   const event=type==='Button'?{type:'press'}:type==='Input'?{type:'input',kind:value.kind,value:value.value}:{type:'select',value:value.value};
+   const result=await callbacks.dispatch({plugin:ref.plugin,module:entry.module,key:entry.key,component:entry.component,requestId:entry.requestId,element:ref.key,event});
+   if(entries.get(entry.identity)!==entry||!entry.enabled||!result?.reached)return {handled:false};
+   const reached=result.reached,snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return {handled:false};
+   const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===type&&node.press?.plugin===ref.plugin&&node.props?.key===reached.element)matches.push(node);for(const child of node.children??[])find(child);};find(snapshot.tree);
+   if(matches.length!==1)return {handled:false};const current=matches[0];
+   if(type==='Select'&&!current.props.options.some(option=>option.value===reached.value))return {handled:false};
+   const handled=callbacks.run({plugin:ref.plugin,handle:current.press.handle,key:current.props.key,component:entry.component,requestId:entry.callbackId,event:reached});
+   return {handled,...(handled?{element:reached.element,...(type!=='Button'?{value:reached.value}:{})}:{})};
+  }
+ }
  function action(client,value){
   for(const entry of entries.values()){
    const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
@@ -64,8 +82,8 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
    const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===ref.type&&node.press?.plugin===ref.plugin&&(typeof ref.key==='string'?node.props?.key===ref.key:node.press.handle===value.handle))matches.push(node);for(const child of node.children??[])find(child);};
    find(snapshot.tree);
-   return matches.length===1?{handle:matches[0].press.handle}:false;
+   return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId}:false;
   }
  }
- return {render,event,action,suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
+ return {render,event,action,dispatchAction,suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
 }`
