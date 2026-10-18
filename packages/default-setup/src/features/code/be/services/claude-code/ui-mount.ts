@@ -222,6 +222,7 @@ export function mountClaudeUi(options: {
         const result = await owner.handle.ui.submitAgent({ client_id: client.client_id, text })
         if (!current()) return
         if (result.kind === 'review') agentInput = { revision, status: 'review', review: { text: result.text, removed: result.removed } }
+        else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: { messageId: result.messageId, commandName: result.commandName, text: result.text, ...(result.outcome ? { outcome: result.outcome } : {}) } }
         else if (result.kind === 'blocked') agentInput = { revision, status: 'blocked', problem: result.message }
         else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: { id: result.id, title: result.title, confirmLabel: result.confirmLabel, ...(result.commandName ? { commandName: result.commandName } : {}) } }
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }

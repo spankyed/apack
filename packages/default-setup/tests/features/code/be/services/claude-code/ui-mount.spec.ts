@@ -415,3 +415,13 @@ it('keeps confirmation separate from worker receipts and admits only its matchin
   expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
   await mount.dispose()
 })
+
+it('publishes original parent command output without a worker delivery receipt', async () => {
+  const f = fixture()
+  Object.assign(f.owner, { nativeView: { session_id: 'session', revision: 2, agent_id: 'agent' } })
+  f.ui.submitAgent.mockResolvedValueOnce({ kind: 'command_output', messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', outcome: 'failed' })
+  const mount = f.mount(); await mount.ready; await mount.submitAgent(1, '/reload-skills')
+  expect(f.states.at(-1)?.agentInput).toEqual({ revision: 1, status: 'command_output', output: { messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', outcome: 'failed' } })
+  expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
+  await mount.dispose()
+})

@@ -52,6 +52,9 @@ async function dispatchNativeAgentInput(n,request,abort){
  const before=new Set([...(saved??[]),...(context.taskRegistry.getTranscript(task.id)?.messages??[])].map(row=>row.uuid));
  const notices=()=>{const state=context.getAppState();return [state.notifications?.current,...(state.notifications?.queue??[])].filter(Boolean);};
  const priorNotices=new Set(notices());
+ const parentBefore=new Set((binding.messages?.()??[]).map(row=>row.uuid));
+ const parsed=n.commandInput.IS(text),command=parsed&&n.engine.Rs(parsed.commandName,binding.commands());
+ const expectedRun=command?.type==='local'?n.engine.Cie(command,parsed.args):undefined;
  const restore=async()=>{try{identityCurrent();const draft=await composer.read();identityCurrent();if(draft.text.trimEnd()===text)await composer.write(original.text,'replace');}catch{} };
  const operation={clientId:request.client_id,taskId:facts.view.taskId,sessionId:facts.sessionId,sequence:facts.sequence,current:viewCurrent,restore,dialog:undefined};
  agentDispatch=operation;installAgentCommandObserver(context);
@@ -66,6 +69,14 @@ async function dispatchNativeAgentInput(n,request,abort){
    const rows=context.taskRegistry.getTranscript(task.id)?.messages??[];
    const row=rows.find(row=>!before.has(row.uuid)&&row.type==='user'&&row.isMeta!==true&&row.origin?.kind==='human'&&row.message?.content===text);
    if(row)return {kind:'input',messageId:row.uuid,previousStatus:task.status};
+   if(expectedRun){
+    const outputs=(binding.messages?.()??[]).filter(row=>!parentBefore.has(row.uuid)&&row.type==='system'&&row.subtype==='local_command'&&row.commandRun?.command===expectedRun.command&&row.commandRun?.args===expectedRun.args&&row.commandRun?.plugin===expectedRun.plugin);
+    if(outputs.length===1){
+     const row=outputs[0],result=n.commandOutput.s4t(row.content,row.uuid,row.timestamp,row.contextUsage,row.commandRun,row.usageReport,row.commandOutcome),content=result?.message?.content;
+     const output=typeof content==='string'?content:Array.isArray(content)?content.filter(block=>block.type==='text').map(block=>block.text).join('\n'):undefined;
+     if(typeof output==='string'&&output.length>0&&output.length<=65536)return {kind:'command_output',messageId:row.uuid,commandName:expectedRun.command,text:output,...(typeof row.commandOutcome?.kind==='string'?{outcome:row.commandOutcome.kind}:{})};
+    }
+   }
    const notice=notices().find(value=>!priorNotices.has(value)&&value.key==='agent-view-command-notice');
    if(notice){await restore();return {kind:'blocked',message:notice.text??notice.segments?.map(segment=>segment.text??'').join('')??'Native command was blocked'};}
    await new Promise(resolve=>setTimeout(resolve,20));

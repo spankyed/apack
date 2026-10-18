@@ -2854,7 +2854,13 @@ type ClaudeUiMountState = ({
     agentProblem?: string;
     agentInput?: {
         revision: number;
-        status: 'blocked' | 'command_done' | 'confirmation' | 'deciding' | 'done' | 'error' | 'pending' | 'review';
+        status: 'blocked' | 'command_done' | 'command_output' | 'confirmation' | 'deciding' | 'done' | 'error' | 'pending' | 'review';
+        output?: {
+            messageId: string;
+            commandName: string;
+            text: string;
+            outcome?: string;
+        };
         receipt?: {
             messageId: string;
         };
@@ -8988,6 +8994,12 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         text: string;
         kind: "review";
         removed: number;
+    } | {
+        text: string;
+        kind: "command_output";
+        messageId: string;
+        commandName: string;
+        outcome?: string | undefined;
     } | {
         message: string;
         kind: "blocked";
