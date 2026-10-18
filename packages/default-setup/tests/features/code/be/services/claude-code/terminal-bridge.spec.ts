@@ -205,3 +205,16 @@ it('validates direct-owner turn facts before changing busy state and fences pend
   expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: true, turn: null })).status).toBe(200)
   expect(bridge!.busy).toBe(true)
 })
+
+it('refreshes native UI mode changes after the initial poll and uses direct owner mode metadata', async () => {
+  await create()
+  const control = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValueOnce({ mode: 'plan' }).mockResolvedValueOnce({ mode: 'default' })
+  const metadata = { cwd: '/workspace', model: 'fixture', turns: 1, startedAt: 100 }
+  await request('/poll', { sessionId: session, agents: [], metadata })
+  expect(bridge!.session.metadata?.permissionMode).toBe('plan')
+  await request('/poll', { sessionId: session, agents: [], metadata })
+  expect(bridge!.session.metadata?.permissionMode).toBe('default')
+  await request('/poll', { sessionId: session, agents: [], metadata: { ...metadata, permissionMode: 'auto' }, directOwner: true, busy: false, turn: null })
+  expect(bridge!.session.metadata?.permissionMode).toBe('auto')
+  expect(control).toHaveBeenCalledTimes(2)
+})

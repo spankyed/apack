@@ -99,7 +99,8 @@ export async function createClaudeTerminalBridge(options: {
         if (changedSession) { session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
           session.update(value.metadata)
-          if (session.metadata?.permissionMode === undefined) {
+          // Native dialogs and terminal shortcuts can change mode without a host command.
+          if (object(value.metadata)?.permissionMode === undefined) {
             const sessionId = projection.sessionId
             try {
               const result = object(await ui.transport.request({ subtype: 'apack_get_permission_mode' }))
