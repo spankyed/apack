@@ -87,8 +87,8 @@
           <div class="flex min-w-0 items-center justify-between gap-2 text-[10px] text-neutral-500">
             <span class="min-w-0 truncate" :title="entry.nativeAgent.name">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
           </div>
-          <div v-if="entry.nativeAgent.statusText" role="status" :aria-label="`Claude agent ${entry.nativeAgent.name} status`" tabindex="0" class="mt-1 max-h-28 min-w-0 overflow-y-auto overscroll-contain rounded text-[11px] leading-4 focus-visible:outline focus-visible:outline-blue-400" data-testid="native-agent-status-text">
-            <NativeStatusText :text="entry.nativeAgent.statusText" />
+          <div role="status" :aria-label="`Claude agent ${entry.nativeAgent.name} status`" :tabindex="entry.nativeAgent.statusText ? 0 : -1" class="mt-1 max-h-28 min-w-0 overflow-y-auto overscroll-contain rounded text-[11px] leading-4 focus-visible:outline focus-visible:outline-blue-400" data-testid="native-agent-status-text">
+            <NativeStatusText v-if="entry.nativeAgent.statusText" :text="entry.nativeAgent.statusText" />
           </div>
         </section>
       </div>

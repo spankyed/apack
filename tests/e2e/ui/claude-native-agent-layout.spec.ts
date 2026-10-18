@@ -73,6 +73,7 @@ test('keeps long native Agent status readable beside the compact composer', asyn
     expect(measured.scrollWidth).toBeLessThanOrEqual(measured.width+1)
     expect(measured.height).toBeLessThanOrEqual(112)
     expect(measured.scrollHeight).toBeGreaterThan(measured.height)
+    await appPage.screenshot({path:testInfo.outputPath('apack-native-agent-status-'+height+'.png')})
     await composer.scrollIntoViewIfNeeded();await expect(composer).toHaveText('Draft retained while the Agent works')
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeVisible()
     await appPage.screenshot({path:testInfo.outputPath('apack-native-agent-compact-'+height+'.png')})
