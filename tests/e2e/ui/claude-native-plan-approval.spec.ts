@@ -70,9 +70,9 @@ test('reviews native plans and preserves original mode, context and session choi
   const panel = appPage.getByTestId('native-plan-panel')
   let initialPending: any
   const edited = '# Synthetic native plan\n\nReviewed in apack. Keep the checks.\n'
-  const approves = ['enter', 'keep', 'keep-auto', 'accept-edits', 'clear', 'managed-clear', 'empty'].includes(planScenario)
-  const clears = ['clear', 'managed-clear'].includes(planScenario)
-  const choice = planScenario === 'enter' || planScenario === 'empty' ? 'yes' : clears ? 'yes-auto-clear-context' : planScenario === 'accept-edits' ? 'yes-accept-edits-keep-context' : planScenario === 'keep-auto' ? 'yes-resume-auto-mode' : 'yes-default-keep-context'
+  const approves = ['enter', 'keep', 'keep-auto', 'accept-edits', 'clear-accept-edits', 'clear', 'managed-clear', 'empty'].includes(planScenario)
+  const clears = ['clear', 'managed-clear', 'clear-accept-edits'].includes(planScenario)
+  const choice = planScenario === 'enter' || planScenario === 'empty' ? 'yes' : clears ? planScenario === 'clear-accept-edits' ? 'yes-accept-edits' : 'yes-auto-clear-context' : planScenario === 'accept-edits' ? 'yes-accept-edits-keep-context' : planScenario === 'keep-auto' ? 'yes-resume-auto-mode' : 'yes-default-keep-context'
   let button = ''
   if (planScenario !== 'auto-enter') {
     await expect(panel).toBeVisible({ timeout: 15000 })
@@ -81,7 +81,7 @@ test('reviews native plans and preserves original mode, context and session choi
     if (!['enter', 'empty', 'withheld'].includes(planScenario)) await expect(panel.getByTestId('native-plan-preview')).toContainText('Synthetic native plan')
     if (planScenario === 'withheld') { await expect(panel.getByTestId('native-plan-withheld')).toBeVisible(); await expect(panel.getByRole('button', { name: 'Approve plan', exact: true })).toHaveCount(0) }
     if (planScenario === 'empty') await expect(panel).toContainText('No plan was provided')
-    if (['keep', 'clear', 'managed-clear'].includes(planScenario)) {
+    if (['keep', 'clear', 'managed-clear', 'clear-accept-edits'].includes(planScenario)) {
       await panel.getByRole('button', { name: 'Edit plan', exact: true }).click()
       await panel.getByRole('textbox', { name: 'Edit proposed plan', exact: true }).fill(edited)
       await panel.getByRole('button', { name: 'Preview', exact: true }).click()
@@ -106,7 +106,7 @@ test('reviews native plans and preserves original mode, context and session choi
         await expect.poll(async () => (await context()).sessionId, { timeout: 15000 }).not.toBe(sessionId)
         expect((await context()).claude.previousSessionIds).toContain(sessionId)
       }
-      const mode = planScenario === 'enter' ? 'plan' : approves ? clears || planScenario === 'keep-auto' ? 'auto' : planScenario === 'accept-edits' ? 'acceptEdits' : 'default' : 'plan'
+      const mode = planScenario === 'enter' ? 'plan' : approves ? planScenario === 'clear-accept-edits' ? 'acceptEdits' : clears || planScenario === 'keep-auto' ? 'auto' : planScenario === 'accept-edits' ? 'acceptEdits' : 'default' : 'plan'
       await expect.poll(async () => { const c = await context(); return [c.claude.permissionMode, c.native?.state.session?.permissionMode, c.native?.state.busy] }, { timeout: 15000 }).toEqual([mode, mode, false])
       expect((await context()).native.state.ownerId).toBe(ownerId)
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -142,7 +142,7 @@ test('reviews native plans and preserves original mode, context and session choi
     expect(continuation?.message.content).toContain('Reviewed in apack')
     await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === continuation.uuid).length).toBe(1)
   }
-  if (['keep', 'clear', 'managed-clear'].includes(planScenario)) expect(await readFile(initialPending.nativeTerminal.plan.planFilePath, 'utf8')).toBe(edited)
+  if (['keep', 'clear', 'managed-clear', 'clear-accept-edits'].includes(planScenario)) expect(await readFile(initialPending.nativeTerminal.plan.planFilePath, 'utf8')).toBe(edited)
   const nativeCost = journals[finalSessionId].filter(row => row.type === 'cost-state').at(-1).totalCostUSD
   await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
   await expect(card).toBeVisible()
