@@ -9,7 +9,7 @@ function setup(requestId?: string) {
   const { id } = repository.threadCommands.create({ topic: 'Tool denial', instructions: '', tags: [] });
   repository.threadCommands.update(id, { context: { claudeCode: requestId ? { isRunning: false, pendingControlRequest: { requestId, toolName: 'Bash', approvalMessageId: 'approval' } } : {} } });
   const respond = vi.fn(), kill = vi.fn(), clear = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ respond, kill })), clearHandle: clear } as never });
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => undefined), getHandle: vi.fn(() => ({ respond, kill })), clearHandle: clear } as never });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { info: vi.fn() });
   mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() });
@@ -42,7 +42,7 @@ describe('CC: Deny Tool', () => {
   it.each(['missing', 'closed'])('retires an unsendable denial without starting new work (%s)', async process => {
     const { id } = setup('current');
     const respond = vi.fn(() => { throw Error('closed'); });
-    mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => process === 'missing' ? undefined : { respond }) } as never });
+    mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: vi.fn(() => undefined), getHandle: vi.fn(() => process === 'missing' ? undefined : { respond }) } as never });
     await expect(action({ threadId: id, requestId: 'current', response: { approved: false } }, services)).resolves.toMatchObject({ success: false });
     expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ isRunning: false, chatState: 'error' });
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();

@@ -15,7 +15,7 @@ async function createServices(nativeError?: Error, sendBlockMessage = vi.fn()) {
 
   mockService<Services, 'cli'>('cli', {
     claudeCode: {
-      closeIdleConversation:vi.fn(async()=>true),getHandle: vi.fn(() => undefined),
+      closeIdleConversation:vi.fn(async()=>true),getNativeTerminal: vi.fn(() => undefined), getHandle: vi.fn(() => undefined),
       clearHandle: vi.fn(),
       validateResumeTarget: vi.fn(async () => {
         if (nativeError) throw nativeError;

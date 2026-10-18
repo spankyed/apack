@@ -427,8 +427,8 @@ export function killTurn(services: Services, threadId: string): void {
     approvalMessageId: prior?.pendingControlRequest?.approvalMessageId ?? null,
   });
 
-  // Kill CLI subprocess.
-  const handle = (services.cli as any).claudeCode.getHandle(threadId);
+  // Stop the process that owns this thread, including an interactive native handoff.
+  const handle = services.cli.claudeCode.getNativeTerminal(threadId) ?? services.cli.claudeCode.getHandle(threadId);
   if (handle) {
     try { handle.kill(); } catch { /* already gone */ }
   }
