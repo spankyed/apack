@@ -12,6 +12,17 @@ function fixture(capabilities: string[] = ['ui_surface_v1']) {
 const client = { client_id: 'fixture-ui', surface: 'desktop' as const }
 
 describe('native UI transport', () => {
+  it('retains Agent reply text and validates the original native human receipt', async () => {
+    const request = vi.fn(async () => ({ input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'resumed' } }))
+    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+    await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ input: { mode: 'resumed' } })
+    expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_input', client_id: 'agent-ui', text: '  Keep whitespace  ' })
+    await expect(ui.submitAgent({ client_id: 'agent-ui', text: ' ' })).rejects.toThrow()
+    const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+    await expect(print.submitAgent({ client_id: 'parent-ui', text: 'Do not send' })).rejects.toThrow('capability is unavailable')
+    expect(request).toHaveBeenCalledOnce()
+  })
+
   it('requires terminal-owner capability before advertising a selected Agent prompt host', async () => {
     const request = vi.fn(async () => ({ surfaces: ['desktop'] }))
     const target = { session_id: 'native-session', revision: 4, agent_id: 'agent-one' }

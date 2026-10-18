@@ -518,6 +518,14 @@ function nativeViewFacts(n,binding,abort){
 async function control(request,abort){
  const n=await initialize();
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
+ if(request.subtype==='apack_ui_agent_input'){
+  await n.gate._Jo('desktop');
+  if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native Agent UI client is detached');
+  const binding=originalContext??n.runtime.ey(),facts=nativeViewFacts(n,binding,abort);
+  if(facts.view.kind!=='agent'||!facts.view.taskId)throw Error('No native Agent is selected');
+  const current=()=>{abort.signal.throwIfAborted();if(facts.sessionId!==String(n.questionOptions.q())||facts.sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native task session changed');};
+  return nativeTaskControl(n,binding,{operation:'input',task_id:facts.view.taskId,text:request.text},abort,current);
+ }
  if(request.subtype==='apack_parent_prompt_state'){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native parent view is unavailable');

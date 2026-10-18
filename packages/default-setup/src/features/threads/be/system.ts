@@ -79,7 +79,7 @@ export const threadsSystem = setup({
       if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_TASK') terminalViews.handle(event, client, reply);
     },
     claudeUiView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
+      if (event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
     },
     // ---- Thread management actions ----
     sendThreadsConnectedData: () => {
@@ -906,6 +906,7 @@ export const threadsSystem = setup({
       CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_TASK: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
+      CLAUDE_UI_AGENT_INPUT: { actions: 'claudeUiView' },
       CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
       CLAUDE_UI_PRESS: { actions: 'claudeUiView' },

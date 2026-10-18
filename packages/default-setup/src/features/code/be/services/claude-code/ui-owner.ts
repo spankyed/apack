@@ -22,6 +22,11 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
   initialized.catch(() => {})
   const owner: ClaudeUiOwner = {
     nativeView: target ? { session_id: target.sessionId, revision: target.revision, agent_id: target.taskId } : undefined,
+    readAgent: target ? async () => {
+      const result = await native.operateTask(target.taskId, 'inspect')
+      if (getClaudeUiOwner(threadId, target) !== owner || !result.details) throw new Error('Native Agent selection changed')
+      return result.details
+    } : undefined,
     done: native.done,
     sessionId: state.sessionId,
     subscribe: listener => native.uiTransport.subscribe(listener),

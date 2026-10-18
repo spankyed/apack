@@ -14,7 +14,7 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
+  const ui = { submitAgent: vi.fn(async () => ({ input: { messageId: '12345678-1234-1234-1234-123456789abc', mode: 'queued' as const } })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
@@ -22,7 +22,7 @@ function fixture() {
   const mount = (promptHost?: ClaudePromptHost) => mountClaudeUi({ owner, promptHost, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
   const invalidate = (local=false) => { for (const listener of listeners) listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render',...(local?{client_snapshot:true,client_id:ui.attach.mock.calls.at(-1)?.[0]?.client_id}:{}) } as StreamLine) }
   const action = () => { const last = states.at(-1); if (last?.status !== 'live' || last.tree.kind !== 'button' || !last.tree.actionId) throw new Error('expected live button'); return last.tree.actionId }
-  return { mount, ui, states, focusRequests, done, listeners, invalidate, action, replace: () => { current = false } }
+  return { mount, owner, ui, states, focusRequests, done, listeners, invalidate, action, replace: () => { current = false } }
 }
 
 beforeEach(() => { vi.useFakeTimers() })
@@ -377,4 +377,18 @@ it('admits one displayed keyed Client action through a local snapshot redraw and
  expect(await view.press(original)).toEqual({handled:true});expect(f.ui.press).toHaveBeenCalledTimes(1)
  f.invalidate();expect(await view.press(original)).toEqual({handled:false})
  await view.dispose()
+})
+
+it('uses Agent snapshots and publishes exact native input receipts only on the selected mount', async () => {
+  const f = fixture()
+  Object.assign(f.owner, { sessionId: 'session', nativeView: { session_id: 'session', revision: 2, agent_id: 'agent' }, readAgent: vi.fn(async () => ({ taskId: 'agent', name: 'Worker', status: 'running', canMessage: true, canInput: true, messages: [{ uuid: 'native-user', role: 'user', text: 'Instruction', renderText: 'Instruction', origin: { kind: 'composer' } }], truncated: false })) })
+  const mount = f.mount(); await mount.ready; await vi.advanceTimersByTimeAsync(100)
+  expect(f.ui.attach).toHaveBeenCalledWith(expect.objectContaining({ native_view: { session_id: 'session', revision: 2, agent_id: 'agent' } }))
+  expect(f.states.at(-1)?.agent?.messages[0]?.uuid).toBe('native-user')
+  await mount.submitAgent(1, 'User reply')
+  expect(f.ui.submitAgent).toHaveBeenCalledOnce()
+  expect(f.states.at(-1)?.agentInput).toMatchObject({ revision: 1, status: 'done', receipt: { mode: 'queued' } })
+  await mount.submitAgent(1, 'Duplicate reply'); expect(f.ui.submitAgent).toHaveBeenCalledOnce()
+  f.replace(); await mount.submitAgent(2, 'Stale reply'); expect(f.ui.submitAgent).toHaveBeenCalledOnce()
+  await mount.dispose()
 })

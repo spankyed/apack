@@ -18,7 +18,7 @@ function fixture() {
   const message = vi.fn((value: unknown) => value)
   const runner = vi.fn(async function* (call: { id: string }, _assistant: unknown, _permission: unknown, _context: unknown, _clock: unknown) { yield { message: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: call.id, ...(denied ? { is_error: true, content: 'Native refusal' } : {}) }] }, toolUseResult: { success: !denied } } } })
   const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { randomUUID: () => '12345678-1234-1234-1234-123456789abc' }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
-  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ runtime: { Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
+  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
   return { show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
 }
 it('stops the exact native registry task through the original user-stop callback', async () => {
@@ -32,7 +32,7 @@ it('rejects foreign and ambiguous task identities before any native operation', 
 })
 it('reads original saved and live Agent messages without exposing hidden context or stopping work', async () => {
   const f = fixture(); const result = await f.request('inspect')
-  expect(result.details.messages).toEqual([{ role: 'user', text: 'Task instruction' }, { role: 'assistant', text: 'Live progress' }])
+  expect(result.details.messages).toEqual([{ uuid: 'saved', role: 'user', text: 'Task instruction', renderText: 'Task instruction', origin: { kind: 'unclassified' } }, { uuid: 'live', role: 'assistant', text: 'Live progress', renderText: 'Live progress', origin: { kind: 'unclassified' } }])
   expect(f.registry.getTranscript).toHaveBeenCalledWith('registry-a'); expect(f.saved).toHaveBeenCalledWith('agent-a'); expect(f.stop).not.toHaveBeenCalled()
 })
 it('refuses a reply when its native session expires during transcript loading', async () => {
@@ -133,9 +133,9 @@ it('deduplicates native human envelopes against visible live human messages and 
   const f = fixture()
   f.saved.mockResolvedValue([{ uuid: 'meta', type: 'user', isMeta: true, origin: { kind: 'human' }, message: { content: 'Native envelope: Typed reply' } }])
   f.registry.getTranscript.mockReturnValue({ messages: [{ uuid: 'visible', type: 'user', origin: { kind: 'human' }, message: { content: 'Typed reply' } }] } as any)
-  expect((await f.request('inspect')).details.messages).toEqual([{ role: 'user', text: 'Typed reply' }])
+  expect((await f.request('inspect')).details.messages).toEqual([{ uuid: 'visible', role: 'user', text: 'Typed reply', renderText: 'Typed reply', origin: { kind: 'composer' } }])
   f.registry.getTranscript.mockReturnValue({ messages: [] })
-  expect((await f.request('inspect')).details.messages).toEqual([{ role: 'user', text: 'Native envelope: Typed reply' }])
+  expect((await f.request('inspect')).details.messages).toEqual([{ uuid: 'meta', role: 'user', text: 'Native envelope: Typed reply' }])
 })
 
 it('refuses ended input before native transcript writes when its live queue context is unavailable', async () => {

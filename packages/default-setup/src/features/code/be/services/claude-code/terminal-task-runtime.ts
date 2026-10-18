@@ -81,8 +81,10 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
    else if(block.type==='tool_result')parts.push(typeof block.content==='string'?block.content:JSON.stringify(block.content));
   }
   let text=parts.join('\n');if(!text)continue;
-  if(text.length>budget){text=text.slice(-budget);truncated=true;}
-  messages.unshift({role:row.type,text});budget-=text.length;if(!budget)break;
+  const exactText=text.length<=budget;
+  if(!exactText){text=text.slice(-budget);truncated=true;}
+  const renderable=row.isMeta!==true&&(typeof content==='string'||Array.isArray(content)&&content.every(block=>block.type==='text'))&&exactText;
+  messages.unshift({uuid:row.uuid,role:row.type,text,...(renderable?{renderText:text,origin:n.runtime.Jgr(row.origin),...(typeof row.message?.id==='string'?{apiMessageId:row.message.id}:{})}:{})});budget-=text.length;if(!budget)break;
  }
  const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined;
  const prompt=typeof task.prompt==='string'?task.prompt:undefined,error=typeof task.error==='string'?task.error:undefined;

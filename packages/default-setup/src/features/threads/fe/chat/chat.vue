@@ -28,9 +28,10 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending" @active="nativeTerminalActive = $event" />
+        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)] ?? ''" @draft="agentDrafts[agentDraftKey(focusedAgent.target)] = $event" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="focusedAgent = undefined" />
         <!-- Shrinkable content area -->
-        <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
+        <div v-show="!nativeTerminalActive && !focusedAgent" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
           <div v-show="!pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -213,6 +214,8 @@ import { claudeClientInput } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
+import NativeAgentView from './NativeAgentView.vue'
+import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import ChatInput from './input.vue'
 import NativeToolApproval from './NativeToolApproval.vue'
 import NativePlanPanel from './NativePlanPanel.vue'
@@ -410,6 +413,19 @@ const statusLineCwd = computed(() => {
 })
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([, view]) => view.threadId === currentThread.value?.id && view.state?.status === 'live'))
+const agentPending = ref(false), agentReturning = ref(false)
+const agentDrafts = ref<Record<string, string>>({})
+const agentDraftKey = (target: ClaudeNativeAgentUiTarget) => JSON.stringify([target.ownerId, target.sessionId, target.taskId])
+const focusedAgent = ref<{ target: ClaudeNativeAgentUiTarget; name: string; statusText?: string }>()
+watch([taskView, agentReturning], ([lease, returning]) => {
+  const owner = lease?.[1].state, selected = owner?.view
+  if (owner && selected?.kind === 'agent' && selected.taskId) {
+    const task = owner.tasks.find(task => task.id === selected.taskId)
+    const target = { ownerId: owner.ownerId, sessionId: owner.sessionId, revision: selected.revision, taskId: selected.taskId }
+    if (JSON.stringify(focusedAgent.value?.target) !== JSON.stringify(target)) focusedAgent.value = { target, name: task?.name ?? selected.taskId, statusText: task?.statusText }
+    else if (focusedAgent.value) focusedAgent.value.statusText = task?.statusText
+  } else if (!returning && (!owner || selected?.kind === 'main' || focusedAgent.value?.target.ownerId !== owner.ownerId)) focusedAgent.value = undefined
+}, { immediate: true })
 let taskRevision = 0
 provide(claudeTaskControls, {
   ownerId: computed(() => taskView.value?.[1].state?.ownerId),

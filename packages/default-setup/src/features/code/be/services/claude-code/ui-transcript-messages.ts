@@ -21,7 +21,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   return node
 }
 const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
-const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => sameSource(a, b) && (a.component === 'AssistantMessage' && b.component === 'AssistantMessage' ? a.isFirstOfReply === b.isFirstOfReply : a.component === 'UserMessage' && b.component === 'UserMessage' && a.isExpanded === b.isExpanded && a.origin.kind === b.origin.kind)
+const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => sameSource(a, b) && (a.component === 'AssistantMessage' && b.component === 'AssistantMessage' ? a.isFirstOfReply === b.isFirstOfReply : a.component === 'UserMessage' && b.component === 'UserMessage' && a.isExpanded === b.isExpanded && JSON.stringify(a.origin) === JSON.stringify(b.origin))
 const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.isSummary ? row.text.trim() : row.text) : row.text
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */

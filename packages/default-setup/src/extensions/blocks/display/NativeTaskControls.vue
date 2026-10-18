@@ -22,7 +22,7 @@
       </details>
       <div v-if="state.details.status === 'failed' && state.details.metadata?.error" role="alert" class="mb-3 whitespace-pre-wrap text-red-300 [overflow-wrap:anywhere]">{{ state.details.metadata.error }}<p v-if="state.details.metadata.errorTruncated">Error preview shortened.</p></div>
       <p v-if="!state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
-      <article v-for="(message, index) in state.details.messages" :key="index" class="mb-3 last:mb-0">
+      <article v-for="message in state.details.messages" :key="message.uuid" class="mb-3 last:mb-0">
         <div class="mb-1 text-[10px] uppercase text-neutral-500">{{ message.role }}</div>
         <pre class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ message.text }}</pre>
       </article>

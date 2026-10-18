@@ -1,3 +1,4 @@
+import { nativePromptEditors } from './native-prompt-scope.ts'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Extension, type Editor } from '@tiptap/core'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -63,6 +64,7 @@ function plugin(
       },
 
       apply(tr, prev) {
+        if (nativePromptEditors.has(editor)) return { ...defaultState }
         const deactivateIf = (active: boolean) => active ? { ...defaultState } : prev
 
         // Handle explicit meta updates (from popup interactions)

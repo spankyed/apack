@@ -52,7 +52,7 @@ export interface ClaudeNativeTaskDetails {
     error?: string
     errorTruncated: boolean
   }
-  messages: { role: 'user' | 'assistant'; text: string }[]
+  messages: { uuid: string; role: 'user' | 'assistant'; text: string; renderText?: string; apiMessageId?: string; origin?: { kind: string; name?: string; asUser?: boolean; server?: string } }[]
   truncated: boolean
 }
 

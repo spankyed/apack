@@ -129,7 +129,7 @@ interface ClaudeUiTranscriptRowSource {
 export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary?: false }
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary: true; blockIndex: number }
-  | { component: 'UserMessage'; origin: { kind: 'unclassified' | 'composer' }; isExpanded: boolean }
+  | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   displayText: string
@@ -147,7 +147,7 @@ export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
+) & { agent?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails; agentProblem?: string; agentInput?: { revision: number; status: 'pending' | 'done' | 'error'; receipt?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; problem?: string }; panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

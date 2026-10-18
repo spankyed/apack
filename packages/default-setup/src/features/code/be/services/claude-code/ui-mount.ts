@@ -1,4 +1,5 @@
 import { createClaudeQuestionHost } from './ui-question-host.ts'
+import { selectClaudeAgentTranscriptRows } from './ui-agent-transcript.ts'
 import { createClaudeTranscriptMessageHost } from './ui-transcript-messages.ts'
 import { createClaudeUiNotices } from './ui-notices.ts'
 import { createClaudeSiteScroll } from './ui-site-scroll.ts'
@@ -10,12 +11,13 @@ import type { ClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './ui-presentation.ts'
 
 export interface ClaudeUiOwner {
+  readAgent?(): Promise<import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails>
   readonly nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
   readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'submitAgent' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -51,10 +53,26 @@ export function mountClaudeUi(options: {
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
   let lastState: ClaudeUiMountState = { status: 'connecting' }
+  let agent: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails | undefined
+  let agentProblem: string | undefined
+  let agentReading = false
+  let agentTimer: ReturnType<typeof setInterval> | undefined
+  let agentInput: { revision: number; status: 'pending' | 'done' | 'error'; receipt?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; problem?: string } | undefined
+  async function refreshAgent() {
+    if (!owner.readAgent || agentReading || !current()) return
+    agentReading = true
+    try {
+      const next = await owner.readAgent()
+      if (!current()) return
+      agent = next; agentProblem = undefined; messages.refresh(); publish(lastState)
+    } catch (error) { if (current()) { agentProblem = error instanceof Error ? error.message : 'Agent conversation could not refresh'; publish(lastState) } }
+    finally { agentReading = false }
+  }
+
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
   const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
-  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => options.messages?.() ?? [], publish: () => publish(lastState) })
+  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => owner.readAgent ? selectClaudeAgentTranscriptRows(agent, owner.sessionId ?? '') : options.messages?.() ?? [], publish: () => publish(lastState) })
 
   const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => options.question?.(), current, publish: () => publish(lastState) })
 
@@ -65,7 +83,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(question.state ? { question: question.state } : {}), ...(messages.state.length ? { transcriptMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.length ? { transcriptMessages: messages.state } : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -134,6 +152,8 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    if (agentTimer) clearInterval(agentTimer)
+    agentTimer = undefined
     panes?.dispose()
     scroll.dispose()
     notices.dispose()
@@ -179,9 +199,9 @@ export function mountClaudeUi(options: {
   const ready = (async () => {
     try {
       if (options.promptHost) stopPromptHost = owner.handle.ui.servePrompt(client.client_id, options.promptHost)
-      await owner.handle.ui.attach({ ...client, ...(options.nativeView ? { native_view: options.nativeView } : {}) })
+      await owner.handle.ui.attach({ ...client, ...((options.nativeView ?? owner.nativeView) ? { native_view: options.nativeView ?? owner.nativeView } : {}) })
       attached = true
-      if (current()) { invalidate(); messages.start(); question.start(); await panes?.start() }
+      if (current()) { await refreshAgent(); if (!current()) return; invalidate(); messages.start(); question.start(); await panes?.start(); if (owner.readAgent && current()) agentTimer = setInterval(() => { void refreshAgent() }, 1000) }
     } catch (error) {
       stopPromptHost?.(); stopPromptHost = undefined
       attachmentError = error instanceof Error ? error.message : 'Native UI attachment failed'
@@ -193,6 +213,17 @@ export function mountClaudeUi(options: {
   return {
     ready,
     dispose,
+    async submitAgent(revision: number, text: string) {
+      if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || agentInput?.status === 'pending') return
+      agentInput = { revision, status: 'pending' }; publish(lastState)
+      try {
+        await ready
+        if (!attached || !current()) return
+        const result = await owner.handle.ui.submitAgent({ client_id: client.client_id, text })
+        if (!current()) return
+        agentInput = { revision, status: 'done', receipt: result.input }; publish(lastState); void refreshAgent()
+      } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
     scroll(event: import('./ui-presentation.ts').ClaudeUiScrollEvent) { if (event.paneId) panes?.scroll(event); else scroll.report(event) },
