@@ -12,7 +12,8 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   const text = content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
   const thinking = content.filter(block => block.type === 'thinking' && typeof block.thinking === 'string').map(block => block.thinking).join('\n')
   const origin = object(row.origin)
-  if (row.type === 'user' && origin?.kind !== undefined && !['human', 'unclassified'].includes(String(origin.kind))) return
+  const planContinuation = origin?.kind === 'auto-continuation' && typeof row.planContent === 'string' && row.queueSkipAttachments === true
+  if (row.type === 'user' && !planContinuation && origin?.kind !== undefined && !['human', 'unclassified'].includes(String(origin.kind))) return
   if (row.type === 'user' && (content.some(block => block.type === 'tool_result') || row.isVisibleInTranscriptOnly === true)) return
   const images = content.flatMap(block => {
     const source = object(block.source)
@@ -29,6 +30,6 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   if (!text && !thinkingText && !tools.length && !media.length) return
   const visibleText = summary ? '' : text
   return { uuid: row.uuid, sessionId: entry.sessionId, sender: row.type, text: visibleText, blocks, ...(images.length ? { references: { images } } : {}),
-    context: { cliUuid: row.uuid, ...(row.type === 'user' ? { claudeNativeUserMessage: { uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, origin: { kind: origin?.kind === 'human' ? 'composer' : 'unclassified' } } } : {}), claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId, ...(row.origin ? { origin: row.origin } : {}), ...(media.length ? { media } : {}) },
+    context: { cliUuid: row.uuid, ...(planContinuation ? { claudePlanContinuation: true } : {}), ...(row.type === 'user' && !planContinuation ? { claudeNativeUserMessage: { uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, origin: { kind: origin?.kind === 'human' ? 'composer' : 'unclassified' } } } : {}), claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId, ...(row.origin ? { origin: row.origin } : {}), ...(media.length ? { media } : {}) },
       ...(row.type === 'assistant' && visibleText ? { claudeNativeMessages: [{ uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, start: 0, end: visibleText.length, ...(typeof message.id === 'string' ? { apiMessageId: message.id } : {}) }] } : {}) } }
 }

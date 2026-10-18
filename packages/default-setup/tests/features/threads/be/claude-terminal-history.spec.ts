@@ -24,3 +24,13 @@ it('uses native human provenance for composer rows and never guesses it for unst
   const unstamped = projectClaudeTerminalHistory({ sessionId, row: { ...row, type: 'user' } })!
   expect(unstamped.context.claudeNativeUserMessage).toMatchObject({ origin: { kind: 'unclassified' } })
 })
+
+it('retains structured plan-reset continuations without calling them human composer inputs', () => {
+  const continuation = { ...row, type: 'user', origin: { kind: 'auto-continuation' }, planContent: '# Approved plan', queueSkipAttachments: true, message: { role: 'user', content: 'Implement the following plan:\n\n# Approved plan' } }
+  const projected = projectClaudeTerminalHistory({ sessionId, row: continuation })!
+  expect(projected.text).toBe(continuation.message.content)
+  expect(projected.context).toMatchObject({ cliUuid: uuid, claudePlanContinuation: true, claudeTerminalMessage: { origin: continuation.origin } })
+  expect(projected.context.claudeNativeUserMessage).toBeUndefined()
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...continuation, planContent: undefined } })).toBeUndefined()
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...continuation, isMeta: true } })).toBeUndefined()
+})
