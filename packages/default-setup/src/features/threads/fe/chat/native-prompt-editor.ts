@@ -159,7 +159,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       try {
         const tr = editor.state.tr
         if (next.doc !== snapshot.doc) tr.replaceWith(0, tr.doc.content.size, next.doc.content)
-        tr.setSelection(TextSelection.create(tr.doc, next.position))
+        // A text/cursor acknowledgment carries no selection-range change.
+        if (next.doc !== snapshot.doc || reply.frame.cursor !== snapshot.cursor) tr.setSelection(TextSelection.create(tr.doc, next.position))
         // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
         const runs = reply.frame.decorations ?? (fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.runs : [])
         tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))

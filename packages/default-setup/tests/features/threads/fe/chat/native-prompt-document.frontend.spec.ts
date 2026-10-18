@@ -342,3 +342,26 @@ it('maps the app serializer empty-paragraph entity to a native empty box and per
     expect(bridge.readDraft()?.text).not.toBe('')
   } finally { bridge.dispose(); spelling.mockRestore() }
 })
+
+it('preserves select-all replacement when native acknowledges unchanged text and cursor', () => {
+  editor.commands.setContent('/cc-reset')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
+  const selected = editor.state.selection, request = send.mock.lastCall![0]
+  expect(selected.empty).toBe(false)
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect(editor.state.selection.eq(selected)).toBe(true)
+  editor.commands.insertContent('/model haiku')
+  expect(serialize(editor.state.doc)).toBe('/model haiku')
+  bridge.dispose()
+})
+it('honors an actual native cursor change while a range was selected', () => {
+  editor.commands.setContent('draft')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: 0 } })
+  expect(editor.state.selection.empty).toBe(true)
+  expect(editor.state.selection.head).toBe(findClaudePromptPosition(editor.state.doc, 0, serialize))
+  bridge.dispose()
+})
