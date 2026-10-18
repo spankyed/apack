@@ -15,7 +15,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
-  const results = new Map<string, { text: string; error: boolean; agentId?: string; assistantUuid?: string }>()
+  const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string }>()
   const agentRows = new Map<string, ClaudeNativeJournalEntry>()
   let lastTaskSnapshot = ''
   let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
@@ -48,6 +48,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           const agent = owner.state.tasks.find(agent => agent.id === result.agentId)
           if (agent) item.nativeAgent = { ...agent, ownerId: owner.state.ownerId, sessionId: owner.state.sessionId }
         }
+        if (result?.uuid) item.nativeResult = { uuid: result.uuid, sessionId: row.sessionId }
         if (result) { item.status = result.error ? 'error' : 'ok'; item.outputSummary = result.text.slice(0, 200); item.details = { ...item.details, output: result.text } }
         else if (['exited', 'error'].includes(owner.state.status)) { item.status = 'error'; item.details = { ...item.details, error: 'Native session ended before a result was recorded' } }
         else pendingTools.set(key, entry)
@@ -120,7 +121,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               const nativeResult = object(entry.row.toolUseResult)
               const singleResult = message.content.filter(value => object(value)?.type === 'tool_result').length === 1
               const agentId = singleResult && typeof nativeResult?.agentId === 'string' && nativeResult.agentId.length > 0 && nativeResult.agentId.length <= 256 ? nativeResult.agentId : undefined
-              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true,
+              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true, ...(typeof entry.row.uuid === 'string' ? { uuid: entry.row.uuid } : {}),
                 ...(agentId && typeof entry.row.sourceToolAssistantUUID === 'string' ? { agentId, assistantUuid: entry.row.sourceToolAssistantUUID } : {}) })
             }
           }

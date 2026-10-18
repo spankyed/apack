@@ -100,3 +100,23 @@ it('binds command callbacks to canonical live native command facts rather than j
   expect(api.commandOutputFacts(native, 'result')).toBeUndefined()
   expect(() => api.currentCommandOutputAction(native, request)).toThrow('expired')
 })
+
+it('uses original structured tool results and expires actions after native result replacement', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const toolResultFrames=new Map();')
+  const end = claudeTerminalUiRuntime.indexOf('function siteExists(', start)
+  const call = { type: 'tool_use', id: 'tool-id', name: 'Read', input: { file_path: '/private/file' } }
+  const result = { uuid: 'result-id', type: 'user', toolUseResult: { file: { content: 'Original structured bytes' } }, message: { content: [{ type: 'tool_result', tool_use_id: 'tool-id', content: 'Original text', is_error: false }] } }
+  let rows = [{ uuid: 'assistant-id', type: 'assistant', message: { content: [call] } }, result]
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({toolResultFacts,toolResultFrames,currentToolResultAction})`, { Map, originalContext: { messages: () => rows } })
+  const facts = api.toolResultFacts({}, 'tool-id', 'result-id', 'assistant-id')
+  expect(facts.props).toEqual({ tool_use_id: 'tool-id', tool: 'Read', output: result.toolUseResult, isErrored: false })
+  expect(api.toolResultFacts({}, 'tool-id', 'foreign', 'assistant-id')).toBeUndefined()
+  expect(api.toolResultFacts({}, 'tool-id', 'result-id', 'foreign')).toBeUndefined()
+  api.toolResultFrames.set(JSON.stringify(['view', 'tool-id']), { resultUuid: 'result-id', assistantUuid: 'assistant-id', fingerprint: facts.fingerprint })
+  const request = { component: 'ToolResult', client_id: 'view', instance_id: 'tool-id' }
+  expect(() => api.currentToolResultAction({}, request)).not.toThrow()
+  result.toolUseResult.file.content = 'Changed'
+  expect(() => api.currentToolResultAction({}, request)).toThrow('expired')
+  rows = []
+  expect(api.toolResultFacts({}, 'tool-id', 'result-id', 'assistant-id')).toBeUndefined()
+})

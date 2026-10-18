@@ -33,6 +33,8 @@ export interface ToolActivityEntry {
   outputSummary?: string;
   /** Native agent matched by structured journal identity, independent of the Agent call's launch result. */
   nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string };
+  /** Exact original result row; structured output remains owned by the native process. */
+  nativeResult?: { uuid: string; sessionId: string };
   /** Optional full details revealed when the row is expanded. */
   details?: { input?: unknown; output?: string; error?: string };
 }
@@ -482,7 +484,7 @@ export type ClaudeUiViewRequest =
   | ({ type: 'CLAUDE_UI_NOTICE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiNoticeEvent)
   | ({ type: 'CLAUDE_UI_SCROLL'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiScrollEvent)
   | ({ type: 'CLAUDE_UI_PANE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiPaneEvent)
-  | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; thinkingExpansion?: Record<string, number[]> }
+  | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
   | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string }
   | ({ type: 'CLAUDE_UI_CLIENT'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiClientEvent)
   | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)

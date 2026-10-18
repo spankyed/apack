@@ -1,7 +1,7 @@
 import type { ClaudeUiTranscriptRow } from './ui-presentation.ts'
 
 /** Only persisted rows belonging to this thread, session and mounted message set are eligible. */
-export function selectClaudeTranscriptRows(messages: readonly { id?: string; sender?: string; text?: string; status?: string | null; context?: unknown; blocks?: readonly unknown[] }[], sessionId: string | undefined, selected: ReadonlySet<string>, userExpansion: ReadonlyMap<string, boolean> = new Map(), thinkingExpansion: ReadonlyMap<string, ReadonlySet<number>> = new Map()): ClaudeUiTranscriptRow[] {
+export function selectClaudeTranscriptRows(messages: readonly { id?: string; sender?: string; text?: string; status?: string | null; context?: unknown; blocks?: readonly unknown[] }[], sessionId: string | undefined, selected: ReadonlySet<string>, userExpansion: ReadonlyMap<string, boolean> = new Map(), blockExpansion: ReadonlyMap<string, ReadonlySet<number>> = new Map()): ClaudeUiTranscriptRow[] {
   if (!sessionId) return []
   const rows: ClaudeUiTranscriptRow[] = [], first = new Map<string, string>(), seen = new Set<string>(), duplicates = new Set<string>()
   for (const message of messages) {
@@ -35,6 +35,20 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
     for (const [blockIndex, value] of (message.blocks ?? []).entries()) {
       if (!value || typeof value !== 'object') continue
       const block = value as Record<string, unknown>
+      if (block.type === 'tool-activity' && block.props && typeof block.props === 'object') {
+        const terminal = context.claudeTerminalMessage && typeof context.claudeTerminalMessage === 'object' ? context.claudeTerminalMessage as Record<string, unknown> : undefined
+        const entries = (block.props as Record<string, unknown>).entries
+        if (terminal?.sessionId === sessionId && terminal.uuid === context.cliUuid && typeof terminal.uuid === 'string' && /^[a-f0-9-]{36}$/i.test(terminal.uuid) && Array.isArray(entries)) for (const value of entries) {
+          if (!value || typeof value !== 'object') continue
+          const item = value as Record<string, unknown>, result = item.nativeResult as Record<string, unknown> | undefined
+          const details = item.details && typeof item.details === 'object' ? item.details as Record<string, unknown> : undefined
+          if (!result || result.sessionId !== sessionId || typeof result.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(result.uuid) || typeof item.id !== 'string' || !item.id || item.id.length > 256 || typeof item.tool !== 'string' || !item.tool || item.tool.length > 256 || !['ok', 'error'].includes(String(item.status)) || typeof details?.output !== 'string') continue
+          const key = `tool-result:${item.id}`
+          if (seen.has(key)) duplicates.add(key)
+          seen.add(key)
+          if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) rows.push({ component: 'ToolResult', messageId: message.id, uuid: item.id, sessionId, text: details.output, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, resultUuid: result.uuid, tool: item.tool, isErrored: item.status === 'error' })
+        }
+      }
       if (block.type !== 'thinking' || !block.props || typeof block.props !== 'object') continue
       const props = block.props as Record<string, unknown>
       if (typeof props.content !== 'string' || !Array.isArray(props.nativeMessages)) continue
@@ -48,7 +62,7 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
         through = row.end
         if (seen.has(row.uuid)) duplicates.add(row.uuid)
         seen.add(row.uuid)
-        if (row.isSummary === true && row.text.trim() && selected.has(message.id) && thinkingExpansion.get(message.id)?.has(blockIndex)) {
+        if (row.isSummary === true && row.text.trim() && selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) {
           // Native main narration rows are standalone summary producers, independent of text-row grouping.
           rows.push({ component: 'AssistantMessage', isSummary: true, blockIndex, isFirstOfReply: true, messageId: message.id, uuid: row.uuid, sessionId, text: row.text, start: row.start, end: row.end })
         }
@@ -70,5 +84,5 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
       if (selected.has(message.id)) rows.push({ component: 'AssistantMessage', messageId: message.id, uuid: row.uuid, sessionId, text: row.text, start: row.start, end: row.end, isFirstOfReply: !apiId || first.get(apiId) === row.uuid })
     }
   }
-  return rows.filter(row => !duplicates.has(row.uuid))
+  return rows.filter(row => !duplicates.has(row.component === 'ToolResult' ? `tool-result:${row.uuid}` : row.uuid))
 }

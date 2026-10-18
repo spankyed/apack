@@ -138,3 +138,20 @@ it('renders command output by original UUID and retires callbacks when its error
   expect(f.ui.press).not.toHaveBeenCalled()
   f.host.dispose()
 })
+
+it('retains structured result rewrites only in presentation and retires controls when the block closes', async () => {
+  const f = fixture()
+  const tool: ClaudeUiTranscriptRow = { component: 'ToolResult', messageId: 'app', uuid: 'a', sessionId: 'session', text: 'Stored original', start: 0, end: 0, blockIndex: 1, assistantUuid: 'assistant-uuid', resultUuid: 'result-uuid', tool: 'Read', isErrored: false }
+  f.setRows([tool, f.rows[0]!])
+  f.ui.render.mockResolvedValueOnce({ tree: { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: 1 } }, props: { output: { file: '<script>literal</script>' } }, rewritten: true, hooked: true, output_rewritten: true })
+  f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.state).toHaveLength(2)
+  expect(f.ui.render).toHaveBeenCalledWith(expect.objectContaining({ component: 'ToolResult', instance_id: 'a', props: { source_uuid: 'result-uuid', assistant_uuid: 'assistant-uuid', text: 'Stored original', tool: 'Read', isErrored: false } }))
+  const frame = f.host.state.find(row => row.component === 'ToolResult')!
+  expect(frame).toMatchObject({ text: 'Stored original', outputRewritten: true, displayText: JSON.stringify({ file: '<script>literal</script>' }, null, 2) })
+  if (frame.body.status !== 'live' || frame.body.tree.kind !== 'button') throw Error('result button')
+  f.setRows([f.rows[0]!])
+  await expect(f.host.press(frame.body.tree.actionId!)).resolves.toEqual({ handled: false })
+  expect(f.ui.press).not.toHaveBeenCalled()
+  f.host.dispose()
+})

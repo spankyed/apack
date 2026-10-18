@@ -92,6 +92,43 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     else await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     const expected = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : 'edited\n'
     await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe(expected)
+    if (turn === 1) {
+      await appPage.locator('.cursor-row-resize').click({ button: 'right' })
+      const tools = appPage.locator('[data-native-tool-activity]').last()
+      await tools.getByRole('button').first().click()
+      const result = tools.locator('[data-native-tool-result]')
+      await expect(result).toContainText('Rewritten native tool result')
+      const id = await result.getAttribute('data-native-tool-result')
+      await composer.fill('Keep my draft while inspecting a native tool result')
+      await result.getByRole('button', { name: 'Inspect native tool result', exact: true }).click()
+      await expect.poll(async () => { try { return JSON.parse(await readFile(join(workspace!, 'native-tool-result-hook.json'), 'utf8')).requestId } catch { return undefined } }).toBe(id)
+      const hook = JSON.parse(await readFile(join(workspace!, 'native-tool-result-hook.json'), 'utf8'))
+      expect(hook.props).toMatchObject({ tool_use_id: id, tool: 'Write', isErrored: false })
+      expect(hook.props.output).toBeTruthy(); expect(typeof hook.props.output).toBe('object')
+      let originalResult: any, originalCall: any
+      for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
+        try { const rows = (await readFile(join(workspace!, '.claude/projects', bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); originalCall = rows.find((row: any) => row.type === 'assistant' && Array.isArray(row.message?.content) && row.message.content.some((block: any) => block.type === 'tool_use' && block.id === id)); originalResult = rows.find((row: any) => row.type === 'user' && Array.isArray(row.message?.content) && row.message.content.some((block: any) => block.type === 'tool_result' && block.tool_use_id === id)); if (originalResult) break } catch (error: any) { if (error.code !== 'ENOENT') throw error }
+      }
+      expect(originalResult?.uuid).toBeTruthy()
+      expect(hook.props.output).toEqual(originalResult.toolUseResult)
+      const frames = await appPage.evaluate(() => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return Object.values(c.nativeUiViews).flatMap((view: any) => view.state?.transcriptMessages ?? []) })
+      expect(frames.find((frame: any) => frame.component === 'ToolResult' && frame.uuid === id)).toMatchObject({ resultUuid: originalResult.uuid, assistantUuid: originalCall.uuid })
+
+      expect(hook.box.text).toBe('Keep my draft while inspecting a native tool result')
+      expect(await readFile(target, 'utf8')).toBe('created\n')
+      await result.scrollIntoViewIfNeeded()
+      await expect(result).toBeInViewport()
+      await expect(result.getByRole('button', { name: 'Inspect native tool result', exact: true })).toBeInViewport()
+      const resultBox = await result.boundingBox(), composerBox = await card.boundingBox()
+      expect(resultBox!.height).toBeGreaterThan(40)
+      expect(resultBox!.y + resultBox!.height).toBeLessThanOrEqual(composerBox!.y)
+      await appPage.screenshot({ path: testInfo.outputPath('apack-native-tool-result.png') })
+      await tools.getByRole('button').first().click()
+      await expect(result).toHaveCount(0)
+      await expect.poll(async () => appPage.evaluate((toolId: string | null) => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return Object.values(c.nativeUiViews).some((view: any) => view.state?.transcriptMessages?.some((frame: any) => frame.component === 'ToolResult' && frame.uuid === toolId)) }, id)).toBe(false)
+      await expect(composer).toHaveText('Keep my draft while inspecting a native tool result')
+    }
+
   }
   let journal: any[] = []
   for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
@@ -111,5 +148,5 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, toolResultLayout: 'maximized via existing divider context action', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

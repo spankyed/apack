@@ -168,7 +168,7 @@
              appears before the model's commentary, not after it. -->
         <template v-for="entry in aboveTextBlocks" :key="entry.blockIndex">
           <ThinkingBlock v-if="entry.thinking" class="mb-2" v-bind="entry.thinking"
-            @view="open => reportThinkingView(entry.blockIndex, open)">
+            @view="open => reportBlockView(entry.blockIndex, open)">
             <template v-for="part in thinkingParts(entry.blockIndex, entry.thinking)" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
               <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
                 @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
@@ -235,9 +235,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch } from 'vue'
+import { computed, ref, onUpdated, watch, provide, h } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
+import NativeToolResult from './NativeToolResult.vue'
+import { claudeToolResults } from '#extensions/blocks/display/native-tool-results.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import type { ThinkingBlockProps } from '#features/threads/be/types.ts'
@@ -262,7 +264,7 @@ interface ChatMessageProps {
 interface ChatMessageEmits {
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
-  (e: 'native-ui-thinking-view', view: { messageId: string; blockIndex: number; open: boolean }): void
+  (e: 'native-ui-block-view', view: { messageId: string; blockIndex: number; open: boolean }): void
   (e: 'native-ui-message-view', view: { messageId: string; isExpanded: boolean }): void
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
@@ -280,16 +282,24 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 })
 
 const emit = defineEmits<ChatMessageEmits>()
+provide(claudeToolResults, {
+  render: (toolUseId, fallback) => h(NativeToolResult, { toolUseId }, fallback),
+  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && frame.component === 'ToolResult')),
+  press: (id, href) => emit('native-ui-press', id, href),
+  field: event => emit('native-ui-field', event),
+  view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },
+})
+
 
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
-const thinkingExpansion = new Map<number, boolean>()
-function reportThinkingView(blockIndex: number, open: boolean) {
-  thinkingExpansion.set(blockIndex, open)
-  emit('native-ui-thinking-view', { messageId: props.message.id, blockIndex, open })
+const blockExpansion = new Map<number, boolean>()
+function reportBlockView(blockIndex: number, open: boolean) {
+  blockExpansion.set(blockIndex, open)
+  emit('native-ui-block-view', { messageId: props.message.id, blockIndex, open })
 }
 watch(() => props.nativeViewId, () => {
-  for (const [blockIndex, open] of thinkingExpansion) emit('native-ui-thinking-view', { messageId: props.message.id, blockIndex, open })
+  for (const [blockIndex, open] of blockExpansion) emit('native-ui-block-view', { messageId: props.message.id, blockIndex, open })
 }, { flush: 'post' })
 
 const expanded = ref(false)

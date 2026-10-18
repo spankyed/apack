@@ -11,6 +11,7 @@ type Entry = {
   pressing: boolean
   body: ClaudeUiTranscriptFrame['body']
   displayText: string
+  outputRewritten?: boolean
   drawing?: ClaudeUiDrawing
   fields?: ClaudeUiDrawing
   revisions: Map<string, number>
@@ -21,11 +22,13 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
+const rowKey = (row: ClaudeUiTranscriptRow) => JSON.stringify([row.component, row.uuid])
+const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'ToolResult' || b.component !== 'ToolResult' || a.blockIndex === b.blockIndex && a.resultUuid === b.resultUuid && a.assistantUuid === b.assistantUuid && a.tool === b.tool) && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
 const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
   if (!sameSource(a, b)) return false
   if (a.component === 'AssistantMessage' && b.component === 'AssistantMessage') return a.isFirstOfReply === b.isFirstOfReply
   if (a.component === 'UserMessage' && b.component === 'UserMessage') return a.isExpanded === b.isExpanded && JSON.stringify(a.origin) === JSON.stringify(b.origin)
+  if (a.component === 'ToolResult' && b.component === 'ToolResult') return a.isErrored === b.isErrored
   return a.component === 'CommandOutput' && b.component === 'CommandOutput' && a.isErrored === b.isErrored
 }
 const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.isSummary ? row.text.trim() : row.text) : row.text
@@ -42,7 +45,7 @@ export function createClaudeTranscriptMessageHost(options: {
   let disposed = false, started = false, rendering = false, refreshPending = false
   let scheduled: ReturnType<typeof setTimeout> | undefined
   const current = () => !disposed && options.current()
-  const present = (entry: Entry) => current() && entries.get(entry.row.uuid) === entry
+  const present = (entry: Entry) => current() && entries.get(rowKey(entry.row)) === entry
   const valid = (entry: Entry) => present(entry) && options.rows().some(row => same(row, entry.row))
   const publish = () => { if (current()) options.publish() }
   function retire(entry: Entry) {
@@ -51,14 +54,14 @@ export function createClaudeTranscriptMessageHost(options: {
   }
   function sync() {
     if (!current()) return
-    const rows = options.rows(), wanted = new Set(rows.map(row => row.uuid))
+    const rows = options.rows(), wanted = new Set(rows.map(rowKey))
     let changed = false
     for (const [id] of entries) if (!wanted.has(id)) { entries.delete(id); changed = true }
     for (const row of rows) {
-      const prior = entries.get(row.uuid)
+      const prior = entries.get(rowKey(row))
       if (prior && same(prior.row, row)) continue
       if (prior && sameSource(prior.row, row)) { prior.row = row; retire(prior); changed = true; continue }
-      entries.set(row.uuid, { row, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: originalDisplayText(row), revisions: new Map(), completed: new Map() })
+      entries.set(rowKey(row), { row, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: originalDisplayText(row), revisions: new Map(), completed: new Map() })
       changed = true
     }
     if (changed) publish()
@@ -79,6 +82,7 @@ export function createClaudeTranscriptMessageHost(options: {
         try {
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid,
             props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
+              : entry.row.component === 'ToolResult' ? { source_uuid: entry.row.resultUuid, assistant_uuid: entry.row.assistantUuid, text: entry.row.text, tool: entry.row.tool, isErrored: entry.row.isErrored }
               : entry.row.component === 'CommandOutput' ? { text: entry.row.text, isErrored: entry.row.isErrored }
               : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
           if (!valid(entry) || epoch !== entry.epoch) continue
@@ -90,6 +94,8 @@ export function createClaudeTranscriptMessageHost(options: {
           stamp(drawing.tree)
           entry.drawing = drawing; entry.fields = drawing
           entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'CommandOutput' ? stripVTControlCharacters(result.props.text).trim() : entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
+          entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
+          if (entry.outputRewritten) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()
@@ -103,6 +109,7 @@ export function createClaudeTranscriptMessageHost(options: {
     }
   }
   function fail(entry: Entry) {
+    entry.outputRewritten = false
     if (!present(entry)) return
     entry.epoch++; entry.dirty = false; entry.drawing = undefined; entry.fields = undefined
     entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish()
@@ -110,7 +117,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
     start() { started = true; refresh() },
     refresh,
     receive(line: Record<string, unknown>) {

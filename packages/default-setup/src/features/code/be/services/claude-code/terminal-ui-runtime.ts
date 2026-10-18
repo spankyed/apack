@@ -63,6 +63,23 @@ function currentCommandOutputAction(n,request){
  const key=JSON.stringify([request.client_id,request.instance_id]),frame=commandOutputFrames.get(key),facts=commandOutputFacts(n,request.instance_id);
  if(!frame||!facts||frame.fingerprint!==facts.fingerprint)throw Error('Native command output changed or expired');
 }
+const toolResultFrames=new Map();
+function toolResultFacts(n,id,resultUuid,assistantUuid){
+ const binding=originalContext??n.runtime.ey(),messages=binding?.messages?.()??[];
+ const results=messages.filter(row=>row.uuid===resultUuid&&row.type==='user').flatMap(row=>Array.isArray(row.message?.content)?row.message.content.filter(block=>block.type==='tool_result'&&block.tool_use_id===id).map(block=>({row,block})):[]);
+ const calls=messages.filter(row=>row.uuid===assistantUuid&&row.type==='assistant').flatMap(row=>Array.isArray(row.message?.content)?row.message.content.filter(block=>block.type==='tool_use'&&block.id===id):[]);
+ if(results.length!==1||calls.length!==1||typeof calls[0].name!=='string')return;
+ const {row,block}=results[0],call=calls[0],content=block.content;
+ if(row.sourceToolAssistantUUID!==undefined&&row.sourceToolAssistantUUID!==assistantUuid)return;
+ const text=typeof content==='string'?content:Array.isArray(content)?content.filter(item=>item.type==='text').map(item=>item.text).join('\n'):'';
+ if(text.length>65536||JSON.stringify(row.toolUseResult??null).length>65536)return;
+ return {props:{tool_use_id:id,tool:call.name,output:row.toolUseResult,isErrored:block.is_error===true},text,fingerprint:JSON.stringify([assistantUuid,call,row.uuid,block,row.toolUseResult])};
+}
+function currentToolResultAction(n,request){
+ if(request.component!=='ToolResult')return;
+ const frame=toolResultFrames.get(JSON.stringify([request.client_id,request.instance_id]));
+ if(!frame||toolResultFacts(n,request.instance_id,frame.resultUuid,frame.assistantUuid)?.fingerprint!==frame.fingerprint)throw Error('Native tool result changed or expired');
+}
 function siteExists(n,component,id){return component==='AbovePrompt'&&id===n.runtime.f4||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
 function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
 function dropSite(n,key){
@@ -197,7 +214,7 @@ async function initialize(){
  initializing=(async()=>{
   if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')!=='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37')throw Error('Native UI transport requires the reviewed Claude Code 2.1.302 binary');
   const clientRuntime=await import('/$bunfs/root/chunk-e980bbar.js');
-  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{current:entry=>{if(entry.component!=='CommandOutput')return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;currentCommandOutputAction(native,{component:entry.component,client_id:entry.client,instance_id:entry.requestId});return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
+  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{current:entry=>{if(!['CommandOutput','ToolResult'].includes(entry.component))return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;const request={component:entry.component,client_id:entry.client,instance_id:entry.requestId};currentCommandOutputAction(native,request);currentToolResultAction(native,request);return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
   const gate=await import('/$bunfs/root/chunk-wn0572jb.js');
   const engine=await import('/$bunfs/root/chunk-c7wcn77x.js');
   const session=await import('/$bunfs/root/chunk-a32bd1ts.js');
@@ -547,7 +564,7 @@ async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
- if(['ui_press','ui_input','ui_select'].includes(request.subtype))currentCommandOutputAction(n,request);
+ if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);}
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
@@ -771,6 +788,7 @@ async function control(request,abort){
   forgetQuestionClient(clientId);
   clientViews.delete(clientId);
   for(const [key,frame] of commandOutputFrames)if(frame.clientId===clientId)commandOutputFrames.delete(key);
+  for(const [key,frame] of toolResultFrames)if(frame.clientId===clientId)toolResultFrames.delete(key);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -801,7 +819,7 @@ async function control(request,abort){
   await n.gate._Jo('desktop');
   if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
   const question=boundQuestion;
-  let commandFacts;
+  let commandFacts,toolFacts;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if(value.component==='AbovePrompt'||value.component==='Pane'){
    const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
@@ -814,6 +832,12 @@ async function control(request,abort){
    if(value.props?.text!==commandFacts.display||value.props?.isErrored!==commandFacts.props.isErrored)throw Error('Native command output does not match its history row');
    Object.assign(props,commandFacts.props);
   }
+  if(value.component==='ToolResult'){
+   toolFacts=toolResultFacts(n,value.instance_id,value.props?.source_uuid,value.props?.assistant_uuid);
+   if(!toolFacts){toolResultFrames.delete(JSON.stringify([clientId,value.instance_id]));return {tree:{type:'engine',ref:0},props:{},rewritten:false,hooked:false};}
+   if(value.props.text!==toolFacts.text||value.props.tool!==toolFacts.props.tool||value.props.isErrored!==toolFacts.props.isErrored)throw Error('Native tool result does not match its mounted row');
+   for(const key of Object.keys(props))delete props[key];Object.assign(props,toolFacts.props);
+  }
   if((value.component==='ToolUse'||value.component==='ToolResult')&&typeof props.tool_use_id!=='string')props.tool_use_id=value.instance_id;
   if(typeof props.output==='string'&&props.output.length>65536)props.output=props.output.slice(0,65536);
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
@@ -822,6 +846,11 @@ async function control(request,abort){
    if(commandOutputFacts(n,value.instance_id)?.fingerprint!==commandFacts.fingerprint)throw Error('Native command output changed while rendering');
    const key=JSON.stringify([clientId,value.instance_id]);commandOutputFrames.delete(key);commandOutputFrames.set(key,{clientId,fingerprint:commandFacts.fingerprint});
    while(commandOutputFrames.size>256)commandOutputFrames.delete(commandOutputFrames.keys().next().value);
+  }
+  if(toolFacts){
+   if(toolResultFacts(n,value.instance_id,value.props.source_uuid,value.props.assistant_uuid)?.fingerprint!==toolFacts.fingerprint)throw Error('Native tool result changed while rendering');
+   const key=JSON.stringify([clientId,value.instance_id]);toolResultFrames.delete(key);toolResultFrames.set(key,{clientId,resultUuid:value.props.source_uuid,assistantUuid:value.props.assistant_uuid,fingerprint:toolFacts.fingerprint});
+   while(toolResultFrames.size>256)toolResultFrames.delete(toolResultFrames.keys().next().value);
   }
   let questionFrame;
   if(question){
@@ -839,7 +868,7 @@ async function control(request,abort){
   }
   refreshNativeTheme(n);
   recordDrawing(n,value,result.tree);
-  return {...(questionFrame?{question:questionFrame}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,result.tree)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(questionFrame?{question:questionFrame}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,result.tree)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
@@ -863,7 +892,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();commandOutputFrames.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});

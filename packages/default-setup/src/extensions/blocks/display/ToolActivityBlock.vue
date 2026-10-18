@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
+  <div data-native-tool-activity class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
     <!-- Header row: chevron + icon + label + badge/spinner -->
     <button
       type="button"
@@ -46,7 +46,7 @@
       <div
         v-for="(entry, index) in entries"
         :key="entry.id || index"
-        :data-native-agent-id="entry.nativeAgent?.id"
+        :data-native-agent-id="entry.nativeAgent?.id" :data-native-tool-use-id="entry.id"
         class="px-3 py-2 text-xs border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
         :class="{ 'opacity-50 line-through': entry.status === 'denied' }"
       >
@@ -66,7 +66,7 @@
               <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
             </JsonHoverPopup>
             <JsonHoverPopup
-              v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent"
+              v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent && !entry.nativeResult"
               :value="entry.details?.output || entry.details?.error"
               :label="`${entry.tool} output`"
               width="trigger"
@@ -83,6 +83,9 @@
             running
           </span>
         </div>
+        <NativeToolResult v-if="entry.nativeResult" :tool-use-id="entry.id" class="mt-1">
+          <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="entry.details?.output || entry.details?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
+        </NativeToolResult>
         <section v-if="entry.nativeAgent" class="mt-2 min-w-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-2" aria-label="Native agent status">
           <div class="flex min-w-0 items-center justify-between gap-2 text-[10px] text-neutral-500">
             <span class="min-w-0 truncate" :title="entry.nativeAgent.name">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
@@ -99,12 +102,13 @@
 
 <script setup lang="ts">
 import { sendToSurface } from '#generated/events.ts'
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, inject, onMounted, onBeforeUnmount, defineComponent } from 'vue'
 import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from 'lucide-vue-next'
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
+import { claudeToolResults } from './native-tool-results.ts'
 import NativeTaskControls from './NativeTaskControls.vue'
 import NativeStatusText from './NativeStatusText.vue'
 
@@ -126,9 +130,21 @@ const props = withDefaults(defineProps<Props>(), {
   defaultOpen: false,
 })
 
+const nativeResults = inject(claudeToolResults, undefined)
+// The owning message supplies its native renderer; this display block owns no feature UI.
+const NativeToolResult = defineComponent({
+  props: { toolUseId: { type: String, required: true } },
+  setup(props, { slots }) { return () => nativeResults?.render(props.toolUseId, slots.default ?? (() => [])) ?? slots.default?.() },
+})
+
+onMounted(() => { if (props.entries[0]) nativeResults?.view(props.entries[0].id, isOpen.value) })
+onBeforeUnmount(() => { if (props.entries[0]) nativeResults?.view(props.entries[0].id, false) })
+
 // User toggle wins once they interact; we only auto-open on error-state
 // transitions (P3 of the design doc).
 const isOpen = ref(props.defaultOpen)
+watch(isOpen, open => { if (props.entries[0]) nativeResults?.view(props.entries[0].id, open) })
+
 const listEl = ref<HTMLElement | null>(null)
 let userHasToggled = false
 let userHasScrolled = false

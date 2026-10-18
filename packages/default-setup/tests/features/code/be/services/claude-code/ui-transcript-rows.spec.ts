@@ -77,3 +77,15 @@ it('binds command output to exact native history identity and rejects stale or d
   expect(selectClaudeTranscriptRows([{ ...command, context: { ...command.context, cliUuid: 'foreign' } }], 'session', selected)).toEqual([])
   expect(selectClaudeTranscriptRows([command, { ...command, id: 'unmounted' }], 'session', selected)).toEqual([])
 })
+
+it('renders result hooks only for expanded native tool rows with exact session/result provenance', () => {
+  const entry = { id: 'tool-id', tool: 'Read', status: 'ok', details: { output: 'Original text' }, nativeResult: { uuid: '11111111-1111-1111-1111-111111111111', sessionId: 'session' } }
+  const source = { id: 'app-tool', sender: 'assistant', text: '', context: { cliUuid: '22222222-2222-2222-2222-222222222222', claudeTerminalMessage: { uuid: '22222222-2222-2222-2222-222222222222', sessionId: 'session' } }, blocks: [{ type: 'tool-activity', props: { entries: [entry] } }] }
+  const selected = new Set(['app-tool']), open = new Map([['app-tool', new Set([0])]])
+  expect(selectClaudeTranscriptRows([source], 'session', selected)).toEqual([])
+  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open)).toEqual([expect.objectContaining({ component: 'ToolResult', uuid: 'tool-id', resultUuid: entry.nativeResult.uuid, blockIndex: 0, text: 'Original text' })])
+  expect(selectClaudeTranscriptRows([source], 'foreign', selected, new Map(), open)).toEqual([])
+  expect(selectClaudeTranscriptRows([source, { ...source, id: 'duplicate' }], 'session', selected, new Map(), open)).toEqual([])
+  entry.nativeResult.sessionId = 'foreign'
+  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open)).toEqual([])
+})
