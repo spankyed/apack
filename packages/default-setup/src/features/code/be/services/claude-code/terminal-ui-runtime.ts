@@ -525,8 +525,8 @@ async function control(request,abort){
   if(typeof request.server_name!=='string'||!request.server_name.trim()||!['reconnect','enable','disable'].includes(request.operation))throw Error('Invalid native MCP control');
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native MCP controls are not ready');
-  const options=()=>binding.toolContext(abort).options;
-  if(!options().mcpClients.some(client=>client.name===request.server_name))throw Error('Native MCP server not found');
+  const liveMcp=()=>binding.toolContext(abort).getAppState().mcp;
+  if(!liveMcp().clients.some(client=>client.name===request.server_name))throw Error('Native MCP server not found');
   if(mcpControlActive)throw Error('Another native MCP control is in progress');
   mcpControlActive=true;try{
   const reconnect=n.mcpControls.Mot(),toggle=n.mcpControls.urs(),disabled=n.mcpControls.Z_e();
@@ -535,7 +535,7 @@ async function control(request,abort){
   else if(disabled(request.server_name)===(request.operation==='enable'))await toggle(request.server_name);
   current();
   if(reconnect!==n.mcpControls.Mot()||toggle!==n.mcpControls.urs())throw Error('Native MCP owner changed');
-  const context=options();return {mcpServers:n.mcp.Q_n({connections:context.mcpClients,tools:context.tools})};
+  const context=liveMcp();return {mcpServers:n.mcp.Q_n({connections:context.clients,tools:context.tools})};
   }finally{mcpControlActive=false;}
  }
  if(request.subtype==='apack_mcp_status'){
@@ -543,8 +543,8 @@ async function control(request,abort){
   if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native MCP session changed');
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native MCP status is not ready');
-  const context=binding.toolContext(abort);
-  return {mcpServers:n.mcp.Q_n({connections:context.options.mcpClients,tools:context.options.tools})};
+  const context=binding.toolContext(abort).getAppState().mcp;
+  return {mcpServers:n.mcp.Q_n({connections:context.clients,tools:context.tools})};
  }
  if(request.subtype==='apack_rename_session'){
   if(typeof request.title!=='string')throw Error('Native title must be a string');

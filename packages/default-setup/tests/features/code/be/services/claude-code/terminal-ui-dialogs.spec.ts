@@ -9,7 +9,7 @@ function fixture() {
   const state = { open: [item] }
   const answer = vi.fn(() => { state.open = [] })
   const store = { getState: () => state, answer }
-  let appState = { settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
+  let appState = { mcp: {clients:[] as {name:string,type:string}[],tools:[] as {name:string}[]}, settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
   const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
   let disabled = false
@@ -152,7 +152,7 @@ it('does not add a manual rename reminder for an original generated title',async
 
 it('uses original native MCP formatting with live clients/tools and refuses a foreign session',async()=>{
  const f=fixture(),options={mcpClients:[{name:'research',type:'connected'}],tools:[{name:'mcp__research__echo'}]}
- Object.assign(f.context,{options})
+ Object.assign(f.context,{options});Object.assign(f.context.getAppState().mcp,{clients:options.mcpClients,tools:options.tools})
  const request={subtype:'apack_mcp_status',session_id:'11111111-1111-4111-8111-111111111111'}
  expect(await f.control(request,new AbortController())).toEqual({mcpServers:[{name:'research',status:'connected'}]})
  expect(f.native.mcp.Q_n).toHaveBeenCalledWith({connections:options.mcpClients,tools:options.tools})
@@ -161,7 +161,7 @@ it('uses original native MCP formatting with live clients/tools and refuses a fo
 });
 
 function mcpControlFixture() {
- const f=fixture(); Object.assign(f.context,{options:{mcpClients:[{name:'research',type:'connected'}],tools:[]}})
+ const f=fixture();f.context.getAppState().mcp.clients=[{name:'research',type:'connected'}]
  const request={subtype:'apack_mcp_control',session_id:'11111111-1111-4111-8111-111111111111',server_name:'research',operation:'reconnect'}
  return {...f,request,run:(extra={})=>f.control({...request,...extra},new AbortController())}
 }
@@ -189,4 +189,15 @@ it('refuses overlapping mutations and stale results after a session changes',asy
  await expect(f.run({operation:'disable'})).rejects.toThrow('in progress')
  f.replaceSession();resolve();await expect(pending).rejects.toThrow('session changed')
  expect(f.native.mcpControls.urs()).not.toHaveBeenCalled()
+})
+
+it('reports the live engine connection after mutation rather than the startup tool snapshot',async()=>{
+ const f=mcpControlFixture(),startup={mcpClients:[{name:'research',type:'connected'}],tools:[{name:'mcp__research__echo'}]}
+ Object.assign(f.context,{options:startup})
+ f.native.mcpControls.urs().mockImplementationOnce(async()=>{f.context.getAppState().mcp.clients=[{name:'research',type:'disabled'}]})
+ await f.run({operation:'disable'})
+ expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[{name:'research',type:'disabled'}],tools:[]})
+ await f.control({subtype:'apack_mcp_status',session_id:f.request.session_id},new AbortController())
+ expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[{name:'research',type:'disabled'}],tools:[]})
+ expect(startup.mcpClients[0]?.type).toBe('connected')
 })
