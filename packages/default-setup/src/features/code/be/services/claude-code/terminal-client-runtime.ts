@@ -24,9 +24,11 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
    entry.enabled=true;
    const snapshot=entry.instance.getSnapshot();
-   entry.frameRefs=new Map();
+   entry.frameRefs??=new Map();
    const remember=node=>{if(!node||typeof node!=='object')return;if(node.press&&['Button','Input','Select','Markdown'].includes(node.type))entry.frameRefs.set(node.press.handle,{type:node.type,key:node.props?.key,plugin:node.press.plugin});if(Array.isArray(node.children))node.children.forEach(remember);};
    if(snapshot.status==='drawn')remember(snapshot.tree);
+   // A delivered field can cross a redraw in transit; callback execution still resolves its current key.
+   while(entry.frameRefs.size>1024)entry.frameRefs.delete(entry.frameRefs.keys().next().value);
    const children=snapshot.status==='drawn'?[snapshot.tree]:[{type:'Text',children:[snapshot.status==='failed'?snapshot.text:'Loading native module…']}];
    return {type:'NativeClient',props:{id:entry.token,...(props.width!==undefined?{width:props.width}:{}),...(props.height!==undefined?{height:props.height}:{}),...(props.flexGrow!==undefined?{flexGrow:props.flexGrow}:{}),pointer:entry.instance.acceptsPointer(),keys:entry.instance.acceptsKeys()},part:{plugin},children};
   };

@@ -65,7 +65,7 @@ test('runs native Client state props input and lifetime inside the app', async (
     await composer.fill('Composer draft survives Client updates')
     await a.fill('LeftDraft');await b.fill('RightDraft')
     await expect(a).toHaveValue('LeftDraft');await expect(b).toHaveValue('RightDraft')
-    const completed=async()=>JSON.parse(await readFile(join(workspace!,'native-client-field-completed.json'),'utf8'))
+    const completed=async()=>JSON.parse(await readFile(join(workspace!,'native-client-field-completed.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return '[]';throw error}))
     await expect.poll(async()=>(await completed()).filter((e:any)=>['LeftDraft','RightDraft'].includes(e.value)&&e.elapsed>=50).length).toBe(2)
     await left.getByRole('combobox',{name:'A choice',exact:true}).selectOption('b')
     await expect(left.getByRole('combobox')).toHaveValue('b');await expect(right.getByRole('combobox')).toHaveValue('a')
