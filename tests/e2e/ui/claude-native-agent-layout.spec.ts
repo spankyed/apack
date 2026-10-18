@@ -53,6 +53,7 @@ test('keeps long native Agent status readable beside the compact composer', asyn
   await expect(card).toBeHidden()
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
+  await appPage.locator('.cursor-row-resize').click({button:'right'})
   const composer=card.locator('[contenteditable="true"]')
   await composer.fill('Launch the private native status agent.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
@@ -95,5 +96,5 @@ test('keeps long native Agent status readable beside the compact composer', asyn
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeLongAgentStatus:true,nativeAgentKeyboardScroll:true,nativeAgentCompletedStatus:true,nativeAgentCompactLayout:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,geometry,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeLongAgentStatus:true,nativeAgentKeyboardScroll:true,nativeAgentCompletedStatus:true,nativeAgentCompactLayout:true,chatLayout:'maximized via existing divider context action',nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,geometry,browserErrors:errors},null,2))
 })
