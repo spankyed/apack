@@ -17,3 +17,18 @@ export interface ClaudeNativeReadDialogResponse {
   decision: 'allow' | 'deny'
   feedback?: string
 }
+
+/** Native owns the shown card and answer admission, including richer form fields. */
+export const ClaudeNativeQuestionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('AskUserQuestion'),
+  shownInput: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativeQuestionDialogsSchema = z.array(ClaudeNativeQuestionDialogSchema).max(1)
+export type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>
+export interface ClaudeNativeQuestionDialogResponse {
+  id: string
+  revision: string
+  sessionId: string
+  answer: Record<string, unknown>
+}

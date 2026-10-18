@@ -1343,6 +1343,39 @@ interface ClaudeNativeJournalEntry {
     row: Record<string, unknown>;
 }
 
+type ClaudeNativeQuestionDialog = z.infer<typeof ClaudeNativeQuestionDialogSchema>;
+
+interface ClaudeNativeQuestionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    answer: Record<string, unknown>;
+}
+
+/** Native owns the shown card and answer admission, including richer form fields. */
+declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    requestId: z.ZodString;
+    toolName: z.ZodLiteral<"AskUserQuestion">;
+    shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+}, "strip", z.ZodTypeAny, {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: "AskUserQuestion";
+    shownInput: Record<string, unknown>;
+}, {
+    id: string;
+    revision: string;
+    sessionId: string;
+    requestId: string;
+    toolName: "AskUserQuestion";
+    shownInput: Record<string, unknown>;
+}>;
+
 type ClaudeNativeReadDialog = z.infer<typeof ClaudeNativeReadDialogSchema>;
 
 interface ClaudeNativeReadDialogResponse {
@@ -1443,6 +1476,8 @@ interface ClaudeNativeTerminalOwner {
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
     resize(ownerId: string, columns: number, rows: number): boolean;
+    getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>;
+    answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>;
     getReadDialogs(): Promise<ClaudeNativeReadDialog[]>;
     answerReadDialog(response: ClaudeNativeReadDialogResponse): Promise<void>;
     getModels(options?: {

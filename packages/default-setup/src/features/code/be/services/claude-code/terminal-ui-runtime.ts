@@ -144,14 +144,15 @@ async function initialize(){
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   const permissions=await import('/$bunfs/root/chunk-gpwdwjeb.js');
   const models=await import('/$bunfs/root/chunk-0xdgy4bd.js');
+  const questionTool=(await import('/$bunfs/root/chunk-at6jwec6.js')).yQ;
   const catalog=await import('/$bunfs/root/chunk-2bb0j573.js');
   await import('/$bunfs/root/chunk-rpe8kh25.js');
-  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog};
+  const modules={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool};
   engine.I9e.onInvalidate(instances=>{try{publish({type:'system',subtype:'ui_invalidate',event:'ui.render',...(gate.e5r()?{prompts_screened:true}:{}),...(instances?{instances:instances.map(item=>({surface:item.surface,component:item.component,instance_id:item.requestId}))}:{})});}catch{}});
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog};
+  return native={gate,engine,session,roster,schemas,runtime,permissions,models,catalog,questionTool};
  })();
  return initializing;
 }
@@ -281,8 +282,8 @@ function drainCompletion(n,clientId,state){
  });
 }
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
-let readDialogRevision;
-function readDialog(n){
+const dialogRevisions=new Map();
+function nativeDialog(n,kind){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
  const context=binding.toolContext(new AbortController()),store=context.dialogStore;
@@ -290,30 +291,48 @@ function readDialog(n){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- if(item?.kind!=='permission_file'||payload?.toolName!=='Read'||payload.operationType!=='read'||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
-  readDialogRevision=undefined;return {store,sessionId};
+ const supported=kind==='permission_file'?payload?.toolName==='Read'&&payload.operationType==='read':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
+  dialogRevisions.delete(kind);return {store,sessionId};
  }
+ let revision=dialogRevisions.get(kind);
  const fingerprint=JSON.stringify(payload);
- if(readDialogRevision?.fingerprint!==fingerprint||readDialogRevision?.item!==item||readDialogRevision?.payload!==payload||readDialogRevision?.sessionId!==sessionId)
-  readDialogRevision={item,payload,sessionId,fingerprint,revision:randomUUID()};
- return {store,sessionId,...readDialogRevision};
+ if(revision?.fingerprint!==fingerprint||revision?.item!==item||revision?.payload!==payload||revision?.sessionId!==sessionId)
+  revision={item,payload,sessionId,fingerprint,revision:randomUUID()};
+ dialogRevisions.set(kind,revision);
+ return {store,sessionId,...revision};
 }
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_read_dialogs'){
-  const d=readDialog(n);if(!d.item)return {dialogs:[]};
+  const d=nativeDialog(n,'permission_file');if(!d.item)return {dialogs:[]};
   const p=d.payload;
   return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:'Read',title:p.title??'Read file',question:p.question?.kind==='plain'?p.question.text:'Allow this read?',...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
  }
  if(request.subtype==='apack_answer_read_dialog'){
   abort.signal.throwIfAborted();
-  const d=readDialog(n);
+  const d=nativeDialog(n,'permission_file');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native approval changed or expired');
   if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native Read decision');
   const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
   // The native requestDialog validates and dispatches this result through its original ask path.
-  d.store.answer(d.item.id,result);readDialogRevision=undefined;
+  d.store.answer(d.item.id,result);dialogRevisions.delete('permission_file');
+  return {answered:true};
+ }
+ if(request.subtype==='apack_question_dialogs'){
+  const d=nativeDialog(n,'permission_ask_user_question');if(!d.item)return {dialogs:[]};
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'AskUserQuestion',shownInput:n.questionTool.shownCardInput(d.payload.input)}]};
+ }
+ if(request.subtype==='apack_answer_question_dialog'){
+  abort.signal.throwIfAborted();
+  const d=nativeDialog(n,'permission_ask_user_question');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native question changed or expired');
+  const shown=n.questionTool.shownCardInput(d.payload.input);
+  const admitted=n.questionTool.admitCardAnswer(shown,request.answer);
+  if(admitted.kind!=='admitted')throw Error('Native question answer refused: '+admitted.rule);
+  // The original tool validates answer keys, shown fields, previews/notes and host-only fields.
+  d.store.answer(d.item.id,{behavior:'allow',updatedInput:admitted.input});dialogRevisions.delete('permission_ask_user_question');
   return {answered:true};
  }
  if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};

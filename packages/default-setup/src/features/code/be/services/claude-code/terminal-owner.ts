@@ -1,4 +1,4 @@
-import { ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
+import { ClaudeNativeQuestionDialogsSchema, type ClaudeNativeQuestionDialog, type ClaudeNativeQuestionDialogResponse, ClaudeNativeReadDialogsSchema, type ClaudeNativeReadDialog, type ClaudeNativeReadDialogResponse } from './terminal-dialogs.ts'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
@@ -30,6 +30,8 @@ export interface ClaudeNativeTerminalOwner {
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
   resize(ownerId: string, columns: number, rows: number): boolean
+  getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>
+  answerQuestionDialog(response: ClaudeNativeQuestionDialogResponse): Promise<void>
   getReadDialogs(): Promise<ClaudeNativeReadDialog[]>
   answerReadDialog(response: ClaudeNativeReadDialogResponse): Promise<void>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
@@ -167,6 +169,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       resize(id, columns, rows) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
         terminal!.resize(columns, rows); return true
+      },
+      async getQuestionDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_question_dialogs' }) as { dialogs?: unknown }
+        if (closed) return []
+        return ClaudeNativeQuestionDialogsSchema.parse(result.dialogs)
+      },
+      async answerQuestionDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_question_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, answer: response.answer }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native question was not acknowledged')
       },
       async getReadDialogs() {
         if (closed || !bridge.ready) return []

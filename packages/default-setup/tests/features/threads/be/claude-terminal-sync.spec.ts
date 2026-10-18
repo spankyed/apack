@@ -42,7 +42,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
     readJournal: () => read([{ sessionId, path }], { final: exited }),
     subscribe: () => () => {}, input: () => false, resize: () => false, close: async () => {}, kill() {},
     submit: async () => { throw new Error('No prompt submission in this fixture') },
-    setPermissionMode: async mode => mode, getReadDialogs: vi.fn(async () => []), answerReadDialog: vi.fn(async () => {}), getModels: async () => ({ models: [] }), setModel: async model => model,
+    setPermissionMode: async mode => mode, getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getReadDialogs: vi.fn(async () => []), answerReadDialog: vi.fn(async () => {}), getModels: async () => ({ models: [] }), setModel: async model => model,
   }
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
@@ -59,7 +59,7 @@ it.each([false, true])('retains receipt-bound references when journal arrives be
   const entry = (id: string) => ({ sessionId, row: { sessionId, uuid: id, type: 'user', message: { content: 'Native rewritten text' } } })
   let release!: () => Promise<void>, active = true
   const readJournal = vi.fn(async () => ({ entries: journalFirst ? [entry(uuid), entry(otherUuid)] : [], pending: false, problems: [] }))
-  const owner = { getReadDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
+  const owner = { getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getReadDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
     readJournal, beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   const history = syncClaudeTerminalThread('thread' as EntityId, owner, () => active)
@@ -85,7 +85,7 @@ it.each([true, false])('joins native task status only to its structured Agent re
   const result = { sessionId, row: { sessionId, uuid: '88888888-8888-8888-8888-888888888888', type: 'user', sourceToolAssistantUUID: matching ? uuid : 'foreign', toolUseResult: { agentId }, message: { content: [{ type: 'tool_result', tool_use_id: 'agent-tool', content: 'Launched' }] } } }
   let release!: () => Promise<void>
   const tasks = [{ id: agentId, name: 'worker', status: 'running', statusText: 'Native progress' }]
-  const owner = { getReadDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks }, busy: false,
+  const owner = { getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getReadDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks }, busy: false,
     readJournal: vi.fn(async () => ({ entries: [assistant, result], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
