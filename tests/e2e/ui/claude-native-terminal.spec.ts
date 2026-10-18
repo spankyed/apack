@@ -104,6 +104,12 @@ test('hands one conversation to the native terminal and displays its main and ag
   const workingOwnerId = (await context()).native.state.ownerId
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(card).toBeVisible()
+  const nativeAgentId = (await context()).native.state.tasks.find((task: any) => task.status === 'running').id
+  await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
+  const agentToolRow = appPage.locator(`[data-native-agent-id="${nativeAgentId}"]`)
+  await expect(agentToolRow).toContainText('AppNativeAgent running')
+  await agentToolRow.scrollIntoViewIfNeeded()
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-agent-tool-running.png') })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await expect(main).toBeVisible()
@@ -130,6 +136,9 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(main).toContainText('AppNativeMain ' + sessionId)
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(card).toBeVisible()
+  await expect(agentToolRow).toContainText('AppNativeAgent completed', { timeout: 10000 })
+  await agentToolRow.scrollIntoViewIfNeeded()
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-agent-tool-completed.png') })
   const composerStatus = card.getByTestId('composer-native-status')
   await expect(composerStatus).toContainText('AppNativeMain ' + sessionId)
   await expect(composerStatus).toContainText('Second native status line')
@@ -241,6 +250,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect(section.getByRole('button', { name: 'Back to conversation', exact: true })).toBeVisible()
   const stopped = await context(); expect(stopped.native.state.mainStatus).toBeUndefined(); expect(stopped.native.state.tasks).toEqual([])
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click(); await expect(card).toBeVisible()
+  await expect(agentToolRow).toHaveCount(0)
   const projects = join(workspace!, '.claude/projects')
   let journal: any[] = []
   for (const bucket of await readdir(projects)) {
@@ -275,5 +285,5 @@ test('hands one conversation to the native terminal and displays its main and ag
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, normalComposerContextReference: true, nativeExternalFilePermission: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, normalComposerNativeStatus: true, normalComposerImageSubmission: true, normalComposerFileReference: true, normalComposerContextReference: true, nativeExternalFilePermission: true, workingNativeInterfaceReopened: true, normalComposerReceipt: true, normalComposerRejectedDraftRetained: true, nativeLiveMainSettings: true, nativeLivePrefixSettings: true, nativeLiveSubagentCommand: true, originalPreloadPreserved: true, boundNativePid: runningIdentity.native.state.nativePid, nativeSubagentPrefixEnvironment: true, nativeMainEmptyCleared: true, nativeMainFailureCleared: true, mainStatusDisplayed: true, subagentStatusDisplayed: true, sameSessionResumed: true, ansiColorDisplayed: true, multilineDisplayed: true, nativeTaskCompletion: true, nativeAgentToolRowStatus: true, sameOwnerAfterViewRemount: true, returnsToConversation: true, nativeHistorySynchronized: true, nativeRewrittenHistory: true, nativeDroppedNotPersisted: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeTurnsSynchronized: true, acceptedNativeUuid: accepted.uuid, nativeCost, sessionId, threadId: stopped.threadId, nativeOwnerId: stopped.native.state.ownerId, nativePid: stopped.native.state.pid, nativeExit: stopped.native.state.exitCode, browserErrors: errors }, null, 2))
 })

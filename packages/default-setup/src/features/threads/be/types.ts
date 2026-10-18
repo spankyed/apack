@@ -31,6 +31,8 @@ export interface ToolActivityEntry {
   durationMs?: number;
   /** One-line output summary if the tool reported one (e.g. "3 matches"). */
   outputSummary?: string;
+  /** Native agent matched by structured journal identity, independent of the Agent call's launch result. */
+  nativeAgent?: { id: string; name: string; status: string; statusText?: string };
   /** Optional full details revealed when the row is expanded. */
   details?: { input?: unknown; output?: string; error?: string };
 }

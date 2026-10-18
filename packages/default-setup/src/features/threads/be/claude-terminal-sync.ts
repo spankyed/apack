@@ -15,7 +15,9 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
-  const results = new Map<string, { text: string; error: boolean }>()
+  const results = new Map<string, { text: string; error: boolean; agentId?: string; assistantUuid?: string }>()
+  const agentRows = new Map<string, ClaudeNativeJournalEntry>()
+  let lastTaskSnapshot = ''
   let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
   const initial = repository.chatQueries.threadData(threadId)
   const toolIds = new Set<string>(), toolCounts = new Map<string, number>()
@@ -40,7 +42,12 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       if (block.type !== 'tool-activity') continue
       const entries = block.props.entries as ToolActivityEntry[]
       for (const item of entries) {
+        if (item.tool === 'Agent') agentRows.set(key, entry)
         const result = results.get(JSON.stringify([row.sessionId, item.id]))
+        if (item.tool === 'Agent' && result?.agentId && result.assistantUuid === row.uuid && owner.state.sessionId === row.sessionId) {
+          const agent = owner.state.tasks.find(agent => agent.id === result.agentId)
+          if (agent) item.nativeAgent = { ...agent }
+        }
         if (result) { item.status = result.error ? 'error' : 'ok'; item.outputSummary = result.text.slice(0, 200); item.details = { ...item.details, output: result.text } }
         else if (['exited', 'error'].includes(owner.state.status)) { item.status = 'error'; item.details = { ...item.details, error: 'Native session ended before a result was recorded' } }
         else pendingTools.set(key, entry)
@@ -73,7 +80,11 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               const block = object(value)
               if (block?.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue
               const text = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map(object).filter(value => value?.type === 'text').map(value => value?.text).join('\n') : ''
-              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true })
+              const nativeResult = object(entry.row.toolUseResult)
+              const singleResult = message.content.filter(value => object(value)?.type === 'tool_result').length === 1
+              const agentId = singleResult && typeof nativeResult?.agentId === 'string' && nativeResult.agentId.length > 0 && nativeResult.agentId.length <= 256 ? nativeResult.agentId : undefined
+              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true,
+                ...(agentId && typeof entry.row.sourceToolAssistantUUID === 'string' ? { agentId, assistantUuid: entry.row.sourceToolAssistantUUID } : {}) })
             }
           }
           if (entry.row.type === 'assistant' && Array.isArray(message?.content)) {
@@ -92,6 +103,11 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         for (const [key, entry] of pendingTools) {
           const message = object(entry.row.message), blocks = Array.isArray(message?.content) ? message.content.map(object) : []
           if (['exited', 'error'].includes(owner.state.status) || blocks.filter(block => block?.type === 'tool_use').every(block => results.has(JSON.stringify([entry.sessionId, block?.id])))) { pendingTools.delete(key); upsert(entry) }
+        }
+        const taskSnapshot = JSON.stringify([owner.state.sessionId, owner.state.tasks])
+        if (taskSnapshot !== lastTaskSnapshot) {
+          lastTaskSnapshot = taskSnapshot
+          for (const entry of agentRows.values()) upsert(entry)
         }
         const state = owner.state, metadata = state.session
         const snapshot = JSON.stringify([state.sessionId, metadata, owner.busy, state.status, state.lastTurn, problem, lastTurnAt, toolCounts.get(state.sessionId)])

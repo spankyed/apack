@@ -46,6 +46,7 @@
       <div
         v-for="(entry, index) in entries"
         :key="entry.id || index"
+        :data-native-agent-id="entry.nativeAgent?.id"
         class="px-3 py-1.5 text-xs flex items-center gap-2 border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
         :class="{ 'opacity-50 line-through': entry.status === 'denied' }"
       >
@@ -73,6 +74,13 @@
           </JsonHoverPopup>
         </div>
 
+        <div v-if="entry.nativeAgent" class="min-w-0 flex-1 border-l border-neutral-700 pl-2" aria-label="Native agent status">
+          <div class="flex items-center gap-2 text-[10px] text-neutral-500">
+            <span class="truncate">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
+          </div>
+          <NativeStatusText v-if="entry.nativeAgent.statusText" class="mt-0.5 text-[10px]" :text="entry.nativeAgent.statusText" />
+        </div>
+
         <!-- Duration badge -->
         <span v-if="entry.durationMs != null" class="text-neutral-500 text-[10px] tabular-nums flex-shrink-0 min-w-[2.5rem] text-right">
           {{ formatDuration(entry.durationMs) }}
@@ -92,15 +100,8 @@ import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
 
-interface ToolActivityEntry {
-  id: string
-  tool: string
-  summary: string
-  status: 'running' | 'ok' | 'denied' | 'error'
-  durationMs?: number
-  outputSummary?: string
-  details?: { input?: unknown; output?: string; error?: string }
-}
+import type { ToolActivityEntry } from '#features/threads/be/types.ts'
+import NativeStatusText from '#features/threads/fe/chat/NativeStatusText.vue'
 
 interface ArtifactRef {
   artifactId: string

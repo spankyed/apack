@@ -77,3 +77,26 @@ it.each([false, true])('retains receipt-bound references when journal arrives be
   history.acceptSubmission({ sessionId, uuid, text: '' }, { images: [{ name: 'stale', url: 'media://stale/x' }] })
   expect((fake.messages[0].references as typeof references).images[0].name).toBe('original.png')
 })
+
+it.each([true, false])('joins native task status only to its structured Agent record, matching identity: %s', async matching => {
+  const uuid = '77777777-7777-7777-7777-777777777777', agentId = 'native-agent'
+  const assistant = { sessionId, row: { sessionId, uuid, type: 'assistant', message: { content: [{ type: 'tool_use', id: 'agent-tool', name: 'Agent', input: {} }, { type: 'tool_use', id: 'other-tool', name: 'Read', input: {} }] } } }
+  const result = { sessionId, row: { sessionId, uuid: '88888888-8888-8888-8888-888888888888', type: 'user', sourceToolAssistantUUID: matching ? uuid : 'foreign', toolUseResult: { agentId }, message: { content: [{ type: 'tool_result', tool_use_id: 'agent-tool', content: 'Launched' }] } } }
+  let release!: () => Promise<void>
+  const tasks = [{ id: agentId, name: 'worker', status: 'running', statusText: 'Native progress' }]
+  const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks }, busy: false,
+    readJournal: vi.fn(async () => ({ entries: [assistant, result], pending: false, problems: [] })),
+    beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  const entries = () => (fake.messages[0]?.blocks as { props: { entries: { nativeAgent?: unknown }[] } }[])[0].props.entries
+  try {
+    await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
+    expect(entries()[0].nativeAgent).toEqual(matching ? tasks[0] : undefined)
+    expect(entries()[1].nativeAgent).toBeUndefined()
+    tasks[0] = { ...tasks[0], status: 'completed', statusText: 'Finished' }
+    await vi.waitFor(() => expect(entries()[0].nativeAgent).toEqual(matching ? tasks[0] : undefined))
+    tasks.length = 0
+    await vi.waitFor(() => expect(entries()[0].nativeAgent).toBeUndefined())
+  } finally { await release() }
+})
