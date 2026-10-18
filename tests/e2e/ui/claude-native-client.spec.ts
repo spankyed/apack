@@ -75,9 +75,16 @@ test('runs native Client state props input and lifetime inside the app', async (
   await expect(region).toContainText('count=1')
   expect(await region.getAttribute('data-native-client')).toBe(id)
   await region.scrollIntoViewIfNeeded()
-  const bounds=await region.boundingBox();expect(bounds).toBeTruthy()
-  await appPage.mouse.move(bounds!.x+15,bounds!.y+10);await appPage.mouse.down()
-  await appPage.mouse.move(bounds!.x-20,bounds!.y+bounds!.height+10)
+  const point=await region.evaluate(element=>{
+    const bounds=element.getBoundingClientRect();let left=Math.max(0,bounds.left),right=Math.min(innerWidth,bounds.right),top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom)
+    for(let parent=element.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent),clip=parent.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(style.overflowX)){left=Math.max(left,clip.left);right=Math.min(right,clip.right)}if(/auto|scroll|hidden|clip/.test(style.overflowY)){top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}}
+    const x=left+Math.min(15,(right-left)/2),y=top+Math.min(10,(bottom-top)/2)
+    return{x,y,outsideX:bounds.left-20,outsideY:Math.min(innerHeight-2,bounds.bottom+10),visible:element.contains(document.elementFromPoint(x,y)),width:right-left,height:bottom-top}
+  })
+  expect(point.visible).toBe(true);expect(point.width).toBeGreaterThan(0);expect(point.height).toBeGreaterThan(0)
+  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-before-drag.png')})
+  await appPage.mouse.move(point.x,point.y);await appPage.mouse.down()
+  await appPage.mouse.move(point.outsideX,point.outsideY)
   await expect.poll(()=>region.textContent()).toMatch(/xy=-[0-9]+,/)
   await appPage.mouse.up()
   await region.focus();await region.press('Escape');await expect(composer).toBeFocused()
