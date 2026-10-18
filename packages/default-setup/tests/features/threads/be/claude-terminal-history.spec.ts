@@ -34,3 +34,29 @@ it('retains structured plan-reset continuations without calling them human compo
   expect(projectClaudeTerminalHistory({ sessionId, row: { ...continuation, planContent: undefined } })).toBeUndefined()
   expect(projectClaudeTerminalHistory({ sessionId, row: { ...continuation, isMeta: true } })).toBeUndefined()
 })
+
+
+it('shows original command envelopes as commands/results without claiming human or assistant model provenance', () => {
+  const command = { ...row, type: 'user', entrypoint: 'cli', message: { content: '<command-name>/compact</command-name>\n  <command-message>compact</command-message>\n  <command-args>Keep &lt;api&gt; &amp; tests</command-args>' } }
+  const invocation = projectClaudeTerminalHistory({ sessionId, row: command })!
+  expect(invocation).toMatchObject({ uuid, sessionId, sender: 'user', text: '/compact Keep <api> & tests' })
+  expect(invocation.context.claudeNativeCommand).toMatchObject({ kind: 'invocation', name: '/compact' })
+  expect(invocation.context.claudeNativeUserMessage).toBeUndefined()
+  for (const stream of ['stdout', 'stderr']) {
+    const output = projectClaudeTerminalHistory({ sessionId, row: { ...command, message: { content: `<local-command-${stream}>\u001b[2mDone &amp; &lt;ready&gt;\u001b[22m</local-command-${stream}>` } } })!
+    expect(output).toMatchObject({ uuid, sessionId, sender: 'assistant', text: 'Done & <ready>' })
+    expect(output.context.claudeNativeCommand).toMatchObject({ kind: 'output', stream })
+    expect(output.context.claudeNativeUserMessage).toBeUndefined(); expect(output.context.claudeNativeMessages).toBeUndefined()
+  }
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...command, message: { content: '<local-command-stdout> </local-command-stdout>' } } })).toBeUndefined()
+})
+it('keeps quoted, malformed, mixed-media and genuinely human command-like markup literal', () => {
+  for (const text of ['Explain <local-command-stdout>text</local-command-stdout>', '<local-command-stdout>missing end', '<local-command-stdout>text</local-command-stderr>', '<command-name>/compact</command-name>']) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...row, type: 'user', entrypoint: 'cli', message: { content: text } } })?.text).toBe(text)
+  }
+  const text = '<local-command-stdout>&amp;lt; literal</local-command-stdout>'
+  const base = { ...row, type: 'user', entrypoint: 'cli', message: { content: text } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...base, origin: { kind: 'human' } } })?.text).toBe(text)
+  expect(projectClaudeTerminalHistory({ sessionId, row: base })?.text).toBe('&lt; literal')
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...base, message: { content: [{ type: 'text', text }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'YWJj' } }] } } })?.text).toBe(text)
+})

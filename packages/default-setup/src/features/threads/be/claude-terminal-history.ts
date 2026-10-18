@@ -1,3 +1,4 @@
+import { presentClaudeCommandHistory } from '#features/code/be/services/claude-code/command-history.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import type { BlockConfig, MessageReferences } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
@@ -10,6 +11,8 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
     || (row.type !== 'user' && row.type !== 'assistant') || typeof row.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.uuid)) return
   const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : Array.isArray(message.content) ? message.content.map(object).filter((block): block is Record<string, unknown> => !!block) : []
   const text = content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
+  const command = content.every(block => block.type === 'text') ? presentClaudeCommandHistory(row, text) : undefined
+  if (command && !command.text) return
   const thinking = content.filter(block => block.type === 'thinking' && typeof block.thinking === 'string').map(block => block.thinking).join('\n')
   const origin = object(row.origin)
   const planContinuation = origin?.kind === 'auto-continuation' && typeof row.planContent === 'string' && row.queueSkipAttachments === true
@@ -28,8 +31,9 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   if (tools.length) blocks.push({ type: 'tool-activity', props: { entries: tools.map(block => ({ id: block.id as string, tool: block.name as string, summary: '', status: 'running' as const, details: { input: block.input } })), label: 'Native tools', state: 'done', defaultOpen: false } })
   const media = content.filter(block => !['text','thinking','tool_use','tool_result'].includes(String(block.type)))
   if (!text && !thinkingText && !tools.length && !media.length) return
-  const visibleText = summary ? '' : text
-  return { uuid: row.uuid, sessionId: entry.sessionId, sender: row.type, text: visibleText, blocks, ...(images.length ? { references: { images } } : {}),
-    context: { cliUuid: row.uuid, ...(planContinuation ? { claudePlanContinuation: true } : {}), ...(row.type === 'user' && !planContinuation ? { claudeNativeUserMessage: { uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, origin: { kind: origin?.kind === 'human' ? 'composer' : 'unclassified' } } } : {}), claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId, ...(row.origin ? { origin: row.origin } : {}), ...(media.length ? { media } : {}) },
-      ...(row.type === 'assistant' && visibleText ? { claudeNativeMessages: [{ uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, start: 0, end: visibleText.length, ...(typeof message.id === 'string' ? { apiMessageId: message.id } : {}) }] } : {}) } }
+  const visibleText = command ? command.text : summary ? '' : text
+  const sender = command?.kind === 'output' ? 'assistant' : row.type
+  return { uuid: row.uuid, sessionId: entry.sessionId, sender, text: visibleText, blocks, ...(images.length ? { references: { images } } : {}),
+    context: { cliUuid: row.uuid, ...(command ? { claudeNativeCommand: command } : {}), ...(planContinuation ? { claudePlanContinuation: true } : {}), ...(row.type === 'user' && !planContinuation && !command ? { claudeNativeUserMessage: { uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, origin: { kind: origin?.kind === 'human' ? 'composer' : 'unclassified' } } } : {}), claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId, ...(row.origin ? { origin: row.origin } : {}), ...(media.length ? { media } : {}) },
+      ...(row.type === 'assistant' && visibleText && !command ? { claudeNativeMessages: [{ uuid: row.uuid, sessionId: entry.sessionId, text: visibleText, start: 0, end: visibleText.length, ...(typeof message.id === 'string' ? { apiMessageId: message.id } : {}) }] } : {}) } }
 }
