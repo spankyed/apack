@@ -13,13 +13,13 @@ function fixture() {
   const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
   let disabled = false
-  const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (_name: string) => {disabled = !disabled}), isDisabled = vi.fn(() => disabled)
+  const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (name: string) => {disabled = !disabled;const result={name,type:disabled?'disabled':'connected'};appState.mcp.clients=[result];return result}), isDisabled = vi.fn(() => disabled)
   const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
   const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
-    originalContext: binding, initialize: async () => native, AbortController, randomUUID,
+    originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>
   const snapshot = async () => (await control({ subtype: 'apack_file_dialogs' }, new AbortController())).dialogs[0]
@@ -194,10 +194,17 @@ it('refuses overlapping mutations and stale results after a session changes',asy
 it('reports the live engine connection after mutation rather than the startup tool snapshot',async()=>{
  const f=mcpControlFixture(),startup={mcpClients:[{name:'research',type:'connected'}],tools:[{name:'mcp__research__echo'}]}
  Object.assign(f.context,{options:startup})
- f.native.mcpControls.urs().mockImplementationOnce(async()=>{f.context.getAppState().mcp.clients=[{name:'research',type:'disabled'}]})
+ f.native.mcpControls.urs().mockImplementationOnce(async()=>{f.context.getAppState().mcp.clients=[{name:'research',type:'disabled'}];return {name:'research',type:'disabled'}})
  await f.run({operation:'disable'})
  expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[{name:'research',type:'disabled'}],tools:[]})
  await f.control({subtype:'apack_mcp_status',session_id:f.request.session_id},new AbortController())
  expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[{name:'research',type:'disabled'}],tools:[]})
  expect(startup.mcpClients[0]?.type).toBe('connected')
+})
+
+it('awaits original queued MCP publication before reporting a completed mutation',async()=>{
+ const f=mcpControlFixture(),result={name:'research',type:'disabled'}
+ f.native.mcpControls.urs().mockImplementationOnce(async()=>{setTimeout(()=>{f.context.getAppState().mcp.clients=[result]},16);return result})
+ await f.run({operation:'disable'})
+ expect(f.native.mcp.Q_n).toHaveBeenLastCalledWith({connections:[result],tools:[]})
 })

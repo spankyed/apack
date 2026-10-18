@@ -531,8 +531,17 @@ async function control(request,abort){
   mcpControlActive=true;try{
   const reconnect=n.mcpControls.Mot(),toggle=n.mcpControls.urs(),disabled=n.mcpControls.Z_e();
   if(typeof reconnect!=='function'||typeof toggle!=='function'||typeof disabled!=='function')throw Error('Native MCP controls are not ready');
-  if(request.operation==='reconnect')await reconnect(request.server_name);
-  else if(disabled(request.server_name)===(request.operation==='enable'))await toggle(request.server_name);
+  let outcome;
+  if(request.operation==='reconnect')outcome=(await reconnect(request.server_name)).client;
+  else if(disabled(request.server_name)===(request.operation==='enable'))outcome=await toggle(request.server_name);
+  // Original CRe batches store publication on a 16ms timer after its callback resolves.
+  const deadline=Date.now()+4000;
+  while(outcome){
+   current();const row=liveMcp().clients.find(client=>client.name===request.server_name);
+   if(row?.type===outcome.type&&(outcome.type!=='connected'||row.client===outcome.client))break;
+   if(Date.now()>=deadline)throw Error('Native MCP connection state has not settled; read status again');
+   await new Promise(resolve=>setTimeout(resolve,25));
+  }
   current();
   if(reconnect!==n.mcpControls.Mot()||toggle!==n.mcpControls.urs())throw Error('Native MCP owner changed');
   const context=liveMcp();return {mcpServers:n.mcp.Q_n({connections:context.clients,tools:context.tools})};
