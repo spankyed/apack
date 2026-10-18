@@ -23,6 +23,7 @@ it('marks a native history error as blocked without discarding its session, and 
  repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'native-session'}}});
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()});
  mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()});
+ mockService<Services,'cli'>('cli',{claudeCode:{closeIdleConversation:vi.fn(async()=>true)} as never});
  const writer={finalize:vi.fn()};
  finalizeSessionError(services,id,writer as never,'No message found with message.uuid of: native-assistant',undefined,{isHistoryChange:true});
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({sessionId:'native-session',historyError:expect.stringContaining('No message found')});
@@ -45,3 +46,25 @@ for(const worktreeMismatch of [false,true]) {
   expect(query).toHaveBeenCalledTimes(worktreeMismatch?0:1);
  });
 }
+
+it('drains the idle owner before reset so its final journal cannot restore the old session',async()=>{
+ const{id}=repository.threadCommands.create({topic:'Native reset',instructions:''});
+ repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'old-session'}}});
+ let release!:()=>void;
+ const closing=new Promise<void>(resolve=>{release=resolve});
+ const closeIdleConversation=vi.fn(async()=>{await closing;repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'old-session',turns:2}}});return true});
+ mockService<Services,'cli'>('cli',{claudeCode:{closeIdleConversation} as never});
+ mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()});
+ const resetting=reset({threadId:id},services,{} as never,'');
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode?.sessionId).toBe('old-session');
+ release();expect(await resetting).toMatchObject({success:true});
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode).toBeUndefined();
+});
+it('preserves the session when its owner is busy instead of reporting a completed reset',async()=>{
+ const{id}=repository.threadCommands.create({topic:'Busy reset',instructions:''});
+ repository.threadCommands.update(id,{context:{claudeCode:{sessionId:'busy-session'}}});
+ mockService<Services,'cli'>('cli',{claudeCode:{closeIdleConversation:vi.fn(async()=>false)} as never});
+ const notify=vi.fn();mockService<Services,'chat'>('chat',{sendBlockMessage:notify});
+ expect(await reset({threadId:id},services,{} as never,'')).toMatchObject({success:false,error:expect.stringContaining('Pause')});
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode?.sessionId).toBe('busy-session');expect(notify).toHaveBeenCalledWith(expect.objectContaining({text:expect.stringContaining('Pause')}));
+});

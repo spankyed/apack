@@ -483,19 +483,12 @@ export function clearClaudeState(services: Services, threadId: string): void {
   const existingTags: string[] = Array.isArray(thread.tags) ? thread.tags : [];
   const nextTags = existingTags.filter((t) => t !== CLAUDE_CODE_TAG);
 
-  const tagRemoved = existingTags.includes(CLAUDE_CODE_TAG);
-
   services.repository.threadCommands.update(threadId as any, {
     context: nextContext,
     tags: nextTags,
   });
 
-  // Notify frontend so tag filters update without a page refresh
-  if (tagRemoved) {
-    services.emitter.broadcastToSurface('default-setup/threads', {
-      type: 'THREAD_UPDATED',
-      threadId,
-      updates: { tags: nextTags },
-    });
-  }
+  services.emitter.broadcastToSurface('default-setup/threads', {
+    type: 'THREAD_UPDATED', threadId, updates: { context: nextContext, tags: nextTags },
+  });
 }

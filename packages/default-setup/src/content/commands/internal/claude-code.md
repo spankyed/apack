@@ -13,6 +13,7 @@ name: Claude Code commands
 **cc-recap**: Summarize current conversation
 **cc-skills**: List installed skills
 **cc-compact**: Custom instructions (optional, summarize context)
+**cc-reset**: Disconnect this thread from its idle native session; preserves saved history. Pause a running turn first.
 **cc-resume**: Session ID (optional, lists sessions if omitted)
 **cc-import**: [all] [no-limit] (imports up to 50 from current dir by default; "all" imports from all dirs; "no-limit" removes cap)
 **cc-add-dir**: <path> [--remember]
