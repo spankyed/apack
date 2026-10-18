@@ -14,13 +14,13 @@ function fixture() {
   const states: ClaudeUiMountState[] = []
   const focusRequests: string[] = []
   const listeners = new Set<(event: StreamLine) => void>()
-  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop' as const] })),
+  const ui = { clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
   const owner = { handle: { ui }, done: done.promise, subscribe(listener: (event: StreamLine) => void) { listeners.add(listener); return () => { listeners.delete(listener) } } }
   const mount = (promptHost?: ClaudePromptHost) => mountClaudeUi({ owner, promptHost, isCurrent: () => current, publish: state => { states.push(state) }, requestFocus: id => { focusRequests.push(id) } })
-  const invalidate = () => { for (const listener of listeners) listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' } as StreamLine) }
+  const invalidate = (local=false) => { for (const listener of listeners) listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render',...(local?{client_snapshot:true,client_id:ui.attach.mock.calls.at(-1)?.[0]?.client_id}:{}) } as StreamLine) }
   const action = () => { const last = states.at(-1); if (last?.status !== 'live' || last.tree.kind !== 'button' || !last.tree.actionId) throw new Error('expected live button'); return last.tree.actionId }
   return { mount, ui, states, focusRequests, done, listeners, invalidate, action, replace: () => { current = false } }
 }
@@ -362,4 +362,19 @@ it('keeps a Client container mounted during native redraws and routes its scoped
  await mount.clientEvent({id,sequence:1,event:{kind:'key',key:'x'}})
  expect(f.ui.clientEvent).toHaveBeenCalledWith(expect.objectContaining({id,sequence:1,event:{kind:'key',key:'x'}}))
  await mount.dispose();expect(await mount.clientEvent({id,sequence:2,event:{kind:'key',key:'y'}})).toEqual({handled:false})
+})
+
+it('admits one displayed keyed Client action through a local snapshot redraw and keeps its identity',async()=>{
+ const f=fixture(),id='9b08a63e-78f6-46c5-9134-c6c64de30937'
+ const frame=(handle:number)=>({tree:{type:'NativeClient',props:{id,pointer:true,keys:true},children:[{type:'Button',props:{key:'increment',label:'Increment'},press:{plugin:'fixture',handle}}]},props:{},rewritten:true,hooked:true})
+ f.ui.render.mockResolvedValue(frame(1));const view=f.mount();await view.ready
+ await vi.waitFor(()=>expect(f.states.at(-1)).toMatchObject({status:'live',tree:{kind:'client'}}))
+ const action=()=>{const state=f.states.at(-1);if(state?.status!=='live'||state.tree.kind!=='client'||state.tree.children[0]?.kind!=='button')throw Error('Expected Client button');return state.tree.children[0].actionId!}
+ const original=action();f.invalidate(true);expect(action()).toBe(original)
+ f.ui.render.mockResolvedValue(frame(2))
+ await vi.waitFor(()=>expect(f.ui.render).toHaveBeenCalledTimes(2))
+ expect(action()).toBe(original)
+ expect(await view.press(original)).toEqual({handled:true});expect(f.ui.press).toHaveBeenCalledTimes(1)
+ f.invalidate();expect(await view.press(original)).toEqual({handled:false})
+ await view.dispose()
 })

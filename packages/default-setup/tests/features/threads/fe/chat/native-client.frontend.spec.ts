@@ -7,7 +7,7 @@ const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
 async function mount(){
  const send=vi.fn(),root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>h('textarea',{'aria-label':'Nested editor'}))}});app.mount(root);await nextTick()
+ app=createApp({setup(){provide(claudeClientInput,send);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick()
  return {root,send,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
@@ -32,4 +32,9 @@ it('reports fractional region coordinates and retains pointer capture outside it
  region.dispatchEvent(pointer('pointerup',{pointerId:7,clientX:90,clientY:180,button:0,bubbles:true}))
  expect(send).toHaveBeenCalledWith(id,expect.objectContaining({type:'move',x:-2,y:4,fine:{x:-1.25,y:4}}))
  expect(release).toHaveBeenCalledWith(7)
+})
+
+it('gives the Client keyboard focus after its button click while leaving nested text input local',async()=>{
+ const {region,root}=await mount();root.querySelector('button')!.click();expect(document.activeElement).toBe(region)
+ const input=root.querySelector('textarea')!;input.focus();input.click();expect(document.activeElement).toBe(input)
 })

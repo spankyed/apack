@@ -1,5 +1,5 @@
 <template>
-  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
+  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
     <slot />
     <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre">0000000000</span>
   </div>
@@ -18,6 +18,7 @@ const cell=()=>({width:Math.max(1,(measure.value?.getBoundingClientRect().width?
 function layout(){frame=undefined;const element=region.value;if(!element)return;const size=cell(),event={kind:'resize' as const,columns:Math.floor(element.clientWidth/size.width),rows:Math.floor(element.clientHeight/size.height)},encoded=JSON.stringify(event);if(encoded!==lastLayout){lastLayout=encoded;send?.(props.node.id,event)}}
 function schedule(){if(frame===undefined)frame=requestAnimationFrame(()=>{layout();flush()})}
 function flush(){if(pending){send?.(props.node.id,pending);pending=undefined}}
+function focusClient(event:MouseEvent){if(props.node.keys&&event.target instanceof HTMLElement&&!event.target.closest('input,textarea,select'))region.value?.focus({preventScroll:true})}
 function key(event:KeyboardEvent){
  if(!props.node.keys||event.target!==region.value||event.isComposing||event.key==='Process'||event.key==='Dead'||event.key==='Escape')return
  const names:Record<string,string>={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Enter:'return',Tab:'tab',Backspace:'backspace',Delete:'delete',PageUp:'pageup',PageDown:'pagedown',Home:'home',End:'end'}

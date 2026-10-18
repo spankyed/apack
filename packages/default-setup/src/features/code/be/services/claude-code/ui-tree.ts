@@ -7,6 +7,7 @@ import type { ClaudeUiPress } from './ui-controls.ts'
 import type { ClaudeUiNode } from './ui-presentation.ts'
 
 export interface ClaudeUiDrawing {
+  clientActions: ReadonlyMap<string,{instance:string;key:string;type:string;plugin:string}>
   clientInstances: ReadonlySet<string>
   scrollTargets: ReadonlyMap<string, { plugin: string; key: string }>
   focusables: ReadonlyMap<string, { plugin: string; key: string }>
@@ -54,6 +55,14 @@ function validateBudget(tree: unknown): void {
 export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing): ClaudeUiDrawing {
   validateBudget(tree)
   const clientInstances = new Set<string>()
+  const clientActions = new Map<string,{instance:string;key:string;type:string;plugin:string}>()
+  let clientScope: string | undefined
+  function actionIdentity(type:string,plugin:string,key:unknown):string {
+    if (!clientScope || typeof key !== 'string') return randomUUID()
+    const prior=[...(previous?.clientActions??[])].filter(([,entry])=>entry.instance===clientScope&&entry.key===key&&entry.type===type&&entry.plugin===plugin)
+    const id=prior.length===1?prior[0]![0]:randomUUID()
+    clientActions.set(id,{instance:clientScope,key,type,plugin});return id
+  }
   const actions = new Map<string, Omit<ClaudeUiPress, 'client_id' | 'surface'>>()
   const fields = new Map<string, { type: 'input' | 'select'; plugin: string; handle: number; key: string; options?: string[] }>()
   const scrollBoxes = new Map<string, { plugin: string; key: string }>()
@@ -77,7 +86,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const props=value.props
       if(!record(props)||typeof props.id!=='string'||!/^[a-f0-9-]{36}$/i.test(props.id)||!Array.isArray(value.children)||typeof props.pointer!=='boolean'||typeof props.keys!=='boolean')throw new ClaudeProtocolError('Invalid native Client presentation')
       clientInstances.add(props.id)
-      return {kind:'client',id:props.id,pointer:props.pointer,keys:props.keys,layout:readClaudeUiBoxLayout(props),children:value.children.map(child=>visit(child,plugin)),...attribution}
+      const parent=clientScope;clientScope=props.id
+      try {return {kind:'client',id:props.id,pointer:props.pointer,keys:props.keys,layout:readClaudeUiBoxLayout(props),children:value.children.map(child=>visit(child,plugin)),...attribution}} finally {clientScope=parent}
     }
     if (value.type === 'Box' || value.type === 'Text') {
       const children = value.children ?? []
@@ -168,7 +178,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (value.press === undefined) return node
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
         || !Number.isSafeInteger(value.press.handle) || typeof props.key !== 'string') throw new ClaudeProtocolError('native Markdown callback is invalid')
-      const actionId = randomUUID()
+      const actionId = actionIdentity(value.type,value.press.plugin,props.key)
       actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle, key: props.key })
       links.set(actionId, pressableLinks === undefined ? undefined : new Set(pressableLinks))
       return { ...node, actionId }
@@ -242,7 +252,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         || (value.props.key !== undefined && typeof value.props.key !== 'string')) {
         throw new ClaudeProtocolError('native UI button has an invalid callback')
       }
-      const actionId = randomUUID()
+      const actionId = actionIdentity(value.type,value.press.plugin,props.key)
       actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle,
         ...(typeof value.props.key === 'string' ? { key: value.props.key } : {}) })
       return { ...button, actionId, ...focusIdentity(value.press.plugin, props.key) }
@@ -254,5 +264,5 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
   const counts = new Map<string, number>()
   for (const [, identity] of targets) { const key = JSON.stringify(identity); counts.set(key, (counts.get(key) ?? 0) + 1) }
   const scrollTargets = new Map(targets.filter(([, identity]) => counts.get(JSON.stringify(identity)) === 1))
-  return { tree: result, clientInstances, actions, fields, links, focusables, scrollTargets }
+  return { tree: result, clientInstances, clientActions, actions, fields, links, focusables, scrollTargets }
 }

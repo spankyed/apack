@@ -77,7 +77,7 @@ const composing = ref(false)
 function focusIn(event: FocusEvent) {
   if (applying || !shown.value || !site.value || event.target !== document.activeElement) return
   held = true
-  const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
+  const target = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
   emit('focus-report', { paneId: shown.value, revision: ++revision, isHeld: true, focusId: target?.dataset.nativeFocusId ?? (event.target === site.value ? null : undefined), by: autoEntering ? 'auto' : 'person' })
 }
 function focusOut(event: FocusEvent) {

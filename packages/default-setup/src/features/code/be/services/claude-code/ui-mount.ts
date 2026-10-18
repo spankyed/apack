@@ -90,13 +90,13 @@ export function mountClaudeUi(options: {
     // Keep in-progress fields mounted, but never display an expired button/link as actionable.
     publish({ status: 'live', tree: retire(fieldDrawing.tree) })
   }
-  function invalidate(): void {
+  function invalidate(clientSnapshot = false): void {
     if (!current()) return
     generation++
-    drawing = undefined
+    if (!clientSnapshot) drawing = undefined
     const alreadyDirty = dirty
     dirty = true
-    if (attached && !alreadyDirty) retireDrawing()
+    if (attached && !alreadyDirty && !clientSnapshot) retireDrawing()
     schedule()
   }
   async function render(): Promise<void> {
@@ -169,7 +169,10 @@ export function mountClaudeUi(options: {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
       if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }
     }
-    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') invalidate()
+    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
+      if (line.client_snapshot === true && line.client_id !== client.client_id) return
+      invalidate(line.client_snapshot === true)
+    }
   })
   const ready = (async () => {
     try {
