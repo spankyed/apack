@@ -304,7 +304,7 @@ async function control(request,abort){
  if(request.subtype==='apack_read_dialogs'){
   const d=readDialog(n);if(!d.item)return {dialogs:[]};
   const p=d.payload;
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:'Read',title:p.title??'Read file',question:p.question?.kind==='plain'?p.question.text:'Allow this read?',input:p.input}]};
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:'Read',title:p.title??'Read file',question:p.question?.kind==='plain'?p.question.text:'Allow this read?',...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
  }
  if(request.subtype==='apack_answer_read_dialog'){
   abort.signal.throwIfAborted();

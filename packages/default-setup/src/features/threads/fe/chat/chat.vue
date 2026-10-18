@@ -32,7 +32,7 @@
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <!-- Agent Chat Content -->
-          <div class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!pendingNativeRead" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -79,8 +79,14 @@
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
+          <div v-if="pendingNativeRead" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+            <NativeReadApproval :key="pendingNativeRead.messageId" v-bind="pendingNativeRead"
+              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeRead!.messageId, response })"
+              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
+          </div>
+          <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
-          <div class="flex-shrink-0 w-full" :class="$style.inputContainer">
+          <div v-show="!pendingNativeRead" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -193,6 +199,7 @@ import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import ChatInput from './input.vue'
+import NativeReadApproval from './NativeReadApproval.vue'
 import RecentThreads from './recent-threads.vue'
 import InlineTabBar from './inline-tab-bar.vue'
 import AgentCanvas from '#features/threads/fe/canvas/agent/canvas.vue'
@@ -377,6 +384,22 @@ const statusLineCwd = computed(() => {
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const pendingNativeRead = computed(() => {
+  const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
+    approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown };
+    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; question?: unknown; reason?: unknown };
+  } | undefined
+  const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
+  if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || pending?.toolName !== 'Read' || typeof pending.approvalMessageId !== 'string' || typeof pending.originalInput?.file_path !== 'string') return undefined
+  const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
+  if (!message) return undefined
+  return { messageId: pending.approvalMessageId, filePath: pending.originalInput.file_path,
+    title: typeof native.title === 'string' ? native.title : 'Read file',
+    question: typeof native.question === 'string' ? native.question : 'Allow this read?',
+    reason: typeof native.reason === 'string' ? native.reason : undefined,
+    disabled: !!message.responseTimestamp }
+})
+
 let nativeSendRevision = 0
 let pendingNativeSend: { ownerId: string; revision: number; resolve(): void; reject(error: Error): void } | undefined
 function submitNativeMessage(text: string, references: MessageReferences): Promise<void> {

@@ -90,7 +90,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
               { type: 'approval', props: { requireReason: false, allowReason: true, autoAcceptOption: false } },
             ], forkable: false, autoHide: true, asUser: true })
             pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: 'Read', originalInput: dialog.input,
-              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision } }
+              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, title: dialog.title, question: dialog.question, reason: dialog.reason } }
           }
           if (pendingControlRequest !== priorControl) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }

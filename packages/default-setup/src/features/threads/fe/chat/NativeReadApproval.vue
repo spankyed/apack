@@ -1,0 +1,54 @@
+<template>
+  <section class="native-read-approval" aria-label="Native Read approval" data-testid="native-read-approval">
+    <header>
+      <span class="eyebrow">Permission needed</span>
+      <h2>{{ title }}</h2>
+    </header>
+    <div class="details" tabindex="0" aria-label="Read request details">
+      <p class="question">{{ question }}</p>
+      <code data-testid="native-read-path">{{ filePath }}</code>
+      <p v-if="reason" class="reason">{{ reason }}</p>
+      <details>
+        <summary>Add a reason for denying</summary>
+        <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="disabled" />
+      </details>
+    </div>
+    <footer>
+      <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
+      <div class="decisions">
+        <button type="button" class="deny" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">Deny</button>
+        <button type="button" class="approve" :disabled="disabled" @click="$emit('respond', { approved: true })">Approve</button>
+      </div>
+    </footer>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+defineProps<{ title: string; question: string; filePath: string; reason?: string; disabled: boolean }>()
+defineEmits<{ respond: [response: { approved: boolean; reason?: string }]; pause: [] }>()
+const feedback = ref('')
+</script>
+
+<style scoped>
+.native-read-approval { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
+header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
+.eyebrow { color: #b8a887; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.details { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
+.question { margin: 0 0 6px; color: #aaa; }
+code { display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
+.reason { margin: 8px 0; color: #aaa; overflow-wrap: anywhere; }
+details { margin-top: 10px; color: #aaa; }
+summary { cursor: pointer; font-size: 11px; }
+textarea { display: block; width: 100%; margin-top: 6px; padding: 6px; resize: vertical; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
+footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid rgb(255 255 255 / .07); }
+.decisions { display: flex; gap: 8px; }
+button { border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
+button:focus-visible, summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.cancel { color: #aaa; background: transparent; }
+.deny { background: #3b3b3b; color: #eee; }
+.approve { background: #e5e5e5; color: #202020; }
+button:hover:not(:disabled) { filter: brightness(1.12); }
+</style>
