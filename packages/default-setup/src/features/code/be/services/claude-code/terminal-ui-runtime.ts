@@ -522,8 +522,12 @@ async function control(request,abort){
   current();
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native rename controls are not ready');
-  const result=await n.rename.Qar(request.title,binding.toolContext(abort),true);
+  const context=binding.toolContext(abort),result=await n.rename.Qar(request.title,context,true);
   current();if(typeof result.newName!=='string'||!result.newName)throw Error(result.message??'Native rename was refused');
+  if(result.isGenerated!==true){
+   await context.appendSystemMessage(n.runtime.Ae({content:n.rename.G8s(result.newName,result.requestedName),isMeta:true}));
+   current();
+  }
   return {title:result.newName,message:result.message};
  }
  if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};

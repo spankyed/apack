@@ -10,9 +10,9 @@ function fixture() {
   const answer = vi.fn(() => { state.open = [] })
   const store = { getState: () => state, answer }
   let appState = { settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
-  const context = { dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
+  const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
   const binding = { surface: 'terminal', toolContext: () => context }
-  const native = { rename: { Qar: vi.fn(async () => ({ newName: 'Native title', message: 'Renamed' })) }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: (value: unknown) => value }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
+  const native = { rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
@@ -135,6 +135,15 @@ it('runs original native rename only for the current native and observer session
  const f=fixture(),request={subtype:'apack_rename_session',session_id:'11111111-1111-4111-8111-111111111111',title:'Requested'}
  expect(await f.control(request,new AbortController())).toEqual({title:'Native title',message:'Renamed'})
  expect(f.native.rename.Qar).toHaveBeenCalledWith('Requested',f.context,true)
+ expect(f.native.rename.G8s).toHaveBeenCalledWith('Native title','Requested')
+ expect(f.native.runtime.Ae).toHaveBeenCalledWith({content:'Original native reminder',isMeta:true})
+ expect(f.context.appendSystemMessage).toHaveBeenCalledWith({content:'Original native reminder',isMeta:true})
  f.replaceNativeSession();await expect(f.control(request,new AbortController())).rejects.toThrow('session changed')
  expect(f.native.rename.Qar).toHaveBeenCalledOnce()
+});
+
+it('does not add a manual rename reminder for an original generated title',async()=>{
+ const f=fixture();f.native.rename.Qar.mockResolvedValueOnce({newName:'Generated',requestedName:'Generated',isGenerated:true,message:'Generated title'})
+ await f.control({subtype:'apack_rename_session',session_id:'11111111-1111-4111-8111-111111111111',title:''},new AbortController())
+ expect(f.native.rename.G8s).not.toHaveBeenCalled();expect(f.context.appendSystemMessage).not.toHaveBeenCalled()
 });

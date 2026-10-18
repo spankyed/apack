@@ -91,6 +91,18 @@ test('renames through the owning native and print processes with original title 
     }
   }
   await expect.poll(nativeTitle).toBe(title)
+  let nativeReminder: any
+  await expect.poll(async () => {
+    for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
+      try { const rows = (await readFile(join(workspace!, '.claude/projects', bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); nativeReminder = rows.find(row => row.type === 'user' && row.isMeta === true && JSON.stringify(row.message?.content).includes('The user named this session')); if (nativeReminder) return nativeReminder.uuid } catch (error: any) { if (error.code !== 'ENOENT') throw error }
+    }
+  }).toBeTruthy()
+  expect(JSON.stringify(nativeReminder.message.content)).toContain(title)
+  expect((await context()).messages.some((m: any) => m.context?.cliUuid === nativeReminder.uuid)).toBe(false)
+
+  await composer.fill('Continue after the native rename reminder.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
   await command('cc-resume', title)
   await expect.poll(async () => (await context()).messages.some((m: any) => m.text === 'Continuing the existing app conversation for this Claude Code session.')).toBe(true)
   expect((await context()).threadId).toBe(sourceThreadId)
@@ -103,7 +115,7 @@ test('renames through the owning native and print processes with original title 
   if (await back.isVisible()) await back.click()
   await composer.fill('Continue after native owner rename.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect.poll(async () => { const c = await context(); return c.claude.chatState === 'success' && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
+  await expect.poll(async () => { const c = await context(); return c.claude.chatState === 'success' && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 4 }).toBe(true)
   const printTitle = 'Print owner rename fixture'
   await command('cc-rename', printTitle)
   await expect.poll(async () => (await context()).topic).toBe(printTitle)
@@ -111,5 +123,5 @@ test('renames through the owning native and print processes with original title 
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
   await appPage.screenshot({ path: testInfo.outputPath('apack-print-session-rename.png') })
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'rename', nativeOwnerRename: true, printOwnerRename: true, nativeTitlePersisted: true, nativeTitleDiscovery: true, sameNativeOwner: true, resumedPrintSameSession: true, title, printTitle, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'rename', nativeOwnerRename: true, nativeRenameReminder: true, nativeReminderUuid: nativeReminder.uuid, printOwnerRename: true, nativeTitlePersisted: true, nativeTitleDiscovery: true, sameNativeOwner: true, resumedPrintSameSession: true, title, printTitle, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })
