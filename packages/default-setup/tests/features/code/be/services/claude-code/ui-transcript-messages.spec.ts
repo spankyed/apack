@@ -125,3 +125,16 @@ it('retires collapsed summary controls before reopening a fresh drawing', async 
   await expect(f.host.press(reopened.actionId!)).resolves.toEqual({ handled: true })
   f.host.dispose()
 })
+
+it('renders command output by original UUID and retires callbacks when its error state changes', async () => {
+  const f = fixture()
+  const command: ClaudeUiTranscriptRow = { component: 'CommandOutput', messageId: 'app-command', uuid: 'native-command', sessionId: 'session', text: 'Result', start: 0, end: 6, isErrored: false }
+  f.setRows([command]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ component: 'CommandOutput', instance_id: 'native-command', props: { text: 'Result', isErrored: false } }))
+  expect(f.host.state[0]).toMatchObject({ text: 'Result', displayText: 'Display rewrite' })
+  const button = f.nodes()[0]; if (button.kind !== 'button') throw Error('button')
+  f.setRows([{ ...command, isErrored: true }])
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  expect(f.ui.press).not.toHaveBeenCalled()
+  f.host.dispose()
+})

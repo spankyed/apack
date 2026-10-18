@@ -71,7 +71,7 @@ it('owns Escape for native confirmation and restores the Agent editor after canc
 
 it('renders native command output as bounded plain text outside the worker transcript', async () => {
   const f = await mount()
-  context.nativeUiViews[f.ui].state.agentInput = { revision: 8, status: 'command_output', output: { messageId: 'native-result', commandName: 'reload-skills', text: '<script>untrusted output</script>\nOriginal second line' } }; await nextTick()
+  context.nativeUiViews[f.ui].state.agentInput = { revision: 8, status: 'command_output', output: { messageId: 'native-result', commandName: 'reload-skills', isErrored: false, text: '<script>untrusted output</script>\nOriginal second line' } }; await nextTick()
   const output = f.root.querySelector('[aria-label="Native command output"]')!
   expect(output.textContent).toContain('<script>untrusted output</script>')
   expect(output.querySelector('script')).toBeNull()

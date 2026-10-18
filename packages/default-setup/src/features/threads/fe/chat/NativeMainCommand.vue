@@ -5,7 +5,7 @@
       <span class="text-xs text-neutral-400">/{{ state.output.commandName }}</span>
       <div class="flex gap-2"><button type="button" class="rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="emit('expand', !expanded)">{{ expanded ? 'Show composer' : 'Expand output' }}</button><button type="button" class="rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200" @click="emit('dismiss')">Back to messages</button></div>
     </header>
-    <div role="region" aria-label="Command result" tabindex="0" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3"><pre :class="state.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.output.text }}</pre></div>
+    <div role="region" aria-label="Command result" tabindex="0" class="min-h-0 flex-1 overflow-auto overscroll-contain p-3"><NativeTranscriptMessage v-if="frame" :frame="frame" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" /><pre v-else :class="state.output.text.includes('\n') ? 'whitespace-pre' : 'whitespace-pre-wrap break-words'" class="text-xs leading-relaxed text-neutral-300">{{ state.output.text }}</pre></div>
   </section>
   <section v-else-if="state?.status === 'confirmation' || state?.status === 'deciding'" aria-label="Native command confirmation" class="mx-4 mb-3 shrink-0 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3">
     <p class="text-sm text-neutral-200 [overflow-wrap:anywhere]">{{ state.command?.title }}</p>
@@ -16,9 +16,11 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
+import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
+import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import NativeCommandPanel from './NativeCommandPanel.vue'
-const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
-const emit = defineEmits<{ panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
+const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
+const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 const cancel = ref<HTMLButtonElement>()
 watch(() => props.state?.status, async status => { if (status === 'confirmation') { await nextTick(); cancel.value?.focus({ preventScroll: true }) } })
 </script>

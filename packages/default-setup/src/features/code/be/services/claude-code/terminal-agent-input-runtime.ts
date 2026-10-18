@@ -107,7 +107,7 @@ async function dispatchNativeInput(n,request,abort,main,parentTicket){
     if(outputs.length===1){
      const row=outputs[0],result=n.commandOutput.s4t(row.content,row.uuid,row.timestamp,row.contextUsage,row.commandRun,row.usageReport,row.commandOutcome),content=result?.message?.content;
      const output=typeof content==='string'?content:Array.isArray(content)?content.filter(block=>block.type==='text').map(block=>block.text).join('\n'):undefined;
-     if(typeof output==='string'&&output.length>0&&output.length<=65536)return {kind:'command_output',messageId:row.uuid,commandName:expectedRun.command,text:output,...(typeof row.commandOutcome?.kind==='string'?{outcome:row.commandOutcome.kind}:{})};
+     if(typeof output==='string'&&output.length>0&&output.length<=65536)return {kind:'command_output',messageId:row.uuid,commandName:expectedRun.command,text:output,isErrored:(n.commandTags.Ms(row.content,'local-command-stderr')??'').trim()!=='',...(typeof row.commandOutcome?.kind==='string'?{outcome:row.commandOutcome.kind}:{})};
     }
    }
    const notice=notices().find(value=>!priorNotices.has(value)&&value.key==='agent-view-command-notice');

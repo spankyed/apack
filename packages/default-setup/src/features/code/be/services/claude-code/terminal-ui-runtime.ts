@@ -42,6 +42,27 @@ function replayNotices(){
 }
 // Native hook dispatch owns admission and rewrites; this adapter supplies the remote layout.
 const sites=new Map();
+const commandOutputFrames=new Map();
+function commandOutputFacts(n,id){
+ const binding=originalContext??n.runtime.ey();
+ const row=(binding?.messages?.()??[]).find(row=>row.uuid===id&&row.type==='system'&&row.subtype==='local_command');
+ if(!row||typeof row.content!=='string'||typeof row.commandRun?.command!=='string'||typeof row.commandRun?.args!=='string')return;
+ const stdout=n.commandTags.Ms(row.content,'local-command-stdout'),stderr=n.commandTags.Ms(row.content,'local-command-stderr');
+ const out=stdout===null?'':n.commandEntities.km(stdout),err=stderr===null?'':n.commandEntities.km(stderr);
+ const hasOut=out.trim()!==''&&out.trim()!==n.questionOptions.gu,hasErr=err.trim()!=='';
+ if(hasOut===hasErr)return;
+ const text=hasOut?out:err;
+ if(text.length>65536||row.commandRun.command.length>256||row.commandRun.args.length>65536)return;
+ const normalized=n.commandOutput.s4t(row.content,row.uuid,row.timestamp,row.contextUsage,row.commandRun,row.usageReport,row.commandOutcome)?.message?.content;
+ const display=typeof normalized==='string'?normalized:Array.isArray(normalized)?normalized.filter(block=>block.type==='text').map(block=>block.text).join('\n'):undefined;
+ if(typeof display!=='string')return;
+ return {props:{command:row.commandRun.command,args:row.commandRun.args,text,isErrored:hasErr},display,fingerprint:JSON.stringify([row.content,row.commandRun])};
+}
+function currentCommandOutputAction(n,request){
+ if(request.component!=='CommandOutput')return;
+ const key=JSON.stringify([request.client_id,request.instance_id]),frame=commandOutputFrames.get(key),facts=commandOutputFacts(n,request.instance_id);
+ if(!frame||!facts||frame.fingerprint!==facts.fingerprint)throw Error('Native command output changed or expired');
+}
 function siteExists(n,component,id){return component==='AbovePrompt'&&id===n.runtime.f4||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
 function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
 function dropSite(n,key){
@@ -176,7 +197,7 @@ async function initialize(){
  initializing=(async()=>{
   if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')!=='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37')throw Error('Native UI transport requires the reviewed Claude Code 2.1.302 binary');
   const clientRuntime=await import('/$bunfs/root/chunk-e980bbar.js');
-  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
+  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{current:entry=>{if(entry.component!=='CommandOutput')return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;currentCommandOutputAction(native,{component:entry.component,client_id:entry.client,instance_id:entry.requestId});return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
   const gate=await import('/$bunfs/root/chunk-wn0572jb.js');
   const engine=await import('/$bunfs/root/chunk-c7wcn77x.js');
   const session=await import('/$bunfs/root/chunk-a32bd1ts.js');
@@ -185,6 +206,7 @@ async function initialize(){
   const runtime=await import('/$bunfs/root/chunk-hqtnbrjd.js');
   const commandInput=await import('/$bunfs/root/chunk-bkgw23zx.js');
   const commandOutput=await import('/$bunfs/root/chunk-1svntv7y.js');
+  const commandTags=await import('/$bunfs/root/chunk-nhvhsxnt.js'),commandEntities=await import('/$bunfs/root/chunk-25a3z2dq.js');
   const themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
@@ -214,7 +236,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,themeResolver,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,themeResolver,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -525,6 +547,7 @@ async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
+ if(['ui_press','ui_input','ui_select'].includes(request.subtype))currentCommandOutputAction(n,request);
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
@@ -747,6 +770,7 @@ async function control(request,abort){
   clearEdit(clientId);clearCompletion(clientId);
   forgetQuestionClient(clientId);
   clientViews.delete(clientId);
+  for(const [key,frame] of commandOutputFrames)if(frame.clientId===clientId)commandOutputFrames.delete(key);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -777,16 +801,28 @@ async function control(request,abort){
   await n.gate._Jo('desktop');
   if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
   const question=boundQuestion;
+  let commandFacts;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if(value.component==='AbovePrompt'||value.component==='Pane'){
    const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
    if(selected.kind==='agent'&&!selected.taskId)throw Error('Native selected Agent is no longer available');
    props.view=selected.kind==='main'?{}:{agentId:selected.taskId};
   }
+  if(value.component==='CommandOutput'){
+   commandFacts=commandOutputFacts(n,value.instance_id);
+   if(!commandFacts){commandOutputFrames.delete(JSON.stringify([clientId,value.instance_id]));return {tree:{type:'engine',ref:0},props:{text:value.props?.text??''},rewritten:false,hooked:false};}
+   if(value.props?.text!==commandFacts.display||value.props?.isErrored!==commandFacts.props.isErrored)throw Error('Native command output does not match its history row');
+   Object.assign(props,commandFacts.props);
+  }
   if((value.component==='ToolUse'||value.component==='ToolResult')&&typeof props.tool_use_id!=='string')props.tool_use_id=value.instance_id;
   if(typeof props.output==='string'&&props.output.length>65536)props.output=props.output.slice(0,65536);
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
   if(!clientViewCurrent(n,clientId))throw Error('Native UI selection changed while rendering');
+  if(commandFacts){
+   if(commandOutputFacts(n,value.instance_id)?.fingerprint!==commandFacts.fingerprint)throw Error('Native command output changed while rendering');
+   const key=JSON.stringify([clientId,value.instance_id]);commandOutputFrames.delete(key);commandOutputFrames.set(key,{clientId,fingerprint:commandFacts.fingerprint});
+   while(commandOutputFrames.size>256)commandOutputFrames.delete(commandOutputFrames.keys().next().value);
+  }
   let questionFrame;
   if(question){
    abort.signal.throwIfAborted();
@@ -827,7 +863,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}clients.clear();clientViews.clear();commandOutputFrames.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});

@@ -419,9 +419,9 @@ it('keeps confirmation separate from worker receipts and admits only its matchin
 it('publishes original parent command output without a worker delivery receipt', async () => {
   const f = fixture()
   Object.assign(f.owner, { nativeView: { session_id: 'session', revision: 2, agent_id: 'agent' } })
-  f.ui.submitAgent.mockResolvedValueOnce({ kind: 'command_output', messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', outcome: 'failed' })
+  f.ui.submitAgent.mockResolvedValueOnce({ kind: 'command_output', messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', isErrored: false, outcome: 'failed' })
   const mount = f.mount(); await mount.ready; await mount.submitAgent(1, '/reload-skills')
-  expect(f.states.at(-1)?.agentInput).toEqual({ revision: 1, status: 'command_output', output: { messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', outcome: 'failed' } })
+  expect(f.states.at(-1)?.agentInput).toEqual({ revision: 1, status: 'command_output', output: { messageId: '12345678-1234-1234-1234-123456789abc', commandName: 'reload-skills', text: 'Original native output', isErrored: false, outcome: 'failed' } })
   expect(f.states.at(-1)?.agentInput?.receipt).toBeUndefined()
   await mount.dispose()
 })
@@ -471,5 +471,24 @@ it('polls and closes original command panels in a main mount without an Agent tr
   await vi.advanceTimersByTimeAsync(1000)
   expect(f.ui.agentPanel).toHaveBeenCalledWith(expect.objectContaining({ panel_id: id, operation: 'read' }))
   expect(f.states.at(-1)?.agentInput?.status).toBe('panel_done')
+  await view.dispose()
+})
+
+it('mounts transient main command results by native UUID without requiring persisted history', async () => {
+  const f = fixture(), id = '12345678-1234-1234-1234-123456789abc'
+  Object.assign(f.owner, { sessionId: 'session' })
+  const view = f.mount(); await view.ready
+  f.ui.prepareParentCommand.mockResolvedValueOnce({ kind: 'prepared', id })
+  f.ui.readParentCommand.mockResolvedValueOnce({ kind: 'finished', id, result: { kind: 'command_output', messageId: id, commandName: 'context', text: 'Native result', isErrored: false } })
+  await view.submitParentCommand(1, '/context', false); await vi.advanceTimersByTimeAsync(100)
+  const frame = f.states.at(-1)?.transcriptMessages?.find(row => row.uuid === id)
+  expect(frame).toMatchObject({ component: 'CommandOutput', uuid: id, messageId: id, text: 'Native result', body: { status: 'live' } })
+  if (frame?.body.status !== 'live' || frame.body.tree.kind !== 'button') throw Error('expected result button')
+  const old = frame.body.tree.actionId!
+  f.ui.prepareParentCommand.mockResolvedValueOnce({ kind: 'not_command' })
+  await view.submitParentCommand(2, 'Ordinary next draft', false)
+  expect(f.states.at(-1)?.transcriptMessages).toBeUndefined()
+  await expect(view.press(old)).resolves.toEqual({ handled: false })
+  expect(f.ui.press).not.toHaveBeenCalled()
   await view.dispose()
 })

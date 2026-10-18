@@ -23,6 +23,15 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
       continue
     }
     if (message.sender !== 'assistant') continue
+    const command = context.claudeNativeCommand && typeof context.claudeNativeCommand === 'object' ? context.claudeNativeCommand as Record<string, unknown> : undefined
+    if (command?.kind === 'output') {
+      const terminal = context.claudeTerminalMessage && typeof context.claudeTerminalMessage === 'object' ? context.claudeTerminalMessage as Record<string, unknown> : undefined
+      if (terminal?.sessionId !== sessionId || typeof terminal.uuid !== 'string' || !terminal.uuid || terminal.uuid.length > 256 || context.cliUuid !== terminal.uuid || command.text !== message.text || !message.text || !['stdout', 'stderr'].includes(String(command.stream))) continue
+      if (seen.has(terminal.uuid)) duplicates.add(terminal.uuid)
+      seen.add(terminal.uuid)
+      if (selected.has(message.id)) rows.push({ component: 'CommandOutput', messageId: message.id, uuid: terminal.uuid, sessionId, text: message.text, start: 0, end: message.text.length, isErrored: command.stream === 'stderr' })
+      continue
+    }
     for (const [blockIndex, value] of (message.blocks ?? []).entries()) {
       if (!value || typeof value !== 'object') continue
       const block = value as Record<string, unknown>

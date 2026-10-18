@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from 'node:util'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import { claudeAssistantDisplayText } from '../../../common/claude-message-display.ts'
 import type { ClaudeUiControls } from './ui-controls.ts'
@@ -21,7 +22,12 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   return node
 }
 const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
-const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => sameSource(a, b) && (a.component === 'AssistantMessage' && b.component === 'AssistantMessage' ? a.isFirstOfReply === b.isFirstOfReply : a.component === 'UserMessage' && b.component === 'UserMessage' && a.isExpanded === b.isExpanded && JSON.stringify(a.origin) === JSON.stringify(b.origin))
+const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
+  if (!sameSource(a, b)) return false
+  if (a.component === 'AssistantMessage' && b.component === 'AssistantMessage') return a.isFirstOfReply === b.isFirstOfReply
+  if (a.component === 'UserMessage' && b.component === 'UserMessage') return a.isExpanded === b.isExpanded && JSON.stringify(a.origin) === JSON.stringify(b.origin)
+  return a.component === 'CommandOutput' && b.component === 'CommandOutput' && a.isErrored === b.isErrored
+}
 const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.isSummary ? row.text.trim() : row.text) : row.text
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
@@ -73,6 +79,7 @@ export function createClaudeTranscriptMessageHost(options: {
         try {
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid,
             props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
+              : entry.row.component === 'CommandOutput' ? { text: entry.row.text, isErrored: entry.row.isErrored }
               : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
           if (!valid(entry) || epoch !== entry.epoch) continue
           const drawing = createClaudeUiDrawing(result.tree, entry.fields)
@@ -82,7 +89,7 @@ export function createClaudeTranscriptMessageHost(options: {
           }
           stamp(drawing.tree)
           entry.drawing = drawing; entry.fields = drawing
-          entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
+          entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'CommandOutput' ? stripVTControlCharacters(result.props.text).trim() : entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()

@@ -14,7 +14,7 @@ function fixture(main = false) {
   const module = { call: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ type: 'text', value: '' })) }, commands = new Map<string, { name: string; type: string; load(): Promise<typeof module> }>()
   const command = (name: string) => { if (!commands.has(name)) commands.set(name, { type: name === 'context' ? 'local-jsx' : 'local', name, load: async () => module }); return commands.get(name)! }
   const binding = { messages: () => parentRows, commands: () => [...commands.values()], composer, toolContext: () => context, savedAgentMessages: async () => [] }
-  const native = { questionOptions: { q: () => sessionId }, commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: command, Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
+  const native = { commandTags: { Ms: () => null }, questionOptions: { q: () => sessionId }, commandInput: { IS: (text: string) => text.startsWith('/') ? { commandName: text.slice(1), args: '' } : null }, engine: { Rs: command, Cie: (command: { name: string }) => ({ command: command.name, args: '' }) }, commandOutput: { s4t: (text: string) => ({ message: { content: [{ type: 'text', text }] } }) }, gate: { _Jo: async () => {} }, runtime: { flt: () => ({ id: 'agent' }), GYt: (text: string) => ({ input: text, removed: { removedTotal: 0 } }) } }
   const enter = vi.fn(async () => {
     if (draft === '/compact') localJsx.show({ props: { title: 'Original parent confirmation', confirmLabel: 'Original confirm', onConfirm: confirm, onCancel: cancel } }, { commandName: 'compact' })
     else if (draft === '/usage') localJsx.show({ type: () => {}, props: {} }, { commandName: 'usage' })
@@ -65,7 +65,7 @@ it('returns a new matching parent command result without treating it as worker i
   const f = fixture()
   f.parentRows.push({ uuid: randomUUID(), type: 'system', subtype: 'local_command', content: 'Old output', commandRun: { command: 'cost', args: '' } })
   f.parentRows.push({ uuid: randomUUID(), type: 'system', subtype: 'local_command', content: 'Other output', commandRun: { command: 'help', args: '' } })
-  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/cost' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'cost', text: 'Original cost output' })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/cost' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'cost', text: 'Original cost output', isErrored: false })
   expect(f.rows).toHaveLength(0)
   expect(f.draft()).toBe('')
 })
@@ -89,7 +89,7 @@ it('scopes live panel input and original store dismissal by client, selection an
 
 it('observes JSX command text completion without requiring a panel or worker receipt', async () => {
   const f = fixture()
-  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' })
+  expect(await f.controller.dispatch(f.native, { client_id: 'client', text: '/context' }, new AbortController())).toEqual({ kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage', isErrored: false })
   expect(f.rows).toHaveLength(0)
 })
 
@@ -111,7 +111,7 @@ it('dispatches parent local commands while leaving ordinary prompts on their ori
   expect(f.enter).not.toHaveBeenCalled(); expect(f.composer.write).not.toHaveBeenCalled()
   const prepared = await f.controller.parentOperation(f.native, { client_id: 'client', text: '/context', operation: 'prepare' }), ticket = { client_id: 'client', command_id: prepared.id }
   await f.controller.parentOperation(f.native, { ...ticket, operation: 'start' })
-  await vi.waitFor(async () => expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage' } }))
+  await vi.waitFor(async () => expect(await f.controller.parentOperation(f.native, { ...ticket, operation: 'read' })).toMatchObject({ kind: 'finished', result: { kind: 'command_output', messageId: f.messageId, commandName: 'context', text: 'Native Context usage', isErrored: false } }))
   expect(f.rows).toHaveLength(0)
   await expect(f.controller.dispatch(f.native, { client_id: 'client', text: 'Worker input' }, new AbortController())).rejects.toThrow('No native Agent')
   const selected = fixture()

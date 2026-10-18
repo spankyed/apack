@@ -80,3 +80,23 @@ it('requires the exact observed Agent attachment and refuses stale, foreign, ret
   tasks.delete('registry-agent')
   expect(() => api.clientAttachmentViewKey(native, target)).toThrow('selection changed')
 })
+
+it('binds command callbacks to canonical live native command facts rather than journal header guesses', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const commandOutputFrames=new Map();')
+  const end = claudeTerminalUiRuntime.indexOf('function siteExists(', start)
+  const row = { uuid: 'result', type: 'system', subtype: 'local_command', content: 'original output', commandRun: { command: 'canonical-command', args: 'redacted-args' } }
+  let messages = [row]
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({commandOutputFrames,commandOutputFacts,currentCommandOutputAction})`, { Map, originalContext: { messages: () => messages } })
+  const native = { commandTags: { Ms: (_content: string, tag: string) => tag === 'local-command-stdout' ? 'Native output' : null }, commandEntities: { km: (text: string) => text }, questionOptions: { gu: 'empty' }, commandOutput: { s4t: () => ({ message: { content: 'Native output' } }) } }
+  const facts = api.commandOutputFacts(native, 'result')
+  expect(facts.props).toEqual({ command: 'canonical-command', args: 'redacted-args', text: 'Native output', isErrored: false })
+  const request = { component: 'CommandOutput', client_id: 'view', instance_id: 'result' }
+  expect(() => api.currentCommandOutputAction(native, request)).toThrow('expired')
+  api.commandOutputFrames.set(JSON.stringify(['view', 'result']), { fingerprint: facts.fingerprint })
+  expect(() => api.currentCommandOutputAction(native, request)).not.toThrow()
+  row.commandRun.args = 'changed'
+  expect(() => api.currentCommandOutputAction(native, request)).toThrow('expired')
+  messages = []
+  expect(api.commandOutputFacts(native, 'result')).toBeUndefined()
+  expect(() => api.currentCommandOutputAction(native, request)).toThrow('expired')
+})

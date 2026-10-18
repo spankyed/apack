@@ -80,7 +80,13 @@ export function mountClaudeUi(options: {
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
   const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
-  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => owner.readAgent ? selectClaudeAgentTranscriptRows(agent, owner.sessionId ?? '') : options.messages?.() ?? [], publish: () => publish(lastState) })
+  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => {
+    const rows = [...(owner.readAgent ? selectClaudeAgentTranscriptRows(agent, owner.sessionId ?? '') : options.messages?.() ?? [])]
+    // Native local output can remain live without ever entering the saved journal.
+    const output = agentInput?.status === 'command_output' ? agentInput.output : undefined
+    if (!owner.nativeView && owner.sessionId && output && !rows.some(row => row.uuid === output.messageId)) rows.push({ component: 'CommandOutput', messageId: output.messageId, uuid: output.messageId, sessionId: owner.sessionId, text: output.text, start: 0, end: output.text.length, isErrored: output.isErrored })
+    return rows
+  }, publish: () => publish(lastState) })
 
   const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => options.question?.(), current, publish: () => publish(lastState) })
 
@@ -226,10 +232,10 @@ export function mountClaudeUi(options: {
       if (owner.nativeView || !attached || !current()) throw new Error('Claude composer is not attached')
       if (!Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) throw new Error('A native command is pending')
       const prepared = await owner.handle.ui.prepareParentCommand({ client_id: client.client_id, text })
-      if (prepared.kind !== 'prepared') { if (current()) { agentInput = undefined; publish(lastState) } return prepared }
+      if (prepared.kind !== 'prepared') { if (current()) { agentInput = undefined; messages.refresh(); publish(lastState) } return prepared }
       if (hasReferences) throw new Error('Remove attachments or references before running a native command')
       if (!current()) throw new Error('Claude composer changed before command execution')
-      agentInput = { revision, status: 'pending' }; publish(lastState)
+      agentInput = { revision, status: 'pending' }; messages.refresh(); publish(lastState)
       const ticket = { client_id: client.client_id, command_id: prepared.id }
       try {
       let startError: unknown
@@ -254,7 +260,7 @@ export function mountClaudeUi(options: {
           else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: result }
           else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: result }
           else agentInput = { revision, status: 'done' }
-          publish(lastState)
+          messages.refresh(); publish(lastState)
         }
         return result
       }
@@ -262,7 +268,7 @@ export function mountClaudeUi(options: {
     },
     async submitAgent(revision: number, text: string) {
       if (!owner.nativeView || !current() || !Number.isSafeInteger(revision) || revision <= (agentInput?.revision ?? 0) || ['pending', 'confirmation', 'deciding', 'panel'].includes(agentInput?.status ?? '')) return
-      agentInput = { revision, status: 'pending' }; publish(lastState)
+      agentInput = { revision, status: 'pending' }; messages.refresh(); publish(lastState)
       try {
         await ready
         if (!attached || !current()) return
@@ -270,7 +276,7 @@ export function mountClaudeUi(options: {
         if (!current()) return
         if (result.kind === 'review') agentInput = { revision, status: 'review', review: { text: result.text, removed: result.removed } }
         else if (result.kind === 'panel') agentInput = { revision, status: 'panel', panel: { id: result.id, commandName: result.commandName } }
-        else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: { messageId: result.messageId, commandName: result.commandName, text: result.text, ...(result.outcome ? { outcome: result.outcome } : {}) } }
+        else if (result.kind === 'command_output') agentInput = { revision, status: 'command_output', output: { messageId: result.messageId, commandName: result.commandName, text: result.text, isErrored: result.isErrored, ...(result.outcome ? { outcome: result.outcome } : {}) } }
         else if (result.kind === 'blocked') agentInput = { revision, status: 'blocked', problem: result.message }
         else if (result.kind === 'confirmation') agentInput = { revision, status: 'confirmation', command: { id: result.id, title: result.title, confirmLabel: result.confirmLabel, ...(result.commandName ? { commandName: result.commandName } : {}) } }
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }

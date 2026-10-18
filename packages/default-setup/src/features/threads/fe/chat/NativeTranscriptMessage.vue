@@ -1,12 +1,12 @@
 <template>
-  <div ref="site" :data-native-assistant="frame.component === 'AssistantMessage' && !frame.isSummary ? frame.uuid : undefined" :data-native-summary="frame.component === 'AssistantMessage' && frame.isSummary ? frame.uuid : undefined" :data-native-user="frame.component === 'UserMessage' ? frame.uuid : undefined" class="min-w-0 outline-none" tabindex="-1"
+  <div ref="site" :data-native-assistant="frame.component === 'AssistantMessage' && !frame.isSummary ? frame.uuid : undefined" :data-native-summary="frame.component === 'AssistantMessage' && frame.isSummary ? frame.uuid : undefined" :data-native-command-output="frame.component === 'CommandOutput' ? frame.uuid : undefined" :data-native-user="frame.component === 'UserMessage' ? frame.uuid : undefined" class="min-w-0 outline-none" tabindex="-1"
     @compositionstart="composing = true" @compositionend="composing = false"
     @click="controlClick" @keydown="key" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
     <NativeUiNode v-if="frame.body.status === 'live'" :node="frame.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
-      <template #engine><pre v-if="frame.component === 'AssistantMessage' && frame.isSummary" class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ frame.displayText }}</pre><TiptapEditor v-else mode="viewer" variant="chat" :model-value="frame.displayText" /></template>
+      <template #engine><pre v-if="frame.component === 'CommandOutput'" class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" :class="frame.isErrored ? 'text-red-300' : 'text-neutral-300'">{{ frame.displayText }}</pre><pre v-else-if="frame.component === 'AssistantMessage' && frame.isSummary" class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ frame.displayText }}</pre><TiptapEditor v-else mode="viewer" variant="chat" :model-value="frame.displayText" /></template>
     </NativeUiNode>
     <template v-else>
-      <pre v-if="frame.component === 'AssistantMessage' && frame.isSummary" class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ frame.displayText }}</pre><TiptapEditor v-else mode="viewer" variant="chat" :model-value="frame.displayText" />
+      <pre v-if="frame.component === 'CommandOutput'" class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed" :class="frame.isErrored ? 'text-red-300' : 'text-neutral-300'">{{ frame.displayText }}</pre><pre v-else-if="frame.component === 'AssistantMessage' && frame.isSummary" class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ frame.displayText }}</pre><TiptapEditor v-else mode="viewer" variant="chat" :model-value="frame.displayText" />
       <span v-if="frame.body.status === 'error'" role="status" class="text-xs text-neutral-500">Claude message controls unavailable</span>
     </template>
   </div>

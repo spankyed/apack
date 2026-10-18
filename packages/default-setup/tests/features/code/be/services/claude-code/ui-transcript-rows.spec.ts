@@ -66,3 +66,14 @@ it('accepts composer provenance only with a matching native human journal identi
   expect(selectClaudeTranscriptRows([user], 'session', new Set(['app-user']))[0]).toMatchObject({ component: 'UserMessage', origin: { kind: 'composer' } })
   expect(selectClaudeTranscriptRows([{ ...user, context: { ...user.context, claudeTerminalMessage: { ...user.context.claudeTerminalMessage, uuid: 'foreign' } } }], 'session', new Set(['app-user']))).toEqual([])
 })
+
+it('binds command output to exact native history identity and rejects stale or duplicate sources', () => {
+  const command = { id: 'app-command', sender: 'assistant', text: 'Result', context: { cliUuid: 'native-command', claudeTerminalMessage: { uuid: 'native-command', sessionId: 'session' }, claudeNativeCommand: { kind: 'output', text: 'Result', stream: 'stderr' } } }
+  const selected = new Set(['app-command'])
+  expect(selectClaudeTranscriptRows([command], 'session', selected)).toEqual([{ component: 'CommandOutput', messageId: 'app-command', uuid: 'native-command', sessionId: 'session', text: 'Result', start: 0, end: 6, isErrored: true }])
+  expect(selectClaudeTranscriptRows([command], 'foreign', selected)).toEqual([])
+  expect(selectClaudeTranscriptRows([command], 'session', new Set())).toEqual([])
+  expect(selectClaudeTranscriptRows([{ ...command, text: 'Changed' }], 'session', selected)).toEqual([])
+  expect(selectClaudeTranscriptRows([{ ...command, context: { ...command.context, cliUuid: 'foreign' } }], 'session', selected)).toEqual([])
+  expect(selectClaudeTranscriptRows([command, { ...command, id: 'unmounted' }], 'session', selected)).toEqual([])
+})
