@@ -19,7 +19,7 @@ test('reviews native plans and preserves original mode, context and session choi
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
   await appPage.waitForTimeout(700)
   await app.navigate('default-setup/threads')
-  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: workspace!, phase: planScenario === 'enter' ? 'Edit' : 'Plan' })
+  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: workspace!, phase: ['enter', 'auto-enter'].includes(planScenario) ? 'Edit' : 'Plan' })
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
@@ -57,50 +57,70 @@ test('reviews native plans and preserves original mode, context and session choi
   await appPage.setViewportSize({ width: 680, height: 600 })
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
   const composer = card.locator('[contenteditable="true"]')
+  if (planScenario === 'accept-edits') {
+    await composer.pressSequentially('/cc-model')
+    await appPage.locator('.command-suggestion-popup').getByText('/cc-model', { exact: true }).click()
+    await composer.pressSequentially('haiku')
+    await card.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
+  }
   const ownerId = (await context()).native.state.ownerId
   await composer.fill('NativePlanFixtureSeedAlpha: Create the synthetic plan and request approval.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const panel = appPage.getByTestId('native-plan-panel')
-  await expect(panel).toBeVisible({ timeout: 15000 })
-  await expect.poll(async () => (await context()).claude.pendingControlRequest?.toolName).toBe(planScenario === 'enter' ? 'EnterPlanMode' : 'ExitPlanMode')
-  const initialPending = (await context()).claude.pendingControlRequest
+  let initialPending: any
   const edited = '# Synthetic native plan\n\nReviewed in apack. Keep the checks.\n'
-  const approves = ['enter', 'keep', 'clear', 'managed-clear', 'empty'].includes(planScenario)
+  const approves = ['enter', 'keep', 'keep-auto', 'accept-edits', 'clear', 'managed-clear', 'empty'].includes(planScenario)
   const clears = ['clear', 'managed-clear'].includes(planScenario)
-  if (!['enter', 'empty', 'withheld'].includes(planScenario)) await expect(panel.getByTestId('native-plan-preview')).toContainText('Synthetic native plan')
-  if (planScenario === 'withheld') { await expect(panel.getByTestId('native-plan-withheld')).toBeVisible(); await expect(panel.getByRole('button', { name: 'Approve plan', exact: true })).toHaveCount(0) }
-  if (planScenario === 'empty') await expect(panel).toContainText('No plan was provided')
-  if (['keep', 'clear', 'managed-clear'].includes(planScenario)) {
-    await panel.getByRole('button', { name: 'Edit plan', exact: true }).click()
-    await panel.getByRole('textbox', { name: 'Edit proposed plan', exact: true }).fill(edited)
-    await panel.getByRole('button', { name: 'Preview', exact: true }).click()
-    await expect(panel.getByTestId('native-plan-preview')).toContainText('Reviewed in apack')
-  }
-  if (planScenario !== 'enter') await panel.getByRole('textbox', { name: 'Plan feedback', exact: true }).fill('Keep the checks')
-  const choice = planScenario === 'enter' || planScenario === 'empty' ? 'yes' : clears ? 'yes-auto-clear-context' : 'yes-default-keep-context'
-  if (approves) await panel.locator('input[value="' + choice + '"]').check()
-  await appPage.setViewportSize({ width: 680, height: 900 })
-  await panel.locator('.body').evaluate(element => { element.scrollTop = 0 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-plan-' + planScenario + '-review.png') })
-  await appPage.setViewportSize({ width: 680, height: 600 })
-  if (approves) await panel.locator('input[value="' + choice + '"]').scrollIntoViewIfNeeded()
-  else await panel.getByRole('textbox', { name: 'Plan feedback', exact: true }).scrollIntoViewIfNeeded()
-  await expect.poll(() => panel.evaluate(element => Array.from(element.querySelectorAll('footer button')).every(button => { const r = button.getBoundingClientRect(); return r.height >= 28 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }))).toBe(true)
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-plan-' + planScenario + '-compact.png') })
-  const button = planScenario === 'cancel' ? 'Cancel' : approves ? planScenario === 'enter' ? 'Enter plan mode' : 'Approve plan' : 'Keep planning'
-  await panel.getByRole('button', { name: button, exact: true }).click()
-  await expect(panel).toBeHidden()
-  if (planScenario === 'cancel') await expect.poll(async () => (await context()).native?.state.status).toMatch(/^(exited|error)$/)
-  else {
-    if (clears) {
-      await expect.poll(async () => (await context()).sessionId, { timeout: 15000 }).not.toBe(sessionId)
-      expect((await context()).claude.previousSessionIds).toContain(sessionId)
+  const choice = planScenario === 'enter' || planScenario === 'empty' ? 'yes' : clears ? 'yes-auto-clear-context' : planScenario === 'accept-edits' ? 'yes-accept-edits-keep-context' : planScenario === 'keep-auto' ? 'yes-resume-auto-mode' : 'yes-default-keep-context'
+  let button = ''
+  if (planScenario !== 'auto-enter') {
+    await expect(panel).toBeVisible({ timeout: 15000 })
+    await expect.poll(async () => (await context()).claude.pendingControlRequest?.toolName).toBe(planScenario === 'enter' ? 'EnterPlanMode' : 'ExitPlanMode')
+    initialPending = (await context()).claude.pendingControlRequest
+    if (!['enter', 'empty', 'withheld'].includes(planScenario)) await expect(panel.getByTestId('native-plan-preview')).toContainText('Synthetic native plan')
+    if (planScenario === 'withheld') { await expect(panel.getByTestId('native-plan-withheld')).toBeVisible(); await expect(panel.getByRole('button', { name: 'Approve plan', exact: true })).toHaveCount(0) }
+    if (planScenario === 'empty') await expect(panel).toContainText('No plan was provided')
+    if (['keep', 'clear', 'managed-clear'].includes(planScenario)) {
+      await panel.getByRole('button', { name: 'Edit plan', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Edit proposed plan', exact: true }).fill(edited)
+      await panel.getByRole('button', { name: 'Preview', exact: true }).click()
+      await expect(panel.getByTestId('native-plan-preview')).toContainText('Reviewed in apack')
     }
-    const mode = planScenario === 'enter' ? 'plan' : approves ? clears ? 'auto' : 'default' : 'plan'
-    await expect.poll(async () => { const c = await context(); return [c.claude.permissionMode, c.native?.state.session?.permissionMode, c.native?.state.busy] }, { timeout: 15000 }).toEqual([mode, mode, false])
+    if (planScenario !== 'enter') await panel.getByRole('textbox', { name: 'Plan feedback', exact: true }).fill('Keep the checks')
+    if (approves) await panel.locator('input[value="' + choice + '"]').check()
+    await appPage.setViewportSize({ width: 680, height: 900 })
+    await panel.locator('.body').evaluate(element => { element.scrollTop = 0 })
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-plan-' + planScenario + '-review.png') })
+    await appPage.setViewportSize({ width: 680, height: 600 })
+    if (approves) await panel.locator('input[value="' + choice + '"]').scrollIntoViewIfNeeded()
+    else await panel.getByRole('textbox', { name: 'Plan feedback', exact: true }).scrollIntoViewIfNeeded()
+    await expect.poll(() => panel.evaluate(element => Array.from(element.querySelectorAll('footer button')).every(button => { const r = button.getBoundingClientRect(); return r.height >= 28 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }))).toBe(true)
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-plan-' + planScenario + '-compact.png') })
+    button = planScenario === 'cancel' ? 'Cancel' : approves ? planScenario === 'enter' ? 'Enter plan mode' : 'Approve plan' : 'Keep planning'
+    await panel.getByRole('button', { name: button, exact: true }).click()
+    await expect(panel).toBeHidden()
+    if (planScenario === 'cancel') await expect.poll(async () => (await context()).native?.state.status).toMatch(/^(exited|error)$/)
+    else {
+      if (clears) {
+        await expect.poll(async () => (await context()).sessionId, { timeout: 15000 }).not.toBe(sessionId)
+        expect((await context()).claude.previousSessionIds).toContain(sessionId)
+      }
+      const mode = planScenario === 'enter' ? 'plan' : approves ? clears || planScenario === 'keep-auto' ? 'auto' : planScenario === 'accept-edits' ? 'acceptEdits' : 'default' : 'plan'
+      await expect.poll(async () => { const c = await context(); return [c.claude.permissionMode, c.native?.state.session?.permissionMode, c.native?.state.busy] }, { timeout: 15000 }).toEqual([mode, mode, false])
+      expect((await context()).native.state.ownerId).toBe(ownerId)
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      if (approves) await expect.poll(async () => (await context()).phase).toBe(planScenario === 'enter' ? 'Plan' : 'Edit')
+      await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+      await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+      await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
+    }
+  } else {
+    await expect.poll(async () => { const c = await context(); return [c.claude.permissionMode, c.phase, c.native?.state.busy] }, { timeout: 15000 }).toEqual(['plan', 'Plan', false])
+    await expect(panel).toBeHidden()
     expect((await context()).native.state.ownerId).toBe(ownerId)
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    if (approves) await expect.poll(async () => (await context()).phase).toBe(planScenario === 'enter' ? 'Plan' : 'Edit')
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-plan-auto-enter.png') })
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
     await section.getByRole('button', { name: 'Stop session', exact: true }).click()
     await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
@@ -133,5 +153,5 @@ test('reviews native plans and preserves original mode, context and session choi
   expect((await context()).sessionId).toBe(finalSessionId)
   const resumedCost = (await context()).claude.totalCostUsd; expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: planScenario, nativePlanReview: true, nativePlanChoice: approves ? choice : planScenario === 'cancel' ? 'cancel' : 'no', nativePlanDecision: button, nativePlanCompactControls: true, nativePlanContextTransition: clears, nativePlanModeSynchronized: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, sessionId, finalSessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: planScenario, nativePlanReview: planScenario !== 'auto-enter', nativePlanWithoutDialog: planScenario === 'auto-enter', nativePlanChoice: planScenario === 'auto-enter' ? 'automatic' : approves ? choice : planScenario === 'cancel' ? 'cancel' : 'no', nativePlanDecision: button, nativePlanCompactControls: planScenario !== 'auto-enter', nativePlanContextTransition: clears, nativePlanModeSynchronized: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, sessionId, finalSessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }, null, 2))
 })

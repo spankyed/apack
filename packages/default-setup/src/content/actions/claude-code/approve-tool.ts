@@ -56,7 +56,6 @@ export async function action(
       expirePendingControlRequest(services, threadId, requestId);
       return { success: false, reason: 'Native approval changed or could not be answered' };
     }
-    if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') services.emitter.broadcastToPlugin('default-setup/threads', { type: 'SET_PHASE', threadId, phase: pending.toolName === 'EnterPlanMode' ? 'Plan' : 'Edit' });
     if (getClaudeState(services, threadId)?.pendingControlRequest?.requestId === requestId)
       persistClaudeState(services, threadId, { pendingControlRequest: undefined });
     return { success: true };

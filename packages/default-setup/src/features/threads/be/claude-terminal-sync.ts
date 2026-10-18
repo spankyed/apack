@@ -162,6 +162,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }
         repository.threadCommands.update(threadId, { context })
         broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+        if (state.status === 'live' && metadata?.permissionMode && metadata.permissionMode !== prior.permissionMode
+          && (metadata.permissionMode === 'plan' || prior.permissionMode === 'plan')) {
+          broadcastToPlugin('threads', { type: 'SET_PHASE', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
+        }
         updateChatState(threadId, chatState)
       } catch (error) {
         journalPending = false

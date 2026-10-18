@@ -132,3 +132,26 @@ it.each(['Read', 'Bash', 'ExitPlanMode'] as const)('retires %s approval on nativ
   expect(fake.messages[1]).toMatchObject({ blockResponse: { cancelled: true } })
   expect(fake.thread.context.claudeCode).toMatchObject({ pendingControlRequest: undefined })
 })
+
+it('publishes targeted Plan/Edit transitions from observed native mode without an approval callback', async () => {
+  let release!: () => Promise<void>
+  const metadata = { cwd: '/workspace', model: 'fixture', turns: 1, startedAt: 100, permissionMode: 'default' }
+  const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks: [], session: metadata }, busy: false,
+    getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [],
+    readJournal: async () => ({ entries: [], pending: false, problems: [] }), beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  try {
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ permissionMode: 'default' }))
+    metadata.permissionMode = 'plan'
+    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', threadId: 'thread', phase: 'Plan' }))
+    const before = fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE').length
+    await new Promise(resolve => setTimeout(resolve, 280))
+    expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before)
+    metadata.permissionMode = 'acceptEdits'
+    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', threadId: 'thread', phase: 'Edit' }))
+    metadata.permissionMode = 'auto'
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ permissionMode: 'auto' }))
+    expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before + 1)
+  } finally { await release() }
+})
