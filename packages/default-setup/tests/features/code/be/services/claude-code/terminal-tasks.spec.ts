@@ -79,3 +79,21 @@ it('refuses an ended teammate address so a reused name cannot receive the old ta
   await expect(f.request('send', 'worker@team')).rejects.toThrow('No live teammate')
   expect(f.runner).not.toHaveBeenCalled()
 })
+
+it('projects native detail counters with result precedence and completed paused duration', async () => {
+  const f = fixture()
+  Object.assign(f.tasks[0], { status: 'completed', prompt: 'Original prompt', model: 'native-model', effort: 'high', startTime: 1000, endTime: 5500, totalPausedMs: 500, progress: { tokenCount: 5, toolUseCount: 2 }, result: { totalTokens: 0, totalToolUseCount: 4 } })
+  expect((await f.request('inspect')).details.metadata).toEqual(expect.objectContaining({ prompt: 'Original prompt', promptTruncated: false, model: 'native-model', effort: 'high', elapsedMs: 4000, tokenCount: 0, toolUseCount: 4 }))
+})
+it('bounds original prompts/errors explicitly and omits invalid native numeric details', async () => {
+  const f = fixture()
+  Object.assign(f.tasks[0], { status: 'failed', prompt: 'p'.repeat(17000), error: 'e'.repeat(17000), startTime: NaN, progress: { tokenCount: -1, toolUseCount: Infinity } })
+  const metadata = (await f.request('inspect')).details.metadata
+  expect(metadata.prompt).toHaveLength(16384); expect(metadata.error).toHaveLength(16384)
+  expect(metadata).toEqual(expect.objectContaining({ promptTruncated: true, errorTruncated: true, elapsedMs: undefined, tokenCount: undefined, toolUseCount: undefined }))
+})
+
+it('retains native integer effort budgets in the displayed effort value', async () => {
+  const f = fixture(); Object.assign(f.tasks[0], { effort: 2048 })
+  expect((await f.request('inspect')).details.metadata.effort).toBe('2048')
+})

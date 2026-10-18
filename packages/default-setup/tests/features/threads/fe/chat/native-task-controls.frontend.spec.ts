@@ -39,3 +39,12 @@ it('closes only the task conversation on Escape and preserves its unsent text', 
   const toggle = f.root.querySelector<HTMLButtonElement>('button')!; expect(document.activeElement).toBe(toggle)
   toggle.click(); await nextTick(); expect(f.root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Unsent Agent instruction')
 })
+
+it('shows original native detail values, failed status and explicit shortened previews', async () => {
+  const f = await fixture()
+  f.state.value = { ...f.state.value, details: { ...f.state.value.details!, status: 'failed', metadata: { prompt: 'Original task prompt', promptTruncated: true, model: 'native-model', effort: 'high', elapsedMs: 4500, tokenCount: 0, toolUseCount: 4, error: 'Native failure', errorTruncated: true } } }; await nextTick()
+  const details = f.root.querySelector('[aria-label="Agent details"]')!
+  expect(details.textContent).toContain('native-model'); expect(details.textContent).toContain('high'); expect(details.textContent).toContain('4s'); expect(details.textContent).toContain('Tokens0'); expect(details.textContent).toContain('Tools4')
+  expect(f.root.querySelector('details')?.textContent).toContain('Original task prompt')
+  expect(f.root.textContent).toContain('Prompt preview shortened.'); expect(f.root.querySelector('[role="alert"]')?.textContent).toContain('Native failure')
+})

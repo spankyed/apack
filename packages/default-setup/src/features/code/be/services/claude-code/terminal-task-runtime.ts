@@ -48,5 +48,13 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
   if(text.length>budget){text=text.slice(-budget);truncated=true;}
   messages.unshift({role:row.type,text});budget-=text.length;if(!budget)break;
  }
- return {details:{taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,messages,truncated}};
+ const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined;
+ const prompt=typeof task.prompt==='string'?task.prompt:undefined,error=typeof task.error==='string'?task.error:undefined;
+ const start=numeric(task.startTime),end=numeric(task.endTime),paused=numeric(task.totalPausedMs)??0;
+ const metadata={prompt:prompt?.slice(0,16384),promptTruncated:(prompt?.length??0)>16384,
+  model:typeof task.model==='string'?task.model:undefined,effort:typeof task.effort==='string'?task.effort:numeric(task.effort)!==undefined?String(task.effort):undefined,
+  elapsedMs:start===undefined?undefined:Math.max(0,(end??Date.now())-start-paused),
+  tokenCount:numeric(task.result?.totalTokens??task.progress?.tokenCount),toolUseCount:numeric(task.result?.totalToolUseCount??task.progress?.toolUseCount),
+  error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
+ return {details:{taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,metadata,messages,truncated}};
 }`

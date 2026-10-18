@@ -28,6 +28,17 @@ export interface ClaudeNativeTaskDetails {
   name: string
   status: string
   canMessage: boolean
+  metadata?: {
+    prompt?: string
+    promptTruncated: boolean
+    model?: string
+    effort?: string
+    elapsedMs?: number
+    tokenCount?: number
+    toolUseCount?: number
+    error?: string
+    errorTruncated: boolean
+  }
   messages: { role: 'user' | 'assistant'; text: string }[]
   truncated: boolean
 }
