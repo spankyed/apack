@@ -1,4 +1,4 @@
-import type { ClaudeUiToolGroup, ClaudeUiComposerPlacement } from './ui-controls.ts'
+import type { ClaudeUiToolGroup, ClaudeUiComposerPlacement, ClaudeUiTerminalPlacement } from './ui-controls.ts'
 import { stripVTControlCharacters } from 'node:util'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import { claudeAssistantDisplayText } from '../../../common/claude-message-display.ts'
@@ -30,7 +30,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
-const composerRow = (row: ClaudeUiTranscriptRow) => row.component === 'Spinner' || row.component === 'SessionMode' || row.component === 'PromptHint'
+const composerRow = (row: ClaudeUiTranscriptRow) => row.component === 'Spinner' || row.component === 'SessionMode' || row.component === 'PromptHint' || row.component === 'TurnDuration' || row.component === 'InfoNotice'
 const rowKey = (row: ClaudeUiTranscriptRow) => JSON.stringify([row.component, row.uuid])
 const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && a.producerRevision === b.producerRevision && (a.component !== 'ToolResult' || b.component !== 'ToolResult' || a.blockIndex === b.blockIndex && a.resultUuid === b.resultUuid && a.assistantUuid === b.assistantUuid && a.tool === b.tool) && (a.component !== 'ToolUse' && a.component !== 'ToolProgress' || b.component !== 'ToolUse' && b.component !== 'ToolProgress' || a.blockIndex === b.blockIndex && a.assistantUuid === b.assistantUuid && a.resultUuid === b.resultUuid && a.activityStatus === b.activityStatus) && (a.component !== 'ToolGroup' || b.component !== 'ToolGroup' || a.blockIndex === b.blockIndex) && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
 const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
@@ -47,14 +47,14 @@ const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'A
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
-  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements'>
+  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements'>
   client: { client_id: string; surface: 'desktop' }
-  rows(groups: readonly ClaudeUiToolGroup[], composer: readonly ClaudeUiComposerPlacement[]): ClaudeUiTranscriptRow[]
+  rows(groups: readonly ClaudeUiToolGroup[], composer: readonly (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[]): ClaudeUiTranscriptRow[]
   current(): boolean
   publish(): void
 }) {
   const entries = new Map<string, Entry>()
-  let groups: ClaudeUiToolGroup[] = [], placements: ClaudeUiComposerPlacement[] = [], readingGroups=false, groupsAgain=false
+  let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
   let disposal: Promise<void> | undefined
   const releases = new Set<Promise<void>>()
@@ -101,8 +101,8 @@ export function createClaudeTranscriptMessageHost(options: {
       let next:ClaudeUiToolGroup[]=[]
       try { next=await options.ui.toolGroups(options.client.client_id) } catch { /* Retire unavailable native groups and retain ordinary tool widgets. */ }
       if(!current())return
-      let nextPlacements:ClaudeUiComposerPlacement[]=[]
-      try { nextPlacements=await options.ui.composerPlacements(options.client.client_id) } catch { /* Unavailable sources retire their drawings. */ }
+      let nextPlacements:(ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[]=[]
+      try { nextPlacements=[...await options.ui.composerPlacements(options.client.client_id),...await options.ui.terminalPlacements(options.client.client_id)] } catch { /* Unavailable sources retire their drawings. */ }
       if(!current())return
       if(JSON.stringify(next)!==JSON.stringify(groups)||JSON.stringify(nextPlacements)!==JSON.stringify(placements)){groups=next;placements=nextPlacements;refresh()}
     } finally { readingGroups=false;if(groupsAgain){groupsAgain=false;void refreshGroups()} }
@@ -182,12 +182,12 @@ export function createClaudeTranscriptMessageHost(options: {
     receive(line: Record<string, unknown>) {
       if (!current()) return
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
-        if(line.tool_groups===true||line.composer_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
+        if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
         const snapshot = line.client_snapshot === true
         if (snapshot && line.client_id !== options.client.client_id) return
         const sites = Array.isArray(line.instances) ? line.instances : undefined
         let changed = false
-        for (const entry of entries.values()) if (!entry.dirty && (!(snapshot || line.tool_groups === true || line.composer_placements === true) || !sites || sites.some(site => site.surface === 'desktop' && site.component === entry.row.component && site.instance_id === entry.row.uuid))) { retire(entry, snapshot); changed = true }
+        for (const entry of entries.values()) if (!entry.dirty && (!(snapshot || line.tool_groups === true || line.composer_placements === true || line.terminal_placements === true) || !sites || sites.some(site => site.surface === 'desktop' && site.component === entry.row.component && site.instance_id === entry.row.uuid))) { retire(entry, snapshot); changed = true }
         if (changed) publish()
         refreshPending = true; schedule()
       } else if (line.type === 'assistant' || (line.type === 'user' && line.isReplay === true) || (line.type === 'system' && line.subtype === 'init') || line.type === 'conversation_reset') {

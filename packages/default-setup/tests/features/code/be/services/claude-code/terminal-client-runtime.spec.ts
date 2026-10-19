@@ -49,3 +49,14 @@ it('does not run a sandbox callback if its instance closes during the original a
   host.release('view', 'ToolResult', 'result'); finish({ reached: { element: 'run' } })
   expect(await pending).toEqual({ handled: false }); expect(run).not.toHaveBeenCalled()
 })
+
+it('suspends only the changing composer instance while another window remains actionable',()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ const key=vi.fn(),host=create(()=>({acquire:()=>({release(){},subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsPointer:()=>false,acceptsKeys:()=>true,key}),dispose(){}}),()=>{},()=> 'callback')
+ const tree={type:'Client',props:{key:'client',module:'./client.ts'},client:{plugin:'fixture'}}
+ const first=host.render('first','PromptHint','prompt-hint',tree,1),second=host.render('second','PromptHint','prompt-hint',tree,1)
+ expect(()=>host.suspendInstance('first','PromptHint','prompt-hint')).not.toThrow()
+ expect(host.event('first',first.props.id,1,{kind:'key',key:'x'})).toEqual({handled:false})
+ expect(host.event('second',second.props.id,1,{kind:'key',key:'x'})).toEqual({handled:true})
+ host.detach()
+})

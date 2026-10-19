@@ -3,9 +3,9 @@ import { createClaudeTranscriptMessageHost } from '#features/code/be/services/cl
 import type { ClaudeUiTranscriptRow } from '#features/code/be/services/claude-code/ui-presentation.ts'
 function fixture(clientId = 'view') {
   let current = true, handle = 0
-  let rowSource: ((groups:readonly import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[],composer:readonly import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[])=>ClaudeUiTranscriptRow[])|undefined
+  let rowSource: Parameters<typeof createClaudeTranscriptMessageHost>[0]['rows']|undefined
   let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
-  const ui = { composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
+  const ui = { terminalPlacements:vi.fn(async()=>[]),composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
       { type: 'Input', props: { key: 'draft', value: '', label: 'Draft' }, press: { plugin: 'fixture', handle: ++handle } },

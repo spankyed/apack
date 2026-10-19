@@ -144,6 +144,7 @@ export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'ToolResult'; blockIndex: number; assistantUuid: string; resultUuid: string; tool: string; isErrored: boolean }
   | { component: 'CommandOutput'; isErrored: boolean }
   | { component: 'Spinner' | 'SessionMode' | 'PromptHint'; sourceRevision: string }
+  | { component: 'TurnDuration' | 'InfoNotice'; sourceRevision: string }
   | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {

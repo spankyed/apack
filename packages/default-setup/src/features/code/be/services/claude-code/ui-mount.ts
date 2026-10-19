@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -85,7 +85,11 @@ export function mountClaudeUi(options: {
     // Native local output can remain live without ever entering the saved journal.
     const output = agentInput?.status === 'command_output' ? agentInput.output : undefined
     if (!owner.nativeView && owner.sessionId && output && !rows.some(row => row.uuid === output.messageId)) rows.push({ component: 'CommandOutput', messageId: output.messageId, uuid: output.messageId, sessionId: owner.sessionId, text: output.text, start: 0, end: output.text.length, isErrored: output.isErrored })
-    if(owner.sessionId)for(const source of composer)rows.push({component:source.component,uuid:source.id,sourceRevision:source.revision,messageId:'composer',sessionId:owner.sessionId,text:'',start:0,end:0})
+    if(owner.sessionId)for(const source of composer){
+      const anchor='anchorIds' in source&&source.component==='TurnDuration'?source.anchorIds.map(id=>rows.find(row=>row.uuid===id||'resultUuid' in row&&row.resultUuid===id||'assistantUuid' in row&&row.assistantUuid===id)).find(Boolean):undefined
+      if(source.component==='TurnDuration'&&!anchor)continue
+      rows.push({component:source.component,uuid:source.id,sourceRevision:source.revision,messageId:anchor?.messageId??'composer',sessionId:owner.sessionId,text:'',start:0,end:0})
+    }
     return rows
   }, publish: () => publish(lastState) })
 
@@ -98,7 +102,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -207,7 +211,7 @@ export function mountClaudeUi(options: {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
       if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }
     }
-    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render' && line.tool_groups !== true && line.composer_placements !== true) {
+    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render' && line.tool_groups !== true && line.composer_placements !== true && line.terminal_placements !== true) {
       if (line.client_snapshot === true && line.client_id !== client.client_id) return
       invalidate(line.client_snapshot === true)
     }

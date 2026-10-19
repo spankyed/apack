@@ -7,11 +7,11 @@ const composerSignatures={
  vY:{component:'PromptHint',hash:'0e01508dc7198c1522cbf5658ec5b6b83f4ce8068ddeee35694dc501b6103dd5'}
 };
 function isComposerComponent(component){return component==='Spinner'||component==='SessionMode'||component==='PromptHint';}
-function nativeComposerInputs(n){
+function nativeComposerInputs(n,signatures=composerSignatures,maxIdLength=256,maxInstances=32){
  const root=n.themeRoots.ai().get(process.stdout)?.container?.current,pending=root?[root]:[],seen=new Set(),result=new Map();
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native composer traversal exceeded bound');seen.add(fiber);
-  const type=fiber.type,spec=typeof type==='function'&&Object.hasOwn(composerSignatures,type.name)?composerSignatures[type.name]:undefined;
+  const type=fiber.type,spec=typeof type==='function'&&Object.hasOwn(signatures,type.name)?signatures[type.name]:undefined;
   if(spec){
    let hash=composerFunctionHashes.get(type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(type)).digest('hex');composerFunctionHashes.set(type,hash);}
    if(hash===spec.hash){
@@ -19,15 +19,15 @@ function nativeComposerInputs(n){
     while(hook&&typeof hook==='object'&&!hooks.has(hook)){
      if(hooks.size>=128)throw Error('Native composer producer hook bound');hooks.add(hook);
      const value=hook.memoizedState,candidates=[value,...(Array.isArray(value)?value.slice(0,4):[])];
-     for(const input of candidates)if(input&&typeof input==='object'&&input.component===spec.component&&input.surface==='terminal'&&typeof input.requestId==='string'&&input.requestId.length>0&&input.requestId.length<=256&&input.props&&typeof input.props==='object'){
+     for(const input of candidates)if(input&&typeof input==='object'&&input.component===spec.component&&input.surface==='terminal'&&typeof input.requestId==='string'&&input.requestId.length>0&&input.requestId.length<=maxIdLength&&input.props&&typeof input.props==='object'){
       const raw=JSON.stringify(input.props);if(raw.length>65536)throw Error('Native composer props exceed limit');
       const factory=spec.slot===undefined?undefined:fiber.updateQueue?.memoCache?.data?.[0]?.[spec.slot];
       if(spec.slot!==undefined&&typeof factory!=='function')throw Error('Original composer default renderer cache changed');
       let factoryId=0;if(factory){if(!composerFactoryIds.has(factory))composerFactoryIds.set(factory,++composerFactorySequence);factoryId=composerFactoryIds.get(factory);}
       const key=JSON.stringify([spec.component,input.requestId]),fingerprint=createHash('sha256').update(JSON.stringify([raw,factoryId])).digest('hex'),prior=result.get(key);
       if(prior&&prior.fingerprint!==fingerprint)throw Error('Ambiguous original composer input');
-      result.set(key,{component:spec.component,id:input.requestId,input,props:JSON.parse(raw),factory,fingerprint});
-      if(result.size>32)throw Error('Native composer instance limit');
+      result.set(key,{component:spec.component,id:input.requestId,input,props:JSON.parse(raw),factory,fingerprint,fiber});
+      if(result.size>maxInstances)throw Error('Native composer instance limit');
      }
      hook=hook.next;
     }
@@ -65,7 +65,7 @@ function refreshNativeComposer(n){
  for(const client of clients){
   if(!clientViewCurrent(n,client))continue;
   const list=nativeComposerList(n,client,inputs),next=new Map(list.map(item=>[JSON.stringify([item.component,item.id]),item.revision])),prior=composerSeen.get(client),changed=[];
-  for(const [key,revision] of next)if(!prior||prior.get(key)!==revision){const [component,id]=JSON.parse(key);changed.push({surface:'desktop',component,instance_id:id});n.nativeClients.suspend(client,component,id);}
+  for(const [key,revision] of next)if(!prior||prior.get(key)!==revision){const [component,id]=JSON.parse(key);changed.push({surface:'desktop',component,instance_id:id});n.nativeClients.suspendInstance(client,component,id);}
   for(const key of prior?.keys()??[])if(!next.has(key)){const [component,id]=JSON.parse(key);n.nativeClients.release(client,component,id);composerFrames.delete(JSON.stringify([client,component,id]));changed.push({surface:'desktop',component,instance_id:id});}
   const second=Math.floor(Date.now()/1000);if(composerClocks.get(client)!==second){composerClocks.set(client,second);for(const item of list)if(item.component==='Spinner'&&!changed.some(value=>value.component===item.component&&value.instance_id===item.id))changed.push({surface:'desktop',component:item.component,instance_id:item.id});}
   composerSeen.set(client,next);

@@ -109,12 +109,33 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await expect(background).toBeVisible()
   await background.click()
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
+  if(process.env.CLAUDE_RESEARCH_TERMINAL_PLACEMENTS==='1')await writeFile(join(workspace!,'native-bash-release'),'released')
 
   await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe('synthetic protocol fixture\n')
   await expect.poll(async()=> (await progress.allTextContents()).join('')).toBe('')
   await expect(appPage.locator(`[data-native-tool-progress="${toolId}"]`).getByRole('button',{name:'Run in background',exact:true})).toHaveCount(0)
   await expect(composer).toHaveText('Keep my draft while a native tool runs')
   await expect(card.locator('[data-native-placement="Spinner"]')).toHaveCount(0)
+  let nativeTerminalPlacements=false
+  if(process.env.CLAUDE_RESEARCH_TERMINAL_PLACEMENTS==='1'){
+    const notice=appPage.locator('[data-native-placement="InfoNotice"]').first(),duration=appPage.locator('[data-native-placement="TurnDuration"]').last()
+    await expect(notice).toContainText('Native notice:')
+    await notice.getByRole('button',{name:'Inspect InfoNotice',exact:true}).click()
+    await expect.poll(async()=> (await readSnapshot('native-terminal-placement-action.json'))?.component).toBe('InfoNotice')
+    const noticeAction=await readSnapshot('native-terminal-placement-action.json');expect(noticeAction.surface).toBe('terminal');expect(noticeAction.requestId).toMatch(/^notice:/)
+    await appPage.screenshot({path:testInfo.outputPath('apack-native-notice-600.png')})
+    await expect(duration).toContainText('Native completion')
+    await duration.getByRole('button',{name:'Inspect TurnDuration',exact:true}).click()
+    await expect.poll(async()=> (await readSnapshot('native-terminal-placement-action.json'))?.component).toBe('TurnDuration')
+    const durationAction=await readSnapshot('native-terminal-placement-action.json');expect(durationAction.surface).toBe('terminal')
+    const durationFrame=await appPage.evaluate((id:string)=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).flatMap((view:any)=>view.state?.transcriptMessages??[]).find((frame:any)=>frame.component==='TurnDuration'&&frame.uuid===id),durationAction.requestId) as any
+    expect(durationFrame?.uuid).toBe(durationAction.requestId)
+    await expect(appPage.locator(`[data-chat-message="${durationFrame.messageId}"]`)).toHaveCount(1)
+    for(const height of [900,600]){await appPage.setViewportSize({width:680,height});await duration.scrollIntoViewIfNeeded();await expect(composer).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('apack-native-terminal-placements-'+height+'.png')})}
+    await expect(composer).toHaveText('Keep my draft while a native tool runs')
+    nativeTerminalPlacements=true
+  }
+
 
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   await writeFile(target, 'Preserved after denial')
@@ -153,5 +174,5 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeComposerPlacements: true, composerSourceIds, nativeBashAllow: true, nativeToolBackground: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeTerminalPlacements, nativeComposerPlacements: true, composerSourceIds, nativeBashAllow: true, nativeToolBackground: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

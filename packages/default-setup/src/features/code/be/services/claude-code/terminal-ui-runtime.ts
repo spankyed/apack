@@ -1,3 +1,4 @@
+import { claudeTerminalHistoryPlacementRuntime } from './terminal-history-placement-runtime.ts'
 import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
 import { claudeTerminalToolGroupRuntime } from './terminal-tool-group-runtime.ts'
 import { claudeTerminalToolProgressRuntime } from './terminal-tool-progress-runtime.ts'
@@ -22,6 +23,7 @@ const instanceLifetimes=createNativeInstanceLifetimes(scope=>{
  if(scope.component==='ToolUse')toolUseFrames.delete(key);
  if(scope.component==='ToolProgress')toolProgressFrames.delete(key);
  if(scope.component==='ToolGroup')toolGroupFrames.delete(key);
+ if(isTerminalPlacement(scope.component))terminalPlacementFrames.delete(JSON.stringify([scope.client_id,scope.component,scope.instance_id]));
  if(isComposerComponent(scope.component))composerFrames.delete(JSON.stringify([scope.client_id,scope.component,scope.instance_id]));
 });
 function publish(event){
@@ -197,6 +199,7 @@ ${claudeTerminalToolUseRuntime}
 ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
 ${claudeTerminalComposerRuntime}
+${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
 ${claudeTerminalParentCommandRuntime}
@@ -609,7 +612,7 @@ async function control(request,abort){
  if(['ui_press','ui_input','ui_select'].includes(request.subtype)&&request.instance_revision!==undefined&&!instanceLifetimes.active(request,request.instance_revision))return {handled:false};
  const toolGroupResult=runToolGroupAction(n,request,abort);if(toolGroupResult!==undefined)return toolGroupResult;
  const toolBackgroundResult=runToolBackgroundAction(n,request,abort);if(toolBackgroundResult!==undefined)return toolBackgroundResult;
- if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);currentToolUseAction(n,request);currentToolProgressAction(n,request);currentToolGroupAction(n,request);currentComposerAction(n,request);}
+ if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);currentToolUseAction(n,request);currentToolProgressAction(n,request);currentToolGroupAction(n,request);currentComposerAction(n,request);currentTerminalPlacementAction(n,request);}
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
@@ -809,6 +812,7 @@ async function control(request,abort){
   if(!clients.has(request.client_id)||typeof request.component!=='string'||!request.component||request.component.length>256||typeof request.instance_id!=='string'||!request.instance_id||request.instance_id.length>256)throw Error('Native UI instance owner is unavailable');
   const released=instanceLifetimes.retire(request,request.instance_revision);await n.nativeClients.settle(request.client_id,request.component,request.instance_id);return {released};
  }
+ if(request.subtype==='apack_ui_terminal_placements'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native terminal placement view is detached');return {placements:terminalPlacementList(n)};}
  if(request.subtype==='apack_ui_composer'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native composer view is detached');return {placements:nativeComposerList(n,request.client_id)};}
  if(request.subtype==='apack_ui_tool_groups'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native group view is detached');return {groups:nativeToolGroupList(n,request.client_id)};}
  if(request.subtype==='apack_ui_client'){if(!clients.has(request.client_id))throw Error('Native Client view is detached');await n.gate._Jo('desktop');return n.nativeClients.event(request.client_id,request.id,request.sequence,request.event);}
@@ -845,6 +849,7 @@ async function control(request,abort){
   for(const [key,frame] of toolUseFrames)if(frame.clientId===clientId)toolUseFrames.delete(key);
   for(const [key,frame] of toolProgressFrames)if(frame.clientId===clientId)toolProgressFrames.delete(key);
   for(const [key,frame] of toolGroupFrames)if(frame.clientId===clientId)toolGroupFrames.delete(key);
+  terminalPlacementSeen.delete(clientId);for(const[key]of terminalPlacementFrames)if(JSON.parse(key)[0]===clientId)terminalPlacementFrames.delete(key);
   composerSeen.delete(clientId);composerClocks.delete(clientId);for(const [key,frame] of composerFrames)if(frame.clientId===clientId)composerFrames.delete(key);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
@@ -878,6 +883,7 @@ async function control(request,abort){
   if(instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native UI instance expired before rendering');
   await n.gate._Jo('desktop');
   if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
+  if(isTerminalPlacement(value.component))return renderTerminalPlacement(n,value,clientId,instanceRevision,abort);
   const question=boundQuestion;
   let commandFacts,toolFacts,useFacts,progressFacts,groupFacts,composerFacts,engineOutput;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
@@ -986,8 +992,9 @@ async function control(request,abort){
  const clientRequest=instanceRevision===undefined?value:{...value,instance_revision:instanceRevision,component:request.component,instance_id:request.instance_id};
  const dispatched=await n.nativeClients.dispatchAction(clientId,clientRequest);if(dispatched!==undefined)return dispatched;
  const clientAction=n.nativeClients.action(clientId,clientRequest);if(clientAction===false)return {handled:false};
- if(instanceRevision!==undefined&&!clientAction){const held=n.engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==request.component||held.requestId!==request.instance_id)return {handled:false};}
- const args={plugin:value.plugin,handle:clientAction?.handle??value.handle,surface:'desktop',...(value.key!==undefined?{element:value.key}:{}),...(clientAction?{component:clientAction.component,requestId:clientAction.requestId}:{...(value.component!==undefined?{component:value.component}:{}),...(value.instance_id!==undefined?{requestId:value.instance_id}:{})})};
+ const terminalPlacement=isTerminalPlacement(request.component)?currentTerminalPlacementAction(n,request):undefined;
+ if(instanceRevision!==undefined&&!clientAction){const held=n.engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==request.component||held.requestId!==(terminalPlacement?.input.requestId??request.instance_id))return {handled:false};}
+ const args={plugin:value.plugin,handle:clientAction?.handle??value.handle,surface:terminalPlacement?'terminal':'desktop',...(value.key!==undefined?{element:value.key}:{}),...(clientAction?{component:clientAction.component,requestId:clientAction.requestId}:{...(value.component!==undefined?{component:value.component}:{}),...(value.instance_id!==undefined?{requestId:terminalPlacement?.input.requestId??value.instance_id}:{})})};
  const result=value.subtype==='ui_press'?await n.engine.I9e.press({...args,...(value.href!==undefined?{link:{href:value.href}}:{})}):value.subtype==='ui_input'?await n.engine.I9e.input({...args,kind:value.kind,value:value.value}):await n.engine.I9e.select({...args,value:value.value});
  return result===undefined?{handled:false}:{handled:true,element:result.element,...(value.subtype!=='ui_press'?{value:result.value}:{})};
 }
@@ -1005,7 +1012,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
@@ -1039,7 +1046,7 @@ const ownerTimer=setInterval(async()=>{
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
-  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);}
+  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshTerminalPlacements(native);}
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};

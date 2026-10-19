@@ -43,6 +43,7 @@
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
               </div>
               <div v-else class="w-full max-w-4xl px-4 py-4 mx-auto space-y-3" ref="messagesContent">
+                <NativeTerminalPlacements :frames="nativeUiDrawing?.composer" component="InfoNotice" @press="pressNativeUi" @field="editNativeUi" />
                 <!-- Load older messages -->
                 <div v-if="messagePagination.hasMore" class="flex justify-center py-3">
                   <button
@@ -60,9 +61,8 @@
                   <!-- Markdown, rendered without raw HTML -->
                   <TiptapEditor class="text-neutral-300 text-sm leading-relaxed" mode="viewer" variant="chat" :model-value="currentThread.instructions" />
                 </div>
+                <template v-for="message in visibleMessages" :key="message.id">
                 <ChatMessage
-                  v-for="message in visibleMessages"
-                  :key="message.id"
                   :message="message"
                   :native-frames="nativeUiDrawing?.transcriptMessages"
                   :native-view-id="nativeUiMount?.mountId"
@@ -80,6 +80,8 @@
                   @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
                   @toggle-compacted="handleToggleCompacted"
                 />
+                <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="message.id" @press="pressNativeUi" @field="editNativeUi" />
+                </template>
               </div>
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -186,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const quotes = [
