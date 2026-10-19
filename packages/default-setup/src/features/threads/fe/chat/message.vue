@@ -284,7 +284,7 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 const emit = defineEmits<ChatMessageEmits>()
 provide(claudeToolDrawings, {
   render: (component, toolUseId, fallback) => h(NativeToolDrawing, { component, toolUseId }, fallback),
-  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && (frame.component === 'ToolResult' || frame.component === 'ToolUse'))),
+  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && (frame.component === 'ToolResult' || frame.component === 'ToolUse' || frame.component === 'ToolProgress'))),
   press: (id, href) => emit('native-ui-press', id, href),
   field: event => emit('native-ui-field', event),
   view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },

@@ -86,6 +86,7 @@
             running
           </span>
         </div>
+        <NativeToolDrawing component="ToolProgress" :tool-use-id="entry.id" />
         <NativeToolDrawing v-if="entry.nativeResult" component="ToolResult" :tool-use-id="entry.id" class="mt-1">
           <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="entry.details?.output || entry.details?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
         </NativeToolDrawing>
@@ -136,7 +137,7 @@ const props = withDefaults(defineProps<Props>(), {
 const nativeDrawings = inject(claudeToolDrawings, undefined)
 // The owning message supplies its native renderer; this display block owns no feature UI.
 const NativeToolDrawing = defineComponent({
-  props: { toolUseId: { type: String, required: true }, component: { type: String as PropType<'ToolUse' | 'ToolResult'>, required: true } },
+  props: { toolUseId: { type: String, required: true }, component: { type: String as PropType<'ToolUse' | 'ToolResult' | 'ToolProgress'>, required: true } },
   setup(props, { slots }) { return () => nativeDrawings?.render(props.component, props.toolUseId, slots.default ?? (() => [])) ?? slots.default?.() },
 })
 

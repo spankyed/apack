@@ -46,7 +46,7 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
             const key = `tool-use:${item.id}`
             if (seen.has(key)) duplicates.add(key)
             seen.add(key)
-            if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) rows.push({ component: 'ToolUse', messageId: message.id, uuid: item.id, sessionId, text: typeof item.summary === 'string' ? item.summary : item.tool, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, activityStatus: String(item.status), ...(result?.sessionId === sessionId && typeof result.uuid === 'string' ? { resultUuid: result.uuid } : {}) })
+            if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) for (const component of ['ToolUse', 'ToolProgress'] as const) rows.push({ component, messageId: message.id, uuid: item.id, sessionId, text: typeof item.summary === 'string' ? item.summary : item.tool, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, activityStatus: String(item.status), ...(result?.sessionId === sessionId && typeof result.uuid === 'string' ? { resultUuid: result.uuid } : {}) })
           }
           if (!result || result.sessionId !== sessionId || typeof result.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(result.uuid) || typeof item.id !== 'string' || !item.id || item.id.length > 256 || typeof item.tool !== 'string' || !item.tool || item.tool.length > 256 || !['ok', 'error'].includes(String(item.status)) || typeof details?.output !== 'string') continue
           const key = `tool-result:${item.id}`
@@ -90,5 +90,5 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
       if (selected.has(message.id)) rows.push({ component: 'AssistantMessage', messageId: message.id, uuid: row.uuid, sessionId, text: row.text, start: row.start, end: row.end, isFirstOfReply: !apiId || first.get(apiId) === row.uuid })
     }
   }
-  return rows.filter(row => !duplicates.has(row.component === 'ToolResult' ? `tool-result:${row.uuid}` : row.component === 'ToolUse' ? `tool-use:${row.uuid}` : row.uuid))
+  return rows.filter(row => !duplicates.has(row.component === 'ToolResult' ? `tool-result:${row.uuid}` : (row.component === 'ToolUse' || row.component === 'ToolProgress') ? `tool-use:${row.uuid}` : row.uuid))
 }

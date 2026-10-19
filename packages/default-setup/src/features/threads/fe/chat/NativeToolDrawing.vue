@@ -15,7 +15,7 @@ import { computed, inject } from 'vue'
 import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import { parseClaudeStatus } from '#extensions/blocks/display/native-status-text.ts'
-const props = defineProps<{ component: 'ToolUse' | 'ToolResult'; toolUseId: string }>()
+const props = defineProps<{ component: 'ToolUse' | 'ToolResult' | 'ToolProgress'; toolUseId: string }>()
 const bridge = inject(claudeToolDrawings, undefined)
 const frame = computed(() => bridge?.frames.value.find(frame => frame.component === props.component && frame.uuid === props.toolUseId))
 const engineParts = computed(() => parseClaudeStatus(frame.value?.engineOutput ?? ''))

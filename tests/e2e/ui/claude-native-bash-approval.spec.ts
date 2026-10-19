@@ -78,7 +78,23 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-bash-compact.png') })
   await panel.getByRole('button', { name: 'Allow once', exact: true }).click()
   await expect(panel).toBeHidden()
+  const toolId='toolu_research_fixture_1'
+  const tools=appPage.locator('[data-native-tool-activity]').last()
+  const toggle=tools.getByRole('button').first()
+  if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()
+  const progress=tools.locator(`[data-native-tool-progress="${toolId}"] [data-native-tool-format]`)
+  await expect(progress).toContainText('Native background hint: (ctrl+b to run in background)')
+  const readSnapshot=async(file:string)=>{try{return JSON.parse(await readFile(join(workspace!,file),'utf8'))}catch{return undefined}}
+  await expect.poll(async()=> (await readSnapshot('native-bash-tool-use.json'))?.props?.isRunning).toBe(true)
+  const progressHook=await readSnapshot('native-bash-tool-progress.json')
+  expect(progressHook).toMatchObject({requestId:toolId,props:{tool_use_id:toolId,kind:'background_hint',hint:'(ctrl+b to run in background)'}})
+  await composer.fill('Keep my draft while a native tool runs')
+  await progress.scrollIntoViewIfNeeded()
+  await appPage.screenshot({path:testInfo.outputPath('apack-native-tool-running-progress.png')})
   await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe('synthetic protocol fixture\n')
+  await expect(progress).toHaveText('')
+  await expect(composer).toHaveText('Keep my draft while a native tool runs')
+
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   await writeFile(target, 'Preserved after denial')
   await requestBash(2)

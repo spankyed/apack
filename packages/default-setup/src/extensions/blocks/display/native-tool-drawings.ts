@@ -1,7 +1,7 @@
 import type { ComputedRef, InjectionKey, VNodeChild } from 'vue'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 export const claudeToolDrawings: InjectionKey<{
-  render(component: 'ToolUse' | 'ToolResult', toolUseId: string, fallback: () => VNodeChild): VNodeChild
+  render(component: 'ToolUse' | 'ToolResult' | 'ToolProgress', toolUseId: string, fallback: () => VNodeChild): VNodeChild
   frames: ComputedRef<ClaudeUiTranscriptFrame[]>
   press(id: string, href?: string): void
   field(event: ClaudeUiFieldEvent): void
