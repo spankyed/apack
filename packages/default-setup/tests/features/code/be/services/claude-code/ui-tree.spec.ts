@@ -224,3 +224,12 @@ it('admits document paint and bounded original Code output without changing stru
   expect(() => createClaudeUiDrawing({ type: 'Code', props: { source: 'x', _apackCodeAnsi: 1 } })).toThrow('drawing is invalid')
   expect(() => createClaudeUiDrawing({ type: 'Markdown', props: { text: 'x', _apackDocumentTheme: { text: '\n' } } })).toThrow('theme is invalid')
 })
+
+
+it.each(['wrap', 'end', 'middle', 'truncate', 'truncate-start', 'truncate-middle', 'truncate-end'])('preserves the declared native Text wrapping mode %s', wrap => {
+  expect(createClaudeUiDrawing({ type: 'Text', props: { wrap }, children: ['release ', { type: 'Text', props: { bold: true }, children: ['notes'] }] }).tree)
+    .toMatchObject({ kind: 'text', style: { wrap }, children: [{ text: 'release ' }, { text: 'notes', style: { bold: true } }] })
+})
+it.each(['ellipsis', 'wrap-stream', false, 0, {}])('rejects undeclared native Text wrapping mode %j', wrap => {
+  expect(() => createClaudeUiDrawing({ type: 'Text', props: { wrap }, children: ['notes'] })).toThrow('native Text style is invalid')
+})

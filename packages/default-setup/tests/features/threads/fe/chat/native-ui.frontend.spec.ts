@@ -1,3 +1,4 @@
+import { onTestFinished } from 'vitest'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
@@ -574,4 +575,32 @@ it('reveals the focused field label on viewport resize without moving focus from
   height = 100; resizeObservers.forEach(callback => callback())
   expect(site.scrollTop).toBe(140)
   expect(document.activeElement).toBe(draft)
+})
+
+it('truncates the original styled inline tree at measured width, redraws on resize and retires its measurement', async () => {
+  let width = 6
+  const oldRangeRect = Object.getOwnPropertyDescriptor(Range.prototype, 'getBoundingClientRect')
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value(this: Range) { return { width: this.toString().length } as DOMRect } })
+  onTestFinished(() => { if (oldRangeRect) Object.defineProperty(Range.prototype, 'getBoundingClientRect', oldRangeRect); else Reflect.deleteProperty(Range.prototype, 'getBoundingClientRect') })
+  const elementRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return { width: this.textContent === '…' ? 1 : width } as DOMRect
+  })
+  onTestFinished(() => elementRect.mockRestore())
+  const tree: ClaudeUiMountState = { status: 'live', tree: { kind: 'text', text: 'ab', style: { wrap: 'truncate-middle' }, children: [
+    { kind: 'text', text: 'cdef', style: { bold: true } },
+    { kind: 'link', href: 'https://example.test/notes', children: [{ kind: 'text', text: 'ghij', style: { italic: true } }] },
+  ] } }
+  const f = await mount({ nativeUi: tree })
+  const text = () => f.root.querySelector<HTMLElement>('[data-native-text-wrap="truncate-middle"]')!
+  await vi.waitFor(() => expect(text().textContent).toBe('abc…ij'))
+  expect(text().querySelector('a')?.textContent).toBe('ij')
+  expect(text().querySelector('a')?.getAttribute('href')).toBe('https://example.test/notes')
+  expect(text().querySelector('.font-semibold')?.textContent).toBe('c')
+  const input = f.root.querySelector('textarea')!; input.value = 'Keep my draft'
+  width = 8; resizeObservers.forEach(callback => callback()); await nextTick()
+  expect(text().textContent).toBe('abcd…hij')
+  expect(input.value).toBe('Keep my draft')
+  expect(JSON.stringify(tree.tree)).toContain('cdef')
+  app!.unmount(); app = undefined
+  expect(document.body.querySelector('[aria-hidden="true"][data-native-text-wrap]')).toBeNull()
 })

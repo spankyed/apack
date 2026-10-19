@@ -6,7 +6,7 @@
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
-  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="whitespace-pre-wrap break-words" :class="textClasses" :style="textPaint" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ node.text }}<NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
+  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="native-inline-text" :class="textClasses" :style="[textPaint, textLayout.layout.value]" :data-native-text-wrap="inlineParent ? undefined : node.style?.wrap" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ displayedText.text }}<NativeUiNode v-for="(child, index) in displayedText.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :style="{ color: claudeUiColor(node.color) }" :class="node.href ? 'underline focus-visible:outline focus-visible:outline-current' : undefined" @click.prevent="node.href && openLink(node.href)">
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </component>
@@ -35,12 +35,15 @@ import { claudeUiBoxPaint, claudeUiColor, claudeUiTextPaint, claudeTextPaint, ty
 import { claudeHoverSurface, claudeHoverBox } from './native-ui-hover.ts'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
+import { claudeInlineTextParent, useClaudeTextLayout } from './use-native-text-layout.ts'
 import type { ClaudeUiTextStyle } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
 const props = withDefaults(defineProps<{ node: ClaudeUiNode; scopeEnabled?: boolean }>(), { scopeEnabled: true })
 const surface = inject(claudeHoverSurface, undefined)
 const parentBox = inject(claudeHoverBox, computed(() => false))
 const inheritedPaint = inject(claudeTextPaint, computed<ClaudeTextPaint>(() => ({})))
+const inlineParent = inject(claudeInlineTextParent, computed(() => false))
+provide(claudeInlineTextParent, computed(() => inlineParent.value || props.node.kind === 'text'))
 const underPointer = ref(false)
 const hover = computed(() => 'hover' in props.node ? props.node.hover : undefined)
 const group = computed(() => hover.value?.group)
@@ -52,6 +55,7 @@ const overrides = computed(() => hot.value ? hover.value : undefined)
 let unregister: (() => void) | undefined
 let registeredElement: Element | undefined
 function hoverElement(value: Element | ComponentPublicInstance | null) {
+  textLayout.element.value = props.node.kind === 'text' && value instanceof HTMLElement ? value : undefined
   if (value === registeredElement) return
   unregister?.(); unregister = undefined; registeredElement = value instanceof HTMLElement ? value : undefined
   if (registeredElement instanceof HTMLElement && surface) unregister = surface.register({ element: registeredElement, underPointer, group })
@@ -108,6 +112,8 @@ const boxStyle = computed<CSSProperties>(() => {
   return { ...result, ...paint }
 })
 const textPaint = computed<CSSProperties>(() => ({ ...claudeUiTextPaint(logicalPaint.value), ...(overrides.value?.text?.bold !== undefined ? { fontWeight: overrides.value.text.bold ? 600 : 400 } : {}) }))
+const textLayout = useClaudeTextLayout(() => props.node, inlineParent, () => textPaint.value)
+const displayedText = computed(() => textLayout.display.value.kind === 'text' ? textLayout.display.value : { text: '', children: [] })
 const textClasses = computed(() => {
   if (props.node.kind !== 'text') return []
   const style = textStyle.value

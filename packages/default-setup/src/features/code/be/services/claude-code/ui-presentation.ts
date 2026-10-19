@@ -43,7 +43,10 @@ export interface ClaudeUiBoxPaint {
   backgroundColor?: string
 }
 
+export type ClaudeUiTextWrap = 'wrap' | 'end' | 'middle' | 'truncate' | 'truncate-start' | 'truncate-middle' | 'truncate-end'
+
 export interface ClaudeUiTextStyle {
+  wrap?: ClaudeUiTextWrap
   color?: string
   backgroundColor?: string
   size?: 'caption' | 'footnote' | 'body' | 'heading' | 'title'

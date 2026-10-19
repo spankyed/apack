@@ -116,8 +116,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
             style[name] = props[name]
           }
         }
-        const choices = { size: ['caption', 'footnote', 'body', 'heading', 'title'], weight: ['regular', 'medium', 'semibold', 'bold'], dir: ['ltr', 'rtl'] } as const
-        for (const name of ['size', 'weight', 'dir'] as const) {
+        const choices = { wrap: ['wrap', 'end', 'middle', 'truncate', 'truncate-start', 'truncate-middle', 'truncate-end'], size: ['caption', 'footnote', 'body', 'heading', 'title'], weight: ['regular', 'medium', 'semibold', 'bold'], dir: ['ltr', 'rtl'] } as const
+        for (const name of ['wrap', 'size', 'weight', 'dir'] as const) {
           const candidate = props[name]
           if (candidate !== undefined) {
             if (typeof candidate !== 'string' || !(choices[name] as readonly string[]).includes(candidate)) throw new ClaudeProtocolError('native Text style is invalid')
