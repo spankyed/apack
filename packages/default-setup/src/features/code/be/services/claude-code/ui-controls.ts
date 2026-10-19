@@ -1,3 +1,4 @@
+import type { ClaudePrintClientProjection } from './print-client-bridge.ts'
 import { z } from 'zod'
 import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host.ts'
 import { ClaudeProtocolError } from './errors.ts'
@@ -108,7 +109,8 @@ const parentCommandResult = z.discriminatedUnion('kind', [
 export type ClaudeParentCommandResult = z.infer<typeof parentCommandResult>
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
-export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>) {
+export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'register' | 'answers' | 'detach'>, printClients?: ClaudePrintClientProjection) {
+  async function admit() { if (!(await initialized).capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable') }
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
     const metadata = await initialized
     if (!metadata.capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable')
@@ -136,6 +138,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async releaseInstance(options: z.infer<typeof instanceRelease>) {
       const valid = instanceRelease.parse(options)
+      if (printClients) return printClients.release(valid)
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return { released: false }
       return z.object({ released: z.boolean() }).parse(await request({ subtype: 'apack_ui_release_instance', ...valid }))
     },
@@ -182,7 +185,8 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async clientEvent(options: {client_id:string;id:string;sequence:number;event:ClaudeUiClientInput}) {
       const valid=z.object({client_id:clientId,id:z.string().uuid(),sequence:z.number().int().positive().safe(),event:clientInput}).strict().parse(options)
-      return z.object({handled:z.boolean()}).parse(await request({subtype:'apack_ui_client',...valid}))
+      if (printClients) await admit()
+      return z.object({handled:z.boolean()}).parse(printClients ? await printClients.event(valid) : await request({subtype:'apack_ui_client',...valid}))
     },
     /** Register only a mounted composer; registration alone does not attach or create a process. */
     servePrompt(id: string, host: ClaudePromptHost): () => void {
@@ -198,11 +202,13 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     async detach(id: string) {
       const valid = clientId.parse(id)
       promptHosts?.detach(valid)
+      if (printClients) { try { await printClients.detach(valid) } catch { /* Original roster detachment still retires native ownership. */ } }
       return z.object({ detached: z.boolean(), surfaces }).passthrough().parse(await request({ subtype: 'ui_detach', client_id: valid }))
     },
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
-      return renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+      const frame = renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
+      return printClients ? renderResult.parse(await printClients.project(valid, frame)) : frame
     },
     /** Read on mount: a pane opened before stream arming produces no roster push. */
     async panes(id: string): Promise<ClaudeUiPaneRoster> {
@@ -245,17 +251,23 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     /** Native serializes callbacks per plugin; send the whole current draft on each edit. */
     async input(options: ClaudeUiInput) {
       const valid = input.parse(options)
-      return fieldResult.parse(await request({ subtype: 'ui_input', ...valid }))
+      let projected: unknown
+      if (printClients) { await admit(); projected = await printClients.action({ subtype: 'ui_input', ...valid }) }
+      return fieldResult.parse(projected ?? await request({ subtype: 'ui_input', ...valid }))
     },
     /** Native validates membership against the Select options in the current drawing. */
     async select(options: ClaudeUiSelect) {
       const valid = field.parse(options)
-      return fieldResult.parse(await request({ subtype: 'ui_select', ...valid }))
+      let projected: unknown
+      if (printClients) { await admit(); projected = await printClients.action({ subtype: 'ui_select', ...valid }) }
+      return fieldResult.parse(projected ?? await request({ subtype: 'ui_select', ...valid }))
     },
     /** Forward the capability issued in the current tree; a stale handle returns handled:false. */
     async press(options: ClaudeUiPress) {
       const valid = press.parse(options)
-      return z.object({ handled: z.boolean(), element: z.string().optional() }).passthrough().parse(await request({ subtype: 'ui_press', ...valid }))
+      let projected: unknown
+      if (printClients) { await admit(); projected = await printClients.action({ subtype: 'ui_press', ...valid }) }
+      return z.object({ handled: z.boolean(), element: z.string().optional() }).passthrough().parse(projected ?? await request({ subtype: 'ui_press', ...valid }))
     },
   }
 }

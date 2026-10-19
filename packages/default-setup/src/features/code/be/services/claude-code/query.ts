@@ -1,3 +1,4 @@
+import { prepareClaudePrintClients } from './print-client-bridge.ts'
 import { ClaudeModelCatalogSchema, type ClaudeModelCatalog } from './host-controls.ts'
 import { randomUUID } from 'node:crypto'
 import { createClaudePromptHosts } from './ui-prompt-host.ts'
@@ -134,12 +135,21 @@ export interface QueryHandle {
 export async function query(opts: QueryOptions): Promise<QueryHandle> {
   const hooks = createHookRegistry(opts.hooks)
   const args = argsFromOptions(opts)
-  const stream = await runner.spawnStream(args, {
-    cwd: opts.cwd,
-    env: opts.env,
-    signal: opts.signal,
-    cliPath: opts.cliPath,
-  })
+  let processId: number | undefined
+  const bunOptions = opts.env && Object.prototype.hasOwnProperty.call(opts.env, 'BUN_OPTIONS') ? opts.env.BUN_OPTIONS : process.env.BUN_OPTIONS
+  const printClients = await prepareClaudePrintClients({ bunOptions, currentPid: () => processId })
+  let stream: StreamHandle
+  try {
+    stream = await runner.spawnStream(args, {
+      cwd: opts.cwd,
+      env: { ...opts.env, BUN_OPTIONS: printClients.bunOptions },
+      signal: opts.signal,
+      cliPath: opts.cliPath,
+    })
+    processId = stream.child.pid
+  } catch (error) { await printClients.close(); throw error }
+  const closeClients = () => { processId = undefined; return printClients.close() }
+  stream.done().then(closeClients, closeClients).catch(() => {})
 
   const router = createControlRouter({
     onPermissionRequest: opts.onPermissionRequest,
@@ -261,7 +271,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
 
   return {
     pid: stream.child.pid,
-    ui: createClaudeUiControls(initialized, hostControls, promptHosts),
+    ui: createClaudeUiControls(initialized, hostControls, promptHosts, printClients.projection),
     initialized,
     sessionId: sessionId.promise,
     events: eventQueue,

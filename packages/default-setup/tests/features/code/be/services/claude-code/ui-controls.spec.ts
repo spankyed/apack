@@ -287,3 +287,34 @@ it('discovers only source-revision-bound composer placements on the native owner
  request.mockResolvedValue({placements:[{component:'Spinner',id:'native-agent',revision:'wrong'}]})
  await expect(ui.composerPlacements('view')).rejects.toThrow()
 })
+
+
+describe('print Client projection', () => {
+  const frame = { tree: { type: 'Text', children: ['original'] }, props: {}, rewritten: false, hooked: true }
+  const request = { client_id: 'print-client', surface: 'desktop' as const, component: 'AbovePrompt', instance_id: 'above', instance_revision: 2, props: {} }
+  const projection = () => ({ project: vi.fn(async (_request, value) => value), action: vi.fn(async () => undefined as unknown), event: vi.fn(async () => ({ handled: false })), release: vi.fn(async () => ({ released: true })), detach: vi.fn(async () => {}) })
+  it('projects only after original public admission and keeps private revisions off the native schema', async () => {
+    const bridge = projection(), native = vi.fn(async () => frame)
+    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
+    await expect(ui.render(request)).resolves.toEqual(frame)
+    expect(native).toHaveBeenCalledWith({ subtype: 'ui_render', client_id: 'print-client', surface: 'desktop', component: 'AbovePrompt', instance_id: 'above', props: {} })
+    expect(bridge.project).toHaveBeenCalledWith(request, frame)
+    native.mockRejectedValueOnce(Error('original admission refused'))
+    await expect(ui.render(request)).rejects.toThrow('original admission refused')
+    expect(bridge.project).toHaveBeenCalledTimes(1)
+    const { surface: _surface, props: _props, ...release } = request
+    await expect(ui.releaseInstance(release)).resolves.toEqual({ released: true })
+    expect(bridge.release).toHaveBeenCalledWith(release)
+  })
+  it('uses current Client actions without replaying them through public press and preserves native refusals', async () => {
+    const bridge = projection(), native = vi.fn(async () => ({ handled: true }))
+    bridge.action.mockResolvedValueOnce({ handled: false })
+    const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
+    const action = { client_id: 'print-client', surface: 'desktop' as const, plugin: 'fixture', handle: 42 }
+    await expect(ui.press(action)).resolves.toEqual({ handled: false }); expect(native).not.toHaveBeenCalled()
+    await expect(ui.press(action)).resolves.toEqual({ handled: true }); expect(native).toHaveBeenCalledTimes(1)
+    const unavailable = createClaudeUiControls(Promise.resolve({ capabilities: [] }), { request: native }, undefined, bridge)
+    await expect(unavailable.press(action)).rejects.toThrow('capability')
+    expect(bridge.action).toHaveBeenCalledTimes(2)
+  })
+})
