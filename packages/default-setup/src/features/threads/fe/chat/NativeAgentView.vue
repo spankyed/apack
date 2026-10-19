@@ -1,7 +1,7 @@
 <template>
-  <section v-show="active" aria-label="Focused Agent conversation" class="flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
+  <section v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
     <header class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
-      <div class="min-w-0"><p class="mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
+      <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
       <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner || selectedTask?.status !== 'running'" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
@@ -177,3 +177,11 @@ function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) act
 function host(value: ClaudePromptHostResponse) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
 onBeforeUnmount(() => { detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
 </script>
+
+<style scoped>
+@media (max-height: 700px) {
+  .native-agent-view > header { padding-top: .25rem; padding-bottom: .5rem; margin-bottom: .25rem; }
+  .native-agent-eyebrow { display: none; }
+  .native-agent-view > details { margin-bottom: 0; }
+}
+</style>
