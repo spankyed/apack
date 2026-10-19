@@ -1,13 +1,13 @@
 import {createApp,h,nextTick,provide,type App} from 'vue'
 import NativeUiClient from '#features/threads/fe/chat/NativeUiClient.vue'
-import {claudeClientInput} from '#features/threads/fe/chat/native-client-input.ts'
+import {claudeClientInput,claudeClientReturnFocus} from '#features/threads/fe/chat/native-client-input.ts'
 let app:App|undefined
 const pointer=(type:string,init:MouseEventInit&{pointerId:number})=>Object.assign(new MouseEvent(type,init),{pointerId:init.pointerId})
 const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
-async function mount(){
+async function mount(returnFocus?:()=>void){
  const send=vi.fn(),root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
+ app=createApp({setup(){provide(claudeClientInput,send);if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
  return {root,send,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
@@ -63,4 +63,11 @@ it('uses native space naming and releases Client focus on control-C/control-D wi
  expect(send).toHaveBeenCalledWith(id,{kind:'key',key:'space'});send.mockClear()
  for(const key of ['c','d']){region.focus();const event=new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true,cancelable:true});region.dispatchEvent(event);expect(document.activeElement).toBe(site);expect(event.defaultPrevented).toBe(false)}
  region.focus();region.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',bubbles:true,cancelable:true}));expect(send).not.toHaveBeenCalled()
+})
+
+it('returns terminal placement Client keyboard ownership to the composer without sending control keys',async()=>{
+ const target=document.createElement('input');document.body.append(target);const focus=vi.fn(()=>target.focus()),{root,region,send}=await mount(focus)
+ root.setAttribute('data-native-placement','InfoNotice');send.mockClear()
+ for(const key of ['Escape','c','d']){region.focus();const event=new KeyboardEvent('keydown',{key,ctrlKey:key!=='Escape',bubbles:true,cancelable:true});region.dispatchEvent(event);expect(document.activeElement).toBe(target);expect(event.defaultPrevented).toBe(true)}
+ expect(focus).toHaveBeenCalledTimes(3);expect(send).not.toHaveBeenCalled()
 })

@@ -98,3 +98,17 @@ it('rejects an asynchronous action spanning policy suspension and restoration',a
  finish({reached:{element:'run'}});expect(await pending).toEqual({handled:false});expect(run).not.toHaveBeenCalled()
  host.detach()
 })
+
+it('projects borrowed terminal Clients through native callbacks without creating or owning a sandbox',async()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ const registry=vi.fn(),key=vi.fn(),stop=vi.fn(),dispatch=vi.fn(),borrow=vi.fn(()=>({id:'original-terminal-client',surface:'terminal',callbackRequestId:'original-notice#clock',release(){},subscribe:()=>stop,getSnapshot:()=>({status:'drawn',tree:{type:'Button',props:{key:'run'},press:{plugin:'fixture',handle:45}}}),acceptsKeys:()=>true,acceptsPointer:()=>false,key}))
+ const host=create(registry,()=>{},()=> 'desktop-callback',{borrow,dispatch})
+ const frame=host.render('view','InfoNotice','bounded-app-id',{type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}},1)
+ expect(registry).not.toHaveBeenCalled();expect(host.surface('view',frame.props.id)).toBe('terminal')
+ expect(host.event('view',frame.props.id,1,{kind:'key',key:'k'})).toEqual({handled:true});expect(key).toHaveBeenCalledWith({key:'k'})
+ const action={subtype:'ui_press',plugin:'fixture',handle:45,key:'run',component:'InfoNotice',instance_id:'bounded-app-id',instance_revision:1}
+ expect(await host.dispatchAction('view',action)).toBeUndefined();expect(dispatch).not.toHaveBeenCalled()
+ expect(host.action('view',action)).toEqual({handle:45,component:'InfoNotice',requestId:'original-notice#clock',surface:'terminal'})
+ host.detach('view');expect(stop).toHaveBeenCalledOnce();expect(host.surface('view',frame.props.id)).toBeUndefined()
+ expect(host.event('view',frame.props.id,2,{kind:'key',key:'old'})).toEqual({handled:false})
+})

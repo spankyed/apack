@@ -217,7 +217,7 @@ function rotateQuote() {
 }
 
 import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
-import { claudeClientInput } from './native-client-input.ts'
+import { claudeClientInput, claudeClientReturnFocus } from './native-client-input.ts'
 import ChatMessage from './message.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
@@ -371,6 +371,7 @@ function detachNativeUi() {
   if (mount) { actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount }); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount }) }
   pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
+provide(claudeClientReturnFocus,()=>mainComposer.value?.focus())
 let nativeClientSequence=0
 provide(claudeClientInput,(id,event)=>{
  const mount=nativeUiMount.value;if(!mount)return

@@ -20,12 +20,13 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    if(entry&&(entry.module!==props.module||entry.instanceRevision!==instanceRevision)){drop(entry);entry=undefined;}
    if(!entry){
     if(entries.size>=512)throw Error('Native Client instance limit reached');
-    let registry=registries.get(client);if(!registry){registry=createRegistry();registries.set(client,registry);}
+    const borrowed=callbacks?.borrow?.({client,component,requestId,plugin,key:props.key,module:props.module});
+    let registry=registries.get(client);if(!borrowed&&!registry){registry=createRegistry();registries.set(client,registry);}
     let timers=new Set(),instance;
     const alive=()=>[...entries.values()].some(other=>(other===entry||instance?.id!==undefined&&other.client===client&&other.instance.id===instance.id)&&current(other));
-    try{instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else if(![...entries.values()].some(other=>other.timers===timers)){clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry.dispose(),0);timer.unref();}throw error;}
+    try{instance=borrowed??registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else if(![...entries.values()].some(other=>other.timers===timers)){clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}throw error;}
     const peer=instance.id===undefined?undefined:[...entries.values()].find(other=>other.client===client&&other.instance.id===instance.id);if(peer){for(const timer of timers)peer.timers.add(timer);timers=peer.timers;}
-    entry={plugin,timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
+    entry={plugin,borrowed:!!borrowed,surface:borrowed?.surface??'desktop',timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:borrowed?.callbackRequestId??clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
     entry.stop=instance.subscribe(()=>{if(entries.get(identity)===entry&&current(entry))invalidate(entry);});
     entries.set(identity,entry);tokens.set(entry.token,entry);
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
@@ -66,6 +67,7 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
  }
  async function dispatchAction(client,value){
   for(const entry of entries.values()){
+   if(entry.borrowed)continue;
    const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
    if(!ref||ref.plugin!==value.plugin||typeof ref.key!=='string'||ref.key!==value.key||ref.type==='Markdown')continue;
    if(!entry.enabled||!current(entry)||entry.instanceRevision!==undefined&&(value.instance_revision!==entry.instanceRevision||value.component!==entry.component||value.instance_id!==entry.requestId))return {handled:false};
@@ -93,8 +95,8 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
    const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===ref.type&&node.press?.plugin===ref.plugin&&(typeof ref.key==='string'?node.props?.key===ref.key:node.press.handle===value.handle))matches.push(node);for(const child of node.children??[])find(child);};
    find(snapshot.tree);
-   return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId}:false;
+   return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId,surface:entry.surface}:false;
   }
  }
- return {render,event,action,dispatchAction,settle(client,component,requestId){return settling.get(scopeOf(client,component,requestId))?.promise??Promise.resolve();},release(client,component,requestId){for(const entry of [...entries.values()])if(entry.scope===scopeOf(client,component,requestId))drop(entry);},suspendInstance(client,component,requestId){for(const entry of entries.values())if(entry.client===client&&entry.component===component&&entry.requestId===requestId)entry.enabled=false;},suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
+ return {render,event,action,dispatchAction,surface(client,id){const entry=tokens.get(id);return entry&&entry.client===client&&entry.enabled&&current(entry)?entry.surface:undefined;},settle(client,component,requestId){return settling.get(scopeOf(client,component,requestId))?.promise??Promise.resolve();},release(client,component,requestId){for(const entry of [...entries.values()])if(entry.scope===scopeOf(client,component,requestId))drop(entry);},suspendInstance(client,component,requestId){for(const entry of entries.values())if(entry.client===client&&entry.component===component&&entry.requestId===requestId)entry.enabled=false;},suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
 }`

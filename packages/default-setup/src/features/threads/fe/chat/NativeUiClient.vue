@@ -6,10 +6,11 @@
 </template>
 <script setup lang="ts">
 import {computed,inject,ref,onMounted,onBeforeUnmount,watch,nextTick,type CSSProperties} from 'vue'
-import {claudeClientInput} from './native-client-input.ts'
+import {claudeClientInput,claudeClientReturnFocus} from './native-client-input.ts'
 import type {ClaudeUiNode} from '#features/code/be/services/claude-code/ui-presentation.ts'
 import type {ClaudeUiClientInput} from '#features/code/be/services/claude-code/ui-controls.ts'
 const props=defineProps<{node:Extract<ClaudeUiNode,{kind:'client'}>}>()
+const returnFocus=inject(claudeClientReturnFocus,undefined)
 const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),measure=ref<HTMLElement|null>(null)
 const dimension=(value:number|string|undefined,unit:string)=>typeof value==='number'?`${value}${unit}`:value
 const style=computed<CSSProperties>(()=>({width:dimension(props.node.layout?.width,'ch')??'fit-content',height:dimension(props.node.layout?.height,'lh'),flexGrow:props.node.layout?.flexGrow,maxWidth:'100%'}))
@@ -23,8 +24,11 @@ function flush(){if(pending){send?.(props.node.id,pending);pending=undefined}}
 function capturedClick(event:MouseEvent){if(suppressPointerClick&&event.detail>0){suppressPointerClick=false;event.preventDefault();event.stopImmediatePropagation();focusClient(event)}}
 function focusClient(event:MouseEvent){if(props.node.keys&&event.target instanceof HTMLElement&&!event.target.closest('input,textarea,select'))region.value?.focus({preventScroll:true})}
 function key(event:KeyboardEvent){
- if(!props.node.keys||event.target!==region.value||event.isComposing||event.key==='Process'||event.key==='Dead'||event.key==='Escape')return
- if(event.ctrlKey&&['c','d'].includes(event.key.toLowerCase())){const site=region.value?.closest<HTMLElement>('.native-extension-surface');if(site)site.focus({preventScroll:true});else region.value?.blur();return}
+ if(event.target!==region.value||event.isComposing||event.key==='Process'||event.key==='Dead')return
+ const terminal=region.value?.closest('[data-native-placement="InfoNotice"],[data-native-placement="TurnDuration"]')
+ if(event.key==='Escape'){if(terminal&&returnFocus){event.preventDefault();event.stopPropagation();returnFocus();}return}
+ if(!props.node.keys)return
+ if(event.ctrlKey&&['c','d'].includes(event.key.toLowerCase())){const site=region.value?.closest<HTMLElement>('.native-extension-surface');if(site)site.focus({preventScroll:true});else if(terminal&&returnFocus){event.preventDefault();event.stopPropagation();returnFocus();}else region.value?.blur();return}
  if(['Shift','Control','Alt','Meta','AltGraph','CapsLock','NumLock','ScrollLock'].includes(event.key))return
  const names:Record<string,string>={' ':'space',ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Enter:'return',Tab:'tab',Backspace:'backspace',Delete:'delete',PageUp:'pageup',PageDown:'pagedown',Home:'home',End:'end'}
  const name=names[event.key]??event.key;if(name.length>32)return
