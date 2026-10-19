@@ -60,3 +60,41 @@ it('suspends only the changing composer instance while another window remains ac
  expect(host.event('second',second.props.id,1,{kind:'key',key:'x'})).toEqual({handled:true})
  host.detach()
 })
+
+it('suspends policy-revoked Clients and resumes their existing clocks with fresh input tokens',async()=>{
+ vi.useFakeTimers()
+ try{
+  const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+  let eligible=true;const ticks=vi.fn(),release=vi.fn(),key=vi.fn(),acquire=vi.fn((options:any)=>{options.clock.every(100,ticks);return{release,subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsPointer:()=>false,acceptsKeys:()=>true,key}})
+  const host=create(()=>({acquire,dispose(){}}),()=>{},()=> 'callback',{eligible:()=>eligible})
+  const tree={type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}}
+  const first=host.render('view','AbovePrompt','above',tree,1)
+  await vi.advanceTimersByTimeAsync(100);expect(ticks).toHaveBeenCalledTimes(1)
+  eligible=false;await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(1);expect(release).not.toHaveBeenCalled()
+  expect(host.event('view',first.props.id,1,{kind:'key',key:'x'})).toEqual({handled:false})
+  expect(()=>host.render('view','AbovePrompt','above',tree,1)).toThrow('no longer eligible')
+  host.render('view','AbovePrompt','above',{type:'Text',children:['default']},1)
+  await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(1)
+  eligible=true;await vi.advanceTimersByTimeAsync(100);expect(ticks).toHaveBeenCalledTimes(1)
+  const restored=host.render('view','AbovePrompt','above',tree,1)
+  expect(restored.props.id).not.toBe(first.props.id);expect(acquire).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(200);expect(ticks).toHaveBeenCalledTimes(3)
+  expect(host.event('view',first.props.id,2,{kind:'key',key:'x'})).toEqual({handled:false})
+  expect(host.event('view',restored.props.id,1,{kind:'key',key:'r'})).toEqual({handled:true});expect(key).toHaveBeenCalledOnce()
+  eligible=false;await vi.advanceTimersByTimeAsync(100)
+  host.detach();await vi.runOnlyPendingTimersAsync();expect(release).toHaveBeenCalledOnce();expect(vi.getTimerCount()).toBe(0)
+ }finally{vi.useRealTimers()}
+})
+
+it('rejects an asynchronous action spanning policy suspension and restoration',async()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ let eligible=true,finish!:(value:unknown)=>void
+ const run=vi.fn(),host=create(()=>({acquire:()=>({release(){},subscribe:()=>()=>{},getSnapshot:()=>({status:'drawn',tree:{type:'Button',props:{key:'run'},press:{plugin:'fixture',handle:1}}}),acceptsPointer:()=>false,acceptsKeys:()=>true}),dispose(){}}),()=>{},()=> 'callback',{eligible:()=>eligible,dispatch:()=>new Promise(resolve=>{finish=resolve}),run})
+ const tree={type:'Client',props:{key:'client',module:'./client.ts'},client:{plugin:'fixture'}}
+ host.render('view','AbovePrompt','above',tree)
+ const pending=host.dispatchAction('view',{subtype:'ui_press',plugin:'fixture',handle:1,key:'run'})
+ eligible=false;host.render('view','AbovePrompt','above',{type:'Text',children:['default']})
+ eligible=true;host.render('view','AbovePrompt','above',tree)
+ finish({reached:{element:'run'}});expect(await pending).toEqual({handled:false});expect(run).not.toHaveBeenCalled()
+ host.detach()
+})

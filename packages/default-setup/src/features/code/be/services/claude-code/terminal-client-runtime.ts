@@ -4,7 +4,8 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
  const scopeOf=(client,component,requestId)=>JSON.stringify([client,component,requestId]);
  function settleAfterRelease(scope){let pending=settling.get(scope);if(!pending){let resolve;const promise=new Promise(done=>{resolve=done;});pending={promise,resolve};settling.set(scope,pending);}if(pending.timer)clearTimeout(pending.timer);pending.timer=setTimeout(()=>{settling.delete(scope);pending.resolve();},0);pending.timer.unref();}
  const drop=entry=>{if(entries.get(entry.identity)!==entry)return;entries.delete(entry.identity);tokens.delete(entry.token);entry.stop();if(![...entries.values()].some(other=>other.timers===entry.timers)){for(const timer of entry.timers)clearInterval(timer);entry.timers.clear();}entry.instance.release();settleAfterRelease(entry.scope);if(![...entries.values()].some(other=>other.client===entry.client)){const registry=registries.get(entry.client);registries.delete(entry.client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}};
- function current(entry){try{if(callbacks?.current?.(entry)!==false)return true;}catch{}drop(entry);return false;}
+ function policySuspend(entry){if(entry.policySuspended)return;entry.policySuspended=true;entry.enabled=false;tokens.delete(entry.token);entry.frameRefs?.clear();}
+ function current(entry){try{if(callbacks?.current?.(entry)===false){drop(entry);return false;}if(callbacks?.eligible?.(entry)===false){policySuspend(entry);return false;}return !entry.policySuspended;}catch{}drop(entry);return false;}
  function render(client,component,requestId,tree,instanceRevision){
   const scope=scopeOf(client,component,requestId),seen=new Set();
   const visit=value=>{
@@ -15,18 +16,20 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    const identity=JSON.stringify([scope,plugin,props.key]);
    if(seen.has(identity))throw Error('Duplicate native Client key');seen.add(identity);
    let entry=entries.get(identity);
+   if(callbacks?.eligible?.({plugin,client,component,requestId})===false){if(entry)policySuspend(entry);throw Error('Native Client module is no longer eligible');}
    if(entry&&(entry.module!==props.module||entry.instanceRevision!==instanceRevision)){drop(entry);entry=undefined;}
    if(!entry){
     if(entries.size>=512)throw Error('Native Client instance limit reached');
     let registry=registries.get(client);if(!registry){registry=createRegistry();registries.set(client,registry);}
     let timers=new Set(),instance;
     const alive=()=>[...entries.values()].some(other=>(other===entry||instance?.id!==undefined&&other.client===client&&other.instance.id===instance.id)&&current(other));
-    try{instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else{clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry.dispose(),0);timer.unref();}throw error;}
+    try{instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else if(![...entries.values()].some(other=>other.timers===timers)){clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry.dispose(),0);timer.unref();}throw error;}
     const peer=instance.id===undefined?undefined:[...entries.values()].find(other=>other.client===client&&other.instance.id===instance.id);if(peer){for(const timer of timers)peer.timers.add(timer);timers=peer.timers;}
-    entry={timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
+    entry={plugin,timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
     entry.stop=instance.subscribe(()=>{if(entries.get(identity)===entry&&current(entry))invalidate(entry);});
     entries.set(identity,entry);tokens.set(entry.token,entry);
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
+   if(entry.policySuspended){entry.policySuspended=false;entry.token=randomUUID();entry.sequence=0;tokens.set(entry.token,entry);}
    entry.enabled=true;
    const snapshot=entry.instance.getSnapshot();
    entry.frameRefs??=new Map();
@@ -38,7 +41,7 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    return {type:'NativeClient',props:{id:entry.token,...(props.width!==undefined?{width:props.width}:{}),...(props.height!==undefined?{height:props.height}:{}),...(props.flexGrow!==undefined?{flexGrow:props.flexGrow}:{}),pointer:entry.instance.acceptsPointer(),keys:entry.instance.acceptsKeys()},part:{plugin},children};
   };
   const result=visit(tree);
-  for(const entry of [...entries.values()])if(entry.scope===scope&&!seen.has(entry.identity))drop(entry);
+  for(const entry of [...entries.values()])if(entry.scope===scope&&!seen.has(entry.identity)){current(entry);if(!entry.policySuspended)drop(entry);}
   return result;
  }
  function event(client,id,sequence,event){
@@ -69,8 +72,9 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    const type=value.subtype==='ui_press'?'Button':value.subtype==='ui_input'?'Input':value.subtype==='ui_select'?'Select':undefined;
    if(type!==ref.type)return {handled:false};
    const event=type==='Button'?{type:'press'}:type==='Input'?{type:'input',kind:value.kind,value:value.value}:{type:'select',value:value.value};
+   const actionToken=entry.token;
    const result=await callbacks.dispatch({plugin:ref.plugin,module:entry.module,key:entry.key,component:entry.component,requestId:entry.requestId,element:ref.key,event});
-   if(entries.get(entry.identity)!==entry||!entry.enabled||!current(entry)||!result?.reached)return {handled:false};
+   if(entries.get(entry.identity)!==entry||entry.token!==actionToken||!entry.enabled||!current(entry)||!result?.reached)return {handled:false};
    const reached=result.reached,snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return {handled:false};
    const matches=[];const find=node=>{if(!node||typeof node!=='object')return;if(node.type===type&&node.press?.plugin===ref.plugin&&node.props?.key===reached.element)matches.push(node);for(const child of node.children??[])find(child);};find(snapshot.tree);
    if(matches.length!==1)return {handled:false};const target=matches[0];

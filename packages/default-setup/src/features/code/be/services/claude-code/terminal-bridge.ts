@@ -40,6 +40,8 @@ export async function createClaudeTerminalBridge(options: {
   let mainCommand = command(options.settings.effective.statusLine) ?? null
   let subagentCommand = command(options.settings.effective.subagentStatusLine) ?? null
   let shellPrefix: string | null = null
+  const initialPolicy = options.settings.sources.find(source => source.source === 'policySettings' || source.source === 'policy')?.settings ?? {}
+  let helperPolicyKey = JSON.stringify([initialPolicy.allowManagedHooksOnly === true, initialPolicy.disableAllHooks === true, options.settings.effective.disableAllHooks === true])
   const generations = { main: randomUUID(), subagent: randomUUID() }
   const waiting: Record<string, unknown>[] = []
   let saveObserver: (() => Promise<void>) | undefined
@@ -51,6 +53,7 @@ export async function createClaudeTerminalBridge(options: {
   }
   const matches = (value: Record<string, unknown>) => value.kind === 'subagent' ? !!subagentCommand && value.command === subagentCommand : value.kind === 'main' && !!mainCommand && (value.command === mainCommand || value.command === prefixCommand(mainCommand))
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
+  let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
   let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
@@ -84,15 +87,22 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, { pending: !!pending, ...(pending?.entered ? { id: pending.id } : {}) }) : reply(409, {})
       if (request.url === '/poll') {
+        // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
+        if (nativePolling && value.directOwner !== true) return reply(200, {})
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
         if (value.metadata !== undefined && !parseClaudeTerminalMetadata(value.metadata)) return reply(400, {})
         for (const key of ['statusCommand', 'subagentCommand', 'shellPrefix']) if (value[key] !== undefined && value[key] !== null && (typeof value[key] !== 'string' || (value[key] as string).length > 32768)) return reply(400, {})
+        const policy = value.policy === undefined ? undefined : object(value.policy)
+        if (value.policy !== undefined && (!policy || typeof policy.allowManagedHooksOnly !== 'boolean' || typeof policy.disableAllHooks !== 'boolean') || value.hooksDisabled !== undefined && typeof value.hooksDisabled !== 'boolean') return reply(400, {})
+        const nextPolicyKey = policy ? JSON.stringify([policy.allowManagedHooksOnly, policy.disableAllHooks, value.hooksDisabled === true]) : helperPolicyKey
+        const policyChanged = nextPolicyKey !== helperPolicyKey
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
-        if (value.directOwner === true) busy = value.busy as boolean
+        helperPolicyKey = nextPolicyKey
+        if (value.directOwner === true) { nativePolling = true; busy = value.busy as boolean }
         const previous = { ...generations }
-        const mainChanged = changedSession || value.statusCommand !== undefined && mainCommand !== value.statusCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
-        const subChanged = changedSession || value.subagentCommand !== undefined && subagentCommand !== value.subagentCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
+        const mainChanged = policyChanged || changedSession || value.statusCommand !== undefined && mainCommand !== value.statusCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
+        const subChanged = policyChanged || changedSession || value.subagentCommand !== undefined && subagentCommand !== value.subagentCommand || value.shellPrefix !== undefined && shellPrefix !== value.shellPrefix
         if (value.statusCommand !== undefined) mainCommand = value.statusCommand as string | null
         if (value.subagentCommand !== undefined) subagentCommand = value.subagentCommand as string | null
         if (value.shellPrefix !== undefined) shellPrefix = value.shellPrefix as string | null
@@ -101,7 +111,7 @@ export async function createClaudeTerminalBridge(options: {
         if (mainChanged || subChanged) await saveObserver?.()
         for (const event of waiting.splice(0)) {
           const kind = event.kind as 'main' | 'subagent'
-          if (event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
+          if (!policyChanged && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
         if (changedSession) { nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
@@ -240,10 +250,15 @@ export async function createClaudeTerminalBridge(options: {
     const runtime = join(directory, 'status.mjs'), observerConfig = join(directory, 'observer.json')
     await writeFile(runtime, claudeTerminalStatusRuntime, { mode: 0o600 })
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
-    saveObserver = async () => {
-      const temporary = observerConfig + '.' + randomUUID() + '.tmp'
-      await writeFile(temporary, JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, originalBunOptions: options.bunOptions, generations }), { mode: 0o600 })
-      await rename(temporary, observerConfig)
+    let observerWrite = Promise.resolve()
+    saveObserver = () => {
+      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, originalBunOptions: options.bunOptions, generations })
+      observerWrite = observerWrite.catch(() => {}).then(async () => {
+        const temporary = observerConfig + '.' + randomUUID() + '.tmp'
+        await writeFile(temporary, snapshot, { mode: 0o600 })
+        await rename(temporary, observerConfig)
+      })
+      return observerWrite
     }
     await saveObserver()
     const bunOptions = (options.bunOptions ? options.bunOptions + ' ' : '') + '--preload=' + nativeQuote(runtime)
@@ -257,7 +272,7 @@ export async function createClaudeTerminalBridge(options: {
       on('classic.*',async($,e,next)=>{const result=await next(e);if(e.transcript_path&&e.session_id&&e.transcript_path.endsWith('/'+e.session_id+'.jsonl')){paths[e.session_id]=e.transcript_path;await send($,'/transcript',{sessionId:e.session_id,path:e.transcript_path}).catch(()=>{});}return result;});
       on('session.append',async($,e,next)=>{const sessionId=await $.session.id();const result=await next(e);if(!e.agentId&&result.message&&result.uuid)await send($,'/append',{sessionId,uuid:result.uuid,message:result.message,door:e.door,origin:e.origin,...(submission&&e.door==='prompt'?{submissionId:submission.id}:{})}).catch(()=>{});return result;});
       on('prompt.submit',async($,e,next)=>{const own=submission;try{const result=await next(e);if(own)await send($,'/submission',{id:own.id,...(typeof result.drop==='string'?{drop:result.drop}:{accepted:true})}).catch(()=>{});return result;}finally{if(submission===own)submission=undefined;}});
-      on('session.start',async($,e,next)=>{try{await send($,'/ui-ready',{});}catch{}if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const helpers=(policy.allowManagedHooksOnly||settings.disableAllHooks&&!policy.disableAllHooks)?policy:settings;const main=policy.disableAllHooks?null:helpers.statusLine;const sub=policy.disableAllHooks?null:helpers.subagentStatusLine;const statusCommand=main?.type==='command'&&typeof main.command==='string'?main.command:null;const subagentCommand=sub?.type==='command'&&typeof sub.command==='string'?sub.command:null;const shellPrefix=await $.env.get('CLAUDE_CODE_SHELL_PREFIX')??null;const command=await send($,'/poll',{agents,metadata,statusCommand,subagentCommand,shellPrefix});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=command.prepared===true;try{if(!filled){const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
+      on('session.start',async($,e,next)=>{try{await send($,'/ui-ready',{});}catch{}if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const helpers=(policy.allowManagedHooksOnly||settings.disableAllHooks&&!policy.disableAllHooks)?policy:settings;const main=policy.disableAllHooks?null:helpers.statusLine;const sub=policy.disableAllHooks?null:helpers.subagentStatusLine;const statusCommand=main?.type==='command'&&typeof main.command==='string'?main.command:null;const subagentCommand=sub?.type==='command'&&typeof sub.command==='string'?sub.command:null;const shellPrefix=await $.env.get('CLAUDE_CODE_SHELL_PREFIX')??null;const command=await send($,'/poll',{agents,metadata,statusCommand,subagentCommand,shellPrefix,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:settings.disableAllHooks===true});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=command.prepared===true;try{if(!filled){const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
       on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
       on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId)await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});return result;});
     }`

@@ -257,3 +257,56 @@ it('fences shared PTY Enter by native main or Agent view and refuses pending par
   expect(enter).toHaveBeenCalledTimes(2)
   await bridge!.close(); await rejected
 })
+
+it('rotates both helper generations across policy changes even when commands are identical',async()=>{
+ await create()
+ const main=await observed(),sub={...await observed('sub'),kind:'subagent',generation:(await config()).generations.subagent,tasks:[{id:'task',status:'running'}],stdout:'{"id":"task","content":"old decoration"}'}
+ await request('/poll',{sessionId:session,agents:[{id:'task',type:'worker',status:'running'}]})
+ await request('/native-status',main);await request('/native-status',sub)
+ const before=(await config()).generations
+ await request('/poll',{sessionId:session,agents:[{id:'task',type:'worker',status:'running'}],statusCommand:'main',subagentCommand:'sub',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ const after=(await config()).generations
+ expect(after.main).not.toBe(before.main);expect(after.subagent).not.toBe(before.subagent)
+ expect(bridge!.projection.mainStatus).toBeUndefined();expect(bridge!.projection.tasks[0].statusText).toBeUndefined()
+ expect((await request('/native-status',main)).status).toBe(409);expect((await request('/native-status',sub)).status).toBe(409)
+ expect((await request('/native-status',{...main,generation:after.main,startedAt:'200',stdout:'fresh policy output'})).status).toBe(200)
+ expect(bridge!.projection.mainStatus).toBe('fresh policy output')
+ await request('/poll',{sessionId:session,agents:[],policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})
+ expect((await request('/native-status',{...main,generation:after.main,startedAt:'300'})).status).toBe(409)
+})
+it('does not replay a queued helper result across a policy transition',async()=>{
+ await create()
+ const pending=await observed('next main')
+ expect((await request('/native-status',pending)).status).toBe(202)
+ await request('/poll',{sessionId:session,agents:[],statusCommand:'next main',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ expect(bridge!.projection.mainStatus).toBeUndefined()
+})
+
+it('stamps a real helper at spawn rather than after a policy change before stdin completion',async()=>{
+ let nativePid:number|undefined
+ const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('late pre-policy helper'))"
+ bridge=await createClaudeTerminalBridge({sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
+ const launcher=join(bridge.directory,'spawn-epoch.mjs'),started=join(bridge.directory,'spawned'),release=join(bridge.directory,'release')
+ await writeFile(launcher,`await import('./status.mjs');const{spawn}=await import('node:child_process');const{writeFileSync,existsSync}=await import('node:fs');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);let output='';child.stdout.on('data',chunk=>output+=chunk);child.once('close',code=>console.log(JSON.stringify({code,output})));writeFileSync(${JSON.stringify(started)},'started');const deadline=Date.now()+3000;while(!existsSync(${JSON.stringify(release)})&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));`)
+ const child=spawn(process.execPath,[launcher],{env:{...process.env,BUN_OPTIONS:bridge.bunOptions},stdio:['ignore','pipe','pipe']});nativePid=child.pid
+ let stdout='',stderr='';child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk)
+ const done=new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)})
+ try{
+  await vi.waitFor(async()=>expect(await readFile(started,'utf8')).toBe('started'),{timeout:3000})
+  const old=(await config()).generations.main
+  await request('/poll',{sessionId:session,agents:[],statusCommand:helper,policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+  expect((await config()).generations.main).not.toBe(old)
+  await writeFile(release,'released');expect(await done).toBe(0)
+  expect(JSON.parse(stdout)).toEqual({code:0,output:'late pre-policy helper'});expect(stderr).toBe('')
+  expect(bridge.projection.mainStatus).toBeUndefined()
+ }finally{if(child.exitCode===null)child.kill('SIGTERM');await done}
+},10000)
+
+it('does not let a late plugin poll roll back policy after native owner handoff',async()=>{
+ await create()
+ await request('/poll',{sessionId:session,agents:[],directOwner:true,busy:true,turn:null,statusCommand:'main',subagentCommand:'sub',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ const current=(await config()).generations
+ await request('/native-status',{...await observed(),stdout:'native policy output'})
+ expect((await request('/poll',{sessionId:session,agents:[],statusCommand:null,subagentCommand:null,policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})).status).toBe(200)
+ expect((await config()).generations).toEqual(current);expect(bridge!.projection.mainStatus).toBe('native policy output');expect(bridge!.busy).toBe(true)
+})

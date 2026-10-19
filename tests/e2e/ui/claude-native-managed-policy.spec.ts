@@ -65,6 +65,40 @@ test('keeps native status, submissions and history available under managed-only 
     const current = await context()
     expect(current.native.state.pid).toBe(ownerIdentity.pid); expect(current.native.state.ownerId).toBe(ownerIdentity.ownerId); expect(current.native.state.sessionId).toBe(sessionId)
   }
+  let nativePolicySameCommandEpochs=false,nativePolicyClientRetirement=false,nativePolicyDrawingRestoration=false
+  if(transition){
+    const readClient=async()=>JSON.parse(await readFile(join(workspace!,'native-policy-client.json'),'utf8'))
+    const observerPath=JSON.parse(await readFile(join(workspace!,'native-observer-path.json'),'utf8')).path
+    const generations=async()=>JSON.parse(await readFile(observerPath,'utf8')).generations
+    const client=card.locator('[data-native-client]').first(),notice=appPage.locator('[data-native-placement="InfoNotice"]').filter({hasText:'Policy notice:'}).first()
+    await expect(client).toContainText('Policy Client ticks=')
+    const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+    await client.focus();await client.press('p');await expect.poll(async()=> (await readClient()).key).toBe('p')
+    await expect(notice).toHaveCount(1)
+    const oldToken=await client.getAttribute('data-native-client'),before=await generations()
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:true}))
+    await expect(client).toHaveCount(0,{timeout:10000})
+    await expect(notice).toHaveCount(0,{timeout:10000})
+    await expect(appPage.locator('[data-native-placement="InfoNotice"]').filter({hasText:'Debug mode enabled'}).first()).toBeAttached()
+    await expect.poll(async()=> (await generations()).main!==before.main&&(await generations()).subagent!==before.subagent).toBe(true)
+    await expect(status).toContainText('AppNativeMain '+sessionId,{timeout:10000})
+    const stopped=await readClient();await appPage.waitForTimeout(350);expect((await readClient()).posts).toBe(stopped.posts)
+    const restricted=await generations()
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:false}))
+    await expect(client).toContainText('Policy Client ticks=',{timeout:10000})
+    await expect(notice).toHaveCount(1,{timeout:10000})
+    expect(await client.getAttribute('data-native-client')).not.toBe(oldToken)
+    await expect.poll(async()=> (await generations()).main!==restricted.main&&(await generations()).subagent!==restricted.subagent).toBe(true)
+    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+    await client.focus();await client.press('r');await expect.poll(async()=> (await readClient()).key).toBe('r')
+    await appPage.evaluate(token=>{const actor=(window as any).applicationState.system.get('default-setup/threads'),context=actor.getSnapshot().context;const[mountId]=Object.entries(context.nativeUiViews).find(([,view]:any)=>view.threadId===context.currentThread.id)!;actor.send({type:'CLAUDE_UI_CLIENT',mountId,threadId:context.currentThread.id,id:token,sequence:1000000,event:{kind:'key',key:'x'}})},oldToken)
+    await appPage.waitForTimeout(350);expect((await readClient()).key).toBe('r')
+    const resumed=await readClient();await expect.poll(async()=>(await readClient()).ticks).toBeGreaterThan(resumed.ticks)
+    await writeFile(join(workspace!,'native-policy-epoch-evidence.json'),JSON.stringify({before,restricted,restored:await generations(),stopped,oldToken,freshToken:await client.getAttribute('data-native-client'),fresh:await readClient()}))
+    nativePolicySameCommandEpochs=true;nativePolicyClientRetirement=true;nativePolicyDrawingRestoration=true
+    await appPage.screenshot({path:testInfo.outputPath('apack-managed-ui-restored.png')})
+    if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
+  }
   if (transition) {
     await policyEnabled(false)
     await appPage.screenshot({ path: testInfo.outputPath('apack-managed-policy-disabled.png') })
@@ -94,7 +128,7 @@ test('keeps native status, submissions and history available under managed-only 
     await expect(agentRow).toContainText('AppNativeAgent running', { timeout: 10000 })
     const restoredStatus = agentRow.getByText(/AppNativeAgent running/).first()
     await restoredStatus.scrollIntoViewIfNeeded()
-    await expect(restoredStatus).toBeInViewport()
+    await expect(restoredStatus).toBeInViewport({ratio:0.99})
     await appPage.screenshot({ path: testInfo.outputPath('apack-managed-agent-policy-restored.png') })
   }
 
@@ -133,5 +167,5 @@ test('keeps native status, submissions and history available under managed-only 
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, nativePolicyTransitions: !!transition, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeManagedPolicy: true, nativeRestrictionMode: restriction, nativePolicyTransitions: !!transition, nativePolicySameCommandEpochs,nativePolicyClientRetirement,nativePolicyDrawingRestoration, normalComposerNativeStatus: true, nativeAgentToolRowStatus: true, normalComposerReceipt: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedPrintCostSynchronized: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

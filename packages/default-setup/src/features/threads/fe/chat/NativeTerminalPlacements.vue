@@ -12,5 +12,6 @@ import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ frames?: ClaudeUiTranscriptFrame[]; component: 'TurnDuration' | 'InfoNotice'; messageId?: string }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
-const placements = computed(() => (props.frames ?? []).filter(frame => frame.component === props.component && (props.messageId === undefined || frame.messageId === props.messageId)))
+const visible = (node: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiNode): boolean => node.kind === 'box' || node.kind === 'link' ? node.children.some(visible) : node.kind === 'text' ? !!node.text.trim() || !!node.children?.some(visible) : node.kind !== 'unsupported' || node.component !== 'engine'
+const placements = computed(() => (props.frames ?? []).filter(frame => frame.component === props.component && (props.messageId === undefined || frame.messageId === props.messageId) && (frame.body.status !== 'live' || !!frame.engineOutput || visible(frame.body.tree))))
 </script>

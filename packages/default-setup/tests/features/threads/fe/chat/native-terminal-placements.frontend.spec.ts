@@ -16,3 +16,9 @@ it('renders native session notices separately from duration history',()=>{
  app=createApp({render:()=>h(NativeTerminalPlacements,{frames:[frame('duration','message','TurnDuration'),frame('notice','composer','InfoNotice')],component:'InfoNotice'})});app.mount(root)
  expect(root.querySelectorAll('[data-native-placement="InfoNotice"]')).toHaveLength(1);expect(root.querySelector('[data-native-placement="TurnDuration"]')).toBeNull()
 })
+
+it('removes the band when the native default is intentionally hidden',()=>{
+ const root=document.createElement('div');document.body.append(root);const value=frame('duration','message','TurnDuration');value.engineOutput='';value.body={status:'live',tree:{kind:'unsupported',component:'engine'}}
+ app=createApp({render:()=>h(NativeTerminalPlacements,{frames:[value],component:'TurnDuration',messageId:'message'})});app.mount(root)
+ expect(root.querySelector('[data-native-placement-band]')).toBeNull()
+})

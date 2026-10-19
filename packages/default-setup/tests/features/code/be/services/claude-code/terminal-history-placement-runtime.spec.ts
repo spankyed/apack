@@ -7,10 +7,10 @@ function fixture(component='TurnDuration'){
  const trusted=new Map([[Function.prototype.toString.call(Eg),'bae302522b9c14ab6c8c71b843f47f1c52e70b334e7a32d51b1f9e8c4132e451'],[Function.prototype.toString.call(yd),'b9e8fced6d2763d7e2373765523e8c6219f677ea5cdd8473f5c292ed9639787f']])
  const crypto=(algorithm:string)=>{let input='';return{update(value:string){input+=value;return this},digest(){return trusted.get(input)??createHash(algorithm).update(input).digest('hex')}}}
  const drawing={type:'native computed layout',props:{text:'Waiting for 2 background agents'}},cache:any[]=[];cache[component==='TurnDuration'?33:2]=drawing
- const source:any={component,id:component==='TurnDuration'?'duration':'notice:'+'x'.repeat(1000),input:{surface:'terminal',component,requestId:component==='TurnDuration'?'duration':'notice:'+'x'.repeat(1000),viewport:{columns:100,rows:30},props:component==='TurnDuration'?{word:'Worked',durationMs:1000}:{text:'A notice',command:'/model'}},fingerprint:'original-source',fiber:{child:{type:component==='TurnDuration'?Eg:yd,updateQueue:{memoCache:{data:[cache]}}}}}
+ const source:any={component,id:component==='TurnDuration'?'duration':'notice:'+'x'.repeat(1000),input:{surface:'terminal',component,requestId:component==='TurnDuration'?'duration':'notice:'+'x'.repeat(1000),viewport:{columns:100,rows:30},props:component==='TurnDuration'?{word:'Worked',durationMs:1000}:{text:'A notice',command:'/model'}},fingerprint:'original-source',fiber:{memoizedProps:{children:'A notice'},child:{memoizedProps:component==='TurnDuration'?{verb:'Rewritten',message:{durationMs:1000}}:{children:'A notice',command:'/model'},type:component==='TurnDuration'?Eg:yd,updateQueue:{memoCache:{data:[cache]}}}}}
  source.props=source.input.props
  const tree:any={type:'Box',children:[{type:'engine',ref:1},{type:'Button',props:{key:'inspect',label:'Inspect'},press:{plugin:'native',handle:2}}]},onScreen={first:0,last:1,of:2}
- const n={engine:{r5:{hostedButtonsOf:vi.fn(()=>[{hosted:902,button:{handle:2,tag:'Button',surface:'terminal',component,requestId:source.input.requestId}}])},vfe:{askedOnScreen:vi.fn(()=>onScreen),settled:vi.fn((_input:unknown)=>tree)},aK:{hasRenderHooksFor:()=>true,heldRenderInput:()=>({component,props:{...source.props,onScreen,word:'Rewritten'}})}},runtime:{ey:()=>({messages:()=>[{type:'assistant',uuid:'assistant'},{type:'user',uuid:'tool-result'},{type:'system',subtype:'turn_duration',uuid:'duration'}]})},nativeClients:{suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},staticRender:{v6e:vi.fn(async()=> 'Native computed layout')}}
+ const n={engine:{FPe:vi.fn(()=>true),r5:{hostedButtonsOf:vi.fn(()=>[{hosted:902,button:{handle:2,tag:'Button',surface:'terminal',component,requestId:source.input.requestId}}])},vfe:{askedOnScreen:vi.fn(()=>onScreen),settled:vi.fn((_input:unknown)=>tree)},aK:{hasRenderHooksFor:vi.fn(()=>true),heldRenderInput:()=>({component,props:{...source.props,onScreen,word:'Rewritten'}})}},runtime:{ey:()=>({messages:()=>[{type:'assistant',uuid:'assistant'},{type:'user',uuid:'tool-result'},{type:'system',subtype:'turn_duration',uuid:'duration'}]})},nativeClients:{suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},staticRender:{v6e:vi.fn(async()=> 'Native computed layout')}}
  const api=vm.runInNewContext(claudeTerminalHistoryPlacementRuntime+`;({list:terminalPlacementList,facts:terminalPlacementFacts,current:currentTerminalPlacementAction,render:renderTerminalPlacement,frames:terminalPlacementFrames,refresh:refreshTerminalPlacements})`,{createHash:crypto,nativeComposerInputs:()=>new Map([['source',source]]),composerFunctionHashes:new WeakMap(),composerFactoryIds:new WeakMap(),composerFactorySequence:0,nativeDrawingUsesEngine:(tree:any)=>JSON.stringify(tree).includes('engine'),originalContext:undefined,nativeThemeTree:(_n:unknown,tree:unknown)=>tree,nativeThemeProvider:()=>({type:'theme',value:{resolvedTheme:{text:'#fff'}}}),clients:new Set(['view']),clientViewCurrent:()=>true,publish:vi.fn(),instanceLifetimes:{active:()=>true}})
  return{api,n,source,tree,onScreen,cache,drawing}
 }
@@ -55,5 +55,22 @@ it('maps sandbox handles only to their uniquely hosted terminal owner',()=>{
  expect(facts.tree.children[1].press.handle).toBe(902)
  expect(f.n.engine.r5.hostedButtonsOf).toHaveBeenCalledWith('native','inspect')
  f.n.engine.r5.hostedButtonsOf.mockReturnValue([{hosted:903,button:{handle:2,tag:'Button',surface:'desktop',component:'InfoNotice',requestId:f.source.input.requestId}}])
+ expect(f.api.list(f.n)).toEqual([])
+})
+
+it('ignores revoked hook caches and waits for the original unmodified default to commit',()=>{
+ const f=fixture(),[item]=f.api.list(f.n),request={client_id:'view',component:'TurnDuration',instance_id:'duration'}
+ f.api.frames.set(JSON.stringify(['view','TurnDuration','duration']),{fingerprint:item.revision})
+ f.n.engine.aK.hasRenderHooksFor.mockReturnValue(false)
+ expect(f.api.list(f.n)).toEqual([])
+ expect(()=>f.api.current(f.n,request)).toThrow('changed or expired')
+ f.source.fiber.child.memoizedProps.verb='Worked'
+ const [restored]=f.api.list(f.n),facts=f.api.facts(f.n,'TurnDuration',restored.id)
+ expect(facts.tree).toEqual({type:'engine',ref:0});expect(facts.props.word).toBe('Worked')
+ expect(restored.revision).not.toBe(item.revision)
+})
+
+it('does not project cached parts from an ineligible plugin while another render hook remains eligible',()=>{
+ const f=fixture();f.tree.part={plugin:'revoked'};f.n.engine.FPe.mockReturnValue(false)
  expect(f.api.list(f.n)).toEqual([])
 })
