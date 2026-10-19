@@ -1,3 +1,4 @@
+import { claudeTerminalToolOutputRuntime } from './terminal-tool-output-runtime.ts'
 import { claudeTerminalInstanceRuntime } from './terminal-instance-runtime.ts'
 import { claudeTerminalParentCommandRuntime } from './terminal-parent-command-runtime.ts'
 import { claudeTerminalAgentInputRuntime } from './terminal-agent-input-runtime.ts'
@@ -80,7 +81,7 @@ function toolResultFacts(n,id,resultUuid,assistantUuid){
  if(row.sourceToolAssistantUUID!==undefined&&row.sourceToolAssistantUUID!==assistantUuid)return;
  const text=typeof content==='string'?content:Array.isArray(content)?content.filter(item=>item.type==='text').map(item=>item.text).join('\n'):'';
  if(text.length>65536||JSON.stringify(row.toolUseResult??null).length>65536)return;
- return {props:{tool_use_id:id,tool:call.name,output:row.toolUseResult,isErrored:block.is_error===true},text,fingerprint:JSON.stringify([assistantUuid,call,row.uuid,block,row.toolUseResult])};
+ return {message:row,messages,block,props:{tool_use_id:id,tool:call.name,output:row.toolUseResult,isErrored:block.is_error===true},text,fingerprint:JSON.stringify([assistantUuid,call,row.uuid,block,row.toolUseResult])};
 }
 function currentToolResultAction(n,request){
  if(request.component!=='ToolResult')return;
@@ -183,10 +184,11 @@ function paneRoster(n){
 }
 ${claudeTerminalInstanceRuntime}
 ${claudeTerminalClientRuntime}
+${claudeTerminalToolOutputRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
 ${claudeTerminalParentCommandRuntime}
-function nativeThemePalette(n,output=process.stdout){
+function nativeThemeProvider(n,output=process.stdout){
  const root=n.themeRoots.ai().get(output)?.container?.current,pending=root?[root]:[],seen=new Set();
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
@@ -194,12 +196,13 @@ function nativeThemePalette(n,output=process.stdout){
   if(fiber.type===n.themePreferences.dEn){
    const value=fiber.child?.memoizedProps?.value;
    if(!value?.resolvedTheme||typeof value.themeSetting!=='string'||typeof value.resolvedTheme.text!=='string')throw Error('Native mounted theme provider contract changed');
-   return value.resolvedTheme;
+   return {type:fiber.child.type,value};
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
  throw Error('Native theme provider is not mounted');
 }
+function nativeThemePalette(n,output=process.stdout){return nativeThemeProvider(n,output).value.resolvedTheme;}
 function nativeThemeTree(n,tree){
  const palette=nativeThemePalette(n);
  const paint=value=>{
@@ -247,6 +250,7 @@ async function initialize(){
   const commandInput=await import('/$bunfs/root/chunk-bkgw23zx.js');
   const commandOutput=await import('/$bunfs/root/chunk-1svntv7y.js');
   const commandTags=await import('/$bunfs/root/chunk-nhvhsxnt.js'),commandEntities=await import('/$bunfs/root/chunk-25a3z2dq.js');
+  const toolRendering=await import('/$bunfs/root/chunk-r2k35jby.js'),staticRender=await import('/$bunfs/root/chunk-mn4kxp8g.js'),appProvider=await import('/$bunfs/root/chunk-002p0hd2.js'),toolExport=await import('/$bunfs/root/chunk-ste1xxgx.js'),jsx=await import('/$bunfs/root/chunk-4hec5rn1.js');
   const themeRoots=await import('/$bunfs/root/chunk-pg10s5g1.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
@@ -276,7 +280,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,themeRoots,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -852,7 +856,7 @@ async function control(request,abort){
   await n.gate._Jo('desktop');
   if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
   const question=boundQuestion;
-  let commandFacts,toolFacts;
+  let commandFacts,toolFacts,engineOutput;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if(value.component==='AbovePrompt'||value.component==='Pane'){
    const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
@@ -883,7 +887,14 @@ async function control(request,abort){
   }
   if(toolFacts){
    if(toolResultFacts(n,value.instance_id,value.props.source_uuid,value.props.assistant_uuid)?.fingerprint!==toolFacts.fingerprint)throw Error('Native tool result changed while rendering');
-   const key=JSON.stringify([clientId,value.instance_id]);toolResultFrames.delete(key);toolResultFrames.set(key,{clientId,resultUuid:value.props.source_uuid,assistantUuid:value.props.assistant_uuid,fingerprint:toolFacts.fingerprint});
+   const key=JSON.stringify([clientId,value.instance_id]);
+   if(nativeDrawingUsesEngine(result.tree)){
+    const binding=originalContext??n.runtime.ey();
+    engineOutput=await formatNativeToolResult(n,toolFacts,result.props.output,{tools:binding.tools(),columns:value.viewport?.columns,signal:abort.signal});
+    if(!clientViewCurrent(n,clientId)||toolResultFacts(n,value.instance_id,value.props.source_uuid,value.props.assistant_uuid)?.fingerprint!==toolFacts.fingerprint)throw Error('Native tool result changed while formatting');
+    if(instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native UI instance expired while formatting');
+   }
+   toolResultFrames.delete(key);toolResultFrames.set(key,{clientId,resultUuid:value.props.source_uuid,assistantUuid:value.props.assistant_uuid,fingerprint:toolFacts.fingerprint});
    while(toolResultFrames.size>256)toolResultFrames.delete(toolResultFrames.keys().next().value);
   }
   let questionFrame;
@@ -902,7 +913,7 @@ async function control(request,abort){
   }
   refreshNativeTheme(n);
   recordDrawing(n,value,result.tree);
-  return {...(questionFrame?{question:questionFrame}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,result.tree,instanceRevision)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,result.tree,instanceRevision)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);

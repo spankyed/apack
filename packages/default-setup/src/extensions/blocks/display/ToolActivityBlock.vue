@@ -4,6 +4,7 @@
     <button
       type="button"
       class="w-full flex items-baseline gap-2 px-3 py-2 text-left hover:bg-neutral-700/40 transition-colors"
+      :aria-expanded="isOpen"
       @click="isOpen = !isOpen"
     >
       <ChevronRight

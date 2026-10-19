@@ -136,6 +136,7 @@ export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
   displayText: string
   outputRewritten?: boolean
+  engineOutput?: string
   body: { status: 'rendering' | 'error' } | { status: 'live'; tree: ClaudeUiNode }
 }
 

@@ -1375,8 +1375,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -1386,8 +1386,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -3110,6 +3110,7 @@ interface ClaudeUiTextStyle {
 type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
     displayText: string;
     outputRewritten?: boolean;
+    engineOutput?: string;
     body: {
         status: 'error' | 'rendering';
     } | {
@@ -10482,6 +10483,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
@@ -10490,6 +10492,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
@@ -10498,6 +10501,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">>, z.objectOutputType<{
@@ -10506,6 +10510,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
@@ -10514,6 +10519,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">>;

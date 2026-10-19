@@ -15,6 +15,7 @@ type Entry = {
   body: ClaudeUiTranscriptFrame['body']
   displayText: string
   outputRewritten?: boolean
+  engineOutput?: string
   drawing?: ClaudeUiDrawing
   fields?: ClaudeUiDrawing
   revisions: Map<string, number>
@@ -113,13 +114,14 @@ export function createClaudeTranscriptMessageHost(options: {
           entry.drawing = drawing; entry.fields = drawing
           entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'CommandOutput' ? stripVTControlCharacters(result.props.text).trim() : entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
           entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
+          entry.engineOutput = entry.row.component === 'ToolResult' ? result.engine_output : undefined
           if (entry.outputRewritten) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()
         } catch {
           if (!present(entry)) void release(entry)
-          if (present(entry) && epoch === entry.epoch) { entry.drawing = undefined; entry.fields = undefined; entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish() }
+          if (present(entry) && epoch === entry.epoch) fail(entry)
         }
       }
     } finally {
@@ -128,7 +130,7 @@ export function createClaudeTranscriptMessageHost(options: {
     }
   }
   function fail(entry: Entry) {
-    entry.outputRewritten = false
+    entry.outputRewritten = false; entry.engineOutput = undefined
     if (!present(entry)) return
     entry.epoch++; entry.dirty = false; entry.drawing = undefined; entry.fields = undefined
     entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish()
@@ -136,7 +138,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
     start() { started = true; refresh() },
     refresh,
     receive(line: Record<string, unknown>) {

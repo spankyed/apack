@@ -59,6 +59,23 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
   const composer = card.locator('[contenteditable="true"]')
   const target = join(workspace!, 'file-fixture.txt')
+  const formattedResults: { turn: number; id: string; text: string }[] = []
+  async function toolBlock(id: string) {
+    let owner: { messageId: string; index: number } | undefined
+    await expect.poll(async () => {
+      owner = await appPage.evaluate(id => {
+        const messages = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.messages ?? []
+        for (const message of messages) {
+          const blocks = (message.blocks ?? []).filter((block: any) => block.type === 'tool-activity')
+          const index = blocks.findIndex((block: any) => block.props.entries?.some((entry: any) => entry.id === id && entry.nativeResult?.uuid))
+          if (index >= 0) return { messageId: message.id, index }
+        }
+      }, id)
+      return !!owner
+    }).toBe(true)
+    return appPage.locator(`[data-chat-message="${owner!.messageId}"] [data-native-tool-activity]`).nth(owner!.index)
+  }
+
   for (const turn of [1, 2, 3, 4, 5, 6, 7]) {
     const isEdit = [3, 5, 7].includes(turn)
     await composer.fill('ResearchFileTurn' + turn)
@@ -94,6 +111,32 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     else await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     const expected = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : 'edited\n'
     await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe(expected)
+    if (turn >= 2 && turn <= 6) {
+      const block = await toolBlock(`file_fixture_${turn}`)
+      const toggle = block.getByRole('button').first()
+      if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+      const result = block.locator(`[data-native-tool-result="file_fixture_${turn}"] [data-native-tool-format]`)
+      if (turn === 4) await writeFile(join(workspace!, 'native-tool-denial-diagnostic.json'), JSON.stringify(await appPage.evaluate(() => ({ messages: (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.messages, views: (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews }))))
+      await expect(result).toBeVisible()
+      const text = await result.innerText()
+      if (turn === 2) expect(text).toContain('overwrite')
+      else if (turn === 3) {
+        expect(text).toContain('edited'); expect(text).toContain('overwrite')
+        const readBlock = await toolBlock('file_read_3')
+        const readToggle = readBlock.getByRole('button').first()
+        if (await readToggle.getAttribute('aria-expanded') !== 'true') await readToggle.click()
+        const read = readBlock.locator('[data-native-tool-result="file_read_3"] [data-native-tool-format]')
+        await expect(read).toContainText('Read 2 lines')
+        formattedResults.push({ turn, id: 'file_read_3', text: await read.innerText() })
+        await readToggle.click()
+      } else expect(text).toMatch(/rejected|denied|Error:/i)
+      formattedResults.push({ turn, id: `file_fixture_${turn}`, text })
+      if (turn === 3 || turn === 4) {
+        await result.scrollIntoViewIfNeeded()
+        await appPage.screenshot({ path: testInfo.outputPath(`apack-native-tool-formatted-${turn}.png`) })
+      }
+      await toggle.click()
+    }
     if (turn === 1) {
       const savedSplit = await appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.panelSizes)
       expect(savedSplit.chatMaximized ?? false).toBe(false)
@@ -101,7 +144,9 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       const tools = appPage.locator('[data-native-tool-activity]').last()
       await tools.getByRole('button').first().click()
       const result = tools.locator('[data-native-tool-result]')
-      await expect(result).toContainText('Rewritten native tool result')
+      await expect(result.locator('[data-native-tool-format]')).toContainText('Rewritten native tool result')
+      await expect(result.locator('[data-native-tool-format]')).toContainText('Wrote 1 line')
+      formattedResults.push({ turn, id: 'file_fixture_1', text: await result.locator('[data-native-tool-format]').innerText() })
       const id = await result.getAttribute('data-native-tool-result')
       await composer.fill('Keep my draft while inspecting a native tool result')
       await result.getByRole('button', { name: 'Inspect native tool result', exact: true }).click()
@@ -238,5 +283,6 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-tool-formatted-results.json'), JSON.stringify(formattedResults, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeToolFormatting: true, nativeToolFormattingErrors: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

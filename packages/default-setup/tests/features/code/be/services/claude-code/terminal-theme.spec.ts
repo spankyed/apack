@@ -6,7 +6,7 @@ function fixture(){
  const provider=()=>{},output={},value={themeSetting:'custom:research',get resolvedTheme(){return palette}}
  const root={container:{current:{type:provider,child:{memoizedProps:{value}}}}}
  const n={themeRoots:{ai:()=>new Map([[output,root]])},themePreferences:{dEn:provider}}
- const start=claudeTerminalUiRuntime.indexOf('function nativeThemePalette('),end=claudeTerminalUiRuntime.indexOf('async function initialize(){',start)
+ const start=claudeTerminalUiRuntime.indexOf('function nativeThemeProvider('),end=claudeTerminalUiRuntime.indexOf('async function initialize(){',start)
  const methods=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';({draw:nativeThemeTree,refresh:refreshNativeTheme,palette:nativeThemePalette})',{clients,publish,process:{stdout:output}})
  return{n,clients,publish,read:(context:unknown)=>methods.palette(context),draw:(tree:unknown)=>methods.draw(n,tree),refresh:()=>methods.refresh(n),change(){palette={...palette,success:'#998877'}}}
 }
