@@ -1,6 +1,6 @@
 <template>
   <!-- History scrolls inside the assigned pane; only its authored minimum affects the shell split. -->
-  <div class="flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { minHeight: 'min(28rem, calc(100vh - 3rem))' } : {}) }">
+  <div class="flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { minHeight: nativeToolsExpanded ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))' : 'min(28rem, calc(100vh - 3rem))' } : {}) }">
     <!-- Main content: optional inline dashboard + chat -->
     <div class="flex flex-grow overflow-hidden min-h-0" ref="chatContainerRef">
       <!-- Thread Sidebar (left, hidden during onboarding) -->
@@ -105,7 +105,7 @@
           <!-- Keep the draft/editor mounted while the native process needs a decision. -->
           <!-- Input -->
           <div v-show="!mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
-            <ChatInput ref="mainComposer"
+            <ChatInput ref="mainComposer" @native-tools-expanded="nativeToolsExpanded = $event"
               :disabled="mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
               :disabled-reason="taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
@@ -254,6 +254,7 @@ const threadsSettings = useSettings('threads')
 const shell = useShell()
 const agentSelection = ref<{ threadId: string; mountId: string; ownerId: string; sessionId: string; taskId: string; revision: number }>()
 const nativeTerminalActive = ref(false)
+const nativeToolsExpanded = ref(false)
 watch(nativeTerminalActive, (active, previous) => {
   if (previous && !active) void nextTick(() => forceScrollToBottom())
 })

@@ -175,7 +175,10 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await verifyDocuments('rgb(18, 52, 86)', 'custom-saved')
     const enabled = await readDocuments()
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+    const beforePicker = (await context()).native.output.at(-1)?.sequence ?? 0
     await input.pressSequentially('/theme'); await input.press('Enter')
+    await expect.poll(async () => stripVTControlCharacters((await context()).native.output.filter((chunk: any) => chunk.sequence > beforePicker).map((chunk: any) => chunk.text).join(''))).toContain('Theme')
+    await expect.poll(highlightedTheme).not.toBe('')
     await input.press('Control+t')
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).syntaxHighlightingDisabled).toBe(true)
     await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
@@ -261,7 +264,15 @@ test('renders original theme previews, cancellation, button roles and saved cust
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-label-failure-' + height + '.png') })
       throw error
     })
-    await expect(note).toBeInViewport({ ratio: 0.99 })
+    await expect(note).toBeInViewport({ ratio: 0.99 }).catch(async error => {
+      await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-bounds-failure-' + height + '.png') })
+      await writeFile(join(workspace!, 'native-field-bounds-failure.json'), JSON.stringify({ height, context: await context(), ui: await appPage.evaluate(() => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { views: c.nativeUiViews, focus: c.nativeUiFocus } }), geometry: await card.evaluate(card => {
+        const note = card.querySelector('textarea[aria-label="Theme note"]')!
+        const nodes = [note, note.parentElement!, ...(() => { const result: Element[] = []; for(let p: Element | null = note.parentElement; p && p !== card; p = p.parentElement) result.push(p); return result })(), card]
+        return nodes.map(node => { const el = node as HTMLElement, r = el.getBoundingClientRect(), style = getComputedStyle(el); return { tag: el.tagName, class: el.className, active: el === document.activeElement, top:r.top, bottom:r.bottom, height:r.height, clientHeight:el.clientHeight, scrollHeight:el.scrollHeight, scrollTop:el.scrollTop, padding:style.padding, overflow:style.overflow } })
+      }) }, null, 2))
+      throw error
+    })
     await writeFile(join(workspace!, 'native-composer-geometry-' + height + '.json'), JSON.stringify(await card.evaluate(element => {
       const selectors = ['[contenteditable="true"]', '.composer-document', '.tiptap-wrapper', '[data-testid="composer-editor-area"]', '[data-testid="composer-session-strip"]', '[data-composer-toolbar]', '[data-testid="native-composer-placements"]']
       return selectors.flatMap(selector => [...element.querySelectorAll<HTMLElement>(selector)].map(node => { const r = node.getBoundingClientRect(), s = getComputedStyle(node); return { selector, rect: { x:r.x, y:r.y, width:r.width, height:r.height }, scrollHeight:node.scrollHeight, clientHeight:node.clientHeight, minHeight:s.minHeight, padding:s.padding, flex:s.flex, overflow:s.overflow } }))
@@ -282,9 +293,19 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-composer-' + height + '.png') })
   }
   if (documentTheme) {
+    await appPage.setViewportSize({ width: 680, height: 900 })
+    const site = card.locator('.native-extension-surface')
+    await expect.poll(() => site.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(220)
+    await card.getByRole('button', { name: 'Session tools', exact: true }).click()
+    await expect(site).toBeHidden()
+    await expect(composer).toHaveText('Draft retained during native theme reload')
+    await card.getByRole('button', { name: 'Session tools', exact: true }).click()
+    await expect(site).toBeVisible()
+    await expect.poll(() => site.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(220)
     await composer.focus()
     for (const height of [900, 600]) {
       await appPage.setViewportSize({ width: 680, height })
+      await expect.poll(() => site.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(height === 900 ? 220 : 80)
       for (const [name, target] of [['markdown', documentProse], ['source', sourceCode], ['diff', diffCode]] as const) {
         await target.scrollIntoViewIfNeeded()
         await expect(target).toBeInViewport({ ratio: name === 'markdown' ? 0.2 : 0.99 })

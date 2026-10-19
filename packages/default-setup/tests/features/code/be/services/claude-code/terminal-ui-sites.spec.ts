@@ -120,3 +120,22 @@ it('uses original structured tool results and expires actions after native resul
   rows = []
   expect(api.toolResultFacts({}, 'tool-id', 'result-id', 'assistant-id')).toBeUndefined()
 })
+
+it('preserves the latest absolute viewport offset through the original native scroll hook after a layout reveal', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();'), end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({remoteScroll})`, { Map, Set, AbortController, Promise, clients: new Set(['app']), clientViewCurrent: () => true, publish() {} })
+  const scrolls = new Map(), focuses = new Map(), calls: any[] = []
+  let deny = false
+  const native = { runtime: { f4: 'above-prompt', kV: (component: string, id: string) => `${component}:${id}`, xbe: () => scrolls, Eat: () => focuses, vxt: async ({ input }: any) => {
+    calls.push(input)
+    if (deny) return { deny: 'native restriction' }
+    scrolls.get('AbovePrompt:above-prompt').commit(input.offset, input.origin)
+    return {}
+  } } }
+  const request = { client_id: 'app', component: 'AbovePrompt', instance_id: 'above-prompt', body_rows: 5, content_rows: 25 }
+  expect((await api.remoteScroll(native, { ...request, offset: 13, by: 13 })).offset).toBe(13)
+  expect((await api.remoteScroll(native, { ...request, offset: 14, by: 0 })).offset).toBe(14)
+  expect(calls.at(-1)).toMatchObject({ offset: 14, by: 0, origin: { kind: 'person' } })
+  deny = true
+  expect(await api.remoteScroll(native, { ...request, offset: 17, by: 3 })).toMatchObject({ moved: false, offset: 14, deny: 'native restriction' })
+})

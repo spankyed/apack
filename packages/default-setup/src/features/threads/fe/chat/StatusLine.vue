@@ -9,7 +9,7 @@
       </button>
     </div>
     <div v-if="nativeStatus" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-12 shrink-0 min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
-    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-56 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
+    <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
     </div>
     <p v-else-if="nativeUi?.status === 'error'" class="text-neutral-500" :title="nativeUi.message" role="status">Claude controls unavailable</p>
@@ -41,6 +41,22 @@ const displayPath = computed(() => {
 const emit = defineEmits<{ 'tools-expanded': [expanded: boolean]; click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
 const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: nativeSite, cellWidth: () => (cellMeasure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
+// Resizing must reveal the complete focused field, even when focus itself does not change.
+function revealFocusedField() {
+  const site = nativeSite.value, active = document.activeElement
+  if (!site || !(active instanceof HTMLElement) || !site.contains(active) || !active.matches('input, textarea, select, [role="textbox"]') || active.closest('[data-native-client]')) return
+  const field = active.closest<HTMLElement>('[data-native-scroll-id]')
+  if (!field) return
+  const bounds = site.getBoundingClientRect(), control = field.getBoundingClientRect()
+  if (control.top < bounds.top || control.height > bounds.height) scroll.reveal(site.scrollTop + control.top - bounds.top)
+  else if (control.bottom > bounds.bottom) scroll.reveal(site.scrollTop + control.bottom - bounds.bottom)
+}
+watch(nativeSite, (site, _previous, cleanup) => {
+  if (!site) return
+  const observer = new ResizeObserver(revealFocusedField)
+  observer.observe(site)
+  cleanup(() => observer.disconnect())
+}, { flush: 'post' })
 let focusRevision = 0
 let applyingFocus = false
 let autoEntering = false
@@ -49,6 +65,7 @@ const composing = ref(false)
 function reportFocusIn(event: FocusEvent) {
   const site = nativeSite.value
   if (applyingFocus || !site || event.target !== document.activeElement) return
+  revealFocusedField()
   held = true
   const element = event.target instanceof HTMLElement && !event.target.closest('[data-native-client]') ? event.target.closest<HTMLElement>('[data-native-focus-id]') : null
   emit('focus-report', { revision: ++focusRevision, isHeld: true, focusId: element?.dataset.nativeFocusId ?? (event.target === site ? null : undefined), by: autoEntering ? 'auto' : 'person' })

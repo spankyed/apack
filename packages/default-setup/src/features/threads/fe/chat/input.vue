@@ -20,7 +20,7 @@
         <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
-          @tools-expanded="nativeToolsExpanded = $event" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
+          @tools-expanded="nativeToolsExpanded = $event; emit('native-tools-expanded', $event)" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <NativeComposerPlacements v-if="nativeUi?.composer?.length" :frames="nativeUi.composer" location="status" @height="nativeActivityHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
 
@@ -289,6 +289,7 @@ const props = defineProps<{
 
 // Define emits including new button actions
 const emit = defineEmits<{
+  (e: 'native-tools-expanded', expanded: boolean): void
   (e: 'send-message', message: string, references?: MessageReferences): void
   (e: 'send-command', command: string, text: string, references?: MessageReferences): void
   (e: 'quick-message'): void

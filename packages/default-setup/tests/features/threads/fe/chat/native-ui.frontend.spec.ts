@@ -5,9 +5,14 @@ import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
-beforeEach(() => { startFeTestRuntime() })
+let resizeObservers: (() => void)[]
+beforeEach(() => {
+  resizeObservers = []
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeObservers.push(callback) } observe() {} disconnect() {} })
+  startFeTestRuntime()
+})
 let app: App | undefined
-afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
+afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
 async function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
   const state = reactive(props)
   const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn()
@@ -548,4 +553,25 @@ it('reports expanded native content only while it needs composer space', async (
   f.root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')!.click(); await nextTick()
   expect(f.toolsExpanded).toHaveBeenLastCalledWith(false)
   expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('reveals the focused field label on viewport resize without moving focus from the draft', async () => {
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'input', revision: 0, submitLabel: 'send', actionId: 'field', focusId: 'keyed-field', label: 'Native draft', value: 'Retained input', rows: 2, autoFocus: false } } })
+  await nextTick()
+  const site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = site.querySelector<HTMLElement>('[data-native-scroll-id]')!, input = site.querySelector<HTMLTextAreaElement>('textarea')!
+  let height = 100
+  Object.defineProperties(site, { clientHeight: { get: () => height }, scrollHeight: { value: 500 } })
+  site.getBoundingClientRect = () => ({ top: 0, bottom: height, height, width: 300 }) as DOMRect
+  field.getBoundingClientRect = () => ({ top: 300 - site.scrollTop, bottom: 380 - site.scrollTop, height: 80, width: 300 }) as DOMRect
+  input.focus()
+  expect(site.scrollTop).toBe(280)
+  height = 60
+  resizeObservers.forEach(callback => callback())
+  expect(site.scrollTop).toBe(300)
+  expect(document.activeElement).toBe(input)
+  const draft = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!
+  draft.focus(); site.scrollTop = 140
+  height = 100; resizeObservers.forEach(callback => callback())
+  expect(site.scrollTop).toBe(140)
+  expect(document.activeElement).toBe(draft)
 })

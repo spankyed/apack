@@ -171,7 +171,7 @@ async function remoteScroll(n,value){
   const end=Math.max(0,value.content_rows-value.body_rows),before=site.follow?end:Math.min(site.offset,end),wasFollowing=site.follow;
   site.offset=before;site.bodyRows=value.body_rows;site.contentRows=value.content_rows;if(value.keyed)site.keyed=value.keyed;site.moving=true;site.superseded=false;refreshSite(n,site);
   let result;
-  try{result=await n.runtime.vxt({input:{component:site.component,requestId:site.id,offset:Math.min(end,Math.max(0,before+value.by)),by:value.by,bodyRows:site.bodyRows,contentRows:site.contentRows,origin:{kind:'person'},...(value.pointer?{pointer:value.pointer}:{})},signal:site.abort.signal});}
+  try{result=await n.runtime.vxt({input:{component:site.component,requestId:site.id,offset:Math.min(end,Math.max(0,value.offset)),by:value.by,bodyRows:site.bodyRows,contentRows:site.contentRows,origin:{kind:'person'},...(value.pointer?{pointer:value.pointer}:{})},signal:site.abort.signal});}
   finally{site.moving=false;}
   if(site.abort.signal.aborted||site.superseded)return {moved:false,offset:siteOffset(site),deny:'the window moved meanwhile',...(site.follow?{follow_end:true}:{})};
   if(result.deny!==undefined)site.offset=before;
