@@ -1,3 +1,4 @@
+import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 
 /** Runs inside the original print CLI; authored UI modules stay in its original sandbox. */
@@ -5,17 +6,28 @@ export function createClaudePrintClientRuntime(config: { socketPath: string; tok
   return `import {createServer} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {readFileSync} from 'node:fs';
 const config=${JSON.stringify(config)};
 ${claudeTerminalClientRuntime}
+${claudeNativeThemeRuntime}
 ` + String.raw`
 if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')==='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37'){
 if(config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
-const scopes=new Map(),latest=new Map(),pendingInvalidations=new Map(),latestAt=new Map();let initialization,host,engine,gate,clients,roster,invalidating;
+const scopes=new Map(),latest=new Map(),pendingInvalidations=new Map(),latestAt=new Map();let initialization,host,engine,gate,clients,roster,invalidating,themeSettings,themeResolver,themeFiles,themePalette,stopThemeWatch,loadingTheme;
 const scopeKey=(client,component,instance)=>JSON.stringify([client,component,instance]);
 function invalidate(entry){
  const key=scopeKey(entry.client,entry.component,entry.requestId);pendingInvalidations.set(key,entry);
  if(!invalidating){invalidating=setTimeout(()=>{invalidating=undefined;for(const[key,entry]of pendingInvalidations){if(!scopes.has(key))continue;process.stdout.write(JSON.stringify({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]})+'\n');}pendingInvalidations.clear();},25);invalidating.unref();}
 }
 function remember(key,sequence){latest.set(key,sequence);latestAt.set(key,Date.now());}
+function publishTheme(){
+ const next=themeResolver.UKe(themeSettings.Ss('theme','dark').value),changed=JSON.stringify(themePalette)!==JSON.stringify(next),prior=themePalette;themePalette=next;
+ if(changed){process.stdout.write(JSON.stringify({type:'system',subtype:'ui_prompt_theme',palette:next})+'\n');if(prior)process.stdout.write(JSON.stringify({type:'system',subtype:'ui_invalidate',event:'ui.render'})+'\n');}
+ return next;
+}
+async function palette(){
+ if(!stopThemeWatch){await (loadingTheme??=themeFiles.ETt().finally(()=>{loadingTheme=undefined}));stopThemeWatch??=themeFiles.vcr(()=>{void themeFiles.ETt().then(()=>{if(stopThemeWatch)publishTheme()}).catch(()=>{});});}
+ return publishTheme();
+}
 function initialize(){return initialization??=(async()=>{
+ themeSettings=await import('/$bunfs/root/chunk-c7857g1z.js');themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');themeFiles=await import('/$bunfs/root/chunk-5feck2gp.js');
  engine=await import('/$bunfs/root/chunk-c7wcn77x.js');gate=await import('/$bunfs/root/chunk-wn0572jb.js');clients=await import('/$bunfs/root/chunk-e980bbar.js');roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
  const registry=()=>clients.x3r({port:clients.A3r({run:({plugin,message})=>engine.I9e.clientMessage({plugin,component:message.component,requestId:message.requestId,key:message.element,module:message.module,data:message.data}).then(value=>value??{})})});
  host=createNativeClientHost(registry,invalidate,clients.R3r,{
@@ -28,6 +40,7 @@ function initialize(){return initialization??=(async()=>{
 function validSite(value){if(!value||typeof value.client_id!=='string'||!/^[A-Za-z0-9._-]{1,64}$/.test(value.client_id)||typeof value.component!=='string'||typeof value.instance_id!=='string'||value.component.length>256||value.instance_id.length>256)throw Error('Invalid print Client scope');}
 async function operation(body,live){
  await initialize();const value=body.value;
+ if(body.operation==='decorations'){if(!value||typeof value.client_id!=='string'||!roster.Kw.list().some(client=>client.clientId===value.client_id))throw Error('Print prompt owner is unavailable');await gate._Jo('desktop');return nativePaletteDecorations(await palette(),value.decorations);}
  if(body.operation==='project'){
   validSite(value);if(value.surface!=='desktop')throw Error('Print Client surface is unavailable');
   const key=scopeKey(value.client_id,value.component,value.instance_id),sequence=body.sequence;
@@ -37,9 +50,10 @@ async function operation(body,live){
   for(const[plugin,hash]of Object.entries(hashes))if(typeof hash!=='string'||engine.I9e.clientModule(plugin)?.hash!==hash)throw Error('Native Client module changed before projection');
   const prior=scopes.get(key);
   if(prior&&(prior.revision!==value.instance_revision||prior.signature!==signature)){scopes.delete(key);host.release(value.client_id,value.component,value.instance_id);await host.settle(value.client_id,value.component,value.instance_id);}
-  if(!live()||latest.get(key)!==sequence)throw Error('Print Client render was replaced');
+  const resolvedPalette=await palette();
+  if(!live()||latest.get(key)!==sequence||!roster.Kw.list().some(client=>client.clientId===value.client_id))throw Error('Print Client render was replaced');
   scopes.set(key,{revision:value.instance_revision,hashes,signature,requestId:body.id});
-  return {...body.frame,tree:host.render(value.client_id,value.component,value.instance_id,body.frame.tree,value.instance_revision)};
+  return {...body.frame,tree:nativePaletteTree(resolvedPalette,host.render(value.client_id,value.component,value.instance_id,body.frame.tree,value.instance_revision))};
  }
  if(body.operation==='release'){
   validSite(value);const key=scopeKey(value.client_id,value.component,value.instance_id),scope=scopes.get(key);
@@ -48,7 +62,7 @@ async function operation(body,live){
  }
  if(body.operation==='detach'){
   for(const[key]of scopes){if(JSON.parse(key)[0]===value.client_id){remember(key,body.sequence);scopes.delete(key);pendingInvalidations.delete(key);}}
-  host.detach(value.client_id);return{detached:true};
+  host.detach(value.client_id);if(!scopes.size){stopThemeWatch?.();stopThemeWatch=undefined;themePalette=undefined;}return{detached:true};
  }
  if(body.operation==='event'){await gate._Jo('desktop');return host.event(value.client_id,value.id,value.sequence,value.event);}
  if(body.operation==='action'){
@@ -61,7 +75,7 @@ async function operation(body,live){
 }
 const server=createServer(async(request,response)=>{
  let id,body;
- response.once('close',()=>{if(response.writableEnded||body?.operation!=='project'||!host)return;const value=body.value,key=scopeKey(value.client_id,value.component,value.instance_id);if(scopes.get(key)?.requestId===id){scopes.delete(key);pendingInvalidations.delete(key);host.release(value.client_id,value.component,value.instance_id);}});
+ response.once('close',()=>{if(response.writableEnded||body?.operation!=='project'||!host)return;const value=body.value;if(!value)return;const key=scopeKey(value.client_id,value.component,value.instance_id);if(scopes.get(key)?.requestId===id){scopes.delete(key);pendingInvalidations.delete(key);host.release(value.client_id,value.component,value.instance_id);}});
  const answer=(status,value)=>{response.writeHead(status,{'content-type':'application/json'});response.end(JSON.stringify({id,pid:process.pid,epoch:config.epoch,...value}));};
  try{
   if(request.method!=='POST'||request.url!=='/clients'||request.headers['x-apack-native-token']!==config.token){answer(403,{error:'Print Client request refused'});return;}
@@ -72,8 +86,8 @@ const server=createServer(async(request,response)=>{
  }catch(error){answer(400,{error:error instanceof Error?error.message:'Print Client request failed'});}
 });
 server.on('error',()=>{});server.listen(config.socketPath);server.unref();
-const sweep=setInterval(()=>{const now=Date.now();for(const[key,at]of latestAt){if(!scopes.has(key)&&now-at>10000){latestAt.delete(key);latest.delete(key);}}if(roster){const attached=new Set(roster.Kw.list().map(client=>client.clientId));for(const[key]of scopes){const[client,component,instance]=JSON.parse(key);if(!attached.has(client)){scopes.delete(key);pendingInvalidations.delete(key);host.release(client,component,instance);}}}},1000);sweep.unref();
-process.once('exit',()=>{clearInterval(sweep);host?.detach();if(invalidating)clearTimeout(invalidating);server.close();});
+const sweep=setInterval(()=>{const now=Date.now();for(const[key,at]of latestAt){if(!scopes.has(key)&&now-at>10000){latestAt.delete(key);latest.delete(key);}}if(roster){const attached=new Set(roster.Kw.list().map(client=>client.clientId));for(const[key]of scopes){const[client,component,instance]=JSON.parse(key);if(!attached.has(client)){scopes.delete(key);pendingInvalidations.delete(key);host.release(client,component,instance);}}if(!scopes.size){stopThemeWatch?.();stopThemeWatch=undefined;themePalette=undefined;}}},1000);sweep.unref();
+process.once('exit',()=>{clearInterval(sweep);stopThemeWatch?.();host?.detach();if(invalidating)clearTimeout(invalidating);server.close();});
 }
 `
 }

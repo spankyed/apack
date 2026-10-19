@@ -25,7 +25,7 @@ export interface ClaudePromptHost {
 }
 
 /** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
-export function createClaudePromptHosts(write: (value: unknown) => boolean) {
+export function createClaudePromptHosts(write: (value: unknown) => boolean, paintFill?: (clientId: string, input: ClaudePromptHostFill) => Promise<ClaudePromptHostFill>) {
   const hosts = new Map<string, ClaudePromptHost>()
   const pending = new Map<string, { client: string; abort: AbortController; finish(value?: unknown, writeReply?: boolean): void }>()
   // Never reapply a duplicate fill. Once the session budget is exhausted, refuse new host work.
@@ -74,9 +74,15 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean) {
         if (writeReply) reply(value)
       }
       pending.set(line.request_id, { client: parsed.success ? parsed.data.client_id : '', abort, finish })
+      const invoke = (input: ClaudePromptHostFill | undefined): unknown => {
+        if (abort.signal.aborted) return undefined
+        return read ? host.read(abort.signal, expiresAt) : filling ? host.fill(input!, abort.signal, expiresAt) : host.suggest!(suggestionText!, abort.signal, expiresAt)
+      }
       void Promise.resolve().then<unknown>(() => {
         if (abort.signal.aborted) return undefined
-        return read ? host.read(abort.signal, expiresAt) : filling ? host.fill(fillInput!, abort.signal, expiresAt) : host.suggest!(suggestionText!, abort.signal, expiresAt)
+        return filling && fillInput && paintFill
+          ? paintFill(parsed.success ? parsed.data.client_id : '', fillInput).then(painted => invoke(fill.parse(painted)))
+          : invoke(fillInput)
       }).then(value => {
         if (read) { const valid = box.safeParse(value); finish(valid.success ? valid.data : fallback) }
         else finish(filling ? { filled: value === true } : { shown: value === true })

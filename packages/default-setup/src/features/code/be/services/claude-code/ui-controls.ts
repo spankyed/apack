@@ -239,7 +239,8 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
     async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {
       const valid = promptEdit.parse(options)
-      return promptFrame.parse(await request({ subtype: 'ui_prompt_edit', ...valid }))
+      const frame = promptFrame.parse(await request({ subtype: 'ui_prompt_edit', ...valid }))
+      return frame.decorations?.length && printClients?.prompt ? promptFrame.parse({ ...frame, decorations: await printClients.prompt(valid.client_id, frame.decorations) }) : frame
     },
     /** Plugin rows follow the host's own completion rows; autocomplete never gates an edit or Send. */
     async promptAutocomplete(options: ClaudeUiPromptAutocomplete): Promise<ClaudeUiPromptCompletions> {

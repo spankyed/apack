@@ -76,3 +76,16 @@ it('advertises suggestions only for an answering host and correlates shown/refus
   expect(suggest).toHaveBeenCalledOnce(); expect(f.answer()).toMatchObject({ response: { response: { shown: false } } })
   f.hosts.close()
 })
+
+it('refuses a painted fill that finishes after its original mounted host detaches', async () => {
+  let resolve!: (value: { text: string; mode: 'insert' }) => void
+  const paint = vi.fn(() => new Promise<{ text: string; mode: 'insert' }>(yes => { resolve = yes }))
+  const write = vi.fn((_value: unknown) => true), apply = vi.fn(async () => true)
+  const hosts = createClaudePromptHosts(write, paint)
+  const detach = hosts.register('view', { read: async () => undefined, fill: apply })
+  hosts.receive(fill()); await flush(); expect(paint).toHaveBeenCalledOnce()
+  detach(); resolve({ text: 'native', mode: 'insert' }); await flush()
+  expect(apply).not.toHaveBeenCalled()
+  expect(write).toHaveBeenCalledOnce(); expect(write.mock.calls[0]?.[0]).toMatchObject({ response: { response: { filled: false } } })
+  hosts.close()
+})

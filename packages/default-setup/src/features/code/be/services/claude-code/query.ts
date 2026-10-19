@@ -179,7 +179,7 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   const surfaceControlRequests = opts.surfaceControlRequests ?? false
   const backgroundTasks = createBackgroundTaskTracker()
   const hostControls = createHostControls(value => stream.write(value))
-  const promptHosts = createClaudePromptHosts(value => stream.write(value))
+  const promptHosts = createClaudePromptHosts(value => stream.write(value), async (clientId, input) => input.decorations?.length && printClients.projection.prompt ? { ...input, decorations: await printClients.projection.prompt(clientId, input.decorations) } : input)
   const pumpPromise = pump(stream, router, eventQueue, sessionId, resultPromise, surfaceControlRequests, hostControls, hooks.callbackIds, backgroundTasks, promptHosts)
     .catch(err => {
       hostControls.close(err)

@@ -23,11 +23,11 @@ async function nativeFixture(pid: () => number | undefined, helloPid = process.p
   server.listen(config.socketPath); await once(server, 'listening')
   return { bridge, calls, pending, finish: () => finish(), async close() { server.close(); await once(server, 'close'); await bridge.close() } }
 }
-it('does not start a native channel for ordinary print drawings and parses its generated preload', async () => {
+it('requires an owned native palette for ordinary print drawings and parses its generated preload', async () => {
   const bridge = await prepareClaudePrintClients({ currentPid: () => undefined, bunOptions: '--preload=user-module.mjs' })
   try {
     const ordinary = { ...frame, tree: { type: 'Text', children: ['ordinary'] } }
-    await expect(bridge.projection.project(site, ordinary)).resolves.toBe(ordinary)
+    await expect(bridge.projection.project(site, ordinary)).rejects.toThrow('owner is unavailable')
     await expect(bridge.projection.event({ client_id: site.client_id, id: 'unused', sequence: 1, event: { kind: 'resize', columns: 5, rows: 1 } })).resolves.toEqual({ handled: false })
     expect(bridge.bunOptions).toMatch(/^--preload=user-module.mjs --preload=file:/)
     const generated = createClaudePrintClientRuntime({ socketPath: '/tmp/owned', token: 'private', epoch: 'process' })

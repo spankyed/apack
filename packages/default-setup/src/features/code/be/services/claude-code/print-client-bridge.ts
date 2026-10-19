@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { request as httpRequest, type ClientRequest } from 'node:http'
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { createClaudePrintClientRuntime } from './print-client-runtime.ts'
+import type { ClaudePromptHostFill } from './ui-prompt-host.ts'
 import type { ClaudeUiRender, ClaudeUiRenderResult, ClaudeUiPress, ClaudeUiInput, ClaudeUiSelect, ClaudeUiClientInput } from './ui-controls.ts'
 
 export interface ClaudePrintClientProjection {
@@ -14,6 +15,7 @@ export interface ClaudePrintClientProjection {
   event(request: { client_id: string; id: string; sequence: number; event: ClaudeUiClientInput }): Promise<unknown>
   release(request: { client_id: string; component: string; instance_id: string; instance_revision: number }): Promise<{ released: boolean }>
   detach(clientId: string): Promise<void>
+  prompt?(clientId: string, decorations: NonNullable<ClaudePromptHostFill['decorations']>): Promise<NonNullable<ClaudePromptHostFill['decorations']>>
 }
 const hasClient = (tree: unknown): boolean => {
   if (!tree || typeof tree !== 'object' || Array.isArray(tree)) return false
@@ -28,7 +30,7 @@ export async function prepareClaudePrintClients(options: { bunOptions?: string; 
   const preload = join(directory, 'clients.mjs')
   await writeFile(preload, createClaudePrintClientRuntime(config), { mode: 0o600 })
   let closed = false, sequence = 0, nativePid: number | undefined, handshake: Promise<void> | undefined
-  const pending = new Set<ClientRequest>(), scopes = new Map<string, { clientId: string }>()
+  const pending = new Set<ClientRequest>(), scopes = new Map<string, { clientId: string; clients: boolean }>()
   const keyOf = (request: { client_id: string; component: string; instance_id: string }) => JSON.stringify([request.client_id, request.component, request.instance_id])
   async function send(operation: string, value: unknown, frame?: ClaudeUiRenderResult): Promise<unknown> {
     const launcherPid = options.currentPid(), ownerPid = nativePid ?? launcherPid
@@ -66,15 +68,14 @@ export async function prepareClaudePrintClients(options: { bunOptions?: string; 
   const projection: ClaudePrintClientProjection = {
     async project(value, frame) {
       const key = keyOf(value), clients = hasClient(frame.tree)
-      if (!clients && !scopes.has(key)) return frame
-      if (clients) scopes.set(key, { clientId: value.client_id })
+      scopes.set(key, { clientId: value.client_id, clients })
       const projected = await request('project', value, frame) as ClaudeUiRenderResult
-      if (!clients) scopes.delete(key)
       return projected
     },
-    action(value) { return [...scopes.values()].some(scope => scope.clientId === value.client_id) ? request('action', value) : Promise.resolve(undefined) },
-    event(value) { return [...scopes.values()].some(scope => scope.clientId === value.client_id) ? request('event', value) : Promise.resolve({ handled: false }) },
+    action(value) { return [...scopes.values()].some(scope => scope.clientId === value.client_id && scope.clients) ? request('action', value) : Promise.resolve(undefined) },
+    event(value) { return [...scopes.values()].some(scope => scope.clientId === value.client_id && scope.clients) ? request('event', value) : Promise.resolve({ handled: false }) },
     async release(value) { const key = keyOf(value); if (!scopes.has(key)) return { released: false }; const result = await request('release', value) as { released: boolean }; if (result.released) scopes.delete(key); return result },
+    async prompt(clientId, decorations) { return await request('decorations', { client_id: clientId, decorations }) as NonNullable<ClaudePromptHostFill['decorations']> },
     async detach(clientId) { const keys = [...scopes].filter(([, scope]) => scope.clientId === clientId).map(([key]) => key); if (!keys.length) return; for (const key of keys) scopes.delete(key); await request('detach', { client_id: clientId }) },
   }
   return {

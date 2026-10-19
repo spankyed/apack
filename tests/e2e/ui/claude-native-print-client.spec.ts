@@ -8,7 +8,7 @@ test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testIn
 test('runs original print Client controls and retires them across native handoff', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario, printClients } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, printClients, printTheme } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   test.skip(!printClients, 'Explicit private print Client fixture required')
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -38,10 +38,16 @@ test('runs original print Client controls and retires them across native handoff
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const composer = card.locator('[contenteditable="true"]')
   await card.getByRole('button', { name: 'Session tools', exact: true }).click()
-  const draft = 'Review the release changes before sending.'
+  let draft = 'Review the release changes before sending.'
   await composer.fill(draft)
   const region = card.locator('[data-native-client]').filter({ hasText: 'Workspace' }).first()
   await expect(region).toContainText('Workspace connected · 0 updates')
+  if (printTheme) {
+    await expect(composer.locator('.claude-prompt-decoration').first()).toHaveCSS('color', 'rgb(171, 205, 239)')
+    await expect(card.getByText('Release review', { exact: true })).toHaveCSS('color', 'rgb(171, 205, 239)')
+    await expect(region.getByText('Workspace connected · 0 updates', { exact: true })).toHaveCSS('color', 'rgb(131, 201, 161)')
+    await expect(region.getByRole('textbox', { name: 'Review note' })).toHaveCSS('color', 'rgb(224, 224, 224)')
+  }
   const initialToken = await region.getAttribute('data-native-client')
   await region.getByRole('button', { name: 'Refresh workspace', exact: true }).click()
   await expect(region).toContainText('1 updates')
@@ -56,6 +62,32 @@ test('runs original print Client controls and retires them across native handoff
   const clock = await refresh()
   await expect.poll(refresh).toBeGreaterThan(clock)
   expect((await context()).turns).toBe(1)
+  if (printTheme) {
+    const template = card.getByRole('button', { name: 'Use review template', exact: true })
+    await template.scrollIntoViewIfNeeded(); await template.click()
+    draft = 'Review release notes before merging.'
+    await expect(composer).toHaveText(draft)
+    const painted = composer.locator('.claude-prompt-decoration').first()
+    await expect(painted).toHaveCSS('color', 'rgb(171, 205, 239)')
+    await expect(painted).toHaveCSS('background-color', 'rgb(38, 50, 65)')
+    await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-print-theme-fill.json'), 'utf8').catch(() => '{}')).result?.isFilled).toBe(true)
+    const edits = async () => JSON.parse(await readFile(join(workspace!, 'native-print-theme-edits.json'), 'utf8'))
+    await composer.click(); await composer.press('Home'); await composer.press('Shift+ArrowRight'); await composer.press('Shift+ArrowRight')
+    await expect.poll(async () => appPage.evaluate(() => window.getSelection()?.toString())).toBe('Re')
+    await appPage.waitForTimeout(300)
+    const before = (await edits()).length
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-print-theme-original.png') })
+    await writeFile(join(workspace!, '.claude/themes/research.json'), JSON.stringify({ name: 'Research', base: 'dark', overrides: { text: '#d0e0f0', inverseText: '#112233', warning: '#fedcba', success: '#91c9e1' } }))
+    await expect(painted).toHaveCSS('color', 'rgb(254, 220, 186)')
+    await expect(painted).toHaveCSS('background-color', 'rgb(17, 34, 51)')
+    await expect(card.getByText('Release review', { exact: true })).toHaveCSS('color', 'rgb(254, 220, 186)')
+    await expect(region.getByText('Workspace synchronized · 1 updates', { exact: true })).toHaveCSS('color', 'rgb(145, 201, 225)')
+    await expect(region.getByRole('textbox', { name: 'Review note' })).toHaveCSS('color', 'rgb(208, 224, 240)')
+    expect((await edits()).length).toBe(before)
+    expect(await appPage.evaluate(() => window.getSelection()?.toString())).toBe('Re')
+    await expect(composer).toHaveText(draft)
+    await expect(region.getByRole('textbox', { name: 'Review note' })).toHaveValue('Release notes')
+  }
   for (const size of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
     await appPage.setViewportSize(size)
     await region.getByRole('button', { name: 'Refresh workspace', exact: true }).scrollIntoViewIfNeeded()
@@ -106,5 +138,5 @@ test('runs original print Client controls and retires them across native handoff
   await region.getByRole('button', { name: 'Refresh workspace', exact: true }).click()
   await expect(region).toContainText('1 updates')
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'composer-layout', nativePrintClient: true, nativePrintClientControls: true, nativePrintClientClock: true, nativePrintClientRetirement: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'composer-layout', nativePrintTheme: printTheme === true, nativePrintClient: true, nativePrintClientControls: true, nativePrintClientClock: true, nativePrintClientRetirement: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
