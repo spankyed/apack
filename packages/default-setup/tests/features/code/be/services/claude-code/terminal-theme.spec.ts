@@ -47,3 +47,13 @@ it('resolves implicit primary/plain button roles while inline text inherits live
  expect(themed.children[0].children[0].props.color).toBeUndefined()
  expect(themed.children[1].props).toMatchObject({color:'#123456',hotkeyColor:'#654321'})
 })
+
+it('exports live field palette roles without changing values, callbacks or Client module props',()=>{
+ const f=fixture(),press={plugin:'native',handle:7},field={type:'Input',press,props:{key:'draft',value:'Keep this draft',_apackFieldTheme:{text:'wrong'}}}
+ const tree={type:'Box',children:[field,{type:'Select',press,props:{key:'pick',value:'a',options:[{value:'a'}]}},{type:'Client',props:{module:'module',props:{theme:'private'}}}]}
+ const before=JSON.stringify(tree),draw=f.draw(tree)
+ expect(draw.children[0].props).toMatchObject({value:'Keep this draft',_apackFieldTheme:{text:'#123456',inverseText:'#654321'}})
+ expect(draw.children[1].props._apackFieldTheme).toEqual({text:'#123456',inverseText:'#654321'})
+ expect(draw.children[0].press).toBe(press);expect(draw.children[2].props).toBe(tree.children[2]!.props)
+ expect(JSON.stringify(tree)).toBe(before)
+})

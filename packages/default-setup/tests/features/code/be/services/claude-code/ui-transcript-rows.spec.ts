@@ -94,3 +94,18 @@ it('mounts a pending ToolUse without fabricating a result or trusting app runnin
  const source={id:'pending',sender:'assistant',text:'',context:{cliUuid:'22222222-2222-2222-2222-222222222222',claudeTerminalMessage:{uuid:'22222222-2222-2222-2222-222222222222',sessionId:'session'}},blocks:[{type:'tool-activity',props:{entries:[{id:'pending-tool',tool:'Write',status:'running',summary:'file.txt'}]}}]}
  expect(selectClaudeTranscriptRows([source],'session',new Set(['pending']),new Map(),new Map([['pending',new Set([0])]]))).toEqual([expect.objectContaining({component:'ToolUse',uuid:'pending-tool',activityStatus:'running',text:'file.txt'}),expect.objectContaining({component:'ToolProgress',uuid:'pending-tool'})])
 })
+
+
+it('anchors a canonical group once across messages and preserves child tool/Agent/result identities',()=>{
+ const make=(id:string,tool:string,uuid:string)=>({id,sender:'assistant',text:'',context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId:'session'}},blocks:[{type:'tool-activity',props:{entries:[{id:tool,tool:'Read',summary:'file',status:'ok',nativeAgent:{id:'agent',ownerId:'owner',sessionId:'session',name:'Worker',status:'running'}}],artifactRef:{artifactId:'artifact',label:'Changes'}}}]})
+ const a=make('a','one','11111111-1111-1111-1111-111111111111'),b=make('b','two','22222222-2222-2222-2222-222222222222'),group={id:'original-group',members:[{toolUseId:'one',revision:'b'.repeat(64)},{toolUseId:'two',revision:'c'.repeat(64)}],usesEngine:true,isActive:false,isExpanded:false,initialized:true,revision:'a'.repeat(64)}
+ const select=(expanded:boolean)=>selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[{...group,isExpanded:expanded}])
+ const closed=select(false);expect(closed).toHaveLength(1);expect(closed[0]).toMatchObject({component:'ToolGroup',uuid:'original-group',messageId:'a',tools:[{id:'one',nativeAgent:{id:'agent'}},{id:'two'}],artifacts:[{artifactId:'artifact',label:'Changes'}]})
+ const open=select(true);expect(open.filter(row=>row.component==='ToolGroup')).toHaveLength(1)
+ expect(open.filter(row=>row.component==='ToolUse').map(row=>[row.uuid,row.messageId])).toEqual([['one','a'],['two','b']])
+ expect(open.filter(row=>row.component==='ToolProgress')).toHaveLength(2)
+ expect(open.filter(row=>row.component==='ToolUse').map(row=>row.producerRevision)).toEqual(['b'.repeat(64),'c'.repeat(64)])
+ expect(selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[{...group,isExpanded:true,usesEngine:false}]).map(row=>row.component)).toEqual(['ToolGroup'])
+ expect(selectClaudeTranscriptRows([a],'session',new Set(['a']),new Map(),new Map(),[group])).toEqual([])
+ expect(selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[group,{...group,id:'overlapping'}])).toEqual([])
+})

@@ -1,3 +1,4 @@
+import NativeToolGroups from '#features/threads/fe/chat/NativeToolGroups.vue'
 import NativeToolDrawing from '#features/threads/fe/chat/NativeToolDrawing.vue'
 import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
 import { createApp, h, nextTick, computed, provide, type App } from 'vue'
@@ -89,10 +90,29 @@ it('reports actual thinking expansion and removes its native slot on collapse', 
 it('renders structured plugin result rewrites as inert text and routes their controls within the owning message', () => {
   const value: ClaudeUiTranscriptFrame = { component: 'ToolResult', messageId: 'app', uuid: 'tool-id', sessionId: 'session', text: 'Original text', start: 0, end: 0, blockIndex: 0, assistantUuid: 'assistant-uuid', resultUuid: 'result', tool: 'Read', isErrored: false, outputRewritten: true, displayText: '{"file":"<script>literal</script>"}', body: { status: 'live', tree: { kind: 'box', children: [{ kind: 'unsupported', component: 'engine' }, { kind: 'button', label: 'Inspect result', actionId: 'action' }] } } }
   const press = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ setup() { provide(claudeToolDrawings, { render: (_component, _id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, view() {} }); return () => h(NativeToolDrawing, { component: 'ToolResult', toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
+  app = createApp({ setup() { provide(claudeToolDrawings, { groups:(ids,fallback)=>fallback(ids), render: (_component, _id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, view() {} }); return () => h(NativeToolDrawing, { component: 'ToolResult', toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
   expect(root.querySelector('pre')?.textContent).toBe(value.displayText)
   expect(root.querySelector('script')).toBeNull()
   expect(root.textContent).not.toContain('Original fallback')
   root.querySelector('button')!.click(); expect(press).toHaveBeenCalledWith('action', undefined)
   expect(claudeNativeMessageParts('app', 'Original text', [{ ...value, end: value.text.length }])).toEqual([{ kind: 'host', text: 'Original text', start: 0 }])
+})
+
+
+it('mounts a canonical group once across block fragments while keeping both native child drawings',()=>{
+ const tools=[{id:'one',tool:'Read',summary:'first.txt',status:'ok' as const},{id:'two',tool:'Read',summary:'second.txt',status:'ok' as const}]
+ const group:ClaudeUiTranscriptFrame={displayText:'',component:'ToolGroup',uuid:'native-group',messageId:'first-message',blockIndex:0,sessionId:'session',text:'',start:0,end:0,revision:'a'.repeat(64),isExpanded:true,isActive:false,usesEngine:true,tools,artifacts:[],body:{status:'live',tree:{kind:'unsupported',component:'engine'}}}
+ const children:ClaudeUiTranscriptFrame[]=tools.map((tool,index)=>({component:'ToolUse',uuid:tool.id,messageId:index?'second-message':'first-message',sessionId:'session',text:'',start:0,end:0,blockIndex:0,assistantUuid:'assistant',activityStatus:'ok',engineOutput:'Native '+tool.id,displayText:'',body:{status:'live',tree:{kind:'unsupported',component:'engine'}}}))
+ const root=document.createElement('div');document.body.append(root)
+ app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(component,id,fallback)=>h(NativeToolDrawing,{component,toolUseId:id},fallback),frames:computed(()=>[group,...children]),press(){},field(){},view(){}});return()=>h('div',tools.map(tool=>h(NativeToolGroups,{toolUseIds:[tool.id]},()=>h('span','Raw duplicate '+tool.id))))}});app.mount(root)
+ expect(root.querySelectorAll('[data-native-tool-group]')).toHaveLength(1)
+ expect(root.querySelectorAll('[data-native-tool-use]')).toHaveLength(2)
+ expect(root.textContent?.match(/Native one/g)).toHaveLength(1);expect(root.textContent?.match(/Native two/g)).toHaveLength(1)
+ expect(root.textContent).not.toContain('Raw duplicate')
+})
+it('restores ordinary block fragments when native group rendering is unavailable',()=>{
+ const group:ClaudeUiTranscriptFrame={displayText:'',component:'ToolGroup',uuid:'native-group',messageId:'app',blockIndex:0,sessionId:'session',text:'',start:0,end:0,revision:'a'.repeat(64),isExpanded:false,isActive:false,usesEngine:true,tools:[{id:'one',tool:'Read',summary:'file',status:'ok'}],artifacts:[],body:{status:'error'}}
+ const root=document.createElement('div');document.body.append(root)
+ app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(_component,_id,fallback)=>fallback(),frames:computed(()=>[group]),press(){},field(){},view(){}});return()=>h(NativeToolGroups,{toolUseIds:['one','ungrouped']},{default:({ids}:{ids:string[]})=>h('span',ids.join(','))})}});app.mount(root)
+ expect(root.querySelector('[data-native-tool-group]')).toBeNull();expect(root.textContent).toBe('one,ungrouped')
 })

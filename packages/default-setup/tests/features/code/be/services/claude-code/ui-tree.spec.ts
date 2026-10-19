@@ -205,3 +205,14 @@ it('preserves resolved button paint and validates its transport values', () => {
  expect(draw.tree).toMatchObject({kind:'button',color:'#123456',hotkeyColor:'rgb(1,2,3)'})
  expect(()=>createClaudeUiDrawing({type:'Button',props:{label:'Invalid',color:42}})).toThrow('button color')
 })
+
+it('validates private field theme roles without changing keyed field authority', () => {
+  const wire = { type: 'Input', props: { key: 'draft', value: 'retained', _apackFieldTheme: { text: '#112233', inverseText: '#ddeeff' } }, press: { plugin: 'fixture', handle: 3 } }
+  const first = createClaudeUiDrawing(wire)
+  const second = createClaudeUiDrawing({ ...wire, props: { ...wire.props, _apackFieldTheme: { text: '#abcdef', inverseText: '#010203' } } }, first)
+  expect(second.tree).toMatchObject({ kind: 'input', value: 'retained', theme: { text: '#abcdef', inverseText: '#010203' } })
+  expect([...second.fields.keys()]).toEqual([...first.fields.keys()])
+  for (const theme of [null, { text: '#fff' }, { text: false, inverseText: '#000' }, { text: 'x'.repeat(257), inverseText: '#000' }]) {
+    expect(() => createClaudeUiDrawing({ ...wire, props: { ...wire.props, _apackFieldTheme: theme } })).toThrow('field theme')
+  }
+})

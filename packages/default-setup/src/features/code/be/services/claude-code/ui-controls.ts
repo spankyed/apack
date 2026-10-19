@@ -9,6 +9,8 @@ const clientInput = z.discriminatedUnion('kind',[
  z.object({kind:z.literal('key'),key:z.string().min(1).max(32).refine(key=>key!=='escape'),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),meta:z.literal(true).optional()}).strict(),clientPointer,
 ])
 export type ClaudeUiClientInput = z.infer<typeof clientInput>
+const toolGroup = z.object({id:z.string().min(1).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
+export type ClaudeUiToolGroup = z.infer<typeof toolGroup>
 const clientId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const surface = z.enum(['desktop', 'mobile', 'vscode'])
 const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
@@ -75,7 +77,7 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const renderResult = z.object({ group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
@@ -115,6 +117,11 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     return controls.request(value)
   }
   return {
+    async toolGroups(id: string): Promise<ClaudeUiToolGroup[]> {
+      const valid=clientId.parse(id)
+      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      return z.object({groups:z.array(toolGroup).max(256)}).strict().parse(await request({subtype:'apack_ui_tool_groups',client_id:valid})).groups
+    },
     async releaseInstance(options: z.infer<typeof instanceRelease>) {
       const valid = instanceRelease.parse(options)
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return { released: false }

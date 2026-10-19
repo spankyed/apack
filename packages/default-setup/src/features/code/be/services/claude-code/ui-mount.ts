@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -27,7 +27,7 @@ export function mountClaudeUi(options: {
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number, paneId?: string): void
   question?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined
-  messages?(): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
+  messages?(groups: readonly import('./ui-controls.ts').ClaudeUiToolGroup[]): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
   nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
 }) {
@@ -80,8 +80,8 @@ export function mountClaudeUi(options: {
   let panes: ReturnType<typeof createClaudePaneHost> | undefined
   const scroll = createClaudeSiteScroll({ ui: owner.handle.ui, client, component: 'AbovePrompt', instanceId, current, drawing: () => drawing ?? fieldDrawing, publish: () => publish(lastState) })
 
-  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: () => {
-    const rows = [...(owner.readAgent ? selectClaudeAgentTranscriptRows(agent, owner.sessionId ?? '') : options.messages?.() ?? [])]
+  const messages = createClaudeTranscriptMessageHost({ ui: owner.handle.ui, client, current, rows: groups => {
+    const rows = [...(owner.readAgent ? selectClaudeAgentTranscriptRows(agent, owner.sessionId ?? '') : options.messages?.(groups) ?? [])]
     // Native local output can remain live without ever entering the saved journal.
     const output = agentInput?.status === 'command_output' ? agentInput.output : undefined
     if (!owner.nativeView && owner.sessionId && output && !rows.some(row => row.uuid === output.messageId)) rows.push({ component: 'CommandOutput', messageId: output.messageId, uuid: output.messageId, sessionId: owner.sessionId, text: output.text, start: 0, end: output.text.length, isErrored: output.isErrored })
@@ -206,7 +206,7 @@ export function mountClaudeUi(options: {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
       if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }
     }
-    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
+    if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render' && line.tool_groups !== true) {
       if (line.client_snapshot === true && line.client_id !== client.client_id) return
       invalidate(line.client_snapshot === true)
     }

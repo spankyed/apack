@@ -81,3 +81,14 @@ it('holds and reports focus against the exact Pane site and ignores a foreign fo
   expect(f.ui.focus).toHaveBeenCalledWith(expect.objectContaining({ component: 'Pane', instance_id: 'a' }))
   f.host.dispose()
 })
+
+
+it('keeps pane controls live while a native tool group changes',async()=>{
+ const f=fixture();await f.host.start();await vi.advanceTimersByTimeAsync(50)
+ const before=f.ui.render.mock.calls.length,button=f.nodes()[0];if(button.kind!=='button')throw Error('button')
+ f.host.receive({type:'system',subtype:'ui_invalidate',event:'ui.render',tool_groups:true,instances:[{surface:'desktop',component:'ToolGroup',instance_id:'native-group'}]})
+ await vi.advanceTimersByTimeAsync(100)
+ expect(f.ui.render).toHaveBeenCalledTimes(before)
+ await expect(f.host.press(button.actionId!)).resolves.toEqual({handled:true})
+ f.host.dispose()
+})

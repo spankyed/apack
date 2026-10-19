@@ -516,3 +516,20 @@ it('commits Client field IME text once and defers native replacements until comp
  field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
  expect(f.field).toHaveBeenLastCalledWith({actionId:'client-ime',revision:2,kind:'submit',value:'完成!'});expect(f.submit).not.toHaveBeenCalled()
 })
+
+it('updates resolved field paint without replacing focused drafts or emitting input', async () => {
+  const input = { kind: 'input' as const, actionId: 'themed-field', revision: 0, value: '', rows: 2, autoFocus: false, submitLabel: 'Send', label: 'Themed draft', theme: { text: '#112233', inverseText: '#ddeeff' } }
+  const f = await mount({ nativeUi: { status: 'live', tree: input } })
+  const field = f.root.querySelector<HTMLTextAreaElement>('[aria-label="Themed draft"]')!
+  field.focus(); field.value = 'Unsent local draft'; field.dispatchEvent(new Event('input', { bubbles: true }))
+  f.field.mockClear()
+  const label = field.closest('label')!
+  expect(label.style.getPropertyValue('--native-field-text')).toBe('rgb(17, 34, 51)')
+  f.state.nativeUi = { status: 'live', tree: { ...input, theme: { text: '#abcdef', inverseText: '#010203' } } }
+  await nextTick()
+  expect(f.root.querySelector('[aria-label="Themed draft"]')).toBe(field)
+  expect(field.value).toBe('Unsent local draft'); expect(document.activeElement).toBe(field)
+  expect(label.style.getPropertyValue('--native-field-text')).toBe('rgb(171, 205, 239)')
+  expect(label.style.getPropertyValue('--native-field-inverse')).toBe('rgb(1, 2, 3)')
+  expect(f.field).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled()
+})

@@ -1375,8 +1375,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -1386,8 +1386,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -2835,6 +2835,33 @@ type ClaudeUiFocusReply = {
 
 type ClaudeUiFocusResult = z.infer<typeof focusResult>;
 
+/** Existing app tool data carried to a canonical native group's default drawing. */
+interface ClaudeUiGroupedTool {
+    id: string;
+    tool: string;
+    summary: string;
+    status: 'denied' | 'error' | 'ok' | 'running';
+    durationMs?: number;
+    outputSummary?: string;
+    nativeAgent?: {
+        id: string;
+        ownerId?: string;
+        sessionId?: string;
+        name: string;
+        status: string;
+        statusText?: string;
+    };
+    nativeResult?: {
+        uuid: string;
+        sessionId: string;
+    };
+    details?: {
+        input?: unknown;
+        output?: string;
+        error?: string;
+    };
+}
+
 interface ClaudeUiHover {
     group?: string;
     text?: Pick<ClaudeUiTextStyle, 'backgroundColor' | 'bold' | 'color' | 'dimColor' | 'inverse' | 'italic' | 'strikethrough' | 'underline'>;
@@ -2939,6 +2966,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'button';
+    expanded?: boolean;
     color?: string;
     hotkeyColor?: string;
     focusId?: string;
@@ -2954,6 +2982,10 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'input';
+    theme?: {
+        text: string;
+        inverseText: string;
+    };
     focusId?: string;
     actionId: string;
     revision: number;
@@ -2966,6 +2998,10 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'select';
+    theme?: {
+        text: string;
+        inverseText: string;
+    };
     focusId?: string;
     actionId: string;
     revision: number;
@@ -3107,7 +3143,10 @@ interface ClaudeUiTextStyle {
     inverse?: boolean;
 }
 
+type ClaudeUiToolGroup = z.infer<typeof toolGroup>;
+
 type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
+    groupExpanded?: boolean;
     displayText: string;
     outputRewritten?: boolean;
     engineOutput?: string;
@@ -3141,6 +3180,18 @@ type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & ({
     activityStatus: string;
     resultUuid?: string;
 } | {
+    component: 'ToolGroup';
+    blockIndex: number;
+    revision: string;
+    isExpanded: boolean;
+    isActive: boolean;
+    usesEngine: boolean;
+    tools: ClaudeUiGroupedTool[];
+    artifacts: {
+        artifactId: string;
+        label: string;
+    }[];
+} | {
     component: 'ToolResult';
     blockIndex: number;
     assistantUuid: string;
@@ -3162,6 +3213,7 @@ type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & ({
 });
 
 interface ClaudeUiTranscriptRowSource {
+    producerRevision?: string;
     messageId: string;
     uuid: string;
     sessionId: string;
@@ -9024,6 +9076,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean): {
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
 declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>): {
+    toolGroups(id: string): Promise<ClaudeUiToolGroup[]>;
     releaseInstance(options: z.infer<typeof instanceRelease>): Promise<{
         released: boolean;
     }>;
@@ -10490,6 +10543,7 @@ declare const render: z.ZodObject<{
 }>;
 
 declare const renderResult: z.ZodEffects<z.ZodObject<{
+    group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     rewritten: z.ZodBoolean;
@@ -10499,6 +10553,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     rewritten: z.ZodBoolean;
@@ -10508,6 +10563,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     rewritten: z.ZodBoolean;
@@ -10517,6 +10573,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">>, z.objectOutputType<{
+    group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     rewritten: z.ZodBoolean;
@@ -10526,6 +10583,7 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    group_engine: z.ZodOptional<z.ZodBoolean>;
     tree: z.ZodUnknown;
     props: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     rewritten: z.ZodBoolean;
@@ -10795,6 +10853,47 @@ declare const threadQueries: {
      */
     readonly findArtifactByType: typeof findArtifactByThreadAndType;
 };
+
+declare const toolGroup: z.ZodObject<{
+    id: z.ZodString;
+    members: z.ZodArray<z.ZodObject<{
+        toolUseId: z.ZodString;
+        revision: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        toolUseId: string;
+        revision: string;
+    }, {
+        toolUseId: string;
+        revision: string;
+    }>, "many">;
+    usesEngine: z.ZodBoolean;
+    isActive: z.ZodBoolean;
+    isExpanded: z.ZodBoolean;
+    initialized: z.ZodBoolean;
+    revision: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    id: string;
+    revision: string;
+    members: {
+        toolUseId: string;
+        revision: string;
+    }[];
+    usesEngine: boolean;
+    isActive: boolean;
+    isExpanded: boolean;
+    initialized: boolean;
+}, {
+    id: string;
+    revision: string;
+    members: {
+        toolUseId: string;
+        revision: string;
+    }[];
+    usesEngine: boolean;
+    isActive: boolean;
+    isExpanded: boolean;
+    initialized: boolean;
+}>;
 
 /**
  * Remove a named listener by its ID.

@@ -64,19 +64,34 @@ test('renders original theme previews, cancellation, button roles and saved cust
   const label = card.getByText('Native themed label', { exact: true })
   const action = card.getByRole('button', { name: 'Native theme action', exact: true })
   const composer = card.locator('[contenteditable="true"]')
+  const note = card.getByRole('textbox', { name: 'Theme note', exact: true })
+  const choice = card.getByRole('combobox', { name: 'Theme choice', exact: true })
+  let previewFieldColor = ''
   async function showTools() {
     await expect(card).toBeVisible()
     const toggle = card.getByRole('button', { name: 'Session tools', exact: true })
     if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await expect(label).toBeVisible()
+    await expect(action).toBeEnabled()
+    await action.focus()
     await action.scrollIntoViewIfNeeded()
-    await expect(action).toBeInViewport({ ratio: 0.99 })
+    try { await expect(action).toBeInViewport({ ratio: 0.99 }) }
+    catch (error) {
+      await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-control-visibility-failure.png') })
+      throw error
+    }
   }
   await showTools()
   await composer.fill('Draft retained during native theme preview')
   await expect(label).toHaveCSS('color', 'rgb(44, 122, 57)')
   await expect(action).toHaveCSS('color', 'rgb(87, 105, 247)')
+  previewFieldColor = await note.evaluate(el => getComputedStyle(el).color)
+  await expect(choice).toHaveCSS('color', previewFieldColor)
+  await note.fill('Retain this field note through theme changes')
+  await expect.poll(async () => readFile(join(workspace!, 'native-theme-note.txt'), 'utf8').catch(() => '')).toBe('Retain this field note through theme changes')
+  await choice.selectOption('b')
+  await expect.poll(async () => readFile(join(workspace!, 'native-theme-choice.txt'), 'utf8').catch(() => '')).toBe('b')
   expect(JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe(savedTheme)
   await action.scrollIntoViewIfNeeded()
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-preview.png') })
@@ -86,13 +101,26 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await showTools()
   await expect(label).toHaveCSS('color', 'rgb(78, 186, 101)')
   await expect(action).toHaveCSS('color', 'rgb(177, 185, 249)')
+  await expect.poll(async () => note.evaluate(el => getComputedStyle(el).color)).not.toBe(previewFieldColor)
+  await expect(note).toHaveValue('Retain this field note through theme changes')
+  await expect(choice).toHaveValue('b')
   await expect(composer).toHaveText('Draft retained during native theme preview')
   expect(JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe(savedTheme)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-preview-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.pressSequentially('/theme'); await input.press('Enter')
-  // Original picker order: auto, six builtins, then user themes. Onboarding saved dark.
-  for (let index = 0; index < 6; index++) { await input.press('ArrowDown'); await appPage.waitForTimeout(100) }
+  // Read the current native highlight; the picker may reopen at Auto or the saved theme.
+  async function highlightedTheme() {
+    const output = stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
+    return output.slice(output.lastIndexOf('Theme')).match(/❯\s*([^\r\n]+)/)?.[1]?.trim() ?? ''
+  }
+  await expect.poll(highlightedTheme).not.toBe('')
+  for (let index = 0; index < 9 && !(await highlightedTheme()).startsWith('Research'); index++) {
+    const before = await highlightedTheme()
+    await input.press('ArrowDown')
+    await expect.poll(highlightedTheme).not.toBe(before)
+  }
+  expect(await highlightedTheme()).toMatch(/^Research(?:\s*custom)?$/)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-picker-selected.png') })
   await writeFile(join(workspace!, 'native-theme-selected-output.txt'), (await context()).native.output.map((chunk: any) => chunk.text).join(''))
   await input.press('Enter')
@@ -101,13 +129,23 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await appPage.setViewportSize({ width: 680, height: 900 })
   await showTools()
   await expect(label).toHaveCSS('color', 'rgb(17, 34, 51)')
+  await expect(note).toHaveCSS('color', 'rgb(18, 52, 86)')
+  await expect(choice).toHaveCSS('color', 'rgb(18, 52, 86)')
+  await expect(note).toHaveValue('Retain this field note through theme changes')
   const themedBox = label.locator('..')
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(171, 205, 239)')
   await composer.fill('Draft retained during native theme reload')
   await expect(action).toHaveCSS('color', 'rgb(68, 85, 102)')
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme.png') })
+  await note.focus()
   await writeFile(join(workspace!, '.claude/themes/research.json'), JSON.stringify({ name: 'Research', base: 'dark', overrides: { text: '#abcdef', success: '#998877', warning: '#123456', suggestion: '#334455' } }))
   await expect(label).toHaveCSS('color', 'rgb(153, 136, 119)', { timeout: 10000 })
+  await expect(note).toHaveCSS('color', 'rgb(171, 205, 239)')
+  await expect(choice).toHaveCSS('color', 'rgb(171, 205, 239)')
+  await expect(note).toBeFocused()
+  await expect(note).toHaveValue('Retain this field note through theme changes')
+  await expect(choice).toHaveValue('b')
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-theme-reloaded.png') })
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(18, 52, 86)')
   await expect(composer).toHaveText('Draft retained during native theme reload')
   await expect(action).toHaveCSS('color', 'rgb(51, 68, 85)')
@@ -132,5 +170,5 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeThemeButtonRoles:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeThemeButtonRoles:true,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 })

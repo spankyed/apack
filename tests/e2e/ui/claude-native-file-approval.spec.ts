@@ -76,7 +76,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       }, id)
       return !!owner
     }).toBe(true)
-    return appPage.locator(`[data-chat-message="${owner!.messageId}"] [data-native-tool-activity]`).nth(owner!.index)
+    return appPage.locator(`[data-native-tool-activity][data-native-tool-ids~="${id}"]`)
   }
 
   for (const turn of [1, 2, 3, 4, 5, 6, 7]) {
@@ -134,14 +134,64 @@ test('reviews native file creation, overwrite and edit before one-time decisions
         const read = readBlock.locator('[data-native-tool-result="file_read_3"] [data-native-tool-format]')
         await expect(read).toContainText('Read 2 lines')
         formattedResults.push({ turn, id: 'file_read_3', text: await read.innerText() })
-        await readToggle.click()
+        if(!(await readBlock.getAttribute('data-native-tool-ids'))?.split(' ').includes('file_fixture_3'))await readToggle.click()
       } else expect(text).toMatch(/rejected|denied|Error:/i)
       formattedResults.push({ turn, id: `file_fixture_${turn}`, text })
       if (turn === 3 || turn === 4) {
         await result.scrollIntoViewIfNeeded()
         await appPage.screenshot({ path: testInfo.outputPath(`apack-native-tool-formatted-${turn}.png`) })
       }
-      await toggle.click()
+      if(await toggle.getAttribute('aria-expanded')==='true')await toggle.click()
+      if(turn===3){
+        const group=(await toolBlock('file_read_3')).filter({has:appPage.getByRole('button',{name:'Inspect tool group',exact:true})})
+        await expect(group).toHaveAttribute('data-native-tool-group',/.+/)
+        const groupId=await group.getAttribute('data-native-tool-group'),disclosure=group.getByRole('button').first()
+        let groupedRetired:{token:string;mountId:string;threadId:string;actionId:string}|undefined
+        if(clientLifetime){
+          if(await disclosure.getAttribute('aria-expanded')!=='true')await disclosure.click()
+          const sandbox=group.locator('[data-native-tool-result="file_read_3"] [data-native-client]')
+          await expect(sandbox).toBeVisible();await sandbox.getByRole('button',{name:'Result action',exact:true}).click();await sandbox.focus();await sandbox.press('g')
+          await expect.poll(async()=> (await lifetime())['group-result']?.key).toBe('g')
+          await expect.poll(async()=> (await lifetime())['group-result']?.ticks??0).toBeGreaterThan(1)
+          const token=(await sandbox.getAttribute('data-native-client'))!
+          groupedRetired=await appPage.evaluate(token=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;for(const[mountId,view]of Object.entries(c.nativeUiViews) as [string,any][]){const frame=view.state?.transcriptMessages?.find((frame:any)=>frame.component==='ToolResult'&&frame.uuid==='file_read_3');if(frame?.body.status!=='live')continue;const find=(node:any):string|undefined=>node.kind==='button'&&node.label==='Inspect native tool result'?node.actionId:node.children?.map(find).find(Boolean);const actionId=find(frame.body.tree);if(actionId)return{token,mountId,threadId:c.currentThread.id,actionId}}},token)
+          expect(groupedRetired).toBeTruthy()
+        }
+
+        if(await disclosure.getAttribute('aria-expanded')==='true')await disclosure.click()
+        await expect(disclosure).toHaveAttribute('aria-expanded','false')
+        if(clientLifetime&&groupedRetired){
+          await expect(group.locator('[data-native-client]')).toHaveCount(0);await appPage.waitForTimeout(400)
+          const stopped=await lifetime(),before=await readFile(join(workspace!,'native-tool-result-hook.json'),'utf8')
+          await appPage.evaluate(old=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'CLAUDE_UI_CLIENT',mountId:old.mountId,threadId:old.threadId,id:old.token,sequence:1000000,event:{kind:'key',key:'x'}});actor.send({type:'CLAUDE_UI_PRESS',mountId:old.mountId,threadId:old.threadId,actionId:old.actionId})},groupedRetired)
+          await expect.poll(async()=> (await lifetime()).above?.posts??0).toBeGreaterThan(stopped.above.posts+2)
+          expect((await lifetime())['group-result']).toEqual(stopped['group-result']);expect(await readFile(join(workspace!,'native-tool-result-hook.json'),'utf8')).toBe(before)
+          await writeFile(join(workspace!,'native-group-client-stopped.json'),JSON.stringify({stopped,after:await lifetime(),staleInputAndActionRetired:true}))
+        }
+
+        await composer.fill('Keep my draft while inspecting a native tool group')
+        await group.getByRole('button',{name:'Inspect tool group',exact:true}).click()
+        const readGroup=async()=>{try{return JSON.parse(await readFile(join(workspace!,'native-tool-group-callback.json'),'utf8'))}catch{return undefined}}
+        await expect.poll(async()=> (await readGroup())?.requestId).toBe(groupId)
+        const hook=await readGroup();expect(hook.props).toMatchObject({isExpanded:false,isActive:false});expect(hook.box.text).toBe('Keep my draft while inspecting a native tool group')
+        expect(hook.props.calls.some((call:any)=>call.tool_use_id==='file_read_3'&&call.tool==='Read'&&!call.isRunning)).toBe(true)
+        await expect(disclosure).toHaveAttribute('aria-expanded','true')
+        await expect(group.locator('[data-native-tool-result="file_read_3"]')).toHaveCount(1)
+        if(clientLifetime&&groupedRetired){
+          const fresh=group.locator('[data-native-tool-result="file_read_3"] [data-native-client]');await expect(fresh).toBeVisible()
+          expect(await fresh.getAttribute('data-native-client')).not.toBe(groupedRetired.token)
+          await expect.poll(async()=> (await lifetime())['group-result']?.key).toBe('none')
+          await fresh.focus();await fresh.press('r');await expect.poll(async()=> (await lifetime())['group-result']?.key).toBe('r')
+          await writeFile(join(workspace!,'native-group-client-reopened.json'),JSON.stringify({freshToken:await fresh.getAttribute('data-native-client'),retiredToken:groupedRetired.token,state:await lifetime()}))
+        }
+
+        const sites=JSON.parse(await readFile(join(workspace!,'native-tool-sites.json'),'utf8'))
+        const original=sites.samples.flatMap((sample:any)=>sample.groups).filter((item:any)=>item.uuid===groupId).at(-1)
+        expect([...new Set(original.messages.flatMap((message:any)=>message.toolIds))].sort()).toEqual(hook.props.calls.map((call:any)=>call.tool_use_id).sort())
+        await appPage.setViewportSize({width:680,height:900});await group.scrollIntoViewIfNeeded();await appPage.screenshot({path:testInfo.outputPath('apack-native-tool-group-expanded.png')})
+        await appPage.setViewportSize({width:680,height:600});await composer.scrollIntoViewIfNeeded();await expect(composer).toHaveText('Keep my draft while inspecting a native tool group')
+        await appPage.screenshot({path:testInfo.outputPath('apack-native-tool-group-compact.png')})
+      }
     }
     if (turn === 1) {
       const savedSplit = await appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.panelSizes)
@@ -297,5 +347,5 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-tool-formatted-results.json'), JSON.stringify(formattedResults, null, 2))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeToolFormatting: true, nativeToolFormattingErrors: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeToolGroup: true, nativeToolGroupExpansionRewrite: true, nativeToolFormatting: true, nativeToolFormattingErrors: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, nativeGroupedClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

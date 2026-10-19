@@ -1,5 +1,6 @@
 <template>
   <div
+    v-if="!groupedSuppressed"
     :data-chat-message="message.id"
     :class="[
       'flex pb-3 animate-fade-in w-full',
@@ -239,6 +240,7 @@ import { computed, ref, onUpdated, watch, provide, h } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import NativeToolDrawing from './NativeToolDrawing.vue'
+import NativeToolGroups from './NativeToolGroups.vue'
 import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
@@ -283,14 +285,20 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 
 const emit = defineEmits<ChatMessageEmits>()
 provide(claudeToolDrawings, {
+  groups: (toolUseIds,fallback) => h(NativeToolGroups,{toolUseIds},{default:({ids}:{ids:readonly string[]})=>fallback(ids)}),
   render: (component, toolUseId, fallback) => h(NativeToolDrawing, { component, toolUseId }, fallback),
-  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && (frame.component === 'ToolResult' || frame.component === 'ToolUse' || frame.component === 'ToolProgress'))),
+  frames: computed(() => (props.nativeFrames ?? []).filter(frame => (frame.component === 'ToolResult' || frame.component === 'ToolUse' || frame.component === 'ToolProgress' || frame.component === 'ToolGroup'))),
   press: (id, href) => emit('native-ui-press', id, href),
   field: event => emit('native-ui-field', event),
   view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },
 })
 
 
+const groupedSuppressed = computed(() => {
+  if(props.message.text?.trim()||!props.message.blocks?.length||props.message.blocks.some(block=>block.type!=='tool-activity'))return false
+  const groups=(props.nativeFrames??[]).filter(frame=>frame.component==='ToolGroup'&&frame.body.status==='live')
+  return props.message.blocks.every(block=>block.props.entries?.length&&block.props.entries.every((entry:{id:string})=>groups.some(group=>group.component==='ToolGroup'&&group.tools[0]?.id!==entry.id&&group.tools.some(tool=>tool.id===entry.id))))
+})
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
 const blockExpansion = new Map<number, boolean>()

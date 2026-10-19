@@ -104,7 +104,7 @@ function bind(key: string, view: ClaudeUiView): void {
       if (![pending.approvalMessageId, native.dialogId, native.revision, native.sessionId, native.requestId].every(value => typeof value === 'string')) return undefined
       return { messageId: pending.approvalMessageId as string, id: native.dialogId as string, revision: native.revision as string, sessionId: native.sessionId as string, requestId: native.requestId as string }
     },
-    messages: () => !view.nativeView && view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.blockExpansion) : [],
+    messages: groups => !view.nativeView && view.messageIds.size && owner.sessionId ? selectClaudeTranscriptRows(repository.chatQueries.threadData(view.threadId as EntityId)?.messages ?? [], owner.sessionId, view.messageIds, view.userExpansion, view.blockExpansion, groups) : [],
     isCurrent: () => views.get(key) === view && getClaudeUiOwner(view.threadId, view.nativeView) === owner,
     requestFocus: (focusId, revision, paneId) => {
       if (views.get(key) === view && view.owner === owner) view.reply({ type: 'CLAUDE_UI_FOCUS_STATE', threadId: view.threadId, mountId: view.mountId, result: { revision, moved: true, focusId, ...(paneId ? { paneId } : {}) } })

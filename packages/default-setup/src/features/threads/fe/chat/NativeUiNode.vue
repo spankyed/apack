@@ -10,7 +10,7 @@
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :class="node.href ? 'underline text-blue-400 focus-visible:outline focus-visible:outline-blue-400' : undefined" @click.prevent="node.href && openLink(node.href)">
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </component>
-  <button v-else-if="node.kind === 'button'" :ref="hoverElement" :style="buttonPaint" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
+  <button v-else-if="node.kind === 'button'" :aria-expanded="node.expanded" :ref="hoverElement" :style="buttonPaint" type="button" :disabled="!node.actionId" :data-native-plugin="node.plugin"
     :aria-label="node.label" :aria-keyshortcuts="node.hotkey" :data-native-focus-id="node.focusId" :data-native-scroll-id="node.focusId" :data-native-hotkey="node.actionId ? node.hotkey : undefined" :data-native-autofocus="node.autoFocus === true && !!node.actionId ? 'true' : undefined"
     :data-native-role="node.role"
     class="inline-flex min-h-8 max-w-full self-start items-center justify-center gap-1.5 whitespace-normal break-words rounded-md border px-2.5 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40"

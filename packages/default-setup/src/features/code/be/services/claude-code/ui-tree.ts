@@ -206,8 +206,14 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       identities.add(identity)
       const actionId = [...(previous?.fields ?? [])].find(([, field]) => field.type === type && field.plugin === press.plugin && field.key === props.key && field.clientInstance === clientScope)?.[0] ?? randomUUID()
       const field = { type, plugin: press.plugin, handle: press.handle, key: props.key, ...(clientScope?{clientInstance:clientScope}:{}) } as const
+      let theme: { text: string; inverseText: string } | undefined
+      if (props._apackFieldTheme !== undefined) {
+        const nativeTheme = props._apackFieldTheme
+        if (!record(nativeTheme) || ['text', 'inverseText'].some(name => typeof nativeTheme[name] !== 'string' || !nativeTheme[name].length || nativeTheme[name].length > 256)) throw new ClaudeProtocolError('native UI field theme is invalid')
+        theme = { text: nativeTheme.text as string, inverseText: nativeTheme.inverseText as string }
+      }
       const label = typeof props.label === 'string' ? { label: props.label } : {}
-      const common = { actionId, ...(!clientScope?focusIdentity(press.plugin, props.key):{}), revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
+      const common = { actionId, ...(theme ? { theme } : {}), ...(!clientScope?focusIdentity(press.plugin, props.key):{}), revision: 0, ...label, value: typeof props.value === 'string' ? props.value : '', autoFocus: props.autoFocus === true, ...attribution }
       if (type === 'input') {
         if (props.rows !== undefined && (typeof props.rows !== 'number' || !Number.isSafeInteger(props.rows) || props.rows < 1)) throw new ClaudeProtocolError('native UI input rows are invalid')
         fields.set(actionId, field)
@@ -240,7 +246,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (value.children !== undefined && !Array.isArray(value.children)) throw new ClaudeProtocolError('native UI button children are invalid')
       if (Array.isArray(value.children)) value.children.forEach(validateInline)
       const hover = readClaudeUiHover(value, props)
-      const button: ClaudeUiNode = { kind: 'button', ...(typeof props.color === 'string' ? { color: props.color } : {}), ...(typeof props.hotkeyColor === 'string' ? { hotkeyColor: props.hotkeyColor } : {}), ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
+      const button: ClaudeUiNode = { kind: 'button', ...(typeof props._apackExpanded === 'boolean' ? {expanded:props._apackExpanded} : {}), ...(typeof props.color === 'string' ? { color: props.color } : {}), ...(typeof props.hotkeyColor === 'string' ? { hotkeyColor: props.hotkeyColor } : {}), ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
         ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(child => visit(child, plugin)) } : {}),
         ...(props.hotkey !== undefined ? { hotkey: props.hotkey as string } : {}),
         ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),

@@ -113,7 +113,7 @@ export function createClaudePaneHost(options: {
       if (!current() || event.type !== 'system') return
       if (event.subtype === 'ui_scroll' && event.component === 'Pane' && typeof event.instance_id === 'string' && roster?.panes.some(pane => pane.id === event.instance_id)) siteScroll(event.instance_id).receive(event)
       if (event.subtype === 'ui_panes') { if (focusInFlight) refreshAfterFocus = true; else void refresh() }
-      if (event.subtype === 'ui_invalidate' && event.event === 'ui.render') invalidate()
+      if (event.subtype === 'ui_invalidate' && event.event === 'ui.render' && event.tool_groups !== true) invalidate()
       if (event.subtype === 'ui_focus' && event.client_id === client.client_id && event.component === 'Pane' && event.instance_id === roster?.shown_id) {
         const id = [...(drawing?.focusables ?? [])].find(([, value]) => value.plugin === event.plugin && value.key === event.key)?.[0]
         if (id && roster?.shown_id) options.requestFocus?.(id, focusRevisions.get(roster.shown_id) ?? 0, roster.shown_id)

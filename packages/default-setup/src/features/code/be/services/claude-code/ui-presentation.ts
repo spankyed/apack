@@ -75,9 +75,9 @@ export type ClaudeUiNode =
   | { kind: 'box'; scrollId?: string; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
   | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
-  | { kind: 'button'; color?: string; hotkeyColor?: string; focusId?: string; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
-  | { kind: 'input'; focusId?: string; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
-  | { kind: 'select'; focusId?: string; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
+  | { kind: 'button'; expanded?: boolean; color?: string; hotkeyColor?: string; focusId?: string; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
+  | { kind: 'input'; theme?: { text: string; inverseText: string }; focusId?: string; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
+  | { kind: 'select'; theme?: { text: string; inverseText: string }; focusId?: string; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }
   | { kind: 'unsupported'; component: string; plugin?: string }
 
 export type ClaudePromptEdit = Omit<import('./ui-controls.ts').ClaudeUiPromptEdit, 'client_id' | 'surface'> & { revision: number }
@@ -119,6 +119,7 @@ export interface ClaudeUiNotices {
 }
 
 interface ClaudeUiTranscriptRowSource {
+  producerRevision?: string
   messageId: string
   uuid: string
   sessionId: string
@@ -126,16 +127,26 @@ interface ClaudeUiTranscriptRowSource {
   start: number
   end: number
 }
+/** Existing app tool data carried to a canonical native group's default drawing. */
+export interface ClaudeUiGroupedTool {
+  id: string; tool: string; summary: string; status: 'running' | 'ok' | 'denied' | 'error'
+  durationMs?: number; outputSummary?: string
+  nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string }
+  nativeResult?: { uuid: string; sessionId: string }
+  details?: { input?: unknown; output?: string; error?: string }
+}
 export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary?: false }
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary: true; blockIndex: number }
   | { component: 'ToolUse'; blockIndex: number; assistantUuid: string; activityStatus: string; resultUuid?: string }
   | { component: 'ToolProgress'; blockIndex: number; assistantUuid: string; activityStatus: string; resultUuid?: string }
+  | { component: 'ToolGroup'; blockIndex: number; revision: string; isExpanded: boolean; isActive: boolean; usesEngine: boolean; tools: ClaudeUiGroupedTool[]; artifacts: { artifactId: string; label: string }[] }
   | { component: 'ToolResult'; blockIndex: number; assistantUuid: string; resultUuid: string; tool: string; isErrored: boolean }
   | { component: 'CommandOutput'; isErrored: boolean }
   | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
+  groupExpanded?: boolean
   displayText: string
   outputRewritten?: boolean
   engineOutput?: string

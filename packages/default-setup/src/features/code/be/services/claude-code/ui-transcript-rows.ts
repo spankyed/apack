@@ -1,8 +1,12 @@
+import type { ClaudeUiToolGroup } from './ui-controls.ts'
+import { selectClaudeToolGroupRows, type ClaudeUiToolCandidate } from './ui-tool-group-rows.ts'
+import type { ClaudeUiGroupedTool } from './ui-presentation.ts'
 import type { ClaudeUiTranscriptRow } from './ui-presentation.ts'
 
 /** Only persisted rows belonging to this thread, session and mounted message set are eligible. */
-export function selectClaudeTranscriptRows(messages: readonly { id?: string; sender?: string; text?: string; status?: string | null; context?: unknown; blocks?: readonly unknown[] }[], sessionId: string | undefined, selected: ReadonlySet<string>, userExpansion: ReadonlyMap<string, boolean> = new Map(), blockExpansion: ReadonlyMap<string, ReadonlySet<number>> = new Map()): ClaudeUiTranscriptRow[] {
+export function selectClaudeTranscriptRows(messages: readonly { id?: string; sender?: string; text?: string; status?: string | null; context?: unknown; blocks?: readonly unknown[] }[], sessionId: string | undefined, selected: ReadonlySet<string>, userExpansion: ReadonlyMap<string, boolean> = new Map(), blockExpansion: ReadonlyMap<string, ReadonlySet<number>> = new Map(), nativeGroups: readonly ClaudeUiToolGroup[] = []): ClaudeUiTranscriptRow[] {
   if (!sessionId) return []
+  const candidates: ClaudeUiToolCandidate[] = []
   const rows: ClaudeUiTranscriptRow[] = [], first = new Map<string, string>(), seen = new Set<string>(), duplicates = new Set<string>()
   for (const message of messages) {
     if (typeof message.id !== 'string' || typeof message.text !== 'string') continue
@@ -42,17 +46,22 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
           if (!value || typeof value !== 'object') continue
           const item = value as Record<string, unknown>, result = item.nativeResult as Record<string, unknown> | undefined
           const details = item.details && typeof item.details === 'object' ? item.details as Record<string, unknown> : undefined
+          let candidate: ClaudeUiToolCandidate | undefined
           if (typeof item.id === 'string' && item.id && item.id.length <= 256 && typeof item.tool === 'string' && item.tool && item.tool.length <= 256) {
             const key = `tool-use:${item.id}`
             if (seen.has(key)) duplicates.add(key)
             seen.add(key)
-            if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) for (const component of ['ToolUse', 'ToolProgress'] as const) rows.push({ component, messageId: message.id, uuid: item.id, sessionId, text: typeof item.summary === 'string' ? item.summary : item.tool, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, activityStatus: String(item.status), ...(result?.sessionId === sessionId && typeof result.uuid === 'string' ? { resultUuid: result.uuid } : {}) })
+            const children: ClaudeUiTranscriptRow[] = (['ToolUse','ToolProgress'] as const).map(component=>({component,messageId:message.id!,uuid:item.id as string,sessionId,text:typeof item.summary==='string'?item.summary:item.tool as string,start:0,end:0,blockIndex,assistantUuid:terminal.uuid as string,activityStatus:String(item.status),...(result?.sessionId===sessionId&&typeof result.uuid==='string'?{resultUuid:result.uuid}:{})}))
+            if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) rows.push(...children)
+            if(['running','ok','denied','error'].includes(String(item.status))){candidate={messageId:message.id,blockIndex,expanded:blockExpansion.get(message.id)?.has(blockIndex)===true,tool:{...(item as unknown as ClaudeUiGroupedTool),summary:typeof item.summary==='string'?item.summary:item.tool},rows:children};const artifact=(block.props as Record<string,unknown>).artifactRef as Record<string,unknown>|undefined;if(artifact&&typeof artifact.artifactId==='string'&&typeof artifact.label==='string')candidate.artifact={artifactId:artifact.artifactId,label:artifact.label};candidates.push(candidate)}
           }
           if (!result || result.sessionId !== sessionId || typeof result.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(result.uuid) || typeof item.id !== 'string' || !item.id || item.id.length > 256 || typeof item.tool !== 'string' || !item.tool || item.tool.length > 256 || !['ok', 'error'].includes(String(item.status)) || typeof details?.output !== 'string') continue
           const key = `tool-result:${item.id}`
           if (seen.has(key)) duplicates.add(key)
           seen.add(key)
-          if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) rows.push({ component: 'ToolResult', messageId: message.id, uuid: item.id, sessionId, text: details.output, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, resultUuid: result.uuid, tool: item.tool, isErrored: item.status === 'error' })
+          const resultRow:ClaudeUiTranscriptRow={ component: 'ToolResult', messageId: message.id, uuid: item.id, sessionId, text: details.output, start: 0, end: 0, blockIndex, assistantUuid: terminal.uuid, resultUuid: result.uuid, tool: item.tool, isErrored: item.status === 'error' }
+          candidate?.rows.push(resultRow)
+          if (selected.has(message.id) && blockExpansion.get(message.id)?.has(blockIndex)) rows.push(resultRow)
         }
       }
       if (block.type !== 'thinking' || !block.props || typeof block.props !== 'object') continue
@@ -90,5 +99,5 @@ export function selectClaudeTranscriptRows(messages: readonly { id?: string; sen
       if (selected.has(message.id)) rows.push({ component: 'AssistantMessage', messageId: message.id, uuid: row.uuid, sessionId, text: row.text, start: row.start, end: row.end, isFirstOfReply: !apiId || first.get(apiId) === row.uuid })
     }
   }
-  return rows.filter(row => !duplicates.has(row.component === 'ToolResult' ? `tool-result:${row.uuid}` : (row.component === 'ToolUse' || row.component === 'ToolProgress') ? `tool-use:${row.uuid}` : row.uuid))
+  return selectClaudeToolGroupRows(rows.filter(row => !duplicates.has(row.component === 'ToolResult' ? `tool-result:${row.uuid}` : (row.component === 'ToolUse' || row.component === 'ToolProgress') ? `tool-use:${row.uuid}` : row.uuid)), candidates, nativeGroups, selected)
 }

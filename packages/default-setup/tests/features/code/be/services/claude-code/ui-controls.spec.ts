@@ -263,3 +263,15 @@ it('keeps instance lifetime metadata on the native adapter and never sends it to
   await print.render({ ...scope, surface: 'desktop', props: {} }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_render', client_id: 'view', component: 'ToolResult', instance_id: 'result', surface: 'desktop', props: {} })
   await print.press({ ...scope, surface: 'desktop', plugin: 'fixture', handle: 1 }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_press', client_id: 'view', surface: 'desktop', plugin: 'fixture', handle: 1 })
 })
+
+
+it('discovers only native-adapter groups and validates source revisions before mounting',async()=>{
+ const group={id:'native-group',members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:true,isExpanded:false,initialized:false,revision:'a'.repeat(64)}
+ const request=vi.fn(async()=>({groups:[group]}))
+ const print=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request})
+ await expect(print.toolGroups('view')).resolves.toEqual([]);expect(request).not.toHaveBeenCalled()
+ const native=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+ await expect(native.toolGroups('view')).resolves.toEqual([group]);expect(request).toHaveBeenCalledWith({subtype:'apack_ui_tool_groups',client_id:'view'})
+ request.mockResolvedValueOnce({groups:[{...group,revision:'not-a-source-revision'}]})
+ await expect(native.toolGroups('view')).rejects.toThrow()
+})

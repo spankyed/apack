@@ -97,7 +97,8 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
 
   await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe('synthetic protocol fixture\n')
-  await expect(progress).toHaveText('')
+  await expect.poll(async()=> (await progress.allTextContents()).join('')).toBe('')
+  await expect(appPage.locator(`[data-native-tool-progress="${toolId}"]`).getByRole('button',{name:'Run in background',exact:true})).toHaveCount(0)
   await expect(composer).toHaveText('Keep my draft while a native tool runs')
 
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)

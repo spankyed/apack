@@ -1,7 +1,11 @@
 <template>
-  <div data-native-tool-activity class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
+  <NativeGroups v-if="!skipNativeGroups" :tool-use-ids="entries.map(entry => entry.id)">
+    <template #default="{ ids }"><ToolActivityBlock v-if="ids.length" v-bind="props" :entries="entries.filter(entry => ids.includes(entry.id))" :label="ids.length === entries.length ? label : ''" :skip-native-groups="true" /></template>
+  </NativeGroups>
+  <div v-else :data-native-tool-activity="nativeGrouped ? undefined : true" :data-native-tool-ids="nativeGrouped ? undefined : entries.map(entry => entry.id).join(' ')" class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
     <!-- Header row: chevron + icon + label + badge/spinner -->
     <button
+      v-if="!nativeGrouped"
       type="button"
       class="w-full flex items-baseline gap-2 px-3 py-2 text-left hover:bg-neutral-700/40 transition-colors"
       :aria-expanded="isOpen"
@@ -126,6 +130,9 @@ interface Props {
   label: string
   state: 'streaming' | 'done' | 'error'
   defaultOpen?: boolean
+  skipNativeGroups?: boolean
+  nativeGrouped?: boolean
+  nativeExpansion?: boolean
   artifactRef?: ArtifactRef
   phase?: string
 }
@@ -135,26 +142,31 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const nativeDrawings = inject(claudeToolDrawings, undefined)
+const NativeGroups = defineComponent({
+  props:{toolUseIds:{type:Array as PropType<string[]>,required:true}},
+  setup(props,{slots}){return()=>nativeDrawings?.groups(props.toolUseIds,ids=>slots.default?.({ids}))??slots.default?.({ids:props.toolUseIds})},
+})
 // The owning message supplies its native renderer; this display block owns no feature UI.
 const NativeToolDrawing = defineComponent({
   props: { toolUseId: { type: String, required: true }, component: { type: String as PropType<'ToolUse' | 'ToolResult' | 'ToolProgress'>, required: true } },
   setup(props, { slots }) { return () => nativeDrawings?.render(props.component, props.toolUseId, slots.default ?? (() => [])) ?? slots.default?.() },
 })
 
-onMounted(() => { if (props.entries[0]) nativeDrawings?.view(props.entries[0].id, isOpen.value) })
-onBeforeUnmount(() => { if (props.entries[0]) nativeDrawings?.view(props.entries[0].id, false) })
+onMounted(() => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, isOpen.value) })
+onBeforeUnmount(() => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, false) })
 
 // User toggle wins once they interact; we only auto-open on error-state
 // transitions (P3 of the design doc).
-const isOpen = ref(props.defaultOpen)
-watch(isOpen, open => { if (props.entries[0]) nativeDrawings?.view(props.entries[0].id, open) })
+const isOpen = ref(props.nativeExpansion ?? props.defaultOpen)
+watch(() => props.nativeExpansion, open => { if(open !== undefined)isOpen.value=open })
+watch(isOpen, open => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, open) })
 
 const listEl = ref<HTMLElement | null>(null)
 let userHasToggled = false
 let userHasScrolled = false
 
 watch(() => props.state, (next, prev) => {
-  if (next === 'error' && prev !== 'error' && !userHasToggled) {
+  if (!props.nativeGrouped && next === 'error' && prev !== 'error' && !userHasToggled) {
     isOpen.value = true
   }
 })
