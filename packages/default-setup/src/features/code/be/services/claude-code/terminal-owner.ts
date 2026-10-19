@@ -159,7 +159,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
     let changingView = false, preparingParent = false
     return {
-      get state() { return { view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, activity: bridge.activity, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
       get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },

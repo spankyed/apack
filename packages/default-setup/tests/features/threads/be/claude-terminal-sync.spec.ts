@@ -182,3 +182,19 @@ it('publishes targeted Plan/Edit transitions from observed native mode without a
     expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before + 1)
   } finally { await release() }
 })
+
+it('reports native pending workflows as working without turning them into Agents or blocking submission', async () => {
+  let release!: () => Promise<void>
+  const state = { ownerId: 'owner', sessionId, status: 'live', tasks: [], activity: { pendingAgents: 0, pendingWorkflows: 1 } }
+  const owner = { state, busy: false, getWorkflowDialogs: async () => [], getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [], readJournal: async () => ({ entries: [], pending: false, problems: [] }), beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  try {
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'working' }))
+    expect(owner.busy).toBe(false); expect(state.tasks).toEqual([])
+    state.activity.pendingWorkflows = 0
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'success' }))
+    state.activity.pendingWorkflows = 1; state.status = 'exited'
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'paused' }))
+  } finally { await release() }
+})

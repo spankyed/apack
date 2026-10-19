@@ -54,6 +54,7 @@ export async function createClaudeTerminalBridge(options: {
   }
   const matches = (value: Record<string, unknown>) => value.kind === 'subagent' ? !!subagentCommand && value.command === subagentCommand : value.kind === 'main' && !!mainCommand && (value.command === mainCommand || value.command === prefixCommand(mainCommand))
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
+  let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0
   let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
@@ -76,6 +77,17 @@ export async function createClaudeTerminalBridge(options: {
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
+      }
+      if (request.url === '/native-activity') {
+        if (value.sessionId !== projection.sessionId || value.pid !== observerPid) return reply(409, {})
+        const counts = object(value.activity)
+        if (!counts || !['pendingAgents', 'pendingWorkflows'].every(key => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return reply(400, {})
+        const next = { pendingAgents: counts.pendingAgents as number, pendingWorkflows: counts.pendingWorkflows as number }
+        if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && JSON.stringify(activity) !== JSON.stringify(next)) return reply(409, {})
+        const changed = JSON.stringify(activity) !== JSON.stringify(next)
+        activitySequence = value.sequence as number; activity = next
+        if (changed) options.changed()
+        return reply(200, {})
       }
       if (request.url === '/observer-error') {
         if (typeof value.message !== 'string') return reply(400, {})
@@ -114,7 +126,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if (!policyChanged && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
+        if (changedSession) { activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
           session.update(value.metadata)
           // Native dialogs and terminal shortcuts can change mode without a host command.
@@ -286,6 +298,7 @@ export async function createClaudeTerminalBridge(options: {
       get view() { return nativeView },
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
+      get activity() { return activity },
       get busy() { return busy || !!pending },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
         if (closed || !ready || pending || busy || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
@@ -297,7 +310,7 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },

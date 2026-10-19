@@ -310,3 +310,22 @@ it('does not let a late plugin poll roll back policy after native owner handoff'
  expect((await request('/poll',{sessionId:session,agents:[],statusCommand:null,subagentCommand:null,policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})).status).toBe(200)
  expect((await config()).generations).toEqual(current);expect(bridge!.projection.mainStatus).toBe('native policy output');expect(bridge!.busy).toBe(true)
 })
+
+it('fences native pending activity by owner/session/sequence without blocking background submission', async () => {
+  await create()
+  const body = { sessionId: session, pid: process.pid, sequence: 1, activity: { pendingAgents: 0, pendingWorkflows: 1 } }
+  expect((await request('/native-activity', { ...body, pid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/native-activity', body)).status).toBe(200)
+  expect(bridge!.activity).toEqual(body.activity); expect(bridge!.busy).toBe(false)
+  expect((await request('/native-activity', body)).status).toBe(200)
+  expect((await request('/native-activity', { ...body, activity: { pendingAgents: 0, pendingWorkflows: 0 } })).status).toBe(409)
+  for (const pendingWorkflows of [-1, 1.5, '1']) expect((await request('/native-activity', { ...body, sequence: 2, activity: { pendingAgents: 0, pendingWorkflows } })).status).toBe(400)
+  expect(bridge!.activity).toEqual(body.activity)
+  const next = { ...body, sequence: 2, activity: { pendingAgents: 0, pendingWorkflows: 0 } }
+  expect((await request('/native-activity', next)).status).toBe(200)
+  expect((await request('/native-activity', body)).status).toBe(409)
+  expect(bridge!.activity).toEqual(next.activity)
+  await request('/poll', { sessionId: '22222222-2222-2222-2222-222222222222', agents: [] })
+  expect(bridge!.activity).toBeUndefined()
+  expect((await request('/native-activity', { ...body, sequence: 3 })).status).toBe(409)
+})

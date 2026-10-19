@@ -28,6 +28,8 @@ export interface ClaudeNativeTerminalState {
   nativePid?: number
   exitCode?: number
   busy: boolean
+  /** Native pending-work counts, independent of prompt submission readiness. */
+  activity?: { pendingAgents: number; pendingWorkflows: number }
   lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
   session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata
   mainStatus?: string
