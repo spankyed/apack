@@ -83,9 +83,14 @@ it('renders result hooks only for expanded native tool rows with exact session/r
   const source = { id: 'app-tool', sender: 'assistant', text: '', context: { cliUuid: '22222222-2222-2222-2222-222222222222', claudeTerminalMessage: { uuid: '22222222-2222-2222-2222-222222222222', sessionId: 'session' } }, blocks: [{ type: 'tool-activity', props: { entries: [entry] } }] }
   const selected = new Set(['app-tool']), open = new Map([['app-tool', new Set([0])]])
   expect(selectClaudeTranscriptRows([source], 'session', selected)).toEqual([])
-  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open)).toEqual([expect.objectContaining({ component: 'ToolResult', uuid: 'tool-id', resultUuid: entry.nativeResult.uuid, blockIndex: 0, text: 'Original text' })])
+  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open)).toEqual([expect.objectContaining({ component: 'ToolUse', uuid: 'tool-id', assistantUuid: source.context.cliUuid }), expect.objectContaining({ component: 'ToolResult', uuid: 'tool-id', resultUuid: entry.nativeResult.uuid, blockIndex: 0, text: 'Original text' })])
   expect(selectClaudeTranscriptRows([source], 'foreign', selected, new Map(), open)).toEqual([])
   expect(selectClaudeTranscriptRows([source, { ...source, id: 'duplicate' }], 'session', selected, new Map(), open)).toEqual([])
   entry.nativeResult.sessionId = 'foreign'
-  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open)).toEqual([])
+  expect(selectClaudeTranscriptRows([source], 'session', selected, new Map(), open).map(row => row.component)).toEqual(['ToolUse'])
+})
+
+it('mounts a pending ToolUse without fabricating a result or trusting app running flags', () => {
+ const source={id:'pending',sender:'assistant',text:'',context:{cliUuid:'22222222-2222-2222-2222-222222222222',claudeTerminalMessage:{uuid:'22222222-2222-2222-2222-222222222222',sessionId:'session'}},blocks:[{type:'tool-activity',props:{entries:[{id:'pending-tool',tool:'Write',status:'running',summary:'file.txt'}]}}]}
+ expect(selectClaudeTranscriptRows([source],'session',new Set(['pending']),new Map(),new Map([['pending',new Set([0])]]))).toEqual([expect.objectContaining({component:'ToolUse',uuid:'pending-tool',activityStatus:'running',text:'file.txt'})])
 })

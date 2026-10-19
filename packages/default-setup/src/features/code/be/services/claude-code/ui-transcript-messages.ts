@@ -27,11 +27,12 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   return node
 }
 const rowKey = (row: ClaudeUiTranscriptRow) => JSON.stringify([row.component, row.uuid])
-const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'ToolResult' || b.component !== 'ToolResult' || a.blockIndex === b.blockIndex && a.resultUuid === b.resultUuid && a.assistantUuid === b.assistantUuid && a.tool === b.tool) && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
+const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && (a.component !== 'ToolResult' || b.component !== 'ToolResult' || a.blockIndex === b.blockIndex && a.resultUuid === b.resultUuid && a.assistantUuid === b.assistantUuid && a.tool === b.tool) && (a.component !== 'ToolUse' || b.component !== 'ToolUse' || a.blockIndex === b.blockIndex && a.assistantUuid === b.assistantUuid && a.resultUuid === b.resultUuid && a.activityStatus === b.activityStatus) && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
 const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
   if (!sameSource(a, b)) return false
   if (a.component === 'AssistantMessage' && b.component === 'AssistantMessage') return a.isFirstOfReply === b.isFirstOfReply
   if (a.component === 'UserMessage' && b.component === 'UserMessage') return a.isExpanded === b.isExpanded && JSON.stringify(a.origin) === JSON.stringify(b.origin)
+  if (a.component === 'ToolUse' && b.component === 'ToolUse') return true
   if (a.component === 'ToolResult' && b.component === 'ToolResult') return a.isErrored === b.isErrored
   return a.component === 'CommandOutput' && b.component === 'CommandOutput' && a.isErrored === b.isErrored
 }
@@ -101,6 +102,7 @@ export function createClaudeTranscriptMessageHost(options: {
         try {
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid, instance_revision: entry.instanceRevision,
             props: entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
+              : entry.row.component === 'ToolUse' ? { assistant_uuid: entry.row.assistantUuid }
               : entry.row.component === 'ToolResult' ? { source_uuid: entry.row.resultUuid, assistant_uuid: entry.row.assistantUuid, text: entry.row.text, tool: entry.row.tool, isErrored: entry.row.isErrored }
               : entry.row.component === 'CommandOutput' ? { text: entry.row.text, isErrored: entry.row.isErrored }
               : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
@@ -114,7 +116,7 @@ export function createClaudeTranscriptMessageHost(options: {
           entry.drawing = drawing; entry.fields = drawing
           entry.displayText = typeof result.props.text === 'string' ? entry.row.component === 'CommandOutput' ? stripVTControlCharacters(result.props.text).trim() : entry.row.component === 'UserMessage' && result.rewritten ? result.props.text.slice(0, 100000) : result.props.text : originalDisplayText(entry.row)
           entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
-          entry.engineOutput = entry.row.component === 'ToolResult' ? result.engine_output : undefined
+          entry.engineOutput = entry.row.component === 'ToolResult' || entry.row.component === 'ToolUse' ? result.engine_output : undefined
           if (entry.outputRewritten) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }

@@ -10,7 +10,10 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
-  const lifetime = async (): Promise<any> => JSON.parse(await readFile(join(workspace!, 'native-client-lifetime.json'), 'utf8').catch(() => '{}'))
+  const lifetime = async (): Promise<any> => {
+    try { return JSON.parse(await readFile(join(workspace!, 'native-client-lifetime.json'), 'utf8')) }
+    catch (error: any) { if (error instanceof SyntaxError || error.code === 'ENOENT') return {}; throw error }
+  }
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -115,6 +118,9 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       const block = await toolBlock(`file_fixture_${turn}`)
       const toggle = block.getByRole('button').first()
       if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+      const header = block.locator(`[data-native-tool-use="file_fixture_${turn}"] [data-native-tool-format]`)
+      await expect(header).toBeVisible()
+      await expect(header).toContainText(isEdit ? 'Update' : 'Write')
       const result = block.locator(`[data-native-tool-result="file_fixture_${turn}"] [data-native-tool-format]`)
       if (turn === 4) await writeFile(join(workspace!, 'native-tool-denial-diagnostic.json'), JSON.stringify(await appPage.evaluate(() => ({ messages: (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.messages, views: (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews }))))
       await expect(result).toBeVisible()
@@ -149,6 +155,13 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       formattedResults.push({ turn, id: 'file_fixture_1', text: await result.locator('[data-native-tool-format]').innerText() })
       const id = await result.getAttribute('data-native-tool-result')
       await composer.fill('Keep my draft while inspecting a native tool result')
+      if (!clientLifetime) {
+        const header = (await toolBlock(id!)).locator(`[data-native-tool-use="${id}"] [data-native-tool-format]`)
+        await expect(header).toContainText('ShownWrite(display-only.txt)')
+        const use = JSON.parse(await readFile(join(workspace!, 'native-tool-use-'+id+'.json'), 'utf8'))
+        expect(use.requestId).toBe(id)
+        expect(use.props).toMatchObject({ tool_use_id: id, tool: 'Write', input: { file_path: target }, isRunning: false, isErrored: false, isInterrupted: false })
+      }
       await result.getByRole('button', { name: 'Inspect native tool result', exact: true }).click()
       await expect.poll(async () => { try { return JSON.parse(await readFile(join(workspace!, 'native-tool-result-hook.json'), 'utf8')).requestId } catch { return undefined } }).toBe(id)
       const hook = JSON.parse(await readFile(join(workspace!, 'native-tool-result-hook.json'), 'utf8'))

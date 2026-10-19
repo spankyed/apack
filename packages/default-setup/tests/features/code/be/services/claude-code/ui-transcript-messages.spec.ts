@@ -198,3 +198,18 @@ it('keeps actions live during Client snapshots and redraws only the originating 
   await expect(f.host.press(b.actionId!)).resolves.toEqual({ handled: true })
   await f.host.dispose()
 })
+
+
+it('keeps ToolUse producer state native and retires header actions when activity changes', async () => {
+  const f = fixture()
+  const tool: ClaudeUiTranscriptRow = { component: 'ToolUse', messageId: 'app', uuid: 'tool', sessionId: 'session', text: 'Original', start: 0, end: 0, blockIndex: 0, assistantUuid: 'assistant', activityStatus: 'running' }
+  f.setRows([tool]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ component: 'ToolUse', instance_id: 'tool', props: { assistant_uuid: 'assistant' } }))
+  const button = f.nodes()[0]; if (button.kind !== 'button') throw Error('button')
+  f.setRows([{ ...tool, activityStatus: 'completed', resultUuid: 'result' }])
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  expect(f.ui.press).not.toHaveBeenCalled()
+  f.host.refresh(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenCalledTimes(2)
+  await f.host.dispose()
+})

@@ -129,6 +129,7 @@ interface ClaudeUiTranscriptRowSource {
 export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary?: false }
   | { component: 'AssistantMessage'; isFirstOfReply: boolean; isSummary: true; blockIndex: number }
+  | { component: 'ToolUse'; blockIndex: number; assistantUuid: string; activityStatus: string; resultUuid?: string }
   | { component: 'ToolResult'; blockIndex: number; assistantUuid: string; resultUuid: string; tool: string; isErrored: boolean }
   | { component: 'CommandOutput'; isErrored: boolean }
   | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }

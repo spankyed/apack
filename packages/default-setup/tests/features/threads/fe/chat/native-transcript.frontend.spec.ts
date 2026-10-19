@@ -1,5 +1,5 @@
-import NativeToolResult from '#features/threads/fe/chat/NativeToolResult.vue'
-import { claudeToolResults } from '#extensions/blocks/display/native-tool-results.ts'
+import NativeToolDrawing from '#features/threads/fe/chat/NativeToolDrawing.vue'
+import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
 import { createApp, h, nextTick, computed, provide, type App } from 'vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import { claudeNativeMessageParts, claudeThinkingMessageParts } from '#features/threads/fe/chat/native-message-parts.ts'
@@ -89,7 +89,7 @@ it('reports actual thinking expansion and removes its native slot on collapse', 
 it('renders structured plugin result rewrites as inert text and routes their controls within the owning message', () => {
   const value: ClaudeUiTranscriptFrame = { component: 'ToolResult', messageId: 'app', uuid: 'tool-id', sessionId: 'session', text: 'Original text', start: 0, end: 0, blockIndex: 0, assistantUuid: 'assistant-uuid', resultUuid: 'result', tool: 'Read', isErrored: false, outputRewritten: true, displayText: '{"file":"<script>literal</script>"}', body: { status: 'live', tree: { kind: 'box', children: [{ kind: 'unsupported', component: 'engine' }, { kind: 'button', label: 'Inspect result', actionId: 'action' }] } } }
   const press = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ setup() { provide(claudeToolResults, { render: (_id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, view() {} }); return () => h(NativeToolResult, { toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
+  app = createApp({ setup() { provide(claudeToolDrawings, { render: (_component, _id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, view() {} }); return () => h(NativeToolDrawing, { component: 'ToolResult', toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
   expect(root.querySelector('pre')?.textContent).toBe(value.displayText)
   expect(root.querySelector('script')).toBeNull()
   expect(root.textContent).not.toContain('Original fallback')

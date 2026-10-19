@@ -238,8 +238,8 @@
 import { computed, ref, onUpdated, watch, provide, h } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
-import NativeToolResult from './NativeToolResult.vue'
-import { claudeToolResults } from '#extensions/blocks/display/native-tool-results.ts'
+import NativeToolDrawing from './NativeToolDrawing.vue'
+import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import type { ThinkingBlockProps } from '#features/threads/be/types.ts'
@@ -282,9 +282,9 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 })
 
 const emit = defineEmits<ChatMessageEmits>()
-provide(claudeToolResults, {
-  render: (toolUseId, fallback) => h(NativeToolResult, { toolUseId }, fallback),
-  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && frame.component === 'ToolResult')),
+provide(claudeToolDrawings, {
+  render: (component, toolUseId, fallback) => h(NativeToolDrawing, { component, toolUseId }, fallback),
+  frames: computed(() => (props.nativeFrames ?? []).filter(frame => frame.messageId === props.message.id && (frame.component === 'ToolResult' || frame.component === 'ToolUse'))),
   press: (id, href) => emit('native-ui-press', id, href),
   field: event => emit('native-ui-field', event),
   view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },
