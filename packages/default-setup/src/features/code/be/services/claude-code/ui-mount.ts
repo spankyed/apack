@@ -17,7 +17,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -171,7 +171,7 @@ export function mountClaudeUi(options: {
     panes?.dispose()
     scroll.dispose()
     notices.dispose()
-    messages.dispose()
+    const messagesReleased = messages.dispose()
     question.dispose()
     stopPromptHost?.(); stopPromptHost = undefined
     fieldDrawing = undefined
@@ -185,6 +185,7 @@ export function mountClaudeUi(options: {
     publish({ status: 'disconnected' })
     disposal = (async () => {
       await ready
+      await messagesReleased
       attached = false
       // Attach may have applied before a lost/error reply; detach is idempotent natively.
       await owner.handle.ui.detach(client.client_id)

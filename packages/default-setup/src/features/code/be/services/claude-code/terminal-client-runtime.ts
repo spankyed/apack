@@ -1,10 +1,11 @@
 /** Authored ownership bridge around the original native Client sandbox. */
 export const claudeTerminalClientRuntime = String.raw`function createNativeClientHost(createRegistry,invalidate,clientRequestId,callbacks){
- const entries=new Map(),tokens=new Map(),registries=new Map();
+ const entries=new Map(),tokens=new Map(),registries=new Map(),settling=new Map();
  const scopeOf=(client,component,requestId)=>JSON.stringify([client,component,requestId]);
- const drop=entry=>{entries.delete(entry.identity);tokens.delete(entry.token);entry.stop();entry.instance.release();if(![...entries.values()].some(other=>other.client===entry.client)){const registry=registries.get(entry.client);registries.delete(entry.client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}};
+ function settleAfterRelease(scope){let pending=settling.get(scope);if(!pending){let resolve;const promise=new Promise(done=>{resolve=done;});pending={promise,resolve};settling.set(scope,pending);}if(pending.timer)clearTimeout(pending.timer);pending.timer=setTimeout(()=>{settling.delete(scope);pending.resolve();},0);pending.timer.unref();}
+ const drop=entry=>{if(entries.get(entry.identity)!==entry)return;entries.delete(entry.identity);tokens.delete(entry.token);entry.stop();if(![...entries.values()].some(other=>other.timers===entry.timers)){for(const timer of entry.timers)clearInterval(timer);entry.timers.clear();}entry.instance.release();settleAfterRelease(entry.scope);if(![...entries.values()].some(other=>other.client===entry.client)){const registry=registries.get(entry.client);registries.delete(entry.client);const timer=setTimeout(()=>registry?.dispose(),0);timer.unref();}};
  function current(entry){try{if(callbacks?.current?.(entry)!==false)return true;}catch{}drop(entry);return false;}
- function render(client,component,requestId,tree){
+ function render(client,component,requestId,tree,instanceRevision){
   const scope=scopeOf(client,component,requestId),seen=new Set();
   const visit=value=>{
    if(!value||typeof value!=='object'||Array.isArray(value))return value;
@@ -14,12 +15,15 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    const identity=JSON.stringify([scope,plugin,props.key]);
    if(seen.has(identity))throw Error('Duplicate native Client key');seen.add(identity);
    let entry=entries.get(identity);
-   if(entry&&entry.module!==props.module){drop(entry);entry=undefined;}
+   if(entry&&(entry.module!==props.module||entry.instanceRevision!==instanceRevision)){drop(entry);entry=undefined;}
    if(!entry){
     if(entries.size>=512)throw Error('Native Client instance limit reached');
     let registry=registries.get(client);if(!registry){registry=createRegistry();registries.set(client,registry);}
-    const instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){const timer=setInterval(()=>{if(entry&&current(entry))fn();},ms);timer.unref();return()=>clearInterval(timer);}}});
-    entry={identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
+    let timers=new Set(),instance;
+    const alive=()=>[...entries.values()].some(other=>(other===entry||instance?.id!==undefined&&other.client===client&&other.instance.id===instance.id)&&current(other));
+    try{instance=registry.acquire({plugin,component,requestId,surface:'desktop',key:props.key,module:props.module,props:props.props,clock:{every(ms,fn){if(entry&&!alive())return()=>{};const timer=setInterval(()=>{if(entry&&alive())fn();else{clearInterval(timer);timers.delete(timer);}},ms);timers.add(timer);timer.unref();return()=>{clearInterval(timer);timers.delete(timer);};}}});}catch(error){for(const timer of timers)clearInterval(timer);if(![...entries.values()].some(other=>other.client===client)){registries.delete(client);const timer=setTimeout(()=>registry.dispose(),0);timer.unref();}throw error;}
+    const peer=instance.id===undefined?undefined:[...entries.values()].find(other=>other.client===client&&other.instance.id===instance.id);if(peer){for(const timer of timers)peer.timers.add(timer);timers=peer.timers;}
+    entry={timers,instanceRevision,identity,scope,client,component,requestId,key:props.key,callbackId:clientRequestId(requestId,props.key),module:props.module,token:randomUUID(),propsKey:JSON.stringify(props.props),instance,enabled:true,sequence:0,stop:()=>{}};
     entry.stop=instance.subscribe(()=>{if(entries.get(identity)===entry&&current(entry))invalidate(entry);});
     entries.set(identity,entry);tokens.set(entry.token,entry);
    }else if(entry.propsKey!==JSON.stringify(props.props)){entry.propsKey=JSON.stringify(props.props);entry.instance.setProps(props.props);}
@@ -60,8 +64,8 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
  async function dispatchAction(client,value){
   for(const entry of entries.values()){
    const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
-   if(!ref||ref.plugin!==value.plugin||typeof ref.key!=='string'||ref.type==='Markdown')continue;
-   if(!entry.enabled||!current(entry)||ref.key!==value.key)return {handled:false};
+   if(!ref||ref.plugin!==value.plugin||typeof ref.key!=='string'||ref.key!==value.key||ref.type==='Markdown')continue;
+   if(!entry.enabled||!current(entry)||entry.instanceRevision!==undefined&&(value.instance_revision!==entry.instanceRevision||value.component!==entry.component||value.instance_id!==entry.requestId))return {handled:false};
    const type=value.subtype==='ui_press'?'Button':value.subtype==='ui_input'?'Input':value.subtype==='ui_select'?'Select':undefined;
    if(type!==ref.type)return {handled:false};
    const event=type==='Button'?{type:'press'}:type==='Input'?{type:'input',kind:value.kind,value:value.value}:{type:'select',value:value.value};
@@ -78,8 +82,8 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
  function action(client,value){
   for(const entry of entries.values()){
    const ref=entry.client===client?entry.frameRefs?.get(value.handle):undefined;
-   if(!ref||ref.plugin!==value.plugin)continue;
-   if(!entry.enabled||!current(entry)||ref.key!==value.key)return false;
+   if(!ref||ref.plugin!==value.plugin||ref.key!==value.key)continue;
+   if(!entry.enabled||!current(entry)||entry.instanceRevision!==undefined&&(value.instance_revision!==entry.instanceRevision||value.component!==entry.component||value.instance_id!==entry.requestId))return false;
    const type=value.subtype==='ui_press'?['Button','Markdown']:value.subtype==='ui_input'?['Input']:['Select'];
    if(!type.includes(ref.type))return false;
    const snapshot=entry.instance.getSnapshot();if(snapshot.status!=='drawn')return false;
@@ -88,5 +92,5 @@ export const claudeTerminalClientRuntime = String.raw`function createNativeClien
    return matches.length===1?{handle:matches[0].press.handle,component:entry.component,requestId:entry.callbackId}:false;
   }
  }
- return {render,event,action,dispatchAction,suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
+ return {render,event,action,dispatchAction,settle(client,component,requestId){return settling.get(scopeOf(client,component,requestId))?.promise??Promise.resolve();},release(client,component,requestId){for(const entry of [...entries.values()])if(entry.scope===scopeOf(client,component,requestId))drop(entry);},suspend(instances){for(const entry of entries.values())if(!instances||instances.some(site=>site.surface==='desktop'&&site.component===entry.component&&site.requestId===entry.requestId))entry.enabled=false;},detach(client){for(const entry of [...entries.values()])if(client===undefined||entry.client===client)drop(entry);},count:()=>entries.size};
 }`

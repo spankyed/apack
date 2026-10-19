@@ -4,7 +4,7 @@ import type { ClaudeUiTranscriptRow } from '#features/code/be/services/claude-co
 function fixture(clientId = 'view') {
   let current = true, handle = 0
   let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
-  const ui = {
+  const ui = { releaseInstance: vi.fn(async () => ({ released: true })),
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
       { type: 'Input', props: { key: 'draft', value: '', label: 'Draft' }, press: { plugin: 'fixture', handle: ++handle } },
@@ -21,7 +21,7 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 it('renders distinct native instances, retaining display-only rewrites and independent actions', async () => {
   const f = fixture(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
-  expect(f.ui.render.mock.calls.map(args => args[0])).toEqual(['a', 'b'].map((id, index) => ({ client_id: 'view', surface: 'desktop', component: 'AssistantMessage', instance_id: id, props: { text: 'Native text', isFirstOfReply: index === 0 } })))
+  expect(f.ui.render.mock.calls.map(args => args[0])).toEqual(['a', 'b'].map((id, index) => ({ client_id: 'view', surface: 'desktop', component: 'AssistantMessage', instance_id: id, instance_revision: index + 1, props: { text: 'Native text', isFirstOfReply: index === 0 } })))
   expect(f.host.state.map(frame => [frame.uuid, frame.text, frame.displayText])).toEqual([['a', 'Native text', 'Display rewrite'], ['b', 'Native text', 'Display rewrite']])
   const a = f.nodes(0)[0], b = f.nodes(1)[0]; if (a.kind !== 'button' || b.kind !== 'button') throw Error('buttons')
   expect(a.actionId).not.toBe(b.actionId)
@@ -154,4 +154,41 @@ it('retains structured result rewrites only in presentation and retires controls
   await expect(f.host.press(frame.body.tree.actionId!)).resolves.toEqual({ handled: false })
   expect(f.ui.press).not.toHaveBeenCalled()
   f.host.dispose()
+})
+
+it('releases closed native instances and uses a new revision when the same row is reopened', async () => {
+  const f = fixture(); f.setRows([f.rows[0]!]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  f.setRows([]); f.host.refresh()
+  expect(f.ui.releaseInstance).toHaveBeenCalledWith({ client_id: 'view', component: 'AssistantMessage', instance_id: 'a', instance_revision: 1 })
+  f.setRows([f.rows[0]!]); f.host.refresh(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ instance_id: 'a', instance_revision: 2 }))
+  await f.host.dispose()
+  expect(f.ui.releaseInstance).toHaveBeenLastCalledWith(expect.objectContaining({ instance_revision: 2 }))
+})
+it('preserves a native instance across prop changes without releasing it after an old render finishes', async () => {
+  const f = fixture(); f.setRows([f.rows[0]!]); let finish!: (value: ClaudeUiRenderResult) => void
+  f.ui.render.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  f.setRows([{ ...f.rows[0]!, text: 'Changed text', end: 12 }]); f.host.refresh()
+  finish({ tree: { type: 'engine', ref: 1 }, props: {}, hooked: false, rewritten: false }); await vi.advanceTimersByTimeAsync(100)
+  expect(f.ui.releaseInstance).not.toHaveBeenCalled()
+  expect(f.ui.render).toHaveBeenLastCalledWith(expect.objectContaining({ instance_revision: 1 }))
+  await f.host.dispose()
+})
+
+it('keeps actions live during Client snapshots and redraws only the originating view and instance', async () => {
+  const f = fixture(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  const a = f.nodes(0)[0], b = f.nodes(1)[0]
+  if (a.kind !== 'button' || b.kind !== 'button') throw Error('buttons')
+  const event = { type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true, client_id: 'other', instances: [{ surface: 'desktop', component: 'AssistantMessage', instance_id: 'a' }] }
+  f.host.receive(event); await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenCalledTimes(2)
+  f.host.receive({ ...event, client_id: 'view' })
+  expect(f.host.ownsAction(a.actionId!)).toBe(true)
+  expect(f.host.ownsAction(b.actionId!)).toBe(true)
+  await vi.advanceTimersByTimeAsync(50)
+  expect(f.ui.render).toHaveBeenCalledTimes(3)
+  expect(f.ui.render.mock.lastCall?.[0].instance_id).toBe('a')
+  await expect(f.host.press(b.actionId!)).resolves.toEqual({ handled: true })
+  await f.host.dispose()
 })

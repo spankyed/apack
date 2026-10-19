@@ -251,3 +251,15 @@ it('fences panel transport capability and refuses payload on read operations', a
   await expect(print.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'close' })).rejects.toThrow('capability')
   expect(request).toHaveBeenCalledOnce()
 })
+
+it('keeps instance lifetime metadata on the native adapter and never sends it to the original print transport', async () => {
+  const request = vi.fn(async () => ({ tree: {}, props: {}, rewritten: false, hooked: false, released: true, handled: true }))
+  const native = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_ui_instance_lifetime_v1'] }), { request })
+  const scope = { client_id: 'view', component: 'ToolResult', instance_id: 'result', instance_revision: 2 }
+  await native.releaseInstance(scope); expect(request).toHaveBeenLastCalledWith({ subtype: 'apack_ui_release_instance', ...scope })
+  await native.render({ ...scope, surface: 'desktop', props: {} }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_render', ...scope, surface: 'desktop', props: {} })
+  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  request.mockClear(); expect(await print.releaseInstance(scope)).toEqual({ released: false }); expect(request).not.toHaveBeenCalled()
+  await print.render({ ...scope, surface: 'desktop', props: {} }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_render', client_id: 'view', component: 'ToolResult', instance_id: 'result', surface: 'desktop', props: {} })
+  await print.press({ ...scope, surface: 'desktop', plugin: 'fixture', handle: 1 }); expect(request).toHaveBeenLastCalledWith({ subtype: 'ui_press', client_id: 'view', surface: 'desktop', plugin: 'fixture', handle: 1 })
+})

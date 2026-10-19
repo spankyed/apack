@@ -9,6 +9,8 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
+  const clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
+  const lifetime = async (): Promise<any> => JSON.parse(await readFile(join(workspace!, 'native-client-lifetime.json'), 'utf8').catch(() => '{}'))
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -95,6 +97,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     if (turn === 1) {
       const savedSplit = await appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.panelSizes)
       expect(savedSplit.chatMaximized ?? false).toBe(false)
+      if (clientLifetime) await appPage.locator('.cursor-row-resize').first().click({ button: 'right' })
       const tools = appPage.locator('[data-native-tool-activity]').last()
       await tools.getByRole('button').first().click()
       const result = tools.locator('[data-native-tool-result]')
@@ -117,6 +120,32 @@ test('reviews native file creation, overwrite and edit before one-time decisions
 
       expect(hook.box.text).toBe('Keep my draft while inspecting a native tool result')
       expect(await readFile(target, 'utf8')).toBe('created\n')
+      let retired: { token: string; mountId: string; threadId: string; actionId: string } | undefined
+      if (clientLifetime) {
+        await card.getByRole('button', { name: 'Session tools', exact: true }).click()
+        const sandbox = result.locator('[data-native-client]')
+        await sandbox.scrollIntoViewIfNeeded()
+        await sandbox.getByRole('button', { name: 'Result action', exact: true }).click()
+        await expect.poll(async () => (await lifetime()).result?.pressed).toBe(1)
+        await sandbox.focus(); await sandbox.press('k')
+        await expect.poll(async () => (await lifetime()).result?.key).toBe('k')
+        await expect.poll(async () => (await lifetime()).above?.ticks ?? 0).toBeGreaterThan(1)
+        const token = (await sandbox.getAttribute('data-native-client'))!
+        await expect.poll(async () => {
+          retired = await appPage.evaluate(({ token, toolId }) => {
+            const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+            for (const [mountId, view] of Object.entries(c.nativeUiViews) as [string, any][]) {
+              const frame = view.state?.transcriptMessages?.find((frame: any) => frame.component === 'ToolResult' && frame.uuid === toolId)
+              if (frame?.body.status !== 'live') continue
+              const find = (node: any): string | undefined => node.kind === 'button' && node.label === 'Result action' ? node.actionId : node.children?.map(find).find(Boolean)
+              const actionId = find(frame.body.tree)
+              if (actionId) return { token, mountId, threadId: c.currentThread.id, actionId }
+            }
+          }, { token, toolId: id })
+          return !!retired
+        }).toBe(true)
+        await appPage.screenshot({ path: testInfo.outputPath('apack-native-client-result-active.png') })
+      } else {
       await result.scrollIntoViewIfNeeded()
       await expect(result).toBeInViewport({ ratio: 0.99 })
       await expect(result.getByRole('button', { name: 'Inspect native tool result', exact: true })).toBeInViewport({ ratio: 1 })
@@ -161,10 +190,33 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await expect(composer).toHaveText('Keep my draft while inspecting a native tool result')
 
 
+      }
       await tools.getByRole('button').first().click()
       await expect(result).toHaveCount(0)
       await expect.poll(async () => appPage.evaluate((toolId: string | null) => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return Object.values(c.nativeUiViews).some((view: any) => view.state?.transcriptMessages?.some((frame: any) => frame.component === 'ToolResult' && frame.uuid === toolId)) }, id)).toBe(false)
       await expect(composer).toHaveText('Keep my draft while inspecting a native tool result')
+      if (clientLifetime && retired) {
+        await appPage.waitForTimeout(400)
+        const stopped = await lifetime()
+        await appPage.evaluate(old => {
+          const actor = (window as any).applicationState.system.get('default-setup/threads')
+          actor.send({ type: 'CLAUDE_UI_CLIENT', mountId: old.mountId, threadId: old.threadId, id: old.token, sequence: 1000000, event: { kind: 'key', key: 'x' } })
+          actor.send({ type: 'CLAUDE_UI_PRESS', mountId: old.mountId, threadId: old.threadId, actionId: old.actionId })
+        }, retired)
+        await expect.poll(async () => (await lifetime()).above?.posts ?? 0).toBeGreaterThan(stopped.above.posts + 2)
+        expect((await lifetime()).result).toEqual(stopped.result)
+        await writeFile(join(workspace!, 'native-client-lifetime-stopped.json'), JSON.stringify({ stopped, after: await lifetime(), staleInputAndActionRetired: true }))
+        await tools.getByRole('button').first().click()
+        const fresh = tools.locator('[data-native-tool-result] [data-native-client]')
+        await expect(fresh).toBeVisible()
+        expect(await fresh.getAttribute('data-native-client')).not.toBe(retired.token)
+        await expect.poll(async () => (await lifetime()).result?.pressed).toBe(0)
+        await fresh.scrollIntoViewIfNeeded(); await fresh.focus(); await fresh.press('r')
+        await expect.poll(async () => (await lifetime()).result?.key).toBe('r')
+        await expect(composer).toHaveText('Keep my draft while inspecting a native tool result')
+        await appPage.screenshot({ path: testInfo.outputPath('apack-native-client-result-reopened.png') })
+        await tools.getByRole('button').first().click()
+      }
     }
 
   }
@@ -186,5 +238,5 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeDefaultSplit: true, toolResultLayout: 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

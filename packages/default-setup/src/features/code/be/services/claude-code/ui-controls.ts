@@ -15,12 +15,14 @@ const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
 const viewport = z.object({ columns: z.number().int().positive(), rows: z.number().int().positive(), isFullscreen: z.boolean().optional() }).strict()
 const nativeView = z.object({ session_id: z.string().min(1).max(256), revision: z.number().int().positive().safe(), agent_id: z.string().min(1).max(256) }).strict()
 const attach = z.object({ client_id: clientId, surface, viewport: viewport.optional(), native_view: nativeView.optional() }).strict().refine(value => !value.native_view || value.surface === 'desktop', 'native Agent UI requires desktop')
-const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.unknown()), viewport: viewport.optional() }).strict()
-const press = z.object({ client_id: clientId, surface, plugin: z.string(), handle: z.number().int().safe(), key: z.string().optional(), href: z.string().max(2048).optional() }).strict()
+const instanceRevision = z.number().int().positive().safe()
+const instanceRelease = z.object({ client_id: clientId, component: z.string().min(1).max(256), instance_id: z.string().min(1).max(256), instance_revision: instanceRevision }).strict()
+const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.unknown()), instance_revision: instanceRevision.optional(), viewport: viewport.optional() }).strict()
+const press = z.object({ client_id: clientId, surface, plugin: z.string(), handle: z.number().int().safe(), key: z.string().optional(), href: z.string().max(2048).optional(), component: z.string().optional(), instance_id: z.string().max(256).optional(), instance_revision: instanceRevision.optional() }).strict()
 // Frozen 2.1.302 ui_input/ui_select schemas: whole-field text, keyed redraw identity.
 const field = z.object({
   client_id: clientId, surface, plugin: z.string().max(256), handle: z.number().int().safe(),
-  key: z.string().optional(), component: z.string().optional(), instance_id: z.string().max(256).optional(),
+  key: z.string().optional(), component: z.string().optional(), instance_id: z.string().max(256).optional(), instance_revision: instanceRevision.optional(),
   value: z.string().max(16384),
 }).strict()
 const input = field.extend({ kind: z.enum(['change', 'submit']) })
@@ -104,9 +106,20 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
   async function request(value: Record<string, unknown> & { subtype: string }): Promise<unknown> {
     const metadata = await initialized
     if (!metadata.capabilities?.includes('ui_surface_v1')) throw new ClaudeProtocolError('native UI surface capability is unavailable')
+    // The original print transport does not implement the desktop adapter's instance lifetimes.
+    if (!metadata.capabilities?.includes('apack_ui_instance_lifetime_v1')) {
+      const { instance_revision: _revision, ...original } = value
+      if (value.subtype === 'ui_press') { const { component: _component, instance_id: _instance, ...press } = original; return controls.request(press) }
+      return controls.request(original)
+    }
     return controls.request(value)
   }
   return {
+    async releaseInstance(options: z.infer<typeof instanceRelease>) {
+      const valid = instanceRelease.parse(options)
+      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return { released: false }
+      return z.object({ released: z.boolean() }).parse(await request({ subtype: 'apack_ui_release_instance', ...valid }))
+    },
     async prepareParentCommand(options: { client_id: string; text: string }) {
       const valid = z.object({ client_id: clientId, text: z.string().min(1).max(32768) }).strict().parse(options)
       return z.union([z.object({ kind: z.literal('prepared'), id: z.string().uuid() }).strict(), parentCommandResult]).parse(await request({ subtype: 'apack_ui_parent_command', operation: 'prepare', ...valid }))
