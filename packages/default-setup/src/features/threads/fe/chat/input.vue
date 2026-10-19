@@ -50,7 +50,7 @@
             variant="chat"
             :placeholder="disabled ? disabledReason ?? 'API keys required to use chat' : 'Message Agent'"
             :disabled="disabled"
-            editor-class="w-full min-h-[88px] rounded-xl px-5 py-4 pr-10 text-sm leading-6 focus:outline-none"
+            editor-class="composer-document w-full min-h-[88px] rounded-xl px-5 py-4 pr-10 text-sm leading-6 focus:outline-none"
             @submit="handleSubmit"
             @update:model-value="onContentUpdate"
             :in-history-mode="historyIndex !== -1"
@@ -864,6 +864,7 @@ const handleSubmit = async () => {
 
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
+.input :global(.tiptap-wrapper .ProseMirror) { padding: 0; }
 .input {
   --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
   border-color: rgba(255, 255, 255, 0.09);
@@ -873,8 +874,9 @@ const handleSubmit = async () => {
 }
 @media (max-height: 700px) {
   .input { --composer-default-history-reserve: 2rem; }
-  .input :global([data-testid="composer-editor-area"]), .input :global(.ProseMirror) { min-height: 40px; }
-  .input :global(.ProseMirror) { padding-top: 8px; padding-bottom: 8px; }
+  .input :global([data-testid="composer-editor-area"]), .input :global(.composer-document) { min-height: 40px; }
+  .input :global(.composer-document) { padding-top: 8px; padding-bottom: 8px; }
+  .input :global(.ProseMirror) { min-height: 24px; }
 }
 .inputCommandActive, .inputCommandActive:focus-within {
   border-color: rgba(180, 180, 255, 0.45);

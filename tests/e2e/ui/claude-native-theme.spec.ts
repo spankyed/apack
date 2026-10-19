@@ -114,7 +114,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   // Read the current native highlight; the picker may reopen at Auto or the saved theme.
   async function highlightedTheme() {
     const output = stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
-    return output.slice(output.lastIndexOf('Theme')).match(/❯\s*([^\r\n]+)/)?.[1]?.trim() ?? ''
+    return output.slice(output.lastIndexOf('Theme')).match(/❯\s*([^\r\n]+)/)?.[1]?.trim().replace(/^✔\s*/, '') ?? ''
   }
   await expect.poll(highlightedTheme).not.toBe('')
   for (let index = 0; index < 9 && !(await highlightedTheme()).startsWith('Research'); index++) {
@@ -136,6 +136,53 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toHaveValue('Retain this field note through theme changes')
   const themedBox = label.locator('..')
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(171, 205, 239)')
+  // Exercise the original custom editor: a valid edit previews without saving; Escape restores it.
+  const savedCustomTheme = await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')
+  const nativeText = async () => stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
+  await composer.fill('Draft retained during custom theme editing')
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  await input.pressSequentially('/theme'); await input.press('Enter')
+  await expect.poll(highlightedTheme).toMatch(/^Research(?:\s*custom)?$/)
+  await input.press('Control+e')
+  await expect.poll(nativeText).toContain('Filter color tokens')
+  await input.pressSequentially('success')
+  await expect.poll(nativeText).toContain('success')
+  await input.press('Enter')
+  await expect.poll(nativeText).toContain('Enter to save')
+  await input.press('Control+u'); await input.pressSequentially('#a1b2c3')
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme-editor.png') })
+  await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+  await showTools()
+  await expect(label).toHaveCSS('color', 'rgb(161, 178, 195)')
+  await expect(note).toHaveValue('Retain this field note through theme changes')
+  await expect(choice).toHaveValue('b')
+  await expect(composer).toHaveText('Draft retained during custom theme editing')
+  expect(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).toBe(savedCustomTheme)
+  await label.scrollIntoViewIfNeeded()
+  await expect(label).toBeInViewport({ ratio: 0.99 })
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-preview.png') })
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  await input.press('Escape')
+  await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+  await showTools()
+  await expect(label).toHaveCSS('color', 'rgb(17, 34, 51)')
+  expect(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).toBe(savedCustomTheme)
+  await label.scrollIntoViewIfNeeded()
+  await expect(label).toBeInViewport({ ratio: 0.99 })
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-cancelled.png') })
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  await input.press('Enter')
+  await input.press('Control+u'); await input.pressSequentially('#c3b2a1'); await input.press('Enter')
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).overrides.success).toBe('#c3b2a1')
+  await input.press('Escape')
+  await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+  await showTools()
+  await expect(label).toHaveCSS('color', 'rgb(195, 178, 161)')
+  await expect(note).toHaveValue('Retain this field note through theme changes')
+  await expect(composer).toHaveText('Draft retained during custom theme editing')
+  await label.scrollIntoViewIfNeeded()
+  await expect(label).toBeInViewport({ ratio: 0.99 })
+  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-saved.png') })
   await composer.fill('Draft retained during native theme reload')
   await expect(action).toHaveCSS('color', 'rgb(68, 85, 102)')
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme.png') })
@@ -157,6 +204,10 @@ test('renders original theme previews, cancellation, button roles and saved cust
       throw error
     })
     await expect(note).toBeInViewport({ ratio: 0.99 })
+    await writeFile(join(workspace!, 'native-composer-geometry-' + height + '.json'), JSON.stringify(await card.evaluate(element => {
+      const selectors = ['[contenteditable="true"]', '.composer-document', '.tiptap-wrapper', '[data-testid="composer-editor-area"]', '[data-testid="composer-session-strip"]', '[data-composer-toolbar]', '[data-testid="native-composer-placements"]']
+      return selectors.flatMap(selector => [...element.querySelectorAll<HTMLElement>(selector)].map(node => { const r = node.getBoundingClientRect(), s = getComputedStyle(node); return { selector, rect: { x:r.x, y:r.y, width:r.width, height:r.height }, scrollHeight:node.scrollHeight, clientHeight:node.clientHeight, minHeight:s.minHeight, padding:s.padding, flex:s.flex, overflow:s.overflow } }))
+    })))
     await expect(composer).toBeInViewport({ ratio: 0.99 }).catch(async error => {
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-visibility-failure-' + height + '.png') })
       throw error
@@ -198,5 +249,5 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeThemeButtonRoles:true,nativeComposerSingleViewport:true,nativeFieldLabelVisibleNormalCompact:true,composerGeometry,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeCustomEditorPreview:true,nativeCustomEditorCancel:true,nativeCustomEditorSave:true,nativeThemeButtonRoles:true,nativeComposerSingleViewport:true,nativeFieldLabelVisibleNormalCompact:true,composerGeometry,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 })
