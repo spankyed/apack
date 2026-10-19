@@ -8,7 +8,7 @@ test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testIn
 test('runs original print Client controls and retires them across native handoff', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario, printClients, printTheme } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, printClients, printTheme, selectionToolbar } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   test.skip(!printClients, 'Explicit private print Client fixture required')
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -97,6 +97,31 @@ test('runs original print Client controls and retires them across native handoff
     await expect(composer).toHaveText(draft)
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: .99 })
     await appPage.screenshot({ path: testInfo.outputPath(`apack-native-print-client-${size.width}-${size.height}.png`) })
+    if (selectionToolbar) {
+      await composer.focus(); await composer.press('Home'); await composer.press('Shift+ArrowRight'); await composer.press('Shift+ArrowRight')
+      await expect.poll(async () => appPage.evaluate(() => window.getSelection()?.toString())).toBe('Re')
+      const menu = appPage.locator('.bubble-menu:visible')
+      await expect(menu).toHaveCount(1)
+      await expect.poll(async () => menu.evaluate(element => {
+        const box = element.getBoundingClientRect(), selected = window.getSelection()?.getRangeAt(0).getBoundingClientRect()
+        return !!selected && box.bottom <= selected.top + 1 && box.top >= 0 && box.left >= 0 && box.right <= innerWidth
+      })).toBe(true)
+      for (const button of await menu.getByRole('button').all()) {
+        await expect(button).toBeInViewport({ ratio: .99 })
+        expect(await button.evaluate(element => { const box = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)) })).toBe(true)
+      }
+      await menu.getByTitle('Bold', { exact: true }).click()
+      await expect(composer.locator('strong')).toHaveText('Re')
+      await menu.getByTitle('Bold', { exact: true }).click()
+      await expect(composer.locator('strong')).toHaveCount(0)
+      await expect(composer).toHaveText(draft)
+      await appPage.screenshot({ path: testInfo.outputPath(`apack-native-selection-toolbar-${size.width}-${size.height}.png`) })
+      await card.getByRole('button', { name: 'Send', exact: true }).focus()
+      await expect(appPage.locator('.bubble-menu:visible')).toHaveCount(0)
+      await appPage.waitForTimeout(350)
+      await expect(appPage.locator('.bubble-menu:visible')).toHaveCount(0)
+    }
+
   }
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -138,5 +163,5 @@ test('runs original print Client controls and retires them across native handoff
   await region.getByRole('button', { name: 'Refresh workspace', exact: true }).click()
   await expect(region).toContainText('1 updates')
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'composer-layout', nativePrintTheme: printTheme === true, nativePrintClient: true, nativePrintClientControls: true, nativePrintClientClock: true, nativePrintClientRetirement: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'composer-layout', nativeSelectionToolbar: selectionToolbar === true, nativePrintTheme: printTheme === true, nativePrintClient: true, nativePrintClientControls: true, nativePrintClientClock: true, nativePrintClientRetirement: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
