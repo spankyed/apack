@@ -228,6 +228,7 @@ import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import ChatInput from './input.vue'
 import NativeToolApproval from './NativeToolApproval.vue'
+import { ClaudeBashApprovalPresentationSchema } from '#features/code/common/native-bash-approval.ts'
 import NativePlanPanel from './NativePlanPanel.vue'
 import { ClaudePlanPresentationSchema } from '#features/code/common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema } from '#features/code/common/native-file-approval.ts'
@@ -498,13 +499,13 @@ watch(() => mainCommand.value?.status, (status, before) => {
 const pendingNativeApproval = computed(() => {
   const pending = currentThread.value?.context?.claudeCode?.pendingControlRequest as {
     approvalMessageId?: unknown; toolName?: unknown; originalInput?: { file_path?: unknown; command?: unknown };
-    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; review?: unknown; cwd?: unknown; question?: unknown; reason?: unknown };
+    nativeTerminal?: { ownerId?: unknown; sessionId?: unknown; title?: unknown; review?: unknown; bash?: unknown; cwd?: unknown; question?: unknown; reason?: unknown };
   } | undefined
   const native = pending?.nativeTerminal, owner = nativeComposerOwner.value
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || !['Read', 'Bash', 'Write', 'Edit'].includes(String(pending?.toolName)) || typeof pending.approvalMessageId !== 'string' || (pending?.toolName === 'Bash' ? typeof pending.originalInput?.command !== 'string' : typeof pending.originalInput?.file_path !== 'string')) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   if (!message) return undefined
-  return { messageId: pending.approvalMessageId, toolName: pending.toolName as 'Read' | 'Bash' | 'Write' | 'Edit', review: ClaudeFileApprovalReviewSchema.safeParse(native.review).data, filePath: pending.originalInput?.file_path as string | undefined, command: pending.originalInput?.command as string | undefined, cwd: typeof native.cwd === 'string' ? native.cwd : undefined,
+  return { messageId: pending.approvalMessageId, toolName: pending.toolName as 'Read' | 'Bash' | 'Write' | 'Edit', review: ClaudeFileApprovalReviewSchema.safeParse(native.review).data, bash: ClaudeBashApprovalPresentationSchema.safeParse(native.bash).data, filePath: pending.originalInput?.file_path as string | undefined, command: pending.originalInput?.command as string | undefined, cwd: typeof native.cwd === 'string' ? native.cwd : undefined,
     title: typeof native.title === 'string' ? native.title : 'Read file',
     question: typeof native.question === 'string' ? native.question : 'Allow this read?',
     reason: typeof native.reason === 'string' ? native.reason : undefined,

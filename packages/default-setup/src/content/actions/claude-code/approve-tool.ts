@@ -30,7 +30,7 @@ export async function action(
     requestId: string;
     toolName?: string;
     originalInput?: Record<string, unknown>;
-    response?: { autoAccept?: boolean; choice?: string; reason?: string; plan?: string };
+    response?: { autoAccept?: boolean; choice?: string; reason?: string; plan?: string; choiceToken?: string; prefix?: string };
   };
 
   if (!threadId || !requestId) return { success: false, reason: 'missing threadId or requestId' };
@@ -49,7 +49,7 @@ export async function action(
     }
     try {
       if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: typeof response?.choice === 'string' ? response.choice : '', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined, plan: typeof response?.plan === 'string' ? response.plan : undefined });
-      else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
+      else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', choice: typeof response?.choice === 'string' ? response.choice : undefined, choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : undefined, prefix: typeof response?.prefix === 'string' ? response.prefix : undefined });
       else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
       else throw new Error('Unsupported native approval');
     } catch {

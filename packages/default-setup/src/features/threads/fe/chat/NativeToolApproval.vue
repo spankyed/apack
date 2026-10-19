@@ -19,6 +19,18 @@
       <p v-if="cwd" class="reason">Working directory</p>
       <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
+      <details v-if="standingChoices.length" class="standing-permission">
+        <summary>Remember permission or change mode</summary>
+        <label>Approval choice
+          <select v-model="selectedChoice" aria-label="Bash approval choice" :disabled="disabled">
+            <option value="yes">Allow once</option>
+            <option v-for="choice in standingChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</option>
+          </select>
+        </label>
+        <label v-if="currentChoice?.prefix !== undefined">Command prefix
+          <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="disabled" />
+        </label>
+      </details>
       <details>
         <summary>Add a reason for denying</summary>
         <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="disabled" />
@@ -28,18 +40,27 @@
       <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="decisions">
         <button type="button" class="deny" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">Deny</button>
-        <button type="button" class="approve" :disabled="disabled" @click="$emit('respond', { approved: true })">{{ toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" class="approve" :disabled="disabled" @click="approve">{{ selectedChoice !== 'yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview } from '#features/code/common/native-file-approval.ts'
-defineProps<{ toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
-defineEmits<{ respond: [response: { approved: boolean; reason?: string }]; pause: [] }>()
+const props = defineProps<{ bash?: ClaudeBashApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [] }>()
 const feedback = ref('')
+const selectedChoice = ref('yes'), prefix = ref('')
+const standingChoices = computed(() => props.toolName === 'Bash' ? props.bash?.choices.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [] : [])
+const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
+watch(currentChoice, choice => { prefix.value = choice?.prefix ?? '' })
+function approve() {
+  const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
+  emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: props.bash!.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
+}
 </script>
 
 <style scoped>
@@ -57,6 +78,8 @@ code.after { border-left: 2px solid #8fba99; }
 .reason { margin: 8px 0; color: #aaa; overflow-wrap: anywhere; }
 details { margin-top: 10px; color: #aaa; }
 summary { cursor: pointer; font-size: 11px; }
+select, input { display: block; width: 100%; margin-top: 6px; padding: 6px; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
+.standing-permission label { display: block; margin-top: 8px; }
 textarea { display: block; width: 100%; margin-top: 6px; padding: 6px; resize: vertical; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
 footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid rgb(255 255 255 / .07); }
 .decisions { display: flex; gap: 8px; }

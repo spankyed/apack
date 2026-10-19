@@ -1,3 +1,4 @@
+import { claudeTerminalBashRuntime } from './terminal-bash-runtime.ts'
 import { claudeTerminalHistoryPlacementRuntime } from './terminal-history-placement-runtime.ts'
 import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
 import { claudeTerminalToolGroupRuntime } from './terminal-tool-group-runtime.ts'
@@ -199,6 +200,7 @@ ${claudeTerminalToolUseRuntime}
 ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
 ${claudeTerminalComposerRuntime}
+${claudeTerminalBashRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
@@ -650,14 +652,15 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_bash_dialogs'){
   const d=nativeDialog(n,'permission_bash');if(!d.item)return {dialogs:[]};
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'Bash',cwd:n.paths.ce(),command:d.payload.input.command,...(typeof d.payload.description==='string'?{description:d.payload.description}:{}),...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'Bash',...(function(){const source=nativeBashChoices(n,d);return source?{choices:source.choices,choiceToken:source.token}:{};})(),cwd:n.paths.ce(),command:d.payload.input.command,...(typeof d.payload.description==='string'?{description:d.payload.description}:{}),...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
  }
  if(request.subtype==='apack_answer_bash_dialog'){
   abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_bash');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native Bash approval changed or expired');
   if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native Bash decision');
-  const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
-  d.store.answer(d.item.id,result);dialogRevisions.delete('permission_bash');return {answered:true};
+  if(request.choice!==undefined){if(request.decision!=='allow'||request.feedback!==undefined)throw Error('Invalid native Bash choice response');await answerNativeBashChoice(n,d,request);}
+  else{const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};d.store.answer(d.item.id,result);}
+  dialogRevisions.delete('permission_bash');return {answered:true};
  }
  if(request.subtype==='apack_file_dialogs'){
   const d=nativeDialog(n,'permission_file');if(!d.item)return {dialogs:[]};

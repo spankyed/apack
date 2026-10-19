@@ -225,7 +225,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerBashDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native Bash approval session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_bash_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_bash_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback, choice: response.choice, choiceToken: response.choiceToken, prefix: response.prefix }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native Bash approval was not acknowledged')
       },
       async getFileDialogs() {

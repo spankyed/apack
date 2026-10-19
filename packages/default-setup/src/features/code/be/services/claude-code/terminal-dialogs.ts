@@ -1,3 +1,4 @@
+import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
 import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema } from '../../../common/native-file-approval.ts'
 import { ClaudeQuestionPresentationSchema } from '../../../common/native-question.ts'
@@ -61,11 +62,13 @@ export interface ClaudeNativeQuestionHoldRequest {
   renderToken: string
 }
 
-/** A one-time native Bash decision; command and working directory are presentation only. */
+/** Native-owned Bash decisions; standing choices retain original callbacks and policy gates. */
 export const ClaudeNativeBashDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
   requestId: z.string().min(1).max(256), toolName: z.literal('Bash'),
   command: z.string().max(262144), cwd: z.string().min(1).max(16384),
+  choices: ClaudeBashApprovalPresentationSchema.shape.choices.optional(),
+  choiceToken: ClaudeBashApprovalPresentationSchema.shape.token.optional(),
   description: z.string().max(4000).optional(), reason: z.string().max(16000).optional(),
   input: z.record(z.string(), z.unknown()),
 })
@@ -76,6 +79,9 @@ export interface ClaudeNativeBashDialogResponse {
   revision: string
   sessionId: string
   decision: 'allow' | 'deny'
+  choice?: string
+  choiceToken?: string
+  prefix?: string
   feedback?: string
 }
 

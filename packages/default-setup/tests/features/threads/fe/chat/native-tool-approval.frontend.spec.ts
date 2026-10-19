@@ -42,3 +42,19 @@ it.each([false, true])('shows literal file changes or the native withheld warnin
     else { expect(root.querySelector('[data-testid="native-file-before"]')?.textContent).toBe('<script>before</script>'); expect(root.querySelector('[data-testid="native-file-after"]')?.textContent).toBe('<img>after'); expect(root.textContent).toContain('Replace all matching occurrences') }
   } finally { app.unmount(); root.remove() }
 })
+
+it('shows only offered standing choices and emits the native token and edited prefix', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const respond = vi.fn(), bash = { token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes' }, { value: 'yes-prefix-edited', label: 'Remember command prefix', prefix: 'npm *' }, { value: 'no', label: 'No' }] }
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Bash', title: 'Run', question: 'Run?', command: 'npm run build', disabled: false, bash, onRespond: respond }) }); app.mount(root)
+  try {
+    const select = root.querySelector('select')!
+    expect(Array.from(select.options).map(option => option.value)).toEqual(['yes', 'yes-prefix-edited'])
+    select.value = 'yes-prefix-edited'; select.dispatchEvent(new Event('change')); await nextTick()
+    const input = root.querySelector('input')!; expect(input.value).toBe('npm *')
+    input.value = 'npm run *'; input.dispatchEvent(new Event('input')); await nextTick()
+    Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Continue')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-prefix-edited', choiceToken: bash.token, prefix: 'npm run *' })
+    expect(root.querySelector('[data-testid="native-bash-command"]')?.textContent).toBe('npm run build')
+  } finally { app.unmount(); root.remove() }
+})
