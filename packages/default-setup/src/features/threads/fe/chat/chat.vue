@@ -31,7 +31,7 @@
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
         <ClaudeNativeSession v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection" @active="nativeTerminalActive = $event" />
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
-        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)] ?? ''" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="focusedAgent = undefined" />
+        <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
@@ -224,6 +224,7 @@ import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import NativeAgentView from './NativeAgentView.vue'
+import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import ChatInput from './input.vue'
@@ -430,9 +431,16 @@ const taskView = computed(() => Object.entries(nativeTerminalViews.value).find((
 const agentPending = ref(false), agentReturning = ref(false)
 const agentScrollPositions = ref<Record<string, ClaudeAgentScrollPosition>>({})
 function saveAgentScrollPosition(target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition) { agentScrollPositions.value[agentDraftKey(target)] = position }
-const agentDrafts = ref<Record<string, string>>({})
+const agentDrafts = ref<Record<string, { text: string; snapshot?: ClaudeAgentDraftSnapshot }>>({})
 const agentDraftKey = (target: ClaudeNativeAgentUiTarget) => JSON.stringify([target.ownerId, target.sessionId, target.taskId])
-function saveAgentDraft(target: ClaudeNativeAgentUiTarget, text: string) { agentDrafts.value[agentDraftKey(target)] = text }
+function saveAgentDraft(target: ClaudeNativeAgentUiTarget, text: string) {
+  const key = agentDraftKey(target), previous = agentDrafts.value[key]
+  agentDrafts.value[key] = { text, ...(previous?.snapshot?.text === text ? { snapshot: previous.snapshot } : {}) }
+}
+function saveAgentDraftSnapshot(target: ClaudeNativeAgentUiTarget, snapshot: ClaudeAgentDraftSnapshot) {
+  const key = agentDraftKey(target), current = agentDrafts.value[key]
+  if (current?.text === snapshot.text) agentDrafts.value[key] = { ...current, snapshot }
+}
 const focusedAgent = ref<{ target: ClaudeNativeAgentUiTarget; name: string; statusText?: string }>()
 watch([taskView, agentReturning, agentSelection], ([lease, returning, selecting]) => {
   if (selecting) return
@@ -473,6 +481,10 @@ provide(claudeTaskControls, {
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 const mainComposer = ref<InstanceType<typeof ChatInput>>()
+function returnFromAgent() {
+  focusedAgent.value = undefined
+  void nextTick(() => { if (document.activeElement === document.body) mainComposer.value?.focus() })
+}
 const mainCommand = computed(() => nativeUiDrawing.value?.agentInput)
 const mainDismissedRevision = ref<number>(), mainOutputExpanded = ref(false)
 const mainOutputDismissed = computed(() => mainCommand.value?.revision === mainDismissedRevision.value)

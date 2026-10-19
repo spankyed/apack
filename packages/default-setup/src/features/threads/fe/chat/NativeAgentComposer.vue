@@ -19,19 +19,28 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
+import type { Editor } from '@tiptap/core'
+import { captureClaudeAgentDraft, restoreClaudeAgentDraft, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ draft: string; disabled: boolean; mountId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> }>()
-const emit = defineEmits<{ leave: []; draft: [text: string]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
+const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> }>()
+const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
-let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true
+let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true, adoptedEditor: Editor | undefined
 watch([() => editorRef.value?.editor, () => props.mountId], ([editor, mountId], _old, cleanup) => {
   bridge?.dispose(); bridge = undefined; offers.value = []
   if (!editor) return
   nativePromptEditors.add(editor); cleanup(() => nativePromptEditors.delete(editor))
+  if (adoptedEditor !== editor) {
+    const saved = props.draftSnapshot
+    const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft) }
+    if (editor.isInitialized) adopt()
+    else { editor.on('create', adopt); cleanup(() => editor.off('create', adopt)) }
+  }
+
   if (!mountId) return
   bridge = bindClaudePromptEditor(editor, value => emit('edit', value), value => { nativeProblem.value = value }, props.promptRevision, {
     initialRevision: props.completionRevision, request: value => emit('complete', value), update: (rows, id) => {
@@ -79,7 +88,11 @@ async function submit() {
   finally { submitting.value = false; emit('pending', false) }
 }
 defineExpose({ focus: () => editorRef.value?.editor?.commands.focus() })
-onBeforeUnmount(() => { alive = false; bridge?.dispose() })
+onBeforeUnmount(() => {
+  const editor = editorRef.value?.editor
+  if (editor && adoptedEditor === editor) { const snapshot = captureClaudeAgentDraft(editor); if (snapshot) emit('draft-snapshot', snapshot) }
+  alive = false; bridge?.dispose()
+})
 </script>
 
 <style scoped>

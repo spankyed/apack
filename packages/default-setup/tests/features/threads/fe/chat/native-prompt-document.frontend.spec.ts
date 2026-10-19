@@ -480,3 +480,55 @@ it('keeps native theme roles live in existing paint without changing the draft, 
  expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true);expect(send).toHaveBeenCalledTimes(count);
  bridge.dispose();
 })
+
+it('attributes browser-delayed keyboard selection to the person and preserves its native key', async () => {
+  editor.commands.setContent('hello world')
+  document.body.append(editor.view.dom)
+  const scroll = editor.view.props.handleScrollToSelection
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    editor.view.focus()
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 2)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(send.mock.lastCall![0]).toMatchObject({ by: 'person', cursor: 2, key: { key: 'home' } })
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(3)
+    const selected = editor.state.selection, request = send.mock.lastCall![0]
+    bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(editor.state.selection.eq(selected)).toBe(true)
+    expect(bridge.fillDraft({ mode: 'replace', text: 'native fill' }, bridge.revision)).toBe(true)
+    expect(send.mock.lastCall![0].by).toBe('app')
+    expect(send.mock.lastCall![0].key).toBeUndefined()
+  } finally { bridge.dispose(); editor.view.setProps({ handleScrollToSelection: scroll }) }
+})
+
+
+it('keeps a delayed selection and its key scoped to the currently focused editor', async () => {
+  const other = new Editor({ extensions: [StarterKit, Markdown] })
+  editor.commands.setContent('parent draft'); other.commands.setContent('worker draft')
+  document.body.append(editor.view.dom, other.view.dom)
+  const firstScroll = editor.view.props.handleScrollToSelection
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  other.view.setProps({ handleScrollToSelection: () => true })
+  const firstSend = vi.fn(), otherSend = vi.fn()
+  const firstBridge = bindClaudePromptEditor(editor, firstSend, vi.fn()), otherBridge = bindClaudePromptEditor(other, otherSend, vi.fn())
+  try {
+    editor.view.focus()
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const count = firstSend.mock.calls.length
+    other.view.focus()
+    const text = other.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 3)
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(otherSend.mock.lastCall![0]).toMatchObject({ by: 'person', text: 'worker draft', cursor: 3 })
+    expect(otherSend.mock.lastCall![0].key).toBeUndefined()
+    expect(firstSend).toHaveBeenCalledTimes(count)
+    expect(firstBridge.readDraft()?.text).toBe('parent draft')
+    expect(otherBridge.readDraft()?.text).toBe('worker draft')
+  } finally { firstBridge.dispose(); otherBridge.dispose(); editor.view.setProps({ handleScrollToSelection: firstScroll }); other.destroy() }
+})

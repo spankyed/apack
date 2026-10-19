@@ -38,26 +38,40 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   let settled = false
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection; done: Promise<boolean>; finish: (accepted: boolean) => void } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
-  let key: ClaudePromptEdit['key']
+  let key: ClaudePromptEdit['key'], selectionKey: ClaudePromptEdit['key']
   const nativeKeys: Record<string, string> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'return', Escape: 'escape', Tab: 'tab', Backspace: 'backspace', Delete: 'delete', PageUp: 'pageup', PageDown: 'pagedown', Home: 'home', End: 'end', Insert: 'insert' }
   const intent = (event?: Event) => {
     person = true
     if (event?.type === 'keydown') {
       const keyboard = event as KeyboardEvent
       key = keyboard.key && keyboard.key.length <= 32 ? { key: nativeKeys[keyboard.key] ?? (/^F\d{1,2}$/.test(keyboard.key) ? keyboard.key.toLowerCase() : keyboard.key), ...(keyboard.ctrlKey ? { ctrl: true as const } : {}), ...(keyboard.shiftKey ? { shift: true as const } : {}), ...(keyboard.metaKey ? { meta: true as const } : {}) } : undefined
-    } else if (event?.type !== 'beforeinput') key = undefined
+      selectionKey = key
+    } else if (event?.type !== 'beforeinput') { key = undefined; selectionKey = undefined }
     if (clearPerson) clearTimeout(clearPerson)
     clearPerson = setTimeout(() => { person = false; key = undefined }, 0)
   }
   const dom = editor.view.dom
   const events = ['beforeinput', 'keydown', 'paste', 'drop', 'pointerdown'] as const
   for (const event of events) dom.addEventListener(event, intent, true)
+  // Browser selection changes can arrive in a later task than their key/pointer event.
+  // Capture before ProseMirror's document observer publishes the resulting selection.
+  const selectionChanged = () => {
+    const selection = dom.ownerDocument.getSelection()
+    if (dom.ownerDocument.activeElement !== dom || !selection?.anchorNode || !selection.focusNode || !dom.contains(selection.anchorNode) || !dom.contains(selection.focusNode)) {
+      person = false; key = undefined; selectionKey = undefined; return
+    }
+    const observedKey = selectionKey
+    intent(); key = observedKey; selectionKey = observedKey
+  }
+  dom.ownerDocument.addEventListener('selectionchange', selectionChanged, true)
+
   function finishPending(accepted: boolean) {
     settled = accepted
     pending?.finish(accepted)
     pending = undefined
   }
   function publish(by?: 'app' | 'person') {
+    if (applying) selectionKey = undefined
     if (disposed || applying || editor.isDestroyed) return
     finishPending(false)
     retireCompletions()
@@ -71,6 +85,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     if (!snapshot) { onProblem('Claude prompt hooks cannot map this editor selection'); return }
     onProblem(undefined)
     const origin = by ?? (person ? 'person' : 'app')
+    selectionKey = undefined
     try { send({ revision, text: snapshot.text, cursor: snapshot.cursor, by: origin, ...(origin === 'person' && key ? { key } : {}) }) }
     catch (error) { finishPending(false); onProblem(error instanceof Error ? error.message : 'Claude input could not be sent') }
   }
@@ -209,12 +224,13 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return true
     },
     dispose() {
-      disposed = true; fillPaint = undefined; finishPending(false); retireCompletions()
+      disposed = true; selectionKey = undefined; fillPaint = undefined; finishPending(false); retireCompletions()
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
       editor.off('destroy', destroyed)
       if (!editor.isDestroyed) { editor.unregisterPlugin(decorations.key); editor.unregisterPlugin(suggestion.key) }
       for (const event of events) dom.removeEventListener(event, intent, true)
+      dom.ownerDocument.removeEventListener('selectionchange', selectionChanged, true)
       dom.removeEventListener('compositionend', compositionEnd)
       dom.removeEventListener('compositionstart', dismissSuggestion)
       dom.removeEventListener('keydown', acceptSuggestion, true)
