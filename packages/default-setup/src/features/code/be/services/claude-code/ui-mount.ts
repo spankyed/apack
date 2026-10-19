@@ -150,7 +150,7 @@ export function mountClaudeUi(options: {
     try {
       const result = await owner.handle.ui.render({ ...client, component: 'AbovePrompt', instance_id: instanceId, props: {} })
       if (!current() || revision !== generation) return
-      drawing = createClaudeUiDrawing(result.tree, fieldDrawing)
+      drawing = createClaudeUiDrawing(result.tree, fieldDrawing, drawing)
       function stamp(node: import('./ui-presentation.ts').ClaudeUiNode): void {
         if (node.kind === 'box' || node.kind === 'client') node.children.forEach(stamp)
         else if (node.kind === 'input' || node.kind === 'select') node.revision = completed.get(node.actionId) ?? 0

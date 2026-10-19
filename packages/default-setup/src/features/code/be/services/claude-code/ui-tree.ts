@@ -60,12 +60,20 @@ function validateBudget(tree: unknown): void {
 }
 
 /** Translate observed nodes only. Native props, engine refs and executable modules never cross this boundary. */
-export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing): ClaudeUiDrawing {
+export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing, activeDrawing?: ClaudeUiDrawing): ClaudeUiDrawing {
   validateBudget(tree)
   const clientInstances = new Set<string>()
   const clientActions = new Map<string,{instance:string;key:string;type:string;plugin:string}>()
   let clientScope: string | undefined
-  function actionIdentity(type:string,plugin:string,key:unknown):string {
+  function actionIdentity(type:string,plugin:string,key:unknown,handle:number):string {
+    // A Client repaint does not replace an unchanged neighbouring native callback.
+    // Only the still-active drawing may lend its capability; retired field state cannot.
+    if (!clientScope && typeof key === 'string') {
+      const prior = [...(activeDrawing?.actions ?? [])].filter(([id, action]) => !activeDrawing!.clientActions.has(id)
+        && action.plugin === plugin && action.key === key && action.handle === handle
+        && activeDrawing!.links.has(id) === (type === 'Markdown'))
+      if (prior.length === 1 && !actions.has(prior[0]![0])) return prior[0]![0]
+    }
     if (!clientScope || typeof key !== 'string') return randomUUID()
     const prior=[...(previous?.clientActions??[])].filter(([,entry])=>entry.instance===clientScope&&entry.key===key&&entry.type===type&&entry.plugin===plugin)
     const id=prior.length===1?prior[0]![0]:randomUUID()
@@ -187,7 +195,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (value.press === undefined) return node
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
         || !Number.isSafeInteger(value.press.handle) || typeof props.key !== 'string') throw new ClaudeProtocolError('native Markdown callback is invalid')
-      const actionId = actionIdentity(value.type,value.press.plugin,props.key)
+      const actionId = actionIdentity(value.type,value.press.plugin,props.key,value.press.handle)
       actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle, key: props.key })
       links.set(actionId, pressableLinks === undefined ? undefined : new Set(pressableLinks))
       return { ...node, actionId }
@@ -269,7 +277,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         || (value.props.key !== undefined && typeof value.props.key !== 'string')) {
         throw new ClaudeProtocolError('native UI button has an invalid callback')
       }
-      const actionId = actionIdentity(value.type,value.press.plugin,props.key)
+      const actionId = actionIdentity(value.type,value.press.plugin,props.key,value.press.handle)
       actions.set(actionId, { plugin: value.press.plugin, handle: value.press.handle,
         ...(typeof value.props.key === 'string' ? { key: value.props.key } : {}) })
       return { ...button, actionId, ...focusIdentity(value.press.plugin, props.key) }

@@ -48,6 +48,33 @@ describe('native UI mounted lifecycle', () => {
     expect(f.states.at(-1)).toEqual({ status: 'disconnected' })
   })
 
+  it('keeps an unchanged ordinary callback actionable across Client-only redraws', async () => {
+    const f = fixture(), view = f.mount()
+    await view.ready; await vi.advanceTimersByTimeAsync(50)
+    const visible = f.action()
+    for (let count = 0; count < 3; count++) { f.invalidate(true); await vi.advanceTimersByTimeAsync(50); expect(f.action()).toBe(visible) }
+    await expect(view.press(visible)).resolves.toEqual({ handled: true })
+    await expect(view.press(visible)).resolves.toEqual({ handled: false })
+    expect(f.ui.press).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(f.action()).not.toBe(visible)
+    await expect(view.press(visible)).resolves.toEqual({ handled: false })
+    await view.dispose()
+  })
+
+  it('retires an ordinary callback changed during a Client-only redraw', async () => {
+    const f = fixture(), view = f.mount()
+    await view.ready; await vi.advanceTimersByTimeAsync(50)
+    const old = f.action()
+    f.ui.render.mockResolvedValueOnce(rendered(2)); f.invalidate(true); await vi.advanceTimersByTimeAsync(50)
+    expect(f.action()).not.toBe(old)
+    await expect(view.press(old)).resolves.toEqual({ handled: false })
+    expect(f.ui.press).not.toHaveBeenCalled()
+    await expect(view.press(f.action())).resolves.toEqual({ handled: true })
+    expect(f.ui.press).toHaveBeenCalledWith(expect.objectContaining({ handle: 2 }))
+    await view.dispose()
+  })
+
   it('discards an invalidated in-flight render and never overlaps render requests', async () => {
     const f = fixture(); const pending = deferred<ReturnType<typeof rendered>>()
     f.ui.render.mockImplementationOnce(() => pending.promise)
