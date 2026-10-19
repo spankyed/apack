@@ -54,7 +54,7 @@ const sourceLines = computed(() => props.node.kind === 'code' ? claudeCodeLines(
 <style scoped>
 .native-code-engine { margin: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .native-code-engine[data-code-wrap="truncate-end"] { white-space: pre; overflow: hidden; }
-.native-document-themed :deep(.ProseMirror), .native-document-themed :deep(a) { color: inherit; }
+.native-document-themed :deep(.ProseMirror), .native-document-themed :deep(.ProseMirror a), .native-document-themed :deep(.ProseMirror a:hover) { color: inherit; }
 .native-source { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .native-source-numbered { grid-template-columns: minmax(2ch, max-content) minmax(0, 1fr); column-gap: 1.5ch; }
 .native-source-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }

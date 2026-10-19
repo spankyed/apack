@@ -68,8 +68,8 @@ it('resolves native document base text while preserving source, href and origina
 })
 
 it('invalidates native document paint when the original syntax setting changes without a palette change', () => {
-  const f = fixture(), state = { syntaxHighlightingDisabled: false }
+  const f = fixture(), state = { settings: { syntaxHighlightingDisabled: false } }
   ;(f.n as any).runtime = { ey: () => ({ toolContext: () => ({ getAppState: () => state }) }) }
-  f.refresh(); state.syntaxHighlightingDisabled = true; f.refresh()
+  f.refresh(); state.settings.syntaxHighlightingDisabled = true; f.refresh()
   expect(f.publish).toHaveBeenCalledExactlyOnceWith({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
 })

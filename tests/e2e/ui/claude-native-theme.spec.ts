@@ -8,7 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('renders original theme previews, cancellation, button roles and saved custom reload', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, documentTheme } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -67,6 +67,35 @@ test('renders original theme previews, cancellation, button roles and saved cust
   const note = card.getByRole('textbox', { name: 'Theme note', exact: true })
   const choice = card.getByRole('combobox', { name: 'Theme choice', exact: true })
   let previewFieldColor = ''
+  const documentLink = card.getByRole('link', { name: 'Native document link', exact: true })
+  const documentProse = card.locator('.native-document-themed .ProseMirror').filter({ hasText: 'Native document paragraph' })
+  const sourceCode = card.locator('[data-native-code-ansi][aria-label="Code"]')
+  const diffCode = card.locator('[data-native-code-ansi][aria-label="Code diff"]')
+  const documentReceipts: any[] = []
+  async function readDocuments() {
+    return appPage.evaluate(() => {
+      const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+      const pending = Object.values(state.nativeUiViews).filter((view: any) => view.threadId === state.currentThread?.id && view.state?.status === 'live').map((view: any) => view.state.tree), codes: any[] = []
+      while (pending.length) { const node: any = pending.pop(); if (!node) continue; if (node.kind === 'code') codes.push(node); if (Array.isArray(node.children)) pending.push(...node.children) }
+      return { source: codes.find(node => node.source.includes('nativeThemeValue')), diff: codes.find(node => node.source.includes('nativeThemeDiff')) }
+    })
+  }
+  async function verifyDocuments(color: string, stage: string) {
+    await expect(documentLink).toHaveCSS('color', color)
+    await expect(documentProse).toHaveCSS('color', color)
+    await expect(sourceCode).toHaveCSS('color', color)
+    await expect(diffCode).toHaveCSS('color', color)
+    const receipt = await readDocuments()
+    expect(receipt.source?.source).toBe('const nativeThemeValue = "document";\nconsole.log(nativeThemeValue);')
+    expect(receipt.diff?.source).toBe('@@ -1 +1 @@\n-const nativeThemeDiff = 1;\n+const nativeThemeDiff = 2;')
+    expect(await sourceCode.textContent()).toBe(stripVTControlCharacters(receipt.source.nativeAnsi))
+    expect(await diffCode.textContent()).toBe(stripVTControlCharacters(receipt.diff.nativeAnsi))
+    await expect(sourceCode).toContainText(/3\s+const/)
+    await expect(diffCode).toContainText('nativeThemeDiff')
+    expect(await sourceCode.locator('[class*="hljs"]').count()).toBe(0)
+    expect(await diffCode.locator('span').evaluateAll(spans => spans.some(span => (span as HTMLElement).style.backgroundColor !== ''))).toBe(true)
+    documentReceipts.push({ stage, color, ...receipt })
+  }
   async function showTools() {
     await expect(card).toBeVisible()
     const toggle = card.getByRole('button', { name: 'Session tools', exact: true })
@@ -90,6 +119,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(action).toHaveCSS('color', 'rgb(87, 105, 247)')
   previewFieldColor = await note.evaluate(el => getComputedStyle(el).color)
   await expect(choice).toHaveCSS('color', previewFieldColor)
+  if (documentTheme) await verifyDocuments(previewFieldColor, 'preview')
   await note.fill('Retain this field note through theme changes')
   await expect.poll(async () => readFile(join(workspace!, 'native-theme-note.txt'), 'utf8').catch(() => '')).toBe('Retain this field note through theme changes')
   await choice.selectOption('b')
@@ -107,6 +137,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toHaveValue('Retain this field note through theme changes')
   await expect(choice).toHaveValue('b')
   await expect(composer).toHaveText('Draft retained during native theme preview')
+  if (documentTheme) await verifyDocuments(await note.evaluate(el => getComputedStyle(el).color), 'preview-cancelled')
   expect(JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe(savedTheme)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-preview-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
@@ -136,6 +167,26 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toHaveValue('Retain this field note through theme changes')
   const themedBox = label.locator('..')
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(171, 205, 239)')
+  if (documentTheme) {
+    await verifyDocuments('rgb(18, 52, 86)', 'custom-saved')
+    const enabled = await readDocuments()
+    await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+    await input.pressSequentially('/theme'); await input.press('Enter')
+    await input.press('Control+t')
+    await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).syntaxHighlightingDisabled).toBe(true)
+    await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+    await showTools()
+    await expect.poll(async () => (await readDocuments()).diff?.nativeAnsi).not.toBe(enabled.diff.nativeAnsi)
+    await verifyDocuments('rgb(18, 52, 86)', 'syntax-disabled')
+    await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+    await input.press('Control+t')
+    await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).syntaxHighlightingDisabled).toBe(false)
+    await input.press('Escape')
+    await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+    await showTools()
+    await expect.poll(async () => (await readDocuments()).diff?.nativeAnsi).toBe(enabled.diff.nativeAnsi)
+    await verifyDocuments('rgb(18, 52, 86)', 'syntax-restored')
+  }
   // Exercise the original custom editor: a valid edit previews without saving; Escape restores it.
   const savedCustomTheme = await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')
   const nativeText = async () => stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
@@ -194,6 +245,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toBeFocused()
   await expect(note).toHaveValue('Retain this field note through theme changes')
   await expect(choice).toHaveValue('b')
+  if (documentTheme) await verifyDocuments('rgb(171, 205, 239)', 'custom-reloaded')
   const composerGeometry: any[] = []
   for (const height of [900, 600]) {
     await appPage.setViewportSize({ width: 680, height })
@@ -223,6 +275,23 @@ test('renders original theme previews, cancellation, button roles and saved cust
     composerGeometry.push({ height, ...sizes })
     await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-composer-' + height + '.png') })
   }
+  if (documentTheme) {
+    await composer.focus()
+    for (const height of [900, 600]) {
+      await appPage.setViewportSize({ width: 680, height })
+      for (const [name, target] of [['source', sourceCode], ['diff', diffCode]] as const) {
+        await target.scrollIntoViewIfNeeded()
+        await expect(target).toBeInViewport({ ratio: 0.99 })
+        await expect(composer).toBeInViewport({ ratio: 0.99 })
+        await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
+        await appPage.screenshot({ path: testInfo.outputPath('apack-native-document-' + name + '-' + height + '.png') })
+      }
+    }
+    await card.getByRole('link', { name: 'native callback', exact: true }).click()
+    await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-document-link.json'), 'utf8').catch(() => '{}')).href).toBe('https://example.com/native-document-callback')
+    await expect(composer).toHaveText('Draft retained during native theme reload')
+    await writeFile(join(workspace!, 'native-document-app-evidence.json'), JSON.stringify({ receipts: documentReceipts, callback: JSON.parse(await readFile(join(workspace!, 'native-document-link.json'), 'utf8')), sourceAndDiffNormalCompact: true }, null, 2))
+  }
   await appPage.setViewportSize({ width: 680, height: 900 })
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-theme-reloaded.png') })
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(18, 52, 86)')
@@ -249,5 +318,5 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeCustomEditorPreview:true,nativeCustomEditorCancel:true,nativeCustomEditorSave:true,nativeThemeButtonRoles:true,nativeComposerSingleViewport:true,nativeFieldLabelVisibleNormalCompact:true,composerGeometry,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,...(documentTheme?{nativeDocumentTheme:true,nativeDocumentSyntaxToggle:true,nativeDocumentCallback:true,nativeDocumentCompact:true}:{}),nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeCustomEditorPreview:true,nativeCustomEditorCancel:true,nativeCustomEditorSave:true,nativeThemeButtonRoles:true,nativeComposerSingleViewport:true,nativeFieldLabelVisibleNormalCompact:true,composerGeometry,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 })
