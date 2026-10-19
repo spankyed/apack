@@ -1646,6 +1646,10 @@
                 "value": "Custom instructions (optional, summarize context)"
               },
               {
+                "key": "cc-reset",
+                "value": "Disconnect this thread from its idle native session; preserves saved history. Pause a running turn first."
+              },
+              {
                 "key": "cc-resume",
                 "value": "Session ID (optional, lists sessions if omitted)"
               },
@@ -1679,7 +1683,7 @@
               },
               {
                 "key": "cc-mcp",
-                "value": "Manage MCP servers"
+                "value": "[status|list] shows the live owner’s connections when running; list otherwise reads saved configuration. Other arguments manage saved MCP configuration."
               },
               {
                 "key": "cc-agents",

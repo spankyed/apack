@@ -100,3 +100,17 @@ it('shows the original file grant scope, respects native readiness and forwards 
     expect(button('Continue').disabled).toBe(true)
   } finally { app.unmount(); root.remove() }
 })
+
+it.each([false, true])('uses native Workflow script visibility and approval eligibility: withheld %s', withheld => {
+  const root = document.createElement('div'); document.body.append(root)
+  const respond = vi.fn(), workflow = { token: 'a'.repeat(64), ready: true, withheld, ...(withheld ? {} : { script: '<script>literal workflow</script>' }), choices: [...(withheld ? [] : [{ value: 'yes' as const, label: 'Yes, run it', decision: 'allow' as const, feedback: true }]), { value: 'no' as const, label: 'No', decision: 'deny' as const, feedback: true }] }
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Workflow', title: 'Review workflow', question: 'Run?', disabled: false, workflow, onRespond: respond }) }); app.mount(root)
+  try {
+    expect(root.querySelector('script')).toBeNull()
+    const allow = root.querySelector<HTMLButtonElement>('button.approve')!
+    expect(allow.disabled).toBe(withheld)
+    if (!withheld) { expect(root.querySelector('[data-testid="native-workflow-script"]')?.textContent).toBe(workflow.script); allow.click(); expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: workflow.token }) }
+    root.querySelector<HTMLButtonElement>('button.deny')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: false, reason: undefined, choice: 'no', choiceToken: workflow.token })
+  } finally { app.unmount(); root.remove() }
+})

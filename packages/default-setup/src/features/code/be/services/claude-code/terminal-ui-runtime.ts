@@ -1,3 +1,4 @@
+import { claudeTerminalWorkflowRuntime } from './terminal-workflow-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalDocumentRuntime } from './terminal-document-runtime.ts'
 import { claudeTerminalBashRuntime } from './terminal-bash-runtime.ts'
@@ -205,6 +206,7 @@ ${claudeTerminalToolGroupRuntime}
 ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
 ${claudeTerminalFileRuntime}
+${claudeTerminalWorkflowRuntime}
 ${claudeTerminalDocumentRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
@@ -459,7 +461,7 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
@@ -640,6 +642,16 @@ async function control(request,abort){
   abort.signal.throwIfAborted();let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
+ }
+ if(request.subtype==='apack_workflow_dialogs'){
+  const d=nativeDialog(n,'permission_workflow');if(!d.item)return {dialogs:[]};const {presentation}=await nativeWorkflowPresentation(n,d);
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:'Workflow',input:d.payload.input,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{})}]};
+ }
+ if(request.subtype==='apack_answer_workflow_dialog'){
+  abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_workflow');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native workflow approval changed or expired');
+  if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native workflow decision');
+  await answerNativeWorkflow(n,d,request);dialogRevisions.delete('permission_workflow');return {answered:true};
  }
  if(request.subtype==='apack_bash_dialogs'){
   const d=nativeDialog(n,'permission_bash');if(!d.item)return {dialogs:[]};

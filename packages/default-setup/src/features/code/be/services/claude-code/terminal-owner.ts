@@ -1,3 +1,4 @@
+import { ClaudeNativeWorkflowDialogsSchema, type ClaudeNativeWorkflowDialog, type ClaudeNativeWorkflowDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeTaskResultSchema } from './terminal-tasks.ts'
 import { ClaudeNativePlanDialogsSchema, type ClaudeNativePlanDialog, type ClaudeNativePlanDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeBashDialogsSchema, type ClaudeNativeBashDialog, type ClaudeNativeBashDialogResponse } from './terminal-dialogs.ts'
@@ -41,6 +42,8 @@ export interface ClaudeNativeTerminalOwner {
   answerBashDialog(response: ClaudeNativeBashDialogResponse): Promise<void>
   getPlanDialogs(): Promise<ClaudeNativePlanDialog[]>
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
+  getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>
+  answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background', text?: string): Promise<{ view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
@@ -230,6 +233,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native Bash approval session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_bash_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback, choice: response.choice, choiceToken: response.choiceToken, prefix: response.prefix }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native Bash approval was not acknowledged')
+      },
+      async getWorkflowDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_workflow_dialogs' }) as { dialogs?: unknown }
+        return closed ? [] : ClaudeNativeWorkflowDialogsSchema.parse(result.dialogs)
+      },
+      async answerWorkflowDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native workflow session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_workflow_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native workflow approval was not acknowledged')
       },
       async getFileDialogs() {
         if (closed || !bridge.ready) return []

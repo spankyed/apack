@@ -1,3 +1,4 @@
+import { ClaudeWorkflowApprovalSchema } from '../../../common/native-workflow-approval.ts'
 import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
 import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
 import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema } from '../../../common/native-file-approval.ts'
@@ -97,4 +98,15 @@ export const ClaudeNativePlanDialogsSchema = z.array(ClaudeNativePlanDialogSchem
 export type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>
 export interface ClaudeNativePlanDialogResponse {
   id: string; revision: string; sessionId: string; choice: string; feedback?: string; plan?: string
+}
+
+export const ClaudeNativeWorkflowDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.literal('Workflow'),
+  presentation: ClaudeWorkflowApprovalSchema, reason: z.string().max(16000).optional(), input: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativeWorkflowDialogsSchema = z.array(ClaudeNativeWorkflowDialogSchema).max(1)
+export type ClaudeNativeWorkflowDialog = z.infer<typeof ClaudeNativeWorkflowDialogSchema>
+export interface ClaudeNativeWorkflowDialogResponse {
+  id: string; revision: string; sessionId: string; decision: 'allow' | 'deny'; choice?: string; choiceToken: string; feedback?: string
 }
