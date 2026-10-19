@@ -23,7 +23,7 @@ it('routes native key names and modifiers while preserving composition, Escape a
 it('reports fractional region coordinates and retains pointer capture outside its bounds',async()=>{
  const {region,send}=await mount(),measure=region.querySelector<HTMLElement>('span')!
  vi.spyOn(region,'getBoundingClientRect').mockReturnValue(new DOMRect(100,100,160,60))
- vi.spyOn(measure,'getBoundingClientRect').mockReturnValue(new DOMRect(0,0,80,20))
+ vi.spyOn(measure,'getBoundingClientRect').mockReturnValue(new DOMRect(0,0,800,20))
  const capture=vi.fn(),release=vi.fn();Object.assign(region,{setPointerCapture:capture,hasPointerCapture:()=>true,releasePointerCapture:release})
  region.dispatchEvent(pointer('pointerdown',{pointerId:7,clientX:110,clientY:110,button:0,buttons:1,bubbles:true}))
  expect(capture).toHaveBeenCalledWith(7)
@@ -70,4 +70,25 @@ it('returns terminal placement Client keyboard ownership to the composer without
  root.setAttribute('data-native-placement','InfoNotice');send.mockClear()
  for(const key of ['Escape','c','d']){region.focus();const event=new KeyboardEvent('keydown',{key,ctrlKey:key!=='Escape',bubbles:true,cancelable:true});region.dispatchEvent(event);expect(document.activeElement).toBe(target);expect(event.defaultPrevented).toBe(true)}
  expect(focus).toHaveBeenCalledTimes(3);expect(send).not.toHaveBeenCalled()
+})
+
+it('reports intrinsic cell geometry without rounding its fractional CSS width down a cell',async()=>{
+ let resize!:()=>void
+ vi.stubGlobal('ResizeObserver',class {constructor(callback:()=>void){resize=callback}observe(){}disconnect(){}})
+ try{
+ const {region,send}=await mount(),measure=region.querySelector<HTMLElement>('span')!
+ const bounds=vi.spyOn(region,'getBoundingClientRect').mockReturnValue(new DOMRect(0,0,39.140625,20))
+ vi.spyOn(measure,'getBoundingClientRect').mockReturnValue(new DOMRect(0,0,782.65625,20))
+ Object.defineProperty(region,'clientWidth',{configurable:true,value:39})
+ send.mockClear()
+ resize()
+ await new Promise(resolve=>requestAnimationFrame(resolve))
+ expect(send).toHaveBeenCalledWith(id,{kind:'resize',columns:5,rows:1})
+ bounds.mockReturnValue(new DOMRect(0,0,93.90625,20));resize()
+ await new Promise(resolve=>requestAnimationFrame(resolve))
+ expect(send).toHaveBeenLastCalledWith(id,{kind:'resize',columns:12,rows:1})
+ bounds.mockReturnValue(new DOMRect(0,0,39,20));resize()
+ await new Promise(resolve=>requestAnimationFrame(resolve))
+ expect(send).toHaveBeenLastCalledWith(id,{kind:'resize',columns:4,rows:1})
+ }finally{vi.unstubAllGlobals()}
 })

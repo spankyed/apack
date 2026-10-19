@@ -1,7 +1,7 @@
 <template>
   <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @click.capture="capturedClick" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
     <slot />
-    <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre">0000000000</span>
+    <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre" style="width:100ch;height:1lh">0</span>
   </div>
 </template>
 <script setup lang="ts">
@@ -17,8 +17,18 @@ const style=computed<CSSProperties>(()=>({width:dimension(props.node.layout?.wid
 let suppressPointerClick=false
 let lastPointer={x:0,y:0}
 let observer:ResizeObserver|undefined,frame:number|undefined,lastLayout='',captured:HTMLElement|undefined,pointerId:number|undefined,pending:Extract<ClaudeUiClientInput,{kind:'pointer'}>|undefined
-const cell=()=>({width:Math.max(1,(measure.value?.getBoundingClientRect().width??80)/10),height:Math.max(1,Number.parseFloat(region.value?getComputedStyle(region.value).lineHeight:'')||20)})
-function layout(){frame=undefined;const element=region.value;if(!element)return;const size=cell(),event={kind:'resize' as const,columns:Math.floor(element.clientWidth/size.width),rows:Math.floor(element.clientHeight/size.height)},encoded=JSON.stringify(event);if(encoded!==lastLayout){lastLayout=encoded;send?.(props.node.id,event)}}
+const cell=()=>({width:Math.max(1,(measure.value?.getBoundingClientRect().width??800)/100),height:Math.max(1,measure.value?.getBoundingClientRect().height||20)})
+function layout(){
+ frame=undefined;const element=region.value;if(!element)return
+ // clientWidth rounds to whole pixels: an intrinsic five-cell region can become four cells.
+ const size=cell(),bounds=element.getBoundingClientRect(),style=getComputedStyle(element)
+ const width=Math.max(0,bounds.width-(parseFloat(style.borderLeftWidth)||0)-(parseFloat(style.borderRightWidth)||0))
+ const height=Math.max(0,bounds.height-(parseFloat(style.borderTopWidth)||0)-(parseFloat(style.borderBottomWidth)||0))
+ // Blink quantizes layout to 1/64 CSS px; don't lose a whole cell at that boundary.
+ const quantum=1/64
+ const event={kind:'resize' as const,columns:Math.floor((width+quantum)/size.width),rows:Math.floor((height+quantum)/size.height)},encoded=JSON.stringify(event)
+ if(encoded!==lastLayout){lastLayout=encoded;send?.(props.node.id,event)}
+}
 function schedule(){if(frame===undefined)frame=requestAnimationFrame(()=>{layout();flush()})}
 function flush(){if(pending){send?.(props.node.id,pending);pending=undefined}}
 function capturedClick(event:MouseEvent){if(suppressPointerClick&&event.detail>0){suppressPointerClick=false;event.preventDefault();event.stopImmediatePropagation();focusClient(event)}}
