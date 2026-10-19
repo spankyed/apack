@@ -111,10 +111,13 @@ test('completes an everyday native review across Agent, approval, question and i
   await capture('agent', agentEditor, [agentForm.getByRole('button', { name: 'Send to Agent', exact: true }), focused.getByRole('button', { name: 'Back to conversation', exact: true })], focused.getByRole('region', { name: 'Agent transcript', exact: true }))
   await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(composer).toHaveText(mainDraft)
+  await expect.poll(async () => (await context()).native.state.tasks.find((task: any) => task.id === taskId)?.status, { timeout: 20000 }).toBe('completed')
   const toolsButton = appPage.getByRole('button', { name: /^Native tools/ }).first()
   if (!await row.isVisible()) await toolsButton.click()
   await row.getByRole('button', { name: 'Open Agent', exact: true }).click()
   await expect(agentEditor).toHaveText(agentDraft)
+  await expect(focused.getByRole('region', { name: 'Agent transcript', exact: true })).toContainText('The release notes cover behavior changes and migration guidance.')
+  await capture('agent-result', agentEditor, [agentForm.getByRole('button', { name: 'Send to Agent', exact: true }), focused.getByRole('button', { name: 'Back to conversation', exact: true })], focused.getByRole('region', { name: 'Agent transcript', exact: true }))
   await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(composer).toHaveText(mainDraft)
   await expect.poll(async () => (await context()).native.state.busy, { timeout: 20000 }).toBe(false)
@@ -161,9 +164,11 @@ test('completes an everyday native review across Agent, approval, question and i
     }
     throw Error('Original session journal missing')
   }
+  const acceptedUsers: any[] = []
   const users = (await ledger()).filter((row: any) => row.type === 'user' && row.origin?.kind === 'human')
   for (const text of ['Review the release notes with a worker.', 'Read the release checklist before proposing changes.', 'Ask me which release audience to target.', 'Draft the release summary while I review the checklist.']) {
     const original = users.filter((row: any) => row.message?.content === text); expect(original).toHaveLength(1)
+    acceptedUsers.push(original[0])
     await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === original[0].uuid).length).toBe(1)
   }
   const nativeCost = (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD
@@ -175,15 +180,15 @@ test('completes an everyday native review across Agent, approval, question and i
   let resumedCost = 0
   await expect.poll(async () => {
     const text = await readFile(join(workspace!, 'native-print-results.jsonl'), 'utf8').catch(() => '')
-    const result = text.split('\n').filter(Boolean).map(line => JSON.parse(line)).at(-1)
+    const result = text.split('\n').slice(0, -1).map(line => JSON.parse(line)).at(-1)
     if (result?.sessionId !== sessionId || result.totalCostUsd <= nativeCost) return false
     resumedCost = result.totalCostUsd
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
-  await expect.poll(async () => (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD).toBe(resumedCost)
+  for (const original of acceptedUsers) await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === original.uuid).length).toBe(1)
   await composer.fill('Ready for the next release-review step.')
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
 })
