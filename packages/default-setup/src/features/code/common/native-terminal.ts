@@ -15,6 +15,14 @@ export interface ClaudeNativeAgentUiTarget {
   taskId: string
 }
 
+export interface ClaudeNativeFocusProjection {
+  sessionId: string
+  viewRevision: number
+  producerId: string
+  active: boolean
+  hidden: string[]
+}
+
 export interface ClaudeNativeTerminalState {
   /** Original native selected view, independent of the app thread. Undefined until observed. */
   view?: ClaudeNativeTerminalView
@@ -30,6 +38,7 @@ export interface ClaudeNativeTerminalState {
   busy: boolean
   /** Native pending-work counts, independent of prompt submission readiness. */
   activity?: { pendingAgents: number; pendingWorkflows: number }
+  focus?: ClaudeNativeFocusProjection
   lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
   session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata
   mainStatus?: string

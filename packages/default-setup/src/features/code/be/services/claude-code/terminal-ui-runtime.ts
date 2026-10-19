@@ -1,3 +1,4 @@
+import { claudeTerminalFocusRuntime } from './terminal-focus-runtime.ts'
 import { claudeTerminalWorkflowRuntime } from './terminal-workflow-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalDocumentRuntime } from './terminal-document-runtime.ts'
@@ -207,6 +208,7 @@ ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
 ${claudeTerminalFileRuntime}
 ${claudeTerminalWorkflowRuntime}
+${claudeTerminalFocusRuntime}
 ${claudeTerminalDocumentRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
@@ -625,7 +627,7 @@ async function control(request,abort){
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
-  if(request.policy_only===true)return {...facts,activity,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  if(request.policy_only===true)return {...facts,activity,focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
@@ -1054,13 +1056,15 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false,reportedView,reportedActivity,activitySequence=0;
+let ownerReading=false,ownerIndependent=false,reportedView,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
+  const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);
+  if(focusKey!==reportedFocus){await ownerPost('/native-focus',{sessionId:gate.sessionId,pid:process.pid,sequence:++focusSequence,viewRevision:gate.sequence,focus:gate.focus});reportedFocus=focusKey;}
   const activityKey=JSON.stringify([gate.sessionId,gate.activity]);
   if(activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity});reportedActivity=activityKey;}
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;

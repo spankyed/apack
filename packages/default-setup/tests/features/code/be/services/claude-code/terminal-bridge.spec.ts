@@ -329,3 +329,17 @@ it('fences native pending activity by owner/session/sequence without blocking ba
   expect(bridge!.activity).toBeUndefined()
   expect((await request('/native-activity', { ...body, sequence: 3 })).status).toBe(409)
 })
+
+it('retires focus selection on native view/session changes and rejects stale selection reports', async () => {
+  await create()
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } })
+  const body = { sessionId: session, pid: process.pid, viewRevision: 1, sequence: 1, focus: { producerId: 'opaque-native-renderer', active: true, hidden: ['hidden'] } }
+  expect((await request('/native-focus', body)).status).toBe(200)
+  expect(bridge!.focus?.hidden).toEqual(['hidden'])
+  expect((await request('/native-focus', { ...body, pid: process.pid + 1 })).status).toBe(409)
+  expect((await request('/native-focus', { ...body, focus: { ...body.focus, hidden: ['replacement'] } })).status).toBe(409)
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 2, view: { kind: 'agent', registryId: 'registry', taskId: 'agent' } })
+  expect(bridge!.focus).toBeUndefined()
+  expect((await request('/native-focus', { ...body, sequence: 2 })).status).toBe(409)
+  expect((await request('/native-focus', { ...body, sequence: 2, viewRevision: 2 })).status).toBe(400)
+})

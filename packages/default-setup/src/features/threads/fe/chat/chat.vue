@@ -232,6 +232,7 @@ import NativeToolApproval from './NativeToolApproval.vue'
 import { ClaudeBashApprovalPresentationSchema } from '#features/code/common/native-bash-approval.ts'
 import NativePlanPanel from './NativePlanPanel.vue'
 import { ClaudePlanPresentationSchema } from '#features/code/common/native-plan.ts'
+import { selectClaudeFocusMessages } from './native-focus-messages.ts'
 import { ClaudeWorkflowApprovalSchema } from '#features/code/common/native-workflow-approval.ts'
 import { ClaudeFileApprovalReviewSchema, ClaudeFileApprovalPresentationSchema } from '#features/code/common/native-file-approval.ts'
 import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
@@ -274,7 +275,11 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
   onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
 }, { flush: 'post' })
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
-const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
+const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
+const nativeUiMount = ref<{ threadId: string; mountId: string }>()
+const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
+const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 
 // Scroll preservation for prepending older messages
@@ -299,7 +304,6 @@ function isTailMessage(msg: MessageEntity): boolean {
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const nativeBlockExpansion = ref<Record<string, number[]>>({})
 const nativeUserExpansion = ref<Record<string, boolean>>({})
-const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
 const nativeUiDrawing = computed(() => {
   const mount = nativeUiMount.value
@@ -435,7 +439,6 @@ const isBusy = useSelector(actor, ({ context }) => {
 const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
 })
-const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const agentPending = ref(false), agentReturning = ref(false)
 const agentScrollPositions = ref<Record<string, ClaudeAgentScrollPosition>>({})
@@ -487,8 +490,6 @@ provide(claudeTaskControls, {
     return revision
   },
 })
-const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
-const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 const mainComposer = ref<InstanceType<typeof ChatInput>>()
 function returnFromAgent() {
   focusedAgent.value = undefined
