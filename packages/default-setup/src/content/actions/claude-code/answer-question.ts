@@ -43,6 +43,8 @@ export async function action(
       expirePendingControlRequest(services, threadId, requestId);
       return { success: false, reason: 'Native question expired' };
     }
+    // A refused answer is editable again; retire that error before the next owned attempt.
+    if (native.problem) persistClaudeState(services, threadId, { pendingControlRequest: { ...pending, nativeTerminal: { ...native, problem: undefined } } });
     try {
       if (!response || typeof response !== 'object' || !response.nativeQuestionAnswer || typeof response.nativeQuestionAnswer !== 'object') throw new Error('Missing native card answer');
       await owner.answerQuestionDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, answer: response.nativeQuestionAnswer, ...(typeof response.nativeQuestionRenderToken === 'string' ? { renderToken: response.nativeQuestionRenderToken, draftStarted: response.nativeQuestionDraftStarted === true } : {}) });

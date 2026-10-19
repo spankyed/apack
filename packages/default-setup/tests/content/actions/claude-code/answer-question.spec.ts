@@ -66,3 +66,15 @@ it.each(['matching', 'replaced', 'refused'])('routes native card answers through
     expect(update).toHaveBeenCalledWith('approval', { responseTimestamp: undefined, blockResponse: undefined })
   }
 })
+
+it('clears a native refusal when retry starts and preserves the pending question until original acknowledgement', async () => {
+  const { id } = setup('current')
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName: 'AskUserQuestion', nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog', revision: 'revision', problem: 'Previous refusal' } } } } })
+  let finish!: () => void
+  const answerQuestionDialog = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: { ownerId: 'owner', sessionId: 'session' }, answerQuestionDialog }) } as never })
+  const waiting = action({ threadId: id, requestId: 'current', response: { nativeQuestionAnswer: { answers: { Name: 'Corrected' } } } }, services)
+  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toEqual({ requestId: 'current', approvalMessageId: 'approval', toolName: 'AskUserQuestion', nativeTerminal: { ownerId: 'owner', sessionId: 'session', dialogId: 'dialog', revision: 'revision' } })
+  finish(); await expect(waiting).resolves.toEqual({ success: true })
+  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined()
+})

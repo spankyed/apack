@@ -532,7 +532,7 @@ const pendingNativeQuestion = computed(() => {
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   const presentation = ClaudeQuestionPresentationSchema.safeParse(native.presentation)
   const frame = nativeUiDrawing.value?.question
-  return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp, error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
+  return message ? { messageId: pending.approvalMessageId, frame: frame?.messageId === pending.approvalMessageId ? frame : undefined, presentation: presentation.success ? presentation.data : undefined, card: pending.originalInput, disabled: !!message.responseTimestamp && typeof native.problem !== 'string', error: typeof native.problem === 'string' ? native.problem : undefined } : undefined
 })
 
 const nativeQuestionDraft = ref<{ messageId: string; token: string }>()
