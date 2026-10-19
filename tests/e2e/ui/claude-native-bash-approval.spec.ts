@@ -91,6 +91,11 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await composer.fill('Keep my draft while a native tool runs')
   await progress.scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-tool-running-progress.png')})
+  const background=tools.locator(`[data-native-tool-progress="${toolId}"]`).getByRole('button',{name:'Run in background',exact:true})
+  await expect(background).toBeVisible()
+  await background.click()
+  await expect.poll(async () => (await context()).native.state.busy).toBe(false)
+
   await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe('synthetic protocol fixture\n')
   await expect(progress).toHaveText('')
   await expect(composer).toHaveText('Keep my draft while a native tool runs')
@@ -116,14 +121,21 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
     expect(original?.uuid).toBeTruthy()
     await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === original.uuid).length).toBe(1)
   }
+  const backgroundResult=journal.find(row=>row.type==='user'&&Array.isArray(row.message?.content)&&row.message.content.some((block:any)=>block.type==='tool_result'&&block.tool_use_id===toolId))
+  expect(backgroundResult?.toolUseResult?.backgroundedByUser).toBe(true)
+  expect(backgroundResult?.toolUseResult?.backgroundTaskId).toEqual(expect.any(String))
   const nativeCost = journal.filter(row => row.type === 'cost-state').at(-1).totalCostUSD
   await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
+  const printResults=async()=> (await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).split('\n').slice(0,-1).filter(Boolean).map(line=>JSON.parse(line))
+  const priorPrintResults=(await printResults()).length
   await composer.fill('Continue after Bash decisions.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect.poll(async () => (await context()).messages.filter((message: any) => message.sender === 'assistant' && message.text === 'Fixture completed.').length).toBe(3)
+  await expect.poll(async () => (await printResults()).length).toBe(priorPrintResults+1)
+  expect((await printResults()).at(-1)).toMatchObject({sessionId,subtype:'success'})
+  await expect.poll(async()=> (await context()).claude.totalCostUsd).toBeGreaterThan(nativeCost)
   expect((await context()).sessionId).toBe(sessionId)
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeBashAllow: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeBashAllow: true, nativeToolBackground: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

@@ -35,6 +35,28 @@ function refreshNativeToolProgress(n){
  }
  if(changed.length)publish({type:'system',subtype:'ui_invalidate',event:'ui.render',instances:changed});
 }
+let toolBackgroundPlugin,toolBackgroundHandle=0;
+function toolBackgroundDrawing(value,tree,instanceRevision){
+ const frame=toolProgressFrames.get(JSON.stringify([value.client_id,value.instance_id]));
+ if(!frame||instanceRevision===undefined||!nativeDrawingUsesEngine(tree))return tree;
+ if(toolBackgroundHandle>=Number.MAX_SAFE_INTEGER)throw Error('Native tool action identity exhausted');
+ toolBackgroundPlugin??='apack-tool-background:'+randomUUID();
+ frame.backgroundHandle=++toolBackgroundHandle;frame.instanceRevision=instanceRevision;
+ return {type:'Box',props:{flexDirection:'column',gap:0},children:[tree,{type:'Button',props:{key:'background-tool',label:'Run in background',variant:'secondary'},press:{plugin:toolBackgroundPlugin,handle:frame.backgroundHandle}}]};
+}
+function runToolBackgroundAction(n,request,abort){
+ if(request.subtype!=='ui_press'||toolBackgroundPlugin===undefined||request.plugin!==toolBackgroundPlugin)return;
+ if(request.component!=='ToolProgress'||request.key!=='background-tool'||!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))return {handled:false};
+ const frame=toolProgressFrames.get(JSON.stringify([request.client_id,request.instance_id]));
+ if(!frame||frame.backgroundHandle!==request.handle||frame.instanceRevision!==request.instance_revision||!instanceLifetimes.active(request,request.instance_revision))return {handled:false};
+ const facts=toolProgressFacts(n,request.instance_id,frame.assistantUuid,abort);
+ if(!facts?.props||facts.fingerprint!==frame.fingerprint)return {handled:false};
+ abort.signal.throwIfAborted();
+ // Consume before entering the original targeted task operation; never retry a possible side effect.
+ delete frame.backgroundHandle;
+ const binding=originalContext??n.runtime.ey(),registry=binding.toolContext(abort).taskRegistry;
+ return {handled:n.runtime.mdt(request.instance_id,registry)===true};
+}
 async function formatNativeToolProgress(n,hint,options){
  if(typeof hint!=='string'||hint.length>65536)throw Error('Native tool progress rewrite is invalid');options.signal?.throwIfAborted();
  if(!hint)return '';
