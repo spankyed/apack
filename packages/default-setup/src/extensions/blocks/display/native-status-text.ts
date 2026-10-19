@@ -1,4 +1,4 @@
-export interface ClaudeStatusSpan { text: string; style: Record<string, string> }
+export interface ClaudeStatusSpan { text: string; style: Record<string, string>; href?: string }
 const palette = ['#171717','#f87171','#4ade80','#facc15','#60a5fa','#c084fc','#22d3ee','#d4d4d4','#737373','#fca5a5','#86efac','#fde047','#93c5fd','#d8b4fe','#67e8f9','#fafafa']
 function indexed(value: number): string | undefined {
   if (!Number.isInteger(value) || value < 0 || value > 255) return
@@ -9,7 +9,15 @@ function indexed(value: number): string | undefined {
 }
 /** Whitelisted SGR presentation only. OSC links, terminal commands and HTML never become DOM markup. */
 export function parseClaudeStatus(text: string): ClaudeStatusSpan[] {
+  return parseNativeText(text, false)
+}
+/** Native document links remain inert data until the document view applies its callback policy. */
+export function parseClaudeDocument(text: string): ClaudeStatusSpan[] {
+  return parseNativeText(text, true)
+}
+function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
   const spans: ClaudeStatusSpan[] = []
+  let href: string | undefined
   let style: Record<string, string> = {}, foreground: string | undefined, background: string | undefined, inverse = false
   function append(value: string) {
     const clean = value.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
@@ -17,12 +25,20 @@ export function parseClaudeStatus(text: string): ClaudeStatusSpan[] {
     const paint = { ...style }
     if (foreground || inverse) paint.color = inverse ? background ?? '#1c1c1c' : foreground!
     if (background || inverse) paint.backgroundColor = inverse ? foreground ?? '#d4d4d4' : background!
-    spans.push({ text: clean, style: paint })
+    spans.push({ text: clean, style: paint, ...(href ? { href } : {}) })
   }
   const controls = /\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b\][\s\S]*$|\x1b\[[0-?]*[ -/]*[@-~]|\x1b./g
   let cursor = 0
   for (const match of text.matchAll(controls)) {
     append(text.slice(cursor, match.index)); cursor = match.index! + match[0].length
+    if (links && match[0].startsWith('\x1b]8;')) {
+      href = undefined
+      const link = /^\x1b\]8;[^;]*;([^\x00-\x20\x7f]*)(?:\x07|\x1b\\)$/.exec(match[0])?.[1]
+      if (link && link.length <= 2048) {
+        try { if (['https:', 'http:', 'file:'].includes(new URL(link).protocol)) href = link } catch { /* invalid URL stays plain text */ }
+      }
+      continue
+    }
     if (!/^\x1b\[[0-9;]*m$/.test(match[0])) continue
     const codes = match[0].slice(2, -1).split(';').map(value => Number(value || 0))
     for (let i = 0; i < codes.length; i++) {

@@ -10,17 +10,17 @@ async function nativeDocumentTree(n,tree,options={}){
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   if(++nodes>1024)throw Error('Native document node limit');
   let result=value;
-  if(value.type==='Code'){
-   const props={...value.props};delete props._apackCodeAnsi;
-   if(typeof props.source==='string'&&props.source.length<=32768){
+  if(value.type==='Code'||value.type==='Markdown'){
+   const props={...value.props},markdown=value.type==='Markdown',annotation=markdown?'_apackMarkdownAnsi':'_apackCodeAnsi',source=markdown?props.text:props.source;delete props[annotation];
+   if(typeof source==='string'&&source.length<=32768){
     const defaults=n.documentDefaults.$Et(),theme=nativeThemeProvider(n),themeKey=JSON.stringify(theme.value.resolvedTheme),columns=Math.max(20,Math.min(240,options.columns??process.stdout.columns??80));
     // Fresh export state: never mount the live app store, tasks, keybindings or another sandbox.
-    const element=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState:{...defaults,tasks:{},taskDecorations:{},settings:{...defaults.settings,syntaxHighlightingDisabled:syntaxFlag}},children:n.jsx.e(theme.type,{value:theme.value,children:n.jsx.e(n.documentRendering.$d.BodyColumns.Provider,{value:columns,children:n.jsx.e(n.documentRendering.$d.CodeBlock,props)})})});
+    const element=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState:{...defaults,tasks:{},taskDecorations:{},settings:{...defaults.settings,syntaxHighlightingDisabled:syntaxFlag}},children:n.jsx.e(theme.type,{value:theme.value,children:n.jsx.e(n.documentRendering.$d.BodyColumns.Provider,{value:columns,children:n.jsx.e(markdown?n.documentRendering.$d.MarkdownBlock:n.documentRendering.$d.CodeBlock,markdown?{text:props.text}:props)})})});
     const text=await n.staticRender.v6e(element,{columns});
     options.signal?.throwIfAborted();
     if(JSON.stringify(nativeThemeProvider(n).value.resolvedTheme)!==themeKey)throw Error('Native document theme changed while formatting');
     if(typeof text!=='string')throw Error('Native Code renderer returned invalid output');
-    if(text.length<=65536&&bytes+text.length<=65536){props._apackCodeAnsi=text;bytes+=text.length;}
+    if(text.length<=65536&&bytes+text.length<=65536){props[annotation]=text;bytes+=text.length;}
    }
    result={...value,props};
   }

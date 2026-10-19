@@ -2,7 +2,7 @@ import vm from 'node:vm'
 import { claudeTerminalDocumentRuntime } from '#features/code/be/services/claude-code/terminal-document-runtime.ts'
 function fixture() {
   const render = vi.fn(async (_tree: unknown, _options: unknown) => '\x1b[31mOriginal code\x1b[39m'), provider = Symbol('fresh export'), code = Symbol('original CodeBlock'), columns = Symbol('original BodyColumns')
-  const n = { documentDefaults: { $Et: () => ({ tasks: {}, taskDecorations: {}, settings: { originalSetting: true }, originalDefault: true }) }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, appProvider: { d_: provider }, documentRendering: { $d: { CodeBlock: code, BodyColumns: { Provider: columns } } }, questionOptions: { j: () => 'session' }, staticRender: { v6e: render } }
+  const n = { documentDefaults: { $Et: () => ({ tasks: {}, taskDecorations: {}, settings: { originalSetting: true }, originalDefault: true }) }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, appProvider: { d_: provider }, documentRendering: { $d: { CodeBlock: code, MarkdownBlock: 'original MarkdownBlock', BodyColumns: { Provider: columns } } }, questionOptions: { j: () => 'session' }, staticRender: { v6e: render } }
   const theme = { text: '#abcdef' }
   const draw = vm.runInNewContext(claudeTerminalDocumentRuntime + ';nativeDocumentTree', { nativeThemeProvider: () => ({ type: 'live theme', value: { resolvedTheme: theme } }), process: { stdout: { columns: 80 } }, AbortController })
   return { n, render, draw, provider, code, columns, theme }
@@ -48,4 +48,14 @@ it('refuses a document whose native plugin eligibility is revoked during formatt
   ;(f.n as any).engine = { FPe: () => eligible }
   f.render.mockImplementation(async () => { eligible = false; return 'revoked drawing' })
   await expect(f.draw(f.n, { type: 'Box', part: { plugin: 'native-plugin' }, children: [{ type: 'Code', props: { source: 'source' } }] })).rejects.toThrow('eligibility changed')
+})
+
+it('renders native Markdown without mounting its callback or changing its original source', async () => {
+  const f = fixture(), press = { plugin: 'plugin', handle: 42 }
+  const tree = { type: 'Markdown', props: { key: 'markdown', text: '**original**', _apackMarkdownAnsi: 'forged' }, press }
+  const drawn = await f.draw(f.n, tree)
+  expect(drawn.press).toBe(press)
+  expect(drawn.props.text).toBe('**original**')
+  expect(drawn.props._apackMarkdownAnsi).toBe('\x1b[31mOriginal code\x1b[39m')
+  expect(JSON.stringify(f.render.mock.calls[0]![0])).toContain('original MarkdownBlock')
 })

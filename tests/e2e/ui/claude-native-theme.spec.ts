@@ -68,16 +68,16 @@ test('renders original theme previews, cancellation, button roles and saved cust
   const choice = card.getByRole('combobox', { name: 'Theme choice', exact: true })
   let previewFieldColor = ''
   const documentLink = card.getByRole('link', { name: 'Native document link', exact: true })
-  const documentProse = card.locator('.native-document-themed .ProseMirror').filter({ hasText: 'Native document paragraph' })
+  const documentProse = card.locator('.native-document-themed [data-native-markdown-ansi]').filter({ hasText: 'Native document paragraph' })
   const sourceCode = card.locator('[data-native-code-ansi][aria-label="Code"]')
   const diffCode = card.locator('[data-native-code-ansi][aria-label="Code diff"]')
   const documentReceipts: any[] = []
   async function readDocuments() {
     return appPage.evaluate(() => {
       const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
-      const pending = Object.values(state.nativeUiViews).filter((view: any) => view.threadId === state.currentThread?.id && view.state?.status === 'live').map((view: any) => view.state.tree), codes: any[] = []
-      while (pending.length) { const node: any = pending.pop(); if (!node) continue; if (node.kind === 'code') codes.push(node); if (Array.isArray(node.children)) pending.push(...node.children) }
-      return { source: codes.find(node => node.source.includes('nativeThemeValue')), diff: codes.find(node => node.source.includes('nativeThemeDiff')) }
+      const pending = Object.values(state.nativeUiViews).filter((view: any) => view.threadId === state.currentThread?.id && view.state?.status === 'live').map((view: any) => view.state.tree), codes: any[] = [], markdown: any[] = []
+      while (pending.length) { const node: any = pending.pop(); if (!node) continue; if (node.kind === 'code') codes.push(node); if (node.kind === 'markdown') markdown.push(node); if (Array.isArray(node.children)) pending.push(...node.children) }
+      return { markdown: markdown.find(node => node.text.includes('Native document paragraph')), source: codes.find(node => node.source.includes('nativeThemeValue')), diff: codes.find(node => node.source.includes('nativeThemeDiff')) }
     })
   }
   async function verifyDocuments(color: string, stage: string) {
@@ -86,6 +86,10 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await expect(sourceCode).toHaveCSS('color', color)
     await expect(diffCode).toHaveCSS('color', color)
     const receipt = await readDocuments()
+    expect(receipt.markdown?.nativeAnsi).toContain('nativeMarkdownValue')
+    expect(receipt.markdown?.nativeAnsi).toContain('\x1b]8;')
+    expect(await documentProse.textContent()).toBe(stripVTControlCharacters(receipt.markdown.nativeAnsi))
+    expect(await documentProse.locator('span').evaluateAll(spans => spans.some(span => (span as HTMLElement).style.fontWeight !== ''))).toBe(true)
     expect(receipt.source?.source).toBe('const nativeThemeValue = "document";\nconsole.log(nativeThemeValue);')
     expect(receipt.diff?.source).toBe('@@ -1 +1 @@\n-const nativeThemeDiff = 1;\n+const nativeThemeDiff = 2;')
     expect(await sourceCode.textContent()).toBe(stripVTControlCharacters(receipt.source.nativeAnsi))
@@ -177,6 +181,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
     await showTools()
     await expect.poll(async () => (await readDocuments()).diff?.nativeAnsi).not.toBe(enabled.diff.nativeAnsi)
+    await expect.poll(async () => (await readDocuments()).markdown?.nativeAnsi).not.toBe(enabled.markdown.nativeAnsi)
     await verifyDocuments('rgb(18, 52, 86)', 'syntax-disabled')
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
     await input.press('Control+t')
@@ -185,6 +190,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
     await showTools()
     await expect.poll(async () => (await readDocuments()).diff?.nativeAnsi).toBe(enabled.diff.nativeAnsi)
+    await expect.poll(async () => (await readDocuments()).markdown?.nativeAnsi).toBe(enabled.markdown.nativeAnsi)
     await verifyDocuments('rgb(18, 52, 86)', 'syntax-restored')
   }
   // Exercise the original custom editor: a valid edit previews without saving; Escape restores it.
@@ -279,9 +285,9 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await composer.focus()
     for (const height of [900, 600]) {
       await appPage.setViewportSize({ width: 680, height })
-      for (const [name, target] of [['source', sourceCode], ['diff', diffCode]] as const) {
+      for (const [name, target] of [['markdown', documentProse], ['source', sourceCode], ['diff', diffCode]] as const) {
         await target.scrollIntoViewIfNeeded()
-        await expect(target).toBeInViewport({ ratio: 0.99 })
+        await expect(target).toBeInViewport({ ratio: name === 'markdown' ? 0.2 : 0.99 })
         await expect(composer).toBeInViewport({ ratio: 0.99 })
         await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
         await appPage.screenshot({ path: testInfo.outputPath('apack-native-document-' + name + '-' + height + '.png') })

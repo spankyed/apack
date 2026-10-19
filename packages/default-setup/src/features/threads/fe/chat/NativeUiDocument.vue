@@ -1,6 +1,7 @@
 <template>
   <div v-if="node.kind === 'markdown'" :style="documentPaint" class="native-document-themed" :class="{ 'opacity-60': node.dim }" :data-native-plugin="node.plugin" @click.capture="modifiedClick = $event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey">
-    <TiptapEditor mode="viewer" variant="chat" :model-value="node.text" :open-viewer-link="openMarkdownLink" />
+    <div v-if="node.nativeAnsi !== undefined" class="native-markdown-engine font-mono text-xs leading-5" data-native-markdown-ansi><template v-for="(span, index) in nativeSpans" :key="index"><a v-if="span.href" :href="span.href" :style="span.style" @click.prevent="openMarkdownLink(span.href)">{{ span.text }}</a><span v-else :style="span.style">{{ span.text }}</span></template></div>
+    <TiptapEditor v-else mode="viewer" variant="chat" :model-value="node.text" :open-viewer-link="openMarkdownLink" />
   </div>
   <pre v-else-if="node.nativeAnsi !== undefined" class="native-code-engine min-w-0 font-mono text-xs leading-5" :style="documentPaint" :data-native-plugin="node.plugin" :data-code-wrap="node.wrap" data-native-code-ansi role="region" :aria-label="node.format === 'diff' ? 'Code diff' : 'Code'"><span v-for="(span, index) in nativeSpans" :key="index" :style="span.style">{{ span.text }}</span></pre>
   <div v-else class="min-w-0" :style="documentPaint" :data-native-plugin="node.plugin" :data-code-wrap="node.wrap">
@@ -26,7 +27,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { claudeUiColor } from './native-ui-paint.ts'
-import { parseClaudeStatus } from '#extensions/blocks/display/native-status-text.ts'
+import { parseClaudeStatus, parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
 import { openLink } from '@apackdev/sdk/fe'
 import { claudeCodeLines, claudeCodeDiffLines } from './native-code-lines.ts'
 import { claudeCodeDiffRows } from './native-code-diff.ts'
@@ -36,7 +37,7 @@ const props = defineProps<{ node: Extract<ClaudeUiNode, { kind: 'markdown' | 'co
 const emit = defineEmits<{ press: [actionId: string, href?: string] }>()
 const modifiedClick = ref(false)
 const documentPaint = computed(() => ({ color: claudeUiColor(props.node.color) }))
-const nativeSpans = computed(() => props.node.kind === 'code' && props.node.nativeAnsi !== undefined ? parseClaudeStatus(props.node.nativeAnsi) : [])
+const nativeSpans = computed(() => props.node.nativeAnsi === undefined ? [] : props.node.kind === 'markdown' ? parseClaudeDocument(props.node.nativeAnsi) : parseClaudeStatus(props.node.nativeAnsi))
 function openMarkdownLink(href: string) {
   if (props.node.kind !== 'markdown' || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return
   try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return } catch { return }
@@ -52,6 +53,9 @@ const sourceLines = computed(() => props.node.kind === 'code' ? claudeCodeLines(
 </script>
 
 <style scoped>
+.native-markdown-engine { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.native-markdown-engine a { color: inherit; cursor: pointer; }
+.native-markdown-engine a:focus-visible { outline: 1px solid currentColor; }
 .native-code-engine { margin: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .native-code-engine[data-code-wrap="truncate-end"] { white-space: pre; overflow: hidden; }
 .native-document-themed :deep(.ProseMirror), .native-document-themed :deep(.ProseMirror a), .native-document-themed :deep(.ProseMirror a:hover) { color: inherit; }

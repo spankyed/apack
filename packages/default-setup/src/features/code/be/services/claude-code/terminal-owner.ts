@@ -84,6 +84,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const env = buildChildEnv(options.env)
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
+  // The app document surface supports native SGR paint and OSC-8 hyperlink identities.
+  terminalEnv.FORCE_COLOR = '3'
+  terminalEnv.FORCE_HYPERLINK = '1'
   const readJournal = createClaudeNativeJournalReader()
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []

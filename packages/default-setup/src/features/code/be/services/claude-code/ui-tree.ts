@@ -181,7 +181,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const props = value.props
       if (props.pressableLinks !== undefined && (!Array.isArray(props.pressableLinks) || !props.pressableLinks.every(href => typeof href === 'string'))) throw new ClaudeProtocolError('native Markdown links are invalid')
       const pressableLinks = props.pressableLinks as string[] | undefined
-      const node: ClaudeUiNode = { kind: 'markdown', ...documentColor(props), text: props.text as string, dim: props.dimColor === true, ...attribution,
+      if (props._apackMarkdownAnsi !== undefined && (typeof props._apackMarkdownAnsi !== 'string' || props._apackMarkdownAnsi.length > 65536)) throw new ClaudeProtocolError('native Markdown drawing is invalid')
+      const node: ClaudeUiNode = { kind: 'markdown', ...(typeof props._apackMarkdownAnsi === 'string' ? { nativeAnsi: props._apackMarkdownAnsi } : {}), ...documentColor(props), text: props.text as string, dim: props.dimColor === true, ...attribution,
         ...(pressableLinks !== undefined ? { pressableLinks } : {}) }
       if (value.press === undefined) return node
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
