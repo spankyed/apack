@@ -1,3 +1,4 @@
+import { claudeTerminalDocumentRuntime } from '#features/code/be/services/claude-code/terminal-document-runtime.ts'
 import vm from 'node:vm'
 import {claudeTerminalUiRuntime} from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 function fixture(){
@@ -7,7 +8,7 @@ function fixture(){
  const root={container:{current:{type:provider,child:{memoizedProps:{value}}}}}
  const n={themeRoots:{ai:()=>new Map([[output,root]])},themePreferences:{dEn:provider}}
  const start=claudeTerminalUiRuntime.indexOf('function nativeThemeProvider('),end=claudeTerminalUiRuntime.indexOf('async function initialize(){',start)
- const methods=vm.runInNewContext(claudeTerminalUiRuntime.slice(start,end)+';({draw:nativeThemeTree,refresh:refreshNativeTheme,palette:nativeThemePalette})',{clients,publish,process:{stdout:output}})
+ const methods=vm.runInNewContext(claudeTerminalDocumentRuntime+claudeTerminalUiRuntime.slice(start,end)+';({draw:nativeThemeTree,refresh:refreshNativeTheme,palette:nativeThemePalette})',{clients,publish,process:{stdout:output},AbortController})
  return{n,clients,publish,read:(context:unknown)=>methods.palette(context),draw:(tree:unknown)=>methods.draw(n,tree),refresh:()=>methods.refresh(n),change(){palette={...palette,success:'#998877'}}}
 }
 it('resolves native Text/Box/hover colors without mutating the native drawing or action identity',()=>{
@@ -56,4 +57,19 @@ it('exports live field palette roles without changing values, callbacks or Clien
  expect(draw.children[1].props._apackFieldTheme).toEqual({text:'#123456',inverseText:'#654321'})
  expect(draw.children[0].press).toBe(press);expect(draw.children[2].props).toBe(tree.children[2]!.props)
  expect(JSON.stringify(tree)).toBe(before)
+})
+
+it('resolves native document base text while preserving source, href and original drawings', () => {
+  const f = fixture(), tree = { type: 'Text', props: { color: 'success' }, children: [{ type: 'Link', props: { href: 'https://example.com', label: 'Link' } }, { type: 'Markdown', props: { text: '**Document**' } }, { type: 'Code', props: { source: 'const value = 1;' } }] }
+  const before = JSON.stringify(tree), draw = f.draw(tree)
+  expect(draw.children[0].props._apackDocumentTheme).toBeUndefined()
+  for (const child of draw.children.slice(1)) expect(child.props._apackDocumentTheme).toEqual({ text: 'rgb(17,34,51)' })
+  expect(JSON.stringify(tree)).toBe(before)
+})
+
+it('invalidates native document paint when the original syntax setting changes without a palette change', () => {
+  const f = fixture(), state = { syntaxHighlightingDisabled: false }
+  ;(f.n as any).runtime = { ey: () => ({ toolContext: () => ({ getAppState: () => state }) }) }
+  f.refresh(); state.syntaxHighlightingDisabled = true; f.refresh()
+  expect(f.publish).toHaveBeenCalledExactlyOnceWith({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
 })

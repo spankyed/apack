@@ -1392,8 +1392,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -1409,8 +1409,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     choiceToken?: string | undefined;
 }, {
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     revision: string;
     input: Record<string, unknown>;
     sessionId: string;
@@ -2968,6 +2968,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'link';
+    color?: string;
     href?: string;
     children: ClaudeUiNode[];
     plugin?: string;
@@ -2982,6 +2983,7 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'markdown';
+    color?: string;
     text: string;
     dim: boolean;
     actionId?: string;
@@ -2989,6 +2991,8 @@ type ClaudeUiNode = {
     plugin?: string;
 } | {
     kind: 'code';
+    color?: string;
+    nativeAnsi?: string;
     source: string;
     language?: string;
     path?: string;

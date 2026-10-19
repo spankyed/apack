@@ -23,6 +23,14 @@ const encoder = new TextEncoder()
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+/** Adapter-only document text role; interpreted as one color property by the renderer. */
+function documentColor(props: Record<string, unknown>): { color?: string } {
+  if (props._apackDocumentTheme === undefined) return {}
+  const theme = props._apackDocumentTheme
+  if (!record(theme) || typeof theme.text !== 'string' || !theme.text.length || theme.text.length > 128 || /[\u0000-\u001f\u007f]/.test(theme.text)) throw new ClaudeProtocolError('native document theme is invalid')
+  return { color: theme.text }
+}
+
 /** Bound the whole wire value, including properties/components we do not render. */
 function validateBudget(tree: unknown): void {
   const pending = [{ value: tree, depth: 0 }]
@@ -154,7 +162,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       }
       const children = value.children
       if (children !== undefined && !Array.isArray(children)) throw new ClaudeProtocolError('native Link children are invalid')
-      return { kind: 'link', ...(href !== undefined ? { href } : {}), children: children === undefined || !children.length
+      return { kind: 'link', ...documentColor(value.props), ...(href !== undefined ? { href } : {}), children: children === undefined || !children.length
         ? [{ kind: 'text', text: typeof value.props.label === 'string' ? value.props.label : raw }]
         : children.map(child => visit(child, plugin)), ...attribution }
     }
@@ -173,7 +181,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       const props = value.props
       if (props.pressableLinks !== undefined && (!Array.isArray(props.pressableLinks) || !props.pressableLinks.every(href => typeof href === 'string'))) throw new ClaudeProtocolError('native Markdown links are invalid')
       const pressableLinks = props.pressableLinks as string[] | undefined
-      const node: ClaudeUiNode = { kind: 'markdown', text: props.text as string, dim: props.dimColor === true, ...attribution,
+      const node: ClaudeUiNode = { kind: 'markdown', ...documentColor(props), text: props.text as string, dim: props.dimColor === true, ...attribution,
         ...(pressableLinks !== undefined ? { pressableLinks } : {}) }
       if (value.press === undefined) return node
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
@@ -190,7 +198,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         || (props.startLine !== undefined && (typeof props.startLine !== 'number' || !Number.isSafeInteger(props.startLine) || props.startLine < 1 || props.startLine > 1_000_000_000))
         || (props.format !== undefined && props.format !== 'source' && props.format !== 'diff')
         || (props.wrap !== undefined && props.wrap !== 'wrap' && props.wrap !== 'truncate-end')) throw new ClaudeProtocolError('native Code props are invalid')
-      return { kind: 'code', source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,
+      if (props._apackCodeAnsi !== undefined && (typeof props._apackCodeAnsi !== 'string' || props._apackCodeAnsi.length > 65536)) throw new ClaudeProtocolError('native Code drawing is invalid')
+      return { kind: 'code', ...documentColor(props), ...(typeof props._apackCodeAnsi === 'string' ? { nativeAnsi: props._apackCodeAnsi } : {}), source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,
         ...(typeof props.language === 'string' ? { language: props.language } : {}), ...(typeof props.path === 'string' ? { path: props.path } : {}), ...(typeof props.startLine === 'number' ? { startLine: props.startLine } : {}) }
     }
     if (value.type === 'Input' || value.type === 'Select') {

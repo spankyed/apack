@@ -71,10 +71,10 @@ export type ClaudeUiNode =
   | { kind: 'client'; id: string; pointer: boolean; keys: boolean; layout?: Pick<ClaudeUiBoxLayout,'width'|'height'|'flexGrow'>; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'text'; hover?: ClaudeUiHover; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }
-  | { kind: 'link'; href?: string; children: ClaudeUiNode[]; plugin?: string }
+  | { kind: 'link'; color?: string; href?: string; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'box'; scrollId?: string; boxKey?: string | false; hover?: ClaudeUiHover; layout?: ClaudeUiBoxLayout; paint?: ClaudeUiBoxPaint; children: ClaudeUiNode[]; plugin?: string }
-  | { kind: 'markdown'; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
-  | { kind: 'code'; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
+  | { kind: 'markdown'; color?: string; text: string; dim: boolean; actionId?: string; pressableLinks?: string[]; plugin?: string }
+  | { kind: 'code'; color?: string; nativeAnsi?: string; source: string; language?: string; path?: string; startLine?: number; format: 'source' | 'diff'; wrap: 'wrap' | 'truncate-end'; plugin?: string }
   | { kind: 'button'; expanded?: boolean; color?: string; hotkeyColor?: string; focusId?: string; hover?: ClaudeUiHover; label: string; hotkey?: string; children?: ClaudeUiNode[]; dimColor?: boolean; variant?: 'primary' | 'secondary'; role?: 'dismiss'; autoFocus?: boolean; actionId?: string; plugin?: string }
   | { kind: 'input'; theme?: { text: string; inverseText: string }; focusId?: string; actionId: string; revision: number; submitLabel: string; label?: string; placeholder?: string; value: string; rows: number; autoFocus: boolean; plugin?: string }
   | { kind: 'select'; theme?: { text: string; inverseText: string }; focusId?: string; actionId: string; revision: number; label?: string; value: string; options: { value: string; label: string }[]; autoFocus: boolean; plugin?: string }

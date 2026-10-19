@@ -1,8 +1,9 @@
 <template>
-  <div v-if="node.kind === 'markdown'" :class="{ 'opacity-60': node.dim }" :data-native-plugin="node.plugin" @click.capture="modifiedClick = $event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey">
+  <div v-if="node.kind === 'markdown'" :style="documentPaint" class="native-document-themed" :class="{ 'opacity-60': node.dim }" :data-native-plugin="node.plugin" @click.capture="modifiedClick = $event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey">
     <TiptapEditor mode="viewer" variant="chat" :model-value="node.text" :open-viewer-link="openMarkdownLink" />
   </div>
-  <div v-else class="min-w-0" :data-native-plugin="node.plugin" :data-code-wrap="node.wrap">
+  <pre v-else-if="node.nativeAnsi !== undefined" class="native-code-engine min-w-0 font-mono text-xs leading-5" :style="documentPaint" :data-native-plugin="node.plugin" :data-code-wrap="node.wrap" data-native-code-ansi role="region" :aria-label="node.format === 'diff' ? 'Code diff' : 'Code'"><span v-for="(span, index) in nativeSpans" :key="index" :style="span.style">{{ span.text }}</span></pre>
+  <div v-else class="min-w-0" :style="documentPaint" :data-native-plugin="node.plugin" :data-code-wrap="node.wrap">
     <div v-if="diffRows" class="native-diff font-mono text-xs leading-5" :class="{ 'native-diff-truncate': node.wrap === 'truncate-end' }" role="region" aria-label="Code diff">
       <div v-for="(row, index) in diffRows" :key="index" class="native-diff-row" :data-diff-kind="row.kind">
         <template v-if="row.kind !== 'hunk'">
@@ -24,6 +25,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { claudeUiColor } from './native-ui-paint.ts'
+import { parseClaudeStatus } from '#extensions/blocks/display/native-status-text.ts'
 import { openLink } from '@apackdev/sdk/fe'
 import { claudeCodeLines, claudeCodeDiffLines } from './native-code-lines.ts'
 import { claudeCodeDiffRows } from './native-code-diff.ts'
@@ -32,6 +35,8 @@ import type { ClaudeUiNode } from '#generated/types.ts'
 const props = defineProps<{ node: Extract<ClaudeUiNode, { kind: 'markdown' | 'code' }> }>()
 const emit = defineEmits<{ press: [actionId: string, href?: string] }>()
 const modifiedClick = ref(false)
+const documentPaint = computed(() => ({ color: claudeUiColor(props.node.color) }))
+const nativeSpans = computed(() => props.node.kind === 'code' && props.node.nativeAnsi !== undefined ? parseClaudeStatus(props.node.nativeAnsi) : [])
 function openMarkdownLink(href: string) {
   if (props.node.kind !== 'markdown' || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return
   try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return } catch { return }
@@ -47,6 +52,9 @@ const sourceLines = computed(() => props.node.kind === 'code' ? claudeCodeLines(
 </script>
 
 <style scoped>
+.native-code-engine { margin: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.native-code-engine[data-code-wrap="truncate-end"] { white-space: pre; overflow: hidden; }
+.native-document-themed :deep(.ProseMirror), .native-document-themed :deep(a) { color: inherit; }
 .native-source { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .native-source-numbered { grid-template-columns: minmax(2ch, max-content) minmax(0, 1fr); column-gap: 1.5ch; }
 .native-source-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }

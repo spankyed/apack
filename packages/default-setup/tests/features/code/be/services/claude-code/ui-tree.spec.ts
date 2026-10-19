@@ -216,3 +216,11 @@ it('validates private field theme roles without changing keyed field authority',
     expect(() => createClaudeUiDrawing({ ...wire, props: { ...wire.props, _apackFieldTheme: theme } })).toThrow('field theme')
   }
 })
+
+it('admits document paint and bounded original Code output without changing structured content or Markdown callbacks', () => {
+  const drawing = createClaudeUiDrawing({ type: 'Box', children: [{ type: 'Link', props: { href: 'https://example.com', _apackDocumentTheme: { text: '#123456' } } }, { type: 'Code', props: { source: 'original', _apackCodeAnsi: '\x1b[31mdrawn\x1b[39m', _apackDocumentTheme: { text: '#abcdef' } } }, { type: 'Markdown', props: { key: 'doc', text: '[Link](https://example.com)', _apackDocumentTheme: { text: '#123456' } }, press: { plugin: 'fixture', handle: 8 } }] })
+  expect(drawing.tree).toMatchObject({ children: [{ kind: 'link', color: '#123456' }, { kind: 'code', source: 'original', nativeAnsi: '\x1b[31mdrawn\x1b[39m', color: '#abcdef' }, { kind: 'markdown', color: '#123456', text: '[Link](https://example.com)' }] })
+  expect(drawing.actions.size).toBe(1)
+  expect(() => createClaudeUiDrawing({ type: 'Code', props: { source: 'x', _apackCodeAnsi: 1 } })).toThrow('drawing is invalid')
+  expect(() => createClaudeUiDrawing({ type: 'Markdown', props: { text: 'x', _apackDocumentTheme: { text: '\n' } } })).toThrow('theme is invalid')
+})

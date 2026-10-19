@@ -1,3 +1,4 @@
+import { claudeTerminalDocumentRuntime } from './terminal-document-runtime.ts'
 import { claudeTerminalBashRuntime } from './terminal-bash-runtime.ts'
 import { claudeTerminalHistoryPlacementRuntime } from './terminal-history-placement-runtime.ts'
 import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
@@ -201,6 +202,7 @@ ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
 ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
+${claudeTerminalDocumentRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
@@ -231,8 +233,9 @@ function nativeThemeTree(n,tree){
  const visit=(value,inheritedColor,inheritedBackground,parentType,insideButton=false)=>{
   if(typeof value==='string')return parentType==='Box'?{type:'Text',props:{color:inheritedColor??palette.text},children:[value]}:value;
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
-  const field=value.type==='Input'||value.type==='Select';
+  const field=value.type==='Input'||value.type==='Select',document=['Link','Markdown','Code'].includes(value.type);
   const themed=['Text','Box','Button'].includes(value.type),props=themed?paint(value.props??{}):field?{...value.props,_apackFieldTheme:{text:palette.text,inverseText:palette.inverseText}}:value.props;
+  if(document){const props={...value.props};delete props._apackDocumentTheme;if(value.type!=='Link'||inheritedColor===undefined&&!insideButton)props._apackDocumentTheme={text:inheritedColor??palette.text};value={...value,props};}
   let color=inheritedColor,background=inheritedBackground;
   if(value.type==='Button'){props.color=props.plain!==true&&props.variant==='primary'?palette.suggestion:palette.text;props.hotkeyColor=props.plain===true?palette.suggestion:props.color;color=props.color;}
   if(value.type==='Text'){
@@ -247,7 +250,7 @@ function nativeThemeTree(n,tree){
 let nativeThemeSnapshot;
 function refreshNativeTheme(n){
  if(!clients.size)return;
- const next=JSON.stringify(nativeThemePalette(n));
+ const next=JSON.stringify([nativeThemePalette(n),nativeDocumentSyntaxFlag(n)]);
  if(nativeThemeSnapshot===next)return;
  const changed=nativeThemeSnapshot!==undefined;nativeThemeSnapshot=next;
  if(changed)publish({type:'system',subtype:'ui_invalidate',event:'ui.render'});
@@ -271,6 +274,7 @@ async function initialize(){
   const toolBackground=await import('/$bunfs/root/chunk-6f1afc3k.js'),terminalComponents=await import('/$bunfs/root/chunk-tdpa6qc1.js');
   const transcriptState=await import('/$bunfs/root/chunk-tnpfcesk.js');
   const toolRendering=await import('/$bunfs/root/chunk-r2k35jby.js'),staticRender=await import('/$bunfs/root/chunk-mn4kxp8g.js'),appProvider=await import('/$bunfs/root/chunk-002p0hd2.js'),toolExport=await import('/$bunfs/root/chunk-ste1xxgx.js'),jsx=await import('/$bunfs/root/chunk-4hec5rn1.js');
+  const documentRendering=await import('/$bunfs/root/chunk-hz2qqf17.js'),documentDefaults=await import('/$bunfs/root/chunk-pbm0yhpt.js');
   const themeRoots=await import('/$bunfs/root/chunk-pg10s5g1.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
@@ -300,7 +304,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,clientRuntime,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -987,8 +991,17 @@ async function control(request,abort){
   }
   refreshNativeTheme(n);
   const drawingTree=groupFacts?toolGroupDrawing(value,result.tree,instanceRevision):progressFacts?toolBackgroundDrawing(value,result.tree,instanceRevision):result.tree;
+  const documentTree=await nativeDocumentTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,drawingTree,instanceRevision),{signal:abort.signal,columns:value.viewport?.columns});
+  if(!clients.has(clientId)||!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native document lifetime expired while formatting');
+  if(composerFacts&&nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while formatting document');
+  if(commandFacts&&commandOutputFacts(n,value.instance_id)?.fingerprint!==commandFacts.fingerprint)throw Error('Native command changed while formatting document');
+  if(toolFacts&&toolResultFacts(n,value.instance_id,value.props.source_uuid,value.props.assistant_uuid)?.fingerprint!==toolFacts.fingerprint)throw Error('Native result changed while formatting document');
+  if(useFacts&&toolUseFacts(n,value.instance_id,value.props.assistant_uuid,abort)?.fingerprint!==useFacts.fingerprint)throw Error('Native tool changed while formatting document');
+  if(progressFacts&&toolProgressFacts(n,value.instance_id,value.props.assistant_uuid,abort)?.fingerprint!==progressFacts.fingerprint)throw Error('Native progress changed while formatting document');
+  if(groupFacts&&nativeToolGroups(n).get(value.instance_id)?.revision!==groupFacts.revision)throw Error('Native group changed while formatting document');
+  if(question){const current=nativeDialog(n,'permission_ask_user_question');if(current.item!==question.item||current.revision!==question.revision)throw Error('Native question changed while formatting document');}
   recordDrawing(n,value,drawingTree);
-  return {...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,drawingTree,instanceRevision)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,documentTree),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
