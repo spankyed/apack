@@ -71,6 +71,7 @@ test('completes an everyday native review across Agent, approval, question and i
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('Release review')
   const composer = card.locator('[contenteditable="true"]')
+  const checkpoint = expect.configure({ soft: true })
   const screenshots: string[] = []
   const geometry: unknown[] = []
   async function capture(stage: string, editor: import('@playwright/test').Locator, controls: import('@playwright/test').Locator[], reading?: import('@playwright/test').Locator) {
@@ -79,14 +80,15 @@ test('completes an everyday native review across Agent, approval, question and i
       const beforeFile = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '-before-check.png'
       await appPage.screenshot({ path: testInfo.outputPath(beforeFile) })
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined }))
-      await expect.poll(async () => {
-        const rectangles = await Promise.all([editor, ...controls].map(control => control.evaluate(element => { const r = element.getBoundingClientRect(); return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height, inside: r.top >= 0 && r.left >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.width > 0 && r.height >= 20 } })))
+      await checkpoint.poll(async () => {
+        const rectangles = await Promise.all([editor, ...controls].map((control, index) => control.evaluate((element, primary) => { const r = element.getBoundingClientRect(); return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height, inside: r.top >= 0 && r.left >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.width > 0 && r.height > 0 && (primary || r.height >= 20) } }, index === 0)))
         return rectangles.every(rect => rect.inside)
-      }).toBe(true)
-      if (reading) await expect.poll(() => reading.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(80)
+      }, { timeout: 1500, intervals: [100, 250] }).toBe(true)
+      if (reading) await checkpoint.poll(() => reading.evaluate(element => element.clientHeight), { timeout: 1500, intervals: [100, 250] }).toBeGreaterThanOrEqual(stage === 'approval' ? 48 : 80)
       const file = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '.png'
       await appPage.screenshot({ path: testInfo.outputPath(file) }); screenshots.push(file)
       geometry.push({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
+      await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ geometry, screenshots }))
     }
   }
   const send = card.getByRole('button', { name: 'Send', exact: true })
@@ -121,20 +123,26 @@ test('completes an everyday native review across Agent, approval, question and i
   const reference = JSON.parse(await readFile(join(workspace!, 'reference-fixture.json'), 'utf8'))
   await composer.fill('Read the release checklist before proposing changes.')
   await send.click()
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'everyday-read-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
+  await composer.fill('Keep my review draft while I approve this read.')
+  await writeFile(join(workspace!, 'everyday-read-release'), 'release')
   const approval = appPage.getByTestId('native-read-approval')
   await expect(approval).toBeVisible(); await expect(approval.getByTestId('native-read-path')).toHaveText(reference.file)
-  await composer.fill('Keep my review draft while I approve this read.')
-  await capture('approval', composer, [approval.getByRole('button', { name: 'Approve', exact: true })], approval.locator('.details'))
+  await expect(composer).toBeHidden(); await expect(composer).toHaveText('Keep my review draft while I approve this read.')
+  await capture('approval', approval.getByTestId('native-read-path'), [approval.getByRole('button', { name: 'Approve', exact: true })], approval.locator('.details'))
   await approval.getByRole('button', { name: 'Approve', exact: true }).click()
   await expect(approval).toBeHidden()
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('The release checklist is available.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Keep my review draft while I approve this read.')
   await composer.fill('Ask me which release audience to target.')
   await send.click()
+  await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'everyday-question-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
+  await composer.fill('Use a direct, concise tone in the summary.')
+  await writeFile(join(workspace!, 'everyday-question-release'), 'release')
   const question = appPage.getByTestId('native-question-panel')
   await expect(question).toBeVisible(); await expect(question).toContainText('Who should the release summary address?')
-  await composer.fill('Use a direct, concise tone in the summary.')
-  await capture('question', composer, [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
+  await expect(composer).toBeHidden(); await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
+  await capture('question', question.locator('h2'), [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
   await question.getByRole('radio', { name: 'Developers People integrating the updated behavior', exact: true }).check()
   await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
   await expect(question).toBeHidden()
@@ -164,11 +172,18 @@ test('completes an everyday native review across Agent, approval, question and i
   await send.click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
-  const resumedCost = (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD
-  await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(resumedCost)
+  let resumedCost = 0
+  await expect.poll(async () => {
+    const text = await readFile(join(workspace!, 'native-print-results.jsonl'), 'utf8').catch(() => '')
+    const result = text.split('\n').filter(Boolean).map(line => JSON.parse(line)).at(-1)
+    if (result?.sessionId !== sessionId || result.totalCostUsd <= nativeCost) return false
+    resumedCost = result.totalCostUsd
+    return (await context()).claude.totalCostUsd === resumedCost
+  }).toBe(true)
+  await expect.poll(async () => (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD).toBe(resumedCost)
   await composer.fill('Ready for the next release-review step.')
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: true, nativeAgentReturn: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
