@@ -9,7 +9,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem)))' }"
+        :style="{ '--composer-history-reserve': nativeToolsExpanded ? '2rem' : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem)))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
@@ -20,7 +20,7 @@
         <NativePanePanel v-if="nativeUi?.panes" :preferred-rows="paneRowsPreference" @resize="paneRowsPreference = $event" :panes="nativeUi.panes" :focus="nativeFocus" :grant-focus="paneFocusGrant" @operate="emit('native-ui-pane', $event)" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" @return-focus="focusComposer" />
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
-          @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
+          @tools-expanded="nativeToolsExpanded = $event" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
 
         <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
 
@@ -326,6 +326,7 @@ function focusComposer() {
     if (card) card.scrollTop = Math.max(0, card.scrollHeight - card.clientHeight)
   })
 }
+const nativeToolsExpanded = ref(false)
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {
   const editor = tiptapRef.value?.editor

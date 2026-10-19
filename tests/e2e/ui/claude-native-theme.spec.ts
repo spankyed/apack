@@ -81,6 +81,8 @@ test('renders original theme previews, cancellation, button roles and saved cust
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-control-visibility-failure.png') })
       throw error
     }
+    // Layout can move the action under the old pointer; inspect base paint outside the site.
+    await appPage.mouse.move(8, 8)
   }
   await showTools()
   await composer.fill('Draft retained during native theme preview')
@@ -145,6 +147,32 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toBeFocused()
   await expect(note).toHaveValue('Retain this field note through theme changes')
   await expect(choice).toHaveValue('b')
+  const composerGeometry: any[] = []
+  for (const height of [900, 600]) {
+    await appPage.setViewportSize({ width: 680, height })
+    await note.focus()
+    const fieldLabel = note.locator('..').locator('.native-field-label')
+    await expect(fieldLabel).toBeInViewport({ ratio: 0.99 }).catch(async error => {
+      await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-label-failure-' + height + '.png') })
+      throw error
+    })
+    await expect(note).toBeInViewport({ ratio: 0.99 })
+    await expect(composer).toBeInViewport({ ratio: 0.99 }).catch(async error => {
+      await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-visibility-failure-' + height + '.png') })
+      throw error
+    })
+    await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
+    const sizes = await card.evaluate(element => {
+      const strip = element.querySelector<HTMLElement>('[data-testid="composer-session-strip"]')!
+      const site = element.querySelector<HTMLElement>('.native-extension-surface')!
+      return { card: { height: element.clientHeight, scrollHeight: element.scrollHeight }, strip: { height: strip.clientHeight, scrollHeight: strip.scrollHeight }, site: { height: site.clientHeight, scrollHeight: site.scrollHeight } }
+    })
+    expect(sizes.card.scrollHeight).toBeLessThanOrEqual(sizes.card.height + 1)
+    expect(sizes.strip.scrollHeight).toBeLessThanOrEqual(sizes.strip.height + 1)
+    composerGeometry.push({ height, ...sizes })
+    await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-composer-' + height + '.png') })
+  }
+  await appPage.setViewportSize({ width: 680, height: 900 })
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-theme-reloaded.png') })
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(18, 52, 86)')
   await expect(composer).toHaveText('Draft retained during native theme reload')
@@ -170,5 +198,5 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeThemeButtonRoles:true,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCustomTheme:true,nativeThemePreview:true,nativeThemePreviewCancel:true,nativeThemeButtonRoles:true,nativeComposerSingleViewport:true,nativeFieldLabelVisibleNormalCompact:true,composerGeometry,nativeFieldTheme:true,nativeFieldThemeRetainedDraft:true,nativeThemeReload:true,nativeRetainedDraft:true,nativeThemeAction:true,nativeThemeHover:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 })

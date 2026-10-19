@@ -73,6 +73,19 @@ test('keeps long native status and model catalog usable in compact windows', asy
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
   }
+  const everydayGeometry: any[] = []
+  await composer.fill('Explain the current changes and suggest the next step.')
+  for (const height of [900, 600]) {
+    await appPage.setViewportSize({ width: 680, height })
+    await expect(composer).toBeInViewport({ ratio: 0.99 })
+    await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
+    await expect(status).toBeInViewport({ ratio: 0.99 })
+    const sizes = await card.evaluate(element => ({ height: element.clientHeight, scrollHeight: element.scrollHeight, width: element.clientWidth, scrollWidth: element.scrollWidth }))
+    expect(sizes.scrollHeight).toBeLessThanOrEqual(sizes.height + 1)
+    expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.width + 1)
+    everydayGeometry.push({ height, card: sizes })
+    await appPage.screenshot({ path: testInfo.outputPath('apack-everyday-native-composer-' + height + '.png') })
+  }
   await writeFile(join(workspace!,'status-mode.txt'),'long')
   await expect(status).toContainText('NativeLongStatusEnd',{timeout:10000})
   await expect(status.locator('[style*="color"]').first()).toHaveCSS('color','rgb(74, 222, 128)')
@@ -128,5 +141,5 @@ test('keeps long native status and model catalog usable in compact windows', asy
   await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeLongStatus:true,nativeKeyboardStatusScroll:true,nativeCompactComposerControls:true,nativeLongModelCatalog:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,geometry,browserErrors:errors},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeEverydayComposer:true,everydayGeometry,nativeLongStatus:true,nativeKeyboardStatusScroll:true,nativeCompactComposerControls:true,nativeLongModelCatalog:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,geometry,browserErrors:errors},null,2))
 })

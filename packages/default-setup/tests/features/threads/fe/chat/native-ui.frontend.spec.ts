@@ -10,13 +10,13 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 async function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('form', { 'data-onboarding-id': 'agent-chat-input', onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
-    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus, onFocusReport: focusReport }), h('textarea', { 'aria-label': 'Message' }),
+    h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus, onFocusReport: focusReport, onToolsExpanded: toolsExpanded }), h('textarea', { 'aria-label': 'Message' }),
   ]) }); app.mount(root)
   if (expand) { root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')?.click(); await nextTick() }
-  return { state, root, cwd, press, field, returnFocus, submit, phase, focusReport }
+  return { state, root, cwd, press, field, returnFocus, submit, phase, focusReport, toolsExpanded }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -413,7 +413,7 @@ it('attributes site-entry autofocus to the plugin and never re-runs it for a nat
 })
 
 
-it('reveals a native focus redirect inside its own scroll site without scrolling the conversation', async () => {
+it('reveals the native field label with focus without scrolling the conversation', async () => {
   const windowFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   try {
     const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [
@@ -423,10 +423,11 @@ it('reveals a native focus redirect inside its own scroll site without scrolling
     const site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = f.root.querySelector<HTMLTextAreaElement>('[data-native-focus-id="second"]')!
     vi.spyOn(site, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 300, 50))
     vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 180, 100, 30))
+    vi.spyOn(field.closest('label')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 150, 100, 70))
     f.root.querySelector<HTMLButtonElement>('[data-native-focus-id="first"]')!.focus()
     const outsideScroll = document.documentElement.scrollTop
     f.state.nativeFocus = { revision: 1, moved: true, focusId: 'second' }; await nextTick()
-    expect(document.activeElement).toBe(field); expect(site.scrollTop).toBe(60)
+    expect(document.activeElement).toBe(field); expect(site.scrollTop).toBe(50)
     expect(document.documentElement.scrollTop).toBe(outsideScroll)
   } finally { windowFocus.mockRestore() }
 })
@@ -532,4 +533,19 @@ it('updates resolved field paint without replacing focused drafts or emitting in
   expect(label.style.getPropertyValue('--native-field-text')).toBe('rgb(171, 205, 239)')
   expect(label.style.getPropertyValue('--native-field-inverse')).toBe('rgb(1, 2, 3)')
   expect(f.field).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('reports expanded native content only while it needs composer space', async () => {
+  const f = await mount({ nativeUi: live }, false)
+  expect(f.toolsExpanded).toHaveBeenLastCalledWith(false)
+  const toggle = f.root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')!
+  toggle.click(); await nextTick()
+  expect(f.toolsExpanded).toHaveBeenLastCalledWith(true)
+  f.state.nativeUi = { status: 'disconnected' }; await nextTick()
+  expect(f.toolsExpanded).toHaveBeenLastCalledWith(false)
+  f.state.nativeUi = live; await nextTick()
+  expect(f.toolsExpanded).toHaveBeenLastCalledWith(true)
+  f.root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')!.click(); await nextTick()
+  expect(f.toolsExpanded).toHaveBeenLastCalledWith(false)
+  expect(f.submit).not.toHaveBeenCalled()
 })
