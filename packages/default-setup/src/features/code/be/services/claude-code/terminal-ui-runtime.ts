@@ -224,14 +224,23 @@ function nativeThemeProvider(n,output=process.stdout){
  throw Error('Native theme provider is not mounted');
 }
 function nativeThemePalette(n,output=process.stdout){return nativeThemeProvider(n,output).value.resolvedTheme;}
-function nativeThemeTree(n,tree){
+function nativeThemePaint(palette,value){
+ if(!value||typeof value!=='object'||Array.isArray(value))return value;
+ const result={...value};
+ for(const key of ['color','backgroundColor','borderColor'])if(typeof result[key]==='string'&&Object.hasOwn(palette,result[key]))result[key]=palette[result[key]];
+ return result;
+}
+function nativeThemePromptDecorations(n,decorations){
+ if(!decorations?.length)return decorations;
  const palette=nativeThemePalette(n);
- const paint=value=>{
-  if(!value||typeof value!=='object'||Array.isArray(value))return value;
-  const result={...value};
-  for(const key of ['color','backgroundColor','borderColor'])if(typeof result[key]==='string'&&Object.hasOwn(palette,result[key]))result[key]=palette[result[key]];
+ return decorations.map(run=>{
+  const result=nativeThemePaint(palette,run);delete result._apackThemeColor;delete result._apackThemeBackgroundColor;
+  for(const [key,role]of [['color','_apackThemeColor'],['backgroundColor','_apackThemeBackgroundColor']])if(typeof run[key]==='string'&&Object.hasOwn(palette,run[key]))result[role]=run[key];
   return result;
- };
+ });
+}
+function nativeThemeTree(n,tree){
+ const palette=nativeThemePalette(n),paint=value=>nativeThemePaint(palette,value);
  const visit=(value,inheritedColor,inheritedBackground,parentType,insideButton=false)=>{
   if(typeof value==='string')return parentType==='Box'?{type:'Text',props:{color:inheritedColor??palette.text},children:[value]}:value;
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
@@ -249,12 +258,18 @@ function nativeThemeTree(n,tree){
  };
  return visit(tree);
 }
-let nativeThemeSnapshot;
+function publishPromptTheme(n){
+ const palette=Object.fromEntries(Object.entries(nativeThemePalette(n)).filter(([key,value])=>/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(key)&&typeof value==='string'));
+ publish({type:'system',subtype:'ui_prompt_theme',palette});
+}
+let nativeThemeSnapshot,nativePromptPaletteSnapshot;
 function refreshNativeTheme(n){
  if(!clients.size)return;
+ const palette=JSON.stringify(nativeThemePalette(n)),paletteChanged=nativePromptPaletteSnapshot!==undefined&&nativePromptPaletteSnapshot!==palette;nativePromptPaletteSnapshot=palette;
  const next=JSON.stringify([nativeThemePalette(n),nativeDocumentSyntaxFlag(n)]);
  if(nativeThemeSnapshot===next)return;
  const changed=nativeThemeSnapshot!==undefined;nativeThemeSnapshot=next;
+ if(paletteChanged)publishPromptTheme(n);
  if(changed)publish({type:'system',subtype:'ui_invalidate',event:'ui.render'});
 }
 async function initialize(){
@@ -353,7 +368,7 @@ function installHosts(n){
  if(wrappedContext)restoreHosts(n);
  const current=n.runtime.ey();if(!current?.composer)throw Error('Native terminal composer is not bound');
  originalContext=current;
- releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async()=>false,readSelection:async()=>({cause:'not_asked'}),readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',args))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
+ releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async()=>false,readSelection:async()=>({cause:'not_asked'}),readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',{...args,...(args.decorations!==undefined?{decorations:nativeThemePromptDecorations(n,args.decorations)}:{})}))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
  const remote=n.runtime.AXs(current.composer),has=answer=>n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes(answer));
  wrappedContext={...current,composer:{...current.composer,read:()=>remote.read(),write:(...args)=>has('ui_prompt_fill')?remote.write(...args):current.composer.write(...args),propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
  n.runtime.Zao(wrappedContext);
@@ -428,7 +443,7 @@ function drainEdit(n,clientId,state){
  Promise.resolve().then(()=>n.session.kGr({before,after:next.box,...(nativeKey?{key:nativeKey}:{})},abort.signal)).catch(()=>next.box).then(result=>{
   state.active=undefined;
   if(abort.signal.aborted||edits.get(clientId)!==state){next.answer({...next.box,superseded:true});return;}
-  const box=n.session.o_n(result),decorations=n.runtime.qgr(n.runtime.nxe(result.decorations,box.text));
+  const box=n.session.o_n(result),decorations=nativeThemePromptDecorations(n,n.runtime.qgr(n.runtime.nxe(result.decorations,box.text)));
   if((box.text!==next.box.text||box.cursor!==next.box.cursor)&&!state.waiting.length&&!state.stale)state.offered=box;
   state.stale=false;next.answer({...box,...(decorations.length?{decorations}:{})});drainEdit(n,clientId,state);
  });
@@ -842,7 +857,7 @@ async function control(request,abort){
   if(clients.has(clientId)&&clientViews.get(clientId)!==viewKey)throw Error('Detach the previous native view before attaching again');
   clients.add(clientId);clientViews.set(clientId,viewKey);
   try{await n.session.I9s({surface:'desktop',clientId,...(value.viewport?{viewport:value.viewport}:{})},answers);if(clientViewKey(n)!==viewKey)throw Error('Native selected view changed during attachment');}catch(error){clients.delete(clientId);clientViews.delete(clientId);try{await n.session.d2t(clientId,'detach');}catch{}if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);throw error;}
-  replayNotices();
+  replayNotices();publishPromptTheme(n);
   return {surfaces:n.runtime.lY()};
  }
  if(value.subtype==='ui_detach'){

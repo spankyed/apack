@@ -8,8 +8,8 @@ function fixture(){
  const root={container:{current:{type:provider,child:{memoizedProps:{value}}}}}
  const n={themeRoots:{ai:()=>new Map([[output,root]])},themePreferences:{dEn:provider}}
  const start=claudeTerminalUiRuntime.indexOf('function nativeThemeProvider('),end=claudeTerminalUiRuntime.indexOf('async function initialize(){',start)
- const methods=vm.runInNewContext(claudeTerminalDocumentRuntime+claudeTerminalUiRuntime.slice(start,end)+';({draw:nativeThemeTree,refresh:refreshNativeTheme,palette:nativeThemePalette})',{clients,publish,process:{stdout:output},AbortController})
- return{n,clients,publish,read:(context:unknown)=>methods.palette(context),draw:(tree:unknown)=>methods.draw(n,tree),refresh:()=>methods.refresh(n),change(){palette={...palette,success:'#998877'}}}
+ const methods=vm.runInNewContext(claudeTerminalDocumentRuntime+claudeTerminalUiRuntime.slice(start,end)+';({draw:nativeThemeTree,refresh:refreshNativeTheme,palette:nativeThemePalette,prompt:nativeThemePromptDecorations})',{clients,publish,process:{stdout:output},AbortController})
+ return{n,clients,publish,read:(context:unknown)=>methods.palette(context),prompt:(runs:unknown)=>methods.prompt(n,runs),draw:(tree:unknown)=>methods.draw(n,tree),refresh:()=>methods.refresh(n),change(){palette={...palette,success:'#998877'}}}
 }
 it('resolves native Text/Box/hover colors without mutating the native drawing or action identity',()=>{
  const f=fixture(),press={plugin:'native',handle:1},tree={type:'Box',props:{backgroundColor:'inverseText',borderColor:'warning'},children:[{type:'Text',props:{color:'success'},children:['label']},{type:'Button',press,props:{},hover:{color:'warning'}}]}
@@ -27,8 +27,8 @@ it('preserves explicit colors and Client props while resolving default/inherited
 })
 it('invalidates attached drawings once per original resolved-theme change',()=>{
  const f=fixture();f.refresh();f.refresh();expect(f.publish).not.toHaveBeenCalled()
- f.change();f.refresh();f.refresh();expect(f.publish).toHaveBeenCalledExactlyOnceWith({type:'system',subtype:'ui_invalidate',event:'ui.render'})
- f.clients.clear();f.change();f.refresh();expect(f.publish).toHaveBeenCalledOnce()
+ f.change();f.refresh();f.refresh();expect(f.publish).toHaveBeenCalledWith({type:'system',subtype:'ui_invalidate',event:'ui.render'});expect(f.publish).toHaveBeenCalledWith({type:'system',subtype:'ui_prompt_theme',palette:expect.objectContaining({success:'#998877'})});expect(f.publish).toHaveBeenCalledTimes(2)
+ f.clients.clear();f.change();f.refresh();expect(f.publish).toHaveBeenCalledTimes(2)
 })
 
 it('reads only the committed original provider and rejects missing or changed provider contracts',()=>{
@@ -72,4 +72,13 @@ it('invalidates native document paint when the original syntax setting changes w
   ;(f.n as any).runtime = { ey: () => ({ toolContext: () => ({ getAppState: () => state }) }) }
   f.refresh(); state.settings.syntaxHighlightingDisabled = true; f.refresh()
   expect(f.publish).toHaveBeenCalledExactlyOnceWith({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
+})
+
+it('resolves prompt decoration roles from the current original theme without changing ranges or native hook data', () => {
+ const f=fixture(),runs=[{start:2,end:7,color:'success',backgroundColor:'warning',bold:true},{start:9,end:12,color:'#010203',italic:true}];
+ const before=JSON.stringify(runs),painted=f.prompt(runs);
+ expect(painted).toEqual([{start:2,end:7,color:'rgb(17,34,51)',backgroundColor:'#abcdef',bold:true,_apackThemeColor:'success',_apackThemeBackgroundColor:'warning'},{start:9,end:12,color:'#010203',italic:true}]);
+ expect(JSON.stringify(runs)).toBe(before);
+ f.change();expect(f.prompt(runs)[0].color).toBe('#998877');
+ expect(f.prompt([])).toEqual([]);expect(f.prompt(undefined)).toBeUndefined();
 })

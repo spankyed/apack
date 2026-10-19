@@ -516,3 +516,15 @@ it('mounts native notices in the session band and durations at canonical message
   await view.dispose()
  }finally{vi.useRealTimers()}
 })
+
+it('publishes only valid current-owner prompt palettes without rerendering native hooks and retires paint on detach', async () => {
+ const f=fixture(),view=f.mount();await view.ready;await vi.advanceTimersByTimeAsync(50);
+ const before=f.ui.render.mock.calls.length,listener=[...f.listeners][0]!;
+ listener({type:'system',subtype:'ui_prompt_theme',palette:{text:'#123456',warning:'ansi256(12)'}} as StreamLine);
+ expect(f.states.at(-1)?.promptPalette).toEqual({text:'#123456',warning:'ansi256(12)'});
+ expect(f.ui.render).toHaveBeenCalledTimes(before);expect(f.ui.promptEdit).not.toHaveBeenCalled();
+ listener({type:'system',subtype:'ui_prompt_theme',palette:{text:'#fff','bad;property':'red'}} as StreamLine);
+ expect(f.states.at(-1)?.promptPalette?.text).toBe('#123456');
+ await view.dispose();expect(f.states.at(-1)?.promptPalette).toBeUndefined();
+ const updates=f.states.length;listener({type:'system',subtype:'ui_prompt_theme',palette:{text:'#abcdef'}} as StreamLine);expect(f.states).toHaveLength(updates);
+})

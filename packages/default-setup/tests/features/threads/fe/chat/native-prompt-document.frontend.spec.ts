@@ -1,3 +1,4 @@
+import { claudePromptThemeStyle, claudeUiColor } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { Editor, Node } from '@tiptap/core'
 import { drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
 import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-editor.ts'
@@ -461,4 +462,21 @@ it('keeps inward decoration projection around canonical structural Markdown deli
   expect(serialize(editor.state.doc)).toBe(text)
   expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('styled')
   bridge.dispose()
+})
+
+it('keeps native theme roles live in existing paint without changing the draft, selection or submitting another edit', () => {
+ editor.commands.setContent('keep this draft');editor.commands.setTextSelection({from:2,to:6});
+ const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn());
+ const doc=editor.state.doc,selection=editor.state.selection;
+ const runs=[{start:0,end:4,color:'#abcdef',_apackThemeColor:'warning'}];
+ editor.view.dispatch(editor.state.tr.setMeta('theme-fixture',true));
+ const drawn=drawClaudePromptDecorations(editor.state.doc,runs,serialize);
+ expect((drawn.find()[0] as any).type.attrs.style).toContain('var(--claude-native-prompt-warning,');
+ const count=send.mock.calls.length;
+ for (const [key,value] of Object.entries(claudePromptThemeStyle({text:'#123456',warning:'#abcdef'}))) editor.view.dom.style.setProperty(key,String(value));
+ expect(editor.view.dom.style.getPropertyValue('--claude-native-prompt-warning')).toBe(claudeUiColor('#abcdef'));
+ for (const [key,value] of Object.entries(claudePromptThemeStyle({text:'#123456',warning:'#010203'}))) editor.view.dom.style.setProperty(key,String(value));
+ expect(editor.view.dom.style.getPropertyValue('--claude-native-prompt-warning')).toBe(claudeUiColor('#010203'));
+ expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true);expect(send).toHaveBeenCalledTimes(count);
+ bridge.dispose();
 })

@@ -1,3 +1,4 @@
+import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeQuestionHost } from './ui-question-host.ts'
 import { selectClaudeAgentTranscriptRows } from './ui-agent-transcript.ts'
 import { createClaudeTranscriptMessageHost } from './ui-transcript-messages.ts'
@@ -52,6 +53,7 @@ export function mountClaudeUi(options: {
   let stopPromptHost: (() => void) | undefined
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
+  let promptPalette: Record<string, string> | undefined
   let lastState: ClaudeUiMountState = { status: 'connecting' }
   let agent: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails | undefined
   let agentProblem: string | undefined
@@ -102,7 +104,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -187,6 +189,7 @@ export function mountClaudeUi(options: {
     if (scheduled) clearTimeout(scheduled)
     scheduled = undefined
     unsubscribe()
+    promptPalette = undefined
     publish({ status: 'disconnected' })
     disposal = (async () => {
       await ready
@@ -207,6 +210,10 @@ export function mountClaudeUi(options: {
     question.receive(line)
     panes?.receive(line)
     scroll.receive(line)
+    if (line.type === 'system' && line.subtype === 'ui_prompt_theme' && current()) {
+      const palette = readClaudePromptPalette(line.palette)
+      if (palette) { promptPalette = palette; publish(lastState) }
+    }
     if (line.type === 'system' && line.subtype === 'ui_focus' && current() && line.client_id === client.client_id && line.component === 'AbovePrompt' && line.instance_id === instanceId) {
       const target = [...(drawing?.focusables ?? [])].find(([, identity]) => identity.plugin === line.plugin && identity.key === line.key)
       if (target) { try { options.requestFocus?.(target[0], focusRevision) } catch { /* closed presentation */ } }

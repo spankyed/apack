@@ -3,7 +3,7 @@ import type { ControlRequestLine } from './types.ts'
 
 const box = z.object({ text: z.string().max(1000000), cursor: z.number().int().nonnegative() }).strict()
   .refine(value => value.cursor <= value.text.length, 'cursor exceeds prompt text')
-const decoration = z.object({ start: z.number().int().nonnegative(), end: z.number().int().nonnegative(),
+const decoration = z.object({ _apackThemeColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), _apackThemeBackgroundColor: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).optional(), start: z.number().int().nonnegative(), end: z.number().int().nonnegative(),
   color: z.string().optional(), backgroundColor: z.string().optional(), dimColor: z.boolean().optional(),
   bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
 }).strict()

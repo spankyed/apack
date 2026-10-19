@@ -57,3 +57,14 @@ export function claudeUiTextPaint(paint: ClaudeTextPaint): CSSProperties {
   return paint.inverse ? { color: background ?? palette.inverseText, backgroundColor: foreground ?? palette.text }
     : { color: foreground, backgroundColor: background }
 }
+
+/** CSS variables repaint existing decorations without changing editor state or invoking prompt hooks. */
+export function claudePromptThemeStyle(palette: Readonly<Record<string, string>> | undefined): CSSProperties {
+  const style: CSSProperties = {}
+  for (const [role, value] of Object.entries(palette ?? {})) {
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(role)) continue
+    const color = claudeUiColor(value)
+    if (color) style[`--claude-native-prompt-${role}`] = color
+  }
+  return style
+}

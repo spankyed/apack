@@ -1,5 +1,5 @@
 <template>
-  <form class="mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
+  <form :style="promptThemeStyle" class="mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
     <StatusLine :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <TiptapEditor ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="emit('draft', $event)" @submit="submit" />
     <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
@@ -14,9 +14,10 @@
 </template>
 <script setup lang="ts">
 import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
+import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
@@ -25,6 +26,7 @@ const props = defineProps<{ draft: string; disabled: boolean; mountId?: string; 
 const emit = defineEmits<{ leave: []; draft: [text: string]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
+const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
 let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true
 watch([() => editorRef.value?.editor, () => props.mountId], ([editor, mountId], _old, cleanup) => {
   bridge?.dispose(); bridge = undefined; offers.value = []

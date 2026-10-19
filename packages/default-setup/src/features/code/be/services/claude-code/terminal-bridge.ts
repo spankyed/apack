@@ -1,3 +1,4 @@
+import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
@@ -192,6 +193,7 @@ export async function createClaudeTerminalBridge(options: {
         const event = object(value.event)
         if (value.pid !== observerPid || !event || event.type !== 'system') return reply(409, {})
         const invalidation = event.subtype === 'ui_invalidate' && event.event === 'ui.render'
+        const promptTheme = event.subtype === 'ui_prompt_theme' && readClaudePromptPalette(event.palette) !== undefined
         const panes = event.subtype === 'ui_panes' && Array.isArray(event.panes) && event.panes.length <= 256
           && event.panes.every(value => { const pane = object(value); return pane && typeof pane.id === 'string' && typeof pane.plugin === 'string' && typeof pane.title === 'string' })
           && [event.shown_id, event.focused_id, event.focus_requested_id].every(id => id === null || typeof id === 'string')
@@ -202,7 +204,7 @@ export async function createClaudeTerminalBridge(options: {
           && typeof event.uuid === 'string' && event.uuid.length > 0 && event.uuid.length <= 128 && typeof event.plugin === 'string' && event.plugin.length > 0 && event.plugin.length <= 256
           && (typeof event.text === 'string' && event.text.length <= 10001 || event.subtype === 'ui_status' && event.text === null)
           && (event.subtype !== 'ui_toast' || Number.isSafeInteger(event.timeout_ms) && Number(event.timeout_ms) >= 0)
-        if (!invalidation && !panes && !scroll && !focus && !notice) return reply(409, {})
+        if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice) return reply(409, {})
         ui.receive(event); return reply(200, {})
       }
       if (request.url === '/transcript') {

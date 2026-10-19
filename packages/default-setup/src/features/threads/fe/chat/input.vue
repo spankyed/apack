@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col w-full">
+  <div class="flex flex-col w-full" :style="promptThemeStyle">
     <form
       @submit.prevent="handleSubmit"
       @keydown.shift.tab.prevent="cyclePhase"
@@ -221,6 +221,7 @@ import NativeComposerPlacements from './NativeComposerPlacements.vue'
 import NativeUiNotices from './NativeUiNotices.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
+import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
@@ -372,6 +373,7 @@ defineExpose({ focus: focusComposer })
 let composerEpoch = 0
 watch([() => props.currentThread?.id, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })
+const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
 watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined

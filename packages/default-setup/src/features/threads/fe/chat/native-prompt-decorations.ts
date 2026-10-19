@@ -57,8 +57,8 @@ export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNulla
     const lines = [run.underline && 'underline', run.strikethrough && 'line-through'].filter(Boolean)
     if (lines.length) styles.push(`text-decoration-line:${lines.join(' ')}`)
     const foreground = claudeUiColor(run.color), background = claudeUiColor(run.backgroundColor)
-    if (foreground) styles.push(`color:${foreground}`)
-    if (background) styles.push(`background-color:${background}`)
+    if (foreground) styles.push(`color:${typeof run._apackThemeColor === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(run._apackThemeColor) ? `var(--claude-native-prompt-${run._apackThemeColor}, ${foreground})` : foreground}`)
+    if (background) styles.push(`background-color:${typeof run._apackThemeBackgroundColor === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(run._apackThemeBackgroundColor) ? `var(--claude-native-prompt-${run._apackThemeBackgroundColor}, ${background})` : background}`)
     if (styles.length) drawn.push(Decoration.inline(from, to, { class: 'claude-prompt-decoration', style: styles.join(';') }))
   }
   return DecorationSet.create(doc, drawn)
