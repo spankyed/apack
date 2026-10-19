@@ -58,3 +58,21 @@ it('shows only offered standing choices and emits the native token and edited pr
     expect(root.querySelector('[data-testid="native-bash-command"]')?.textContent).toBe('npm run build')
   } finally { app.unmount(); root.remove() }
 })
+
+it('preserves an edited prefix through same-dialog presentation refreshes and temporary choice withdrawal', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const bash = reactive({ token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes' }, { value: 'yes-prefix-edited', label: 'Remember', prefix: 'npm *' }] })
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Bash', title: 'Run', question: 'Run?', command: 'npm run build', disabled: false, bash, onRespond: respond }) }); app.mount(root)
+  try {
+    const select = root.querySelector('select')!; select.value = 'yes-prefix-edited'; select.dispatchEvent(new Event('change')); await nextTick()
+    const input = root.querySelector('input')!; input.value = 'npm run *'; input.dispatchEvent(new Event('input')); await nextTick()
+    bash.token = 'b'.repeat(64); bash.choices = bash.choices.map(choice => ({ ...choice })); await nextTick()
+    expect(root.querySelector('input')!.value).toBe('npm run *')
+    const standing = bash.choices[1]!; bash.choices = [bash.choices[0]!]; await nextTick()
+    expect(Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Continue')?.disabled).toBe(true)
+    bash.choices = [bash.choices[0]!, standing]; await nextTick()
+    expect(root.querySelector('input')!.value).toBe('npm run *')
+    Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Continue')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-prefix-edited', choiceToken: bash.token, prefix: 'npm run *' })
+  } finally { app.unmount(); root.remove() }
+})

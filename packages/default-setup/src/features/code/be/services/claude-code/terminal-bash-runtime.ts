@@ -39,6 +39,7 @@ async function answerNativeBashChoice(n,d,request){
  if(!choice||choice.value==='no')throw Error('Invalid native Bash approval choice');
  if(choice.prefix!==undefined){
   if(typeof request.prefix!=='string'||request.prefix.length>4000)throw Error('Invalid native Bash prefix');
+  if(request.prefix!==choice.prefix){
   const original=source.options.find(option=>option.value===choice.value);
   original.onChange(request.prefix);
   // React owns prefix state and the callback closure. Never answer with the pre-edit closure.
@@ -51,6 +52,7 @@ async function answerNativeBashChoice(n,d,request){
    updated=undefined;
   }
   if(!updated)throw Error('Native Bash prefix was not acknowledged');source=updated;
+  }
  }else if(request.prefix!==undefined)throw Error('Unexpected native Bash prefix');
  if(await source.control.onChange(choice.value)===false)throw Error('Native Bash choice is currently held or refused');
  const deadline=Date.now()+1000;

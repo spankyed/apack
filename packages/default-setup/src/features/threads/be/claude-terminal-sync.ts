@@ -81,7 +81,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
         const dialog = reads.at(0) ?? bashes.at(0) ?? questions.at(0) ?? plans.at(0)
         const nativeControl = object(priorControl?.nativeTerminal)
-        const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision && (dialog.toolName !== 'Bash' || object(nativeControl.bash)?.token === dialog.choiceToken)
+        const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
         if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
           updateMessageState(priorControl.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } })
         }
@@ -109,6 +109,12 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
             repository.threadCommands.update(threadId, { context })
             broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
           }
+        }
+        if (sameDialog && dialog?.toolName === 'Bash' && nativeControl && priorControl && object(nativeControl.bash)?.token !== dialog.choiceToken) {
+          const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
+            pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, bash: dialog.choices && dialog.choiceToken ? { choices: dialog.choices, token: dialog.choiceToken } : undefined } } } }
+          repository.threadCommands.update(threadId, { context })
+          broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
         }
         for (const entry of batch.entries) {
           const message = object(entry.row.message)

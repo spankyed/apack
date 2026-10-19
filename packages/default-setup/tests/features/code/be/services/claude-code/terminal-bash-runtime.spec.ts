@@ -65,3 +65,12 @@ it('withholds standing choices while the original review layout is held', () => 
   f.fiber.updateQueue.memoCache.data[0][23].body.isStandingHeld = true
   expect(f.api.read(f.n, f.d).choices.map((choice: any) => choice.value)).toEqual(['yes', 'no'])
 })
+
+it('accepts an unchanged original prefix without waiting for a nonexistent state change', async () => {
+  const f = fixture(), edit = vi.fn()
+  f.control.options.push({ value: 'yes-prefix-edited', label: 'Remember', type: 'input', initialValue: 'npm *', onChange: edit })
+  const source = f.api.read(f.n, f.d)
+  await f.api.answer(f.n, f.d, { choice: 'yes-prefix-edited', choiceToken: source.token, prefix: 'npm *' })
+  expect(edit).not.toHaveBeenCalled()
+  expect(f.control.onChange).toHaveBeenCalledWith('yes-prefix-edited')
+})

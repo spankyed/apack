@@ -4,7 +4,7 @@
       <span class="eyebrow">Permission needed</span>
       <h2>{{ title }}</h2>
     </header>
-    <div class="details" tabindex="0" :aria-label="`${toolName} request details`">
+    <div ref="detailsElement" class="details" @focusin="ensureFocusedField" @input="ensureFocusedField" tabindex="0" :aria-label="`${toolName} request details`">
       <p class="question">{{ question }}</p>
       <code :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
       <section v-if="review" class="change-review" aria-label="Proposed file change" data-testid="native-file-review">
@@ -40,23 +40,47 @@
       <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="decisions">
         <button type="button" class="deny" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">Deny</button>
-        <button type="button" class="approve" :disabled="disabled" @click="approve">{{ selectedChoice !== 'yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" class="approve" :disabled="disabled || selectedChoice !== 'yes' && !currentChoice" @click="approve">{{ selectedChoice !== 'yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview } from '#features/code/common/native-file-approval.ts'
 const props = defineProps<{ bash?: ClaudeBashApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [] }>()
+const detailsElement = ref<HTMLElement>()
+let resizeObserver: ResizeObserver | undefined, focusFrame: number | undefined
+function ensureFocusedField() {
+  if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+  focusFrame = requestAnimationFrame(() => {
+    focusFrame = undefined
+    const details = detailsElement.value, field = document.activeElement
+    if (!details || !(field instanceof HTMLElement) || !details.contains(field) || !field.matches('input,select,textarea')) return
+    const box = details.getBoundingClientRect(), bounds = field.getBoundingClientRect()
+    if (bounds.bottom > box.bottom - 8) details.scrollTop += bounds.bottom - box.bottom + 8
+    else if (bounds.top < box.top + 8) details.scrollTop -= box.top + 8 - bounds.top
+  })
+}
+onMounted(() => {
+  window.addEventListener('resize', ensureFocusedField)
+  if (typeof ResizeObserver === 'undefined') return
+  resizeObserver = new ResizeObserver(ensureFocusedField)
+  if (detailsElement.value) resizeObserver.observe(detailsElement.value)
+})
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', ensureFocusedField)
+  if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+})
 const feedback = ref('')
-const selectedChoice = ref('yes'), prefix = ref('')
+const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string>>({})
 const standingChoices = computed(() => props.toolName === 'Bash' ? props.bash?.choices.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [] : [])
 const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
-watch(currentChoice, choice => { prefix.value = choice?.prefix ?? '' })
+const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? currentChoice.value?.prefix ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
 function approve() {
   const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
   emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: props.bash!.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
