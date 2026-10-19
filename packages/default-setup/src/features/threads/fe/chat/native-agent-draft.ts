@@ -8,8 +8,12 @@ export interface ClaudeAgentDraftSnapshot {
   selection: Record<string, unknown>
   storedMarks?: readonly Record<string, unknown>[]
 }
-const markdown = (editor: Editor, doc = editor.state.doc): string =>
-  (editor.storage as unknown as { markdown: { serializer: { serialize(value: typeof doc): string } } }).markdown.serializer.serialize(doc)
+/** The app serializes a structurally empty paragraph as a round-trip marker. */
+export function normalizeClaudeAgentDraftText(doc: Editor['state']['doc'], text: string): string {
+  return text === '&nbsp;' && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size ? '' : text
+}
+const markdown = (editor: Editor, doc = editor.state.doc): string => normalizeClaudeAgentDraftText(doc,
+  (editor.storage as unknown as { markdown: { serializer: { serialize(value: typeof doc): string } } }).markdown.serializer.serialize(doc))
 
 export function captureClaudeAgentDraft(editor: Editor): ClaudeAgentDraftSnapshot | undefined {
   if (editor.isDestroyed || editor.view.composing) return

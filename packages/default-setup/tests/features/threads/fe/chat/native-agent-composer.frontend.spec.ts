@@ -5,7 +5,7 @@ import type { ClaudePromptReply, ClaudePromptEdit } from '#generated/types.ts'
 import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
 import type { Editor } from '@tiptap/core'
 import type { ClaudeAgentDraftSnapshot } from '#features/threads/fe/chat/native-agent-draft.ts'
-let resetSelectionOnCreate = false
+let resetSelectionOnCreate = false, preserveEmptyMarker = false
 let app: App | undefined, editor: Editor
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
   const { defineComponent, h, onBeforeUnmount, onMounted, ref } = await import('vue')
@@ -14,13 +14,13 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
   const { Markdown } = await import('tiptap-markdown')
   return { default: defineComponent({ emits: ['update:modelValue'], setup(_props, { expose, emit }) {
     const root = ref<HTMLElement>()
-    editor = new Editor({ onCreate: ({ editor }) => { if (resetSelectionOnCreate) editor.commands.setTextSelection(1) }, onUpdate: ({ editor }) => emit('update:modelValue', (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()), content: 'Unsent Agent draft', extensions: [StarterKit, Markdown, Extension.create({ name: 'genericEscape', addKeyboardShortcuts: () => ({ Escape: () => true }) })] })
+    editor = new Editor({ onCreate: ({ editor }) => { if (resetSelectionOnCreate) editor.commands.setTextSelection(1) }, onUpdate: ({ editor }) => emit('update:modelValue', preserveEmptyMarker && editor.isEmpty ? '&nbsp;' : (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()), content: 'Unsent Agent draft', extensions: [StarterKit, Markdown, Extension.create({ name: 'genericEscape', addKeyboardShortcuts: () => ({ Escape: () => true }) })] })
     expose({ editor }); onMounted(() => root.value?.append(editor.view.dom)); onBeforeUnmount(() => editor.destroy())
     return () => h('div', { ref: root })
   } }) }
 })
 vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => null } }))
-beforeEach(() => { resetSelectionOnCreate = false; startFeTestRuntime() })
+beforeEach(() => { resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot) {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
@@ -86,4 +86,11 @@ it('captures selection before teardown and restores it after the next editor cre
   await vi.waitFor(() => expect(editor.isInitialized).toBe(true))
   expect(editor.state.selection.toJSON()).toEqual(selection)
   expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+})
+it('persists a cleared Agent as an empty draft rather than the serializer placeholder', async () => {
+  preserveEmptyMarker = true
+  const f = await mount()
+  editor.commands.clearContent(); await nextTick()
+  expect(f.draft).toHaveBeenLastCalledWith('')
+  expect(f.root.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true)
 })

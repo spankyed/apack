@@ -1,7 +1,7 @@
 <template>
   <form :style="promptThemeStyle" class="native-agent-composer mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
     <StatusLine :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
-    <TiptapEditor ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="emit('draft', $event)" @submit="submit" />
+    <TiptapEditor ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
       <button v-for="(row, index) in offers" :key="index" type="button" class="block w-full px-4 py-2 text-left text-xs text-neutral-300 hover:bg-white/5" @mousedown.prevent @click="bridge?.selectCompletion(index, row.offerId)">{{ row.label ?? row.text }}</button>
     </div>
@@ -20,7 +20,7 @@ import StatusLine from './StatusLine.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import type { Editor } from '@tiptap/core'
-import { captureClaudeAgentDraft, restoreClaudeAgentDraft, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
+import { captureClaudeAgentDraft, restoreClaudeAgentDraft, normalizeClaudeAgentDraftText, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
@@ -59,6 +59,10 @@ watch(() => props.hostRequest, request => {
   else if (request.kind === 'fill') emit('host', { requestId: request.requestId, kind: 'fill', filled: available && (bridge?.fillDraft(request.input, request.revision) ?? false) })
   else emit('host', { requestId: request.requestId, kind: 'suggest', shown: available && (bridge?.showSuggestion(request.text, request.revision) ?? false) })
 })
+function updateDraft(text: string) {
+  const editor = editorRef.value?.editor
+  emit('draft', editor ? normalizeClaudeAgentDraftText(editor.state.doc, text) : text)
+}
 function leaveEditor(event: KeyboardEvent) {
   const editor = editorRef.value?.editor
   if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || editor?.view.composing || !editor?.view.dom.contains(event.target as Node)) return

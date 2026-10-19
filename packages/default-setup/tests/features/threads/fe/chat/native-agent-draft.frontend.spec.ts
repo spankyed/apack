@@ -9,8 +9,11 @@ const reference = Node.create({ name: 'reference', group: 'inline', inline: true
   addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('@notes') } } }),
 })
 const editors: Editor[] = []
-function create(content: Content) {
-  const editor = new Editor({ extensions: [StarterKit, Markdown, reference], content }); editors.push(editor); return editor
+const emptyParagraph = Node.create({ name: 'paragraph', priority: 1000, group: 'block', content: 'inline*', parseHTML: () => [{ tag: 'p' }], renderHTML: () => ['p', 0],
+  addStorage: () => ({ markdown: { serialize(state: { write(text: string): void; renderInline(node: unknown): void; closeBlock(node: unknown): void }, node: { childCount: number }) { if (!node.childCount) state.write('&nbsp;'); else state.renderInline(node); state.closeBlock(node) }, parse: {} } }),
+})
+function create(content: Content, preserveEmpty = false) {
+  const editor = new Editor({ extensions: [preserveEmpty ? StarterKit.configure({ paragraph: false }) : StarterKit, Markdown, reference, ...(preserveEmpty ? [emptyParagraph] : [])], content }); editors.push(editor); return editor
 }
 afterEach(() => { for (const editor of editors.splice(0)) editor.destroy() })
 const rich = { type: 'doc', content: [
@@ -63,4 +66,24 @@ it('leaves an active composition alone', () => {
   expect(captureClaudeAgentDraft(original)).toBeUndefined()
   expect(restoreClaudeAgentDraft(original, snapshot, snapshot.text)).toBe(false)
   expect(original.state.doc.textContent).toBe('draft')
+})
+it('keeps an empty Agent draft canonical through remount', () => {
+  const original = create('draft'); original.commands.clearContent()
+  const snapshot = captureClaudeAgentDraft(original)!
+  expect(snapshot.text).toBe('')
+  const next = create(snapshot.text)
+  expect(restoreClaudeAgentDraft(next, snapshot, '')).toBe(true)
+  expect(next.isEmpty).toBe(true)
+})
+it('does not save the app serializer empty-paragraph marker as Agent draft content', () => {
+  const original = create('draft', true); original.commands.clearContent()
+  const snapshot = captureClaudeAgentDraft(original)!
+  expect(snapshot.text).toBe('')
+  const next = create(snapshot.text, true)
+  expect(restoreClaudeAgentDraft(next, snapshot, '')).toBe(true)
+  expect(next.isEmpty).toBe(true)
+})
+it('retains a deliberate nonbreaking space that is actual document content', () => {
+  const original = create({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '\u00a0' }] }] }, true)
+  expect(captureClaudeAgentDraft(original)!.text).not.toBe('')
 })
