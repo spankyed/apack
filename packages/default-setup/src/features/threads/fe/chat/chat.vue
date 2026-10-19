@@ -1,5 +1,6 @@
 <template>
-  <div class="flex flex-col h-full">
+  <!-- History scrolls inside the assigned pane; only its authored minimum affects the shell split. -->
+  <div class="flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { minHeight: 'min(28rem, calc(100vh - 3rem))' } : {}) }">
     <!-- Main content: optional inline dashboard + chat -->
     <div class="flex flex-grow overflow-hidden min-h-0" ref="chatContainerRef">
       <!-- Thread Sidebar (left, hidden during onboarding) -->
