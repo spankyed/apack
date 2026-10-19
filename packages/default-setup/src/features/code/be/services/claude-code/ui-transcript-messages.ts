@@ -1,4 +1,4 @@
-import type { ClaudeUiToolGroup } from './ui-controls.ts'
+import type { ClaudeUiToolGroup, ClaudeUiComposerPlacement } from './ui-controls.ts'
 import { stripVTControlCharacters } from 'node:util'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import { claudeAssistantDisplayText } from '../../../common/claude-message-display.ts'
@@ -18,6 +18,7 @@ type Entry = {
   displayText: string
   outputRewritten?: boolean
   engineOutput?: string
+  nativeHint?: boolean
   groupExpanded?: boolean
   drawing?: ClaudeUiDrawing
   fields?: ClaudeUiDrawing
@@ -29,6 +30,7 @@ function inert(node: ClaudeUiNode): ClaudeUiNode {
   if ('children' in node && node.children) return { ...node, children: node.children.map(inert) }
   return node
 }
+const composerRow = (row: ClaudeUiTranscriptRow) => row.component === 'Spinner' || row.component === 'SessionMode' || row.component === 'PromptHint'
 const rowKey = (row: ClaudeUiTranscriptRow) => JSON.stringify([row.component, row.uuid])
 const sameSource = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => a.component === b.component && a.uuid === b.uuid && a.sessionId === b.sessionId && a.messageId === b.messageId && a.text === b.text && a.start === b.start && a.end === b.end && a.producerRevision === b.producerRevision && (a.component !== 'ToolResult' || b.component !== 'ToolResult' || a.blockIndex === b.blockIndex && a.resultUuid === b.resultUuid && a.assistantUuid === b.assistantUuid && a.tool === b.tool) && (a.component !== 'ToolUse' && a.component !== 'ToolProgress' || b.component !== 'ToolUse' && b.component !== 'ToolProgress' || a.blockIndex === b.blockIndex && a.assistantUuid === b.assistantUuid && a.resultUuid === b.resultUuid && a.activityStatus === b.activityStatus) && (a.component !== 'ToolGroup' || b.component !== 'ToolGroup' || a.blockIndex === b.blockIndex) && (a.component !== 'AssistantMessage' || b.component !== 'AssistantMessage' || (a.isSummary === b.isSummary && (!a.isSummary || (b.isSummary && a.blockIndex === b.blockIndex))))
 const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
@@ -38,33 +40,34 @@ const same = (a: ClaudeUiTranscriptRow, b: ClaudeUiTranscriptRow) => {
   if ((a.component === 'ToolUse' || a.component === 'ToolProgress') && (b.component === 'ToolUse' || b.component === 'ToolProgress')) return true
   if (a.component === 'ToolGroup' && b.component === 'ToolGroup') return a.isExpanded === b.isExpanded && a.revision === b.revision && a.usesEngine === b.usesEngine
   if (a.component === 'ToolResult' && b.component === 'ToolResult') return a.isErrored === b.isErrored
+  if ('sourceRevision' in a && 'sourceRevision' in b) return a.sourceRevision === b.sourceRevision
   return a.component === 'CommandOutput' && b.component === 'CommandOutput' && a.isErrored === b.isErrored
 }
 const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'AssistantMessage' ? claudeAssistantDisplayText(row.isSummary ? row.text.trim() : row.text) : row.text
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
-  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups'>
+  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements'>
   client: { client_id: string; surface: 'desktop' }
-  rows(groups: readonly ClaudeUiToolGroup[]): ClaudeUiTranscriptRow[]
+  rows(groups: readonly ClaudeUiToolGroup[], composer: readonly ClaudeUiComposerPlacement[]): ClaudeUiTranscriptRow[]
   current(): boolean
   publish(): void
 }) {
   const entries = new Map<string, Entry>()
-  let groups: ClaudeUiToolGroup[] = [], readingGroups=false, groupsAgain=false
+  let groups: ClaudeUiToolGroup[] = [], placements: ClaudeUiComposerPlacement[] = [], readingGroups=false, groupsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
   let disposal: Promise<void> | undefined
   const releases = new Set<Promise<void>>()
   let scheduled: ReturnType<typeof setTimeout> | undefined
   const current = () => !disposed && options.current()
   const present = (entry: Entry) => current() && entries.get(rowKey(entry.row)) === entry
-  const valid = (entry: Entry) => present(entry) && options.rows(groups).some(row => same(row, entry.row))
+  const valid = (entry: Entry) => present(entry) && options.rows(groups,placements).some(row => same(row, entry.row))
   const publish = () => { if (current()) options.publish() }
   function retire(entry: Entry, clientSnapshot = false) {
     entry.epoch++; entry.dirty = true
     if (clientSnapshot) return
     entry.drawing = undefined
-    entry.body = entry.fields && (entry.row.component === 'ToolGroup' || entry.fields.fields.size || entry.fields.clientInstances.size) ? { status: 'live', tree: inert(entry.fields.tree) } : { status: 'rendering' }
+    entry.body = entry.fields && (entry.row.component === 'ToolGroup' || composerRow(entry.row) || entry.fields.fields.size || entry.fields.clientInstances.size) ? { status: 'live', tree: inert(entry.fields.tree) } : { status: 'rendering' }
   }
   function release(entry: Entry): Promise<void> {
     const currentEntry = entries.get(rowKey(entry.row))
@@ -77,7 +80,7 @@ export function createClaudeTranscriptMessageHost(options: {
   }
   function sync() {
     if (!current()) return
-    const rows = options.rows(groups), wanted = new Set(rows.map(rowKey))
+    const rows = options.rows(groups,placements), wanted = new Set(rows.map(rowKey))
     let changed = false
     for (const [id, entry] of entries) if (!wanted.has(id)) { entries.delete(id); void release(entry); changed = true }
     for (const row of rows) {
@@ -98,7 +101,10 @@ export function createClaudeTranscriptMessageHost(options: {
       let next:ClaudeUiToolGroup[]=[]
       try { next=await options.ui.toolGroups(options.client.client_id) } catch { /* Retire unavailable native groups and retain ordinary tool widgets. */ }
       if(!current())return
-      if(JSON.stringify(next)!==JSON.stringify(groups)){groups=next;refresh()}
+      let nextPlacements:ClaudeUiComposerPlacement[]=[]
+      try { nextPlacements=await options.ui.composerPlacements(options.client.client_id) } catch { /* Unavailable sources retire their drawings. */ }
+      if(!current())return
+      if(JSON.stringify(next)!==JSON.stringify(groups)||JSON.stringify(nextPlacements)!==JSON.stringify(placements)){groups=next;placements=nextPlacements;refresh()}
     } finally { readingGroups=false;if(groupsAgain){groupsAgain=false;void refreshGroups()} }
   }
   function schedule() {
@@ -117,12 +123,13 @@ export function createClaudeTranscriptMessageHost(options: {
         try {
           if(entry.failedLease){await release(entry);if(!valid(entry)||epoch!==entry.epoch)continue;entry.instanceRevision=++nextInstanceRevision;entry.released=false;entry.failedLease=false}
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid, instance_revision: entry.instanceRevision,
-            props: entry.row.component === 'ToolGroup' ? {source_revision:entry.row.revision,isExpanded:entry.row.isExpanded}
+            props: 'sourceRevision' in entry.row ? {source_revision:entry.row.sourceRevision}
+              : entry.row.component === 'ToolGroup' ? {source_revision:entry.row.revision,isExpanded:entry.row.isExpanded}
               : entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
               : (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? { assistant_uuid: entry.row.assistantUuid }
               : entry.row.component === 'ToolResult' ? { source_uuid: entry.row.resultUuid, assistant_uuid: entry.row.assistantUuid, text: entry.row.text, tool: entry.row.tool, isErrored: entry.row.isErrored }
               : entry.row.component === 'CommandOutput' ? { text: entry.row.text, isErrored: entry.row.isErrored }
-              : { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } })
+              : entry.row.component === 'UserMessage' ? { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } : {} })
           if (!valid(entry) || epoch !== entry.epoch) { if (!present(entry)) void release(entry); continue }
           const drawing = createClaudeUiDrawing(result.tree, entry.fields)
           function stamp(node: ClaudeUiNode) {
@@ -138,8 +145,9 @@ export function createClaudeTranscriptMessageHost(options: {
             groups=groups.map(group=>group.id===entry.row.uuid?{...group,initialized:true,isExpanded:result.props.isExpanded as boolean,usesEngine:result.group_engine!}:group)
             entry.row={...entry.row,isExpanded:result.props.isExpanded,usesEngine:result.group_engine};sync()
           }
+          entry.nativeHint = entry.row.component==='PromptHint' && result.native_hint===true
           entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
-          entry.engineOutput = entry.row.component === 'ToolResult' || (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? result.engine_output : undefined
+          entry.engineOutput = composerRow(entry.row) || entry.row.component === 'ToolResult' || (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? result.engine_output : undefined
           if (entry.outputRewritten) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
           entry.body = { status: 'live', tree: drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
@@ -162,23 +170,24 @@ export function createClaudeTranscriptMessageHost(options: {
       void release(entry);entry.failedLease=true;entry.groupExpanded=false;entry.row={...entry.row,isExpanded:false}
       groups=groups.map(group=>group.id===entry.row.uuid?{...group,isExpanded:false}:group);refreshPending=true
     }
+    if(composerRow(entry.row)){void release(entry);entry.failedLease=true}
     entry.displayText = originalDisplayText(entry.row); entry.body = { status: 'error' }; publish()
   }
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
     start() { started = true; refresh(); void refreshGroups() },
     refresh,
     receive(line: Record<string, unknown>) {
       if (!current()) return
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
-        if(line.tool_groups===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
+        if(line.tool_groups===true||line.composer_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
         const snapshot = line.client_snapshot === true
         if (snapshot && line.client_id !== options.client.client_id) return
         const sites = Array.isArray(line.instances) ? line.instances : undefined
         let changed = false
-        for (const entry of entries.values()) if (!entry.dirty && (!(snapshot || line.tool_groups === true) || !sites || sites.some(site => site.surface === 'desktop' && site.component === entry.row.component && site.instance_id === entry.row.uuid))) { retire(entry, snapshot); changed = true }
+        for (const entry of entries.values()) if (!entry.dirty && (!(snapshot || line.tool_groups === true || line.composer_placements === true) || !sites || sites.some(site => site.surface === 'desktop' && site.component === entry.row.component && site.instance_id === entry.row.uuid))) { retire(entry, snapshot); changed = true }
         if (changed) publish()
         refreshPending = true; schedule()
       } else if (line.type === 'assistant' || (line.type === 'user' && line.isReplay === true) || (line.type === 'system' && line.subtype === 'init') || line.type === 'conversation_reset') {

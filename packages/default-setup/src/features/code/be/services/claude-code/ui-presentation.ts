@@ -143,9 +143,11 @@ export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'ToolGroup'; blockIndex: number; revision: string; isExpanded: boolean; isActive: boolean; usesEngine: boolean; tools: ClaudeUiGroupedTool[]; artifacts: { artifactId: string; label: string }[] }
   | { component: 'ToolResult'; blockIndex: number; assistantUuid: string; resultUuid: string; tool: string; isErrored: boolean }
   | { component: 'CommandOutput'; isErrored: boolean }
+  | { component: 'Spinner' | 'SessionMode' | 'PromptHint'; sourceRevision: string }
   | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }
 )
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
+  nativeHint?: boolean
   groupExpanded?: boolean
   displayText: string
   outputRewritten?: boolean
@@ -164,7 +166,7 @@ export type ClaudeUiMountState = (
   | { status: 'connecting' | 'rendering' | 'disconnected' }
   | { status: 'live'; tree: ClaudeUiNode }
   | { status: 'error'; message: string }
-) & { agent?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails; agentProblem?: string; agentInput?: { revision: number; status: 'pending' | 'done' | 'error' | 'review' | 'blocked' | 'confirmation' | 'deciding' | 'command_done' | 'command_output' | 'panel' | 'panel_done'; panel?: { id: string; commandName: string }; output?: { messageId: string; commandName: string; text: string; isErrored: boolean; outcome?: string }; receipt?: { messageId: string }; command?: import('../../../common/native-terminal.ts').ClaudeNativeAgentCommandConfirmation; decision?: 'confirm' | 'cancel'; review?: import('../../../common/native-terminal.ts').ClaudeNativeAgentInputReview; problem?: string }; panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
+) & { agent?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails; agentProblem?: string; agentInput?: { revision: number; status: 'pending' | 'done' | 'error' | 'review' | 'blocked' | 'confirmation' | 'deciding' | 'command_done' | 'command_output' | 'panel' | 'panel_done'; panel?: { id: string; commandName: string }; output?: { messageId: string; commandName: string; text: string; isErrored: boolean; outcome?: string }; receipt?: { messageId: string }; command?: import('../../../common/native-terminal.ts').ClaudeNativeAgentCommandConfirmation; decision?: 'confirm' | 'cancel'; review?: import('../../../common/native-terminal.ts').ClaudeNativeAgentInputReview; problem?: string }; composer?: ClaudeUiTranscriptFrame[]; panes?: ClaudeUiPanePresentation; scroll?: ClaudeUiScrollState; notices?: ClaudeUiNotices; transcriptMessages?: ClaudeUiTranscriptFrame[]; question?: ClaudeUiQuestionFrame }
 
 /** Opaque current-drawing focus identity; absence reports hold only, null selects the container. */
 export type ClaudeUiFocusEvent = { paneId?: string; revision: number; isHeld: boolean; focusId?: string | null; by: 'person' | 'auto' }

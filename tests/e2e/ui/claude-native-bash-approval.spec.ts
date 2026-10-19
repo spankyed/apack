@@ -89,6 +89,20 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   const progressHook=await readSnapshot('native-bash-tool-progress.json')
   expect(progressHook).toMatchObject({requestId:toolId,props:{tool_use_id:toolId,kind:'background_hint',hint:'(ctrl+b to run in background)'}})
   await composer.fill('Keep my draft while a native tool runs')
+  const activity=card.locator('[data-native-placement="Spinner"]')
+  await expect(activity).toContainText('Native activity')
+  await expect(card.locator('[data-native-placement="SessionMode"]')).toContainText('Native fixture mode')
+  await expect(card.locator('[data-native-placement="PromptHint"]')).toContainText('Draft ready from native hook')
+  await expect.poll(async()=> (await readSnapshot('native-composer-hint-hook.json'))?.props?.isDraft).toBe(true)
+  const spinnerHook=await readSnapshot('native-composer-spinner-hook.json')
+  expect(spinnerHook.props.mode).not.toBe('tool-input')
+  expect(spinnerHook.requestId).toEqual(expect.any(String))
+  await activity.getByRole('button',{name:'Inspect activity',exact:true}).click()
+  await expect.poll(async()=> (await readSnapshot('native-composer-spinner-action.json'))?.box?.text).toBe('Keep my draft while a native tool runs')
+  const composerSourceIds={spinner:spinnerHook.requestId,mode:(await readSnapshot('native-composer-mode-hook.json'))?.requestId,hint:(await readSnapshot('native-composer-hint-hook.json'))?.requestId}
+  expect(composerSourceIds.mode).toBe('session-mode');expect(composerSourceIds.hint).toBe('prompt-hint')
+  await appPage.screenshot({path:testInfo.outputPath('apack-native-composer-activity.png')})
+
   await progress.scrollIntoViewIfNeeded()
   await appPage.screenshot({path:testInfo.outputPath('apack-native-tool-running-progress.png')})
   const background=tools.locator(`[data-native-tool-progress="${toolId}"]`).getByRole('button',{name:'Run in background',exact:true})
@@ -100,6 +114,7 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   await expect.poll(async()=> (await progress.allTextContents()).join('')).toBe('')
   await expect(appPage.locator(`[data-native-tool-progress="${toolId}"]`).getByRole('button',{name:'Run in background',exact:true})).toHaveCount(0)
   await expect(composer).toHaveText('Keep my draft while a native tool runs')
+  await expect(card.locator('[data-native-placement="Spinner"]')).toHaveCount(0)
 
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   await writeFile(target, 'Preserved after denial')
@@ -138,5 +153,5 @@ test('routes one-time Bash allow, deny and cancellation from the compact compose
   const resumedCost = (await context()).claude.totalCostUsd
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeBashAllow: true, nativeToolBackground: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeComposerPlacements: true, composerSourceIds, nativeBashAllow: true, nativeToolBackground: true, nativeBashDeny: true, nativeBashCancel: true, nativeBashCommandContext: true, nativeBashCompactControls: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })

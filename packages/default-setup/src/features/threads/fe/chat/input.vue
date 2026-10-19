@@ -9,7 +9,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ '--composer-history-reserve': nativeToolsExpanded ? '2rem' : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem)))' }"
+        :style="{ '--composer-history-reserve': nativeToolsExpanded ? '2rem' : nativeComposerHeight ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight}px))` : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"
@@ -21,6 +21,8 @@
         <StatusIndicator :anchor="inputCardRef"/>
         <StatusLine ref="statusLineRef" :status-line="statusLine" :native-status="nativeStatus" :cwd="statusLineCwd" :native-ui="nativeUi" :native-focus="nativeFocus"
           @tools-expanded="nativeToolsExpanded = $event" @return-focus="focusComposer" @click="emit('statusline-click')" @press="(actionId, href) => emit('native-ui-press', actionId, href)" @field="emit('native-ui-field', $event)" @scroll="emit('native-ui-scroll', $event)" @focus-report="emit('native-ui-focus', $event)" />
+
+        <NativeComposerPlacements v-if="nativeUi?.composer?.length" :frames="nativeUi.composer" location="status" @height="nativeActivityHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
 
         <NativeUiNotices v-if="nativeUi?.notices" :notices="nativeUi.notices" @operate="emit('native-ui-notice', $event)" />
 
@@ -74,6 +76,11 @@
             @summarize-from-here="(id) => { revertMenuOpen = false; emit('summarize-from-here', id) }"
             @close="revertMenuOpen = false"
           />
+        </div>
+
+        <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
+          <NativeComposerPlacements class="min-w-0 flex-1" :frames="nativeUi.composer" location="hint" @height="nativeHintHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+          <NativeComposerPlacements class="ml-auto min-w-0" :frames="nativeUi.composer" location="mode" @height="nativeModeHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
         </div>
 
         <!-- Buttons row -->
@@ -210,6 +217,7 @@ import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import NativePanePanel from './NativePanePanel.vue'
 import StatusLine from './StatusLine.vue'
+import NativeComposerPlacements from './NativeComposerPlacements.vue'
 import NativeUiNotices from './NativeUiNotices.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
@@ -326,6 +334,8 @@ function focusComposer() {
     if (card) card.scrollTop = Math.max(0, card.scrollHeight - card.clientHeight)
   })
 }
+const nativeActivityHeight = ref(0), nativeHintHeight = ref(0), nativeModeHeight = ref(0)
+const nativeComposerHeight = computed(() => nativeActivityHeight.value + Math.max(nativeHintHeight.value, nativeModeHeight.value))
 const nativeToolsExpanded = ref(false)
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {
@@ -855,13 +865,14 @@ const handleSubmit = async () => {
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input {
+  --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 12px 40px -20px rgba(0, 0, 0, 0.6);
   &:focus-within { border-color: rgba(147, 180, 240, 0.32); }
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 @media (max-height: 700px) {
-  .input { --composer-history-reserve: 2rem; }
+  .input { --composer-default-history-reserve: 2rem; }
   .input :global([data-testid="composer-editor-area"]), .input :global(.ProseMirror) { min-height: 40px; }
   .input :global(.ProseMirror) { padding-top: 8px; padding-bottom: 8px; }
 }

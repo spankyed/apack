@@ -1,3 +1,4 @@
+import NativeComposerPlacements from '#features/threads/fe/chat/NativeComposerPlacements.vue'
 import NativeToolGroups from '#features/threads/fe/chat/NativeToolGroups.vue'
 import NativeToolDrawing from '#features/threads/fe/chat/NativeToolDrawing.vue'
 import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
@@ -115,4 +116,14 @@ it('restores ordinary block fragments when native group rendering is unavailable
  const root=document.createElement('div');document.body.append(root)
  app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(_component,_id,fallback)=>fallback(),frames:computed(()=>[group]),press(){},field(){},view(){}});return()=>h(NativeToolGroups,{toolUseIds:['one','ungrouped']},{default:({ids}:{ids:string[]})=>h('span',ids.join(','))})}});app.mount(root)
  expect(root.querySelector('[data-native-tool-group]')).toBeNull();expect(root.textContent).toBe('one,ungrouped')
+})
+
+it('renders native activity engine output and replacement controls in the composer without raw markup',async()=>{
+ const press=vi.fn(),root=document.createElement('div');document.body.append(root)
+ const value:ClaudeUiTranscriptFrame={component:'Spinner',uuid:'native-agent',sourceRevision:'a'.repeat(64),messageId:'composer',sessionId:'session',text:'',start:0,end:0,displayText:'',engineOutput:'\x1b[31mNative activity <script>literal</script>\x1b[0m',body:{status:'live',tree:{kind:'box',children:[{kind:'unsupported',component:'engine'},{kind:'button',label:'Inspect activity',actionId:'inspect'}]}}}
+ app=createApp({render:()=>h(NativeComposerPlacements,{frames:[value],location:'status',onPress:press})});app.mount(root)
+ expect(root.querySelector('[role="status"]')?.textContent).toBe('Native activity <script>literal</script>')
+ expect(root.querySelector('script')).toBeNull()
+ root.querySelector('button')!.click();expect(press).toHaveBeenCalledWith('inspect',undefined)
+ await nextTick()
 })

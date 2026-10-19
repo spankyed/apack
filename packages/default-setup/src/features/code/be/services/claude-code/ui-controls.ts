@@ -11,6 +11,8 @@ const clientInput = z.discriminatedUnion('kind',[
 export type ClaudeUiClientInput = z.infer<typeof clientInput>
 const toolGroup = z.object({id:z.string().min(1).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
 export type ClaudeUiToolGroup = z.infer<typeof toolGroup>
+const composerPlacement=z.object({component:z.enum(['Spinner','SessionMode','PromptHint']),id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
+export type ClaudeUiComposerPlacement=z.infer<typeof composerPlacement>
 const clientId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const surface = z.enum(['desktop', 'mobile', 'vscode'])
 const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
@@ -77,7 +79,7 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const renderResult = z.object({ native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
@@ -117,6 +119,10 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     return controls.request(value)
   }
   return {
+    async composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]> {
+      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      return z.object({placements:z.array(composerPlacement).max(32)}).strict().parse(await request({subtype:'apack_ui_composer',client_id:clientId.parse(id)})).placements
+    },
     async toolGroups(id: string): Promise<ClaudeUiToolGroup[]> {
       const valid=clientId.parse(id)
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []

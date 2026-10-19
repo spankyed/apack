@@ -275,3 +275,15 @@ it('discovers only native-adapter groups and validates source revisions before m
  request.mockResolvedValueOnce({groups:[{...group,revision:'not-a-source-revision'}]})
  await expect(native.toolGroups('view')).rejects.toThrow()
 })
+
+it('discovers only source-revision-bound composer placements on the native owner',async()=>{
+ const request=vi.fn(async()=>({placements:[{component:'Spinner',id:'native-agent',revision:'a'.repeat(64)}]}))
+ const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+ await expect(ui.composerPlacements('view')).resolves.toHaveLength(1)
+ expect(request).toHaveBeenCalledWith({subtype:'apack_ui_composer',client_id:'view'})
+ const print=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request})
+ await expect(print.composerPlacements('view')).resolves.toEqual([])
+ expect(request).toHaveBeenCalledTimes(1)
+ request.mockResolvedValue({placements:[{component:'Spinner',id:'native-agent',revision:'wrong'}]})
+ await expect(ui.composerPlacements('view')).rejects.toThrow()
+})

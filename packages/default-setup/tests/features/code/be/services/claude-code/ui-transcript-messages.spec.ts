@@ -3,9 +3,9 @@ import { createClaudeTranscriptMessageHost } from '#features/code/be/services/cl
 import type { ClaudeUiTranscriptRow } from '#features/code/be/services/claude-code/ui-presentation.ts'
 function fixture(clientId = 'view') {
   let current = true, handle = 0
-  let rowSource: ((groups:readonly import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[])=>ClaudeUiTranscriptRow[])|undefined
+  let rowSource: ((groups:readonly import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[],composer:readonly import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[])=>ClaudeUiTranscriptRow[])|undefined
   let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
-  const ui = { toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
+  const ui = { composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
       { type: 'Input', props: { key: 'draft', value: '', label: 'Draft' }, press: { plugin: 'fixture', handle: ++handle } },
@@ -14,7 +14,7 @@ function fixture(clientId = 'view') {
     press: vi.fn(async (_request: ClaudeUiPress) => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })),
   }
   const publish = vi.fn()
-  const host = createClaudeTranscriptMessageHost({ ui, client: { client_id: clientId, surface: 'desktop' }, rows: groups => rowSource?.(groups) ?? rows, current: () => current, publish })
+  const host = createClaudeTranscriptMessageHost({ ui, client: { client_id: clientId, surface: 'desktop' }, rows: (groups,composer) => rowSource?.(groups,composer) ?? rows, current: () => current, publish })
   const nodes = (index = 0) => { const body = host.state[index].body; if (body.status !== 'live' || body.tree.kind !== 'box') throw Error('expected message'); return body.tree.children }
   return { host, ui, publish, nodes, rows, replace: () => { current = false }, setRows: (next: ClaudeUiTranscriptRow[]) => { rows = next }, setSource: (next:NonNullable<typeof rowSource>)=>{rowSource=next} }
 }
@@ -254,4 +254,22 @@ it('discovers native groups, keeps the engine inert during redraw and retires ch
  expect(f.host.state.filter(row=>row.component==='ToolUse')).toEqual([])
  expect(f.ui.releaseInstance).toHaveBeenCalledWith(expect.objectContaining({component:'ToolUse',instance_revision:childRevision}))
  await f.host.dispose()
+})
+
+it('mounts source-bound composer rows, keeps unrelated message actions live and retires withdrawn sources', async () => {
+ const f=fixture(),source={component:'Spinner' as const,id:'native-agent',revision:'a'.repeat(64)}
+ f.ui.composerPlacements.mockResolvedValue([source])
+ f.setSource((_groups,composer)=>[f.rows[0]!,...composer.map(item=>({component:item.component,uuid:item.id,sourceRevision:item.revision,messageId:'composer',sessionId:'session',text:'',start:0,end:0}))])
+ f.host.start();await vi.advanceTimersByTimeAsync(50)
+ expect(f.ui.render).toHaveBeenCalledWith(expect.objectContaining({component:'Spinner',instance_id:'native-agent',props:{source_revision:source.revision}}))
+ const original=f.nodes()[0];if(original.kind!=='button')throw Error('button')
+ const spinner=f.host.state.find(row=>row.component==='Spinner')!,body=spinner.body;if(body.status!=='live'||body.tree.kind!=='box'||body.tree.children[0].kind!=='button')throw Error('spinner button')
+ const stale=body.tree.children[0].actionId!
+ f.ui.composerPlacements.mockResolvedValue([])
+ f.host.receive({type:'system',subtype:'ui_invalidate',event:'ui.render',composer_placements:true,client_id:'view',instances:[{surface:'desktop',component:'Spinner',instance_id:'native-agent'}]})
+ await vi.advanceTimersByTimeAsync(100)
+ expect(f.host.state.some(row=>row.component==='Spinner')).toBe(false)
+ await expect(f.host.press(stale)).resolves.toEqual({handled:false})
+ await expect(f.host.press(original.actionId!)).resolves.toEqual({handled:true})
+ expect(f.ui.releaseInstance).toHaveBeenCalledWith(expect.objectContaining({component:'Spinner',instance_id:'native-agent'}))
 })

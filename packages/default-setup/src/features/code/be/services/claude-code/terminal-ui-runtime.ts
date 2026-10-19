@@ -1,3 +1,4 @@
+import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
 import { claudeTerminalToolGroupRuntime } from './terminal-tool-group-runtime.ts'
 import { claudeTerminalToolProgressRuntime } from './terminal-tool-progress-runtime.ts'
 import { claudeTerminalToolUseRuntime } from './terminal-tool-use-runtime.ts'
@@ -21,6 +22,7 @@ const instanceLifetimes=createNativeInstanceLifetimes(scope=>{
  if(scope.component==='ToolUse')toolUseFrames.delete(key);
  if(scope.component==='ToolProgress')toolProgressFrames.delete(key);
  if(scope.component==='ToolGroup')toolGroupFrames.delete(key);
+ if(isComposerComponent(scope.component))composerFrames.delete(JSON.stringify([scope.client_id,scope.component,scope.instance_id]));
 });
 function publish(event){
  try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
@@ -194,6 +196,7 @@ ${claudeTerminalToolOutputRuntime}
 ${claudeTerminalToolUseRuntime}
 ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
+${claudeTerminalComposerRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
 ${claudeTerminalParentCommandRuntime}
@@ -250,7 +253,7 @@ async function initialize(){
  initializing=(async()=>{
   if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')!=='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37')throw Error('Native UI transport requires the reviewed Claude Code 2.1.302 binary');
   const clientRuntime=await import('/$bunfs/root/chunk-e980bbar.js');
-  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{current:entry=>{if(entry.instanceRevision!==undefined&&!instanceLifetimes.active({client_id:entry.client,component:entry.component,instance_id:entry.requestId},entry.instanceRevision))return false;if(!['CommandOutput','ToolResult','ToolUse','ToolProgress','ToolGroup'].includes(entry.component))return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;const request={component:entry.component,client_id:entry.client,instance_id:entry.requestId};currentCommandOutputAction(native,request);currentToolResultAction(native,request);currentToolUseAction(native,request);currentToolProgressAction(native,request);currentToolGroupAction(native,request);return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
+  const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{current:entry=>{if(entry.instanceRevision!==undefined&&!instanceLifetimes.active({client_id:entry.client,component:entry.component,instance_id:entry.requestId},entry.instanceRevision))return false;if(!['CommandOutput','ToolResult','ToolUse','ToolProgress','ToolGroup','Spinner','SessionMode','PromptHint'].includes(entry.component))return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;const request={component:entry.component,client_id:entry.client,instance_id:entry.requestId};currentCommandOutputAction(native,request);currentToolResultAction(native,request);currentToolUseAction(native,request);currentToolProgressAction(native,request);currentToolGroupAction(native,request);currentComposerAction(native,request);return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
   const gate=await import('/$bunfs/root/chunk-wn0572jb.js');
   const engine=await import('/$bunfs/root/chunk-c7wcn77x.js');
   const session=await import('/$bunfs/root/chunk-a32bd1ts.js');
@@ -606,7 +609,7 @@ async function control(request,abort){
  if(['ui_press','ui_input','ui_select'].includes(request.subtype)&&request.instance_revision!==undefined&&!instanceLifetimes.active(request,request.instance_revision))return {handled:false};
  const toolGroupResult=runToolGroupAction(n,request,abort);if(toolGroupResult!==undefined)return toolGroupResult;
  const toolBackgroundResult=runToolBackgroundAction(n,request,abort);if(toolBackgroundResult!==undefined)return toolBackgroundResult;
- if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);currentToolUseAction(n,request);currentToolProgressAction(n,request);currentToolGroupAction(n,request);}
+ if(['ui_press','ui_input','ui_select'].includes(request.subtype)){currentCommandOutputAction(n,request);currentToolResultAction(n,request);currentToolUseAction(n,request);currentToolProgressAction(n,request);currentToolGroupAction(n,request);currentComposerAction(n,request);}
  if(request.subtype==='apack_ui_agent_dispatch')return dispatchNativeAgentInput(n,request,abort);
  if(request.subtype==='apack_ui_agent_panel')return nativeAgentPanel(n,request);
  if(request.subtype==='apack_ui_agent_command')return answerNativeAgentCommand(n,request);
@@ -806,6 +809,7 @@ async function control(request,abort){
   if(!clients.has(request.client_id)||typeof request.component!=='string'||!request.component||request.component.length>256||typeof request.instance_id!=='string'||!request.instance_id||request.instance_id.length>256)throw Error('Native UI instance owner is unavailable');
   const released=instanceLifetimes.retire(request,request.instance_revision);await n.nativeClients.settle(request.client_id,request.component,request.instance_id);return {released};
  }
+ if(request.subtype==='apack_ui_composer'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native composer view is detached');return {placements:nativeComposerList(n,request.client_id)};}
  if(request.subtype==='apack_ui_tool_groups'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native group view is detached');return {groups:nativeToolGroupList(n,request.client_id)};}
  if(request.subtype==='apack_ui_client'){if(!clients.has(request.client_id))throw Error('Native Client view is detached');await n.gate._Jo('desktop');return n.nativeClients.event(request.client_id,request.id,request.sequence,request.event);}
  const schema=schemaNames[request.subtype];
@@ -841,6 +845,7 @@ async function control(request,abort){
   for(const [key,frame] of toolUseFrames)if(frame.clientId===clientId)toolUseFrames.delete(key);
   for(const [key,frame] of toolProgressFrames)if(frame.clientId===clientId)toolProgressFrames.delete(key);
   for(const [key,frame] of toolGroupFrames)if(frame.clientId===clientId)toolGroupFrames.delete(key);
+  composerSeen.delete(clientId);composerClocks.delete(clientId);for(const [key,frame] of composerFrames)if(frame.clientId===clientId)composerFrames.delete(key);
   const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
@@ -874,7 +879,7 @@ async function control(request,abort){
   await n.gate._Jo('desktop');
   if(!clientViewCurrent(n,clientId))throw Error('Native UI client belongs to a different selected view');
   const question=boundQuestion;
-  let commandFacts,toolFacts,useFacts,progressFacts,groupFacts,engineOutput;
+  let commandFacts,toolFacts,useFacts,progressFacts,groupFacts,composerFacts,engineOutput;
   const props=question?{tool:question.payload.toolName,questions:question.payload.questions,...(question.payload.metadataSource?{metadataSource:question.payload.metadataSource}:{})}:{...value.props};
   if(value.component==='AbovePrompt'||value.component==='Pane'){
    const selected=nativeViewFacts(n,originalContext??n.runtime.ey(),abort).view;
@@ -887,6 +892,7 @@ async function control(request,abort){
    if(value.props?.text!==commandFacts.display||value.props?.isErrored!==commandFacts.props.isErrored)throw Error('Native command output does not match its history row');
    Object.assign(props,commandFacts.props);
   }
+  if(isComposerComponent(value.component)){composerFacts=nativeComposerFacts(n,clientId,value.component,value.instance_id);if(!composerFacts||composerFacts.fingerprint!==value.props?.source_revision)throw Error('Native composer source changed before rendering');for(const key of Object.keys(props))delete props[key];Object.assign(props,composerFacts.props);}
   if(value.component==='ToolGroup'){
    groupFacts=nativeToolGroups(n).get(value.instance_id);if(!groupFacts||groupFacts.revision!==value.props?.source_revision)throw Error('Native group no longer matches its app members');
    const frame=toolGroupFrames.get(JSON.stringify([clientId,value.instance_id]));
@@ -916,6 +922,7 @@ async function control(request,abort){
   const result=await n.engine.I9e.run({surface:'desktop',component:value.component,requestId:value.instance_id,...(value.viewport?{viewport:value.viewport}:{}),props});
   if(!clientViewCurrent(n,clientId))throw Error('Native UI selection changed while rendering');
   if(instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native UI instance expired while rendering');
+  if(composerFacts){if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while rendering');composerFrames.set(JSON.stringify([clientId,value.component,value.instance_id]),{clientId,component:value.component,id:value.instance_id,fingerprint:composerFacts.fingerprint});if(nativeDrawingUsesEngine(result.tree))engineOutput=await formatNativeComposer(n,composerFacts,result.props,{columns:value.viewport?.columns,signal:abort.signal});if(nativeComposerFacts(n,clientId,value.component,value.instance_id)?.fingerprint!==composerFacts.fingerprint)throw Error('Native composer source changed while formatting');if(!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native composer lifetime expired while formatting');}
   if(commandFacts){
    if(commandOutputFacts(n,value.instance_id)?.fingerprint!==commandFacts.fingerprint)throw Error('Native command output changed while rendering');
    const key=JSON.stringify([clientId,value.instance_id]);commandOutputFrames.delete(key);commandOutputFrames.set(key,{clientId,fingerprint:commandFacts.fingerprint});
@@ -972,7 +979,7 @@ async function control(request,abort){
   refreshNativeTheme(n);
   const drawingTree=groupFacts?toolGroupDrawing(value,result.tree,instanceRevision):progressFacts?toolBackgroundDrawing(value,result.tree,instanceRevision):result.tree;
   recordDrawing(n,value,drawingTree);
-  return {...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,drawingTree,instanceRevision)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
+  return {...(composerFacts?.component==='PromptHint'?{native_hint:result.props.hint===composerFacts.props.hint}:{}),...(groupFacts?{group_engine:nativeDrawingUsesEngine(result.tree)}:{}),...(questionFrame?{question:questionFrame}:{}),...(engineOutput!==undefined?{engine_output:engineOutput}:{}),...(toolFacts?{output_rewritten:JSON.stringify(result.props.output)!==JSON.stringify(toolFacts.props.output)}:{}),tree:nativeThemeTree(n,n.nativeClients.render(clientId,value.component,value.instance_id,drawingTree,instanceRevision)),props:questionFrame?{...result.props,questions:questionFrame.shownInput.questions}:result.props,rewritten:result.rewritten,hooked:n.gate.n5r(value.component,'desktop'),...(Object.keys(result.clientModules).length?{client_modules:result.clientModules}:{}),drawn_by:result.drawnBy};
  }
  if(!clients.size)throw Error('Native UI has no attached app view');
  for(const site of sites.values())refreshSite(n,site);
@@ -998,7 +1005,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
@@ -1032,7 +1039,7 @@ const ownerTimer=setInterval(async()=>{
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
-  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);}
+  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);}
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};
