@@ -76,3 +76,27 @@ it('preserves an edited prefix through same-dialog presentation refreshes and te
     expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-prefix-edited', choiceToken: bash.token, prefix: 'npm run *' })
   } finally { app.unmount(); root.remove() }
 })
+
+it('shows the original file grant scope, respects native readiness and forwards only its selected token', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const respond = vi.fn(), pause = vi.fn()
+  const file = reactive({ ready: false, token: 'a'.repeat(64), choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true },
+    { value: 'yes-session', label: 'Original native session permission scope', decision: 'allow' as const, feedback: false },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: true },
+  ] })
+  const app = createApp({ render: () => h(NativeToolApproval, { file, toolName: 'Write', title: 'Write file', question: 'Allow?', disabled: false, onRespond: respond, onPause: pause }) }); app.mount(root)
+  const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
+  try {
+    expect(button('Allow once').disabled).toBe(true); expect(button('Cancel').disabled).toBe(false)
+    file.ready = true; await nextTick()
+    const select = root.querySelector('select')!; select.value = 'yes-session'; select.dispatchEvent(new Event('change')); await nextTick()
+    expect(root.querySelector('[data-testid="native-file-permission-choice-description"]')?.textContent).toBe(file.choices[1].label)
+    button('Continue').click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-session', choiceToken: file.token })
+    const reason = root.querySelector('textarea')!; reason.value = 'Leave it unchanged'; reason.dispatchEvent(new Event('input')); await nextTick(); button('Deny').click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: false, reason: 'Leave it unchanged', choice: 'no', choiceToken: file.token })
+    file.choices.splice(1, 1); file.token = 'b'.repeat(64); await nextTick()
+    expect(button('Continue').disabled).toBe(true)
+  } finally { app.unmount(); root.remove() }
+})

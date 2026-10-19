@@ -133,6 +133,29 @@ it.each(['Read', 'Bash', 'ExitPlanMode'] as const)('retires %s approval on nativ
   expect(fake.thread.context.claudeCode).toMatchObject({ pendingControlRequest: undefined })
 })
 
+it('refreshes native file readiness and permission scope without replacing the pending approval', async () => {
+  let release!: () => Promise<void>
+  const approval = { ready: false, token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true }] }
+  const dialog = { id: 'file-dialog', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sessionId, requestId: 'file-write', toolName: 'Write' as const,
+    title: 'Write file', question: 'Allow?', input: { file_path: '/workspace/file.txt', content: 'original' }, approval }
+  const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,
+    getFileDialogs: async () => [dialog], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [],
+    readJournal: async () => ({ entries: [], pending: false, problems: [] }),
+    beforeRelease(listener: () => Promise<void>) { release = listener },
+  } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  try {
+    await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
+    const message = fake.messages[0]
+    dialog.approval = { ...approval, ready: true, token: 'b'.repeat(64), choices: [...approval.choices, { value: 'yes-session', label: 'Original session scope', decision: 'allow', feedback: false }] }
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ pendingControlRequest: { nativeTerminal: { file: { ready: true, token: 'b'.repeat(64), choices: dialog.approval.choices } } } }))
+    expect(fake.messages).toHaveLength(1)
+    expect(fake.messages[0]).toBe(message)
+    expect(message).not.toHaveProperty('blockResponse')
+  } finally { await release() }
+})
+
 it('publishes targeted Plan/Edit transitions from observed native mode without an approval callback', async () => {
   let release!: () => Promise<void>
   const metadata = { cwd: '/workspace', model: 'fixture', turns: 1, startedAt: 100, permissionMode: 'default' }

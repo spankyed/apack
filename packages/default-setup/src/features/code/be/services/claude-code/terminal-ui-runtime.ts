@@ -1,5 +1,6 @@
 import { claudeTerminalDocumentRuntime } from './terminal-document-runtime.ts'
 import { claudeTerminalBashRuntime } from './terminal-bash-runtime.ts'
+import { claudeTerminalFileRuntime } from './terminal-file-runtime.ts'
 import { claudeTerminalHistoryPlacementRuntime } from './terminal-history-placement-runtime.ts'
 import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
 import { claudeTerminalToolGroupRuntime } from './terminal-tool-group-runtime.ts'
@@ -202,6 +203,7 @@ ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
 ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
+${claudeTerminalFileRuntime}
 ${claudeTerminalDocumentRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
@@ -672,16 +674,16 @@ async function control(request,abort){
   const content=p.content,isWrite=['Write','Edit'].includes(p.toolName);
   const withheld=p.contentWithheld===true||content?.kind==='no-changes';
   const review=isWrite?{withheld,...(typeof content?.message==='string'?{notice:content.message}:typeof content?.notice==='string'?{notice:content.notice}:{}),...(!withheld?(content.kind==='file-write-diff'?{...(content.fileExists?{before:content.oldContent}:{}),after:content.content}:{before:content.edits[0].old_string,after:content.edits[0].new_string,replaceAll:content.edits[0].replace_all===true}):{})}:undefined;
-  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:p.toolName,title:p.title??'File permission',question:p.question?.kind==='plain'?p.question.text:p.question?.kind==='file-action'?'Allow Claude to '+p.question.verbPhrase+' '+p.question.fileName+'?':'Allow this file operation?',...(review?{review}:{}),...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
+  const choices=await nativeFileChoices(n,d);
+  return {dialogs:[{approval:{token:choices.token,ready:choices.ready,choices:choices.choices},id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:p.requestId,toolName:p.toolName,title:p.title??'File permission',question:p.question?.kind==='plain'?p.question.text:p.question?.kind==='file-action'?'Allow Claude to '+p.question.verbPhrase+' '+p.question.fileName+'?':'Allow this file operation?',...(review?{review}:{}),...(typeof p.permissionResult?.message==='string'?{reason:p.permissionResult.message}:{}),input:p.input}]};
  }
  if(request.subtype==='apack_answer_file_dialog'){
   abort.signal.throwIfAborted();
   const d=nativeDialog(n,'permission_file');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native approval changed or expired');
   if(!['allow','deny'].includes(request.decision)||request.feedback!==undefined&&(typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Invalid native file decision');
-  const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};
-  // The native requestDialog validates and dispatches this result through its original ask path.
-  d.store.answer(d.item.id,result);dialogRevisions.delete('permission_file');
+  if(request.choice!==undefined&&(typeof request.choice!=='string'||request.choice.length>128)||request.choiceToken!==undefined&&(typeof request.choiceToken!=='string'||!/^[a-f0-9]{64}$/.test(request.choiceToken)))throw Error('Invalid native file choice');
+  await answerNativeFileChoice(n,d,request);dialogRevisions.delete('permission_file');
   return {answered:true};
  }
  if(request.subtype==='apack_question_dialogs'){

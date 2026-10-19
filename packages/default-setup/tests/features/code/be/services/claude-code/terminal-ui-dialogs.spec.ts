@@ -1,5 +1,6 @@
 import vm from 'node:vm'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
+import { claudeTerminalFileRuntime } from '#features/code/be/services/claude-code/terminal-file-runtime.ts'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
 
 function fixture() {
@@ -7,7 +8,7 @@ function fixture() {
   let nativeSessionId = sessionId
   const item = { id: 'dialog-1', kind: 'permission_file', payload: { requestId: 'read-1', toolName: 'Read', operationType: 'read', input: { file_path: '/original' } } }
   const state = { open: [item] }
-  const answer = vi.fn(() => { state.open = [] })
+  const answer = vi.fn((_id: unknown, _result: unknown) => { state.open = [] })
   const store = { getState: () => state, answer }
   let appState = { mcp: {clients:[] as {name:string,type:string}[],tools:[] as {name:string}[]}, settings: { showClearContextOnPlanAccept: false }, toolPermissionContext: { mode: 'plan', prePlanMode: 'default', isAutoModeAvailable: true, isBypassPermissionsModeAvailable: false } }
   const context = { appendSystemMessage: vi.fn(async (_message: unknown) => {}), dialogStore: store, getAppState: () => appState, setAppState: (update: (state: typeof appState) => typeof appState) => { appState = update(appState) } }
@@ -16,9 +17,18 @@ function fixture() {
   const reconnect = vi.fn(async (_name: string) => ({client:{type:'connected'}})), toggle = vi.fn(async (name: string) => {disabled = !disabled;const result={name,type:disabled?'disabled':'connected'};appState.mcp.clients=[result];return result}), isDisabled = vi.fn(() => disabled)
   const native = { mcpControls: {Mot: () => reconnect, urs: () => toggle, Z_e: () => isDisabled}, mcp: { Q_n: vi.fn((_input: unknown) => [{name:'research',status:'connected'}]) }, rename: { Qar: vi.fn(async () => ({ newName: 'Native title', requestedName: 'Requested', isGenerated: false, message: 'Renamed' })), G8s: vi.fn(() => 'Original native reminder') }, questionOptions: { q: () => nativeSessionId, Sye: vi.fn(), x$: vi.fn(), s3: vi.fn(), EN: vi.fn() }, paths: { ce: () => '/workspace', Ar: () => null }, questionText: { VL: (value: string) => value.includes('UNSAFE') }, runtime: { ty: () => true, Cf: () => '/private/original.jsonl', Ae: vi.fn((value: unknown) => value) }, planConsent: { kTe: (mode: string) => ({ applies: [{ type: 'setMode', mode, destination: 'session' }] }), Y_n: () => ({ applies: [] }), hv: () => true }, planAuto: { yp: () => false, Fx: vi.fn() }, planNormalize: { nV: (value: unknown) => value, vSe: (value: unknown) => value }, planTool: { Cxn: () => '' }, planTeams: { is: () => false }, planProactivity: { BG: () => false } }
 
+  let feedback = ''
+  const setter = (value: string) => { feedback = value; fileFiber.memoizedState.memoizedState = value }
+  const options: any[] = [{ value: 'yes', label: 'Yes', option: { type: 'accept-once' } }, { value: 'no', label: 'No', option: { type: 'reject' } }]
+  const fileControl = { options, onInputModeToggle: (value: string) => { Object.assign(options.find(option => option.value === value), { type: 'input', onChange: setter }) }, onChange: (value: string) => { answer(item.id, value === 'yes' ? { behavior: 'allow', updatedInput: item.payload.input } : { behavior: 'deny', ...(feedback ? { feedback } : {}) }); return true } }
+  // This fixture isolates wire validation; callback/state behavior also has dedicated native-file tests.
+  const fileFiber = { type: function Sat() {}, memoizedProps: { payload: item.payload, wouldTakeAnswer: () => true }, memoizedState: { memoizedState: '', queue: { dispatch: setter }, next: null }, child: { type: function Xe() {}, memoizedProps: fileControl } }
+  const fileStdout = {}, fileHashes = new WeakMap([[fileFiber.type, '4d3297fd160d4c1497f0a21f0f98372ea53943f0e951256c3fbd8ac13dd5b406']])
+  Object.assign(native, { themeRoots: { ai: () => new Map([[fileStdout, { container: { current: fileFiber } }]]) } })
   const start = claudeTerminalUiRuntime.indexOf('const dialogRevisions=')
   const end = claudeTerminalUiRuntime.indexOf('const server=http.createServer')
-  const control = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};control`, {
+  const control = vm.runInNewContext(`${claudeTerminalFileRuntime};${claudeTerminalUiRuntime.slice(start, end)};control`, {
+    process: { stdout: fileStdout }, createHash, composerFunctionHashes: fileHashes, runToolGroupAction: () => undefined, runToolBackgroundAction: () => undefined, nativeBashChoices: () => undefined,
     originalContext: binding, initialize: async () => native, AbortController, randomUUID, setTimeout,
     readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'fixture',
   }) as (request: Record<string, unknown>, abort: AbortController) => Promise<any>

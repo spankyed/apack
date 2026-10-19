@@ -7,3 +7,10 @@ export const ClaudeFileApprovalReviewSchema = z.object({
   replaceAll: z.boolean().optional(),
 }).refine(value => !value.withheld || value.before === undefined && value.after === undefined, 'Withheld native content must not be presented')
 export type ClaudeFileApprovalReview = z.infer<typeof ClaudeFileApprovalReviewSchema>
+
+/** Choices and readiness borrowed from the original mounted native file dialog. */
+export const ClaudeFileApprovalPresentationSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/), ready: z.boolean(),
+  choices: z.array(z.object({ value: z.string().min(1).max(128), label: z.string().max(4000), decision: z.enum(['allow', 'deny']), feedback: z.boolean() })).max(16),
+})
+export type ClaudeFileApprovalPresentation = z.infer<typeof ClaudeFileApprovalPresentationSchema>

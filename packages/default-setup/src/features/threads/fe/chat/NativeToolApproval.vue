@@ -4,7 +4,7 @@
       <span class="eyebrow">Permission needed</span>
       <h2>{{ title }}</h2>
     </header>
-    <div ref="detailsElement" class="details" @focusin="ensureFocusedField" @input="ensureFocusedField" tabindex="0" :aria-label="`${toolName} request details`">
+    <div ref="detailsElement" class="details" @focusin="ensureFocusedField" @input="ensureFocusedField" @change="ensureFocusedField" tabindex="0" :aria-label="`${toolName} request details`">
       <p class="question">{{ question }}</p>
       <code :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
       <section v-if="review" class="change-review" aria-label="Proposed file change" data-testid="native-file-review">
@@ -19,28 +19,29 @@
       <p v-if="cwd" class="reason">Working directory</p>
       <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
-      <details v-if="standingChoices.length" class="standing-permission">
+      <details v-if="standingChoices.length" :open="!!file" class="standing-permission">
         <summary>Remember permission or change mode</summary>
         <label>Approval choice
-          <select v-model="selectedChoice" aria-label="Bash approval choice" :disabled="disabled">
-            <option value="yes">Allow once</option>
+          <select v-model="selectedChoice" :aria-label="`${toolName} approval choice`" :disabled="controlsDisabled">
+            <option value="yes">{{ file?.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' }}</option>
             <option v-for="choice in standingChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</option>
           </select>
         </label>
-        <label v-if="currentChoice?.prefix !== undefined">Command prefix
-          <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="disabled" />
+        <p v-if="file && selectedFileChoice && (selectedChoice !== 'yes' || selectedFileChoice.label !== 'Yes')" class="permission-choice-description" data-testid="native-file-permission-choice-description">{{ selectedFileChoice.label }}</p>
+        <label v-if="currentChoice && 'prefix' in currentChoice && currentChoice.prefix !== undefined">Command prefix
+          <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="controlsDisabled" />
         </label>
       </details>
       <details>
         <summary>Add a reason for denying</summary>
-        <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="disabled" />
+        <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="controlsDisabled" />
       </details>
     </div>
     <footer>
       <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="decisions">
-        <button type="button" class="deny" :disabled="disabled" @click="$emit('respond', { approved: false, reason: feedback.trim() || undefined })">Deny</button>
-        <button type="button" class="approve" :disabled="disabled || selectedChoice !== 'yes' && !currentChoice" @click="approve">{{ selectedChoice !== 'yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" class="deny" :disabled="controlsDisabled" @click="deny">Deny</button>
+        <button type="button" class="approve" :disabled="controlsDisabled || selectedChoice !== 'yes' && !currentChoice" @click="approve">{{ selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
@@ -49,8 +50,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
-import type { ClaudeFileApprovalReview } from '#features/code/common/native-file-approval.ts'
-const props = defineProps<{ bash?: ClaudeBashApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
+const props = defineProps<{ bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [] }>()
 const detailsElement = ref<HTMLElement>()
 let resizeObserver: ResizeObserver | undefined, focusFrame: number | undefined
@@ -61,7 +62,10 @@ function ensureFocusedField() {
     const details = detailsElement.value, field = document.activeElement
     if (!details || !(field instanceof HTMLElement) || !details.contains(field) || !field.matches('input,select,textarea')) return
     const box = details.getBoundingClientRect(), bounds = field.getBoundingClientRect()
-    if (bounds.bottom > box.bottom - 8) details.scrollTop += bounds.bottom - box.bottom + 8
+    // A native select truncates long grants. Keep its full source scope in view as well.
+    const scope = props.file && field.matches('select') ? details.querySelector('[data-testid="native-file-permission-choice-description"]')?.getBoundingClientRect() : undefined
+    const bottom = scope && scope.bottom - bounds.top <= box.height - 16 ? scope.bottom : bounds.bottom
+    if (bottom > box.bottom - 8) details.scrollTop += bottom - box.bottom + 8
     else if (bounds.top < box.top + 8) details.scrollTop -= box.top + 8 - bounds.top
   })
 }
@@ -78,10 +82,22 @@ onBeforeUnmount(() => {
 })
 const feedback = ref('')
 const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string>>({})
-const standingChoices = computed(() => props.toolName === 'Bash' ? props.bash?.choices.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [] : [])
+const controlsDisabled = computed(() => props.disabled || props.file?.ready === false)
+const standingChoices = computed(() => (props.toolName === 'Bash' ? props.bash?.choices : props.file?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
+const selectedFileChoice = computed(() => props.file?.choices.find(choice => choice.value === selectedChoice.value))
 const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
-const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? currentChoice.value?.prefix ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
+const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? (currentChoice.value && 'prefix' in currentChoice.value ? currentChoice.value.prefix : '') ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
+function deny() {
+  if (controlsDisabled.value) return
+  emit('respond', { approved: false, reason: feedback.value.trim() || undefined, ...(props.file ? { choice: 'no', choiceToken: props.file.token } : {}) })
+}
 function approve() {
+  if (controlsDisabled.value) return
+  if (props.file) {
+    const choice = props.file.choices.find(choice => choice.value === selectedChoice.value)
+    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: props.file.token })
+    return
+  }
   const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
   emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: props.bash!.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
 }
@@ -103,6 +119,7 @@ code.after { border-left: 2px solid #8fba99; }
 details { margin-top: 10px; color: #aaa; }
 summary { cursor: pointer; font-size: 11px; }
 select, input { display: block; width: 100%; margin-top: 6px; padding: 6px; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
+.permission-choice-description { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; color: #ddd; }
 .standing-permission label { display: block; margin-top: 8px; }
 textarea { display: block; width: 100%; margin-top: 6px; padding: 6px; resize: vertical; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
 footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid rgb(255 255 255 / .07); }

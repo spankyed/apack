@@ -239,7 +239,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerFileDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native approval session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_file_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, feedback: response.feedback, choice: response.choice, choiceToken: response.choiceToken }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native approval was not acknowledged')
       },
       async operateTask(taskId, operation, text) {

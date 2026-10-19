@@ -50,7 +50,7 @@ export async function action(
     try {
       if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: typeof response?.choice === 'string' ? response.choice : '', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined, plan: typeof response?.plan === 'string' ? response.plan : undefined });
       else if (pending.toolName === 'Bash') await owner.answerBashDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', choice: typeof response?.choice === 'string' ? response.choice : undefined, choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : undefined, prefix: typeof response?.prefix === 'string' ? response.prefix : undefined });
-      else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow' });
+      else if (['Read', 'Write', 'Edit'].includes(pending.toolName)) await owner.answerFileDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'allow', ...(typeof response?.choice === 'string' ? { choice: response.choice } : {}), ...(typeof response?.choiceToken === 'string' ? { choiceToken: response.choiceToken } : {}) });
       else throw new Error('Unsupported native approval');
     } catch {
       expirePendingControlRequest(services, threadId, requestId);
