@@ -1,7 +1,9 @@
 import { Editor, Node } from '@tiptap/core'
+import { drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
 import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-editor.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
+import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
 import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument } from '#features/threads/fe/chat/native-prompt-document.ts'
 
 let editor: Editor
@@ -405,12 +407,58 @@ it('retains unchanged reference attributes when native Markdown adds surrounding
   bridge.dispose()
 })
 
-it('keeps the native draft when styling offsets cannot survive Markdown normalization', () => {
+it('maps native content decorations through structural normalization and retains them through canonical adoption', () => {
   editor.commands.setContent('safe')
-  const problem = vi.fn(), bridge = bindClaudePromptEditor(editor, vi.fn(), problem)
-  const text = '* first\n* second'
-  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 2, end: 7, color: 'red' }] } })
+  const send = vi.fn(), problem = vi.fn(), bridge = bindClaudePromptEditor(editor, send, problem)
+  const text = '__Title__\n\n*   first\n*   second', canonical = '**Title**\n\n- first\n- second'
+  const first = text.indexOf('first'), second = text.indexOf('second')
+  const parsed = rewriteClaudePromptDocument(captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize)!, { text, cursor: text.length }, serialize, value => { const template = document.createElement('template'); template.innerHTML = (editor.storage as unknown as { markdown: { parser: { parse(value: string): string } } }).markdown.parser.parse(value); return PromptDOMParser.fromSchema(editor.schema).parse(template.content) }, [first, first + 5, second, second + 6])!
+  expect(parsed.sourcePositions).toBeDefined()
+  expect(findClaudePromptPosition(parsed.doc, canonical.indexOf('first'), serialize)).toBeTypeOf('number')
+  expect(parsed.sourcePositions?.get(first)).toBe(findClaudePromptPosition(parsed.doc, canonical.indexOf('first'), serialize))
+  expect(parsed.sourcePositions?.get(second)).toBe(findClaudePromptPosition(parsed.doc, canonical.indexOf('second'), serialize))
+  expect(drawClaudePromptDecorations(parsed.doc, [{ start: first, end: first + 5, color: 'red' }, { start: second, end: second + 6, underline: true }], serialize, parsed.sourcePositions).find()).toHaveLength(2)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: first, end: first + 5, color: 'red' }, { start: second, end: second + 6, underline: true }] } })
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['first', 'second'])
+  const request = send.mock.lastCall![0]
+  expect(request).toEqual(expect.objectContaining({ by: 'app', text: canonical, cursor: canonical.length }))
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect([...editor.view.dom.querySelectorAll('.claude-prompt-decoration')].map(node => node.textContent)).toEqual(['first', 'second'])
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  editor.commands.insertContent(' person')
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')).toBeNull()
+  bridge.dispose()
+})
+
+it('normalizes decorated native fills and preserves their paint through app acknowledgement', () => {
+  editor.commands.setContent('safe')
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const text = '*   first\n*   second', start = text.indexOf('second')
+  expect(bridge.fillDraft({ mode: 'replace', text, decorations: [{ start, end: start + 6, bold: true }] }, bridge.revision)).toBe(true)
+  expect(serialize(editor.state.doc)).toBe('- first\n- second')
+  const request = send.mock.lastCall![0]
+  bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('second')
+  expect(serialize(editor.state.doc)).toBe('- first\n- second')
+  bridge.dispose()
+})
+
+it('preserves the draft if a source decoration boundary changes Markdown interpretation', async () => {
+  editor.commands.setContent('safe')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  const text = '*   first\n*   second'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 0, end: 7, color: 'red' }] } })
   expect(serialize(editor.state.doc)).toBe('safe')
-  expect(problem).toHaveBeenLastCalledWith(expect.stringContaining('styling cannot be mapped'))
+  expect(await bridge.settle()).toBe(false)
+  bridge.dispose()
+})
+
+it('keeps inward decoration projection around canonical structural Markdown delimiters', () => {
+  editor.commands.setContent('safe')
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn()), text = '**styled**'
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 0, end: text.length, underline: true }] } })
+  expect(serialize(editor.state.doc)).toBe(text)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('styled')
   bridge.dispose()
 })

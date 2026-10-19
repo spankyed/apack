@@ -11,7 +11,13 @@ export function createClaudePromptDecorations() {
     key,
     state: {
       init: () => DecorationSet.empty,
-      apply: (tr, value) => tr.getMeta(key) ?? (tr.docChanged || tr.selectionSet ? DecorationSet.empty : value),
+      apply: (tr, value) => {
+        const drawn = tr.getMeta(key)
+        if (drawn !== undefined) return drawn
+        // Schema maintenance belongs to the native redraw; later person edits retire its paint.
+        if (tr.getMeta('appendedTransaction')?.getMeta(key) !== undefined) return value.map(tr.mapping, tr.doc)
+        return tr.docChanged || tr.selectionSet ? DecorationSet.empty : value
+      },
     },
     props: { decorations: state => key.getState(state) },
   })
@@ -19,10 +25,11 @@ export function createClaudePromptDecorations() {
 }
 
 /** Decorations are presentation only: no marks, draft characters or submitted text are added. */
-export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer): DecorationSet {
+export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer, sourcePositions?: ReadonlyMap<number, number>): DecorationSet {
   const drawn: Decoration[] = []
   const positions = new Map<string, number | undefined>()
   const position = (offset: number, bias: -1 | 0 | 1) => {
+    if (sourcePositions) return sourcePositions.get(offset)
     const address = `${offset}:${bias}`
     if (!positions.has(address)) positions.set(address, findClaudePromptPosition(doc, offset, serialize, bias))
     return positions.get(address)

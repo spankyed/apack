@@ -34,7 +34,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     completionPending = { revision, snapshot, selection: editor.state.selection }
     try { completion.request({ revision, text: snapshot.text, cursor: snapshot.cursor }) } catch { retireCompletions() }
   }
-  let fillPaint: { revision: number; text: string; runs: NonNullable<Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input']['decorations']> } | undefined
+  let fillPaint: { revision: number; text: string; drawn: ReturnType<typeof drawClaudePromptDecorations> } | undefined
   let settled = false
   let pending: { revision: number; snapshot: ClaudePromptDocument; selection: import('@tiptap/pm/state').Selection; done: Promise<boolean>; finish: (accepted: boolean) => void } | undefined
   let person = false, clearPerson: ReturnType<typeof setTimeout> | undefined
@@ -81,7 +81,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
     const cursor = offset + input.text.length
-    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parse)
+    const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
+    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parse, runs.flatMap(run => [run.start, run.end]))
     if (!next) {
       let atoms = false
       snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
@@ -97,19 +98,19 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         next = { doc, position }
       } catch { return }
     }
-    if (next.normalized && input.decorations?.length) return
-    const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
     return { next, text, offset, runs, before: snapshot.text }
   }
   function placeDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number, origin: 'app' | 'person'): boolean {
     const prepared = prepareDraft(input, expectedRevision)
     if (!prepared) return false
-    const { next, text, runs } = prepared
-    fillPaint = origin === 'app' ? { revision: revision + 1, text, runs } : undefined
+    const { next, runs } = prepared
+    const drawn = drawClaudePromptDecorations(next.doc, runs, serialize, next.sourcePositions)
+    fillPaint = origin === 'app' ? { revision: revision + 1, text: serialize(next.doc), drawn } : undefined
     const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
     tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', origin)
-    tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
+    tr.setMeta(decorations.key, drawn)
     editor.view.dispatch(tr)
+    if (fillPaint?.revision === revision) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
     return true
   }
   function dismissSuggestion() {
@@ -161,9 +162,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (editor.state.doc !== snapshot.doc || !editor.state.selection.eq(selection)) { finishPending(false); return }
       if (reply.status === 'error') { onProblem(reply.message); finishPending(false); return }
       if (reply.frame.superseded) { finishPending(false); return }
-      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse)
+      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse, reply.frame.decorations?.flatMap(run => [run.start, run.end]))
       if (!next) { onProblem('Claude prompt rewrite cannot be represented without changing editor structure'); finishPending(false); return }
-      if (next.normalized && reply.frame.decorations?.length) { onProblem('Claude prompt styling cannot be mapped through Markdown normalization'); finishPending(false); return }
       applying = true
       try {
         const tr = editor.state.tr
@@ -171,10 +171,11 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         // A text/cursor acknowledgment carries no selection-range change.
         if (next.doc !== snapshot.doc || reply.frame.cursor !== snapshot.cursor) tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null)
         // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
-        const runs = reply.frame.decorations ?? (fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.runs : [])
-        tr.setMeta(decorations.key, drawClaudePromptDecorations(tr.doc, runs, serialize))
-        fillPaint = undefined
+        const drawn = reply.frame.decorations ? drawClaudePromptDecorations(tr.doc, reply.frame.decorations, serialize, next.sourcePositions) : fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.drawn : drawClaudePromptDecorations(tr.doc, [], serialize)
+        tr.setMeta(decorations.key, drawn)
+        fillPaint = next.normalized ? { revision: revision + 1, text: serialize(tr.doc), drawn } : undefined
         editor.view.dispatch(tr)
+        if (fillPaint) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
         onProblem(undefined)
         finishPending(true)
         if (!next.normalized) askCompletions()

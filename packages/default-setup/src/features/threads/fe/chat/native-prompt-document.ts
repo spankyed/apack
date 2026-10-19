@@ -1,4 +1,3 @@
-import { Transform } from '@tiptap/pm/transform'
 import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 export interface ClaudePromptDocument {
@@ -78,7 +77,7 @@ function rewriteClaudePromptText(snapshot: ClaudePromptDocument, frame: { text: 
 
 
 /** Apply native Markdown structure through the editor schema while retaining unchanged atom attributes. */
-export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode): { doc: ProseMirrorNode; position: number; storedMarks?: readonly Mark[]; normalized?: boolean } | undefined {
+export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode, offsets: readonly number[] = []): { doc: ProseMirrorNode; position: number; storedMarks?: readonly Mark[]; normalized?: boolean; sourcePositions?: ReadonlyMap<number, number> } | undefined {
   const textOnly = rewriteClaudePromptText(snapshot, frame, serialize)
   if (textOnly || !parse || !Number.isInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > frame.text.length) return textOnly
   try {
@@ -97,21 +96,42 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
     })
     if (unmappable) return
     const parsed = parse(frame.text)
-    let marker = '\uE000apackNativeCursor\uE001'
-    while (frame.text.includes(marker)) marker += '\uE002'
-    const marked = parse(frame.text.slice(0, frame.cursor) + marker + frame.text.slice(frame.cursor))
-    let markerPosition: number | undefined, markerMarks: readonly Mark[] = [], markerCount = 0
+    // Parse all requested source boundaries together, avoiding a parse per decoration.
+    const canonicalSource = serialize(parsed) === frame.text
+    const requested = [...new Set([frame.cursor, ...(canonicalSource ? [] : offsets)])].sort((a, b) => a - b)
+    if (requested.some(offset => !Number.isInteger(offset) || offset < 0 || offset > frame.text.length)) return
+    let prefix = '\uE000apackNativeOffset'
+    while (frame.text.includes(prefix)) prefix += '\uE002'
+    const markers = requested.map((offset, index) => ({ offset, marker: prefix + index + '\uE001' }))
+    const parts: string[] = []; let previous = 0
+    for (const { offset, marker } of markers) { parts.push(frame.text.slice(previous, offset), marker); previous = offset }
+    parts.push(frame.text.slice(previous))
+    const marked = parse(parts.join(''))
+    const found: { index: number; position: number; length: number; marks: readonly Mark[] }[] = []
+    const pattern = new RegExp(prefix + '(\\d+)\uE001', 'g')
     marked.descendants((node, position) => {
       if (!node.isText) return
-      const index = node.text!.indexOf(marker)
-      if (index < 0) return
-      markerCount += node.text!.split(marker).length - 1
-      markerPosition = position + index; markerMarks = node.marks
+      for (const match of node.text!.matchAll(pattern)) found.push({ index: Number(match[1]), position: position + match.index!, length: match[0].length, marks: node.marks })
     })
-    if (markerCount !== 1 || markerPosition === undefined) return
-    let doc = new Transform(marked).delete(markerPosition, markerPosition + marker.length).doc
-    // The marker must not change Markdown interpretation (e.g. inside a fence delimiter).
+    if (found.length !== markers.length || new Set(found.map(value => value.index)).size !== markers.length || found.some(value => !markers[value.index])) return
+    found.sort((a, b) => a.position - b.position)
+    const sourcePositions = new Map<number, number>(); let removed = 0, markerMarks: readonly Mark[] = []
+    for (const value of found) {
+      const offset = markers[value.index]!.offset
+      sourcePositions.set(offset, value.position - removed); removed += value.length
+      if (offset === frame.cursor) markerMarks = value.marks
+    }
+    const clean = (node: ProseMirrorNode): ProseMirrorNode | undefined => {
+      if (node.isText) { const text = node.text!.replace(pattern, ''); return text ? node.type.schema.text(text, node.marks) : undefined }
+      const children: ProseMirrorNode[] = []
+      node.forEach(child => { const next = clean(child); if (next) children.push(next) })
+      return node.copy(Fragment.from(children))
+    }
+    let doc = clean(marked)!
+    // Source boundaries must not change Markdown interpretation or atom identity.
     if (!doc.eq(parsed)) return
+    const markerPosition = sourcePositions.get(frame.cursor)
+    if (markerPosition === undefined) return
     const replacements = new Map<number, ProseMirrorNode>(), used = new Map<string, number>()
     doc.descendants((node, position) => {
       if (!node.isAtom || node.isText) return
@@ -135,6 +155,6 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
     doc = restore(doc, 0)
     const canonical = captureClaudePromptDocument(doc, markerPosition, serialize, markerMarks)
     if (!canonical) return
-    return { doc, position: markerPosition, storedMarks: markerMarks, normalized: canonical.text !== frame.text || canonical.cursor !== frame.cursor }
+    return { doc, position: markerPosition, storedMarks: markerMarks, normalized: canonical.text !== frame.text || canonical.cursor !== frame.cursor, sourcePositions: canonicalSource ? undefined : sourcePositions }
   } catch { return }
 }

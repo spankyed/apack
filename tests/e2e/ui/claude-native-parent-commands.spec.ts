@@ -53,7 +53,7 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
   await appPage.locator('.cursor-row-resize').click({button:'right'})
-  const composer=card.locator('[contenteditable]')
+  const composer=card.locator('[contenteditable="true"]')
   const submission = () => appPage.evaluate(() => {
     const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
     return Object.values(c.nativeTerminalViews).map((v: any) => v.submission).filter(Boolean).sort((a: any, b: any) => b.revision - a.revision)[0] as any
@@ -64,6 +64,9 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   await composer.fill('NativeStructureFixture')
   await expect(composer.locator('strong')).toHaveText('Native structured title')
   await expect(composer.locator('li')).toHaveText(['first', 'second'])
+  await expect(composer.locator('.claude-prompt-decoration')).toHaveText(['first', 'second'])
+  await expect(composer.locator('.claude-prompt-decoration').first()).toHaveCSS('color', 'rgb(255, 170, 0)')
+  await expect(composer.locator('.claude-prompt-decoration').last()).toHaveCSS('text-decoration-line', 'underline')
   await card.getByRole('button', { name: 'Session tools', exact: true }).click()
   await card.getByRole('button', { name: 'Read structured draft', exact: true }).click()
   await expect.poll(async () => { try { return JSON.parse(await readFile(join(workspace!, 'native-structure-read.json'), 'utf8')) } catch { return undefined } }).toMatchObject({ text: structuredDraft, cursor: structuredDraft.length })
@@ -72,7 +75,7 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   await expect(composer).toHaveText('')
   await expect.poll(async () => (await submission())?.receipt?.text).toBe(structuredDraft)
   const structureEvents = JSON.parse(await readFile(join(workspace!, 'native-main-prompt-edits.json'), 'utf8'))
-  expect(structureEvents.some((event: any) => event.result?.text === '**Native structured title**\n\n* first\n* second')).toBe(true)
+  expect(structureEvents.some((event: any) => event.result?.text === '**Native structured title**\n\n*   first\n*   second' && event.result.decorations?.length === 2)).toBe(true)
   await sendNative('Populate the native conversation before parent command verification.')
   await expect(composer).toHaveText('')
   await expect.poll(async () => (await context()).native.state.lastTurn?.reason, { timeout: 20000 }).toBe('answer')
@@ -175,5 +178,5 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(clear.sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: planScenario, nativeParentText: true, nativeParentPanels: true, nativeParentDelayedCompact: true, nativeParentClear: true, nativeParentPostClearReceipt: true, nativeParentDraftPreserved: true, nativeCommandHistory: true, nativePromptStructure: true, nativeCommandOutput: true, resumedPrintSameSession: true, sameNativeOwner: true, sessionId, finalSessionId: clear.sessionId, boundNativePid, compact, clear, postClearReceipt, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: planScenario, nativeParentText: true, nativeParentPanels: true, nativeParentDelayedCompact: true, nativeParentClear: true, nativeParentPostClearReceipt: true, nativeParentDraftPreserved: true, nativeCommandHistory: true, nativePromptStructure: true, nativePromptDecorations: true, nativeCommandOutput: true, resumedPrintSameSession: true, sameNativeOwner: true, sessionId, finalSessionId: clear.sessionId, boundNativePid, compact, clear, postClearReceipt, browserErrors: errors }, null, 2))
 })
