@@ -15,6 +15,7 @@ import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, 
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
+import { takeClaudeUiRetirements } from './chat/native-ui-retirement.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -1488,12 +1489,15 @@ const threadsState = setup({
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
     CLAUDE_UI_MOUNT: { actions: [assign(({ context, event }) => ({ nativeUiViews: {
-      ...context.nativeUiViews, [event.mountId]: context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } },
-    } })), ({ event }) => { sendToSystem(id, event) }] },
-    CLAUDE_UI_UNMOUNT: { actions: [assign(({ context, event }) => {
+      ...context.nativeUiViews, [event.mountId]: { ...(context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } }), mountRequest: event },
+    } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
+    CLAUDE_UI_UNMOUNT: { actions: [({ context, event }) => {
+      const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey
+      sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) })
+    }, assign(({ context, event }) => {
       const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
       return { nativeUiViews }
-    }), ({ event }) => { sendToSystem(id, event) }] },
+    })] },
     CLAUDE_PROMPT_EDIT: { actions: [assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (!view || view.threadId !== event.threadId || !Number.isSafeInteger(event.revision) || event.revision <= (view.promptRevision ?? 0)) return {}
@@ -1580,10 +1584,20 @@ const threadsState = setup({
       let bytes = 0, from = output.length; while (from > 0 && bytes < 262144) bytes += output[--from].text.length;
       return { nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: { threadId: event.threadId, state: event.state, task: event.task, submission: event.submission, opening: event.opening, problem: event.problem, output: output.slice(from) } } };
     }) },
-    CLAUDE_UI_STATE: { actions: assign(({ context, event }) => {
+    CLAUDE_UI_STATE: { actions: [() => {
+      // Module refresh can unmount the old view after startup; a native frame also proves readiness.
+      for (const release of takeClaudeUiRetirements()) sendToSystem(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
+    }, assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
-      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) ? { promptHostRequest: undefined } : {}) } } }
-    }) },
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, resumeKey: event.resumeKey, attachmentId: event.attachmentId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) || context.nativeUiViews[event.mountId].resumeKey !== event.resumeKey ? { promptHostRequest: undefined } : {}) } } }
+    })] },
+    CLAUDE_UI_LEASE_EXPIRED: {
+      guard: ({ context, event }) => context.nativeUiViews[event.mountId]?.threadId === event.threadId && context.nativeUiViews[event.mountId]?.resumeKey === event.resumeKey,
+      actions: [assign(({ context, event }) => ({ nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], resumeKey: undefined, promptHostRequest: undefined } } })), ({ context, event, self }) => {
+        const request = context.nativeUiViews[event.mountId]?.mountRequest
+        if (request) self.send({ ...request, resumeKey: undefined })
+      }],
+    },
     // Thread management events
     SHOW_CREATE_FORM: {
       target: '.create',
@@ -1616,7 +1630,13 @@ const threadsState = setup({
     },
     THREAD_CONNECTED: {
       guard: ({ context }) => !context.showArchived,
-      actions: ['setSurfaceData', 'refreshViewIfActive']
+      actions: ['setSurfaceData', 'refreshViewIfActive', ({ context }) => {
+        // Startup data follows the accepted pack handshake; old actors could not send cleanup before it.
+        for (const release of takeClaudeUiRetirements()) sendToSystem(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
+        // Resume only this window's active native views.
+        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) sendToSystem(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId })
+        for (const view of Object.values(context.nativeUiViews)) if (view.mountRequest) sendToSystem(id, { ...view.mountRequest, ...(view.resumeKey ? { resumeKey: view.resumeKey } : {}) })
+      }]
     },
     SET_VIEW_DATA: {
       // Only apply if the response matches the currently viewed thread (prevents stale out-of-order responses)

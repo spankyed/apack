@@ -473,6 +473,8 @@ export type AgentSettings = ThreadsSettings['chat'];
 
 // System-private entity type
 
+export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string; resumeKey?: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
+
 export type ClaudeUiViewRequest =
   | { type: 'CLAUDE_UI_COMMAND_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
   | { type: 'CLAUDE_UI_COMMAND_DECISION'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
@@ -484,8 +486,8 @@ export type ClaudeUiViewRequest =
   | ({ type: 'CLAUDE_UI_NOTICE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiNoticeEvent)
   | ({ type: 'CLAUDE_UI_SCROLL'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiScrollEvent)
   | ({ type: 'CLAUDE_UI_PANE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiPaneEvent)
-  | { type: 'CLAUDE_UI_MOUNT'; threadId: string; mountId: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
-  | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string }
+  | ClaudeUiMountRequest
+  | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string; resumeKey?: string }
   | ({ type: 'CLAUDE_UI_CLIENT'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiClientEvent)
   | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)
   | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
@@ -528,7 +530,8 @@ export type OutgoingThreadsEvents =
   | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }
   | { type: 'CLAUDE_PROMPT_HOST_REQUEST'; threadId: string; mountId: string; request: import('#generated/types.ts').ClaudePromptHostRequest }
   | { type: 'CLAUDE_UI_FOCUS_STATE'; threadId: string; mountId: string; result: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }
-  | { type: 'CLAUDE_UI_STATE'; threadId: string; mountId: string; state: ClaudeUiMountState }
+  | { type: 'CLAUDE_UI_STATE'; threadId: string; mountId: string; resumeKey: string; attachmentId?: string; state: ClaudeUiMountState }
+  | { type: 'CLAUDE_UI_LEASE_EXPIRED'; threadId: string; mountId: string; resumeKey: string }
   // Thread management events
   | { type: 'THREAD_CONNECTED'; data: ThreadConnectedData }
   | { type: 'SET_VIEW_DATA', id: EARS.EntityId, data: ThreadExtendedData }

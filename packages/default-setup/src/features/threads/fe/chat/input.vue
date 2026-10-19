@@ -211,6 +211,7 @@
 
 <script setup lang="ts">
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
@@ -282,7 +283,7 @@ const props = defineProps<{
   nativeStatus?: string
   /** Full CWD path for the statusline click handler. */
   statusLineCwd?: string
-  nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
+  nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; attachmentId?: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
   nativeSubmit?: (text: string, references: MessageReferences) => Promise<ClaudeComposerSubmitResult>
   nativeUi?: ClaudeUiMountState
@@ -374,8 +375,12 @@ let composerEpoch = 0
 watch([() => props.currentThread?.id, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
+// Restore only this native session's parent input before adopting it into a fresh prompt host.
+watch([() => tiptapRef.value?.editor, () => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId], ([editor, threadId, sessionId], _previous, cleanup) => {
+  if (editor && threadId && sessionId) cleanup(bindClaudeWindowDraft(editor, JSON.stringify([threadId, sessionId])))
+}, { flush: 'post' })
 let promptEditor: ReturnType<typeof bindClaudePromptEditor> | undefined
-watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId], ([editor, mountId]) => {
+watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => props.nativePrompt?.attachmentId], ([editor, mountId]) => {
   promptEditor?.dispose(); promptEditor = undefined; nativePromptProblem.value = undefined
   if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []

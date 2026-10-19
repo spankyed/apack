@@ -1,21 +1,24 @@
 import { createActor } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
+import { repository } from '#generated/repository.ts'
 import threadsState from '#features/threads/fe/state.ts'
+import { queueClaudeUiRetirement, takeClaudeUiRetirements } from '#features/threads/fe/chat/native-ui-retirement.ts'
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
 const sent = vi.fn()
+const resumeKey = '11111111-1111-4111-8111-111111111111'
 afterAll(startFeTestRuntime({ client: { send: sent } }))
 
 it('ignores another view/thread and late replies after unmount without reviving a closed slot', () => {
   const actor = createActor(threadsState).start()
   actor.send({ type: 'CLAUDE_UI_MOUNT', mountId: 'mounted', threadId: 'thread-one' })
   const state = { status: 'live' as const, tree: { kind: 'button' as const, label: 'Run', actionId: 'opaque' } }
-  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'other', threadId: 'thread-one', state })
-  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'mounted', threadId: 'thread-two', state })
-  expect(actor.getSnapshot().context.nativeUiViews).toEqual({ mounted: { threadId: 'thread-one', state: { status: 'connecting' } } })
-  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'mounted', threadId: 'thread-one', state })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'other', threadId: 'thread-one', state })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-two', state })
+  expect(actor.getSnapshot().context.nativeUiViews).toEqual({ mounted: { threadId: 'thread-one', state: { status: 'connecting' }, mountRequest: { type: 'CLAUDE_UI_MOUNT', mountId: 'mounted', threadId: 'thread-one' } } })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-one', state })
   expect(actor.getSnapshot().context.nativeUiViews.mounted?.state).toEqual(state)
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', mountId: 'mounted', threadId: 'thread-one' })
-  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'mounted', threadId: 'thread-one', state })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-one', state })
   expect(actor.getSnapshot().context.nativeUiViews).toEqual({})
   actor.stop()
 })
@@ -33,7 +36,7 @@ it('correlates native draft replies with the latest edit in the mounted thread s
   expect(actor.getSnapshot().context.nativeUiViews.mounted?.prompt).toBeUndefined()
   actor.send({ ...reply, result: { ...reply.result, revision: 2 } })
   expect(actor.getSnapshot().context.nativeUiViews.mounted?.prompt?.revision).toBe(2)
-  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'mounted', threadId: 'thread-one', state: { status: 'live', tree: { kind: 'text', text: 'controls' } } })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-one', state: { status: 'live', tree: { kind: 'text', text: 'controls' } } })
   expect(actor.getSnapshot().context.nativeUiViews.mounted?.prompt?.revision).toBe(2)
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', mountId: 'mounted', threadId: 'thread-one' }); actor.send({ ...reply, result: { ...reply.result, revision: 2 } })
   expect(actor.getSnapshot().context.nativeUiViews).toEqual({}); actor.stop()
@@ -87,7 +90,7 @@ it('routes only the current prompt host response and retires requests when the o
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toEqual(request)
   actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity, requestId: request.requestId, kind: 'fill', filled: true })
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toEqual(request)
-  actor.send({ type: 'CLAUDE_UI_STATE', ...identity, state: { status: 'disconnected' } })
+  actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, ...identity, state: { status: 'disconnected' } })
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toBeUndefined()
   actor.stop()
 })
@@ -101,5 +104,57 @@ it('forwards an Agent input once for its mounted thread and refuses foreign or r
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity }); actor.send({ ...input, revision: 2 })
   const inputs = sent.mock.calls.filter(call => JSON.stringify(call).includes('CLAUDE_UI_AGENT_INPUT'))
   expect(inputs).toHaveLength(1); expect(JSON.stringify(inputs)).toContain('User reply')
+  actor.stop()
+})
+
+it('renews a native view using its issued credential and ignores an obsolete lease-expiry answer', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native-attachment', state: { status: 'live', tree: { kind: 'text', text: 'native' } } })
+  sent.mockClear(); actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', resumeKey }) }))
+  sent.mockClear(); actor.send({ type: 'CLAUDE_UI_LEASE_EXPIRED', ...identity, resumeKey: 'old-key' })
+  expect(sent).not.toHaveBeenCalled(); expect(actor.getSnapshot().context.nativeUiViews.view?.resumeKey).toBe(resumeKey)
+  actor.send({ type: 'CLAUDE_UI_LEASE_EXPIRED', ...identity, resumeKey })
+  expect(actor.getSnapshot().context.nativeUiViews.view?.resumeKey).toBeUndefined()
+  expect(sent).toHaveBeenLastCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', resumeKey: undefined }) }))
+  actor.stop()
+})
+it('resumes active native UI and terminal views on subscription startup without losing mount context', () => {
+  const actor = createActor(threadsState).start(), mount = { type: 'CLAUDE_UI_MOUNT' as const, mountId: 'view', threadId: 'thread', messageIds: ['message'], userExpansion: { message: true } }
+  actor.send(mount); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' })
+  actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'view', threadId: 'thread', resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
+  sent.mockClear()
+  actor.send({ type: 'THREAD_CONNECTED', data: { ...repository.threadQueries.connectedData(), settings: null } })
+  expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { ...mount, resumeKey } }))
+  expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' } }))
+  expect(actor.getSnapshot().context.nativeUiViews.view?.attachmentId).toBe('native')
+  actor.stop()
+})
+it('carries the issued lease when a native view closes after its connection changes', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
+  sent.mockClear(); actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity })
+  expect(sent).toHaveBeenLastCalledWith(expect.objectContaining({ event: { type: 'CLAUDE_UI_UNMOUNT', ...identity, resumeKey } }))
+  expect(actor.getSnapshot().context.nativeUiViews.view).toBeUndefined(); actor.stop()
+})
+
+it('defers replaced-actor cleanup to accepted startup data and drains it once', () => {
+  takeClaudeUiRetirements(); sent.mockClear()
+  const release = { threadId: 'thread-old', mountId: 'old-view', resumeKey }
+  queueClaudeUiRetirement(release); queueClaudeUiRetirement(release)
+  const actor = createActor(threadsState).start()
+  expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT')).toHaveLength(0)
+  const startup = { type: 'THREAD_CONNECTED' as const, data: { ...repository.threadQueries.connectedData(), settings: null } }
+  actor.send(startup)
+  expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT').map(([message]) => message.event)).toEqual([{ type: 'CLAUDE_UI_UNMOUNT', ...release }])
+  actor.send(startup)
+  expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT')).toHaveLength(1)
+  queueClaudeUiRetirement({ ...release, mountId: 'late-old-view' })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', threadId: 'current-thread', mountId: 'new-view' })
+  actor.send({ type: 'CLAUDE_UI_STATE', threadId: 'current-thread', mountId: 'new-view', resumeKey, state: { status: 'live', tree: { kind: 'text', text: 'ready' } } })
+  expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT').map(([message]) => message.event.mountId)).toEqual(['old-view', 'late-old-view'])
+  expect(takeClaudeUiRetirements()).toEqual([])
   actor.stop()
 })

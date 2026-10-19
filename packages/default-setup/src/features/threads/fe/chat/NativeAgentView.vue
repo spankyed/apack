@@ -41,7 +41,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
+    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
@@ -49,6 +49,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
+import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
@@ -92,7 +93,12 @@ const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMou
 function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
-  if (uiMount.value) actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity() })
+  if (uiMount.value) {
+    const snapshot = actor.getSnapshot()
+    const resumeKey = snapshot.context.nativeUiViews[uiMount.value]?.resumeKey
+    if (resumeKey) queueClaudeUiRetirement({ ...identity(), resumeKey })
+    if (snapshot.status !== 'stopped') actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity() })
+  }
   uiMount.value = undefined
   submission?.reject(Error('Agent view changed before acknowledgment')); submission = undefined
 }

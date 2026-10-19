@@ -249,6 +249,8 @@ import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { sendToSystem } from '#generated/events.ts'
+import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
+import { claudeWindowAgentDrafts } from './native-window-draft.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
@@ -347,7 +349,7 @@ const nativePrompt = computed(() => {
   if (!mount || mount.threadId !== currentThread.value?.id) return
   const view = nativeUiViews.value[mount.mountId]
   if (!view || !['rendering', 'live', 'error'].includes(view.state.status)) return
-  return { mountId: mount.mountId, hostRequest: view.promptHostRequest, revision: view.promptRevision, reply: view.prompt, completionRevision: view.completionRevision, completions: view.completions }
+  return { mountId: mount.mountId, attachmentId: view.attachmentId, hostRequest: view.promptHostRequest, revision: view.promptRevision, reply: view.prompt, completionRevision: view.completionRevision, completions: view.completions }
 })
 function answerPromptHost(response: import('#generated/types.ts').ClaudePromptHostResponse) {
   const mount = nativeUiMount.value
@@ -371,7 +373,13 @@ function detachNativeUi() {
   nativeUiMount.value = undefined
   nativeUserExpansion.value = {}
   nativeBlockExpansion.value = {}
-  if (mount) { actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount }); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount }) }
+  if (mount) {
+    const snapshot = actor.getSnapshot()
+    const resumeKey = snapshot.context.nativeUiViews[mount.mountId]?.resumeKey
+    if (resumeKey) queueClaudeUiRetirement({ ...mount, resumeKey })
+    if (snapshot.status !== 'stopped') actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
+    actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount })
+  }
   pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
 provide(claudeClientReturnFocus,()=>mainComposer.value?.focus())
@@ -431,7 +439,7 @@ const taskView = computed(() => Object.entries(nativeTerminalViews.value).find((
 const agentPending = ref(false), agentReturning = ref(false)
 const agentScrollPositions = ref<Record<string, ClaudeAgentScrollPosition>>({})
 function saveAgentScrollPosition(target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition) { agentScrollPositions.value[agentDraftKey(target)] = position }
-const agentDrafts = ref<Record<string, { text: string; snapshot?: ClaudeAgentDraftSnapshot }>>({})
+const agentDrafts = ref(claudeWindowAgentDrafts)
 const agentDraftKey = (target: ClaudeNativeAgentUiTarget) => JSON.stringify([target.ownerId, target.sessionId, target.taskId])
 function saveAgentDraft(target: ClaudeNativeAgentUiTarget, text: string) {
   const key = agentDraftKey(target), previous = agentDrafts.value[key]

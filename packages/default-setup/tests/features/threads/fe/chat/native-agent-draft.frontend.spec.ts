@@ -2,6 +2,7 @@ import { Editor, Node, type Content } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
+import { bindClaudeWindowDraft } from '#features/threads/fe/chat/native-window-draft.ts'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft } from '#features/threads/fe/chat/native-agent-draft.ts'
 
 const reference = Node.create({ name: 'reference', group: 'inline', inline: true, atom: true,
@@ -86,4 +87,33 @@ it('does not save the app serializer empty-paragraph marker as Agent draft conte
 it('retains a deliberate nonbreaking space that is actual document content', () => {
   const original = create({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '\u00a0' }] }] }, true)
   expect(captureClaudeAgentDraft(original)!.text).not.toBe('')
+})
+
+it('retains a parent document and selection across frontend replacement as app input', async () => {
+  const owner = crypto.randomUUID(), original = create(rich)
+  await new Promise(resolve => original.on('create', resolve))
+  const dispose = bindClaudeWindowDraft(original, owner)
+  original.commands.setTextSelection({ from: 2, to: 5 })
+  const snapshot = captureClaudeAgentDraft(original)!
+  dispose(); original.destroy()
+  const next = create(''), transactions: import('@tiptap/pm/state').Transaction[] = []
+  next.on('transaction', ({ transaction }) => transactions.push(transaction))
+  const detach = bindClaudeWindowDraft(next, owner)
+  await new Promise(resolve => next.on('create', resolve))
+  expect(next.getJSON()).toEqual(snapshot.doc); expect(next.state.selection.toJSON()).toEqual(snapshot.selection)
+  expect(transactions.filter(transaction => transaction.docChanged).every(transaction => transaction.getMeta('claude-prompt-by') === 'app')).toBe(true)
+  next.commands.clearContent(); detach()
+  const cleared = create(''), stop = bindClaudeWindowDraft(cleared, owner)
+  await new Promise(resolve => cleared.on('create', resolve))
+  expect(cleared.isEmpty).toBe(true); stop()
+})
+it('isolates window draft owners and keeps an existing current document', async () => {
+  const owner = crypto.randomUUID(), original = create('retained draft')
+  await new Promise(resolve => original.on('create', resolve))
+  bindClaudeWindowDraft(original, owner)()
+  const other = create(''), existing = create('newer current draft')
+  const stopOther = bindClaudeWindowDraft(other, crypto.randomUUID()), stopCurrent = bindClaudeWindowDraft(existing, owner)
+  await Promise.all([new Promise(resolve => other.on('create', resolve)), new Promise(resolve => existing.on('create', resolve))])
+  expect(other.isEmpty).toBe(true); expect(existing.state.doc.textContent).toBe('newer current draft')
+  stopOther(); stopCurrent()
 })

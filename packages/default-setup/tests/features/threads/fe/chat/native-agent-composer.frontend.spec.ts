@@ -24,10 +24,10 @@ beforeEach(() => { resetSelectionOnCreate = false; preserveEmptyMarker = false; 
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
 async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot) {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  const state = reactive({ draft: 'Unsent Agent draft', prompt: undefined as ClaudePromptReply | undefined })
-  const edit = (value: ClaudePromptEdit) => { state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } }
-  app = createApp({ render: () => h(NativeAgentComposer, { draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, mountId: connected ? 'agent-ui' : undefined, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
-  return { leave, draft, saved, root }
+  const state = reactive({ draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
+  const edit = vi.fn((value: ClaudePromptEdit) => { state.promptRevision = value.revision; state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } })
+  app = createApp({ render: () => h(NativeAgentComposer, { draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
+  return { leave, draft, saved, root, state, edit }
 }
 it('owns Escape before the generic editor keymap and preserves the unsent draft', async () => {
   const f = await mount(), event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
@@ -93,4 +93,13 @@ it('persists a cleared Agent as an empty draft rather than the serializer placeh
   editor.commands.clearContent(); await nextTick()
   expect(f.draft).toHaveBeenLastCalledWith('')
   expect(f.root.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true)
+})
+it('adopts the current draft and selection as app input when a fresh native attachment replaces the old one', async () => {
+  const f = await mount(async () => {}, true)
+  editor.commands.setTextSelection({ from: 2, to: 5 }); await nextTick()
+  const doc = editor.state.doc, selected = editor.state.selection, revision = f.state.promptRevision, edits = f.edit.mock.calls.length
+  f.state.attachmentId = 'native-two'; await nextTick(); await nextTick()
+  expect(f.edit).toHaveBeenCalledTimes(edits + 1)
+  expect(f.edit.mock.lastCall![0]).toMatchObject({ by: 'app', revision: revision + 1, text: 'Unsent Agent draft' })
+  expect(editor.state.doc).toBe(doc); expect(editor.state.selection.eq(selected)).toBe(true)
 })
