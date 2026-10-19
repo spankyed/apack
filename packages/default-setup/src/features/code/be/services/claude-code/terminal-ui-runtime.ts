@@ -186,32 +186,47 @@ ${claudeTerminalClientRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
 ${claudeTerminalParentCommandRuntime}
+function nativeThemePalette(n,output=process.stdout){
+ const root=n.themeRoots.ai().get(output)?.container?.current,pending=root?[root]:[],seen=new Set();
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
+  if(seen.size>=4096)throw Error('Native theme provider traversal exceeded bound');seen.add(fiber);
+  if(fiber.type===n.themePreferences.dEn){
+   const value=fiber.child?.memoizedProps?.value;
+   if(!value?.resolvedTheme||typeof value.themeSetting!=='string'||typeof value.resolvedTheme.text!=='string')throw Error('Native mounted theme provider contract changed');
+   return value.resolvedTheme;
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ throw Error('Native theme provider is not mounted');
+}
 function nativeThemeTree(n,tree){
- const palette=n.themeResolver.UKe(n.themePreferences.lEn());
+ const palette=nativeThemePalette(n);
  const paint=value=>{
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   const result={...value};
   for(const key of ['color','backgroundColor','borderColor'])if(typeof result[key]==='string'&&Object.hasOwn(palette,result[key]))result[key]=palette[result[key]];
   return result;
  };
- const visit=(value,inheritedColor,inheritedBackground,parentType)=>{
+ const visit=(value,inheritedColor,inheritedBackground,parentType,insideButton=false)=>{
   if(typeof value==='string')return parentType==='Box'?{type:'Text',props:{color:inheritedColor??palette.text},children:[value]}:value;
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   const themed=['Text','Box','Button'].includes(value.type),props=themed?paint(value.props??{}):value.props;
   let color=inheritedColor,background=inheritedBackground;
+  if(value.type==='Button'){props.color=props.plain!==true&&props.variant==='primary'?palette.suggestion:palette.text;props.hotkeyColor=props.plain===true?palette.suggestion:props.color;color=props.color;}
   if(value.type==='Text'){
-   props.color??=inheritedColor??palette.text;color=props.color;
+   if(!insideButton)props.color??=inheritedColor??palette.text;color=props.color??inheritedColor;
    if(props.inverse===true)props.backgroundColor??=inheritedBackground??palette.inverseText;
   }
   if(themed&&props?.backgroundColor!==undefined)background=props.backgroundColor;
-  return {...value,...(themed?{props}:{}),...(themed&&value.hover?{hover:paint(value.hover)}:{}),...(Array.isArray(value.children)?{children:value.children.map(child=>visit(child,color,background,value.type))}:{})};
+  return {...value,...(themed?{props}:{}),...(themed&&value.hover?{hover:paint(value.hover)}:{}),...(Array.isArray(value.children)?{children:value.children.map(child=>visit(child,color,background,value.type,insideButton||value.type==='Button'))}:{})};
  };
  return visit(tree);
 }
 let nativeThemeSnapshot;
 function refreshNativeTheme(n){
  if(!clients.size)return;
- const next=JSON.stringify(n.themeResolver.UKe(n.themePreferences.lEn()));
+ const next=JSON.stringify(nativeThemePalette(n));
  if(nativeThemeSnapshot===next)return;
  const changed=nativeThemeSnapshot!==undefined;nativeThemeSnapshot=next;
  if(changed)publish({type:'system',subtype:'ui_invalidate',event:'ui.render'});
@@ -232,7 +247,7 @@ async function initialize(){
   const commandInput=await import('/$bunfs/root/chunk-bkgw23zx.js');
   const commandOutput=await import('/$bunfs/root/chunk-1svntv7y.js');
   const commandTags=await import('/$bunfs/root/chunk-nhvhsxnt.js'),commandEntities=await import('/$bunfs/root/chunk-25a3z2dq.js');
-  const themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');
+  const themeRoots=await import('/$bunfs/root/chunk-pg10s5g1.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
   const taskControls=await import('/$bunfs/root/chunk-nmzacz4p.js');
@@ -261,7 +276,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,themeResolver,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeClients,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,themeRoots,themePreferences,rename,taskControls,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }

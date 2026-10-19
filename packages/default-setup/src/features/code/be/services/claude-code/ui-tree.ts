@@ -229,6 +229,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
         || (props.variant !== undefined && props.variant !== 'primary' && props.variant !== 'secondary')
         || (props.role !== undefined && props.role !== 'dismiss')
         || (props.autoFocus !== undefined && props.autoFocus !== true)) throw new ClaudeProtocolError('native UI button style is invalid')
+      for (const name of ['color', 'hotkeyColor'] as const) if (props[name] !== undefined && (typeof props[name] !== 'string' || props[name].length > 256)) throw new ClaudeProtocolError('native UI button color is invalid')
       if (props.hotkey !== undefined && (typeof props.hotkey !== 'string' || props.hotkey.length !== 1 || !/^[0-9a-z]$/.test(props.hotkey))) throw new ClaudeProtocolError('native UI button hotkey is invalid')
       // The native wire carries a normalized accessible label alongside optional inline children.
       function validateInline(child: unknown): void {
@@ -239,7 +240,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing)
       if (value.children !== undefined && !Array.isArray(value.children)) throw new ClaudeProtocolError('native UI button children are invalid')
       if (Array.isArray(value.children)) value.children.forEach(validateInline)
       const hover = readClaudeUiHover(value, props)
-      const button: ClaudeUiNode = { kind: 'button', ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
+      const button: ClaudeUiNode = { kind: 'button', ...(typeof props.color === 'string' ? { color: props.color } : {}), ...(typeof props.hotkeyColor === 'string' ? { hotkeyColor: props.hotkeyColor } : {}), ...(hover ? { hover } : {}), label: props.label as string, ...attribution,
         ...(Array.isArray(value.children) && value.children.length ? { children: value.children.map(child => visit(child, plugin)) } : {}),
         ...(props.hotkey !== undefined ? { hotkey: props.hotkey as string } : {}),
         ...(props.dimColor !== undefined ? { dimColor: props.dimColor as boolean } : {}),

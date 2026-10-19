@@ -199,3 +199,9 @@ it('isolates repeated field keys in separate Client instances while preserving e
  expect(()=>createClaudeUiDrawing(duplicate)).toThrow('ambiguous')
  expect(JSON.stringify(second.tree)).not.toMatch(/clientInstance|handle|requestId/)
 })
+
+it('preserves resolved button paint and validates its transport values', () => {
+ const draw=createClaudeUiDrawing({type:'Button',props:{label:'Native',color:'#123456',hotkeyColor:'rgb(1,2,3)'}})
+ expect(draw.tree).toMatchObject({kind:'button',color:'#123456',hotkeyColor:'rgb(1,2,3)'})
+ expect(()=>createClaudeUiDrawing({type:'Button',props:{label:'Invalid',color:42}})).toThrow('button color')
+})

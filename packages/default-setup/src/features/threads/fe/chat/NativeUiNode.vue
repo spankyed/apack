@@ -20,7 +20,7 @@
     <span v-if="node.role === 'dismiss'" aria-hidden="true">×</span>
     <template v-else-if="node.children?.length"><NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></template>
     <template v-else>{{ node.label }}</template>
-    <kbd v-if="node.hotkey" aria-hidden="true" class="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded border border-current/15 px-1 font-mono text-[10px] leading-none opacity-60">{{ node.hotkey.toUpperCase() }}</kbd>
+    <kbd v-if="node.hotkey" :style="{ color: claudeUiColor(node.hotkeyColor) }" aria-hidden="true" class="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded border border-current/15 px-1 font-mono text-[10px] leading-none opacity-60">{{ node.hotkey.toUpperCase() }}</kbd>
   </button>
   <slot v-else-if="node.component === 'engine'" name="engine" />
   <span v-else class="text-neutral-500" :data-native-plugin="node.plugin">Unsupported Claude component: {{ node.component }}</span>
@@ -31,7 +31,7 @@ import { computed, inject, provide, ref, onBeforeUnmount, onUpdated, type Compon
 import { openLink } from '@apackdev/sdk/fe'
 import NativeUiClient from './NativeUiClient.vue'
 import NativeUiSvg from './NativeUiSvg.vue'
-import { claudeUiBoxPaint, claudeUiTextPaint, claudeTextPaint, type ClaudeTextPaint } from './native-ui-paint.ts'
+import { claudeUiBoxPaint, claudeUiColor, claudeUiTextPaint, claudeTextPaint, type ClaudeTextPaint } from './native-ui-paint.ts'
 import { claudeHoverSurface, claudeHoverBox } from './native-ui-hover.ts'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
@@ -66,7 +66,7 @@ function childScopeEnabled(index: number): boolean {
 }
 const boxPaint = computed(() => props.node.kind === 'box' ? { ...props.node.paint, ...overrides.value?.paint } : undefined)
 const textStyle = computed<ClaudeUiTextStyle>(() => props.node.kind === 'text' ? { ...props.node.style, ...overrides.value?.text } : {})
-const buttonTextStyle = computed<ClaudeUiTextStyle>(() => props.node.kind === 'button' ? { dimColor: props.node.dimColor, ...overrides.value?.text } : {})
+const buttonTextStyle = computed<ClaudeUiTextStyle>(() => props.node.kind === 'button' ? { color: props.node.color, dimColor: props.node.dimColor, ...overrides.value?.text } : {})
 const logicalPaint = computed<ClaudeTextPaint>(() => {
   const base = props.node.kind === 'button' ? {} : inheritedPaint.value
   const style: ClaudeTextPaint = props.node.kind === 'text' ? textStyle.value : props.node.kind === 'button' ? buttonTextStyle.value : {}
