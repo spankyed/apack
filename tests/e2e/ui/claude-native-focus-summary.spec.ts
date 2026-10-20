@@ -59,7 +59,7 @@ test('renders original notification-only focus groups', async ({ app, appPage },
     let theme = false, security = false, navigated = false, trustAt = 0, attempts = 0
     await expect.poll(async () => {
       const current = await context(), kind = recognizeOnboardingPrompt(await screen(), workspace)
-      if (current.native?.state.status === 'live') return current.native.state.mainStatus?.includes('AppNativeMain ' + sessionId) === true
+      if (current.native?.state.status === 'live') return current.native.state.mainStatus?.includes('Workspace ready') === true
       if (kind === 'theme' && !theme) { theme = true; await input.press('Enter') }
       else if (kind === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
       else if (kind === 'workspace-trust' && !navigated) { navigated = true; trustAt = Date.now(); await input.press('ArrowDown') }
