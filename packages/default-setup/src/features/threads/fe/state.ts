@@ -17,7 +17,7 @@ import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './cont
 import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
-import { takeClaudeUiRetirements } from './chat/native-ui-retirement.ts';
+import { takeClaudeUiRetirements, rememberClaudeUiLease, forgetClaudeUiLease } from './chat/native-ui-retirement.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -1547,6 +1547,7 @@ const threadsState = setup({
       ...context.nativeUiViews, [event.mountId]: { ...(context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } }), mountRequest: event },
     } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
     CLAUDE_UI_UNMOUNT: { actions: [({ context, event }) => {
+      forgetClaudeUiLease(event)
       const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey
       sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) })
     }, assign(({ context, event }) => {
@@ -1646,6 +1647,8 @@ const threadsState = setup({
       for (const release of takeClaudeUiRetirements()) sendToSystem(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
     }, assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
+      if (event.state.status === 'disconnected') forgetClaudeUiLease(event)
+      else rememberClaudeUiLease({ threadId: event.threadId, mountId: event.mountId, resumeKey: event.resumeKey })
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...context.nativeUiViews[event.mountId], threadId: event.threadId, resumeKey: event.resumeKey, attachmentId: event.attachmentId, state: event.state, ...(['disconnected', 'connecting'].includes(event.state.status) || context.nativeUiViews[event.mountId].resumeKey !== event.resumeKey ? { promptHostRequest: undefined } : {}) } } }
     })] },
     CLAUDE_UI_LEASE_EXPIRED: {
