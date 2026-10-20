@@ -68,6 +68,73 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   const composer = card.locator('[contenteditable="true"]')
   const info=appPage.locator('[data-native-placement="InfoNotice"] [data-native-client]').filter({hasText:'InfoNotice Client'}).first()
   try{await expect(info).toContainText('InfoNotice Client count=0 key=none',{timeout:10000})}catch(error){if(process.env.CLAUDE_RESEARCH_RASTER==='1'||process.env.CLAUDE_RESEARCH_IMAGE==='1'){await writeFile(join(workspace!,'native-raster-failure.json'),JSON.stringify(await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})));await appPage.screenshot({path:testInfo.outputPath('native-raster-failure.png')})}throw error}
+  if(process.env.CLAUDE_RESEARCH_CLIENT_RETURN==='1'){
+    const stages: any[] = [], keys: any[] = [];
+    const draft = 'Keep my review notes when returning from the native interface.';
+    const events = async () => JSON.parse(await readFile(join(workspace!, 'native-terminal-client-events.json'), 'utf8'));
+    const latest = async () => (await events()).filter((event: any) => event.kind === 'InfoNotice').at(-1);
+    await appPage.evaluate(() => {
+      (window as any).__clientReturnKeys = [];
+      window.addEventListener('keydown', event => {
+        const target = event.target as HTMLElement;
+        (window as any).__clientReturnKeys.push({ key: event.key, client: target.closest('[data-native-client]')?.getAttribute('data-native-client'), input: target.hasAttribute('data-native-client-text-input') });
+      }, true);
+    });
+    await composer.fill(draft);
+    try {
+      for (const [index, width] of [1100, 680, 1100].entries()) {
+        const retired = await info.getAttribute('data-native-client');
+        await section.getByRole('button', { name: 'Use native interface', exact: true }).click();
+        await appPage.setViewportSize({ width, height: width === 680 ? 600 : 900 });
+        expect((await context()).native.state.nativePid).toBe(boundNativePid);
+        await section.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+        await expect(info).toBeVisible();
+        await expect(composer).toHaveText(draft);
+        const current = await info.getAttribute('data-native-client');
+        expect(current).not.toBe(retired);
+        await appPage.evaluate(token => {
+          const actor = (window as any).applicationState.system.get('default-setup/threads'), c = actor.getSnapshot().context;
+          const [mountId] = Object.entries(c.nativeUiViews).find(([, view]: any) => view.threadId === c.currentThread.id)!;
+          actor.send({ type: 'CLAUDE_UI_CLIENT', mountId, threadId: c.currentThread.id, id: token, sequence: 1000000, event: { kind: 'key', key: 'old' } });
+        }, retired);
+        const key = ['j', 'k', 'l'][index];
+        await info.scrollIntoViewIfNeeded();
+        await info.focus();
+        const focus = await info.evaluate(node => ({ held: node.contains(document.activeElement), target: document.activeElement?.tagName, input: document.activeElement?.hasAttribute('data-native-client-text-input') }));
+        await info.press(key);
+        await expect.poll(async () => (await latest())?.key).toBe(key);
+        await info.getByRole('button', { name: 'Increment terminal Client', exact: true }).click();
+        await expect.poll(async () => (await latest())?.count).toBe(index + 1);
+        const originalReceipt = await latest();
+        expect(originalReceipt.surface).toBe('terminal');
+        expect(originalReceipt.key).toBe(key);
+        expect((await events()).some((event: any) => event.key === 'old')).toBe(false);
+        stages.push({ width, key, retired, current, focus, originalReceipt });
+        await info.focus(); await info.press('Escape'); await expect(composer).toBeFocused();
+        for (const target of [composer, status, card.getByRole('button', { name: 'Send', exact: true })]) {
+          await expect(target).toBeInViewport();
+          expect(await target.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)); })).toBe(true);
+        }
+        if(index<2)await appPage.screenshot({ path: testInfo.outputPath('native-client-return-'+width+'.png') });
+      }
+      keys.push(...await appPage.evaluate(() => (window as any).__clientReturnKeys));
+      await writeFile(join(workspace!, 'native-client-return-proof.json'), JSON.stringify({ stages, keys, draft }, null, 2));
+      await section.getByRole('button', { name: 'Use native interface', exact: true }).click();
+      await section.getByRole('button', { name: 'Stop session', exact: true }).click();
+      await expect.poll(async () => (await context()).native.state.status).toBe('exited');
+      await section.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+      await composer.fill('Continue the same review after native interface return.');
+      await card.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect.poll(async () => (await context()).claude.chatState).toBe('success');
+      expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);
+      await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui:true,nativePlanScenario:'composer-layout',nativeClientReturnKeys:true,nativeClientReturnActions:true,nativeClientRetiredToken:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors }));
+    } catch(error) {
+      await appPage.screenshot({path:testInfo.outputPath('native-client-return-failure.png')});
+      await writeFile(join(workspace!,'native-client-return-failure.json'),JSON.stringify({stages,keys:await appPage.evaluate(()=>(window as any).__clientReturnKeys),latest:await latest(),state:await context(),focus:await info.evaluate(node=>({id:node.getAttribute('data-native-client'),keys:node.innerHTML,active:document.activeElement?.outerHTML}))},null,2));
+      throw error;
+    }
+    return;
+  }
   if(process.env.CLAUDE_RESEARCH_IMAGE_PIXELS==='1'){
     const image=appPage.locator('[data-native-placement="InfoNotice"] [data-native-image]').first(),receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-image-blits.json'),'utf8').catch(()=>'[]'))
     const pixel=()=>image.evaluate(element=>{const source=element.querySelector('img,canvas') as HTMLImageElement|HTMLCanvasElement;if(!source)return [];if(source instanceof HTMLImageElement&&!source.complete)return [];const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;const c=canvas.getContext('2d')!;try{c.drawImage(source,0,0,2,2);return Array.from(c.getImageData(0,0,1,1).data)}catch{return []}})

@@ -66,7 +66,8 @@ function borrowTerminalClient(n,request){
  const instance=facts.clients.get(JSON.stringify([request.plugin,request.key]));
  if(!instance||instance.module!==request.module)throw Error('Original terminal Client is no longer mounted');
  // The terminal owns this sandbox, its clocks and its measured size. Borrow input/subscription only.
- return{id:instance.id,surface:'terminal',callbackRequestId:n.clientRuntime.R3r(facts.input.requestId,request.key),subscribe:fn=>instance.subscribe(fn),getSnapshot:()=>instance.getSnapshot(),acceptsPointer:()=>instance.acceptsPointer(),acceptsKeys:()=>instance.acceptsKeys(),key:event=>instance.key(event),pointer:event=>instance.pointer(event),setProps(){},resize(){},laidOut(){},release(){}};
+ // Input continuity follows this exact sandbox, not the enclosing placement viewport fingerprint.
+ return{id:instance.id,isCurrent:()=>{const current=terminalPlacementFacts(n,request.component,request.requestId);return current?.clients.get(JSON.stringify([request.plugin,request.key]))===instance&&instance.module===request.module;},surface:'terminal',callbackRequestId:n.clientRuntime.R3r(facts.input.requestId,request.key),subscribe:fn=>instance.subscribe(fn),getSnapshot:()=>instance.getSnapshot(),acceptsPointer:()=>instance.acceptsPointer(),acceptsKeys:()=>instance.acceptsKeys(),key:event=>instance.key(event),pointer:event=>instance.pointer(event),setProps(){},resize(){},laidOut(){},release(){}};
 }
 function terminalHostedDrawing(n,source,tree){
  let count=0;

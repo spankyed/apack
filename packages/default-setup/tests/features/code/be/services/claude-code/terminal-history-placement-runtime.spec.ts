@@ -97,7 +97,14 @@ it('keeps Client state redraws within a source lease but retires a replaced nati
  c.instance.getSnapshot.mockReturnValue({status:'drawn',tree:{type:'Text',children:['changed state']}})
  expect(f.api.list(f.n)[0].revision).toBe(first.revision)
  f.api.frames.set(JSON.stringify(['view',first.component,first.id]),{fingerprint:first.revision})
+ const borrowed=f.api.borrow(f.n,{client:'view',component:first.component,requestId:first.id,plugin:'native',key:'clock',module:'./clock.ts'})
+ expect(borrowed.isCurrent()).toBe(true)
+ f.source.input.viewport={columns:60,rows:20}
+ expect(f.api.list(f.n)[0].revision).not.toBe(first.revision)
+ expect(borrowed.isCurrent()).toBe(true)
+ expect(()=>f.api.current(f.n,{client_id:'view',component:first.component,instance_id:first.id})).toThrow('changed or expired')
  c.fiber.memoizedProps.instance={...c.instance}
+ expect(borrowed.isCurrent()).toBe(false)
  expect(f.api.list(f.n)[0].revision).not.toBe(first.revision)
  expect(()=>f.api.current(f.n,{client_id:'view',component:first.component,instance_id:first.id})).toThrow('changed or expired')
 })

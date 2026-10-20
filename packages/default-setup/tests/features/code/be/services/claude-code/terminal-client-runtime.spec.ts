@@ -112,3 +112,27 @@ it('projects borrowed terminal Clients through native callbacks without creating
  host.detach('view');expect(stop).toHaveBeenCalledOnce();expect(host.surface('view',frame.props.id)).toBeUndefined()
  expect(host.event('view',frame.props.id,2,{kind:'key',key:'old'})).toEqual({handled:false})
 })
+
+
+it('keeps input on an unchanged borrowed sandbox through placement redraw but rejects replaced leases and revoked policy',()=>{
+ const create=vm.runInNewContext(`${claudeTerminalClientRuntime};createNativeClientHost`,{Map,Set,randomUUID,setTimeout,clearTimeout,setInterval,clearInterval})
+ let original=true,eligible=true
+ const key=vi.fn(),stop=vi.fn(),borrow=()=>({id:'original',isCurrent:()=>original,surface:'terminal',release(){},subscribe:()=>stop,getSnapshot:()=>({status:'drawn',tree:{type:'Text',children:['client']}}),acceptsKeys:()=>true,acceptsPointer:()=>false,key})
+ const host=create(vi.fn(),()=>{},()=> 'callback',{borrow,current:(entry:any)=>entry.instance.isCurrent(),eligible:()=>eligible})
+ const tree={type:'Client',props:{key:'clock',module:'./clock.ts'},client:{plugin:'fixture'}}
+ const frame=host.render('view','InfoNotice','notice',tree,1)
+ host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',frame.props.id,1,{kind:'key',key:'k'})).toEqual({handled:true})
+ expect(host.render('view','InfoNotice','notice',tree,1).props.id).toBe(frame.props.id)
+ eligible=false;host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',frame.props.id,2,{kind:'key',key:'blocked'})).toEqual({handled:false})
+ eligible=true
+ const restored=host.render('view','InfoNotice','notice',tree,1)
+ expect(restored.props.id).not.toBe(frame.props.id)
+ expect(host.event('view',restored.props.id,1,{kind:'key',key:'fresh'})).toEqual({handled:true})
+ original=false;host.suspendInstance('view','InfoNotice','notice')
+ expect(host.event('view',restored.props.id,2,{kind:'key',key:'old'})).toEqual({handled:false})
+ expect(key.mock.calls.map(call=>call[0].key)).toEqual(['k','fresh'])
+ expect(stop).toHaveBeenCalledTimes(1)
+ host.detach()
+})

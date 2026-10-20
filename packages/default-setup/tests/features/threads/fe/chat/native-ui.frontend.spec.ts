@@ -522,10 +522,11 @@ it('reports Client focus as a held site without selecting its surrounding native
  const f=await mount({nativeUi:{status:'live',tree}})
  const region=f.root.querySelector<HTMLElement>('[data-native-client]')!
  region.focus()
- expect(document.activeElement).toBe(region)
+ const keyboard=f.root.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ expect(document.activeElement).toBe(keyboard)
  expect(f.focusReport).toHaveBeenLastCalledWith(expect.objectContaining({isHeld:true,focusId:undefined}))
  f.state.nativeUi={status:'live',tree:{...tree,children:[{kind:'text',text:'Native Client redrawn'}]}};await nextTick()
- expect(f.root.querySelector('[data-native-client]')).toBe(region);expect(document.activeElement).toBe(region)
+ expect(f.root.querySelector('[data-native-client]')).toBe(region);expect(document.activeElement).toBe(keyboard)
 })
 
 it('commits Client field IME text once and defers native replacements until composition ends',async()=>{
