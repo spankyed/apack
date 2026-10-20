@@ -273,3 +273,22 @@ it('mounts source-bound composer rows, keeps unrelated message actions live and 
  await expect(f.host.press(original.actionId!)).resolves.toEqual({handled:true})
  expect(f.ui.releaseInstance).toHaveBeenCalledWith(expect.objectContaining({component:'Spinner',instance_id:'native-agent'}))
 })
+
+
+it('keeps redrawn callbacks inert until the previous native press acknowledges', async () => {
+  const f = fixture(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  const first = f.nodes()[0]; if (first.kind !== 'button') throw Error('button')
+  let acknowledge!: (value: { handled: boolean }) => void
+  f.ui.press.mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve }))
+  const pending = f.host.press(first.actionId!)
+  f.host.receive({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
+  await vi.advanceTimersByTimeAsync(50)
+  const redrawn = f.nodes()[0]; if (redrawn.kind !== 'button') throw Error('button')
+  expect(redrawn.actionId).toBeUndefined()
+  acknowledge({ handled: true }); await pending; await vi.advanceTimersByTimeAsync(50)
+  const ready = f.nodes()[0]; if (ready.kind !== 'button') throw Error('button')
+  expect(ready.actionId).toBeTruthy()
+  await expect(f.host.press(ready.actionId!)).resolves.toEqual({ handled: true })
+  expect(f.ui.press).toHaveBeenCalledTimes(2)
+  await f.host.dispose()
+})

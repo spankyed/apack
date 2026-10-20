@@ -1,4 +1,5 @@
 <template>
+  <p v-if="node.formattingFallback" role="note" class="mb-2 text-xs text-neutral-500">Showing source formatting for this large result.</p>
   <div v-if="node.kind === 'markdown'" :style="documentPaint" class="native-document-themed" :class="{ 'opacity-60': node.dim }" :data-native-plugin="node.plugin" @click.capture="modifiedClick = $event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey">
     <div v-if="node.nativeAnsi !== undefined" class="native-markdown-engine font-mono text-xs leading-5" data-native-markdown-ansi><template v-for="(span, index) in nativeSpans" :key="index"><a v-if="span.href" :href="span.href" :style="span.style" @click.prevent="openMarkdownLink(span.href)">{{ span.text }}</a><span v-else :style="span.style">{{ span.text }}</span></template></div>
     <TiptapEditor v-else mode="viewer" variant="chat" :model-value="node.text" :open-viewer-link="openMarkdownLink" />

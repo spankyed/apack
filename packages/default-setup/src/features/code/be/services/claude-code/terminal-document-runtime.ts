@@ -1,5 +1,7 @@
+import { encodeClaudeDocument } from '../../../common/native-document-codec.ts'
 /** Original CodeBlock export rendering; source and callbacks remain owned by the original drawing. */
-export const claudeTerminalDocumentRuntime = String.raw`function nativeDocumentSyntaxFlag(n){
+export const claudeTerminalDocumentRuntime = String.raw`const encodeNativeDocument = ${encodeClaudeDocument.toString()};
+function nativeDocumentSyntaxFlag(n){
  const binding=typeof originalContext==='undefined'?n.runtime?.ey():originalContext??n.runtime?.ey();
  return binding?.toolContext?.(new AbortController())?.getAppState?.().settings?.syntaxHighlightingDisabled===true;
 }
@@ -48,7 +50,7 @@ function nativeImageFingerprint(n,tree,scope){
  return images.length?createHash('sha256').update(JSON.stringify(images)).digest('hex'):undefined;
 }
 async function nativeDocumentTree(n,tree,options={}){
- let nodes=0,bytes=0;const initialTheme=JSON.stringify(nativeThemeProvider(n).value.resolvedTheme),syntaxFlag=nativeDocumentSyntaxFlag(n);
+ let nodes=0,bytes=0,documentBudget=Math.max(0,262144-Buffer.byteLength(JSON.stringify(tree),'utf8'));const initialTheme=JSON.stringify(nativeThemeProvider(n).value.resolvedTheme),syntaxFlag=nativeDocumentSyntaxFlag(n);
  const visit=async value=>{
   options.signal?.throwIfAborted();
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
@@ -64,9 +66,14 @@ async function nativeDocumentTree(n,tree,options={}){
    result=ansi.length<=65536&&bytes+ansi.length<=65536?{type:'NativeRaster',props:{columns,rows,ansi},part:{plugin:value.raster.plugin}}:{type:'Text',props:{dimColor:true},children:['Raster preview exceeds this view. Open the native interface to inspect it.'],part:{plugin:value.raster.plugin}};
    bytes+=Math.min(ansi.length,65536);
   }
+  if(value.type==='Image'||value.type==='Raster'){
+   let cost=Buffer.byteLength(JSON.stringify(result),'utf8')-Buffer.byteLength(JSON.stringify(value),'utf8');
+   if(cost>documentBudget){result={type:'Text',props:{dimColor:true},children:[value.type+' preview exceeds this drawing. Open the native interface to inspect it.'],...(value.image?.plugin||value.raster?.plugin?{part:{plugin:value.image?.plugin??value.raster?.plugin}}:{})};cost=Buffer.byteLength(JSON.stringify(result),'utf8')-Buffer.byteLength(JSON.stringify(value),'utf8');}
+   documentBudget=Math.max(0,documentBudget-cost);
+  }
   if(value.type==='Code'||value.type==='Markdown'){
-   const props={...value.props},markdown=value.type==='Markdown',annotation=markdown?'_apackMarkdownAnsi':'_apackCodeAnsi',source=markdown?props.text:props.source;delete props[annotation];
-   if(typeof source==='string'&&source.length<=32768){
+   const props={...value.props},markdown=value.type==='Markdown',annotation=markdown?'_apackMarkdownAnsi':'_apackCodeAnsi',source=markdown?props.text:props.source;delete props[annotation];delete props._apackDocumentPacked;delete props._apackDocumentFallback;
+   if(typeof source==='string'&&source.length<=131072){
     const defaults=n.documentDefaults.$Et(),theme=nativeThemeProvider(n),themeKey=JSON.stringify(theme.value.resolvedTheme),columns=Math.max(20,Math.min(240,options.columns??process.stdout.columns??80));
     // Fresh export state: never mount the live app store, tasks, keybindings or another sandbox.
     const element=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,initialState:{...defaults,tasks:{},taskDecorations:{},settings:{...defaults.settings,syntaxHighlightingDisabled:syntaxFlag}},children:n.jsx.e(theme.type,{value:theme.value,children:n.jsx.e(n.documentRendering.$d.BodyColumns.Provider,{value:columns,children:n.jsx.e(markdown?n.documentRendering.$d.MarkdownBlock:n.documentRendering.$d.CodeBlock,markdown?{text:props.text}:props)})})});
@@ -74,8 +81,12 @@ async function nativeDocumentTree(n,tree,options={}){
     options.signal?.throwIfAborted();
     if(JSON.stringify(nativeThemeProvider(n).value.resolvedTheme)!==themeKey)throw Error('Native document theme changed while formatting');
     if(typeof text!=='string')throw Error('Native Code renderer returned invalid output');
-    if(text.length<=65536&&bytes+text.length<=65536){props[annotation]=text;bytes+=text.length;}
-   }
+    let addition;
+    if(text.length<=65536)addition={[annotation]:text};
+    else if(text.length<=1048576){try{addition={_apackDocumentPacked:encodeNativeDocument(text)};}catch{}}
+    const cost=addition?Buffer.byteLength(JSON.stringify(addition),'utf8')+1:Infinity;
+    if(cost<=documentBudget){Object.assign(props,addition);documentBudget-=cost;}else props._apackDocumentFallback='drawing-budget';
+   }else props._apackDocumentFallback='source-limit';
    result={...value,props};
   }
   if(Array.isArray(value.children)){

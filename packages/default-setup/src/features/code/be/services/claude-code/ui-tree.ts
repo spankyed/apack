@@ -1,3 +1,4 @@
+import { decodeClaudeDocument } from '../../../common/native-document-codec.ts'
 import { readClaudeUiHover } from './ui-hover.ts'
 import { readClaudeUiBoxLayout } from './ui-box-layout.ts'
 import { randomUUID } from 'node:crypto'
@@ -199,10 +200,11 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
     if (value.type === 'Markdown') {
       if (!record(value.props) || typeof value.props.text !== 'string' || (value.props.dimColor !== undefined && typeof value.props.dimColor !== 'boolean')) throw new ClaudeProtocolError('native Markdown props are invalid')
       const props = value.props
+      const nativeAnsi = props._apackDocumentPacked === undefined ? props._apackMarkdownAnsi : decodeClaudeDocument(props._apackDocumentPacked)
       if (props.pressableLinks !== undefined && (!Array.isArray(props.pressableLinks) || !props.pressableLinks.every(href => typeof href === 'string'))) throw new ClaudeProtocolError('native Markdown links are invalid')
       const pressableLinks = props.pressableLinks as string[] | undefined
       if (props._apackMarkdownAnsi !== undefined && (typeof props._apackMarkdownAnsi !== 'string' || props._apackMarkdownAnsi.length > 65536)) throw new ClaudeProtocolError('native Markdown drawing is invalid')
-      const node: ClaudeUiNode = { kind: 'markdown', ...(typeof props._apackMarkdownAnsi === 'string' ? { nativeAnsi: props._apackMarkdownAnsi } : {}), ...documentColor(props), text: props.text as string, dim: props.dimColor === true, ...attribution,
+      const node: ClaudeUiNode = { kind: 'markdown', ...(typeof nativeAnsi === 'string' ? { nativeAnsi } : {}), ...(props._apackDocumentFallback === 'drawing-budget' || props._apackDocumentFallback === 'source-limit' ? { formattingFallback: true } : {}), ...documentColor(props), text: props.text as string, dim: props.dimColor === true, ...attribution,
         ...(pressableLinks !== undefined ? { pressableLinks } : {}) }
       if (value.press === undefined) return node
       if (!record(value.press) || typeof value.press.plugin !== 'string' || !value.press.plugin || typeof value.press.handle !== 'number'
@@ -220,7 +222,8 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
         || (props.format !== undefined && props.format !== 'source' && props.format !== 'diff')
         || (props.wrap !== undefined && props.wrap !== 'wrap' && props.wrap !== 'truncate-end')) throw new ClaudeProtocolError('native Code props are invalid')
       if (props._apackCodeAnsi !== undefined && (typeof props._apackCodeAnsi !== 'string' || props._apackCodeAnsi.length > 65536)) throw new ClaudeProtocolError('native Code drawing is invalid')
-      return { kind: 'code', ...documentColor(props), ...(typeof props._apackCodeAnsi === 'string' ? { nativeAnsi: props._apackCodeAnsi } : {}), source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,
+      const nativeAnsi = props._apackDocumentPacked === undefined ? props._apackCodeAnsi : decodeClaudeDocument(props._apackDocumentPacked)
+      return { kind: 'code', ...(props._apackDocumentFallback === 'drawing-budget' || props._apackDocumentFallback === 'source-limit' ? { formattingFallback: true } : {}), ...documentColor(props), ...(typeof nativeAnsi === 'string' ? { nativeAnsi } : {}), source: props.source, format: props.format === 'diff' ? 'diff' : 'source', wrap: props.wrap === 'truncate-end' ? 'truncate-end' : 'wrap', ...attribution,
         ...(typeof props.language === 'string' ? { language: props.language } : {}), ...(typeof props.path === 'string' ? { path: props.path } : {}), ...(typeof props.startLine === 'number' ? { startLine: props.startLine } : {}) }
     }
     if (value.type === 'Input' || value.type === 'Select') {

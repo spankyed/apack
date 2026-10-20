@@ -18,7 +18,7 @@ it('uses original CodeBlock under fresh export, current theme and body width wit
   expect(f.render.mock.calls[0]![0]).toMatchObject({ type: f.provider, props: { session: 'session', keybindings: false, initialState: { tasks: {}, taskDecorations: {}, originalDefault: true, settings: { originalSetting: true, syntaxHighlightingDisabled: false } }, children: { type: 'live theme', props: { children: { type: f.columns, props: { value: 54, children: { type: f.code } } } } } } })
 })
 it('keeps oversized source bounded and strips supplied native output without traversing Client module props', async () => {
-  const f = fixture(), tree = { type: 'Box', children: [{ type: 'Code', props: { source: 'x'.repeat(32769), _apackCodeAnsi: 'forged' } }, { type: 'Client', props: { props: { type: 'Code', source: 'module private' } } }] }
+  const f = fixture(), tree = { type: 'Box', children: [{ type: 'Code', props: { source: 'x'.repeat(131073), _apackCodeAnsi: 'forged' } }, { type: 'Client', props: { props: { type: 'Code', source: 'module private' } } }] }
   const drawn = await f.draw(f.n, tree)
   expect(drawn.children[0].props._apackCodeAnsi).toBeUndefined()
   expect(drawn.children[1]).toBe(tree.children[1])
@@ -111,4 +111,21 @@ it('projects only original allocated Image bytes and observes accepted swaps wit
  held.current.source={rgba:'AIj//w==',width:1,height:1}
  expect(await f.draw(f.n,node,{terminalScope:scope})).toMatchObject({props:{data:'AIj//w=='}});expect(node.props.source).toBe(source)
  images.live.delete(7);await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('no admitted byte source')
+})
+
+it('losslessly packs native output beyond the old cap while retaining full source and callbacks', async () => {
+  const f=fixture(),source='const value = "release";\n'.repeat(1600),ansi=('\x1b[38;2;12;34;56mrelease\x1b[39m\n').repeat(2500),press={plugin:'original',handle:4}
+  f.render.mockResolvedValue(ansi)
+  const result=await f.draw(f.n,{type:'Code',props:{source,language:'javascript'},press})
+  expect(result.props.source).toBe(source);expect(result.press).toBe(press)
+  expect(result.props._apackDocumentPacked).toBeDefined();expect(result.props._apackCodeAnsi).toBeUndefined()
+  const {decodeClaudeDocument}=await import('#features/code/common/native-document-codec.ts')
+  expect(decodeClaudeDocument(result.props._apackDocumentPacked)).toBe(ansi)
+  expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(262144)
+})
+it('keeps full source and marks a budget fallback instead of overflowing the surrounding drawing', async () => {
+  const f=fixture(),source='x'.repeat(90000);f.render.mockResolvedValue('y'.repeat(200000))
+  const result=await f.draw(f.n,{type:'Code',props:{source}})
+  expect(result.props.source).toBe(source);expect(result.props._apackDocumentFallback).toBe('drawing-budget')
+  expect(result.props._apackDocumentPacked).toBeUndefined()
 })

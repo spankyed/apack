@@ -1,3 +1,4 @@
+import { encodeClaudeDocument } from '#features/code/common/native-document-codec.ts'
 import { createClaudeUiDrawing } from '#features/code/be/services/claude-code/ui-tree.ts'
 
 const button = () => ({ type: 'Button', props: { key: 'run', label: 'Run fixture', onclick: 'ignored' }, press: { plugin: 'fixture', handle: 42 } })
@@ -245,4 +246,13 @@ it('accepts inert byte Images without source paths/actions and rejects invalid b
  const drawing=createClaudeUiDrawing({type:'NativeImage',props,part:{plugin:'native'}})
  expect(drawing.tree).toEqual({kind:'image',...props,plugin:'native'});expect(drawing.actions.size).toBe(0)
  for(const override of [{data:'file:///private/image'},{width:2},{columns:513},{format:'png',data:'AAAA'},{data:'x'.repeat(65537)}])expect(()=>createClaudeUiDrawing({type:'NativeImage',props:{...props,...override}})).toThrow()
+})
+
+it('decodes packed native documents after wire validation without changing source or authority', () => {
+ const source='Original source',ansi=('\x1b[38;2;12;34;56mvalue\x1b[39m\n').repeat(3000),packed=encodeClaudeDocument(ansi)
+ const drawing=createClaudeUiDrawing({type:'Code',props:{source,_apackDocumentPacked:packed}})
+ expect(drawing.tree).toMatchObject({kind:'code',source,nativeAnsi:ansi})
+ const fallback=createClaudeUiDrawing({type:'Markdown',props:{text:source,_apackDocumentFallback:'source-limit'}})
+ expect(fallback.tree).toMatchObject({kind:'markdown',text:source,formattingFallback:true})
+ expect(()=>createClaudeUiDrawing({type:'Code',props:{source,_apackDocumentPacked:{body:'~0',codes:[]}}})).toThrow()
 })
