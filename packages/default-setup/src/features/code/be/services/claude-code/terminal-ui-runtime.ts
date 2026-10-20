@@ -1,3 +1,4 @@
+import { claudeTerminalRasterRuntime } from './terminal-raster-runtime.ts'
 import { claudeTerminalFocusRuntime } from './terminal-focus-runtime.ts'
 import { claudeTerminalWorkflowRuntime } from './terminal-workflow-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
@@ -21,7 +22,9 @@ import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,inFlight=0,highestSequence=0;
+const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const instanceLifetimes=createNativeInstanceLifetimes(scope=>{
+ nativeRasterMirrors.release(scope.client_id,scope.component,scope.instance_id);
  native?.nativeClients.release(scope.client_id,scope.component,scope.instance_id);
  const key=JSON.stringify([scope.client_id,scope.instance_id]);
  if(scope.component==='CommandOutput')commandOutputFrames.delete(key);
@@ -211,6 +214,7 @@ ${claudeTerminalFileRuntime}
 ${claudeTerminalWorkflowRuntime}
 ${claudeTerminalFocusRuntime}
 ${claudeTerminalDocumentRuntime}
+${claudeTerminalRasterRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
 ${claudeTerminalTaskRuntime}
 ${claudeTerminalAgentInputRuntime}
@@ -255,7 +259,7 @@ async function initialize(){
   const clientRuntime=await import('/$bunfs/root/chunk-e980bbar.js');
   const nativeClients=createNativeClientHost(clientRuntime.x3r,entry=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:entry.client,instances:[{surface:'desktop',component:entry.component,instance_id:entry.requestId}]}),clientRuntime.R3r,{borrow:request=>borrowTerminalClient(native,request),eligible:entry=>engine.FPe(entry.plugin),current:entry=>{if(entry.instanceRevision!==undefined&&!instanceLifetimes.active({client_id:entry.client,component:entry.component,instance_id:entry.requestId},entry.instanceRevision))return false;if(!['CommandOutput','ToolResult','ToolUse','ToolProgress','ToolGroup','Spinner','SessionMode','PromptHint','InfoNotice','TurnDuration'].includes(entry.component))return true;if(!native||!clients.has(entry.client)||!clientViewCurrent(native,entry.client))return false;const request={component:entry.component,client_id:entry.client,instance_id:entry.requestId};currentCommandOutputAction(native,request);currentToolResultAction(native,request);currentToolUseAction(native,request);currentToolProgressAction(native,request);currentToolGroupAction(native,request);currentComposerAction(native,request);currentTerminalPlacementAction(native,request);return true;},dispatch:value=>engine.I9e.clientPress(value),run:value=>{const held=engine.r5.heldPress(value.plugin,value.handle,value.key);if(!held||held.component!==value.component||held.requestId!==value.requestId)return false;const run=engine.tut.runnerFor(value.plugin,held.handle);if(!run)return false;run(value.event);return true;}});
   const gate=await import('/$bunfs/root/chunk-wn0572jb.js');
-  const engine=await import('/$bunfs/root/chunk-c7wcn77x.js');
+  const engine=await import('/$bunfs/root/chunk-c7wcn77x.js'),nativeHost=await import('/$bunfs/root/chunk-sbny5rjh.js');
   const session=await import('/$bunfs/root/chunk-a32bd1ts.js');
   const roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
   const schemas=await import('/$bunfs/root/chunk-5c94ftfz.js');
@@ -298,7 +302,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -851,7 +855,7 @@ async function control(request,abort){
  if(value.subtype==='ui_detach'){
   await retireNativeAgentCommands(clientId);
   instanceLifetimes.detach(clientId);
-  n.nativeClients.detach(clientId);
+  n.nativeClients.detach(clientId);nativeRasterMirrors.detach(clientId);
   for(const [key,site] of sites)if(site.clientId===clientId)dropSite(n,key);
   clearEdit(clientId);clearCompletion(clientId);
   forgetQuestionClient(clientId);
@@ -1039,7 +1043,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
+   if(activeSession!==body.sessionId){await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();clients.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;}
    const result=await control(body.request,abort);
    if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
    reply(200,{...identity,result});
@@ -1079,7 +1083,7 @@ const ownerTimer=setInterval(async()=>{
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
-  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshTerminalPlacements(native);}
+  if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();}
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
   const body={...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true};
