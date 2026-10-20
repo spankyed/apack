@@ -6,6 +6,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
+const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp }, testInfo) => {
@@ -79,7 +80,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
 
   const selected=()=>appPage.evaluate(()=>window.getSelection()?.toString()??'')
   async function fill(container:typeof card,editor:typeof composer,owner:string){
-    await editor.fill(owner+' release review')
+    await editor.fill(owner+' release review'+(referenceJourney&&owner==='Worker'?'\n\n[Reference](apack-ref://thread/'+(await context()).threadId+')':''))
     const tools=container.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
     await container.getByRole('button',{name:'Use review template',exact:true}).click()
     await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-fill.json'),'utf8').catch(()=>'{}'))).toMatchObject({result:{isFilled:true},after:{text:expect.stringContaining('# '+owner+' review')}})
@@ -93,12 +94,15 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),agentComposer=form.locator('[contenteditable="true"]')
   await expect(focused).toBeVisible();const agentFill=await fill(form,agentComposer,'Worker')
+  const referenceHref=referenceJourney?'apack-ref://thread/'+(await context()).threadId:null
+  if(referenceJourney)await expect(agentComposer.locator('.reference-pill')).toHaveAttribute('data-ref-type','thread')
   const codeClass=await agentComposer.locator('code').getAttribute('class')
   await agentComposer.evaluate(el=>el.setAttribute('data-rich-original','true'))
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await expect(composer.locator('h1')).toHaveText('Parent review');await expect(composer.locator('pre')).toContainText('const ready = true');await expect(composer).toBeFocused();await expect.poll(selected).toBe('Re')
   await row.getByRole('button',{name:'Open Agent',exact:true}).click();await expect(focused).toBeVisible()
   expect(await agentComposer.getAttribute('data-rich-original')).toBeNull()
+  if(referenceJourney)await expect(agentComposer.locator('.reference-pill')).toHaveAttribute('data-ref-type','thread')
   await expect(agentComposer.locator('h1')).toHaveText('Worker review');await expect(agentComposer.locator('pre')).toContainText('const ready = true')
   expect(await agentComposer.locator('code').getAttribute('class')).toBe(codeClass)
   await agentComposer.focus();await expect.poll(selected).toBe('Re')
@@ -108,6 +112,15 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8').catch(()=>'{}'))).toMatchObject({text:agentFill.after.text,cursor:agentFill.after.text.indexOf('Review changes.')+2})
   await tools.click();await agentComposer.focus();await expect.poll(selected).toBe('Re')
   for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);const selectionLine=agentComposer.locator('p').filter({hasText:'Review changes.'});await selectionLine.scrollIntoViewIfNeeded();await expect(selectionLine).toBeInViewport();await expect.poll(selected).toBe('Re');await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-rich-agent-draft-'+size.width+'.png')})}
+  if(referenceJourney){
+    const sent=agentFill.after.text
+    await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentComposer).toHaveText('')
+    await expect.poll(async()=>appPage.evaluate(text=>{const views=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews;return Object.values(views).some((view:any)=>view.state?.agent?.messages?.some((message:any)=>message.role==='user'&&message.text===text))},sent)).toBe(true)
+    const files=await readdir(join(workspace!,'.claude/projects'),{recursive:true})
+    let nativeReceipt:any
+    await expect.poll(async()=>{for(const file of files.filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))){const rows=(await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').map(line=>JSON.parse(line));nativeReceipt=rows.find(row=>row.type==='user'&&row.isMeta===true&&row.origin?.kind==='human'&&typeof row.message?.content==='string'&&row.message.content.includes(sent)&&row.message.content.split(sent).length===2);if(nativeReceipt)return true}return false}).toBe(true)
+    await writeFile(join(workspace!,'native-agent-reference-proof.json'),JSON.stringify({taskId,referenceHref,text:sent,nativeUuid:nativeReceipt.uuid,parentDraft:parentFill.after.text,remounted:true}))
+  }
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer.locator('h1')).toHaveText('Parent review');await expect.poll(selected).toBe('Re')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-rich-agent-draft-proof.json'),JSON.stringify({taskId,parentFill,agentFill,codeClass,remounted:true,selected:'Re'}))
@@ -115,5 +128,5 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing the worker draft.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeRichAgentDraft:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeRichAgentDraft:true,...(referenceJourney?{nativeAgentReference:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
