@@ -94,8 +94,8 @@ test('round-trips decorated structured replace append and cursor insertion throu
   expect(proof[2].after.text).toContain('Please Review changes.')
   expect(proof[2].after.text).toContain('- Verify behavior')
   expect(proof[2].after.text).not.toContain('apackNativeOffset')
-  if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
-  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')})}
+  if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')==='true')await tools.click()
+  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')});if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-compact-checklist.png')})}}
   const before=(await context()).messages.length
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&message.text===proof[2].after.text)).toBe(true)
