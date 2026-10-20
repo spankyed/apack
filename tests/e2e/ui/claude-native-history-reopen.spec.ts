@@ -8,7 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('reopens saved native drawings under a fresh owner and refuses retired actions', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, ownerFailure } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -70,6 +70,13 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
     return null;
   })}
   const callbacks=async()=>JSON.parse(await readFile(join(workspace!,'native-history-callbacks.json'),'utf8'));
+  async function ledger(){
+    for(const bucket of await readdir(join(workspace!,'.claude/projects'))){
+      try{return (await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.type==='cost-state'&&row.sessionId===sessionId).at(-1)}
+      catch(error:any){if(error.code!=='ENOENT')throw error}
+    }
+  }
+
   try{
     await composer.fill('Read the release checklist from the generated migration registry.');await card.getByRole('button',{name:'Send',exact:true}).click();
     await expect.poll(async()=>readFile(join(workspace!,'large-read-ready'),'utf8').catch(()=>'' )).toBe('ready');await composer.fill(draft);await writeFile(join(workspace!,'release-large-read'),'ready');
@@ -81,13 +88,30 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
     const retired=await guideCapability();expect(retired).toBeTruthy();
     await writeFile(join(workspace!,'native-history-initial-control-receipts.json'),await readFile(join(workspace!,'native-client-control-receipts.json')));
     const before=await context(),history=before.messages.filter((m:any)=>m.context?.cliUuid).map((m:any)=>({id:m.id,uuid:m.context.cliUuid,text:m.text,sender:m.sender}));expect(history.length).toBeGreaterThan(1);
-    const nativeCost=before.claude.totalCostUsd;expect(nativeCost).toBeGreaterThan(0);
-    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');
-    await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft);
+    const nativeCost=before.claude.totalCostUsd,toolCallCount=before.claude.toolCallCount;expect(nativeCost).toBeGreaterThan(0);
+    const checkpoint=ownerFailure?await ledger():undefined;if(ownerFailure)expect(checkpoint.totalCostUSD).toBe(nativeCost)
+    let failure: { kind: string; pid: number; brokerPid: number; nativePid: number; at: number; retiredAt?: number } | undefined
+    if(ownerFailure){
+      const live=(await context()).native.state;expect(live.status).toBe('live');expect(live.nativePid).toBe(boundNativePid)
+      const pid=ownerFailure==='native'?live.nativePid:live.pid;expect(pid).toBeGreaterThan(1);expect(pid).not.toBe(process.pid)
+      failure={kind:ownerFailure,pid,brokerPid:live.pid,nativePid:live.nativePid,at:Date.now()};process.kill(pid,'SIGKILL')
+      await expect.poll(async()=>(await context()).native.state.status).toBe('error')
+      await expect.poll(()=>{try{process.kill(boundNativePid,0);return false}catch(error:any){if(error.code!=='ESRCH')throw error;return true}}).toBe(true)
+      failure.retiredAt=Date.now()
+      await expect(composer).toHaveText(draft)
+      await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeEnabled()
+      await expect(section.getByRole('status')).toContainText('disconnected unexpectedly')
+      await expect(appPage.getByRole('button',{name:'Guide',exact:true})).toHaveCount(0)
+      for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(section.getByRole('status')).toBeInViewport();await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-owner-failure-'+width+'.png')})}
+      await appPage.setViewportSize({width:1400,height:900})
+    }else{
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
+    }
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();
     let reopenNavigated=false,reopenTrusted=false
     await expect.poll(async()=>{const n=(await context()).native,screen=recognizeOnboardingPrompt(n?.output?.map((chunk:any)=>chunk.text).join('')??'',workspace);
-      if(screen==='workspace-trust'&&!reopenNavigated){await appPage.screenshot({path:testInfo.outputPath('native-history-reopen-trust.png')});reopenNavigated=true;await input.press('ArrowDown')}
+      if(screen==='workspace-trust'&&!reopenNavigated){await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-history-reopen-trust.png')});reopenNavigated=true;await input.press('ArrowDown')}
       else if(screen==='workspace-trust-selected'&&reopenNavigated&&!reopenTrusted){reopenTrusted=true;await input.press('Enter')}
       return n?.state.status==='live'&&n.state.nativePid!==boundNativePid&&n.state.mainStatus?.includes(sessionId)
     },{timeout:25000,intervals:[250]}).toBe(true);
@@ -96,7 +120,7 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
     if(await code.count()===0&&await markdown.count()===0)await appPage.getByRole('button',{name:'Expand tool activity',exact:true}).click();
     await expect(code).toHaveCount(1,{timeout:15000});expect((await document('code')).source).toBe(expected.code);
     await expect(appPage.locator('[data-native-plugin-status]')).toHaveCount(0);
-    const reopened=await context();expect(reopened.sessionId).toBe(sessionId);expect(reopened.threadId).toBe(before.threadId);expect(reopened.claude.totalCostUsd).toBe(nativeCost);
+    const reopened=await context();expect(reopened.sessionId).toBe(sessionId);expect(reopened.threadId).toBe(before.threadId);expect(reopened.claude.totalCostUsd).toBe(nativeCost);expect(reopened.claude.toolCallCount).toBe(toolCallCount);if(ownerFailure){await expect(section.getByText(/disconnected unexpectedly/)).toHaveCount(0);expect((await ledger()).modelUsage).toEqual(checkpoint.modelUsage);}
     for(const old of history){const rows=reopened.messages.filter((m:any)=>m.context?.cliUuid===old.uuid);expect(rows).toHaveLength(1);expect({id:rows[0].id,uuid:rows[0].context.cliUuid,text:rows[0].text,sender:rows[0].sender}).toEqual(old);}
     const fresh=await guideCapability();expect(fresh).toBeTruthy();expect(fresh!.actionId).not.toBe(retired!.actionId);
     await appPage.evaluate(({current,old})=>{(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_UI_PRESS',threadId:current.threadId,mountId:current.mountId,actionId:old.actionId})},{current:fresh!,old:retired!});
@@ -108,13 +132,13 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
       const last=markdown.locator('span').last();await expect.poll(async()=>{await last.evaluate(n=>n.scrollIntoView({block:'center'}));return last.evaluate(n=>{const r=n.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})}).toBe(true);await expect(last).toBeInViewport({ratio:1});
       await expect(composer).toHaveText(draft);await expect(card.getByTestId('composer-native-status')).toContainText('AppNativeMain '+sessionId);
       for(const target of [composer,card.getByRole('button',{name:'Send',exact:true})]){await expect(target).toBeInViewport();expect(await target.evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})).toBe(true);}
-      await appPage.screenshot({path:testInfo.outputPath('native-history-reopen-'+width+'.png')});
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-history-reopen-'+width+'.png')});
     }
     await app.navigate('host/settings');await app.navigate('default-setup/threads');await expect(composer).toHaveText(draft);expect((await context()).native.state.nativePid).toBe(reopenedNativePid);
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();
     await composer.fill('Continue after reopening the saved migration review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
     expect((await context()).sessionId).toBe(sessionId);const continuedCost=(await context()).claude.totalCostUsd;expect(continuedCost).toBeGreaterThan(nativeCost);const originalPrint=JSON.parse((await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').at(-1)!);expect(continuedCost).toBe(originalPrint.totalCostUsd);expect(errors).toEqual([]);
-    await writeFile(join(workspace!,'native-history-reopen-proof.json'),JSON.stringify({history,retired,fresh,sessionId,boundNativePid,reopenedNativePid,nativeCost,continuedCost,callbacks:await callbacks()},null,2));
-    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHistoryReopened:true,nativeRetiredActionRefused:true,nativeLiveNoticeRetired:true,nativeHistoryIdentity:true,nativeLargeCode:true,nativeLargeMarkdown:true,nativeLargeNavigation:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,reopenedNativePid,nativeCost,continuedCost,browserErrors:errors},null,2));
-  }catch(error){await writeFile(join(workspace!,'native-history-reopen-failure.json'),JSON.stringify(await context(),null,2));await appPage.screenshot({path:testInfo.outputPath('native-history-reopen-failure.png')});throw error;}
+    await writeFile(join(workspace!,'native-history-reopen-proof.json'),JSON.stringify({failure,checkpoint,history,retired,fresh,sessionId,boundNativePid,reopenedNativePid,nativeCost,toolCallCount,continuedCost,callbacks:await callbacks()},null,2));
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHistoryReopened:true,nativeOwnerFailure:ownerFailure,nativeRetiredActionRefused:true,nativeLiveNoticeRetired:true,nativeHistoryIdentity:true,nativeLargeCode:true,nativeLargeMarkdown:true,nativeLargeNavigation:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,reopenedNativePid,nativeCost,continuedCost,browserErrors:errors},null,2));
+  }catch(error){await writeFile(join(workspace!,'native-history-reopen-failure.json'),JSON.stringify(await context(),null,2));await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-history-reopen-failure.png')});throw error;}
 });

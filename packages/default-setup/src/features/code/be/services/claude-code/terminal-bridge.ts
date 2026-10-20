@@ -142,7 +142,13 @@ export async function createClaudeTerminalBridge(options: {
         }
         if (changedSession) { focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
-          session.update(value.metadata)
+          const metadata = parseClaudeTerminalMetadata(value.metadata)!
+          if (metadata.totalCostUsd !== undefined) {
+            const checkpoint = object(await ui.transport.request({ subtype: 'apack_checkpoint_cost', session_id: projection.sessionId }))
+            if (closed || value.sessionId !== projection.sessionId || checkpoint?.sessionId !== projection.sessionId || typeof checkpoint.totalCostUsd !== 'number' || !Number.isFinite(checkpoint.totalCostUsd) || checkpoint.totalCostUsd < 0) return reply(409, {})
+            metadata.totalCostUsd = checkpoint.totalCostUsd
+          }
+          session.update(metadata)
           // Native dialogs and terminal shortcuts can change mode without a host command.
           if (object(value.metadata)?.permissionMode === undefined) {
             const sessionId = projection.sessionId

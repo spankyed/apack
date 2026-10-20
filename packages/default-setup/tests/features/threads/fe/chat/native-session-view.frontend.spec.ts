@@ -73,3 +73,18 @@ it('exposes a scoped cancel action before owner state exists and keeps retry dis
  f.publish({opening:false,output:[],problem:'Native startup cancelled'});await nextTick();
  const retry=[...f.root.querySelectorAll('button')].find(button=>button.textContent?.includes('Use native interface'))!;expect(retry.disabled).toBe(false);expect(f.active).toHaveBeenLastCalledWith(false);
 });
+
+
+it('explains unexpected failure beside reopen in ordinary conversation, while preserving specific native problems', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'error', tasks: [] } }); await nextTick()
+  f.back.click(); await nextTick()
+  expect(f.active).toHaveBeenLastCalledWith(false)
+  expect(f.root.querySelector('[role="status"]')?.textContent).toBe('Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.')
+  const reopen = [...f.root.querySelectorAll('button')].find(button => button.textContent?.includes('Use native interface'))!
+  expect(reopen.disabled).toBe(false)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'error', problem: 'Original native failure detail' } }); await nextTick()
+  expect(f.root.querySelector('[role="status"]')?.textContent).toBe('Original native failure detail')
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick()
+  expect(f.root.querySelector('[role="status"]')).toBeNull()
+})

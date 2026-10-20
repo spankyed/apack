@@ -3,7 +3,7 @@ import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-c
 
 const native = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), closeBridge: vi.fn(async () => {}) } })
 vi.mock('node-pty', () => ({ spawn: native.spawn }))
-vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: native.closeBridge }) }))
+vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: native.closeBridge, ready: true, projection: { sessionId: '11111111-1111-1111-1111-111111111111', tasks: [] }, session: { metadata: undefined } }) }))
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks() })
 
 it.each([
@@ -57,4 +57,20 @@ it.each([[undefined,'1'],['',''],['0','0'],['1','1']])('declares image support w
  const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},env:{CLAUDE_CODE_FORCE_TERMINAL_IMAGES:images}})
  await prepared.start()
  try{expect(native.spawn.mock.calls[0][2].env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(expected)}finally{await prepared.dispose()}
+})
+
+
+it.each([[0, undefined, 'exited'], [1, undefined, 'error'], [0, 9, 'error'], [0, 15, 'error']] as const)('classifies actual PTY exit code %s / signal %s without hiding an unexpected termination', async (exitCode, signal, status) => {
+  let exited!: (event: { exitCode: number; signal?: number }) => void
+  native.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exited) { exited = callback }, kill() { exited({exitCode:0,signal:15}) } }))
+  const prepared = await prepareClaudeNativeTerminal({ sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: {effective:{},sources:[]} })
+  const owner = await prepared.start();exited({exitCode,signal});await owner.done
+  expect(owner.state.status).toBe(status);expect(owner.state.exitCode).toBe(exitCode)
+})
+
+it('keeps intentional signal-driven shutdown classified as exited', async () => {
+  let exited!: (event: { exitCode: number; signal?: number }) => void
+  native.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exited) { exited = callback }, kill() { exited({exitCode:0,signal:15}) } }))
+  const prepared = await prepareClaudeNativeTerminal({ sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: {effective:{},sources:[]} })
+  const owner = await prepared.start();await prepared.dispose();expect(owner.state.status).toBe('exited')
 })

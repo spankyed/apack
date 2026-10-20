@@ -113,9 +113,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\x1b[200~' + path + '\x1b[201~') },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
   let hardStop: ReturnType<typeof setTimeout> | undefined
-  async function finish(code: number) {
+  async function finish(code: number, signal?: number) {
     if (closed) return
-    closed = true; clearTimeout(hardStop); status = stopping || code === 0 ? 'exited' : 'error'; exitCode = code
+    closed = true; clearTimeout(hardStop); status = stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code
     try { await bridge.close() } finally {
       releasing = true
       try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
@@ -161,7 +161,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         while (output.length > 1 && outputSize > 262144) outputSize -= Buffer.byteLength(output.shift()!.text)
         changed()
       })
-      terminal.onExit(({ exitCode }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode).catch(() => {}) })
+      terminal.onExit(({ exitCode, signal }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode, signal).catch(() => {}) })
       options.signal?.addEventListener('abort', kill, { once: true })
       if (options.signal?.aborted) kill()
       status = 'starting'

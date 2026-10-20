@@ -623,8 +623,26 @@ function nativeViewFacts(n,binding,abort){
  if(key!==nativeViewKey){nativeViewKey=key;nativeViewSequence++;}
  return {sessionId,view,sequence:nativeViewSequence};
 }
+let costCheckpoint=Promise.resolve(),checkpointedCostKey;
+function checkpointNativeCost(n,sessionId){
+ const state=n.runtime.adt();
+ if(!state||state.sessionId!==sessionId)throw Error('Native cost ledger is unavailable for this session');
+ const key=JSON.stringify([state.sessionId,state.totalCostUSD,state.modelUsage]);
+ const result=costCheckpoint.then(async()=>{
+  if(checkpointedCostKey!==key){
+   await n.runtime.kfo(state);
+   // appendEntry queues metadata writes. Await the original journal flush before acknowledging cost.
+   await n.runtime.Ou();
+   checkpointedCostKey=key;
+  }
+  return {sessionId:state.sessionId,totalCostUsd:state.totalCostUSD};
+ });
+ costCheckpoint=result.then(()=>{},()=>{});
+ return result;
+}
 async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
  if(['ui_press','ui_input','ui_select'].includes(request.subtype)&&request.instance_revision!==undefined&&!instanceLifetimes.active(request,request.instance_revision))return {handled:false};

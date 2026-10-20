@@ -13,7 +13,7 @@
       </div>
     </section>
     <div v-if="!active" class="native-launch__actions">
-      <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
+      <span v-if="launchProblem" role="status" class="native-problem">{{ launchProblem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
@@ -85,6 +85,7 @@ function answerNotice(decision: 'continue' | 'interrupt') {
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } })
 }
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
+const launchProblem = computed(() => view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
 const stateLabel = computed(() => {
   const state = view.value?.state
   if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
@@ -155,7 +156,9 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 
 <style scoped>
 .native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
-.native-launch__actions { justify-content: flex-end; display: flex; align-items: center; gap: 12px; }
+.native-launch__actions { justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.native-launch__actions .native-problem { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+.native-launch__actions .native-button { flex-shrink: 0; }
 .native-notice { margin-bottom: 8px; padding: 12px; border: 1px solid #d3aa8e33; border-radius: 10px; background: #d3aa8e08; }
 .native-notice__body { max-height: min(14rem, 23vh); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; line-height: 1.5; color: #c9c5bf; overflow-wrap: anywhere; }
 .native-notice h3 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: #eee7dd; }

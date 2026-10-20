@@ -359,3 +359,26 @@ it('publishes native Workflow tasks independently of Agent polls and refuses sta
  expect(bridge.projection.tasks).toHaveLength(1)
  expect((await request('/native-activity',{...body,sequence:3,workflows:[]})).status).toBe(200);expect(bridge.projection.tasks).toEqual([])
 })
+
+
+it('publishes changed native cost only after the original ledger checkpoint acknowledges its session', async () => {
+  await create()
+  let release!: (value: unknown) => void
+  const control = vi.spyOn(bridge!.uiTransport, 'request').mockImplementation(() => new Promise(yes => { release = yes }))
+  const pending = request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })
+  await vi.waitFor(() => expect(control).toHaveBeenCalledWith({ subtype: 'apack_checkpoint_cost', session_id: session }))
+  expect(bridge!.session.metadata).toBeUndefined()
+  release({ sessionId: session, totalCostUsd: 0.43 })
+  expect((await pending).status).toBe(200)
+  expect(bridge!.session.metadata?.totalCostUsd).toBe(0.43)
+  control.mockResolvedValue({ sessionId: session, totalCostUsd: 0.43 })
+  await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.43 } })
+  expect(control).toHaveBeenCalledTimes(2)
+})
+
+it('refuses foreign checkpoint acknowledgements without publishing their cost', async () => {
+  await create()
+  vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue({ sessionId: 'foreign', totalCostUsd: 99 })
+  expect((await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })).status).toBe(409)
+  expect(bridge!.session.metadata).toBeUndefined()
+})
