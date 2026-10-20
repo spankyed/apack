@@ -9,7 +9,7 @@ test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testIn
 test('renders original notification-only focus groups', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { focusSummary, focusBash } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { focusSummary, focusBash, focusQueue } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   test.skip(!focusSummary, 'Explicit private native pending-duration profile required')
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -78,8 +78,33 @@ test('renders original notification-only focus groups', async ({ app, appPage },
       await expect.poll(async()=>{const approval=appPage.getByRole('region',{name:'Bash approval',exact:true});if(await approval.isVisible())await approval.getByRole('button',{name:'Allow once',exact:true}).click();return await readFile(join(workspace!,'fixture.txt'),'utf8').catch(()=>'')},{timeout:15000}).toBe('synthetic protocol fixture'+String.fromCharCode(10))
     }else{
     await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='running'),{timeout:15000}).toBe(true)
+    if(focusQueue){
+      await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+      await writeFile(join(workspace!,'native-parent-delay-request'),'delay')
+      await expect.poll(()=>readFile(join(workspace!,'native-parent-delay-ready'),'utf8').catch(()=>'')).toBe('ready')
+      await composer.fill('Keep reviewing while the background worker finishes.');await card.getByRole('button',{name:'Send',exact:true}).click()
+      await expect.poll(async()=>(await context()).native.state.busy).toBe(true)
+      await expect.poll(()=>readFile(join(workspace!,'native-parent-delay-active'),'utf8').catch(()=>'')).toBe('active')
+    }
     await writeFile(join(workspace!,'native-pending-duration-release'),'release')
     await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
+    if(focusQueue){
+      const queue=async()=>JSON.parse(await readFile(join(workspace!,'native-queued-completion.json'),'utf8').catch(()=>'{}'))
+      const heldCase=(snapshot:any)=>snapshot.queue.some((command:any)=>command.mode==='task-notification'&&snapshot.tasks.some((task:any)=>task.id===command.taskId&&task.status==='completed'))
+      await expect.poll(async()=>(await queue()).snapshots?.some(heldCase),{timeout:10000}).toBe(true)
+      const observed=await queue();expect(observed.error).toBeUndefined();const held=observed.snapshots.find(heldCase)
+      expect(held.counts.pendingAgents).toBe(1)
+      await expect.poll(async()=>(await context()).native.state.activity?.pendingAgents).toBe(1)
+      const draft='Keep this draft while the completed worker notification is queued.';await composer.fill(draft)
+      const waiting=appPage.locator('[data-native-placement="TurnDuration"]').filter({hasText:/Waiting for.*background agent/}).last()
+      await expect(waiting).toBeVisible()
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await waiting.scrollIntoViewIfNeeded();await expect(waiting).toBeInViewport();await expect(composer).toHaveText(draft);await appPage.screenshot({path:testInfo.outputPath('native-queued-completion-'+size.width+'.png')})}
+      await expect.poll(async()=>(await queue()).snapshots?.at(-1)?.counts.pendingAgents,{timeout:15000}).toBe(0)
+      await expect.poll(async()=>(await context()).native.state.activity?.pendingAgents).toBe(0)
+      await expect(composer).toHaveText(draft)
+      const drained=(await queue()).snapshots.at(-1);await writeFile(join(workspace!,'native-queued-completion-proof.json'),JSON.stringify({held,drained}))
+    }
+
     }
     await composer.fill('Continue the release review after the worker finishes.');await card.getByRole('button',{name:'Send',exact:true}).click()
     const isNotification=(row:any)=>row.type==='collapsed_read_search'&&(focusBash?row.bashCount:row.agentCount)>0&&row.members?.every((member:any)=>member.type==='user')
@@ -101,6 +126,6 @@ test('renders original notification-only focus groups', async ({ app, appPage },
     const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
     await composer.fill('Continue the same session after reviewing completed work.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeNotificationGroup:true,nativeBashNotification:focusBash===true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeNotificationGroup:true,nativeBashNotification:focusBash===true,nativeQueuedCompletion:focusQueue===true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })
