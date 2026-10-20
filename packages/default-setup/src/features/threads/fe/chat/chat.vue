@@ -143,7 +143,7 @@
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
-              @phase-change="(phase: string) => actor.send({ type: 'SET_PHASE', phase })"
+              @phase-change="setComposerPhase"
               @set-default-mode="(mode: string) => threadsSettings.set({ path: ['chat', 'defaultMode'], value: mode })"
               @set-default-phase="(phase: string) => threadsSettings.set({ path: ['chat', 'defaultPhase'], value: phase })"
               @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
@@ -197,6 +197,7 @@
 </template>
 
 <script setup lang="ts">
+import { readClaudeComposerPhase, commitClaudeComposerPhase } from './native-composer-phase.ts'
 import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
@@ -438,6 +439,10 @@ const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])
 const currentMode = useSelector(actor, (state) => state.context.mode)
 const currentPhase = useSelector(actor, (state) => state.context.phase)
+function setComposerPhase(phase: string) {
+  if (nativeComposerOwner.value && currentThread.value?.context?.claudeCode && (phase === 'Plan' || phase === 'Edit')) actor.send({ type: 'STAGE_CLAUDE_PHASE', phase })
+  else actor.send({ type: 'SET_PHASE', phase })
+}
 const modes = useSelector(actor, (state) => state.context.modes)
 const hotkeys = useSelector(actor, (state) => state.context.hotkeys)
 const quickPrompts = useSelector(actor, (state) => (state.context.chatSettings?.quickPrompts || []) as QuickPrompt[])
@@ -593,14 +598,14 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
 }
 
 let nativeSendRevision = 0
-const pendingNativeSend = ref<{ ownerId: string; revision: number; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
+const pendingNativeSend = ref<{ ownerId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
 function submitNativeMessage(text: string, references: MessageReferences): Promise<ClaudeComposerSubmitResult> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
-    pendingNativeSend.value = { ownerId: owner.ownerId, revision, resolve, reject }
-    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references })
+    pendingNativeSend.value = { ownerId: owner.ownerId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
+    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
     pendingScrollOnSend.value = true
   })
 }
@@ -614,6 +619,7 @@ watch(nativeComposerView, view => {
   if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision || result.status === 'pending') return
   pendingNativeSend.value = undefined
   if (result.status === 'accepted') {
+    if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.threadId, pending.stageRevision)
     if (result.command?.kind === 'review') pending.resolve({ review: result.command })
     else if (result.command?.kind === 'confirmation') pending.resolve({ commandPending: true, revision: result.revision })
     else pending.resolve()

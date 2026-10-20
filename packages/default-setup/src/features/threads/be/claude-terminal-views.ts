@@ -10,7 +10,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
   | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
-  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
+  | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
@@ -192,6 +192,7 @@ export function createClaudeTerminalViews(dependencies: {
       }
       else if (event.type === 'CLAUDE_TERMINAL_SUBMIT') {
         if (!Number.isSafeInteger(event.revision) || event.revision <= (target.submissionRevision ?? 0)
+          || event.phase !== undefined && event.phase !== 'Plan' && event.phase !== 'Edit'
           || target.submission?.status === 'pending' || typeof event.text !== 'string' || !event.text.trim() && !Object.values(event.references ?? {}).some(value => value?.length) || event.text.length > 32768) return
         const references = event.references ? structuredClone(event.references) : undefined
         target.submissionRevision = event.revision
@@ -206,6 +207,7 @@ export function createClaudeTerminalViews(dependencies: {
           if (!dependencies.prepareInput && event.references && Object.values(event.references).some(value => value?.length)) throw new Error('Native references could not be prepared')
           const input = dependencies.prepareInput ? await dependencies.prepareInput(event.text, references) : { text: event.text, images: [] }
           if (!current()) return undefined
+          if (event.phase !== undefined) return owner.submit(input.text, input.images.length ? input.images : undefined, event.phase)
           return input.images.length ? owner.submit(input.text, input.images) : owner.submit(input.text)
         }).then(result => {
           if (result && 'command' in result) {

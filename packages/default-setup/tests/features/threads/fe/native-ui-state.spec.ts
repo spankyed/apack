@@ -1,6 +1,7 @@
 import { createActor } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
 import { repository } from '#generated/repository.ts'
+import { readClaudeComposerPhase, commitClaudeComposerPhase } from '#features/threads/fe/chat/native-composer-phase.ts'
 import threadsState from '#features/threads/fe/state.ts'
 import { queueClaudeUiRetirement, takeClaudeUiRetirements } from '#features/threads/fe/chat/native-ui-retirement.ts'
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
@@ -168,13 +169,25 @@ it('loads native permission phase on cold thread selection without overwriting a
   const actor = createActor(threadsState).start()
   actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
   expect(actor.getSnapshot().context.phase).toBe('Edit')
-  actor.send({type:'SET_PHASE',phase:'Plan'})
+  actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Plan'})
   actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
   expect(actor.getSnapshot().context.phase).toBe('Plan')
   actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(plan.id)!})
   expect(actor.getSnapshot().context.phase).toBe('Plan')
   actor.send({type:'LOAD_CHAT_THREAD',data:{...repository.chatQueries.threadData(edit.id)!,forcedMode:'Claude Code'}})
-  expect(actor.getSnapshot().context.phase).toBe('Edit')
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  actor.send({type:'SET_PHASE',source:'native',threadId:edit.id,phase:'Edit'})
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  const first = readClaudeComposerPhase(edit.id)!
+  actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Edit'})
+  commitClaudeComposerPhase(edit.id,first.revision)
+  expect(readClaudeComposerPhase(edit.id)?.phase).toBe('Edit')
+  commitClaudeComposerPhase(edit.id,readClaudeComposerPhase(edit.id)!.revision)
+  actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Edit'})
+  actor.send({type:'SET_PHASE',threadId:edit.id,phase:'Plan'})
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  expect(readClaudeComposerPhase(edit.id)).toBeUndefined()
   actor.stop()
 })
 

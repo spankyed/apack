@@ -64,6 +64,7 @@
             type="button"
             :disabled="disabled"
             class="flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-xs text-neutral-400 transition-colors"
+            :title="currentModeName === 'Claude Code' ? 'Phase for your next message' : undefined"
             :class="phaseButtonClasses"
             :style="phaseButtonStyle"
           >

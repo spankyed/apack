@@ -555,7 +555,7 @@ export type OutgoingThreadsEvents =
   | { type: 'UPDATE_MESSAGE_STATE'; messageId: string; references?: MessageReferences; text?: string; blocks?: BlockConfig[]; responseTimestamp?: number; blockResponse?: BlockResponse; forkable?: boolean; status?: 'queued' | 'cancelled' | null; context?: Record<string, unknown>; asideText?: string; asideContext?: string; compacted?: boolean }
   | { type: 'MESSAGE_ADDED'; threadId: string; message: MessageEntity }
   | { type: 'SET_MODE'; mode: string }
-  | { type: 'SET_PHASE'; phase: string; threadId?: string }
+  | { type: 'SET_PHASE'; phase: string; threadId?: string; source?: 'native' }
   | { type: 'SET_CHAT_STATE'; threadId: string; chatState: string }
   | { type: 'FLASH_CHAT_STATE'; threadId: string; stateId: string; durationMs?: number }
   | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }

@@ -2,7 +2,8 @@ import { Editor, Node, type Content } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
-import { bindClaudeWindowDraft, claudeWindowDraftStorageKey } from '#features/threads/fe/chat/native-window-draft.ts'
+import { bindClaudeWindowDraft } from '#features/threads/fe/chat/native-window-draft.ts'
+import { claudeWindowStorageKey } from '#features/threads/fe/chat/native-window-storage.ts'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft } from '#features/threads/fe/chat/native-agent-draft.ts'
 
 const reference = Node.create({ name: 'reference', group: 'inline', inline: true, atom: true,
@@ -122,11 +123,11 @@ it('isolates window draft owners and keeps an existing current document', async 
 it('restores persisted structured input without any in-memory owner and clears it after submission', async () => {
   const owner = crypto.randomUUID(), original = create(rich)
   await new Promise(resolve => original.on('create', resolve)); original.commands.setTextSelection({from:2,to:5})
-  const snapshot = captureClaudeAgentDraft(original)!, key = claudeWindowDraftStorageKey(owner)!
+  const snapshot = captureClaudeAgentDraft(original)!, key = claudeWindowStorageKey('parent-draft', owner)!
   localStorage.setItem(key,JSON.stringify(snapshot))
   const restored = create(''), detach = bindClaudeWindowDraft(restored,owner)
   await new Promise(resolve => restored.on('create',resolve))
   expect(restored.getJSON()).toEqual(snapshot.doc); expect(restored.state.selection.toJSON()).toEqual(snapshot.selection)
-  expect(claudeWindowDraftStorageKey(owner,'?popout=plugin&pluginId=default-setup/threads')).not.toBe(key)
+  expect(claudeWindowStorageKey('parent-draft', owner,'?popout=plugin&pluginId=default-setup/threads')).not.toBe(key)
   restored.commands.clearContent(); detach(); expect(localStorage.getItem(key)).toBeNull()
 })

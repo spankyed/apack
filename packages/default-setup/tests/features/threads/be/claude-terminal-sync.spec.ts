@@ -172,12 +172,12 @@ it('publishes targeted Plan/Edit transitions from observed native mode without a
   try {
     await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ permissionMode: 'default' }))
     metadata.permissionMode = 'plan'
-    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', threadId: 'thread', phase: 'Plan' }))
+    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', source: 'native', threadId: 'thread', phase: 'Plan' }))
     const before = fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE').length
     await new Promise(resolve => setTimeout(resolve, 280))
     expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before)
     metadata.permissionMode = 'acceptEdits'
-    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', threadId: 'thread', phase: 'Edit' }))
+    await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', source: 'native', threadId: 'thread', phase: 'Edit' }))
     metadata.permissionMode = 'auto'
     await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ permissionMode: 'auto' }))
     expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before + 1)

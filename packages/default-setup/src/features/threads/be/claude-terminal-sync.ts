@@ -200,7 +200,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
         if (state.status === 'live' && metadata?.permissionMode && metadata.permissionMode !== prior.permissionMode
           && (metadata.permissionMode === 'plan' || prior.permissionMode === 'plan')) {
-          broadcastToPlugin('threads', { type: 'SET_PHASE', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
+          broadcastToPlugin('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
         }
         updateChatState(threadId, chatState)
       } catch (error) {

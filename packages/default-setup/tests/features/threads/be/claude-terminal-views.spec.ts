@@ -275,3 +275,19 @@ it.each(['foreground', 'background'] as const)('holds shared UI suspension until
     expect(resume).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+
+
+it('carries the selected phase only to the authenticated owner and preserves a native refusal', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    const submit = { ...mount, type: 'CLAUDE_TERMINAL_SUBMIT', ownerId: f.owner.state.ownerId, revision: 1, text: 'Retain my plan draft', phase: 'Plan' } as const
+    f.views.handle(submit, 'other-window', f.send)
+    expect(f.owner.submit).not.toHaveBeenCalled()
+    vi.mocked(f.owner.submit).mockRejectedValue(new Error('Original policy refusal'))
+    f.views.handle(submit, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({status:'rejected',problem:'Original policy refusal'}))
+    expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith(submit.text, undefined, 'Plan')
+    expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
+  } finally { f.views.clear() }
+})

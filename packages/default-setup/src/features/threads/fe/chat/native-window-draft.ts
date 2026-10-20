@@ -1,3 +1,4 @@
+import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { Editor } from '@tiptap/core'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 
@@ -9,14 +10,8 @@ const scope = globalThis as unknown as Record<symbol, WindowDrafts | undefined>
 const drafts = scope[key] ??= { parent: new Map(), agents: {} }
 export const claudeWindowAgentDrafts = drafts.agents
 
-export function claudeWindowDraftStorageKey(owner: string, search = globalThis.location?.search ?? ''): string | undefined {
-  const query = new URLSearchParams(search), plugin = query.get('pluginId')
-  // WindowManager keeps one main window and one popout per plugin.
-  if (query.get('popout') === 'plugin' && !plugin) return
-  return 'apack.claude-parent-draft:' + JSON.stringify([query.get('popout') === 'plugin' ? ['plugin', plugin] : ['main'], owner])
-}
 export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void {
-  const storageKey = claudeWindowDraftStorageKey(owner)
+  const storageKey = claudeWindowStorageKey('parent-draft', owner)
   let saved = drafts.parent.get(owner)
   if (!saved && storageKey) {
     try { const raw = globalThis.localStorage?.getItem(storageKey); if (raw) saved = JSON.parse(raw) as ClaudeAgentDraftSnapshot } catch { /* Storage availability never gates editing. */ }

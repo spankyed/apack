@@ -1,0 +1,75 @@
+import { tmpdir } from 'node:os'
+import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
+
+const f = vi.hoisted(() => {
+  vi.resetModules()
+  return { spawn: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }
+})
+vi.mock('node-pty', () => ({spawn:f.spawn}))
+vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({createClaudeTerminalBridge: async () => ({
+  pluginRoot:'/private/fixture-plugin', bunOptions:'fixture-preload', close:async()=>{}, ready:true,
+  projection:f.projection, session:{metadata:{permissionMode:'default'},update:f.update},
+  uiTransport:{request:f.request}, submit:f.submit,
+})}))
+async function fixture() {
+  let exit!: (event:{exitCode:number})=>void
+  f.spawn.mockImplementation(() => ({pid:0,onData(){},onExit(callback:typeof exit){exit=callback},kill(){exit({exitCode:0})}}))
+  const prepared = await prepareClaudeNativeTerminal({sessionId:f.projection.sessionId,cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
+  return {prepared,owner:await prepared.start()}
+}
+beforeEach(() => {
+  vi.clearAllMocks()
+  f.projection.sessionId='11111111-1111-1111-1111-111111111111'
+  f.request.mockReset(); f.submit.mockReset()
+})
+it('requires the native phase acknowledgement before admitting the human prompt', async () => {
+  const {prepared,owner}=await fixture()
+  try {
+    const order:string[]=[]
+    f.request.mockImplementation(async request => {order.push(request.subtype);return request.subtype==='apack_parent_prompt_state'?{main:true}:{mode:'plan'}})
+    f.submit.mockImplementation(async () => {order.push('human');return {sessionId:f.projection.sessionId,uuid:'original',text:'My plan'}})
+    await expect(owner.submit('My plan',undefined,'Plan')).resolves.toMatchObject({uuid:'original'})
+    expect(order).toEqual(['apack_parent_prompt_state','apack_set_composer_phase','human'])
+    expect(f.update).toHaveBeenCalledWith({permissionMode:'plan'})
+  } finally {await prepared.dispose()}
+})
+it.each(['refused','unacknowledged','session-changed'])('retains the prompt when phase application is %s', async failure => {
+  const {prepared,owner}=await fixture()
+  try {
+    f.request.mockImplementation(async request => {
+      if(request.subtype==='apack_parent_prompt_state')return {main:true}
+      if(failure==='refused')throw Error('Original policy refusal')
+      if(failure==='session-changed')f.projection.sessionId='22222222-2222-2222-2222-222222222222'
+      return {mode:failure==='unacknowledged'?'default':'plan'}
+    })
+    await expect(owner.submit('Keep this draft',undefined,'Plan')).rejects.toThrow(failure==='refused'?'Original policy refusal':failure==='session-changed'?'session changed':'not acknowledged')
+    expect(f.submit).not.toHaveBeenCalled();expect(f.update).not.toHaveBeenCalled()
+  } finally {await prepared.dispose()}
+})
+it('does not apply a phase to an Agent view and refuses overlapping parent submissions', async () => {
+  const {prepared,owner}=await fixture()
+  try {
+    f.request.mockResolvedValueOnce({main:false})
+    await expect(owner.submit('Parent',undefined,'Plan')).rejects.toThrow('main view')
+    expect(f.request).toHaveBeenCalledTimes(1);expect(f.submit).not.toHaveBeenCalled()
+    let release!: (value:unknown)=>void
+    f.request.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const pending=owner.submit('Parent',undefined,'Plan')
+    await expect(owner.setPermissionMode('acceptEdits')).rejects.toThrow('parent input is changing')
+    await expect(owner.submit('Overlapping',undefined,'Edit')).rejects.toThrow('draft was retained')
+    f.request.mockResolvedValue({mode:'plan'});f.submit.mockResolvedValue({sessionId:f.projection.sessionId,uuid:'original',text:'Parent'})
+    release({main:true});await pending
+  } finally {await prepared.dispose()}
+})
+
+it('waits for an outstanding permission change before admitting a parent prompt', async () => {
+  const {prepared,owner}=await fixture()
+  try {
+    let release!: (value:unknown)=>void
+    f.request.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const changing=owner.setPermissionMode('acceptEdits')
+    await expect(owner.submit('Keep my draft',undefined,'Plan')).rejects.toThrow('draft was retained')
+    expect(f.submit).not.toHaveBeenCalled()
+    release({mode:'acceptEdits'});await changing
+  } finally {await prepared.dispose()}
+})

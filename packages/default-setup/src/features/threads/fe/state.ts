@@ -15,6 +15,7 @@ import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, 
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
+import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
 import { takeClaudeUiRetirements } from './chat/native-ui-retirement.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
@@ -199,7 +200,8 @@ type UIEvent =
   | { type: 'CLOSE_ACTIVE_TAB' }
   | { type: 'SELECT_ARTIFACT'; artifactId: string }
   | { type: 'SET_MODE'; mode: string }
-  | { type: 'SET_PHASE'; phase: string; threadId?: string }
+  | { type: 'SET_PHASE'; phase: string; threadId?: string; source?: 'native' }
+  | { type: 'STAGE_CLAUDE_PHASE'; phase: 'Plan' | 'Edit' }
   | { type: 'RESPOND_TO_BLOCK_INTERACTION'; messageId: string; response: BlockResponse }
   | { type: 'UPDATE_MESSAGE_STATE'; messageId: string; responseTimestamp?: number; blockResponse?: BlockResponse; asideText?: string; context?: Record<string, unknown>; compacted?: boolean }
   | { type: 'MESSAGE_ADDED'; threadId: string; message: MessageEntity }
@@ -758,9 +760,21 @@ const threadsState = setup({
 
       return { mode: newMode, phase: newPhase, phaseByModeName: updatedPhaseByModeName };
     }),
+    stageClaudePhase: assign(({ context, event }) => {
+      const { phase } = typeOf('STAGE_CLAUDE_PHASE', event);
+      const threadId = context.currentThread?.id;
+      if (!threadId || !context.currentThread?.context?.claudeCode) return {};
+      stageClaudeComposerPhase(threadId, phase);
+      return { phase, phaseByModeName: { ...context.phaseByModeName, [context.mode]: phase } };
+    }),
     setPhase: assign(({ context, event }) => {
       const change = typeOf('SET_PHASE', event);
       if (change.threadId && change.threadId !== context.currentThread?.id) return {};
+      const threadId = context.currentThread?.context?.claudeCode ? context.currentThread.id : undefined;
+      const staged = threadId ? readClaudeComposerPhase(threadId) : undefined;
+      if (staged && change.source === 'native') return {};
+      // Print controls and explicit print-phase choices supersede a leftover native stage.
+      if (staged && threadId) commitClaudeComposerPhase(threadId, staged.revision);
       const newPhase = change.phase;
       return {
         phase: newPhase,
@@ -894,11 +908,12 @@ const threadsState = setup({
 
       const chatState: ChatState = (thread.chatState as ChatState) ?? 'idle';
       const nativeMode = thread.context?.claudeCode?.permissionMode;
-      const nativePhase = claudePhaseForNativeMode(nativeMode, context.phase);
+      const stagedPhase = thread.context?.claudeCode && thread.id ? readClaudeComposerPhase(thread.id)?.phase : undefined;
+      const nativePhase = stagedPhase ?? claudePhaseForNativeMode(nativeMode, context.phase);
       const adoptNativePhase = nativeMode && (thread.id !== context.currentThread?.id
         || !Object.hasOwn(context.phaseByModeName, thread.forcedMode ?? context.mode));
       const base = {
-        ...(adoptNativePhase ? {phase: nativePhase} : {}),
+        ...(stagedPhase || adoptNativePhase ? {phase: nativePhase} : {}),
         currentThread: thread,
         messagePagination: {
           hasMore: thread.hasMore ?? false,
@@ -932,7 +947,7 @@ const threadsState = setup({
         const newPhase = modeConfig?.phases?.length
           ? (modeName in context.phaseByModeName ? context.phaseByModeName[modeName] : modeConfig.phases[0].name)
           : undefined;
-        return { ...base, mode: modeName, phase: adoptNativePhase ? claudePhaseForNativeMode(nativeMode, newPhase) : newPhase };
+        return { ...base, mode: modeName, phase: stagedPhase ?? (adoptNativePhase ? claudePhaseForNativeMode(nativeMode, newPhase) : newPhase) };
       }
 
       return base;
@@ -979,6 +994,9 @@ const threadsState = setup({
         || !Object.hasOwn(context.phaseByModeName, modeUpdate.mode ?? context.mode))) {
         modeUpdate.phase = claudePhaseForNativeMode(currentThread.context?.claudeCode?.permissionMode, modeUpdate.phase);
       }
+
+      const stagedPhase = currentThread?.context?.claudeCode && currentThread.id ? readClaudeComposerPhase(currentThread.id)?.phase : undefined;
+      if (stagedPhase) modeUpdate.phase = stagedPhase;
 
       // Restore previously open tabs from this surface's storage
       const backendTabs: Tab[] = typedEvent.data.tabs || [];
@@ -1906,6 +1924,7 @@ const threadsState = setup({
     },
     SET_MODE: { actions: 'setMode' },
     SET_PHASE: { actions: 'setPhase' },
+    STAGE_CLAUDE_PHASE: { actions: 'stageClaudePhase' },
     CLEAR_THREAD: { actions: 'clearThread' },
     NEW_THREAD_IN_PROJECT: { actions: 'newThreadInProject' },
     NEW_THREAD_NO_PROJECT: { actions: 'newThreadNoProject' },

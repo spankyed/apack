@@ -57,7 +57,7 @@ export interface ClaudeNativeTerminalOwner {
   renameSession(title: string): Promise<{ title: string; message: string }>
   setModel(model: string): Promise<string>
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
-  submit(text: string, images?: readonly ClaudeNativeImage[]): Promise<ClaudeNativeSubmissionReceipt>
+  submit(text: string, images?: readonly ClaudeNativeImage[], phase?: 'Plan' | 'Edit'): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
   kill(): void
 }
@@ -102,7 +102,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
-  let exitCode: number | undefined, stopping = false, changingModel = false
+  let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
   let releasing = false
@@ -169,9 +169,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     let notice: ClaudeNativeNotice | undefined
     let changingView = false, preparingParent = false
     return {
-      get state() { return { notice: closed ? undefined : notice, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { notice: closed ? undefined : notice, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
-      get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
+      get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport: bridge.uiTransport,
@@ -319,7 +319,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         return { title: result.title, message: result.message }
       },
       async setModel(model) {
-        if (closed || changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
+        if (closed || changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) throw new Error('Wait for the native conversation to become idle before changing model')
         changingModel = true; changed()
         const sessionId = bridge.projection.sessionId
         try {
@@ -332,21 +332,33 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async setPermissionMode(mode) {
         if (closed) throw new Error('Native terminal closed')
+        if (changingPermission || preparingParent) throw new Error('Native permission mode or parent input is changing')
         const sessionId = bridge.projection.sessionId
-        const result = await bridge.uiTransport.request({ subtype: 'apack_set_permission_mode', mode })
-        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing permission mode')
-        const accepted = PermissionModeSchema.parse((result as { mode?: unknown })?.mode)
-        const metadata = bridge.session.metadata
-        if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
-        return accepted
+        changingPermission = true; changed()
+        try {
+          const result = await bridge.uiTransport.request({ subtype: 'apack_set_permission_mode', mode })
+          if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing permission mode')
+          const accepted = PermissionModeSchema.parse((result as { mode?: unknown })?.mode)
+          const metadata = bridge.session.metadata
+          if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
+          return accepted
+        } finally { changingPermission = false; changed() }
       },
-      async submit(text, images) {
-        if (changingModel || changingView || preparingParent) throw new Error('Native input is changing; your draft was retained')
+      async submit(text, images, phase) {
+        if (changingModel || changingPermission || changingView || preparingParent) throw new Error('Native input is changing; your draft was retained')
         const sessionId = bridge.projection.sessionId; preparingParent = true; changed()
         try {
           const state = await bridge.uiTransport.request({ subtype: 'apack_parent_prompt_state' })
           if (closed || sessionId !== bridge.projection.sessionId) throw new Error('Native input session changed')
           if (!state || typeof state !== 'object' || !('main' in state) || state.main !== true) throw new Error('Return to the native main view before submitting a parent prompt')
+          if (phase !== undefined) {
+            const result = await bridge.uiTransport.request({ subtype: 'apack_set_composer_phase', phase })
+            if (closed || sessionId !== bridge.projection.sessionId) throw new Error('Native input session changed while applying phase')
+            const accepted = PermissionModeSchema.parse((result as { mode?: unknown })?.mode)
+            if ((phase === 'Plan') !== (accepted === 'plan')) throw new Error('Native composer phase was not acknowledged')
+            const metadata = bridge.session.metadata
+            if (metadata) bridge.session.update({ ...metadata, permissionMode: accepted })
+          }
           return await bridge.submit(text, images)
         } finally { preparingParent = false; changed() }
       },
