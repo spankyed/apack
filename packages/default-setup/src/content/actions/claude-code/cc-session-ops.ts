@@ -69,68 +69,6 @@ export async function action(
   return { success: !!handler, command: `cc-${name}`, text: result.text, data: result.data };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
-
-/**
- * Extract displayable text from a CLI transcript content array.
- * Skips tool_use / tool_result blocks; concatenates text blocks.
- */
-function extractText(content: any): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((b: any) => b.type === 'text' && b.text)
-    .map((b: any) => b.text)
-    .join('\n');
-}
-
-/**
- * Parse a CLI session transcript and batch-import messages into a thread.
- * No per-message frontend events — caller must refresh the thread afterwards.
- */
-function importSessionMessages(
-  services: Services,
-  threadId: string,
-  transcript: any[],
-): number {
-  const messages: Array<{
-    text: string;
-    sender: 'user' | 'assistant';
-    forkable?: boolean;
-    context?: Record<string, unknown>;
-  }> = [];
-
-  for (const entry of transcript) {
-    if (entry.type === 'user' && entry.message?.role === 'user') {
-      const text = extractText(entry.message.content);
-      if (!text) continue;
-      messages.push({
-        text,
-        sender: 'user',
-        forkable: false,
-        ...(entry.uuid && { context: { cliUuid: entry.uuid } }),
-      });
-    } else if (entry.type === 'assistant') {
-      const text = extractText(entry.message?.content) || '(tool use only)';
-      messages.push({
-        text,
-        sender: 'assistant',
-        forkable: !!entry.uuid,
-        ...(entry.uuid && { context: { cliUuid: entry.uuid } }),
-      });
-    }
-  }
-
-  if (messages.length > 0) {
-    services.chat.addMessagesToThread({
-      threadId: threadId as any,
-      messages: messages as any,
-    });
-  }
-
-  return messages.length;
-}
-
 // ── Handlers ────────────────────────────────────────────────────────
 
 async function handleResume(
@@ -224,7 +162,7 @@ async function handleResume(
   }
 
   // Import messages from transcript (batch — no per-message events)
-  const importedCount = importSessionMessages(services, targetThreadId, transcript);
+  const importedCount = services.chat.importClaudeSessionMessages({threadId: targetThreadId as any, transcript, sessionId});
 
   // Set up session state — persistClaudeState adds 'claude-code' tag
   persistClaudeState(services, targetThreadId, {
@@ -333,7 +271,7 @@ async function handleImport(
       });
 
       // Import messages
-      importSessionMessages(services, newThreadId as string, transcript);
+      services.chat.importClaudeSessionMessages({threadId: newThreadId, transcript, sessionId: session.id});
 
       // Write session state directly — no frontend events during bulk import.
       // Using persistClaudeState + ensureSessionMarker would emit THREAD_UPDATED

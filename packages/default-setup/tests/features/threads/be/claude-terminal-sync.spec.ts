@@ -11,7 +11,7 @@ const fake = vi.hoisted(() => ({
 }))
 vi.mock('#generated/events.ts', () => ({ broadcastToPlugin: fake.broadcast }))
 vi.mock('#generated/repository.ts', () => ({ repository: {
-  chatQueries: { threadData: () => ({ ...fake.thread, messages: [] }), messageById: (id: string) => fake.messages.find(message => message.id === id) },
+  chatQueries: { threadData: () => ({ ...fake.thread, messages: fake.messages }), messageById: (id: string) => fake.messages.find(message => message.id === id) },
   threadQueries: { byId: () => fake.thread },
   chatCommands: {
     addMessage: (message: Record<string, unknown>) => { const row = { ...message, id: String(fake.messages.length) }; fake.messages.push(row); return row },
@@ -212,3 +212,16 @@ it('persists a consumed journal batch even when native dialog discovery fails du
   await release()
   expect(fake.messages).toEqual([expect.objectContaining({sender:'user',text:'Managed media submission',context:expect.objectContaining({cliUuid:uuid})})])
 })
+
+it('does not recount a saved tool when its native journal is read again after reopening', async () => {
+ const uuid='22222222-2222-2222-2222-222222222222';
+ fake.thread.context={claudeCode:{sessionId,toolCallCount:1}};
+ fake.messages.push({id:'saved-tool',text:'',context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId}},blocks:[{type:'tool-activity',props:{entries:[{id:'read-saved',tool:'Read',status:'ok'}]}}]});
+ const entries=[{sessionId,row:{sessionId,uuid,type:'assistant',message:{content:[{type:'tool_use',id:'read-saved',name:'Read',input:{}}]}}},{sessionId,row:{sessionId,uuid:'33333333-3333-3333-3333-333333333333',type:'user',message:{content:[{type:'tool_result',tool_use_id:'read-saved',content:'Saved result'}]}}}];
+ const readJournal=vi.fn().mockResolvedValueOnce({entries,pending:false,problems:[]}).mockResolvedValue({entries:[],pending:false,problems:[]});
+ let release!:()=>Promise<void>;
+ const owner={state:{ownerId:'owner',sessionId,status:'live',tasks:[]},busy:false,readJournal,refreshNotice:async()=>{},getWorkflowDialogs:async()=>[],getFileDialogs:async()=>[],getBashDialogs:async()=>[],getQuestionDialogs:async()=>[],getPlanDialogs:async()=>[],beforeRelease(listener:()=>Promise<void>){release=listener}} as unknown as ClaudeNativeTerminalOwner;
+ const {syncClaudeTerminalThread}=await import('#features/threads/be/claude-terminal-sync.ts');
+ syncClaudeTerminalThread('thread' as EntityId,owner,()=>true,readLaunch);
+ try{await vi.waitFor(()=>expect(fake.thread.context.claudeCode).toMatchObject({toolCallCount:1,chatState:'success'}));expect(fake.messages).toHaveLength(1);expect(fake.messages[0]).toMatchObject({id:'saved-tool',blocks:[{props:{entries:[{nativeResult:{sessionId,uuid:'33333333-3333-3333-3333-333333333333'}}]}}]});}finally{await release();}
+});

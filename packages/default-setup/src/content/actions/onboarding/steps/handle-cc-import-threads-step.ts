@@ -148,23 +148,7 @@ async function importCcSessions(services: Services, toImport: any[]) {
         tags: ['imported'],
       });
 
-      const messages: Array<{ text: string; sender: 'user' | 'assistant'; forkable?: boolean; context?: Record<string, unknown> }> = [];
-      for (const entry of transcript) {
-        const msg = (entry as any).message;
-        const uuid = (entry as any).uuid;
-        if ((entry as any).type === 'user' && msg?.role === 'user') {
-          const text = extractCcText(msg.content);
-          if (!text) continue;
-          messages.push({ text, sender: 'user', forkable: false, ...(uuid && { context: { cliUuid: uuid } }) });
-        } else if ((entry as any).type === 'assistant') {
-          const text = extractCcText(msg?.content) || '(tool use only)';
-          messages.push({ text, sender: 'assistant', forkable: !!uuid, ...(uuid && { context: { cliUuid: uuid } }) });
-        }
-      }
-
-      if (messages.length > 0) {
-        services.chat.addMessagesToThread({ threadId: newThreadId as any, messages: messages as any });
-      }
+      services.chat.importClaudeSessionMessages({threadId: newThreadId, transcript, sessionId: session.id});
 
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       services.repository.threadCommands.update(newThreadId, {

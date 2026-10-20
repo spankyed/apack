@@ -26,7 +26,7 @@ it('does not reopen a staged fork as the original saved session', async () => {
  const transcript=vi.fn(async()=>[{type:'cost-state',totalCostUSD:1.25}]),open=vi.fn(),create=vi.fn((opts:{topic:string;instructions:string})=>repository.threadCommands.create(opts))
  mockService<Services,'cli'>('cli',{claudeCode:{listSessions:vi.fn(async()=>[{id:'native-session',cwd:'/fixture'}]),viewSession:transcript,getNativeTerminal:vi.fn(),getConversation:vi.fn()} as never})
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
- mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn(),openThreadChatAndRefreshRecent:open,createThreadAndNotify:create})
+ mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:vi.fn(),openThreadChatAndRefreshRecent:open,createThreadAndNotify:create})
  await action({command:'cc-resume',text:'native-session',threadId:fork.id},services,{} as never,'')
  expect(transcript).toHaveBeenCalledWith('native-session',{cwd:'/fixture'})
  expect(create).toHaveBeenCalledOnce();const imported=create.mock.results[0]!.value.id
@@ -40,7 +40,7 @@ it('bulk import retains native cumulative cost without charging a new turn', asy
  const caller=repository.threadCommands.create({topic:'Import',instructions:''})
  const transcript=[{type:'cost-state',totalCostUSD:0.5},{type:'cost-state',totalCostUSD:1.25},{type:'cost-state',totalCostUSD:-1},{type:'cost-state',totalCostUSD:Number.NaN}]
  mockService<Services,'cli'>('cli',{claudeCode:{listSessions:vi.fn(async()=>[{id:'saved-native',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
- mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn(()=>({messageId:'Message-progress' as const})),updateMessageState:vi.fn()})
+ mockService<Services,'chat'>('chat',{...chatService,sendBlockMessage:vi.fn(()=>({messageId:'Message-progress' as const})),updateMessageState:vi.fn()})
  await action({command:'cc-import',threadId:caller.id},services,{} as never,'')
  const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='saved-native')
  expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',totalCostUsd:1.25})
@@ -54,16 +54,16 @@ it('projects native model, turn UUIDs, tools and timestamps without counting too
 it('onboarding imports the same native metadata into thread context and remains idempotent', async () => {
  const caller=repository.threadCommands.create({topic:'Onboarding',instructions:''})
  repository.threadCommands.update(caller.id,{context:{onboarding:{step:'import-threads',threadId:caller.id,pendingMessageId:'Message-choice',data:{ccSessionCount:1}}}})
- const transcript=[{type:'user',uuid:'native-user',timestamp:'2026-10-18T01:00:00Z',message:{role:'user',content:'Hello'}},{type:'assistant',uuid:'native-answer',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'text',text:'Answer'}]}},{type:'cost-state',totalCostUSD:1.25}]
- mockService<Services,'cli'>('cli',{claudeCode:{listAllSessions:vi.fn(async()=>[{id:'onboarding-native',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
+ const transcript=[{type:'user',sessionId:'11111111-1111-1111-1111-111111111111',uuid:'22222222-2222-2222-2222-222222222222',timestamp:'2026-10-18T01:00:00Z',message:{role:'user',content:'Hello'}},{type:'assistant',sessionId:'11111111-1111-1111-1111-111111111111',uuid:'33333333-3333-3333-3333-333333333333',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'text',text:'Answer'}]}},{type:'cost-state',totalCostUSD:1.25}]
+ mockService<Services,'cli'>('cli',{claudeCode:{listAllSessions:vi.fn(async()=>[{id:'11111111-1111-1111-1111-111111111111',cwd:'/fixture'}]),viewSession:vi.fn(async()=>transcript)} as never})
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'chat'>('chat',{...chatService,sendChoiceBlock:vi.fn(()=>({messageId:'Message-choice' as const})),sendRecentThreadsRefresh:vi.fn()})
  await onboardImport({threadId:caller.id,response:['cc']},services)
- const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='onboarding-native')
+ const imported=repository.threadQueries.all().find(t=>t.context?.claudeCode?.sessionId==='11111111-1111-1111-1111-111111111111')
  expect(imported?.context?.claudeCode).toMatchObject({cwd:'/fixture',model:'native-model',turns:1,totalCostUsd:1.25,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z')})
- expect(repository.chatQueries.threadData(imported!.id)?.messages?.map(m=>m.context?.cliUuid)).toEqual(['native-user','native-answer'])
+ expect(repository.chatQueries.threadData(imported!.id)?.messages?.map(m=>m.context?.cliUuid)).toEqual(['22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333'])
  await onboardImport({threadId:caller.id,response:['cc']},services)
- expect(repository.threadQueries.all().filter(t=>t.context?.claudeCode?.sessionId==='onboarding-native')).toHaveLength(1)
+ expect(repository.threadQueries.all().filter(t=>t.context?.claudeCode?.sessionId==='11111111-1111-1111-1111-111111111111')).toHaveLength(1)
 });
 
 it('offers saved local Claude sessions during onboarding even when authentication is unavailable', async () => {

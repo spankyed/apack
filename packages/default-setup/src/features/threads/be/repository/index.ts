@@ -438,9 +438,18 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   return thread[0] as AgentThreadData | null;
 }
 
+/** Restored relation order is not a chronology; imported Claude rows retain their native timestamps. */
+function orderImportedClaudeMessages(threadId: EARS.EntityId, messages: Partial<MessageEntity>[]) {
+  const thread = threadQueries.byId(threadId);
+  return thread?.tags?.includes('imported') && thread.context?.claudeCode
+    ? messages.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
+    : messages;
+}
+
 function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[] {
-  return (query.ids(threadId)
+  return orderImportedClaudeMessages(threadId, (query.ids(threadId)
     .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? [])
+    .filter(m => !m.deleted))
     .sort((a, b) => {
       if (a.status === 'queued' && b.status !== 'queued') return 1;
       if (b.status === 'queued' && a.status !== 'queued') return -1;
@@ -457,7 +466,7 @@ function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
     .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []);
 
   const queued = allMessages.filter(m => m.status === 'queued');
-  const regular = allMessages.filter(m => m.status !== 'queued');
+  const regular = orderImportedClaudeMessages(threadId, allMessages.filter(m => m.status !== 'queued'));
 
   // Reverse to get newest-first for paging, then slice
   const reversed = [...regular].reverse();
@@ -605,6 +614,7 @@ export const chatCommands = {
     compacted?: boolean;
     context?: Record<string, unknown>;
     skipRelink?: boolean;
+    timestamp?: number;
   }): {
     id: EARS.EntityId;
     threadId: EARS.EntityId;
@@ -627,7 +637,7 @@ export const chatCommands = {
       );
     }
 
-    const timestamp = Date.now();
+    const timestamp = params.timestamp ?? Date.now();
     const messageTx = create(EARS.Entity.Message, { text: text.trim(), timestamp, sender, createdAt: timestamp });
 
     if (blocks) messageTx.set('blocks', blocks);

@@ -28,6 +28,14 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     if (!message.id) continue
     const context = object(message.context), terminal = object(context?.claudeTerminalMessage)
     const sessionId = typeof terminal?.sessionId === 'string' ? terminal.sessionId : initial?.context?.claudeCode?.sessionId
+    for (const block of message.blocks ?? []) {
+      if (block.type !== 'tool-activity' || !sessionId) continue
+      const entries = object(block.props)?.entries
+      if (Array.isArray(entries)) for (const value of entries) {
+        const tool = object(value)
+        if (typeof tool?.id === 'string') toolIds.add(JSON.stringify([sessionId, tool.id]))
+      }
+    }
     const ids = [context?.cliUuid, object(context?.claudeNativeUserMessage)?.uuid,
       ...(Array.isArray(context?.claudeNativeMessages) ? context.claudeNativeMessages.map(value => object(value)?.uuid) : []),
       ...(message.blocks ?? []).flatMap(block => { const rows = object(block.props)?.nativeMessages; return Array.isArray(rows) ? rows.map(value => object(value)?.uuid) : [] })]

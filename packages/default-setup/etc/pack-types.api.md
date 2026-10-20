@@ -9044,6 +9044,7 @@ declare const chatCommands: {
         compacted?: boolean;
         context?: Record<string, unknown>;
         skipRelink?: boolean;
+        timestamp?: number;
     }) => {
         id: EARS.EntityId;
         threadId: EARS.EntityId;
@@ -9541,6 +9542,7 @@ declare const featureServices: {
         updateMessageState: typeof updateMessageState;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
+        importClaudeSessionMessages: typeof importClaudeSessionMessages;
         createThreadAndNotify: typeof createThreadAndNotify;
         openThreadChatAndRefreshRecent: typeof openThreadChatAndRefreshRecent;
         openThreadTabAndRefresh: typeof openThreadTabAndRefresh;
@@ -9903,6 +9905,13 @@ declare const focusResult: z.ZodObject<{
 }, z.ZodTypeAny, "passthrough">>;
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
+
+/** Import canonical native rows without acquiring or persisting live drawing capabilities. */
+declare function importClaudeSessionMessages({ threadId, transcript, sessionId }: {
+    threadId: EntityId;
+    transcript: readonly Record<string, unknown>[];
+    sessionId: string;
+}): number;
 
 declare const input: z.ZodObject<{
     client_id: z.ZodString;

@@ -1,3 +1,4 @@
+import { importClaudeSessionMessages } from '../claude-session-import.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import type { Reply } from '@apackdev/sdk/events';
 import { answer } from '../answer.ts';
@@ -679,6 +680,7 @@ export const chatService = {
   updateMessageState,
   createMarkerMessage,
   addMessagesToThread,
+  importClaudeSessionMessages,
   createThreadAndNotify,
   openThreadChatAndRefreshRecent,
   openThreadTabAndRefresh,

@@ -9,7 +9,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('saves native launch, history and draft before a complete app shutdown', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, importReopen } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -84,6 +84,22 @@ test('saves native launch, history and draft before a complete app shutdown', as
     const before=await context(),history=before.messages.filter((m:any)=>m.context?.cliUuid).map((m:any)=>({id:m.id,uuid:m.context.cliUuid,text:m.text,sender:m.sender}));
     const nativeCost=before.claude.totalCostUsd;expect(nativeCost).toBeGreaterThan(0);
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft);
+    let savedThreadId=before.threadId,savedHistory=history,savedLaunch:any,stagedModel:string|undefined,stagedPermissionMode='default';
+    if(importReopen){
+      await command('cc-reset');await expect.poll(async()=>(await context()).claude).toBeUndefined();
+      await command('cc-import');await expect.poll(async()=>(await context()).messages.some((m:any)=>m.text==='Imported 1 sessions.')).toBe(true);
+      await command('cc-resume',sessionId);await expect.poll(async()=>(await context()).threadId).not.toBe(before.threadId);
+      const imported=await context();savedThreadId=imported.threadId;savedLaunch=imported.claude.nativeLaunch;
+      expect(savedLaunch).toEqual({sessionId,cwd:workspace});expect(imported.claude.totalCostUsd).toBe(nativeCost);
+      savedHistory=imported.messages.filter((m:any)=>m.context?.cliUuid).map((m:any)=>({id:m.id,uuid:m.context.cliUuid,text:m.text,sender:m.sender}));
+      let journal:any[]=[];
+      for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{journal=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);break}catch(error:any){if(error.code!=='ENOENT')throw error}}
+      const canonicalHistory=history.map((old:any)=>{const row=journal.find(row=>row.uuid===old.uuid);expect(row).toBeTruthy();const content=row.message.content;const text=typeof content==='string'?content:content.filter((b:any)=>b.type==='text').map((b:any)=>b.text).join('\n');return {...old,text};});
+      for(const old of canonicalHistory){const rows=savedHistory.filter((m:any)=>m.uuid===old.uuid);expect(rows).toHaveLength(1);expect(rows[0]).toMatchObject({uuid:old.uuid,text:old.text,sender:old.sender});}
+      expect(imported.claude.toolCallCount).toBe(before.claude.toolCallCount);
+      await composer.fill(draft);
+      await writeFile(join(workspace!,'native-import-history-before-reopen.json'),JSON.stringify({sourceThreadId:before.threadId,sourceHistory:canonicalHistory,sourceAppHistory:history,imported},null,2));
+    }else{
     await command('cc-model','haiku');await expect.poll(async()=>(await context()).claude.modelOverride).toBe('haiku');
     await appPage.locator('.cursor-row-resize').click({button:'right'});
     await appPage.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId,restore:true}),before.threadId);
@@ -92,8 +108,10 @@ test('saves native launch, history and draft before a complete app shutdown', as
     await appPage.locator('summary').filter({hasText:'Details'}).click();
     await appPage.getByRole('button',{name:'Ask',exact:true}).click();await expect.poll(async()=>(await context()).claude.permissionMode).toBe('default');
     await appPage.locator('.cursor-row-resize').click({button:'right'});await composer.fill(draft);
-    const savedLaunch=(await context()).claude.nativeLaunch;expect(savedLaunch).toMatchObject({sessionId,cwd:workspace});expect(savedLaunch.allowedTools).toContain('Read');expect(savedLaunch.appendSystemPrompt).toContain('Implement only what the plan specifies');expect(savedLaunch).not.toHaveProperty('env');expect(savedLaunch).not.toHaveProperty('settings');expect(savedLaunch).not.toHaveProperty('worktree');
+    savedLaunch=(await context()).claude.nativeLaunch;expect(savedLaunch).toMatchObject({sessionId,cwd:workspace});expect(savedLaunch.allowedTools).toContain('Read');expect(savedLaunch.appendSystemPrompt).toContain('Implement only what the plan specifies');expect(savedLaunch).not.toHaveProperty('env');expect(savedLaunch).not.toHaveProperty('settings');expect(savedLaunch).not.toHaveProperty('worktree');
+      stagedModel='haiku';
+    }
     const api=JSON.parse(await readFile(resolveAppEnvironment({env:'test',userDataDir:join(workspace!,'app-data')}).apiPortFile,'utf8'));
-    await writeFile(join(workspace!,'native-cold-state.json'),JSON.stringify({threadId:before.threadId,sessionId,history,nativeCost,retired,savedLaunch,stagedModel:"haiku",stagedPermissionMode:"default",draft,boundNativePid,mainPid:electronApp.process().pid,apiPid:api.pid},null,2));
+    await writeFile(join(workspace!,'native-cold-state.json'),JSON.stringify({threadId:savedThreadId,sessionId,history:savedHistory,nativeCost,toolCallCount:before.claude.toolCallCount,retired,savedLaunch,stagedModel,stagedPermissionMode,importReopen,draft,boundNativePid,mainPid:electronApp.process().pid,apiPid:api.pid},null,2));
   }catch(error){await writeFile(join(workspace!,'native-cold-save-failure.json'),JSON.stringify(await context(),null,2));await appPage.screenshot({path:testInfo.outputPath('native-cold-save-failure.png')});throw error;}
 });
