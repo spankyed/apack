@@ -8,6 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('reviews native file creation, overwrite and edit before one-time decisions', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
+  const fileLayout=JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).fileLayout===true
   const restriction = false
   const clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
   const lifetime = async (): Promise<any> => {
@@ -85,7 +86,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     const panel = appPage.getByTestId(isEdit ? 'native-edit-approval' : 'native-write-approval')
     await expect(panel).toBeVisible({ timeout: 15000 })
-    const after = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : turn === 3 ? 'edited\n' : 'Must not be applied\n'
+    const after = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : turn === 3 ? 'edited\n' : fileLayout&&turn===4?Array.from({length:160},(_,i)=>'Release checklist item '+(i+1)+': preserve existing behavior.').join('\n')+'\n':'Must not be applied\n'
     await expect(panel.getByTestId('native-read-path')).toHaveText(target)
     if (turn === 6) {
       await expect(panel.getByTestId('native-file-review')).toContainText('too large to show')
@@ -108,13 +109,26 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await expect(panel.getByTestId('native-file-after')).toBeInViewport()
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-compact-' + turn + '.png') })
     }
+    if(fileLayout&&turn===4){
+      for(const width of [1100,680]){
+        await appPage.setViewportSize({width,height:width===680?600:900})
+        const transcript=appPage.getByTestId('chat-transcript');await expect(transcript).toBeVisible();expect((await transcript.boundingBox())!.height).toBeGreaterThan(80)
+        await panel.getByTestId('native-file-after').evaluate(element=>{element.parentElement!.parentElement!.scrollTop=element.parentElement!.parentElement!.scrollHeight})
+        await expect(panel.getByTestId('native-file-after')).toContainText('Release checklist item 160:')
+        const summary=panel.locator('details').last().locator('summary');await summary.click()
+        const feedback=panel.getByRole('textbox',{name:'Reason for denying',exact:true});await feedback.focus();await feedback.fill('Keep the existing file unchanged.');await expect(feedback).toBeInViewport()
+        await expect.poll(()=>panel.evaluate(element=>Array.from(element.querySelectorAll('footer button')).every(button=>{const b=button.getBoundingClientRect(),p=element.getBoundingClientRect();return b.top>=p.top&&b.bottom<=p.bottom&&b.bottom<=innerHeight}))).toBe(true)
+        await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-long-file-feedback-'+width+'.png')})
+        await summary.click()
+      }
+    }
     await panel.getByRole('button', { name: turn <= 3 ? 'Allow once' : turn === 7 ? 'Cancel' : 'Deny', exact: true }).click()
-    await expect(panel).toBeHidden()
+    try{await expect(panel).toBeHidden()}catch(error){await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2));await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')});throw error}
     if (turn === 7) await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
     else await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     const expected = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : 'edited\n'
     await expect.poll(async () => readFile(target, 'utf8').catch(() => '')).toBe(expected)
-    if (turn >= 2 && turn <= 6) {
+    if (!fileLayout && turn >= 2 && turn <= 6) {
       const block = await toolBlock(`file_fixture_${turn}`)
       const toggle = block.getByRole('button').first()
       if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
@@ -347,5 +361,5 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   expect(resumedCost).toBeGreaterThan(nativeCost)
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-tool-formatted-results.json'), JSON.stringify(formattedResults, null, 2))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeToolGroup: true, nativeToolGroupExpansionRewrite: true, nativeToolFormatting: true, nativeToolFormattingErrors: true, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, nativeGroupedClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativeLongFileLayout:fileLayout, nativeWriteCreate: true, nativeWriteOverwrite: true, nativeEdit: true, nativeWriteDeny: true, nativeEditDeny: true, nativeFileCancel: true, nativeFileWithholding: true, nativeFileReview: true, nativeFileCompactControls: true, nativeToolResult: true, nativeToolGroup: !fileLayout, nativeToolGroupExpansionRewrite: !fileLayout, nativeToolFormatting: !fileLayout, nativeToolFormattingErrors: !fileLayout, nativeDefaultSplit: !clientLifetime, nativeClientLifetime: clientLifetime, nativeGroupedClientLifetime: clientLifetime, toolResultLayout: clientLifetime ? 'maximized Client lifetime fixture; independent AbovePrompt and ToolResult modules' : 'default split with native chat minimum; resized 600/900/600 without changing saved split', nativeHistorySynchronized: true, nativeCostSynchronized: true, resumedPrintSameSession: true, resumedCost, nativeCost, sessionId, boundNativePid, browserErrors: errors }, null, 2))
 })
