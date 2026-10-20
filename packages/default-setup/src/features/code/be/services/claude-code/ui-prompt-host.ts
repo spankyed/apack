@@ -15,13 +15,14 @@ const fill = z.object({ text: z.string().max(1000000), mode: z.enum(['replace', 
       end = run.end
     }
   })
-const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest']), client_id: z.string(), surface: z.enum(['desktop', 'mobile', 'vscode']) }).passthrough()
+const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy']), client_id: z.string(), surface: z.enum(['desktop', 'mobile', 'vscode']) }).passthrough()
 export type ClaudePromptHostBox = z.infer<typeof box>
 export type ClaudePromptHostFill = z.infer<typeof fill>
 export interface ClaudePromptHost {
   read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>
   fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>
   suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>
+  copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>
 }
 
 /** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
@@ -43,14 +44,14 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
     },
     answers(client: string): string[] {
       const host = hosts.get(client)
-      return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : [])] : []
+      return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : [])] : []
     },
     detach,
     receive(line: ControlRequestLine): boolean {
-      if (!['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest'].includes(line.request.subtype)) return false
+      if (!['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy'].includes(line.request.subtype)) return false
       if (closed || seen.has(line.request_id)) return true
-      const read = line.request.subtype === 'ui_prompt_read', filling = line.request.subtype === 'ui_prompt_fill'
-      const fallback = read ? { text: '', cursor: 0 } : filling ? { filled: false } : { shown: false }
+      const read = line.request.subtype === 'ui_prompt_read', filling = line.request.subtype === 'ui_prompt_fill', copying = line.request.subtype === 'ui_copy'
+      const fallback = read ? { text: '', cursor: 0 } : filling ? { filled: false } : copying ? { copied: false } : { shown: false }
       const reply = (value: unknown) => {
         if (closed) return
         try { write({ type: 'control_response', response: { subtype: 'success', request_id: line.request_id, response: value } }) } catch { /* process transport already closed */ }
@@ -61,9 +62,9 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       const host = parsed.success && parsed.data.surface === 'desktop' ? hosts.get(parsed.data.client_id) : undefined
       const input = !filling ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
       const fillInput = input?.success ? input.data : undefined
-      const suggestion = !read && !filling ? z.string().max(1000000).safeParse(line.request.text) : undefined
-      const suggestionText = suggestion?.success && suggestion.data.trim() ? suggestion.data : undefined
-      if (!host || (filling && !fillInput) || (!read && !filling && (!host.suggest || suggestionText === undefined))) { reply(fallback); return true }
+      const textInput = !read && !filling ? z.string().max(1000000).safeParse(line.request.text) : undefined
+      const requestText = textInput?.success && (copying || textInput.data.trim()) ? textInput.data : undefined
+      if (!host || (filling && !fillInput) || (!read && !filling && (!(copying ? host.copy : host.suggest) || requestText === undefined))) { reply(fallback); return true }
       const expiresAt = Date.now() + 3500
       const abort = new AbortController()
       const timer = setTimeout(() => finish(), 4000)
@@ -76,7 +77,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       pending.set(line.request_id, { client: parsed.success ? parsed.data.client_id : '', abort, finish })
       const invoke = (input: ClaudePromptHostFill | undefined): unknown => {
         if (abort.signal.aborted) return undefined
-        return read ? host.read(abort.signal, expiresAt) : filling ? host.fill(input!, abort.signal, expiresAt) : host.suggest!(suggestionText!, abort.signal, expiresAt)
+        return read ? host.read(abort.signal, expiresAt) : filling ? host.fill(input!, abort.signal, expiresAt) : copying ? host.copy!(requestText!, abort.signal, expiresAt) : host.suggest!(requestText!, abort.signal, expiresAt)
       }
       void Promise.resolve().then<unknown>(() => {
         if (abort.signal.aborted) return undefined
@@ -85,7 +86,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
           : invoke(fillInput)
       }).then(value => {
         if (read) { const valid = box.safeParse(value); finish(valid.success ? valid.data : fallback) }
-        else finish(filling ? { filled: value === true } : { shown: value === true })
+        else finish(filling ? { filled: value === true } : copying ? { copied: value === true } : { shown: value === true })
       }, () => finish())
       return true
     },

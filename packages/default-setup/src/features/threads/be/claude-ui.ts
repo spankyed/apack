@@ -97,6 +97,7 @@ function bind(view: ClaudeUiView): void {
   const promptHost: ClaudePromptHost = {
     async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
     async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
+    async copy(text, signal, expiresAt) { const answer = await ask({ kind: 'copy', text }, signal, expiresAt); return answer?.kind === 'copy' && answer.copied },
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost, nativeView: owner.nativeView,

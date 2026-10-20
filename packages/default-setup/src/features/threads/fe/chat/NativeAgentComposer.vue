@@ -18,6 +18,7 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
+import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import type { Editor } from '@tiptap/core'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft, normalizeClaudeAgentDraftText, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
@@ -54,6 +55,12 @@ watch(() => props.prompt, value => { if (value) bridge?.receive(value) })
 watch(() => props.completions, value => { if (value) bridge?.receiveCompletions(value) })
 watch(() => props.hostRequest, request => {
   if (!request) return
+  if (request.kind === 'copy') {
+    const owner = bridge, attachment = props.attachmentId
+    void copyClaudeUiText(request.text, request.expiresAt, () => alive && !!owner && bridge === owner && props.attachmentId === attachment && props.hostRequest === request)
+      .then(copied => emit('host', { requestId: request.requestId, kind: 'copy', copied }))
+    return
+  }
   const available = !props.disabled && !submitting.value && Date.now() < request.expiresAt && document.hasFocus() && !!bridge
   if (request.kind === 'read') { const box = available ? bridge?.readDraft() : undefined; emit('host', { requestId: request.requestId, kind: 'read', ...(box ? { box } : {}) }) }
   else if (request.kind === 'fill') emit('host', { requestId: request.requestId, kind: 'fill', filled: available && (bridge?.fillDraft(request.input, request.revision) ?? false) })

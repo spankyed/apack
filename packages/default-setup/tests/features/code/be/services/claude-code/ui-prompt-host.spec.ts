@@ -89,3 +89,40 @@ it('refuses a painted fill that finishes after its original mounted host detache
   expect(write).toHaveBeenCalledOnce(); expect(write.mock.calls[0]?.[0]).toMatchObject({ response: { response: { filled: false } } })
   hosts.close()
 })
+
+
+it('copies exact text once only for an advertising desktop host, including an empty string', async () => {
+  const f = fixture(), copy = vi.fn(async () => true)
+  f.detach(); f.hosts.register('view', { ...f.host, copy })
+  expect(f.hosts.answers('view')).toContain('ui_copy')
+  const request = { ...read('copy'), request: { ...read().request, subtype: 'ui_copy', text: 'native 👋\nexact' } }
+  f.hosts.receive(request); f.hosts.receive(request); await flush()
+  expect(copy).toHaveBeenCalledOnce()
+  expect(copy).toHaveBeenCalledWith('native 👋\nexact', expect.any(AbortSignal), expect.any(Number))
+  expect(f.answer()).toMatchObject({ response: { response: { copied: true } } })
+  f.hosts.receive({ ...request, request_id: 'empty', request: { ...request.request, text: '' } }); await flush()
+  expect(copy).toHaveBeenLastCalledWith('', expect.any(AbortSignal), expect.any(Number))
+  f.hosts.close()
+})
+
+it('refuses absent, foreign, non-desktop and oversized clipboard requests without writing', async () => {
+  const f = fixture(), copy = vi.fn(async () => true)
+  const request = { ...read('copy'), request: { ...read().request, subtype: 'ui_copy', text: 'native' } }
+  f.hosts.receive(request); await flush()
+  expect(f.answer()).toMatchObject({ response: { response: { copied: false } } })
+  f.detach();f.hosts.register('view', { ...f.host, copy })
+  for (const [id, overrides] of [['foreign', { client_id: 'other' }], ['mobile', { surface: 'mobile' }], ['large', { text: 'x'.repeat(1000001) }]] as const) {
+    f.hosts.receive({ ...request, request_id: id, request: { ...request.request, ...overrides } });await flush()
+    expect(f.answer()).toMatchObject({ response: { response: { copied: false } } })
+  }
+  expect(copy).not.toHaveBeenCalled();f.hosts.close()
+})
+
+it('retires pending clipboard answers when their host is detached', async () => {
+  const f = fixture();let resolve!: (value: boolean) => void
+  const copy = vi.fn(() => new Promise<boolean>(yes => { resolve = yes }))
+  f.detach();const detach = f.hosts.register('view', { ...f.host, copy })
+  f.hosts.receive({ ...read('copy'), request: { ...read().request, subtype: 'ui_copy', text: 'native' } });await flush()
+  detach();expect(f.answer()).toMatchObject({ response: { response: { copied: false } } })
+  resolve(true);await flush();expect(f.write).toHaveBeenCalledOnce();f.hosts.close()
+})

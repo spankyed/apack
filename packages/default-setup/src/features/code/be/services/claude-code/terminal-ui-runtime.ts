@@ -349,7 +349,7 @@ function installHosts(n){
  if(wrappedContext)restoreHosts(n);
  const current=n.runtime.ey();if(!current?.composer)throw Error('Native terminal composer is not bound');
  originalContext=current;
- releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async()=>false,readSelection:async()=>({cause:'not_asked'}),readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',{...args,...(args.decorations!==undefined?{decorations:nativeThemePromptDecorations(n,args.decorations)}:{})}))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
+ releaseHostGateway=n.runtime.TXs({reach:()=> 'first',copy:async args=>(await askHost('ui_copy',args))?.copied,readSelection:async()=>({cause:'not_asked'}),readPrompt:args=>askHost('ui_prompt_read',args),fillPrompt:async args=>(await askHost('ui_prompt_fill',{...args,...(args.decorations!==undefined?{decorations:nativeThemePromptDecorations(n,args.decorations)}:{})}))?.filled,suggestPrompt:async args=>(await askHost('ui_prompt_suggest',args))?.shown});
  const remote=n.runtime.AXs(current.composer),has=answer=>n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes(answer));
  wrappedContext={...current,composer:{...current.composer,read:()=>remote.read(),write:(...args)=>has('ui_prompt_fill')?remote.write(...args):current.composer.write(...args),propose:(...args)=>has('ui_prompt_suggest')?remote.propose(...args):current.composer.propose(...args)}};
  n.runtime.Zao(wrappedContext);
@@ -866,7 +866,7 @@ async function control(request,abort){
  if(value.subtype==='ui_attach'){
   const viewKey=clientAttachmentViewKey(n,request.native_view);
   if(!clients.has(clientId)&&clients.size>=64)throw Error('Native UI attachment limit reached');
-  const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
+  const answers=value.answers??[];if(answers.some(answer=>!['ui_prompt_read','ui_prompt_fill','ui_prompt_suggest','ui_copy'].includes(answer)))throw Error('Native reverse UI operation is not integrated');
   installNotices(n,n.runtime.ey());
   if(answers.length)installHosts(n);
   if(clients.has(clientId)&&clientViews.get(clientId)!==viewKey)throw Error('Detach the previous native view before attaching again');

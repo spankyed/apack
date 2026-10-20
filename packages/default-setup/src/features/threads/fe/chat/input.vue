@@ -223,6 +223,7 @@ import NativeUiNotices from './NativeUiNotices.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
+import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
@@ -399,6 +400,12 @@ watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
 })
 watch(() => props.nativePrompt?.hostRequest, request => {
   if (!request) return
+  if (request.kind === 'copy') {
+    const owner = promptEditor, attachment = props.nativePrompt?.attachmentId
+    void copyClaudeUiText(request.text, request.expiresAt, () => !!owner && promptEditor === owner && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
+      .then(copied => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'copy', copied }))
+    return
+  }
   const available = Date.now() < request.expiresAt && !!promptEditor && !props.disabled && !submitting.value && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')
   if (request.kind === 'read') {
     const box = available ? promptEditor?.readDraft() : undefined

@@ -12,7 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('round-trips decorated structured replace append and cursor insertion through original native APIs', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia,promptSyntax,uiCopy}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -91,6 +91,33 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await popup.locator('.reference-suggestion-item').filter({has:appPage.getByText((await context()).topic,{exact:true})}).click();await expect(popup).toBeHidden()
   }
 
+  if(uiCopy){
+    const original=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}));
+    const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-copy-receipts.json'),'utf8').catch(()=>'[]'));
+    const button=card.getByRole('button',{name:'Copy release checklist',exact:true});
+    try{
+      await button.click();await expect.poll(async()=>(await copies()).length).toBe(1);
+      expect((await copies())[0].result).toEqual({isCopied:true});
+      expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 0\nVerify behavior 👋');
+      for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-clipboard-'+width+'.png')});}
+      await appPage.setViewportSize({width:1400,height:900});
+      await appPage.evaluate(()=>{const clipboard=navigator.clipboard;(window as any).__nativeCopyWrite=clipboard.writeText;clipboard.writeText=async()=>{throw new DOMException('Platform clipboard unavailable','NotAllowedError')}});
+      await button.click();await expect.poll(async()=>(await copies()).length).toBe(2);
+      expect((await copies())[1].result).toEqual({isCopied:false,reason:'no-clipboard'});
+      expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 0\nVerify behavior 👋');
+      await appPage.evaluate(()=>{navigator.clipboard.writeText=(window as any).__nativeCopyWrite;delete (window as any).__nativeCopyWrite});
+      await button.click();await expect.poll(async()=>(await copies()).length).toBe(3);expect((await copies())[2].result).toEqual({isCopied:true});
+      expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 2\nVerify behavior 👋');
+      await button.click();await expect.poll(async()=>(await copies()).length).toBe(4);
+      expect((await copies())[3]).toEqual({textLength:1000001,result:{isCopied:false,reason:'no-clipboard'}});
+      expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 2\nVerify behavior 👋');
+      await expect(composer).toHaveText('Review the pending release notes.');
+    }finally{
+      await appPage.evaluate(()=>{if((window as any).__nativeCopyWrite){navigator.clipboard.writeText=(window as any).__nativeCopyWrite;delete (window as any).__nativeCopyWrite}});
+      await electronApp.evaluate(({clipboard,nativeImage},saved)=>{const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},original);
+    }
+  }
+
   const receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-structured-prompt-receipts.json'),'utf8').catch(()=>'[]'))
   await card.getByRole('button',{name:'Use review outline',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(1)
@@ -117,7 +144,9 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await appPage.setViewportSize({width:1400,height:900});
   }
 
-  await composer.locator('p').filter({hasText:'Review changes.'}).click();await composer.press('Control+a')
+  await composer.locator('p').filter({hasText:'Review changes.'}).click({position:{x:8,y:8}})
+  await expect.poll(()=>composer.evaluate(element=>(element as any).editor.state.selection.$head.parent.textContent)).toBe('Review changes.')
+  await composer.press('Control+a')
   await card.getByRole('button',{name:'Add review note',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(3)
   const proof=await receipts();expect(proof[2].result.isFilled).toBe(true)
@@ -139,5 +168,5 @@ test('round-trips decorated structured replace append and cursor insertion throu
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

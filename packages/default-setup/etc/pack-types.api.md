@@ -2640,6 +2640,7 @@ interface ClaudePromptHost {
     read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>;
     fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>;
     suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
+    copy?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>;
 }
 
 type ClaudePromptHostBox = z.infer<typeof box>;
@@ -2658,6 +2659,9 @@ type ClaudePromptHostRequest = {
 } | {
     kind: 'suggest';
     text: string;
+} | {
+    kind: 'copy';
+    text: string;
 });
 
 type ClaudePromptHostResponse = {
@@ -2671,6 +2675,9 @@ type ClaudePromptHostResponse = {
 } | {
     kind: 'suggest';
     shown: boolean;
+} | {
+    kind: 'copy';
+    copied: boolean;
 });
 
 type ClaudePromptReply = {

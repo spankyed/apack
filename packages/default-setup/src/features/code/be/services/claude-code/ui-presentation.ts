@@ -182,11 +182,13 @@ export type ClaudePromptHostRequest = { requestId: string; revision: number; exp
   | { kind: 'read' }
   | { kind: 'fill'; input: import('./ui-prompt-host.ts').ClaudePromptHostFill }
   | { kind: 'suggest'; text: string }
+  | { kind: 'copy'; text: string }
 )
 export type ClaudePromptHostResponse = { requestId: string } & (
   | { kind: 'read'; box?: import('./ui-prompt-host.ts').ClaudePromptHostBox }
   | { kind: 'fill'; filled: boolean }
   | { kind: 'suggest'; shown: boolean }
+  | { kind: 'copy'; copied: boolean }
 )
 
 export interface ClaudeUiClientEvent { id: string; sequence: number; event: import('./ui-controls.ts').ClaudeUiClientInput }
