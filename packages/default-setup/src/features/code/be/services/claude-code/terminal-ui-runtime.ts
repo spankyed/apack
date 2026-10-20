@@ -6,7 +6,7 @@ import { claudeTerminalBashRuntime } from './terminal-bash-runtime.ts'
 import { claudeTerminalFileRuntime } from './terminal-file-runtime.ts'
 import { claudeTerminalHistoryPlacementRuntime } from './terminal-history-placement-runtime.ts'
 import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
-import { claudeTerminalToolGroupRuntime } from './terminal-tool-group-runtime.ts'
+import { claudeTerminalToolGroupRuntime, claudeTerminalToolGroupDrawingRuntime } from './terminal-tool-group-runtime.ts'
 import { claudeTerminalToolProgressRuntime } from './terminal-tool-progress-runtime.ts'
 import { claudeTerminalToolUseRuntime } from './terminal-tool-use-runtime.ts'
 import { claudeTerminalToolOutputRuntime } from './terminal-tool-output-runtime.ts'
@@ -204,6 +204,7 @@ ${claudeTerminalToolOutputRuntime}
 ${claudeTerminalToolUseRuntime}
 ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
+${claudeTerminalToolGroupDrawingRuntime}
 ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
 ${claudeTerminalFileRuntime}
@@ -956,6 +957,8 @@ async function control(request,abort){
    while(toolResultFrames.size>256)toolResultFrames.delete(toolResultFrames.keys().next().value);
   }
   if(groupFacts){
+   if(nativeDrawingUsesEngine(result.tree))engineOutput=await formatNativeToolGroup(n,groupFacts,value.viewport?.columns);
+   abort.signal.throwIfAborted();if(!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native group lifetime expired while formatting');
    if(nativeToolGroups(n).get(value.instance_id)?.revision!==groupFacts.revision)throw Error('Native tool group changed while rendering');
    if(typeof result.props.isExpanded!=='boolean')throw Error('Native group expansion rewrite is invalid');
    const key=JSON.stringify([clientId,value.instance_id]);toolGroupFrames.delete(key);toolGroupFrames.set(key,{clientId,id:value.instance_id,revision:groupFacts.revision,expanded:props.isExpanded,shownExpanded:result.props.isExpanded,usesEngine:nativeDrawingUsesEngine(result.tree),needsRender:false});while(toolGroupFrames.size>256)toolGroupFrames.delete(toolGroupFrames.keys().next().value);

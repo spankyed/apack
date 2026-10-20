@@ -266,7 +266,7 @@ it('keeps instance lifetime metadata on the native adapter and never sends it to
 
 
 it('discovers only native-adapter groups and validates source revisions before mounting',async()=>{
- const group={id:'native-group',members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:true,isExpanded:false,initialized:false,revision:'a'.repeat(64)}
+ const group={id:'native-group',anchorIds:[],members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:true,isExpanded:false,initialized:false,revision:'a'.repeat(64)}
  const request=vi.fn(async()=>({groups:[group]}))
  const print=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request})
  await expect(print.toolGroups('view')).resolves.toEqual([]);expect(request).not.toHaveBeenCalled()

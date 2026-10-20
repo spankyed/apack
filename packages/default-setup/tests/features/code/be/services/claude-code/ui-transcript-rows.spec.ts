@@ -98,7 +98,7 @@ it('mounts a pending ToolUse without fabricating a result or trusting app runnin
 
 it('anchors a canonical group once across messages and preserves child tool/Agent/result identities',()=>{
  const make=(id:string,tool:string,uuid:string)=>({id,sender:'assistant',text:'',context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId:'session'}},blocks:[{type:'tool-activity',props:{entries:[{id:tool,tool:'Read',summary:'file',status:'ok',nativeAgent:{id:'agent',ownerId:'owner',sessionId:'session',name:'Worker',status:'running'}}],artifactRef:{artifactId:'artifact',label:'Changes'}}}]})
- const a=make('a','one','11111111-1111-1111-1111-111111111111'),b=make('b','two','22222222-2222-2222-2222-222222222222'),group={id:'original-group',members:[{toolUseId:'one',revision:'b'.repeat(64)},{toolUseId:'two',revision:'c'.repeat(64)}],usesEngine:true,isActive:false,isExpanded:false,initialized:true,revision:'a'.repeat(64)}
+ const a=make('a','one','11111111-1111-1111-1111-111111111111'),b=make('b','two','22222222-2222-2222-2222-222222222222'),group={id:'original-group',anchorIds:[],members:[{toolUseId:'one',revision:'b'.repeat(64)},{toolUseId:'two',revision:'c'.repeat(64)}],usesEngine:true,isActive:false,isExpanded:false,initialized:true,revision:'a'.repeat(64)}
  const select=(expanded:boolean)=>selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[{...group,isExpanded:expanded}])
  const closed=select(false);expect(closed).toHaveLength(1);expect(closed[0]).toMatchObject({component:'ToolGroup',uuid:'original-group',messageId:'a',tools:[{id:'one',nativeAgent:{id:'agent'}},{id:'two'}],artifacts:[{artifactId:'artifact',label:'Changes'}]})
  const open=select(true);expect(open.filter(row=>row.component==='ToolGroup')).toHaveLength(1)
@@ -108,4 +108,13 @@ it('anchors a canonical group once across messages and preserves child tool/Agen
  expect(selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[{...group,isExpanded:true,usesEngine:false}]).map(row=>row.component)).toEqual(['ToolGroup'])
  expect(selectClaudeTranscriptRows([a],'session',new Set(['a']),new Map(),new Map(),[group])).toEqual([])
  expect(selectClaudeTranscriptRows([a,b],'session',new Set(['a']),new Map(),new Map(),[group,{...group,id:'overlapping'}])).toEqual([])
+})
+
+it('anchors notification-only native groups to canonical selected history without exposing hidden notification text',()=>{
+ const source=message('prior-app',[row('prior-native')]),group={id:'notification-group',anchorIds:['not-projected','prior-native'],members:[],usesEngine:true,isActive:false,isExpanded:false,initialized:true,revision:'a'.repeat(64)}
+ const selected=new Set(['prior-app'])
+ expect(selectClaudeTranscriptRows([source],'session',selected,new Map(),new Map(),[group])).toContainEqual(expect.objectContaining({component:'ToolGroup',uuid:'notification-group',messageId:'prior-app',tools:[],blockIndex:-1}))
+ expect(selectClaudeTranscriptRows([source],'foreign',selected,new Map(),new Map(),[group])).toEqual([])
+ expect(selectClaudeTranscriptRows([source],'session',new Set(),new Map(),new Map(),[group])).toEqual([])
+ expect(selectClaudeTranscriptRows([source],'session',selected,new Map(),new Map(),[{...group,anchorIds:['unknown']}])).not.toContainEqual(expect.objectContaining({component:'ToolGroup'}))
 })

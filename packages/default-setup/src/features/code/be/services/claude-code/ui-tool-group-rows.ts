@@ -9,7 +9,12 @@ export function selectClaudeToolGroupRows(rows: ClaudeUiTranscriptRow[], candida
   const covered=new Set<string>(), added:ClaudeUiTranscriptRow[]=[]
   for(const group of groups){
     const ids=group.members.map(member=>member.toolUseId), revisions=new Map(group.members.map(member=>[member.toolUseId,member.revision]))
-    if(!ids.length||new Set(ids).size!==ids.length||ids.some(id=>byId.get(id)?.length!==1||ownership.get(id)!==1))continue
+    if(!ids.length){
+      const anchor=group.anchorIds.map(id=>rows.find(row=>row.uuid===id||'assistantUuid' in row&&row.assistantUuid===id||'resultUuid' in row&&row.resultUuid===id)).find(Boolean)
+      if(anchor&&selected.has(anchor.messageId))added.push({component:'ToolGroup',uuid:group.id,messageId:anchor.messageId,blockIndex:-1,sessionId:anchor.sessionId,text:'',start:0,end:0,revision:group.revision,isExpanded:group.isExpanded,isActive:group.isActive,usesEngine:group.usesEngine,tools:[],artifacts:[]})
+      continue
+    }
+    if(new Set(ids).size!==ids.length||ids.some(id=>byId.get(id)?.length!==1||ownership.get(id)!==1))continue
     const members=ids.map(id=>byId.get(id)![0]!),anchor=members[0]!
     if(!selected.has(anchor.messageId))continue
     const sessionId=anchor.rows[0]!.sessionId,expanded=group.initialized?group.isExpanded:anchor.expanded

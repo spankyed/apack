@@ -80,6 +80,7 @@
                   @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
                   @toggle-compacted="handleToggleCompacted"
                 />
+                <NativeToolGroup v-for="group in (nativeUiDrawing?.transcriptMessages ?? []).filter(frame => frame.component === 'ToolGroup' && !frame.tools.length && frame.messageId === message.id)" :key="group.uuid" :frame="group as Extract<typeof group, {component: 'ToolGroup'}>" />
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="message.id" @press="pressNativeUi" @field="editNativeUi" />
                 </template>
               </div>
@@ -189,6 +190,7 @@
 
 <script setup lang="ts">
 import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
+import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const quotes = [

@@ -217,7 +217,7 @@ it('keeps ToolUse producer state native and retires header actions when activity
 
 
 it('discovers native groups, keeps the engine inert during redraw and retires children on collapse',async()=>{
- const f=fixture(),unrelated=f.rows[0]!,group={id:'native-group',members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:false,isExpanded:true,initialized:true,revision:'a'.repeat(64)}
+ const f=fixture(),unrelated=f.rows[0]!,group={id:'native-group',anchorIds:[],members:[{toolUseId:'tool',revision:'b'.repeat(64)}],usesEngine:true,isActive:false,isExpanded:true,initialized:true,revision:'a'.repeat(64)}
  f.ui.toolGroups.mockResolvedValue([group])
  f.setSource(groups=>[...groups.flatMap(value=>{
   const row:ClaudeUiTranscriptRow={component:'ToolGroup',uuid:value.id,messageId:'app',sessionId:'session',text:'',start:0,end:0,blockIndex:0,revision:value.revision,isActive:value.isActive,isExpanded:value.isExpanded,usesEngine:value.usesEngine,tools:[{id:'tool',tool:'Read',summary:'file',status:'ok'}],artifacts:[]}

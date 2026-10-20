@@ -6,7 +6,7 @@ function fixture(){
  const props={message:{type:'collapsed_read_search',uuid:'native-group',messages:[{type:'assistant',message:{content:[call]}}]},lookups:{toolResultByToolUseID:new Map([['one',result]]),erroredToolUseIDs:new Set()},inProgressToolUseIDs:new Set(['one']),isActiveCollapsedGroup:true}
  const fiber:any={type:component,memoizedProps:props},state:{viewingAgentTaskId?:string}={}
  const n={themeRoots:{ai:()=>new Map([[output,{container:{current:fiber}}]])},toolRendering:{h3:component},engine:{aK:{isInterruptedCall:(row:any)=>row?.interrupted===true}},nativeClients:{release:vi.fn(),suspend:vi.fn()}}
- const publish=vi.fn(),f=vm.runInNewContext(`${claudeTerminalToolGroupRuntime};({groups:nativeToolGroups,list:nativeToolGroupList,frames:toolGroupFrames,check:currentToolGroupAction,draw:toolGroupDrawing,press:runToolGroupAction,refresh:refreshNativeToolGroups})`,{process:{stdout:output},createHash,AbortController,originalContext:{toolContext:()=>({getAppState:()=>state})},clients:new Set(['view']),clientViewCurrent:()=>true,instanceLifetimes:{active:(_request:any,revision:number)=>revision===1},randomUUID:()=> 'scope',nativeDrawingUsesEngine:(tree:any)=>tree.type==='engine',publish})
+ const publish=vi.fn(),f=vm.runInNewContext(`${claudeTerminalToolGroupRuntime};({groups:nativeToolGroups,list:nativeToolGroupList,frames:toolGroupFrames,check:currentToolGroupAction,draw:toolGroupDrawing,press:runToolGroupAction,refresh:refreshNativeToolGroups})`,{process:{stdout:output},createHash,AbortController,originalContext:{toolContext:()=>({getAppState:()=>state}),messages:()=>[{type:'assistant',uuid:'prior-answer'},{type:'user',uuid:'notification'}]},clients:new Set(['view']),clientViewCurrent:()=>true,instanceLifetimes:{active:(_request:any,revision:number)=>revision===1},randomUUID:()=> 'scope',nativeDrawingUsesEngine:(tree:any)=>tree.type==='engine',publish})
  return{n,f,props,fiber,state,call,result,publish}
 }
 it('reads original group identity, first tool blocks, running/results and refuses selected Agent fallback',()=>{
@@ -56,4 +56,15 @@ it('retires disclosure actions when original summary metadata changes with stabl
  expect(x.f.press(x.n,request,new AbortController())).toEqual({handled:false})
  x.f.refresh(x.n)
  expect(x.n.nativeClients.suspend).toHaveBeenCalledWith([{surface:'desktop',component:'ToolGroup',requestId:'native-group'}])
+})
+
+it('keeps original notification-only group identity and preceding canonical anchors without inventing calls',()=>{
+ const x=fixture();x.props.message.messages.splice(0)
+ x.props.message.messages.push({type:'user',uuid:'notification',message:{content:[]}} as any)
+ const group=x.f.groups(x.n).get('native-group')
+ expect(group.calls).toEqual([])
+ expect(group.anchorIds).toEqual(['prior-answer'])
+ expect(x.f.list(x.n,'view')[0]).toMatchObject({id:'native-group',members:[],anchorIds:['prior-answer']})
+ ;(x.props.message.messages[0] as any).uuid='unknown'
+ expect(x.f.groups(x.n).size).toBe(0)
 })

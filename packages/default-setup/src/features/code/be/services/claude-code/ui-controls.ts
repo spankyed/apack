@@ -10,7 +10,7 @@ const clientInput = z.discriminatedUnion('kind',[
  z.object({kind:z.literal('key'),key:z.string().min(1).max(32).refine(key=>key!=='escape'),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),meta:z.literal(true).optional()}).strict(),clientPointer,
 ])
 export type ClaudeUiClientInput = z.infer<typeof clientInput>
-const toolGroup = z.object({id:z.string().min(1).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
+const toolGroup = z.object({id:z.string().min(1).max(256),anchorIds:z.array(z.string().min(1).max(256)).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
 export type ClaudeUiToolGroup = z.infer<typeof toolGroup>
 const composerPlacement=z.object({component:z.enum(['Spinner','SessionMode','PromptHint']),id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
 export type ClaudeUiComposerPlacement=z.infer<typeof composerPlacement>
