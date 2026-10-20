@@ -43,7 +43,7 @@
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <!-- Agent Chat Content -->
-          <div v-show="!mainCommandView && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-grow w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="h-full overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -69,6 +69,7 @@
                 </div>
                 <template v-for="message in visibleMessages" :key="message.id">
                 <ChatMessage
+                  v-if="message.id !== pendingNativeApproval?.messageId"
                   :message="message"
                   :native-frames="nativeUiDrawing?.transcriptMessages"
                   :native-view-id="nativeUiMount?.mountId"
@@ -93,7 +94,7 @@
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
-          <div v-if="pendingNativeApproval" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
+          <div v-if="pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
             <NativeToolApproval :key="pendingNativeApproval.messageId" v-bind="pendingNativeApproval"
               @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
               @edit-workflow="nativeSession?.open()"
@@ -971,6 +972,16 @@ watch(messagesContent, (el, _, onCleanup) => {
   overflow-y: auto;
 
   min-height: 0;
+}
+
+.approvalContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  max-height: 72%;
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
 }
 
 .inputContainer {

@@ -132,11 +132,11 @@ function approve() {
 </script>
 
 <style scoped>
-.native-tool-approval { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
+.native-tool-approval { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
 header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
 .eyebrow { color: #b8a887; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 h2 { margin: 0; font-size: 14px; font-weight: 600; }
-.details { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
+.details { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
 .question { margin: 0 0 6px; color: #aaa; }
 code { white-space: pre-wrap; display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
 .change-review { margin-top: 10px; }
