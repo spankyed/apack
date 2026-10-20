@@ -3,12 +3,12 @@ import { inject, onBeforeUnmount, onMounted, provide, type InjectionKey } from '
 type SelectionText = { text: string; instance_id?: string }
 interface ClaudeSelectionReader { read(): SelectionText | undefined; clear(): void }
 const selectionReader: InjectionKey<ClaudeSelectionReader> = Symbol('claude-ui-selection')
-const rows = '[data-native-selection-row],[data-native-user],[data-native-assistant],[data-native-summary],[data-native-command-output],[data-native-tool-use],[data-native-tool-result],[data-native-tool-group],[data-native-tool-progress]'
+const rows = '[data-native-agent-message],[data-native-selection-row],[data-native-user],[data-native-assistant],[data-native-summary],[data-native-command-output],[data-native-tool-use],[data-native-tool-result],[data-native-tool-group],[data-native-tool-progress]'
 const element = (node: Node | null) => node instanceof Element ? node : node?.parentElement
 function rowId(start: Node | null, end: Node | null): string | undefined {
   const row = element(start)?.closest(rows)
   if (!row || element(end)?.closest(rows) !== row) return undefined
-  return ['nativeSelectionRow', 'nativeUser', 'nativeAssistant', 'nativeSummary', 'nativeCommandOutput', 'nativeToolUse', 'nativeToolResult', 'nativeToolGroup', 'nativeToolProgress'].map(name => (row as HTMLElement).dataset[name]).find(value => !!value)
+  return ['nativeAgentMessage', 'nativeSelectionRow', 'nativeUser', 'nativeAssistant', 'nativeSummary', 'nativeCommandOutput', 'nativeToolUse', 'nativeToolResult', 'nativeToolGroup', 'nativeToolProgress'].map(name => (row as HTMLElement).dataset[name]).find(value => !!value)
 }
 
 /** Retain the person's selection when the native action that reads it takes browser focus. */

@@ -1,7 +1,7 @@
 import { createApp, h, nextTick } from 'vue'
 import { provideClaudeUiSelection, replyClaudeUiSelection } from '#features/threads/fe/chat/native-ui-selection.ts'
 
-it.each(['data-native-assistant', 'data-native-selection-row'])('retains text and %s attribution through action focus, then clears on blur/unmount', async rowAttribute => {
+it.each(['data-native-assistant', 'data-native-selection-row', 'data-native-agent-message'])('retains text and %s attribution through action focus, then clears on blur/unmount', async rowAttribute => {
   const root = document.createElement('div'); document.body.append(root)
   let reader!: ReturnType<typeof provideClaudeUiSelection>
   const app = createApp({ setup() { reader = provideClaudeUiSelection(() => root); return () => h('div', { [rowAttribute]: 'original-row' }, 'Release notes selected 👋') } })

@@ -1,5 +1,5 @@
 <template>
-  <section v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
+  <section ref="selectionRoot" v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
     <header class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
       <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
