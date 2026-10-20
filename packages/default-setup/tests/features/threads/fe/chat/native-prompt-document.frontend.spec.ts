@@ -540,3 +540,17 @@ it('keeps a delayed selection and its key scoped to the currently focused editor
     expect(otherBridge.readDraft()?.text).toBe('worker draft')
   } finally { firstBridge.dispose(); otherBridge.dispose(); editor.view.setProps({ handleScrollToSelection: firstScroll }); other.destroy() }
 })
+
+
+it('maps decoration boundaries inside noncanonical code fences without changing code or caret', () => {
+  editor.commands.setContent('safe')
+  const send=vi.fn(),problem=vi.fn(),bridge=bindClaudePromptEditor(editor,send,problem)
+  const text='~~~ts\nconst ready = true\n~~~\n\n*   Context',canonical='```ts\nconst ready = true\n```\n\n- Context'
+  const cursor=text.indexOf('ready')+5,end=text.indexOf('~~~',3)+2
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:1,end,underline:true,color:'red'}]}})
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe('const ready = true')
+  expect(captureClaudePromptDocument(editor.state.doc,editor.state.selection.head,serialize)?.cursor).toBe(canonical.indexOf('ready')+5)
+  bridge.dispose()
+})
