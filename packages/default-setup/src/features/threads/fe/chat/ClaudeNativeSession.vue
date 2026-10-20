@@ -122,6 +122,7 @@ watch([view, active], async ([value, showing]) => {
   }
   terminal?.write(value.output)
 }, { flush: 'post' })
+defineExpose({ open })
 renew(); const heartbeat = setInterval(renew, 10000)
 onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false) })
 </script>

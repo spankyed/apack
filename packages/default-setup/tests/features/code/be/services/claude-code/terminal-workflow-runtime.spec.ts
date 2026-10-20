@@ -60,3 +60,11 @@ it('never leaks withheld summary data and falls back to the raw script for overs
   const shown = (await f.api.nativeWorkflowPresentation(f.n, f.d)).presentation
   expect(shown.summary).toBeUndefined(); expect(shown.summaryUnavailable).toBe(true); expect(shown.script).toBe('original script')
 })
+
+it('offers the native editor handoff with the original live callback, including a withheld preview', async () => {
+  const f = fixture(); f.cache[17] = () => {}
+  expect((await f.api.nativeWorkflowPresentation(f.n, f.d)).presentation.canEdit).toBe(true)
+  f.ready(false); expect((await f.api.nativeWorkflowPresentation(f.n, f.d)).presentation.canEdit).toBe(false)
+  f.ready(true); f.cache[28] = true; const withheld = (await f.api.nativeWorkflowPresentation(f.n, f.d)).presentation; expect(withheld.canEdit).toBe(true); expect(withheld.script).toBeUndefined()
+  f.cache[28] = false; f.cache[17] = undefined; expect((await f.api.nativeWorkflowPresentation(f.n, f.d)).presentation.canEdit).toBe(false)
+})

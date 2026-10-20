@@ -25,6 +25,7 @@
           </section>
           <code v-else data-testid="native-workflow-script">{{ workflow.script }}</code>
         </template>
+        <template v-if="workflow.canEdit"><button type="button" class="workflow-preview-toggle" :disabled="controlsDisabled" @click="emit('edit-workflow')">Edit in native interface</button><p class="reason">Press Ctrl+G there to open your configured editor, then return here to review before approving.</p></template>
         <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
       </template>
       <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
@@ -75,7 +76,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
 const props = defineProps<{ workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'Workflow'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
-const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [] }>()
+const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
 watch(() => props.workflow?.token, () => { rawWorkflow.value = undefined })

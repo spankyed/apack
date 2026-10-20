@@ -4,6 +4,8 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const workflowEditor=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR==='1'
+const workflowEditorWithheld=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR_WITHHELD==='1'
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testInfo.expectedStatus && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('native-pending-workflow-failure.png') }).catch(() => {}) })
 test('mirrors original pending workflow duration and completion', async ({ app, appPage }, testInfo) => {
@@ -76,9 +78,23 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     const approval = appPage.getByRole('region', { name: 'Workflow approval', exact: true })
     await expect(approval).toBeVisible()
     const summary=approval.getByTestId('native-workflow-summary'),retainedDraft='Keep review notes while inspecting the workflow.'
-    await expect(approval.getByTestId('native-workflow-description')).toContainText('Review release notes')
-    await expect(summary).toContainText('Review');await expect(summary).toContainText('Return the synthetic worker marker only.')
+    if(workflowEditorWithheld){
+      await expect(approval).toContainText('Claude withheld this script');await expect(approval.getByTestId('native-workflow-script')).toHaveCount(0);await expect(summary).toHaveCount(0)
+      await expect(approval.getByRole('button',{name:'Allow',exact:true})).toBeDisabled();await expect(approval.getByRole('button',{name:'Edit in native interface',exact:true})).toBeEnabled()
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await approval.getByRole('button',{name:'Edit in native interface',exact:true}).scrollIntoViewIfNeeded();await expect(approval.getByRole('button',{name:'Edit in native interface',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-withheld-'+size.width+'.png')})}
+    }else{await expect(approval.getByTestId('native-workflow-description')).toContainText('Review release notes');await expect(summary).toContainText('Review');await expect(summary).toContainText('Return the synthetic worker marker only.')}
     await expect(composer).toBeHidden()
+    let editorBeforeToken:string|undefined,editorAfterToken:string|undefined
+    if(workflowEditor){
+      editorBeforeToken=(await context()).claude.pendingControlRequest.nativeTerminal.workflow.token
+      await approval.getByRole('button',{name:'Edit in native interface',exact:true}).click();await expect(input).toBeVisible();await input.focus();await input.press('Control+g')
+      await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-workflow-editor-receipt.json'),'utf8').catch(()=>'{}')).after).toContain('Edited release notes')
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await appPage.screenshot({path:testInfo.outputPath('native-workflow-editor-terminal.png')})
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(approval).toBeVisible()
+      await expect(approval.getByTestId('native-workflow-description')).toContainText('Edited release notes');await expect(summary).toContainText('Edited review')
+      editorAfterToken=(await context()).claude.pendingControlRequest.nativeTerminal.workflow.token;expect(editorAfterToken).not.toBe(editorBeforeToken)
+    }
     const summaryText=await summary.innerText();let scriptText=''
     for (const size of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
       await appPage.setViewportSize(size); await expect(approval.getByRole('button', { name: 'Yes, run it', exact: true })).toBeInViewport()
@@ -101,6 +117,12 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await expect(waitingRow).toBeVisible()
     const journalPath = async () => { const dirs = await readdir(join(workspace!, '.claude/projects')); for (const dir of dirs) { const path = join(workspace!, '.claude/projects', dir, sessionId + '.jsonl'); try { await readFile(path); return path } catch {} } throw Error('Original native journal missing') }
     const journal = async () => (await readFile(await journalPath(), 'utf8')).trim().split(String.fromCharCode(10)).map(line => JSON.parse(line))
+    if(workflowEditor){
+      await expect.poll(async()=>(await journal()).find(row=>typeof row.toolUseResult?.scriptPath==='string')?.toolUseResult.scriptPath).toBeTruthy()
+      const persistedScriptPath=(await journal()).find(row=>typeof row.toolUseResult?.scriptPath==='string').toolUseResult.scriptPath
+      expect(persistedScriptPath.startsWith(workspace!+'/')).toBe(true);expect(await readFile(persistedScriptPath,'utf8')).toBe(scriptText)
+      await writeFile(join(workspace!,'native-workflow-editor-proof.json'),JSON.stringify({beforeToken:editorBeforeToken,afterToken:editorAfterToken,scriptText,persistedScriptPath,sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
+    }
     await expect.poll(async () => (await journal()).some(row => row.type === 'system' && row.subtype === 'turn_duration' && row.pendingWorkflowCount === 1)).toBe(true)
     const pendingNativeRows = (await journal()).filter(row => row.type === 'system' && row.subtype === 'turn_duration')
     await expect.poll(async () => (await context()).native.state.activity?.pendingWorkflows).toBe(1)
@@ -150,6 +172,6 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill('Continue the same session after the pending worker review.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowSummary: true, nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowSummary: true, ...(workflowEditor?{nativeWorkflowEditor:true,...(workflowEditorWithheld?{nativeWorkflowEditorWithheld:true}:{})}:{}), nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })

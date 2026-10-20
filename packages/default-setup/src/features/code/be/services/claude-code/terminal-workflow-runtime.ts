@@ -7,7 +7,7 @@ export const claudeTerminalWorkflowRuntime = String.raw`function nativeWorkflowC
    if(hash!=='6823a3f796c86b23af27d79c7298106e83e975be017609701b37268da846db9b')throw Error('Native workflow renderer changed');
    const cache=fiber.updateQueue?.memoCache?.data?.[0];
    if(!cache||cache[26]!==d.payload||typeof cache[27]!=='string'||typeof cache[30]!=='function'||!Array.isArray(cache[63])||typeof fiber.memoizedProps.wouldTakeAnswer!=='function')continue;
-   matches.push({fiber,handler:cache[30],script:cache[27],withheld:cache[28]===true,summary:cache[12],raw:cache[39]===true,description:cache[48],args:cache[19],grant:cache[24]?.applies,options:cache[63],ready:fiber.memoizedProps.wouldTakeAnswer()===true});
+   matches.push({fiber,handler:cache[30],script:cache[27],withheld:cache[28]===true,canEdit:typeof cache[17]==='function',summary:cache[12],raw:cache[39]===true,description:cache[48],args:cache[19],grant:cache[24]?.applies,options:cache[63],ready:fiber.memoizedProps.wouldTakeAnswer()===true});
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
@@ -33,7 +33,7 @@ async function nativeWorkflowPresentation(n,d){
   }else summaryUnavailable=true;
  }
  const argsText=args?.kind==='full'?args.text:args?.marker;
- const presentation={ready,withheld,...(!withheld&&description?{description}:{}),...(script!==undefined?{script}:{}),...(typeof argsText==='string'?{args:argsText}:{}),...(summary?{summary,raw:current.raw}:{}),...(summaryUnavailable?{summaryUnavailable:true}:{}),choices};
+ const presentation={ready,withheld,canEdit:ready&&current.canEdit===true,...(!withheld&&description?{description}:{}),...(script!==undefined?{script}:{}),...(typeof argsText==='string'?{args:argsText}:{}),...(summary?{summary,raw:current.raw}:{}),...(summaryUnavailable?{summaryUnavailable:true}:{}),choices};
  const token=createHash('sha256').update(JSON.stringify([d.revision,presentation,current?.grant])).digest('hex');return {source:current,presentation:{...presentation,token}};
 }
 async function answerNativeWorkflow(n,d,request){

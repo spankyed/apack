@@ -117,16 +117,28 @@ it.each([false, true])('uses native Workflow script visibility and approval elig
 
 it('switches native-derived Workflow summary/raw presentation without answering and resets on replacement', async () => {
   const root = document.createElement('div'); document.body.append(root)
-  const respond = vi.fn(), workflow = reactive({ token: 'a'.repeat(64), ready: true, withheld: false, script: 'original script', raw: false,
+  const respond = vi.fn(), edit = vi.fn(), workflow = reactive({ token: 'a'.repeat(64), ready: true, withheld: false, canEdit: true, script: 'original script', raw: false,
     summary: [{ title: '<script>Review</script>', detail: 'Original detail', prompts: ['Inspect migration notes'] }],
     choices: [{ value: 'yes' as const, label: 'Yes, run it', decision: 'allow' as const, feedback: true }, { value: 'no' as const, label: 'No', decision: 'deny' as const, feedback: true }] })
-  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Workflow', title: 'Review workflow', question: 'Run?', disabled: false, workflow, onRespond: respond }) }); app.mount(root)
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Workflow', title: 'Review workflow', question: 'Run?', disabled: false, workflow, onRespond: respond, 'onEdit-workflow': edit }) }); app.mount(root)
   const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
   try {
+    button('Edit in native interface').click(); expect(edit).toHaveBeenCalledOnce(); expect(respond).not.toHaveBeenCalled()
     expect(root.querySelector('script')).toBeNull(); expect(root.querySelector('[data-testid="native-workflow-summary"]')?.textContent).toContain('Inspect migration notes')
     button('View raw script').click(); await nextTick(); expect(root.querySelector('[data-testid="native-workflow-script"]')?.textContent).toBe('original script'); expect(respond).not.toHaveBeenCalled()
     workflow.token = 'b'.repeat(64); await nextTick(); expect(root.querySelector('[data-testid="native-workflow-summary"]')).not.toBeNull()
     button('View raw script').click(); await nextTick(); button('View workflow summary').click(); await nextTick(); expect(respond).not.toHaveBeenCalled()
     button('Yes, run it').click(); expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: workflow.token })
+  } finally { app.unmount(); root.remove() }
+})
+
+it('retains native editor access for a withheld Workflow without exposing or approving its script', () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const edit = vi.fn(), respond = vi.fn(), workflow = { token: 'a'.repeat(64), ready: true, withheld: true, canEdit: true, choices: [{ value: 'no' as const, label: 'No', decision: 'deny' as const, feedback: true }] }
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Workflow', title: 'Review workflow', question: 'Run?', disabled: false, workflow, onRespond: respond, 'onEdit-workflow': edit }) }); app.mount(root)
+  try {
+    expect(root.querySelector('[data-testid="native-workflow-script"],[data-testid="native-workflow-summary"]')).toBeNull()
+    const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Edit in native interface')!
+    expect(button.disabled).toBe(false); button.click(); expect(edit).toHaveBeenCalledOnce(); expect(respond).not.toHaveBeenCalled(); expect(root.querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true)
   } finally { app.unmount(); root.remove() }
 })
