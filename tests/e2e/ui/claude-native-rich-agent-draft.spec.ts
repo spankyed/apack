@@ -7,6 +7,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'
+const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp }, testInfo) => {
@@ -112,14 +113,37 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8').catch(()=>'{}'))).toMatchObject({text:agentFill.after.text,cursor:agentFill.after.text.indexOf('Review changes.')+2})
   await tools.click();await agentComposer.focus();await expect.poll(selected).toBe('Re')
   for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);const selectionLine=agentComposer.locator('p').filter({hasText:'Review changes.'});await selectionLine.scrollIntoViewIfNeeded();await expect(selectionLine).toBeInViewport();await expect.poll(selected).toBe('Re');await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-rich-agent-draft-'+size.width+'.png')})}
-  if(referenceJourney){
+  if(imeJourney){
+    await agentComposer.locator('p').filter({hasText:'Review changes.'}).click();await agentComposer.press('End')
+    const cdp=await appPage.context().newCDPSession(appPage),preview='にほん',commit='日本語'
+    const edits=async()=>JSON.parse(await readFile(join(workspace!,'native-agent-ime-edits.json'),'utf8').catch(()=>'[]'))
+    const beforeEdits=await edits(),turns=(await context()).native.state.session.turns
+    await appPage.evaluate(()=>{(window as any).__agentImeActorEvents=[];const actor=(window as any).applicationState.system.get('default-setup/threads');actor.system.inspect((item:any)=>{if(item.event?.type==='CLAUDE_PROMPT_EDIT'||item.event?.type==='CLAUDE_PROMPT_STATE')(window as any).__agentImeActorEvents.push(item.event)})});
+    await agentComposer.evaluate(element=>{const events:any[]=[];(window as any).__agentImeEvents=events;for(const name of ['compositionstart','compositionupdate','compositionend','input'])element.addEventListener(name,event=>{const editor=(element as any).editor;events.push({type:event.type,data:(event as InputEvent).data,composing:editor?.view.composing,text:editor?.state.doc.textContent})})})
+    await cdp.send('Input.imeSetComposition',{text:preview,selectionStart:3,selectionEnd:3});await expect(agentComposer).toContainText(preview)
+    await agentComposer.evaluate(element=>element.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',isComposing:true,bubbles:true,cancelable:true})))
+    await appPage.setViewportSize({width:680,height:600});await expect(agentComposer).toContainText(preview);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+    expect((await edits()).some((edit:any)=>edit.text.includes(preview))).toBe(false);expect((await context()).native.state.session.turns).toBe(turns)
+    await appPage.screenshot({path:testInfo.outputPath('native-agent-ime-preview.png')})
+    await cdp.send('Input.insertText',{text:commit});await expect(agentComposer).toContainText(commit)
+    try { await expect.poll(async()=>(await edits()).some((edit:any)=>edit.text.includes(commit))).toBe(true) }
+    finally { await writeFile(join(workspace!,'native-agent-ime-editor-state.json'),JSON.stringify(await agentComposer.evaluate(element=>{const editor=(element as any).editor,view=editor?.view;return {composing:view?.composing,doc:view?.state.doc.toJSON(),markdown:editor?.storage.markdown.getMarkdown(),html:element.innerHTML,events:(window as any).__agentImeEvents,actorEvents:(window as any).__agentImeActorEvents,views:Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).map((view:any)=>({revision:view.promptRevision,prompt:view.prompt})),alerts:Array.from(document.querySelectorAll('[role=alert]')).map(node=>node.textContent)}}))) }
+    const committedEdits=await edits();expect(committedEdits.some((edit:any)=>edit.text.includes(preview))).toBe(false)
+    await cdp.detach()
+    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click();await form.getByRole('button',{name:'Read current draft',exact:true}).click()
+    await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8').catch(()=>'{}')).text).toContain(commit)
+    agentFill.after=JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8'));expect(agentFill.after.text.split(commit)).toHaveLength(2);await tools.click()
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await agentComposer.locator('p').filter({hasText:commit}).scrollIntoViewIfNeeded();await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-agent-ime-'+size.width+'.png')})}
+    await writeFile(join(workspace!,'native-agent-ime-composition-proof.json'),JSON.stringify({preview,commit,beforeEdits,committedEdits,turnsBefore:turns,turnsAfter:(await context()).native.state.session.turns,canonical:agentFill.after.text}))
+  }
+  if(referenceJourney||imeJourney){
     const sent=agentFill.after.text
     await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentComposer).toHaveText('')
     await expect.poll(async()=>appPage.evaluate(text=>{const views=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews;return Object.values(views).some((view:any)=>view.state?.agent?.messages?.some((message:any)=>message.role==='user'&&message.text===text))},sent)).toBe(true)
     const files=await readdir(join(workspace!,'.claude/projects'),{recursive:true})
     let nativeReceipt:any
     await expect.poll(async()=>{for(const file of files.filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))){const rows=(await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').map(line=>JSON.parse(line));nativeReceipt=rows.find(row=>row.type==='user'&&row.isMeta===true&&row.origin?.kind==='human'&&typeof row.message?.content==='string'&&row.message.content.includes(sent)&&row.message.content.split(sent).length===2);if(nativeReceipt)return true}return false}).toBe(true)
-    await writeFile(join(workspace!,'native-agent-reference-proof.json'),JSON.stringify({taskId,referenceHref,text:sent,nativeUuid:nativeReceipt.uuid,parentDraft:parentFill.after.text,remounted:true}))
+    await writeFile(join(workspace!,imeJourney?'native-agent-ime-proof.json':'native-agent-reference-proof.json'),JSON.stringify({taskId,referenceHref,text:sent,nativeUuid:nativeReceipt.uuid,parentDraft:parentFill.after.text,remounted:true}))
   }
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer.locator('h1')).toHaveText('Parent review');await expect.poll(selected).toBe('Re')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -128,5 +152,5 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing the worker draft.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeRichAgentDraft:true,...(referenceJourney?{nativeAgentReference:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeRichAgentDraft:true,...(referenceJourney?{nativeAgentReference:true}:{}),...(imeJourney?{nativeAgentIme:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
