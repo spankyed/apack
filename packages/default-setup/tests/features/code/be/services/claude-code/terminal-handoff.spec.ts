@@ -8,7 +8,7 @@ const session = '11111111-1111-1111-1111-111111111111'
 async function printOwner() {
   const events = new PassThrough({ objectMode: true })
   const handle = { events, close: vi.fn(async () => { events.end() }), kill: vi.fn(() => events.end()), getPermissionMode: vi.fn(async () => 'plan'), getSettings: vi.fn(async () => ({ effective: {}, sources: [] })) } as unknown as QueryHandle
-  const owner = await openConversation('thread', JSON.stringify({ cwd: '/fixture', model: 'native-model' }), async () => handle, async () => {})
+  const owner = await openConversation('thread', JSON.stringify({ cwd: '/fixture', model: 'native-model', worktree: false }), async () => handle, async () => {})
   events.write({ type: 'system', subtype: 'init', session_id: session, cwd: '/native-cwd' })
   await vi.waitFor(() => expect(owner.sessionId).toBe(session))
   return { handle, owner }
@@ -46,6 +46,7 @@ it('cancels a handoff waiting for native settings without starting a terminal', 
   vi.mocked(first.handle.getSettings).mockImplementationOnce(() => new Promise(yes => { resolve = yes }))
   const pending = openNativeTerminal('thread', {}, mocks.prepare), rejected = expect(pending).rejects.toThrow('changed')
   expect(isConversationBusy('thread')).toBe(true); expect(getConversation('thread')).toBeUndefined()
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
   runThreadTeardown('thread'); resolve({ effective: {}, sources: [] }); await rejected
   expect(mocks.prepare).not.toHaveBeenCalled(); expect(getNativeTerminal('thread')).toBeUndefined()
 })
@@ -73,4 +74,46 @@ it('drains the detached native owner before a replacement print process can spaw
   await Promise.resolve();expect(spawn).not.toHaveBeenCalled()
   await native.close();const owner = await replacement
   expect(spawn).toHaveBeenCalledOnce();await owner.close()
+})
+
+
+it('reopens a stopped native session only after fresh settings preflight finishes', async () => {
+  await printOwner(); const first = terminal(), second = terminal()
+  mocks.prepare.mockResolvedValueOnce({ start: async () => first, dispose: async () => {} })
+  await openNativeTerminal('thread', {}, mocks.prepare); await first.close(); await first.done
+  const fresh = { settings: { effective: { disableAllHooks: true }, sources: [] }, permissionMode: 'plan' as const }
+  let finish!: (value: typeof fresh) => void
+  const read = vi.fn((_options: unknown) => new Promise<typeof fresh>(resolve => { finish = resolve }))
+  mocks.prepare.mockResolvedValueOnce({ start: async () => second, dispose: async () => {} })
+  const pending = openNativeTerminal('thread', { cliPath: '/new-native' }, mocks.prepare, read)
+  await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
+  expect(read).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session, cwd: '/native-cwd', cliPath: '/new-native' }))
+  expect(read.mock.calls[0]![0]).not.toHaveProperty('worktree')
+  expect(mocks.prepare).toHaveBeenCalledTimes(1); expect(isConversationBusy('thread')).toBe(true)
+  await expect(openNativeTerminal('thread', {}, mocks.prepare, read)).rejects.toThrow('idle')
+  finish(fresh); expect(await pending).toBe(second)
+  expect(mocks.prepare).toHaveBeenLastCalledWith(expect.objectContaining({ settings: fresh.settings, sessionId: session, permissionMode: 'plan' }))
+})
+
+it('cancels a stopped-session preflight on teardown and cannot resurrect its launch', async () => {
+  await printOwner(); const first = terminal()
+  mocks.prepare.mockResolvedValueOnce({ start: async () => first, dispose: async () => {} })
+  await openNativeTerminal('thread', {}, mocks.prepare); await first.close(); await first.done
+  let finish!: (value: { settings: { effective: {}; sources: [] }; permissionMode: 'plan' }) => void
+  const read = vi.fn(() => new Promise<{ settings: { effective: {}; sources: [] }; permissionMode: 'plan' }>(resolve => { finish = resolve }))
+  const pending = openNativeTerminal('thread', {}, mocks.prepare, read), rejected = expect(pending).rejects.toThrow('changed')
+  await vi.waitFor(() => expect(read).toHaveBeenCalledOnce()); runThreadTeardown('thread')
+  finish({ settings: { effective: {}, sources: [] }, permissionMode: 'plan' }); await rejected
+  expect(mocks.prepare).toHaveBeenCalledTimes(1); expect(getNativeTerminal('thread')).toBeUndefined()
+  await expect(openNativeTerminal('thread', {}, mocks.prepare, read)).rejects.toThrow('idle')
+})
+
+it('retains a stopped-session retry after a failed settings read without starting another owner', async () => {
+  await printOwner(); const first = terminal(), next = terminal()
+  mocks.prepare.mockResolvedValueOnce({ start: async () => first, dispose: async () => {} })
+  await openNativeTerminal('thread', {}, mocks.prepare); await first.close(); await first.done
+  await expect(openNativeTerminal('thread', {}, mocks.prepare, async () => { throw Error('Settings unavailable') })).rejects.toThrow('Settings unavailable')
+  expect(isConversationBusy('thread')).toBe(false); expect(mocks.prepare).toHaveBeenCalledTimes(1)
+  mocks.prepare.mockResolvedValueOnce({ start: async () => next, dispose: async () => {} })
+  expect(await openNativeTerminal('thread', {}, mocks.prepare, async () => ({ settings: { effective: {}, sources: [] }, permissionMode: 'plan' }))).toBe(next)
 })

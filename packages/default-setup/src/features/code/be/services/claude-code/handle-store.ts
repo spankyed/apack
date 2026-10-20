@@ -11,8 +11,10 @@ const starting = new Map<string, object>()
 const terminals = new Map<string, ClaudeNativeTerminalOwner>()
 const draining = new Map<string, Promise<void>>()
 const terminalTransitions = new Map<string, AbortController>()
+const terminalResumes = new Map<string, Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>>()
 
 function stop(key: string): void {
+  terminalResumes.delete(key)
   starting.delete(key)
   terminalTransitions.get(key)?.abort(); terminalTransitions.delete(key)
   const terminal = terminals.get(key); terminals.delete(key); terminal?.kill()
@@ -41,6 +43,7 @@ export async function openConversation(key: string, launchKey: string, spawn: ()
     const handle = await spawn()
     if (starting.get(key) !== ticket) { handle.kill(); throw new Error('Claude conversation startup was cancelled') }
     const owner = createClaudeConversation(handle, consumeAutonomous, accountedCostUsd)
+    terminalResumes.delete(key)
     conversations.set(key, { owner, launchKey })
     const cleanup = () => {
       if (conversations.get(key)?.owner === owner) conversations.delete(key)
@@ -67,7 +70,7 @@ export async function closeIdleConversation(key: string): Promise<boolean> {
   return true
 }
 export function killAllHandles(): void {
-  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...starting.keys()])) stop(key)
+  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...terminalResumes.keys(), ...starting.keys()])) stop(key)
 }
 
 export function storeHandle(key: string, handle: QueryHandle): void {
@@ -103,30 +106,49 @@ export function clearHandle(key: string): void {
 export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows'>
 export function getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined { return terminals.get(key) }
 
-/** Explicit idle handoff; a reservation fences new print owners until the old process has exited. */
-export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>): Promise<ClaudeNativeTerminalOwner> {
-  const previous = conversations.get(key)
-  if (!previous || previous.owner.closing || !previous.owner.sessionId || isConversationBusy(key) || terminals.has(key)) throw new Error('Native terminal handoff needs an idle live Claude conversation')
+/** Explicit handoff/reopen; reservation and read-only preflight keep one session writer. */
+export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: Omit<ClaudeNativeTerminalOptions, 'settings'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
+  const previous = conversations.get(key), resume = terminalResumes.get(key)
+  if ((!previous && (!resume || !readResume)) || previous?.owner.closing || previous && !previous.owner.sessionId || isConversationBusy(key) || terminals.has(key) || terminalTransitions.has(key)) throw new Error('Native terminal handoff needs an idle live Claude conversation or a stopped native session')
   const ticket = {}, abort = new AbortController()
   starting.set(key, ticket); terminalTransitions.set(key, abort)
   let prepared: ClaudePreparedNativeTerminal | undefined
   let published = false
+  const current = () => !abort.signal.aborted && starting.get(key) === ticket && (previous ? conversations.get(key) === previous && !previous.owner.busy : terminalResumes.get(key) === resume)
   try {
-    const settings = await previous.owner.handle.getSettings()
-    const permissionMode = await previous.owner.handle.getPermissionMode()
-    if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
-    if (abort.signal.aborted || starting.get(key) !== ticket || conversations.get(key) !== previous || previous.owner.busy) throw new Error('Claude conversation changed during native terminal handoff')
-    const launch = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
-    const cwd = previous.owner.sessionCwd ?? launch.cwd
-    if (typeof cwd !== 'string' || !cwd) throw new Error('Native terminal handoff has no current working directory')
-    const sessionId = previous.owner.sessionId!
-    prepared = await prepare({ ...launch, ...options, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? launch.model, cwd, sessionId, settings, permissionMode, signal: abort.signal })
-    if (abort.signal.aborted || previous.owner.busy || starting.get(key) !== ticket) throw new Error('Claude conversation changed before terminal startup')
-    await previous.owner.close()
+    await draining.get(key)
+    if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
+    let launch: Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>, settings: ClaudeNativeTerminalOptions['settings']
+    if (previous) {
+      settings = await previous.owner.handle.getSettings()
+      const permissionMode = await previous.owner.handle.getPermissionMode()
+      if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
+      const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
+      // Print-only flags (notably worktree) do not belong to a resumed native launch.
+      launch = { ...options, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
+        allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: prior.addDir, pluginDir: prior.pluginDir }
+    } else {
+      launch = { ...resume!, ...options }
+      // Original native settings/policy are read again; no cached helpers run after Stop.
+      const fresh = await readResume!({ ...launch, signal: abort.signal })
+      settings = fresh.settings; launch.permissionMode = fresh.permissionMode
+    }
+    if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
+    if (typeof launch.cwd !== 'string' || !launch.cwd) throw new Error('Native terminal handoff has no current working directory')
+    prepared = await prepare({ ...launch, settings, signal: abort.signal })
+    if (!current()) throw new Error('Claude conversation changed before terminal startup')
+    await previous?.owner.close()
     if (abort.signal.aborted || starting.get(key) !== ticket) throw new Error('Native terminal handoff was cancelled')
     const owner = await prepared.start()
     if (abort.signal.aborted || starting.get(key) !== ticket) { owner.kill(); await owner.done; throw new Error('Native terminal startup was cancelled') }
-    terminals.set(key, owner); published = true
+    terminals.set(key, owner); terminalResumes.set(key, launch); published = true
+    owner.beforeRelease(async () => {
+      if (terminalResumes.get(key) !== launch) return
+      const state = owner.state
+      launch.sessionId = state.sessionId; launch.cwd = state.session?.cwd ?? state.cwd
+      launch.model = owner.modelSelection ?? state.session?.model ?? launch.model
+      launch.permissionMode = state.session?.permissionMode ?? launch.permissionMode
+    })
     void owner.done.finally(() => { if (terminals.get(key) === owner) terminals.delete(key) })
     return owner
   } finally {

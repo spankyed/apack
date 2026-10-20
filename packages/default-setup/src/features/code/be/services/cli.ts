@@ -213,7 +213,15 @@ function createCliService(): CliServiceType {
           prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous, accountedCostUsd)
       },
       getConversation,
-      openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal) },
+      openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {
+        const { sessionId, columns: _columns, rows: _rows, ...queryOptions } = launch
+        const handle = await claudeCode.query({ ...queryOptions, resume: sessionId, keepStdinOpen: true, noSessionPersistence: true })
+        try {
+          const settings = await handle.getSettings(), permissionMode = await handle.getPermissionMode()
+          if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
+          return { settings, permissionMode }
+        } finally { await handle.close() }
+      }) },
       getNativeTerminal,
       isConversationBusy,
       isCurrentTurn,
