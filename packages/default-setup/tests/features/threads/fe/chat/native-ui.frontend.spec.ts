@@ -216,6 +216,14 @@ it('keeps static SVG in an image and interactive SVG in an opaque scriptless fra
   const frame = f.root.querySelector('iframe')!
   expect(frame.getAttribute('sandbox')).toBe('')
   expect(frame.title).toBe('Native drawing')
+  const sizingImage = frame.parentElement!.querySelector('img')!
+  expect(sizingImage.getAttribute('aria-hidden')).toBe('true')
+  expect(sizingImage.alt).toBe('')
+  expect(sizingImage.style.width).toBe('100px')
+  expect(sizingImage.style.aspectRatio).toBe('2')
+  expect(frame.style.width).toBe('')
+  expect(frame.srcdoc).toContain('width: 100% !important')
+  expect(frame.srcdoc).toContain('height: 100% !important')
   expect(frame.srcdoc).toContain("script-src 'none'")
   expect(frame.srcdoc).toContain('<animate'); expect(frame.srcdoc).toContain('rect:hover')
   expect(frame.srcdoc).not.toContain('<script'); expect(frame.srcdoc).not.toContain('onload')
@@ -232,6 +240,20 @@ it('normalizes an SVG without xmlns and preserves its internal references', asyn
   expect(parsed.querySelector('use')?.namespaceURI).toBe('http://www.w3.org/2000/svg')
   expect(parsed.querySelector('use')?.getAttribute('href')).toBe('#shape')
   expect(drawing.ratio).toBe(2)
+})
+
+
+it('preserves intrinsic SVG dimensions while fitting only the scriptless frame copy', () => {
+  const drawing = prepareClaudeSvg('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="48" viewBox="0 0 180 48" style="width:180px!important;height:48px!important"><rect width="180" height="48"/></svg>')!
+  const intrinsic = new DOMParser().parseFromString(drawing.source, 'image/svg+xml').querySelector('svg')!
+  const framed = new DOMParser().parseFromString(drawing.frameSource, 'image/svg+xml').querySelector('svg')!
+  expect(intrinsic.getAttribute('width')).toBe('180')
+  expect(intrinsic.getAttribute('height')).toBe('48')
+  expect(intrinsic.style.width).toBe('180px')
+  expect(framed.style.width).toBe('100%')
+  expect(framed.style.height).toBe('100%')
+  expect(framed.style.getPropertyPriority('width')).toBe('important')
+  expect(drawing.ratio).toBe(3.75)
 })
 
 
