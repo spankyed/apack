@@ -115,7 +115,38 @@ test('reads native Agent selections and copies excerpts without crossing parent 
   }finally{
     await electronApp.evaluate(({clipboard,nativeImage},{saved,expected})=>{if(clipboard.readText()!==expected)return;const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},{saved,expected:selectedDraft})
   }
-  for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await writeFile(join(workspace!,'agent-layout-'+width+'.json'),JSON.stringify(await focused.evaluate(root=>{const nodes=[root,root.parentElement!,root.parentElement!.parentElement!,root.parentElement!.parentElement!.parentElement!,...root.children,...root.querySelectorAll('form > *')];return nodes.map(el=>{const b=el.getBoundingClientRect(),s=getComputedStyle(el);return {tag:el.tagName,class:el.className,top:b.top,bottom:b.bottom,height:b.height,minHeight:s.minHeight,maxHeight:s.maxHeight,flex:s.flex,overflow:s.overflow}})}),null,2));await expect(agentComposer).toBeInViewport();await expect(agentComposer).toHaveText(workerDraft);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();const pane=await focused.boundingBox(),box=await form.boundingBox(),transcript=await focused.getByRole('region',{name:'Agent transcript',exact:true}).boundingBox();expect(box!.y+box!.height).toBeLessThanOrEqual(pane!.y+pane!.height+1);expect(transcript!.height).toBeGreaterThanOrEqual(64);await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-selection-'+width+'.png')});await form.getByRole('button',{name:'Session tools',exact:true}).click();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-everyday-'+width+'.png')});await review(form)}
+  for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await writeFile(join(workspace!,'agent-layout-'+width+'.json'),JSON.stringify(await focused.evaluate(root=>{const nodes=[root,root.parentElement!,root.parentElement!.parentElement!,root.parentElement!.parentElement!.parentElement!,...root.children,...root.querySelectorAll('form > *')];return nodes.map(el=>{const b=el.getBoundingClientRect(),s=getComputedStyle(el);return {tag:el.tagName,class:el.className,top:b.top,bottom:b.bottom,height:b.height,minHeight:s.minHeight,maxHeight:s.maxHeight,flex:s.flex,overflow:s.overflow}})}),null,2));await agentComposer.scrollIntoViewIfNeeded();await expect(agentComposer).toBeInViewport();await expect(agentComposer).toHaveText(workerDraft);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();const pane=await focused.boundingBox(),box=await form.boundingBox(),transcript=await focused.getByRole('region',{name:'Agent transcript',exact:true}).boundingBox();expect(box!.y+box!.height).toBeLessThanOrEqual(pane!.y+pane!.height+1);expect(transcript!.height).toBeGreaterThanOrEqual(64);await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-selection-'+width+'.png')});await form.getByRole('button',{name:'Session tools',exact:true}).click();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-everyday-'+width+'.png')});await review(form)}
+  const longDraft=Array.from({length:12},(_,index)=>`Release review item ${index+1}: verify behavior and document the result.`).join('\n\n')
+  await agentComposer.fill(longDraft)
+  const details=focused.locator('details').first()
+  await details.locator(':scope > summary').click()
+  await expect(details).toHaveAttribute('open','')
+  const extended=await focused.evaluate(root=>{const pane=root.getBoundingClientRect(),form=root.querySelector('form')!.getBoundingClientRect(),transcript=root.querySelector('[aria-label="Agent transcript"]')!.parentElement!.getBoundingClientRect();return {pane:{top:pane.top,bottom:pane.bottom,height:pane.height},form:{top:form.top,bottom:form.bottom,height:form.height},transcript:{height:transcript.height}}})
+  await writeFile(join(workspace!,'agent-extended-layout.json'),JSON.stringify(extended,null,2))
+  const tail=await agentComposer.evaluate(root=>{
+    const editor=root.closest('.native-agent-editor')!,body=editor.parentElement!.parentElement!
+    editor.scrollTop=editor.scrollHeight;body.scrollTop=body.scrollHeight
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null,last:Node|null=null;while(node=walker.nextNode())if(node.textContent?.includes('Release review item 12:'))last=node
+    if(!last)throw Error('Final draft line missing')
+    const range=document.createRange();range.selectNodeContents(last);const bounds=range.getBoundingClientRect(),viewport=body.getBoundingClientRect(),inner=editor.getBoundingClientRect()
+    return {top:bounds.top,bottom:bounds.bottom,visibleTop:Math.max(viewport.top,inner.top),visibleBottom:Math.min(viewport.bottom,inner.bottom),text:last.textContent}
+  })
+  expect(tail.top).toBeGreaterThanOrEqual(tail.visibleTop);expect(tail.bottom).toBeLessThanOrEqual(tail.visibleBottom)
+  await writeFile(join(workspace!,'agent-draft-tail.json'),JSON.stringify(tail,null,2))
+  await appPage.screenshot({path:testInfo.outputPath('native-agent-extended-680.png')})
+  expect(extended.form.bottom).toBeLessThanOrEqual(extended.pane.bottom+1)
+  expect(extended.transcript.height).toBeGreaterThanOrEqual(64)
+  await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+  await agentComposer.evaluate(root=>root.scrollIntoView({block:'nearest'}))
+  await expect(agentComposer).toContainText('Release review item 12:')
+  await details.locator(':scope > summary').click()
+  await agentComposer.fill('');await agentComposer.pressSequentially('#release')
+  const suggestion=form.getByRole('button',{name:'Complete #release',exact:true})
+  await expect(suggestion).toBeVisible();await suggestion.scrollIntoViewIfNeeded()
+  await appPage.screenshot({path:testInfo.outputPath('native-agent-suggestions-680.png')})
+  await suggestion.click();await expect(agentComposer).toHaveText('#release-complete')
+  await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+  await agentComposer.fill(workerDraft)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parentDraft)
   const parentReview=await review(card);await parentReview.click();await expect.poll(async()=>(await reads()).length).toBe(3)
   expect((await reads())[2]).toMatchObject({before:{text:parentDraft},selected:false})
@@ -135,5 +166,5 @@ test('reads native Agent selections and copies excerpts without crossing parent 
   await composer.fill('Continue the same session after reviewing Agent excerpts.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-agent-selection-proof.json'),JSON.stringify({taskId,agentMessage:message,selectedTranscript,selectedDraft,parentDraft,workerDraft,receipts:await reads(),copies:await copies(),sessionId,boundNativePid},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeAgentSelection:true,nativeAgentClipboard:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeAgentSelection:true,nativeAgentClipboard:true,nativeAgentComposeLayout:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
