@@ -74,6 +74,14 @@ const context = useSelector(actor, state => state.context)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
 const state = computed(() => snapshot.value?.state)
 const selectionRoot = ref<HTMLElement | null>(null)
+// Budget the composer from its assigned pane, leaving header and readable transcript space.
+watch(selectionRoot, (element, _previous, cleanup) => {
+  if (!element) return
+  const update = () => element.style.setProperty('--agent-available-height', `${element.clientHeight}px`)
+  const observer = new ResizeObserver(update)
+  observer.observe(element); update()
+  cleanup(() => observer.disconnect())
+}, { flush: 'post' })
 const pageSelection = provideClaudeUiSelection(() => selectionRoot.value)
 watch(() => JSON.stringify([uiMount.value, state.value?.agent?.messages.filter(message => message.role === 'user').at(-1)?.uuid]), pageSelection.clear)
 

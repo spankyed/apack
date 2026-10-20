@@ -1,12 +1,12 @@
 <template>
-  <form :style="promptThemeStyle" class="native-agent-composer mx-4 mb-4 min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
+  <form :style="promptThemeStyle" class="native-agent-composer mx-4 mb-4 flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
     <StatusLine :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
-    <TiptapEditor ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
+    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
       <button v-for="(row, index) in offers" :key="index" type="button" class="block w-full px-4 py-2 text-left text-xs text-neutral-300 hover:bg-white/5" @mousedown.prevent @click="bridge?.selectCompletion(index, row.offerId)">{{ row.label ?? row.text }}</button>
     </div>
     <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
-    <div class="flex items-center justify-between gap-3 px-4 pb-3">
+    <div class="flex shrink-0 items-center justify-between gap-3 px-4 pb-3">
       <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
       <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : 'Send to Agent' }}</button>
     </div>
@@ -115,6 +115,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 11rem)); }
+.native-agent-composer :deep(.native-strip--open) { min-height: 0; }
 @media (max-height: 700px) {
   .native-agent-composer { margin-bottom: .75rem; }
   .native-agent-composer :deep(.native-agent-editor) { min-height: 4rem; max-height: 6rem; padding-block: .5rem; }
