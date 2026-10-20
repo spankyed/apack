@@ -846,7 +846,7 @@ export const threadsSystem = setup({
       const message = repository.chatQueries.messageById(messageId as EARS.EntityId);
       if (!message || !repository.chatQueries.hasMessageInThread(messageId as EARS.EntityId, threadId as EARS.EntityId)) return;
       // Retired one-shot decisions cannot regain authority through a delayed frontend response.
-      if (message.responseTimestamp && message.blocks?.some(block => block.type === 'question' || block.type === 'approval')) return;
+      if (message.responseTimestamp && (message.context?.claudeNativeQuestion || message.blocks?.some(block => block.type === 'question' || block.type === 'approval'))) return;
 
       const result = repository.chatCommands.updateMessageBlockResponse({
         messageId: messageId as EARS.EntityId,
