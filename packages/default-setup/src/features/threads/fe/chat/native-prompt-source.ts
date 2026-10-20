@@ -11,8 +11,8 @@ export const ClaudePromptSource = Node.create({
   name: 'claudePromptSource', group: 'block', content: 'text*', marks: '',
   code: true, defining: true, isolating: true, whitespace: 'pre',
   addAttributes: () => ({ references: { default: [] } }),
-  parseHTML: () => [{ tag: 'pre[data-claude-prompt-source]' }],
-  renderHTML: () => ['pre', { 'data-claude-prompt-source': '', style: 'white-space:pre-wrap;overflow-wrap:anywhere' }, ['code', 0]],
+  parseHTML: () => [{ tag: 'div[data-claude-prompt-source]' }],
+  renderHTML: () => ['div', { 'data-claude-prompt-source': '', style: 'white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace' }, 0],
   addStorage: () => ({ markdown: { serialize(state: MarkdownSerializerState, node: ProseMirrorNode) { state.write(node.textContent); state.closeBlock(node) } } }),
   addKeyboardShortcuts() {
     return { 'Shift-Enter': () => this.editor.isActive(this.name) && this.editor.commands.insertContent({ type: 'text', text: '\n' }) }

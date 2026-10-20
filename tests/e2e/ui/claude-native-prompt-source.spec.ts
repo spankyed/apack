@@ -99,7 +99,8 @@ test('edits exact native source at reference URI and fence carets without losing
   expect(second.result.text).toBe(first.result.text);expect(second.result.cursor).toBe(second.result.text.indexOf('~~~~')+1)
   await expect(literal).toHaveText(second.result.text)
   await composer.press('Backspace')
-  const expected=second.result.text.slice(0,second.result.cursor-1)+second.result.text.slice(second.result.cursor)
+  const afterFence=second.result.text.slice(0,second.result.cursor-1)+second.result.text.slice(second.result.cursor)
+  let expected=afterFence
   await expect(literal).toHaveText(expected)
   await expect(composer.locator('.claude-prompt-decoration')).toHaveCount(0)
   expect((await context()).messages).toEqual(before.messages)
@@ -107,6 +108,16 @@ test('edits exact native source at reference URI and fence carets without losing
     await appPage.setViewportSize({width,height:width===680?600:900});await literal.scrollIntoViewIfNeeded()
     await expect(status).toContainText('Session ready');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-prompt-source-'+width+'.png')})
+  }
+  await composer.press('Meta+ArrowDown');await composer.press('End')
+  await composer.press('Shift+Enter');await composer.pressSequentially('Review linked notes.')
+  expected=afterFence+'\nReview linked notes.'
+  await expect(literal).toHaveText(expected)
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===680?600:900})
+    await composer.press('Meta+ArrowDown');await composer.press('End')
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-prompt-source-end-'+width+'.png')})
   }
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='user'&&row.text.includes(expected))).toBe(true)
@@ -122,6 +133,6 @@ test('edits exact native source at reference URI and fence carets without losing
   await composer.fill('Continue after verifying the native source editor.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-prompt-source-proof.json'),JSON.stringify({sessionId,boundNativePid,referenceHref,receipts:await receipts(),expected,submitted:submitted.text,sentUuid:sent.context.cliUuid,references:sent.references.context}))
+  await writeFile(join(workspace!,'native-prompt-source-proof.json'),JSON.stringify({sessionId,boundNativePid,referenceHref,receipts:await receipts(),afterFence,expected,submitted:submitted.text,sentUuid:sent.context.cliUuid,references:sent.references.context}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativePromptSource:true,nativeStructuredPrompt:true,sameNativeOwner:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
