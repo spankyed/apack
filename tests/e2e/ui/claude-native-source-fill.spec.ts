@@ -95,6 +95,27 @@ test('round trips native source fills with line breaks and explicit context with
     await expect.poll(async()=>(await receipts()).length).toBe(count)
     if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')==='true')await tools.click()
   }
+  const reloads:any[]=[]
+  const reloadDraft=async(text:string,linked:boolean)=>{
+    const stored=()=>appPage.evaluate(expected=>Object.entries(localStorage).filter(([key])=>key.startsWith('apack.claude-parent-draft:')).map(([key,value])=>({key,value:JSON.parse(value)})).find(row=>row.value.text===expected),text)
+    await expect.poll(stored).toBeTruthy()
+    const before=(await stored())!
+    expect(before.value.doc.content[0].type).toBe('claudePromptSource')
+    const references=before.value.doc.content[0].attrs.references
+    expect(references.length).toBe(linked?1:0)
+    await appPage.reload();await app.waitForPlugin('default-setup/threads');await app.navigate('default-setup/threads')
+    await appPage.evaluate(threadId=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'VIEW_THREAD',threadId});actor.send({type:'VIEW_DASHBOARD'})},threadId)
+    await expect(literal).toHaveText(text)
+    await expect.poll(async()=>(await context()).native?.state?.nativePid).toBe(boundNativePid)
+    await expect(status).toContainText('Session ready')
+    await expect.poll(async()=>(await stored())?.value.selection).toEqual(before.value.selection)
+    expect((await stored())!.value.doc).toEqual(before.value.doc)
+    // Native drawing/callback state is intentionally not persisted with document data.
+    await expect(composer.locator('.claude-prompt-decoration')).toHaveCount(0)
+    await composer.focus();await composer.pressSequentially('!');await expect(literal).not.toHaveText(text)
+    await composer.press('Backspace');await expect(literal).toHaveText(text)
+    reloads.push({linked,text,selection:before.value.selection,references,restoredDocument:true,editable:true,sameNativePid:true})
+  }
   await addReference('Use release context')
   await composer.press('End');await composer.press('Shift+Enter');await composer.pressSequentially('Keep this line while preparing the review.')
   await composer.press('Control+a')
@@ -113,6 +134,7 @@ test('round trips native source fills with line breaks and explicit context with
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-source-fill-linked-'+width+'.png')})
   }
+  await reloadDraft(firstText,true)
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='user'&&row.text.includes(firstText))).toBe(true)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
@@ -130,6 +152,7 @@ test('round trips native source fills with line breaks and explicit context with
     await expect(status).toContainText('Session ready');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-source-fill-fresh-'+width+'.png')})
   }
+  await reloadDraft(secondText,false)
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='user'&&row.text===secondText)).toBe(true)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
@@ -144,6 +167,6 @@ test('round trips native source fills with line breaks and explicit context with
   await composer.fill('Continue after verifying native source fills.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-source-fill-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,referenceHref,operations:await receipts(),submits,firstText,secondText,firstUuid:firstSent.context.cliUuid,secondUuid:secondSent.context.cliUuid,retainedReferences:firstSent.references.context,withdrawnReferences:secondSent.references?.context??[]}))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSourceFill:true,nativeStructuredPrompt:true,sameNativeOwner:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-source-fill-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,referenceHref,operations:await receipts(),reloads,submits,firstText,secondText,firstUuid:firstSent.context.cliUuid,secondUuid:secondSent.context.cliUuid,retainedReferences:firstSent.references.context,withdrawnReferences:secondSent.references?.context??[]}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSourceFill:true,nativeSourceFillReload:true,nativeStructuredPrompt:true,sameNativeOwner:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
