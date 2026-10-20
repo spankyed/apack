@@ -168,5 +168,6 @@ async function nativeTaskControl(n,binding,request,abort,current){
   elapsedMs:start===undefined?undefined:Math.max(0,(end??Date.now())-start-paused),
   tokenCount:numeric(task.result?.totalTokens??task.progress?.tokenCount),toolUseCount:numeric(task.result?.totalToolUseCount??task.progress?.toolUseCount),
   error:error?.slice(0,16384),errorTruncated:(error?.length??0)>16384};
- return {details:{taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
+ const handback=task.type==='local_agent'&&typeof task.handbackReport?.text==='string'?{taskId:request.task_id,text:task.handbackReport.text,...(typeof task.handbackReport.warning==='string'?{warning:task.handbackReport.warning}:{})}:undefined;
+ return {details:{...(handback?{handback}:{}),taskId:request.task_id,name:task.description??task.agentType??request.task_id,status:task.status,canMessage,canInput,metadata,messages,truncated}};
 }`

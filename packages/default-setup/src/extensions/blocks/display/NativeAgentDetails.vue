@@ -1,5 +1,6 @@
 <template>
   <div>
+      <NativeAgentHandback v-if="details.handback" :report="details.handback" />
       <dl v-if="details.metadata" :aria-label="details.workflow ? 'Workflow metadata' : 'Agent details'" class="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-white/10 pb-3 text-[11px]">
         <dt class="text-neutral-500">Status</dt><dd class="m-0 text-neutral-300">{{ details.status === 'killed' ? 'Stopped' : details.status }}</dd>
         <template v-if="details.metadata.model"><dt class="text-neutral-500">Model</dt><dd class="m-0 break-words text-neutral-300 [overflow-wrap:anywhere]">{{ details.metadata.model }}</dd></template>
@@ -17,6 +18,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import NativeAgentHandback from './NativeAgentHandback.vue'
 import type { ClaudeNativeTaskDetails } from '#features/code/common/native-terminal.ts'
 defineProps<{ details: ClaudeNativeTaskDetails }>()
 </script>

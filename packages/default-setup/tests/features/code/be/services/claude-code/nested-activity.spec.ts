@@ -42,3 +42,28 @@ describe('process-owned nested Claude activity', () => {
     expect(() => activity.receive(frame('foreign', 'large', [{ type: 'text', text: 'x'.repeat(2097152) }]))).toThrow('buffer limit')
   })
 })
+
+
+it('routes one complete handback only to its started task owner, including a late root binding', () => {
+  const activity=createClaudeNestedActivity(),receive=vi.fn()
+  const start={type:'system',subtype:'task_started',task_type:'local_agent',task_id:'child',tool_use_id:'root',session_id:'session',run_id:'run'} as StreamLine
+  const report={type:'system',subtype:'task_notification',task_id:'child',tool_use_id:'root',session_id:'session',run_id:'run',status:'completed',handback:'send',handback_report:{text:'Complete report\n<script>literal</script>',warning:'Original safety warning'},uuid:'report'} as StreamLine
+  expect(activity.receive(start)).toBe(false)
+  expect(activity.receive({...report,session_id:'foreign'})).toBe(false)
+  expect(activity.receive({...report,run_id:'old'})).toBe(false)
+  expect(activity.receive({...report,tool_use_id:'foreign'})).toBe(false)
+  expect(activity.receive({...report,handback_report:{text:'x',warning:42}} as StreamLine)).toBe(false)
+  expect(activity.receive(report)).toBe(true)
+  activity.register('foreign',receive);expect(receive).not.toHaveBeenCalled()
+  activity.register('root',receive);expect(receive).toHaveBeenCalledExactlyOnceWith(report)
+  activity.receive({...report,uuid:'duplicate',handback_report:{text:'Do not replace the delivered report'}} as StreamLine)
+  expect(receive).toHaveBeenCalledTimes(1)
+  const resumed=vi.fn();activity.register('resumed-root',resumed)
+  activity.receive({...start,run_id:'resumed',tool_use_id:'resumed-root'})
+  const resumedReport={...report,run_id:'resumed',tool_use_id:'resumed-root',uuid:'resumed-report'}
+  expect(activity.receive(resumedReport)).toBe(true)
+  expect(resumed).toHaveBeenCalledExactlyOnceWith(resumedReport)
+  activity.receive(report);expect(receive).toHaveBeenCalledTimes(1)
+  expect(activity.takeAccounting()).toEqual({toolCallCount:0,mutatedPaths:[],hadErrors:false})
+  activity.close();activity.receive(report);expect(receive).toHaveBeenCalledTimes(1)
+})

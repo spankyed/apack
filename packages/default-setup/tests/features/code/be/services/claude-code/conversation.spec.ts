@@ -379,3 +379,20 @@ it('starts a resumed owner at already-accounted native cost and resets with the 
   await vi.waitFor(() => expect(charges).toHaveLength(2)); expect(charges[1]).toBeCloseTo(0.2)
   await owner.close()
 })
+
+
+it('observes an empty idle native drain without creating a turn and still accepts an empty bound user result',async()=>{
+ const f=fixture(),turns:ClaudeConversationTurn[]=[],seen:StreamLine[][]=[]
+ const consume=async(turn:ClaudeConversationTurn)=>{turns.push(turn);const rows:StreamLine[]=[];for await(const line of turn.handle.events)rows.push(line);seen.push(rows);owner.release(turn.handle)}
+ const owner=createClaudeConversation(f.native,consume),observe=vi.fn();owner.subscribe(observe)
+ const empty={...result(5),num_turns:0,result:'',is_error:false,origin:{kind:'task-notification',producer:'session-task'}}
+ f.push(empty)
+ await vi.waitFor(()=>expect(observe).toHaveBeenCalledWith(empty))
+ expect(turns).toHaveLength(0);expect(owner.busy).toBe(false)
+ const id=owner.start('An actual user input',consume)
+ f.push(started(id));f.push({...empty,total_cost_usd:6,user_message_uuid:id})
+ await vi.waitFor(()=>expect(seen).toHaveLength(1))
+ expect(turns).toHaveLength(1);expect(turns[0]!.inputId).toBe(id);expect(turns[0]!.costBaseline).toBe(5)
+ expect(seen[0]).toContainEqual(expect.objectContaining({type:'result',user_message_uuid:id,num_turns:0}))
+ await owner.close()
+})

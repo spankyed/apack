@@ -30,6 +30,10 @@
       <!-- <span v-if="badge" class="text-xs text-neutral-500 flex-shrink-0 tabular-nums">{{ badge }}</span> -->
     </button>
 
+    <template v-for="entry in entries" :key="'report-'+entry.id">
+      <NativeAgentHandback v-if="entry.handback" :report="entry.handback" class="mx-3 mb-3" />
+    </template>
+
     <!-- Artifact ref link — shown below the header when set (Phase C diff) -->
     <button
       v-if="artifactRef && state !== 'streaming'"
@@ -118,6 +122,7 @@ import { computeLabel } from './tool-activity-label.ts'
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 import { claudeToolDrawings } from './native-tool-drawings.ts'
 import NativeTaskControls from './NativeTaskControls.vue'
+import NativeAgentHandback from './NativeAgentHandback.vue'
 import NativeStatusText from './NativeStatusText.vue'
 
 interface ArtifactRef {

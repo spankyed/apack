@@ -36,6 +36,7 @@ export interface ToolActivityEntry {
   /** Exact original result row; structured output remains owned by the native process. */
   nativeResult?: { uuid: string; sessionId: string };
   /** Optional full details revealed when the row is expanded. */
+  handback?: import('#features/code/common/native-handback.ts').ClaudeAgentHandback;
   details?: { input?: unknown; output?: string; error?: string };
 }
 

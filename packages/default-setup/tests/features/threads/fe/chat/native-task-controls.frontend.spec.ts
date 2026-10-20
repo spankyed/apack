@@ -67,3 +67,16 @@ it('opens the bound native Agent through the app control', async () => {
   f.state.value = { ownerId: 'owner', taskId: 'agent', revision: 2, operation: 'foreground', status: 'pending' }; await nextTick()
   expect(open.disabled).toBe(true)
 })
+
+
+it('preserves the complete attributed handback and warning as inert Agent output', async () => {
+ const f=await fixture()
+ const text='Release review complete.\n<script>window.bad=true</script>\nThe caller should review the migration notes.'
+ f.state.value.details!.handback={taskId:'agent',text,warning:'Original native safety warning <img src=x onerror=bad()>'}
+ await nextTick()
+ const report=f.root.querySelector('[data-native-handback-task="agent"]')!
+ expect(report.textContent).toContain(text)
+ expect(report.querySelector('[role="alert"]')?.textContent).toContain('Original native safety warning <img src=x onerror=bad()>')
+ expect(report.querySelector('script,img')).toBeNull()
+ expect(report.textContent).toContain('From the delegated Agent')
+})

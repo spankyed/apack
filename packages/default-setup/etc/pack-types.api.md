@@ -560,6 +560,14 @@ interface Category {
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
+/** Original Agent output, attributed to its native task; never person input or approval. */
+interface ClaudeAgentHandback {
+    taskId: string;
+    runId?: string;
+    text: string;
+    warning?: string;
+}
+
 type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>;
 
 declare const ClaudeContextUsageSchema: z.ZodObject<{
@@ -2349,6 +2357,7 @@ interface ClaudeNativeSubmissionReceipt {
 }
 
 interface ClaudeNativeTaskDetails {
+    handback?: ClaudeAgentHandback;
     taskId: string;
     name: string;
     status: string;

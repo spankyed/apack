@@ -315,6 +315,11 @@ export async function consumeStream(
               const target = toolActivity;
               activity.register(toolId, event => {
                 const nested = event as any;
+                if (nested.type === 'system' && nested.subtype === 'task_notification' && nested.handback_report) {
+                  target.update(toolId, { handback: { taskId: nested.task_id, ...(nested.run_id ? { runId: nested.run_id } : {}), text: nested.handback_report.text, ...(typeof nested.handback_report.warning === 'string' ? { warning: nested.handback_report.warning } : {}) } });
+                  target.flush();
+                  return;
+                }
                 if (!Array.isArray(nested.message?.content)) return;
                 const parts: string[] = [];
                 for (const block of nested.message.content) {

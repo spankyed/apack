@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 import vm from 'node:vm'
+import { ClaudeNativeTaskResultSchema } from '#features/code/be/services/claude-code/terminal-tasks.ts'
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
 function fixture() {
-  const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
+  const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string }; handbackReport?: { text: string; warning?: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
   const registry = { get: (id: string) => tasks.find(task => task.id === id), all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
   const messageQueue = { getCommandQueueSnapshot: vi.fn(() => []) }, getMessages = vi.fn(() => [])
   const liveGate = vi.fn((_queue: unknown, read: () => unknown) => read)
@@ -247,4 +248,15 @@ it('resumes a settled paused Workflow only through the original admitted command
  expect(ticket.workflowResumeTaskId).toBe('workflow-a');expect(done).toHaveBeenCalledExactlyOnceWith(text,{shouldQuery:true,display:'system',metaMessages:[text]});expect(cancel).not.toHaveBeenCalled()
  task.status='running';await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('not paused and settled')
  task.status='paused';panel.workflowDone=undefined;await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('callback is unavailable');expect(cancel).toHaveBeenCalledTimes(1)
+})
+
+
+it('projects the original complete report and warning only for the inspected native Agent',async()=>{
+ const f=fixture(),report={text:'Complete native report\n<script>literal text</script>',warning:'Original native warning'}
+ f.tasks[0]!.handbackReport=report
+ const result=await f.request('inspect')
+ expect(result.details.handback).toEqual({taskId:'agent-a',...report})
+ expect(ClaudeNativeTaskResultSchema.safeParse(result).success).toBe(true)
+ expect(ClaudeNativeTaskResultSchema.safeParse({...result,details:{...result.details,handback:{taskId:'foreign',...report}}}).success).toBe(false)
+ expect(f.stop).not.toHaveBeenCalled()
 })

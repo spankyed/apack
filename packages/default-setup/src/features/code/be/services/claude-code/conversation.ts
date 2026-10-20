@@ -215,6 +215,16 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
             continue
           }
         }
+        // Background handback can drain an idle native result without an assistant turn.
+        // Keep its raw observation and cumulative ledger, but do not create a chat placeholder.
+        if (!active && line.type === 'result' && line.subtype === 'success' && line.is_error !== true
+          && line.num_turns === 0 && line.result === '' && !line.user_message_uuid
+          && typeof line.origin === 'object' && line.origin !== null
+          && 'kind' in line.origin && line.origin.kind === 'task-notification'
+          && 'producer' in line.origin && line.origin.producer === 'session-task') {
+          cumulativeCost = Math.max(cumulativeCost, normaliseResult(event as ResultLine).totalCostUsd)
+          continue
+        }
         if (!active && (line.type === 'assistant' || line.type === 'result'
           || line.type === 'stream_event' || line.type === 'control_request')) activate(consumeAutonomous)
         const current = active
