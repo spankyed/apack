@@ -34,3 +34,14 @@ it('loads imported native rows chronologically before pagination regardless of r
  expect(repository.chatQueries.threadData(thread.id)!.messages!.map(m=>m.text)).toEqual(['First','Second']);
  expect(repository.chatQueries.threadDataPaginated(thread.id)!.messages!.map(m=>m.text)).toEqual(['First','Second']);
 });
+
+it('restores native-owned history by original time and stable same-session order before pagination',()=>{
+ const sessionId='11111111-1111-4111-8111-111111111111',thread=repository.threadCommands.create({topic:'Native order',instructions:''})
+ repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId,nativeLaunch:{sessionId,cwd:'/fixture'}}}})
+ const native=(timestamp:number,order:number)=>({cliUuid:String(order),claudeTerminalMessage:{sessionId,timestamp,order}})
+ repository.chatCommands.addMessage({threadId:thread.id,text:'Assistant',sender:'assistant',timestamp:300,context:native(100,2)})
+ repository.chatCommands.addMessage({threadId:thread.id,text:'User',sender:'user',timestamp:400,context:native(100,1)})
+ repository.chatCommands.addMessage({threadId:thread.id,text:'Earlier',sender:'assistant',timestamp:500,context:native(99,3)})
+ expect(repository.chatQueries.threadData(thread.id)!.messages!.map(row=>row.text)).toEqual(['Earlier','User','Assistant'])
+ expect(repository.chatQueries.threadDataPaginated(thread.id)!.messages!.map(row=>row.text)).toEqual(['Earlier','User','Assistant'])
+})

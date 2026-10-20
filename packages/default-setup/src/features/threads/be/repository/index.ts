@@ -438,16 +438,21 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
   return thread[0] as AgentThreadData | null;
 }
 
-/** Restored relation order is not a chronology; imported Claude rows retain their native timestamps. */
-function orderImportedClaudeMessages(threadId: EARS.EntityId, messages: Partial<MessageEntity>[]) {
+/** Claude relation order is not a chronology after restoration. Queue placement stays separate. */
+function orderClaudeSessionMessages(threadId: EARS.EntityId, messages: Partial<MessageEntity>[]) {
   const thread = threadQueries.byId(threadId);
-  return thread?.tags?.includes('imported') && thread.context?.claudeCode
-    ? messages.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
-    : messages;
+  if (!thread?.context?.claudeCode || !thread.tags?.includes('imported') && !thread.context.claudeCode.nativeLaunch) return messages;
+  const native = (message: Partial<MessageEntity>) => message.context?.claudeTerminalMessage as { sessionId?: string; timestamp?: number; order?: number } | undefined;
+  return messages.sort((a, b) => {
+    const left = native(a), right = native(b);
+    const time = (left?.timestamp ?? a.timestamp ?? 0) - (right?.timestamp ?? b.timestamp ?? 0);
+    if (time || !left?.sessionId || left.sessionId !== right?.sessionId) return time;
+    return (left.order ?? 0) - (right.order ?? 0);
+  });
 }
 
 function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[] {
-  return orderImportedClaudeMessages(threadId, (query.ids(threadId)
+  return orderClaudeSessionMessages(threadId, (query.ids(threadId)
     .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? [])
     .filter(m => !m.deleted))
     .sort((a, b) => {
@@ -466,7 +471,7 @@ function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
     .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []);
 
   const queued = allMessages.filter(m => m.status === 'queued');
-  const regular = orderImportedClaudeMessages(threadId, allMessages.filter(m => m.status !== 'queued'));
+  const regular = orderClaudeSessionMessages(threadId, allMessages.filter(m => m.status !== 'queued'));
 
   // Reverse to get newest-first for paging, then slice
   const reversed = [...regular].reverse();

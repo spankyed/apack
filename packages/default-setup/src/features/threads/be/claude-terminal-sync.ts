@@ -13,7 +13,7 @@ const object = (value: unknown): Record<string, unknown> | undefined => value !=
 
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
 export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean, readLaunch: () => Promise<ClaudeNativeLaunch | undefined>) {
-  const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
+  const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; timestamp?: number; order?: number }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
   const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string }>()
@@ -39,14 +39,21 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     const ids = [context?.cliUuid, object(context?.claudeNativeUserMessage)?.uuid,
       ...(Array.isArray(context?.claudeNativeMessages) ? context.claudeNativeMessages.map(value => object(value)?.uuid) : []),
       ...(message.blocks ?? []).flatMap(block => { const rows = object(block.props)?.nativeMessages; return Array.isArray(rows) ? rows.map(value => object(value)?.uuid) : [] })]
-    for (const id of ids) if (typeof id === 'string' && sessionId) nativeMessages.set(JSON.stringify([sessionId, id]), { id: message.id, terminal: !!terminal })
+    for (const id of ids) if (typeof id === 'string' && sessionId) nativeMessages.set(JSON.stringify([sessionId, id]), { id: message.id, terminal: !!terminal, ...(typeof terminal?.timestamp === 'number' && Number.isFinite(terminal.timestamp) ? {timestamp:terminal.timestamp} : {}), ...(typeof terminal?.order === 'number' && Number.isSafeInteger(terminal.order) && terminal.order > 0 ? {order:terminal.order} : {}) })
   }
+  let nativeOrder = 0
+  for (const message of nativeMessages.values()) nativeOrder = Math.max(nativeOrder, message.order ?? 0)
   function upsert(entry: ClaudeNativeJournalEntry) {
     const row = projectClaudeTerminalHistory(entry)
     if (!row) return
     const key = JSON.stringify([row.sessionId, row.uuid]), existing = nativeMessages.get(key)
     const references = row.sender === 'user' ? acceptedReferences.get(key) ?? row.references : row.references
     if (existing && !existing.terminal) return
+    const timestamp = row.timestamp ?? existing?.timestamp, order = existing?.order ?? ++nativeOrder
+    const terminal = object(row.context.claudeTerminalMessage)!
+    // Preserve the recovered clock and ordinal when a later journal update omits them.
+    row.context.claudeTerminalMessage = {...terminal, order, ...(timestamp !== undefined ? {timestamp} : {})}
+    if (existing) nativeMessages.set(key, {...existing, order, timestamp})
     for (const block of row.blocks) {
       if (block.type !== 'tool-activity') continue
       const entries = block.props.entries as ToolActivityEntry[]
@@ -66,10 +73,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     }
     if (existing) updateMessageState(existing.id, { text: row.text, blocks: row.blocks, context: row.context, ...(references ? { references } : {}) })
     else {
-      const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references })
+      const result = repository.chatCommands.addMessage({ threadId, sender: row.sender, text: row.text, blocks: row.blocks, context: row.context, references, ...(timestamp !== undefined ? {timestamp} : {}) })
       // addMessage trims the human entry path; a native row's exact text is already accepted.
       if (result.text !== row.text) repository.chatCommands.updateMessageState({ messageId: result.id, updates: { text: row.text } })
-      nativeMessages.set(key, { id: result.id, terminal: true })
+      nativeMessages.set(key, { id: result.id, terminal: true, order, timestamp })
       const message = repository.chatQueries.messageById(result.id)
       if (message) broadcastToPlugin('threads', { type: 'MESSAGE_ADDED', threadId, message })
     }

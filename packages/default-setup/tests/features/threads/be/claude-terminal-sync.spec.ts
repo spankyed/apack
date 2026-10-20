@@ -32,7 +32,7 @@ beforeEach(async () => {
 afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
 it.each([false, true])('persists the final row beyond the batch boundary on exit, damaged row: %s', async damaged => {
   const path = join(directory, sessionId + '.jsonl'), read = createClaudeNativeJournalReader()
-  const row = (uuid: string, text: string) => JSON.stringify({ sessionId, uuid, type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }) + '\n'
+  const row = (uuid: string, text: string) => JSON.stringify({ sessionId, uuid, timestamp: '2026-10-20T10:00:00Z', type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }) + '\n'
   await writeFile(path, row('22222222-2222-2222-2222-222222222222', 'a'.repeat(1300000)) + (damaged ? '{broken\n' : '') + row('33333333-3333-3333-3333-333333333333', 'b'.repeat(1300000)) + row('44444444-4444-4444-4444-444444444444', 'Final native answer'))
   let exited = false, release: (() => Promise<void>) | undefined
   const owner: ClaudeNativeTerminalOwner = {
@@ -52,6 +52,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
   expect(fake.messages, JSON.stringify(fake.thread.context)).not.toEqual([])
   expect(fake.messages.map(message => (message.context as Record<string, unknown>).cliUuid)).toEqual(['22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444'])
   expect(fake.messages.at(-1)?.text).toBe('Final native answer')
+  expect(fake.messages.at(-1)?.context).toMatchObject({claudeTerminalMessage:{timestamp:Date.parse('2026-10-20T10:00:00Z'),order:3}})
   expect(fake.thread.context.claudeCode).toMatchObject(damaged ? { chatState: 'error', sessionError: 'Native transcript contains invalid JSON' } : { chatState: 'paused', sessionError: undefined })
 })
 
