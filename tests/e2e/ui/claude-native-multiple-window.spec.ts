@@ -120,6 +120,7 @@ test('keeps independent window drafts and native ownership through popout detach
     for(const [page,target,name] of [[appPage,card,'main'],[popout,second,'popout']] as const){
       await page.setViewportSize({width,height:width===680?600:900})
       const tools=target.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
+      await page.screenshot({caret:'initial',path:testInfo.outputPath('native-multiple-window-'+name+'-'+width+'.png')})
       await expect(target.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
       await page.screenshot({caret:'initial',path:testInfo.outputPath('native-multiple-window-'+name+'-'+width+'.png')})
     }

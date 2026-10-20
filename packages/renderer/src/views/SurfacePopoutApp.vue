@@ -33,7 +33,7 @@
             v-if="canShowChat"
             data-onboarding-id="chat-area"
             class="relative min-h-0 overflow-hidden"
-            :style="{ flex: `${100 - canvasShare} 1 0%`, minHeight: 'min(180px, 100%)' }"
+            :style="{ flex: `${100 - canvasShare} 1 0%`, minHeight: 'auto', maxHeight: '100%' }"
           >
             <SurfacePane :surface="activeSurface" area="chat" />
           </ChatArea>
