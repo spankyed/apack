@@ -12,6 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('round-trips decorated structured replace append and cursor insertion through original native APIs', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
+  const {promptMedia}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -74,6 +75,15 @@ test('round-trips decorated structured replace append and cursor insertion throu
 
   const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
   await composer.fill('Review the pending release notes.')
+  if(promptMedia){
+    const image=(await readFile(join(workspace!,'native-app-image.png'))).toString('base64')
+    await card.evaluate((element,data)=>{const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0)),clipboard=new DataTransfer();clipboard.items.add(new File([bytes],'release-marker.png',{type:'image/png'}));element.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}))},image)
+    await expect(card.getByTitle('release-marker 1.png',{exact:true})).toBeVisible()
+    await composer.press('End');await composer.pressSequentially(' #')
+    const popup=appPage.locator('.reference-suggestion-popup');await popup.getByText('Threads',{exact:true}).click()
+    await popup.locator('.reference-suggestion-item').filter({has:appPage.getByText((await context()).topic,{exact:true})}).click();await expect(popup).toBeHidden()
+  }
+
   const receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-structured-prompt-receipts.json'),'utf8').catch(()=>'[]'))
   await card.getByRole('button',{name:'Use review outline',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(1)
@@ -89,6 +99,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
   await card.getByRole('button',{name:'Add review note',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(3)
   const proof=await receipts();expect(proof[2].result.isFilled).toBe(true)
+  if(promptMedia){await expect(card.getByTitle('release-marker 1.png',{exact:true})).toBeVisible();expect(proof[2].after.text).toContain((await context()).topic)}
   expect(proof[2].before.cursor).toBe(proof[2].before.text.indexOf('Review changes.'))
   await expect(composer.locator('.claude-prompt-decoration')).toHaveText('Please')
   expect(proof[2].after.text).toContain('Please Review changes.')
@@ -98,12 +109,13 @@ test('round-trips decorated structured replace append and cursor insertion throu
   for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')});if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-compact-checklist.png')})}}
   const before=(await context()).messages.length
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
-  await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&message.text===proof[2].after.text)).toBe(true)
+  await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text))).toBe(true)
+  if(promptMedia){const sent=(await context()).messages.slice(before).find((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text));expect(sent.references.images).toHaveLength(1);expect(sent.references.context).toEqual(expect.arrayContaining([expect.objectContaining({refType:'thread',refId:(await context()).threadId})]));await expect(card.getByTitle('release-marker 1.png',{exact:true})).toHaveCount(0)}
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-structured-prompt-proof.json'),JSON.stringify({receipts:proof,canonical:proof[2].after.text}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
