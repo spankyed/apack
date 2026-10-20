@@ -1,11 +1,13 @@
 import vm from 'node:vm'
+import {createHash} from 'node:crypto'
 import { claudeTerminalDocumentRuntime } from '#features/code/be/services/claude-code/terminal-document-runtime.ts'
 function fixture() {
   const render = vi.fn(async (_tree: unknown, _options: unknown) => '\x1b[31mOriginal code\x1b[39m'), provider = Symbol('fresh export'), code = Symbol('original CodeBlock'), columns = Symbol('original BodyColumns')
   const n = { documentDefaults: { $Et: () => ({ tasks: {}, taskDecorations: {}, settings: { originalSetting: true }, originalDefault: true }) }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, appProvider: { d_: provider }, documentRendering: { $d: { CodeBlock: code, MarkdownBlock: 'original MarkdownBlock', BodyColumns: { Provider: columns } } }, questionOptions: { j: () => 'session' }, staticRender: { v6e: render } }
   const theme = { text: '#abcdef' }
-  const draw = vm.runInNewContext(claudeTerminalDocumentRuntime + ';nativeDocumentTree', { nativeThemeProvider: () => ({ type: 'live theme', value: { resolvedTheme: theme } }), process: { stdout: { columns: 80 } }, AbortController })
-  return { n, render, draw, provider, code, columns, theme }
+  const hashes=new WeakMap<Function,string>()
+  const draw = vm.runInNewContext(claudeTerminalDocumentRuntime + ';nativeDocumentTree', { createHash,composerFunctionHashes:hashes,nativeThemeProvider: () => ({ type: 'live theme', value: { resolvedTheme: theme } }), process: { stdout: { columns: 80 } }, AbortController })
+  return { n, render, draw, provider, code, columns, theme,hashes }
 }
 it('uses original CodeBlock under fresh export, current theme and body width without changing source or callbacks', async () => {
   const f = fixture(), press = { plugin: 'plugin', handle: 7 }, code = { type: 'Code', props: { source: 'original source', language: 'typescript', _apackCodeAnsi: 'forged' } }, tree = { type: 'Box', children: [code, { type: 'Button', press }] }
@@ -78,4 +80,23 @@ it('bounds native Raster output explicitly and refuses retired Raster eligibilit
  await expect(f.draw(f.n,tree)).rejects.toThrow('eligibility changed')
  ;(f.n as any).engine.FPe=()=>true
  expect(await f.draw(f.n,tree)).toMatchObject({type:'Text',children:['Raster preview exceeds this view. Open the native interface to inspect it.']})
+})
+
+it('mirrors only the original mounted Image alt fallback under its exact native placement without reading source bytes',async()=>{
+ const f=fixture();function Fo(){};f.hashes.set(Fo,'90ffae0a8b68a15a4c68fa3ca5513e524c112e97e31aac7c1abc7bf8a217f6cf')
+ const props={key:'cover',source:{file:'/private/native-owned-image.png',format:'png'},columns:8,rows:2,alt:'Release cover'},scope={component:'InfoNotice',requestId:'original notice'}
+ const fiber:any={type:Fo,memoizedProps:{...props,elementKey:props.key,plugin:'native'},return:{memoizedProps:{value:scope}},child:{memoizedProps:{dimColor:true,children:props.alt}}}
+ ;(f.n as any).themeRoots={ai:()=>({get:()=>({container:{current:fiber}})})}
+ const node={type:'Image',props,image:{plugin:'native'}}
+ expect(await f.draw(f.n,node,{terminalScope:scope})).toEqual({type:'Text',props:{dimColor:true},children:['Release cover'],part:{plugin:'native'}})
+ expect(f.render).not.toHaveBeenCalled();expect(node.props.source.file).toBe('/private/native-owned-image.png')
+ await expect(f.draw(f.n,node,{terminalScope:{...scope,requestId:'foreign'}})).rejects.toThrow('not mounted')
+ fiber.child.memoizedProps={children:{type:'ink-raw-ansi'}}
+ await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('pixel delivery')
+})
+it('refuses a changed native Image renderer instead of guessing fallback from an arbitrary text node',async()=>{
+ const f=fixture();function Fo(){};const scope={component:'InfoNotice',requestId:'notice'},props={source:{png:'native'},columns:1,rows:1,alt:'cover'}
+ const fiber={type:Fo,memoizedProps:{...props,plugin:'native'},return:{memoizedProps:{value:scope}},child:{memoizedProps:{dimColor:true,children:'cover'}}}
+ ;(f.n as any).themeRoots={ai:()=>({get:()=>({container:{current:fiber}})})}
+ await expect(f.draw(f.n,{type:'Image',props,image:{plugin:'native'}},{terminalScope:scope})).rejects.toThrow('renderer changed')
 })

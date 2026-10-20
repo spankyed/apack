@@ -3,6 +3,30 @@ export const claudeTerminalDocumentRuntime = String.raw`function nativeDocumentS
  const binding=typeof originalContext==='undefined'?n.runtime?.ey():originalContext??n.runtime?.ey();
  return binding?.toolContext?.(new AbortController())?.getAppState?.().settings?.syntaxHighlightingDisabled===true;
 }
+function nativeImageFallback(n,node,scope){
+ if(!scope)throw Error('Native Image needs its original terminal placement');
+ const props=node.props,plugin=node.image?.plugin;if(!props||typeof plugin!=='string'||typeof props.alt!=='string')throw Error('Invalid native Image');
+ const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=8192)throw Error('Native Image traversal exceeded bound');seen.add(fiber);
+  if(typeof fiber.type==='function'&&fiber.type.name==='Fo'){
+   const held=fiber.memoizedProps;
+   if(held?.plugin===plugin&&held.elementKey===props.key&&held.columns===props.columns&&held.rows===props.rows&&held.alt===props.alt&&JSON.stringify(held.source)===JSON.stringify(props.source)){
+    let parent=fiber.return,inside=false,depth=0;
+    while(parent&&++depth<=128){const value=parent.memoizedProps?.value;if(value?.component===scope.component&&value.requestId===scope.requestId){inside=true;break;}parent=parent.return;}
+    if(inside){
+     let hash=composerFunctionHashes.get(fiber.type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
+     if(hash!=='90ffae0a8b68a15a4c68fa3ca5513e524c112e97e31aac7c1abc7bf8a217f6cf')throw Error('Original Image renderer changed');
+     matches.push(fiber.child?.memoizedProps?.dimColor===true&&fiber.child.memoizedProps.children===props.alt);
+    }
+   }
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ if(!matches.length)throw Error('Original Image is not mounted in this terminal placement');
+ if(!matches.every(Boolean))throw Error('Native Image pixel delivery is not implemented in this view');
+ return {type:'Text',props:{dimColor:true},children:[props.alt],part:{plugin}};
+}
 async function nativeDocumentTree(n,tree,options={}){
  let nodes=0,bytes=0;const initialTheme=JSON.stringify(nativeThemeProvider(n).value.resolvedTheme),syntaxFlag=nativeDocumentSyntaxFlag(n);
  const visit=async value=>{
@@ -10,6 +34,7 @@ async function nativeDocumentTree(n,tree,options={}){
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   if(++nodes>1024)throw Error('Native document node limit');
   let result=value;
+  if(value.type==='Image')result=nativeImageFallback(n,value,options.terminalScope);
   if(value.type==='Raster'){
    const {columns,rows,cells}=value.props??{};
    if(!Number.isInteger(columns)||columns<1||columns>512||!Number.isInteger(rows)||rows<1||rows>256||typeof value.raster?.plugin!=='string')throw Error('Invalid native Raster');
