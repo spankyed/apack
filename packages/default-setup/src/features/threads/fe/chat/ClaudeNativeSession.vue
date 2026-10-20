@@ -16,8 +16,9 @@
       <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
-        {{ view?.opening ? 'Opening native interface…' : 'Use native interface' }}
+        {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
       </button>
+      <button v-if="view?.opening && view.openingId" type="button" class="native-button" :disabled="view.cancelling" @click="cancelOpen">Cancel startup</button>
     </div>
     <template v-else>
       <header class="native-header">
@@ -114,13 +115,19 @@ const expanded = ref(true)
 const dismissed = ref(false)
 const requested = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
-const active = computed(() => !!view.value?.state && requested.value && !dismissed.value)
+const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined
 let attachedOwner: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
 function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
 function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
+function cancelOpen() {
+  const openingId = view.value?.openingId
+  if (!openingId || view.value?.cancelling) return
+  requested.value = false; dismissed.value = true
+  actor.send({ type: 'CLAUDE_TERMINAL_CANCEL_OPEN', ...identity(), openingId })
+}
 function stop() { const ownerId = view.value?.state?.ownerId; if (ownerId) actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId }) }
 function detach() { observer?.disconnect(); observer = undefined; terminal?.detach(); terminal = undefined; attachedOwner = undefined }
 watch(active, value => emit('active', value), { immediate: true })

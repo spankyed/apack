@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
@@ -8,6 +9,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_MOUNT' }
   | { type: 'CLAUDE_TERMINAL_UNMOUNT' }
   | { type: 'CLAUDE_TERMINAL_OPEN' }
+  | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
@@ -44,6 +46,8 @@ export type ClaudeTerminalViewSnapshot = {
   submission?: ClaudeTerminalSubmissionState
   state?: ClaudeNativeTerminalState
   opening: boolean
+  openingId?: string
+  cancelling?: boolean
   problem?: string
   output: { sequence: number; text: string }[]
 }
@@ -62,6 +66,7 @@ interface View {
   unsubscribe?: () => void
   sequence: number
   opening: boolean
+  launch?: {id: string; abort: AbortController}
   problem?: string
   queued?: boolean
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
@@ -73,7 +78,7 @@ interface View {
 /** Window leases own subscriptions; detaching a view never stops the native session. */
 export function createClaudeTerminalViews(dependencies: {
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
-  open(threadId: string): Promise<ClaudeNativeTerminalOwner>
+  open(threadId: string, signal: AbortSignal): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
   beforeViewChange?(client: string, threadId: string): Promise<void>
   command?(client: string, threadId: string, mountId: string, revision: number, text: string, hasReferences: boolean): Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeParentCommandResult>
@@ -82,6 +87,7 @@ export function createClaudeTerminalViews(dependencies: {
   const views = new Map<string, View>()
   let timer: ReturnType<typeof setInterval> | undefined
   function drop(key: string) {
+    views.get(key)?.launch?.abort.abort()
     views.get(key)?.unsubscribe?.(); views.delete(key)
     if (!views.size && timer) { clearInterval(timer); timer = undefined }
   }
@@ -90,7 +96,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, problem: view.problem, output: [...output] })
+        state: view.owner?.state, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -131,11 +137,20 @@ export function createClaudeTerminalViews(dependencies: {
         if (target.opening) return
         const existing = dependencies.get(event.threadId)
         if (existing) { attach(key, target, existing); publish(key, target); return }
-        target.opening = true; target.problem = undefined; publish(key, target)
-        void dependencies.open(event.threadId).then(owner => {
-          if (views.get(key) === target) attach(key, target, owner)
-        }).catch(error => { target.problem = error instanceof Error ? error.message : 'Native interface could not start' })
-          .finally(() => { target.opening = false; publish(key, target) })
+        const launch = {id: randomUUID(), abort: new AbortController()}
+        target.launch = launch; target.opening = true; target.problem = undefined; publish(key, target)
+        void dependencies.open(event.threadId, launch.abort.signal).then(async owner => {
+          if (launch.abort.signal.aborted) {
+            if (dependencies.get(event.threadId) === owner) { await owner.close(); await owner.done }
+            return
+          }
+          if (views.get(key) === target && target.launch === launch) attach(key, target, owner)
+        }).catch(error => { target.problem = launch.abort.signal.aborted ? 'Native startup cancelled' : error instanceof Error ? error.message : 'Native interface could not start' })
+          .finally(() => { if (target.launch === launch) { target.launch = undefined; target.opening = false; publish(key, target) } })
+        return
+      }
+      if (event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN') {
+        if (target.opening && target.launch?.id === event.openingId) { target.launch.abort.abort(); publish(key, target) }
         return
       }
       const owner = dependencies.get(event.threadId)

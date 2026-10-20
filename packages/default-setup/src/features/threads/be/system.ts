@@ -33,11 +33,11 @@ const terminalViews = createClaudeTerminalViews({
   accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),
-  async open(key) {
+  async open(key, signal) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
     if (state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) throw new Error('Complete or reset the pending history change before opening the native interface');
     const resume = readSavedClaudeNativeLaunch(state);
-    const owner = await services.cli.claudeCode.openNativeTerminal(key, resume ? {resume} : undefined);
+    const owner = await services.cli.claudeCode.openNativeTerminal(key, {...(resume ? {resume} : {}), signal});
     terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
       const current = services.cli.claudeCode.getNativeTerminal(key);
       return current === owner;
@@ -82,7 +82,7 @@ export const threadsSystem = setup({
   },
   actions: threadsSpec.actions({
     claudeTerminalView: ({ event, client, reply }) => {
-      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_NOTICE') terminalViews.handle(event, client, reply);
+      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_NOTICE') terminalViews.handle(event, client, reply);
     },
     claudeUiView: ({ event, client, reply }) => {
       if (event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
@@ -907,6 +907,7 @@ export const threadsSystem = setup({
       CLAUDE_TERMINAL_MOUNT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_UNMOUNT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CANCEL_OPEN: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_SUBMIT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_INPUT: { actions: 'claudeTerminalView' },
       CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },

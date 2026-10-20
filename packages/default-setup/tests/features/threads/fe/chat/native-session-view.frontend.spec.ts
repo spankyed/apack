@@ -63,3 +63,13 @@ it('shows the original billing notice in ordinary chat and sends its exact decis
   ;[...card.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.click()
   expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('interrupt')
 })
+
+it('exposes a scoped cancel action before owner state exists and keeps retry disabled while cleanup is pending', async () => {
+ const f=await fixture(),openingId=crypto.randomUUID();
+ f.publish({opening:true,openingId,output:[]});await nextTick();expect(f.active).toHaveBeenLastCalledWith(false);
+ const cancel=[...f.root.querySelectorAll('button')].find(button=>button.textContent==='Cancel startup')!;
+ expect(cancel).toBeTruthy();cancel.click();await nextTick();expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId}));
+ f.publish({opening:true,openingId,cancelling:true,output:[]});await nextTick();expect(cancel.disabled).toBe(true);expect(f.root.textContent).toContain('Cancelling native startup…');
+ f.publish({opening:false,output:[],problem:'Native startup cancelled'});await nextTick();
+ const retry=[...f.root.querySelectorAll('button')].find(button=>button.textContent?.includes('Use native interface'))!;expect(retry.disabled).toBe(false);expect(f.active).toHaveBeenLastCalledWith(false);
+});

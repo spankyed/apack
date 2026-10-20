@@ -105,7 +105,7 @@ export function clearHandle(key: string): void {
   } else stop(key)
 }
 
-export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows'> & { resume?: ClaudeNativeLaunch }
+export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows' | 'signal'> & { resume?: ClaudeNativeLaunch }
 export function getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined { return terminals.get(key) }
 
 /** Read launch intent from the current original owner; never persist settings or credentials. */
@@ -123,12 +123,23 @@ export async function getNativeLaunch(key: string): Promise<ClaudeNativeLaunch |
   return snapshotClaudeNativeLaunch({...launch, sessionId: prior.owner.sessionId!, cwd: prior.owner.sessionCwd ?? launch.cwd, model: prior.owner.modelSelection ?? launch.model, permissionMode})
 }
 
+/** Cancel read-only controls without killing the still-idle print owner. */
+function readUntilAborted<T>(read: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('Native terminal startup was cancelled'))
+  let cancel!: () => void
+  const aborted = new Promise<never>((_, reject) => { cancel = () => reject(new Error('Native terminal startup was cancelled')); signal.addEventListener('abort', cancel, {once: true}) })
+  return Promise.race([read(), aborted]).finally(() => signal.removeEventListener('abort', cancel))
+}
+
 /** Explicit handoff/reopen; reservation and read-only preflight keep one session writer. */
 export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
-  const {resume: saved, ...overrides} = options
+  const {resume: saved, signal, ...overrides} = options
+  if (signal?.aborted) throw new Error('Native terminal startup was cancelled')
   const previous = conversations.get(key), retained = terminalResumes.get(key), resume = saved ? ClaudeNativeLaunchSchema.parse(saved) : retained
   if ((!previous && (!resume || !readResume)) || previous?.owner.closing || previous && !previous.owner.sessionId || isConversationBusy(key) || terminals.has(key) || terminalTransitions.has(key)) throw new Error('Native terminal handoff needs an idle live Claude conversation or a stopped native session')
   const ticket = {}, abort = new AbortController()
+  const cancel = () => abort.abort()
+  signal?.addEventListener('abort', cancel, {once: true})
   starting.set(key, ticket); terminalTransitions.set(key, abort)
   let prepared: ClaudePreparedNativeTerminal | undefined
   let published = false
@@ -138,8 +149,8 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
     let launch: Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>, settings: ClaudeNativeTerminalOptions['settings']
     if (previous) {
-      settings = await previous.owner.handle.getSettings()
-      const permissionMode = await previous.owner.handle.getPermissionMode()
+      settings = await readUntilAborted(() => previous.owner.handle.getSettings(), abort.signal)
+      const permissionMode = await readUntilAborted(() => previous.owner.handle.getPermissionMode(), abort.signal)
       if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
@@ -173,6 +184,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     try { if (!published) await prepared?.dispose() } finally {
       if (starting.get(key) === ticket) starting.delete(key)
       if (terminalTransitions.get(key) === abort) terminalTransitions.delete(key)
+      signal?.removeEventListener('abort', cancel)
     }
   }
 }

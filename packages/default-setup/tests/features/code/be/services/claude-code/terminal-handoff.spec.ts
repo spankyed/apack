@@ -44,7 +44,7 @@ it('cancels a handoff waiting for native settings without starting a terminal', 
   const first = await printOwner()
   let resolve!: (value: { effective: {}; sources: [] }) => void
   vi.mocked(first.handle.getSettings).mockImplementationOnce(() => new Promise(yes => { resolve = yes }))
-  const pending = openNativeTerminal('thread', {}, mocks.prepare), rejected = expect(pending).rejects.toThrow('changed')
+  const pending = openNativeTerminal('thread', {}, mocks.prepare), rejected = expect(pending).rejects.toThrow('cancelled')
   expect(isConversationBusy('thread')).toBe(true); expect(getConversation('thread')).toBeUndefined()
   await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
   runThreadTeardown('thread'); resolve({ effective: {}, sources: [] }); await rejected
@@ -141,3 +141,14 @@ it('honors newly staged launch choices instead of the retained stopped-owner sna
   await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',model:'haiku',permissionMode:'plan'}},mocks.prepare,read)
   expect(read).toHaveBeenCalledWith(expect.objectContaining({model:'haiku',permissionMode:'plan'}))
 })
+
+it('aborts a pending read-only handoff without closing the print owner or admitting a late settings reply', async () => {
+ const first=await printOwner(),abort=new AbortController();let resolve!:(value:{effective:{};sources:[]})=>void;
+ vi.mocked(first.handle.getSettings).mockImplementationOnce(()=>new Promise(yes=>{resolve=yes}));
+ const pending=openNativeTerminal('thread',{signal:abort.signal},mocks.prepare);const rejected=expect(pending).rejects.toThrow('cancelled');
+ await vi.waitFor(()=>expect(resolve).toBeTypeOf('function'));abort.abort();await rejected;
+ expect(first.handle.close).not.toHaveBeenCalled();expect(first.handle.kill).not.toHaveBeenCalled();expect(getConversation('thread')?.owner).toBe(first.owner);expect(isConversationBusy('thread')).toBe(false);
+ resolve({effective:{},sources:[]});await Promise.resolve();expect(mocks.prepare).not.toHaveBeenCalled();
+ const native=terminal();mocks.prepare.mockResolvedValueOnce({start:async()=>native,dispose:vi.fn(async()=>{})});
+ expect(await openNativeTerminal('thread',{},mocks.prepare)).toBe(native);expect(mocks.prepare.mock.calls[0][0].signal.aborted).toBe(false);
+});

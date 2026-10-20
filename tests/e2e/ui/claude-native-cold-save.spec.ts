@@ -9,7 +9,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('saves native launch, history and draft before a complete app shutdown', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { planScenario, importReopen } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { planScenario, importReopen, startupCancel } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -112,6 +112,6 @@ test('saves native launch, history and draft before a complete app shutdown', as
       stagedModel='haiku';
     }
     const api=JSON.parse(await readFile(resolveAppEnvironment({env:'test',userDataDir:join(workspace!,'app-data')}).apiPortFile,'utf8'));
-    await writeFile(join(workspace!,'native-cold-state.json'),JSON.stringify({threadId:savedThreadId,sessionId,history:savedHistory,nativeCost,toolCallCount:before.claude.toolCallCount,retired,savedLaunch,stagedModel,stagedPermissionMode,importReopen,draft,boundNativePid,mainPid:electronApp.process().pid,apiPid:api.pid},null,2));
+    await writeFile(join(workspace!,'native-cold-state.json'),JSON.stringify({threadId:savedThreadId,sessionId,history:savedHistory,nativeCost,toolCallCount:before.claude.toolCallCount,retired,savedLaunch,stagedModel,stagedPermissionMode,importReopen,startupCancel,draft,boundNativePid,mainPid:electronApp.process().pid,apiPid:api.pid},null,2));
   }catch(error){await writeFile(join(workspace!,'native-cold-save-failure.json'),JSON.stringify(await context(),null,2));await appPage.screenshot({path:testInfo.outputPath('native-cold-save-failure.png')});throw error;}
 });

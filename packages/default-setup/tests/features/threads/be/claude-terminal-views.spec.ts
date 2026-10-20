@@ -231,3 +231,30 @@ it('answers only the exact live notice and refuses stale or detached controls', 
     expect(f.owner.answerNotice).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+
+it('cancels only the matching opening view and waits for cleanup before permitting retry', async () => {
+ const pending:Array<{signal:AbortSignal;reject:(error:Error)=>void}>=[],replies:ClaudeTerminalViewReply[]=[];
+ const open=vi.fn((_thread:string,signal:AbortSignal)=>new Promise<ClaudeNativeTerminalOwner>((_,reject)=>pending.push({signal,reject})));
+ const views=createClaudeTerminalViews({get:()=>undefined,open});
+ const send=(event:Parameters<typeof views.handle>[0],client='first')=>views.handle(event,client,reply=>replies.push(reply));
+ send(mount);send({...mount,type:'CLAUDE_TERMINAL_OPEN'});const openingId=replies.at(-1)!.openingId!;
+ expect(openingId).toBeTruthy();send({...mount,type:'CLAUDE_TERMINAL_MOUNT'},'second');
+ send({...mount,type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId},'second');
+ send({...mount,type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId:randomUUID()});expect(pending[0].signal.aborted).toBe(false);
+ send({...mount,type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId});expect(pending[0].signal.aborted).toBe(true);expect(replies.at(-1)).toMatchObject({opening:true,cancelling:true});
+ send({...mount,type:'CLAUDE_TERMINAL_OPEN'});expect(open).toHaveBeenCalledTimes(1);
+ pending[0].reject(new Error('Child exited'));await vi.waitFor(()=>expect(replies.at(-1)).toMatchObject({opening:false,problem:'Native startup cancelled'}));
+ send({...mount,type:'CLAUDE_TERMINAL_OPEN'});expect(open).toHaveBeenCalledTimes(2);expect(replies.at(-1)!.openingId).not.toBe(openingId);
+ send({...mount,type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId});expect(pending[1].signal.aborted).toBe(false);
+ send({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'});expect(pending[1].signal.aborted).toBe(true);pending[1].reject(new Error('Child exited'));views.clear();
+});
+it('drains a late published owner after cancellation without attaching it to the retired opening', async () => {
+ let resolve!:(owner:ClaudeNativeTerminalOwner)=>void,finish!:()=>void;
+ const done=new Promise<void>(yes=>{finish=yes}),close=vi.fn(async()=>{}),owner={state:{ownerId:'late'},done,close} as unknown as ClaudeNativeTerminalOwner;
+ let current:ClaudeNativeTerminalOwner|undefined;const replies:ClaudeTerminalViewReply[]=[];
+ const views=createClaudeTerminalViews({get:()=>current,open:()=>new Promise(yes=>{resolve=yes})});
+ const send=(event:Parameters<typeof views.handle>[0])=>views.handle(event,'client',reply=>replies.push(reply));
+ send(mount);send({...mount,type:'CLAUDE_TERMINAL_OPEN'});send({...mount,type:'CLAUDE_TERMINAL_CANCEL_OPEN',openingId:replies.at(-1)!.openingId!});current=owner;resolve(owner);
+ await vi.waitFor(()=>expect(close).toHaveBeenCalledOnce());expect(replies.at(-1)).toMatchObject({opening:true,cancelling:true});expect(replies.at(-1)!.state).toBeUndefined();finish();
+ await vi.waitFor(()=>expect(replies.at(-1)!.opening).toBe(false));views.clear();
+});

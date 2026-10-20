@@ -38,6 +38,22 @@ test('cold reopens the saved native session without an invented model turn',asyn
  await appPage.locator('.cursor-row-resize').click({button:'right'});await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Edit',exact:true})).toBeVisible();
  expect((await context()).claude.nativeLaunch).toEqual(saved.savedLaunch);
  expect((await readFile(join(workspace!,'native-children.jsonl'),'utf8')).trim().split('\n')).toHaveLength(2);
+    if(saved.startupCancel){
+      await writeFile(join(workspace!,'hold-native-startup'),'armed');
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();
+      await expect.poll(async()=>readFile(join(workspace!,'held-native-startup.json'),'utf8').catch(()=>'' )).not.toBe('');
+      const held=JSON.parse(await readFile(join(workspace!,'held-native-startup.json'),'utf8'));
+      const cancel=section.getByRole('button',{name:'Cancel startup',exact:true});
+      for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(composer).toHaveText(draft);await expect(cancel).toBeInViewport();expect(await cancel.evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})).toBe(true);await appPage.screenshot({path:testInfo.outputPath('native-startup-cancel-'+width+'.png')});}
+      await cancel.click();
+      await expect.poll(async()=>(await context()).native?.opening).toBe(false);
+      await expect(cancel).toHaveCount(0);await expect(composer).toHaveText(draft);
+      let live=false;try{execFileSync('/bin/ps',['-p',String(held.pid),'-o','pid='],{stdio:'pipe'});live=true}catch(error:any){expect(error.status).toBe(1)}expect(live).toBe(false);
+      await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeEnabled();
+      expect((await context()).claude.totalCostUsd).toBe(saved.nativeCost);
+      await writeFile(join(workspace!,'native-startup-cancel-proof.json'),JSON.stringify({heldPid:held.pid,sessionId,cleanupBeforeRetry:true,retainedDraft:true,cost:saved.nativeCost},null,2));
+      await appPage.setViewportSize({width:1400,height:900});
+    }
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();
     let reopenNavigated=false,reopenTrusted=false
     await expect.poll(async()=>{const n=(await context()).native,screen=recognizeOnboardingPrompt(n?.output?.map((chunk:any)=>chunk.text).join('')??'',workspace);
@@ -71,6 +87,6 @@ test('cold reopens the saved native session without an invented model turn',asyn
     await composer.fill('Continue after reopening the saved migration review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
     expect((await context()).sessionId).toBe(sessionId);const continuedCost=(await context()).claude.totalCostUsd;expect(continuedCost).toBeGreaterThan(saved.nativeCost);const originalPrint=JSON.parse((await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').at(-1)!);expect(continuedCost).toBe(originalPrint.totalCostUsd);expect(errors).toEqual([]);
     await writeFile(join(workspace!,'native-history-reopen-proof.json'),JSON.stringify({history:saved.history,retired:saved.retired,fresh,sessionId,boundNativePid,reopenedNativePid,nativeCost:saved.nativeCost,toolCallCount:reopened.claude.toolCallCount,continuedCost,callbacks:await callbacks(),coldMainPid:electronApp.process().pid,coldApiPid:api.pid,priorMainPid:saved.mainPid,priorApiPid:saved.apiPid},null,2));
-    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeColdReopen:true,nativeImportedHistoryReopened:saved.importReopen===true,nativeHistoryReopened:true,nativeRetiredActionRefused:true,nativeLiveNoticeRetired:true,nativeHistoryIdentity:true,nativeLargeCode:true,nativeLargeMarkdown:true,nativeLargeNavigation:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,reopenedNativePid,nativeCost:saved.nativeCost,continuedCost,browserErrors:errors},null,2));
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeColdReopen:true,nativeImportedHistoryReopened:saved.importReopen===true,nativeStartupCancelled:saved.startupCancel===true,nativeHistoryReopened:true,nativeRetiredActionRefused:true,nativeLiveNoticeRetired:true,nativeHistoryIdentity:true,nativeLargeCode:true,nativeLargeMarkdown:true,nativeLargeNavigation:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,reopenedNativePid,nativeCost:saved.nativeCost,continuedCost,browserErrors:errors},null,2));
   }catch(error){await writeFile(join(workspace!,'native-cold-reopen-failure.json'),JSON.stringify(await context(),null,2));await appPage.screenshot({path:testInfo.outputPath('native-cold-reopen-failure.png')});throw error;}
 });
