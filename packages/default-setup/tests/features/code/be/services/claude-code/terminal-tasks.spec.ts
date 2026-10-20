@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto'
 import vm from 'node:vm'
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
 function fixture() {
@@ -194,4 +195,34 @@ it('uses original Workflow withholding sanitizers and bounds previews explicitly
  const bounded=project({},{workflowProgress:Array.from({length:101},(_,index)=>({type:'workflow_agent',index,label:'x'.repeat(10000)})),result:circular})
  expect(bounded.progress).toHaveLength(100);expect(bounded.truncated).toBe(true);expect(bounded.outputUnavailable).toBe(true)
  expect(bounded.progress.reduce((sum:number,event:any)=>sum+(event.label?.length??0),0)).toBeLessThanOrEqual(65536)
+})
+
+function workflowWorkerFixture() {
+ const event={type:'workflow_agent',index:1,label:'Reviewer',agentId:'worker-a',state:'start'},controller=new AbortController()
+ const task={id:'workflow-a',type:'local_workflow',status:'running',workflowRunId:'run-a',workflowProgress:[event],agentControllers:new Map([['worker-a',controller]])}
+ const registry={all:()=>({[task.id]:task})},skip=vi.fn(()=>true),retry=vi.fn(()=>true)
+ const n={workflowTasks:{_ot:skip,Sot:retry}},binding={toolContext:()=>({taskRegistry:registry})}
+ const run=vm.runInNewContext(claudeTerminalTaskRuntime+';({control:nativeTaskControl,progress:nativeWorkflowProgress})',{createHash,randomUUID})
+ const token=()=>run.progress(n,task).progress[0].controlToken
+ const request=(operation:string,value=token())=>run.control(n,binding,{task_id:task.id,operation,worker:{agentId:event.agentId,token:value}},new AbortController(),()=>{})
+ return {event,controller,task,registry,skip,retry,token,request}
+}
+it('dispatches native Workflow worker IDs and refuses controller capabilities after abort/replacement', async () => {
+ const f=workflowWorkerFixture(),old=f.token()
+ expect(old).toMatch(/^[a-f0-9]{64}$/);expect(f.token()).toBe(old)
+ expect(await f.request('retry_worker',old)).toEqual({worker:{agentId:'worker-a',operation:'retry_worker',accepted:true}})
+ expect(f.retry).toHaveBeenCalledExactlyOnceWith('workflow-a','worker-a',f.registry)
+ f.controller.abort();await expect(f.request('skip_worker',old)).rejects.toThrow('changed or expired')
+ f.task.agentControllers.set('worker-a',new AbortController());expect(f.token()).not.toBe(old)
+ await expect(f.request('skip_worker',old)).rejects.toThrow('changed or expired')
+ expect(await f.request('skip_worker')).toMatchObject({worker:{accepted:true,operation:'skip_worker'}})
+ expect(f.skip).toHaveBeenCalledExactlyOnceWith('workflow-a','worker-a',f.registry)
+})
+it('withdraws Workflow worker controls at terminal states and never invents native acknowledgement', async () => {
+ const f=workflowWorkerFixture();f.retry.mockReturnValue(false)
+ await expect(f.request('retry_worker')).rejects.toThrow('action refused')
+ f.event.state='done';expect(f.token()).toBeUndefined()
+ f.event.state='start';f.task.status='completed';expect(f.token()).toBeUndefined()
+ await expect(f.request('skip_worker','0'.repeat(64))).rejects.toThrow('changed or expired')
+ expect(f.skip).not.toHaveBeenCalled()
 })

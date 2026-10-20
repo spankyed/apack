@@ -154,6 +154,38 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
       const details=appPage.getByRole('dialog',{name:'Workflow details',exact:true});await expect(details).toContainText('release-review');await expect(details).toContainText('wf_')
       expect((await context()).native.task.details.taskId).toBe(taskId);expect((await context()).native.task.details.canInput).toBe(false);expect((await context()).native.task.details.canMessage).toBe(false)
       const initialDetails=(await context()).native.task.details
+      if(process.env.CLAUDE_RESEARCH_WORKFLOW_WORKER_ACTIONS==='1'){
+        const active=async()=>(await context()).native.task.details?.workflow?.progress.find((event:any)=>event.type==='workflow_agent'&&event.controlToken)
+        const signals=async()=>JSON.parse(await readFile(join(workspace!,'native-workflow-worker-signals.json'),'utf8').catch(()=>'{}'))
+        await expect.poll(async()=>!!await active()).toBe(true);const initial=await active()
+        await expect.poll(async()=>(await signals()).watched?.some((event:any)=>event.taskId===taskId&&event.agentId===initial.agentId)).toBe(true)
+        for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await composerUncovered();await details.getByRole('button',{name:'Restart Release reviewer',exact:true}).scrollIntoViewIfNeeded();await expect(details.getByRole('button',{name:'Restart Release reviewer',exact:true})).toBeInViewport();await expect(details.getByRole('button',{name:'Skip Release reviewer',exact:true})).toBeEnabled();await appPage.screenshot({path:testInfo.outputPath('native-workflow-worker-controls-'+size.width+'.png')})}
+        await details.getByRole('button',{name:'Restart Release reviewer',exact:true}).evaluate(element=>{const key=Object.getOwnPropertySymbols(element).find(key=>key.description==='_vei'),handler=key&&(element as any)[key]?.onClick?.value;if(typeof handler!=='function')throw Error('Original Vue worker click callback unavailable');(window as any).__retiredWorkflowRestart=handler})
+        await details.getByRole('button',{name:'Restart Release reviewer',exact:true}).click()
+        await expect.poll(async()=>(await signals()).aborts?.some((event:any)=>event.agentId===initial.agentId&&event.reason==='user-retry')).toBe(true)
+        await expect.poll(async()=>(await active())?.agentId,{timeout:15000}).not.toBe(initial.agentId)
+        await expect.poll(async()=>!!(await active())?.controlToken).toBe(true);const restarted=await active();expect(restarted.agentId).toBeTruthy();expect(restarted.controlToken).not.toBe(initial.controlToken)
+        await expect.poll(async()=>(await signals()).watched?.some((event:any)=>event.agentId===restarted.agentId)).toBe(true)
+        await details.press('Escape');await expect(details).toHaveCount(0);expect((await context()).native.state.status).toBe('live');expect((await context()).native.state.nativePid).toBe(boundNativePid);await expect.poll(async()=>(await context()).native.task.status).not.toBe('pending')
+        await appPage.evaluate(()=>(window as any).__retiredWorkflowRestart(new MouseEvent('click',{bubbles:true})))
+        await expect.poll(async()=>(await context()).native.task.problem).toContain('changed or expired')
+        const staleRefused=true;expect((await signals()).aborts.filter((event:any)=>event.reason==='user-retry')).toHaveLength(1)
+        await row.getByRole('button',{name:'Workflow details',exact:true}).click();await expect.poll(async()=>(await context()).native.task.status).toBe('done')
+        await details.getByRole('button',{name:'Skip '+restarted.label,exact:true}).click()
+        await expect.poll(async()=>(await signals()).aborts.some((event:any)=>event.agentId===restarted.agentId&&event.reason==='user-skip')).toBe(true)
+        await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.status,{timeout:15000}).toBe('completed')
+        await expect.poll(async()=>(await context()).native.state.activity?.pendingWorkflows??0).toBe(0)
+        await details.getByRole('button',{name:'Refresh details',exact:true}).click();await expect.poll(async()=>(await context()).native.task.details?.status).toBe('completed')
+        await expect(details.getByRole('region',{name:'Workflow workers',exact:true})).toContainText('skipped');await expect(details.getByRole('button',{name:'Restart '+restarted.label,exact:true})).toHaveCount(0);await expect(details.getByRole('button',{name:'Skip '+restarted.label,exact:true})).toHaveCount(0)
+        for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await composerUncovered();await expect(composer).toHaveText(draft);await appPage.screenshot({path:testInfo.outputPath('native-workflow-worker-skipped-'+size.width+'.png')})}
+        expect((await context()).native.state.nativePid).toBe(boundNativePid)
+        await writeFile(join(workspace!,'native-workflow-worker-actions-proof.json'),JSON.stringify({taskId,initial,restarted,staleRefused,final:(await context()).native.task.details,signals:await signals(),draft}))
+        await appPage.getByRole('button',{name:'Close Workflow details',exact:true}).click();await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+        const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+        await composer.fill('Continue after restarting and skipping the review worker.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+        await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowWorkerActions:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+      }
+
       if(process.env.CLAUDE_RESEARCH_WORKFLOW_PROGRESS==='1'){await expect(details.getByRole('region',{name:'Workflow phases',exact:true})).toContainText('Review');await expect(details.getByRole('region',{name:'Workflow workers',exact:true})).toContainText('Release reviewer');await expect(details.getByRole('region',{name:'Workflow logs',exact:true})).toContainText('Release review started')}
       for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByText('AppNativeMain '+sessionId,{exact:false})).toBeInViewport();await expect(composer).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await composerUncovered();await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-details-'+size.width+'.png')})}
       await appPage.getByRole('button',{name:'Close Workflow details',exact:true}).click()

@@ -1,5 +1,12 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status}));}
+const workflowControllerIds=new WeakMap();
+function nativeWorkflowWorker(task,event){
+ if(task.status!=='running'||!['start','progress'].includes(event?.state)||typeof event.agentId!=='string')return;
+ const controller=task.agentControllers?.get(event.agentId);if(!controller||controller.signal.aborted)return;
+ let id=workflowControllerIds.get(controller);if(!id){id=randomUUID();workflowControllerIds.set(controller,id);}
+ return createHash('sha256').update(JSON.stringify([task.id,task.workflowRunId,event.index,event.agentId,id])).digest('hex');
+}
 function nativeWorkflowProgress(n,task){
  let budget=65536,truncated=false;
  const text=value=>{if(typeof value!=='string')return;const limit=Math.min(4096,budget);if(value.length>limit)truncated=true;const shown=value.slice(0,limit);budget-=shown.length;return shown;};
@@ -9,6 +16,7 @@ function nativeWorkflowProgress(n,task){
  const progress=visible.slice(-100).flatMap(event=>{
   if(!['workflow_phase','workflow_agent','workflow_log'].includes(event.type))return [];
   const item={type:event.type};
+  if(event.type==='workflow_agent'){const token=nativeWorkflowWorker(task,event);if(token)item.controlToken=token;}
   for(const key of ['index','phaseIndex','tokens','toolCalls'])if(Number.isSafeInteger(event[key])&&event[key]>=0)item[key]=event[key];
   for(const key of ['title','kind','label','state','phaseTitle','agentId','model','error','resultPreview','message']){const value=text(event[key]);if(value!==undefined)item[key]=value;}
   for(const key of ['cached','skipped'])if(typeof event[key]==='boolean')item[key]=event[key];
@@ -22,7 +30,7 @@ function nativeWorkflowProgress(n,task){
 }
 async function nativeTaskControl(n,binding,request,abort,current){
  current();
- if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background'].includes(request.operation))throw Error('Invalid native task operation');
+ if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background','skip_worker','retry_worker'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  if(request.operation==='background'){
   await retireNativeAgentCommands();current();
@@ -37,6 +45,14 @@ async function nativeTaskControl(n,binding,request,abort,current){
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
  if(task.type==='local_workflow'){
+  if(['skip_worker','retry_worker'].includes(request.operation)){
+   const worker=request.worker;if(typeof worker?.agentId!=='string'||worker.agentId.length>256||typeof worker.token!=='string'||!/^[a-f0-9]{64}$/.test(worker.token))throw Error('Invalid Workflow worker target');
+   const event=(task.workflowProgress??[]).find(event=>event.type==='workflow_agent'&&event.agentId===worker.agentId&&nativeWorkflowWorker(task,event)===worker.token);
+   if(!event)throw Error('Workflow worker changed or expired');
+   const operation=request.operation,accepted=operation==='skip_worker'?n.workflowTasks._ot(task.id,worker.agentId,registry):n.workflowTasks.Sot(task.id,worker.agentId,registry);
+   current();if(accepted!==true)throw Error('Native Workflow worker action refused');
+   return {worker:{agentId:worker.agentId,operation,accepted:true}};
+  }
   if(!['inspect','stop'].includes(request.operation))throw Error('Workflow tasks support inspection and native stop only');
   if(request.operation==='stop'){await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};}
   const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined,start=numeric(task.startTime),end=numeric(task.endTime);
@@ -47,6 +63,7 @@ async function nativeTaskControl(n,binding,request,abort,current){
   current();if(context.getAppState().viewingAgentTaskId!==task.id)throw Error('Native view moved during selection');
   return {view:{taskId:request.task_id}};
  }
+ if(['skip_worker','retry_worker'].includes(request.operation))throw Error('Worker controls require a native Workflow');
  const liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
  const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
  const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');
