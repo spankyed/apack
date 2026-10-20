@@ -9,7 +9,22 @@
       <template v-if="workflow">
         <p class="reason">Dynamic workflows can run multiple subagents and consume substantial tokens.</p>
         <p v-if="workflow.withheld" role="note">Claude withheld this script. Approval is unavailable; deny or send feedback.</p>
-        <code v-else data-testid="native-workflow-script">{{ workflow.script }}</code>
+        <template v-else>
+          <p v-if="workflow.description" data-testid="native-workflow-description"><NativeStatusText :text="workflow.description" /></p>
+          <button v-if="workflow.summary" type="button" class="workflow-preview-toggle" :disabled="controlsDisabled" :aria-expanded="!showRawWorkflow" @click="rawWorkflow = !showRawWorkflow">{{ showRawWorkflow ? 'View workflow summary' : 'View raw script' }}</button>
+          <p v-if="workflow.summaryUnavailable" role="note">The workflow summary exceeds the preview limit. Review the raw script.</p>
+          <section v-if="workflow.summary && !showRawWorkflow" aria-label="Workflow summary" data-testid="native-workflow-summary">
+            <p>This workflow will run subagents across these phases:</p>
+            <ol class="workflow-phases">
+              <li v-for="(phase, index) in workflow.summary" :key="index">
+                <h3>{{ phase.title }}</h3>
+                <p v-if="phase.detail">{{ phase.detail }}</p>
+                <ul v-if="phase.prompts.length"><li v-for="(prompt, promptIndex) in phase.prompts" :key="promptIndex">{{ prompt }}</li></ul>
+              </li>
+            </ol>
+          </section>
+          <code v-else data-testid="native-workflow-script">{{ workflow.script }}</code>
+        </template>
         <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
       </template>
       <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
@@ -54,12 +69,16 @@
 </template>
 
 <script setup lang="ts">
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
 const props = defineProps<{ workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'Workflow'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [] }>()
+const rawWorkflow = ref<boolean>()
+const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
+watch(() => props.workflow?.token, () => { rawWorkflow.value = undefined })
 const detailsElement = ref<HTMLElement>()
 let resizeObserver: ResizeObserver | undefined, focusFrame: number | undefined
 function ensureFocusedField() {
@@ -139,4 +158,9 @@ button:disabled { opacity: .5; cursor: default; }
 .deny { background: #3b3b3b; color: #eee; }
 .approve { background: #e5e5e5; color: #202020; }
 button:hover:not(:disabled) { filter: brightness(1.12); }
+.workflow-preview-toggle { align-self: flex-start; margin-block: .5rem; padding: .35rem .6rem; border: 1px solid #ffffff26; border-radius: .4rem; font-size: .75rem; }
+.workflow-phases { padding-left: 1.25rem; list-style: decimal; }
+.workflow-phases > li { margin-block: .75rem; }
+.workflow-phases h3 { font-weight: 600; }
+.workflow-phases ul { margin-top: .35rem; padding-left: 1.25rem; list-style: disc; }
 </style>

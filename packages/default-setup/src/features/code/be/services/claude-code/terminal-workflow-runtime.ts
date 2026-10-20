@@ -7,7 +7,7 @@ export const claudeTerminalWorkflowRuntime = String.raw`function nativeWorkflowC
    if(hash!=='6823a3f796c86b23af27d79c7298106e83e975be017609701b37268da846db9b')throw Error('Native workflow renderer changed');
    const cache=fiber.updateQueue?.memoCache?.data?.[0];
    if(!cache||cache[26]!==d.payload||typeof cache[27]!=='string'||typeof cache[30]!=='function'||!Array.isArray(cache[63])||typeof fiber.memoizedProps.wouldTakeAnswer!=='function')continue;
-   matches.push({fiber,handler:cache[30],script:cache[27],withheld:cache[28]===true,args:cache[19],grant:cache[24]?.applies,options:cache[63],ready:fiber.memoizedProps.wouldTakeAnswer()===true});
+   matches.push({fiber,handler:cache[30],script:cache[27],withheld:cache[28]===true,summary:cache[12],raw:cache[39]===true,description:cache[48],args:cache[19],grant:cache[24]?.applies,options:cache[63],ready:fiber.memoizedProps.wouldTakeAnswer()===true});
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
@@ -20,11 +20,20 @@ async function nativeWorkflowPresentation(n,d){
   if(typeof label!=='string'||label.length>4000)throw Error('Invalid native workflow label');
   choices.push({value:option.value,label:label.trim(),decision:option.value==='no'?'deny':'allow',feedback:!!option.feedbackConfig});
  }
+ let description;
+ if(source&&!source.withheld&&source.description){const theme=nativeThemeProvider(n);description=await n.staticRender.$bn(n.jsx.e(theme.type,{value:theme.value,children:source.description}),{columns:100});if(typeof description!=='string'||description.length>200000)throw Error('Native workflow description exceeds bound');}
  const current=nativeWorkflowControl(n,d);if(current?.handler!==source?.handler)throw Error('Native workflow choices changed while formatting');
  const ready=current?.ready===true,withheld=!current||current.withheld,script=withheld?undefined:current.script,args=current?.args;
  if(script!==undefined&&script.length>200000)throw Error('Native workflow preview exceeds bound');
+ let summary,summaryUnavailable=false;
+ if(!withheld&&current.options.some(option=>option.value==='toggle')&&Array.isArray(current.summary)){
+  const phases=current.summary;
+  if(phases.length<=4096&&phases.every(phase=>typeof phase?.title==='string'&&(phase.detail===undefined||typeof phase.detail==='string')&&Array.isArray(phase.prompts)&&phase.prompts.length<=4096&&phase.prompts.every(prompt=>typeof prompt==='string'))){
+   const encoded=JSON.stringify(phases);if(encoded.length<=200000)summary=phases.map(phase=>({title:phase.title,...(phase.detail!==undefined?{detail:phase.detail}:{}),prompts:[...phase.prompts]}));else summaryUnavailable=true;
+  }else summaryUnavailable=true;
+ }
  const argsText=args?.kind==='full'?args.text:args?.marker;
- const presentation={ready,withheld,...(script!==undefined?{script}:{}),...(typeof argsText==='string'?{args:argsText}:{}),choices};
+ const presentation={ready,withheld,...(!withheld&&description?{description}:{}),...(script!==undefined?{script}:{}),...(typeof argsText==='string'?{args:argsText}:{}),...(summary?{summary,raw:current.raw}:{}),...(summaryUnavailable?{summaryUnavailable:true}:{}),choices};
  const token=createHash('sha256').update(JSON.stringify([d.revision,presentation,current?.grant])).digest('hex');return {source:current,presentation:{...presentation,token}};
 }
 async function answerNativeWorkflow(n,d,request){

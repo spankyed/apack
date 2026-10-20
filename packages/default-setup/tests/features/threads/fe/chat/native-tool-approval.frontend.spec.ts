@@ -114,3 +114,19 @@ it.each([false, true])('uses native Workflow script visibility and approval elig
     expect(respond).toHaveBeenLastCalledWith({ approved: false, reason: undefined, choice: 'no', choiceToken: workflow.token })
   } finally { app.unmount(); root.remove() }
 })
+
+it('switches native-derived Workflow summary/raw presentation without answering and resets on replacement', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const respond = vi.fn(), workflow = reactive({ token: 'a'.repeat(64), ready: true, withheld: false, script: 'original script', raw: false,
+    summary: [{ title: '<script>Review</script>', detail: 'Original detail', prompts: ['Inspect migration notes'] }],
+    choices: [{ value: 'yes' as const, label: 'Yes, run it', decision: 'allow' as const, feedback: true }, { value: 'no' as const, label: 'No', decision: 'deny' as const, feedback: true }] })
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Workflow', title: 'Review workflow', question: 'Run?', disabled: false, workflow, onRespond: respond }) }); app.mount(root)
+  const button = (text: string) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === text)!
+  try {
+    expect(root.querySelector('script')).toBeNull(); expect(root.querySelector('[data-testid="native-workflow-summary"]')?.textContent).toContain('Inspect migration notes')
+    button('View raw script').click(); await nextTick(); expect(root.querySelector('[data-testid="native-workflow-script"]')?.textContent).toBe('original script'); expect(respond).not.toHaveBeenCalled()
+    workflow.token = 'b'.repeat(64); await nextTick(); expect(root.querySelector('[data-testid="native-workflow-summary"]')).not.toBeNull()
+    button('View raw script').click(); await nextTick(); button('View workflow summary').click(); await nextTick(); expect(respond).not.toHaveBeenCalled()
+    button('Yes, run it').click(); expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: workflow.token })
+  } finally { app.unmount(); root.remove() }
+})

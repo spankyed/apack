@@ -75,14 +75,24 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     const approval = appPage.getByRole('region', { name: 'Workflow approval', exact: true })
     await expect(approval).toBeVisible()
-    await expect(approval.getByTestId('native-workflow-script')).toContainText('export const meta')
-    await expect(approval.getByTestId('native-workflow-script')).toContainText('status-fixture')
+    const summary=approval.getByTestId('native-workflow-summary'),retainedDraft='Keep review notes while inspecting the workflow.'
+    await expect(approval.getByTestId('native-workflow-description')).toContainText('Review release notes')
+    await expect(summary).toContainText('Review');await expect(summary).toContainText('Return the synthetic worker marker only.')
+    await expect(composer).toBeHidden()
+    const summaryText=await summary.innerText();let scriptText=''
     for (const size of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
       await appPage.setViewportSize(size); await expect(approval.getByRole('button', { name: 'Yes, run it', exact: true })).toBeInViewport()
+      await expect(composer).toBeHidden();await appPage.screenshot({ path: testInfo.outputPath('native-workflow-summary-' + size.width + '.png') })
+      await approval.getByRole('button',{name:'View raw script',exact:true}).click()
+      await expect(approval.getByTestId('native-workflow-script')).toContainText('export const meta');await expect(approval.getByTestId('native-workflow-script')).toContainText('status-fixture')
+      scriptText=await approval.getByTestId('native-workflow-script').innerText();await expect(approval.getByRole('button',{name:'Yes, run it',exact:true})).toBeInViewport()
       await appPage.screenshot({ path: testInfo.outputPath('native-workflow-approval-' + size.width + '.png') })
+      await approval.getByRole('button',{name:'View workflow summary',exact:true}).click();await expect(summary).toContainText('Return the synthetic worker marker only.')
     }
+    await writeFile(join(workspace!,'native-workflow-summary-proof.json'),JSON.stringify({summaryText,scriptText,retainedDraft,normalAndCompact:true}))
     await approval.getByRole('button', { name: 'Yes, run it', exact: true }).click()
     await expect(approval).toHaveCount(0)
+    await composer.fill(retainedDraft);await expect(composer).toHaveText(retainedDraft)
     const tasks = async () => JSON.parse(await readFile(join(workspace!, 'native-workflow-state.json'), 'utf8').catch(() => '[]'))
     await expect.poll(async () => (await tasks()).some((task: any) => task.type === 'local_workflow' && task.status === 'running'), { timeout: 15000 }).toBe(true)
     await expect.poll(async () => (await frames()).some((frame: any) => /Waiting for.*dynamic workflow/.test(frame.engineOutput ?? '')), { timeout: 15000 }).toBe(true)
@@ -140,6 +150,6 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill('Continue the same session after the pending worker review.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowSummary: true, nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })
