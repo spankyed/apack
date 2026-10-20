@@ -73,7 +73,7 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
   await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
   await appPage.locator('.cursor-row-resize').click({button:'right'})
   const composer=card.locator('[contenteditable="true"]')
-  expect(['native','broker']).toContain(pendingApprovalFailure)
+  expect(['native','broker','cancel']).toContain(pendingApprovalFailure)
   const draft='Keep my unsent release summary while recovering this approval.'
   const approval=appPage.getByRole('region',{name:'Read approval',exact:true})
   const controls=async()=>JSON.parse(await readFile(join(workspace!,'native-client-control-receipts.json'),'utf8').catch(()=>'[]'))
@@ -92,11 +92,11 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
     for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(approval.getByRole('button',{name:'Approve',exact:true})).toBeInViewport();await expect(composer).toHaveText(draft);await expect(composer).toBeHidden();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-pending-before-loss-'+width+'.png')})}
     await appPage.setViewportSize({width:1400,height:900})
     const live=before.native.state,pid=pendingApprovalFailure==='native'?live.nativePid:live.pid
-    const failure={kind:pendingApprovalFailure,pid,brokerPid:live.pid,nativePid:live.nativePid,at:Date.now(),retiredAt:0};expect(pid).toBeGreaterThan(1);expect(pid).not.toBe(process.pid);process.kill(pid,'SIGKILL')
-    await expect.poll(async()=>(await context()).native.state.status).toBe('error')
+    const failure={kind:pendingApprovalFailure,pid,brokerPid:live.pid,nativePid:live.nativePid,at:Date.now(),retiredAt:0};expect(pid).toBeGreaterThan(1);expect(pid).not.toBe(process.pid);if(pendingApprovalFailure==='cancel')await approval.getByRole('button',{name:'Cancel',exact:true}).click();else process.kill(pid,'SIGKILL')
+    await expect.poll(async()=>(await context()).native.state.status).toBe(pendingApprovalFailure==='cancel'?'exited':'error')
     await expect.poll(()=>{try{process.kill(boundNativePid,0);return false}catch(error:any){if(error.code!=='ESRCH')throw error;return true}}).toBe(true);failure.retiredAt=Date.now()
     await expect(approval).toHaveCount(0);await expect.poll(async()=>(await context()).claude.pendingControlRequest).toBeFalsy();await expect(composer).toHaveText(draft)
-    await expect(composer).toBeInViewport();await expect(section.getByRole('status')).toContainText('disconnected unexpectedly')
+    await expect(composer).toBeInViewport();if(pendingApprovalFailure!=='cancel')await expect(section.getByRole('status')).toContainText('disconnected unexpectedly')
     await section.getByRole('button',{name:'Use native interface',exact:true}).click()
     let reopenNavigated=false,reopenTrusted=false,reopenNavigationAt=0,reopenNavigationAttempts=0
     await expect.poll(async()=>{const n=(await context()).native,text=await screenText(n),screen=recognizeOnboardingPrompt(text,workspace)
