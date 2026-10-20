@@ -31,7 +31,7 @@
     </button>
 
     <template v-for="entry in entries" :key="'report-'+entry.id">
-      <NativeAgentHandback v-if="entry.handback" :report="entry.handback" class="mx-3 mb-3" />
+      <NativeAgentHandback v-for="report in entry.handbacks ?? []" :key="JSON.stringify([report.taskId, report.runId])" :report="report" class="mx-3 mb-3" />
     </template>
 
     <!-- Artifact ref link — shown below the header when set (Phase C diff) -->
