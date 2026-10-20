@@ -461,6 +461,20 @@ function drainCompletion(n,clientId,state){
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
 const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
 let mcpControlActive=false;
+function nativeBillingNotice(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
+ const sessionId=JSON.parse(readFileSync(configUrl,'utf8')).sessionId;
+ if(String(n.questionOptions.q())!==sessionId)throw Error('Native notice session changed');
+ const store=binding.toolContext(new AbortController()).dialogStore,open=store.getState().open;
+ const item=open.length===1?open[0]:undefined,payload=item?.payload,kind='auto_mode_server_fallback';
+ if(item?.kind!==kind||typeof payload?.title!=='string'||!Array.isArray(payload.paragraphs)||!payload.paragraphs.every(text=>typeof text==='string')||typeof payload.helpUrl!=='string'){
+  dialogRevisions.delete(kind);return {store,sessionId};
+ }
+ const fingerprint=JSON.stringify(payload);let revision=dialogRevisions.get(kind);
+ if(revision?.item!==item||revision?.payload!==payload||revision?.fingerprint!==fingerprint||revision?.sessionId!==sessionId)revision={item,payload,fingerprint,sessionId,revision:randomUUID()};
+ dialogRevisions.set(kind,revision);return {store,...revision};
+}
 function nativeDialog(n,kind){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native dialogs are not ready');
@@ -652,6 +666,15 @@ async function control(request,abort){
   abort.signal.throwIfAborted();let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
+ }
+ if(request.subtype==='apack_billing_notice'){
+  const d=nativeBillingNotice(n);return {notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
+ }
+ if(request.subtype==='apack_answer_billing_notice'){
+  abort.signal.throwIfAborted();const d=nativeBillingNotice(n);
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native notice changed or expired');
+  if(!['continue','interrupt'].includes(request.decision))throw Error('Invalid native notice decision');
+  d.store.answer(d.item.id,request.decision);dialogRevisions.delete('auto_mode_server_fallback');return {answered:true};
  }
  if(request.subtype==='apack_workflow_dialogs'){
   const d=nativeDialog(n,'permission_workflow');if(!d.item)return {dialogs:[]};const {presentation}=await nativeWorkflowPresentation(n,d);

@@ -8,6 +8,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 test('shows the original native-owner handback report and returns to the retained parent draft', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
+  const noticeCancel=process.env.CLAUDE_RESEARCH_BILLING_NOTICE_CANCEL==='1'
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -68,13 +69,37 @@ test('shows the original native-owner handback report and returns to the retaine
     await expect.poll(async()=>(await dialogs()).some((event:any)=>event.value?.open?.some((item:any)=>item.kind==='auto_mode_server_fallback'))).toBe(true);
     const notice=(await dialogs()).flatMap((event:any)=>event.value?.open??[]).find((item:any)=>item.kind==='auto_mode_server_fallback');
     expect(notice.payload.title).toContain("We're changing auto mode");
-    await section.getByRole('button',{name:'Use native interface',exact:true}).click();
-    await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.map((chunk:any)=>chunk.text).join(''))).toContain('classifier');
-    await appPage.screenshot({path:testInfo.outputPath('native-handback-gateway-notice.png')});
-    // Frozen original dialog explicitly binds Enter to continue, preserving native acknowledgement.
-    await input.press('Enter');
+    const noticeCard=appPage.getByRole('region',{name:'Claude auto mode notice',exact:true});
+    await expect(noticeCard).toContainText(notice.payload.title);
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900});
+      await expect(noticeCard.getByRole('button',{name:'Continue in auto mode',exact:true})).toBeInViewport();
+      await expect(composer).toBeInViewport();
+      await expect(composer).toHaveText(draft);
+      await appPage.screenshot({path:testInfo.outputPath('native-handback-gateway-notice-'+width+'.png')});
+    }
+    if(noticeCancel){
+      await noticeCard.getByRole('button',{name:'Cancel',exact:true}).click();
+      await expect.poll(async()=>(await dialogs()).some((event:any)=>event.type==='closed'&&event.value?.id===notice.id&&event.value?.result==='interrupt')).toBe(true);
+      await expect(noticeCard).toHaveCount(0);
+      await expect.poll(async()=>(await context()).native.state.tasks.every((task:any)=>['completed','failed','killed'].includes(task.status)),{timeout:20000}).toBe(true);
+      expect((await original()).some((task:any)=>task.handbackReport)).toBe(false);
+      await expect(composer).toHaveText(draft);
+      await writeFile(join(workspace!,'native-billing-notice-cancel-proof.json'),JSON.stringify({notice,original:await original(),draft,dialogs:await dialogs()},null,2));
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();
+      await section.getByRole('button',{name:'Stop session',exact:true}).click();
+      await expect.poll(async()=>(await context()).native.state.status).toBe('exited');
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();
+      await composer.fill('Continue the release review after cancelling the auto mode notice.');
+      await card.getByRole('button',{name:'Send',exact:true}).click();
+      await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
+      expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'agent-layout',nativeBillingNoticeCancel:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2));
+      return;
+    }
+    await noticeCard.getByRole('button',{name:'Continue in auto mode',exact:true}).click();
     await expect.poll(async()=>(await dialogs()).some((event:any)=>event.type==='closed'&&event.value?.id===notice.id&&event.value?.result==='continue')).toBe(true);
-    await section.getByRole('button',{name:'Back to conversation',exact:true}).click();
+    await expect(noticeCard).toHaveCount(0);
     await expect(composer).toHaveText(draft);
     await expect.poll(async()=>(await original()).some((task:any)=>task.handbackReport?.text===expected),{timeout:25000}).toBe(true);
     const task=(await original()).find((task:any)=>task.handbackReport?.text===expected);

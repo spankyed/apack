@@ -1598,6 +1598,39 @@ interface ClaudeNativeJournalEntry {
     row: Record<string, unknown>;
 }
 
+type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
+
+type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
+    decision: 'continue' | 'interrupt';
+};
+
+/** Original classifier-billing notice; native owns acknowledgement and interruption. */
+declare const ClaudeNativeNoticeSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    kind: z.ZodLiteral<"auto_mode_server_fallback">;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString, "many">;
+    helpUrl: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    id: string;
+    kind: "auto_mode_server_fallback";
+    title: string;
+    revision: string;
+    sessionId: string;
+    paragraphs: string[];
+    helpUrl: string;
+}, {
+    id: string;
+    kind: "auto_mode_server_fallback";
+    title: string;
+    revision: string;
+    sessionId: string;
+    paragraphs: string[];
+    helpUrl: string;
+}>;
+
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
 
 interface ClaudeNativePlanDialogResponse {
@@ -2429,6 +2462,8 @@ interface ClaudeNativeTerminalOwner {
         sequence: number;
         text: string;
     }[];
+    refreshNotice(): Promise<void>;
+    answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
     readJournal(): Promise<ClaudeNativeJournalBatch>;
     readonly records: readonly {
         sequence: number;
@@ -2489,6 +2524,7 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    notice?: ClaudeNativeNotice;
     /** Original native selected view, independent of the app thread. Undefined until observed. */
     view?: ClaudeNativeTerminalView;
     ownerId: string;
@@ -2830,11 +2866,21 @@ type ClaudeTerminalViewRequest = {
     operation: 'input' | 'send';
     text: string;
 })) | {
+    type: 'CLAUDE_TERMINAL_NOTICE';
+    ownerId: string;
+    notice: ClaudeNativeNoticeResponse;
+} | {
     type: 'CLAUDE_TERMINAL_CLOSE';
     ownerId: string;
 });
 
 type ClaudeTerminalViewSnapshot = {
+    noticeAnswer?: {
+        id: string;
+        revision: string;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
     task?: ClaudeTerminalTaskState;
     submission?: ClaudeTerminalSubmissionState;
     state?: ClaudeNativeTerminalState;

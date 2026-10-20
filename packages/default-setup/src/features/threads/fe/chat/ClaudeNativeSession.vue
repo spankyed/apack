@@ -1,5 +1,17 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+    <section v-if="!active && view?.state?.notice" aria-label="Claude auto mode notice" class="native-notice">
+      <div class="native-notice__body" tabindex="0">
+        <h3>{{ view.state.notice.title }}</h3>
+        <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
+        <p class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+      </div>
+      <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
+      <div class="native-notice__actions">
+        <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>
+        <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice('continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
+      </div>
+    </section>
     <div v-if="!active" class="native-launch__actions">
       <span v-if="view?.problem || view?.state?.problem" role="status" class="native-problem">{{ view?.problem || view?.state?.problem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
@@ -64,6 +76,13 @@ const actor: ThreadsState = usePlugin()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
+const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
+const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
+function answerNotice(decision: 'continue' | 'interrupt') {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || !notice || noticePending.value) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } })
+}
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
 const stateLabel = computed(() => {
   const state = view.value?.state
@@ -128,8 +147,14 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 </script>
 
 <style scoped>
-.native-launch { display: flex; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
-.native-launch__actions { display: flex; align-items: center; gap: 12px; }
+.native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
+.native-launch__actions { justify-content: flex-end; display: flex; align-items: center; gap: 12px; }
+.native-notice { margin-bottom: 8px; padding: 12px; border: 1px solid #d3aa8e33; border-radius: 10px; background: #d3aa8e08; }
+.native-notice__body { max-height: min(14rem, 23vh); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; line-height: 1.5; color: #c9c5bf; overflow-wrap: anywhere; }
+.native-notice h3 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: #eee7dd; }
+.native-notice p { margin: 0 0 8px; }
+.native-notice__url { color: #9f9a92; font-size: 11px; }
+.native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
 .native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }

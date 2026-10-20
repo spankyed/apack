@@ -1575,6 +1575,7 @@ const threadsState = setup({
     CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_NOTICE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {

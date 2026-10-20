@@ -7,6 +7,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
     subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }),
+    answerNotice: vi.fn(async () => {}),
     operateTask: vi.fn(async () => ({ stopped: true })),
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
@@ -207,5 +208,26 @@ it('returns the submitting window native command outcome without a fabricated hu
     expect(command).toHaveBeenCalledExactlyOnceWith('window', 'thread', mount.mountId, 1, '/clear', false)
     expect(f.owner.submit).not.toHaveBeenCalled(); expect(f.accepted).not.toHaveBeenCalled()
     expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
+  } finally { f.views.clear() }
+})
+
+it('answers only the exact live notice and refuses stale or detached controls', async () => {
+  const f = fixture()
+  try {
+    const notice = { id: 'notice', revision: randomUUID(), sessionId: f.owner.state.sessionId, kind: 'auto_mode_server_fallback' as const, title: 'Original notice', paragraphs: ['Original explanation'], helpUrl: 'https://code.claude.com/docs/en/auto-mode-classifier-billing' }
+    f.owner.state.notice = notice
+    f.views.handle(mount, 'one', f.send)
+    const request = { ...mount, type: 'CLAUDE_TERMINAL_NOTICE' as const, ownerId: f.owner.state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'continue' as const } }
+    f.views.handle({ ...request, notice: { ...request.notice, revision: randomUUID() } }, 'one', f.send)
+    f.views.handle(request, 'other-window', f.send)
+    expect(f.owner.answerNotice).not.toHaveBeenCalled()
+    f.views.handle(request, 'one', f.send)
+    f.views.handle(request, 'one', f.send)
+    expect(f.owner.answerNotice).toHaveBeenCalledExactlyOnceWith(request.notice)
+    await Promise.resolve(); await Promise.resolve()
+    expect(f.send.mock.calls.at(-1)![0].noticeAnswer?.status).toBe('done')
+    f.owner.state.notice = { ...notice, revision: randomUUID() }
+    f.views.handle(request, 'one', f.send)
+    expect(f.owner.answerNotice).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })

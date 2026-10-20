@@ -111,6 +111,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           lastTaskSnapshot = taskSnapshot
           for (const entry of agentRows.values()) upsert(entry)
         }
+        await owner.refreshNotice()
         const workflows = await owner.getWorkflowDialogs()
         const reads = await owner.getFileDialogs()
         const bashes = await owner.getBashDialogs()

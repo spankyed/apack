@@ -1,3 +1,4 @@
+import { ClaudeNativeNoticeSchema, type ClaudeNativeNotice, type ClaudeNativeNoticeResponse } from '../../../common/native-notice.ts'
 import { ClaudeNativeWorkflowDialogsSchema, type ClaudeNativeWorkflowDialog, type ClaudeNativeWorkflowDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeTaskResultSchema } from './terminal-tasks.ts'
 import { ClaudeNativePlanDialogsSchema, type ClaudeNativePlanDialog, type ClaudeNativePlanDialogResponse } from './terminal-dialogs.ts'
@@ -30,6 +31,8 @@ export interface ClaudeNativeTerminalOwner {
   beforeRelease(listener: () => Promise<void>): void
   /** Raw native terminal bytes, sequenced independently of presentation metadata. */
   readonly output: readonly { sequence: number; text: string }[]
+  refreshNotice(): Promise<void>
+  answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>
   readJournal(): Promise<ClaudeNativeJournalBatch>
   readonly records: readonly { sequence: number; record: ClaudeNativeTerminalRecord }[]
   subscribe(listener: () => void): () => void
@@ -163,14 +166,30 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.signal?.aborted) kill()
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
+    let notice: ClaudeNativeNotice | undefined
     let changingView = false, preparingParent = false
     return {
-      get state() { return { view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { notice: closed ? undefined : notice, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return modelSelection },
       get busy() { return !closed && (changingModel || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport: bridge.uiTransport,
+      async refreshNotice() {
+        if (closed || !bridge.ready) return
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_billing_notice' }) as { notice?: unknown }
+        if (closed || sessionId !== bridge.projection.sessionId) return
+        const next = result.notice == null ? undefined : ClaudeNativeNoticeSchema.parse(result.notice)
+        if (next && next.sessionId !== sessionId) throw new Error('Native notice session changed')
+        if (JSON.stringify(next) !== JSON.stringify(notice)) { notice = next; changed() }
+      },
+      async answerNotice(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_billing_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native notice was not acknowledged')
+        if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
+      },
       async readJournal() {
         const batch = await readJournal(bridge.transcripts, { final: closed })
         for (const entry of batch.entries) {

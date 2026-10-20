@@ -29,6 +29,7 @@ export interface ClaudeNativeFocusProjection {
 }
 
 export interface ClaudeNativeTerminalState {
+  notice?: import('./native-notice.ts').ClaudeNativeNotice
   /** Original native selected view, independent of the app thread. Undefined until observed. */
   view?: ClaudeNativeTerminalView
   ownerId: string

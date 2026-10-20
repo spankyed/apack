@@ -45,3 +45,21 @@ it('allows leaving an exited native owner even if a task receipt was still pendi
   expect(f.back.disabled).toBe(false); f.back.click(); await nextTick()
   expect(f.active).toHaveBeenLastCalledWith(false)
 })
+
+it('shows the original billing notice in ordinary chat and sends its exact decision identity', async () => {
+  const f = await fixture()
+  const notice = { id: 'notice', revision: 'revision', sessionId: 'session', kind: 'auto_mode_server_fallback' as const, title: '<script>Original notice</script>', paragraphs: ['Original gateway explanation'], helpUrl: 'https://code.claude.com/docs/en/auto-mode-classifier-billing' }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude auto mode notice"]')!
+  expect(card.textContent).toContain(notice.title); expect(card.querySelector('script')).toBeNull()
+  const button = [...card.querySelectorAll('button')].find(button => button.textContent === 'Continue in auto mode')!
+  button.click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner', notice: { id: 'notice', revision: 'revision', sessionId: 'session', decision: 'continue' } }))
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice }, noticeAnswer: { id: 'notice', revision: 'revision', status: 'pending' } }); await nextTick()
+  expect([...card.querySelectorAll('button')].every(button => button.disabled)).toBe(true)
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice }, noticeAnswer: { id: 'notice', revision: 'revision', status: 'error', problem: 'Native notice changed' } }); await nextTick()
+  expect(card.querySelector('[role="alert"]')?.textContent).toBe('Native notice changed')
+  ;[...card.querySelectorAll('button')].find(button => button.textContent === 'Cancel')!.click()
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('interrupt')
+})
