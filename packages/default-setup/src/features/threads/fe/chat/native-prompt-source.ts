@@ -42,8 +42,8 @@ export function claudePromptSourceReferences(node: ProseMirrorNode): ContextRefe
   return retainedReferences(node).map(value=>({...value.reference}))
 }
 
-/** Keep exact source/caret and unchanged reference identities; never guess through missing atoms. */
-export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer): ReturnType<typeof rewriteClaudePromptDocument> {
+/** Keep exact source/caret. Ordinary edits retain atom identity; explicit replacement may withdraw it. */
+export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, allowAtomReplacement = false): ReturnType<typeof rewriteClaudePromptDocument> {
   const type=snapshot.doc.type.schema.nodes.claudePromptSource
   if (!type || !Number.isInteger(frame.cursor) || frame.cursor<0 || frame.cursor>frame.text.length) return
   const references: ClaudeSourceReference[]=[]
@@ -51,7 +51,9 @@ export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame:
   snapshot.doc.descendants((node,position)=>{
     if (node.type.name==='claudePromptSource') { references.push(...retainedReferences(node));return false }
     if (!node.isAtom || node.isText) return
-    if (node.type.name!=='reference' || !node.isInline) { unmappable=true;return false }
+    // A hard break carries text, not an opaque reference identity. Full fills may explicitly replace other atoms.
+    if (node.type.name==='hardBreak' && node.isInline) return false
+    if (node.type.name!=='reference' || !node.isInline) { if (!allowAtomReplacement) unmappable=true;return false }
     const start=captureClaudePromptDocument(snapshot.doc,position,serialize),end=captureClaudePromptDocument(snapshot.doc,position+node.nodeSize,serialize)
     if (!start || !end || end.cursor<=start.cursor) { unmappable=true;return false }
     references.push({text:start.text.slice(start.cursor,end.cursor),reference:{...node.attrs} as ContextReference})
@@ -60,10 +62,12 @@ export function rewriteClaudePromptSource(snapshot: ClaudePromptDocument, frame:
   if (unmappable) return
   const counts=new Map<string,number>()
   for (const value of references) counts.set(value.text,(counts.get(value.text)??0)+1)
-  for (const [text,count] of counts) if (occurrences(frame.text,text)!==count) return
+  const matches=new Map([...counts].map(([text,count])=>[text,occurrences(frame.text,text)===count]))
+  if (!allowAtomReplacement && [...matches.values()].some(value=>!value)) return
+  const retained=references.filter(value=>matches.get(value.text))
   try {
     const content=frame.text?snapshot.doc.type.schema.text(frame.text):undefined
-    const doc=snapshot.doc.type.create(null,type.create({references},content)),position=frame.cursor+1
+    const doc=snapshot.doc.type.create(null,type.create({references:retained},content)),position=frame.cursor+1
     if (serialize(doc)!==frame.text) return
     const captured=captureClaudePromptDocument(doc,position,serialize)
     return captured?.cursor===frame.cursor?{doc,position}:undefined

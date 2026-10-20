@@ -68,3 +68,36 @@ it('does not let raw fallback bypass composition, stale revisions or invalid cur
   next.receive({revision:next.revision,status:'applied',frame:{text:'x',cursor:2}})
   expect(editor.state.doc).toBe(before);expect(await next.settle()).toBe(false);next.dispose()
 })
+
+
+it('allows an explicit reverse replace to withdraw old reference context in literal source',()=>{
+  editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'reference'}]}]})
+  const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn()),source='~~~ts\nconst fresh = true\n~~~'
+  expect(bridge.fillDraft({mode:'replace',text:source},bridge.revision)).toBe(true)
+  expect(text()).toBe(source);expect(bridge.readDraft()).toEqual({text:source,cursor:source.length})
+  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([]);bridge.dispose()
+})
+
+it('carries textual hard breaks and reference identity through literal append and insert fills',()=>{
+  editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Use '},{type:'reference'},{type:'hardBreak'},{type:'text',text:'Keep this line'}]}]})
+  const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn()),before=text(),append='\n\n~~~ts\nconst ready = true\n~~~'
+  expect(bridge.fillDraft({mode:'append',text:append},bridge.revision)).toBe(true)
+  expect(text()).toBe(before+append)
+  expect(claudePromptSourceReferences(editor.state.doc.firstChild!)).toEqual([{refType:'thread',refId:'thread-id',shortCode:'T-1',label:'Context'}])
+  const old=bridge.revision,content=text()
+  bridge.receive({revision:old,status:'applied',frame:bridge.readDraft()!})
+  expect(bridge.fillDraft({mode:'insert',text:'\nMore notes'},bridge.revision)).toBe(true)
+  expect(text()).toBe(content+'\nMore notes')
+  const current=editor.state.doc
+  expect(bridge.fillDraft({mode:'replace',text:'stale'},old)).toBe(false)
+  expect(editor.state.doc).toBe(current);bridge.dispose()
+})
+
+
+it('keeps an ordinary representable replacement rich while explicitly withdrawing old references',()=>{
+  editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'reference'}]}]})
+  const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
+  expect(bridge.fillDraft({mode:'replace',text:'**Fresh review**'},bridge.revision)).toBe(true)
+  expect(text()).toBe('**Fresh review**');expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
+  expect(editor.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold');bridge.dispose()
+})

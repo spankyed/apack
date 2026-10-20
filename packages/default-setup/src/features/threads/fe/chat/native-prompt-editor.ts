@@ -109,7 +109,19 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
     const cursor = offset + input.text.length
     const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
-    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parse, runs.flatMap(run => [run.start, run.end])) ?? rewriteClaudePromptSource(snapshot, { text, cursor }, serialize)
+    let parserRefused = false
+    const parseFill = (value: string) => { try { return parse(value) } catch (error) { parserRefused = true; throw error } }
+    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parseFill, runs.flatMap(run => [run.start, run.end]))
+    if (parserRefused) return
+    if (!next && input.mode === 'replace') {
+      // A full replacement may release old atoms; prefer a rich result when its caret is representable.
+      try {
+        const empty = parseFill(''), blank = captureClaudePromptDocument(empty, 1, serialize)
+        if (blank) next = rewriteClaudePromptDocument(blank, { text, cursor }, serialize, parseFill, runs.flatMap(run => [run.start, run.end]))
+      } catch { return }
+      if (parserRefused) return
+    }
+    next ??= rewriteClaudePromptSource(snapshot, { text, cursor }, serialize, input.mode === 'replace')
     if (!next) {
       let atoms = false
       snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
@@ -136,6 +148,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
     tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', origin)
     tr.setMeta(decorations.key, drawn)
+    if (next.doc.firstChild?.type.name === 'claudePromptSource' && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
     editor.view.dispatch(tr)
     if (fillPaint?.revision === revision) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
     return true
