@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
-import { storeHandle, clearHandle, openConversation, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
+import { storeHandle, clearHandle, openConversation, getNativeLaunch, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mocks = { prepare: vi.fn() }
@@ -116,4 +116,28 @@ it('retains a stopped-session retry after a failed settings read without startin
   expect(isConversationBusy('thread')).toBe(false); expect(mocks.prepare).toHaveBeenCalledTimes(1)
   mocks.prepare.mockResolvedValueOnce({ start: async () => next, dispose: async () => {} })
   expect(await openNativeTerminal('thread', {}, mocks.prepare, async () => ({ settings: { effective: {}, sources: [] }, permissionMode: 'plan' }))).toBe(next)
+})
+
+
+it('reopens validated persisted launch intent without any in-memory prior owner', async () => {
+  const native = terminal(), prepare = vi.fn(async () => ({ start: async () => native, dispose: async () => {} }))
+  const read = vi.fn(async () => ({ settings: { effective: {}, sources: [] }, permissionMode: 'plan' as const }))
+  const resume = {sessionId:session,cwd:'/saved',allowedTools:['Read'],disallowedTools:['Bash'],appendSystemPrompt:'Saved review instructions',addDir:['/reference']}
+  expect(await openNativeTerminal('cold', {resume}, prepare, read)).toBe(native)
+  expect(read).toHaveBeenCalledWith(expect.objectContaining(resume))
+  expect(prepare).toHaveBeenCalledWith(expect.objectContaining({...resume,permissionMode:'plan'}))
+  expect(await getNativeLaunch('cold')).not.toHaveProperty('settings')
+  await expect(openNativeTerminal('invalid', {resume:{...resume,env:{TOKEN:'not persisted'}} as typeof resume}, prepare, read)).rejects.toThrow()
+  expect(prepare).toHaveBeenCalledTimes(1)
+})
+
+
+it('honors newly staged launch choices instead of the retained stopped-owner snapshot', async () => {
+  await printOwner(); const first = terminal(), next = terminal()
+  mocks.prepare.mockResolvedValueOnce({start:async()=>first,dispose:async()=>{}})
+  await openNativeTerminal('thread',{},mocks.prepare);await first.close();await first.done
+  const read = vi.fn(async()=>({settings:{effective:{},sources:[]},permissionMode:'plan' as const}))
+  mocks.prepare.mockResolvedValueOnce({start:async()=>next,dispose:async()=>{}})
+  await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',model:'haiku',permissionMode:'plan'}},mocks.prepare,read)
+  expect(read).toHaveBeenCalledWith(expect.objectContaining({model:'haiku',permissionMode:'plan'}))
 })

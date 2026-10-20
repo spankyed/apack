@@ -1,3 +1,4 @@
+import { readSavedClaudeNativeLaunch } from '#features/code/be/services/claude-code/native-launch.ts';
 import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
 import { createClaudeTerminalViews } from './claude-terminal-views.ts';
@@ -33,11 +34,14 @@ const terminalViews = createClaudeTerminalViews({
   prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
   get: key => services.cli.claudeCode.getNativeTerminal(key),
   async open(key) {
-    const owner = await services.cli.claudeCode.openNativeTerminal(key);
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    if (state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) throw new Error('Complete or reset the pending history change before opening the native interface');
+    const resume = readSavedClaudeNativeLaunch(state);
+    const owner = await services.cli.claudeCode.openNativeTerminal(key, resume ? {resume} : undefined);
     terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
       const current = services.cli.claudeCode.getNativeTerminal(key);
       return current === owner;
-    }));
+    }, () => services.cli.claudeCode.getNativeLaunch(key)));
     return owner;
   },
 });

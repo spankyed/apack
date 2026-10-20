@@ -1,3 +1,4 @@
+import type { ClaudeNativeLaunch } from '#features/code/common/native-launch.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
 import { broadcastToPlugin } from '#generated/events.ts'
@@ -11,7 +12,7 @@ import type { MessageReferences, ToolActivityEntry } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
-export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean) {
+export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean, readLaunch: () => Promise<ClaudeNativeLaunch | undefined>) {
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean }>()
   const acceptedReferences = new Map<string, MessageReferences>()
   const pendingTools = new Map<string, ClaudeNativeJournalEntry>()
@@ -174,13 +175,15 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const snapshot = JSON.stringify([state.sessionId, metadata, working, state.status, state.lastTurn, problem, lastTurnAt, toolCounts.get(state.sessionId), object(repository.threadQueries.byId(threadId)?.context?.claudeCode?.pendingControlRequest)?.requestId])
         if (snapshot === lastMetadata) return
         lastMetadata = snapshot
+        const nativeLaunch = await readLaunch()
+        if (!current()) return
         const thread = repository.threadQueries.byId(threadId)
         if (!thread) return
         const prior = thread.context?.claudeCode ?? {}
         const previous = Array.isArray(prior.previousSessionIds) ? prior.previousSessionIds : []
         const nativeError = state.lastTurn?.reason === 'error' ? 'Native Claude turn failed; details remain in the native interface' : state.lastTurn?.reason === 'refusal' ? 'Native Claude refused the turn' : undefined
         const chatState = problem || nativeError || state.status === 'error' ? 'error' : object(prior.pendingControlRequest)?.nativeTerminal ? 'paused' : working ? 'working' : state.status === 'exited' || state.lastTurn?.reason === 'aborted' ? 'paused' : 'success'
-        const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId,
+        const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId, ...(nativeLaunch?.sessionId === state.sessionId ? {nativeLaunch} : {}),
           ...(prior.sessionId && prior.sessionId !== state.sessionId ? { previousSessionIds: [...new Set([...previous, prior.sessionId])] } : {}),
           ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }

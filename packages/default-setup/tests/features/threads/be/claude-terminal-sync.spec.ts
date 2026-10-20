@@ -21,6 +21,7 @@ vi.mock('#generated/repository.ts', () => ({ repository: {
 } }))
 vi.mock('#features/threads/be/services/chat.ts', () => ({ sendBlockMessage: vi.fn((options: Record<string, unknown>) => { const row = { ...options, id: String(fake.messages.length) }; fake.messages.push(row); return { messageId: row.id } }), updateMessageState: vi.fn((id: string, updates: Record<string, unknown>) => { Object.assign(fake.messages.find(message => message.id === id)!, updates) }) }))
 vi.mock('#features/threads/be/services/threads.ts', () => ({ updateChatState: vi.fn() }))
+const readLaunch = async () => undefined
 const sessionId = '11111111-1111-1111-1111-111111111111'
 let directory: string
 beforeEach(async () => {
@@ -45,7 +46,7 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
     setPermissionMode: async mode => mode, holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), refreshNotice: vi.fn(async () => {}), answerNotice: vi.fn(async () => {}), getWorkflowDialogs: vi.fn(async () => []), answerWorkflowDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), answerFileDialog: vi.fn(async () => {}), controlMcpServer: vi.fn(async () => ({mcpServers:[]})), operateTask: vi.fn(async () => ({ stopped: true })), getMcpStatus: vi.fn(async () => ({mcpServers:[]})), getModels: async () => ({ models: [] }), renameSession: vi.fn(async (title: string) => ({ title, message: 'Renamed' })), setModel: async model => model,
   }
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   expect(release).toBeDefined()
   exited = true; await release!()
   expect(fake.messages, JSON.stringify(fake.thread.context)).not.toEqual([])
@@ -62,7 +63,7 @@ it.each([false, true])('retains receipt-bound references when journal arrives be
   const owner = { holdQuestionDialog: vi.fn(async () => {}), renderQuestionDialog: vi.fn(async () => { throw new Error('Question rendering is not used in this fixture') }), getQuestionDialogs: vi.fn(async () => []), answerQuestionDialog: vi.fn(async () => {}), getPlanDialogs: vi.fn(async () => []), answerPlanDialog: vi.fn(async () => {}), getBashDialogs: vi.fn(async () => []), answerBashDialog: vi.fn(async () => {}), refreshNotice: vi.fn(async () => {}), answerNotice: vi.fn(async () => {}), getWorkflowDialogs: vi.fn(async () => []), answerWorkflowDialog: vi.fn(async () => {}), getFileDialogs: vi.fn(async () => []), state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: false,
     readJournal, beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  const history = syncClaudeTerminalThread('thread' as EntityId, owner, () => active)
+  const history = syncClaudeTerminalThread('thread' as EntityId, owner, () => active, readLaunch)
   await vi.waitFor(() => expect(readJournal).toHaveBeenCalled())
   // Allow the first journal batch to be persisted before attaching the receipt.
   await Promise.resolve()
@@ -89,7 +90,7 @@ it.each([true, false])('joins native task status only to its structured Agent re
     readJournal: vi.fn(async () => ({ entries: [assistant, result], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   const entries = () => (fake.messages[0]?.blocks as { props: { entries: { nativeAgent?: unknown }[] } }[])[0].props.entries
   try {
     await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
@@ -117,7 +118,7 @@ it.each(['Read', 'Bash', 'ExitPlanMode', 'Workflow'] as const)('retires %s appro
     readJournal: vi.fn(async () => ({ entries: [], pending: false, problems: [] })),
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
   expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'paused', pendingControlRequest: { nativeTerminal: { ownerId: 'owner', revision: dialog.revision } } })
   await vi.waitFor(() => expect(getFileDialogs.mock.calls.length).toBeGreaterThan(1))
@@ -148,7 +149,7 @@ it('refreshes native file readiness and permission scope without replacing the p
     beforeRelease(listener: () => Promise<void>) { release = listener },
   } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   try {
     await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
     const message = fake.messages[0]
@@ -167,7 +168,7 @@ it('publishes targeted Plan/Edit transitions from observed native mode without a
     refreshNotice: vi.fn(async () => {}), answerNotice: vi.fn(async () => {}), getWorkflowDialogs: vi.fn(async () => []), answerWorkflowDialog: vi.fn(async () => {}), getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [],
     readJournal: async () => ({ entries: [], pending: false, problems: [] }), beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   try {
     await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ permissionMode: 'default' }))
     metadata.permissionMode = 'plan'
@@ -188,7 +189,7 @@ it('reports native pending workflows as working without turning them into Agents
   const state = { ownerId: 'owner', sessionId, status: 'live', tasks: [], activity: { pendingAgents: 0, pendingWorkflows: 1 } }
   const owner = { state, busy: false, refreshNotice: vi.fn(async () => {}), answerNotice: vi.fn(async () => {}), getWorkflowDialogs: async () => [], getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [], readJournal: async () => ({ entries: [], pending: false, problems: [] }), beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId, owner, () => true)
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   try {
     await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'working' }))
     expect(owner.busy).toBe(false); expect(state.tasks).toEqual([])
@@ -206,7 +207,7 @@ it('persists a consumed journal batch even when native dialog discovery fails du
   const getWorkflowDialogs=vi.fn().mockRejectedValueOnce(new Error('Transient native dialog discovery failure')).mockResolvedValue([])
   const owner={state:{ownerId:'owner',sessionId,status:'live',tasks:[]},busy:false,readJournal,refreshNotice:vi.fn(async()=>{}),answerNotice:vi.fn(async()=>{}),getWorkflowDialogs,getFileDialogs:async()=>[],getBashDialogs:async()=>[],getQuestionDialogs:async()=>[],getPlanDialogs:async()=>[],beforeRelease(listener:()=>Promise<void>){release=listener}} as unknown as ClaudeNativeTerminalOwner
   const {syncClaudeTerminalThread}=await import('#features/threads/be/claude-terminal-sync.ts')
-  syncClaudeTerminalThread('thread' as EntityId,owner,()=>true)
+  syncClaudeTerminalThread('thread' as EntityId,owner,()=>true,readLaunch)
   await vi.waitFor(()=>expect(getWorkflowDialogs).toHaveBeenCalled())
   await release()
   expect(fake.messages).toEqual([expect.objectContaining({sender:'user',text:'Managed media submission',context:expect.objectContaining({cliUuid:uuid})})])

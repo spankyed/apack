@@ -158,3 +158,35 @@ it('defers replaced-actor cleanup to accepted startup data and drains it once', 
   expect(takeClaudeUiRetirements()).toEqual([])
   actor.stop()
 })
+
+
+it('loads native permission phase on cold thread selection without overwriting a staged phase on refresh', () => {
+  const edit = repository.threadCommands.create({topic:'Saved native edit',instructions:''})
+  repository.threadCommands.update(edit.id,{context:{claudeCode:{sessionId:'saved-edit',permissionMode:'acceptEdits'}}})
+  const plan = repository.threadCommands.create({topic:'Saved native plan',instructions:''})
+  repository.threadCommands.update(plan.id,{context:{claudeCode:{sessionId:'saved-plan',permissionMode:'plan'}}})
+  const actor = createActor(threadsState).start()
+  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
+  expect(actor.getSnapshot().context.phase).toBe('Edit')
+  actor.send({type:'SET_PHASE',phase:'Plan'})
+  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(plan.id)!})
+  expect(actor.getSnapshot().context.phase).toBe('Plan')
+  actor.send({type:'LOAD_CHAT_THREAD',data:{...repository.chatQueries.threadData(edit.id)!,forcedMode:'Claude Code'}})
+  expect(actor.getSnapshot().context.phase).toBe('Edit')
+  actor.stop()
+})
+
+
+it('keeps a loaded native phase when startup hydration arrives later', () => {
+  const thread = repository.threadCommands.create({topic:'Cold native',instructions:''})
+  repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId:'saved',permissionMode:'default'}}})
+  const data={...repository.chatQueries.threadData(thread.id)!,forcedMode:'Claude Code'}
+  const actor=createActor(threadsState).start()
+  actor.send({type:'LOAD_CHAT_THREAD',data})
+  expect(actor.getSnapshot().context.phase).toBe('Edit')
+  actor.send({type:'AGENT_CONNECTED',data:{currentThread:data,threads:[],recentThreads:[],tabs:[]}})
+  expect(actor.getSnapshot().context.phase).toBe('Edit')
+  actor.stop()
+})

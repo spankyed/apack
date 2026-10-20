@@ -1,7 +1,7 @@
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 
 /** Native transcript facts used by each saved-session import route. */
-export function importedSessionMetadata(transcript: readonly Record<string, unknown>[]) {
+export function importedSessionMetadata(transcript: readonly Record<string, unknown>[], sessionId: string, cwd?: string) {
   let totalCostUsd = 0, model = '', startedAt: number | undefined, lastTurnAt: number | undefined;
   const turns = new Set<string>(), tools = new Set<string>();
   for (const [index, row] of transcript.entries()) {
@@ -25,6 +25,6 @@ export function importedSessionMetadata(transcript: readonly Record<string, unkn
       turns.add(typeof row.uuid === 'string' ? row.uuid : String(index));
     }
   }
-  return { totalCostUsd, model, turns: turns.size, toolCallCount: tools.size,
+  return { nativeLaunch: cwd ? {sessionId,cwd} : undefined, totalCostUsd, model, turns: turns.size, toolCallCount: tools.size,
     ...(startedAt !== undefined ? { startedAt } : {}), ...(lastTurnAt !== undefined ? { lastTurnAt } : {}) };
 }

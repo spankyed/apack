@@ -1,7 +1,7 @@
 import type { Editor } from '@tiptap/core'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 
-// Pack frontend modules/actors are replaceable. Only document data survives in this window;
+// Pack frontend modules/actors are replaceable. Only document data is retained;
 // native authority, callbacks, completion offers and component references never enter this cache.
 const key = Symbol.for('apack.default-setup.claude-window-drafts')
 type WindowDrafts = { parent: Map<string, ClaudeAgentDraftSnapshot>; agents: Record<string, { text: string; snapshot?: ClaudeAgentDraftSnapshot }> }
@@ -9,15 +9,39 @@ const scope = globalThis as unknown as Record<symbol, WindowDrafts | undefined>
 const drafts = scope[key] ??= { parent: new Map(), agents: {} }
 export const claudeWindowAgentDrafts = drafts.agents
 
+export function claudeWindowDraftStorageKey(owner: string, search = globalThis.location?.search ?? ''): string | undefined {
+  const query = new URLSearchParams(search), plugin = query.get('pluginId')
+  // WindowManager keeps one main window and one popout per plugin.
+  if (query.get('popout') === 'plugin' && !plugin) return
+  return 'apack.claude-parent-draft:' + JSON.stringify([query.get('popout') === 'plugin' ? ['plugin', plugin] : ['main'], owner])
+}
 export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void {
-  const saved = drafts.parent.get(owner)
+  const storageKey = claudeWindowDraftStorageKey(owner)
+  let saved = drafts.parent.get(owner)
+  if (!saved && storageKey) {
+    try { const raw = globalThis.localStorage?.getItem(storageKey); if (raw) saved = JSON.parse(raw) as ClaudeAgentDraftSnapshot } catch { /* Storage availability never gates editing. */ }
+  }
   let ready = false
-  const save = () => { if (ready) { const snapshot = captureClaudeAgentDraft(editor); if (snapshot) drafts.parent.set(owner, snapshot) } }
+  const save = () => {
+    if (!ready) return
+    const snapshot = captureClaudeAgentDraft(editor)
+    if (!snapshot) return
+    drafts.parent.set(owner, snapshot)
+    if (storageKey) try {
+      if (editor.isEmpty) globalThis.localStorage?.removeItem(storageKey)
+      else globalThis.localStorage?.setItem(storageKey, JSON.stringify(snapshot))
+    } catch { /* Keep the current window draft when storage is unavailable or full. */ }
+  }
   const adopt = () => {
     if (editor.isDestroyed) return
     if (saved && editor.isEmpty) {
-      editor.chain().setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false).setContent(saved.doc).run()
-      restoreClaudeAgentDraft(editor, saved, saved.text)
+      try {
+        const doc = editor.schema.nodeFromJSON(saved.doc); doc.check()
+        if (typeof saved.text === 'string') {
+          editor.chain().setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false).setContent(doc.toJSON()).run()
+          restoreClaudeAgentDraft(editor, saved, saved.text)
+        }
+      } catch { /* Invalid stored data cannot prevent a fresh editor. */ }
     }
     ready = true; save()
   }

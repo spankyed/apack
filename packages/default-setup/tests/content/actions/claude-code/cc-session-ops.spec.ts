@@ -48,7 +48,7 @@ it('bulk import retains native cumulative cost without charging a new turn', asy
 
 it('projects native model, turn UUIDs, tools and timestamps without counting tool-result or meta inputs', () => {
  const user={type:'user',uuid:'human',timestamp:'2026-10-18T01:00:00Z',message:{content:'Hello'}}
- expect(importedSessionMetadata([user,user,{type:'user',uuid:'tool',message:{content:[{type:'tool_result'}]}},{type:'user',isMeta:true,message:{content:'Meta'}},{type:'assistant',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'tool_use',id:'tool-id'}]}},{type:'assistant',message:{model:'<synthetic>',content:[{type:'tool_use',id:'tool-id'}]}},{type:'cost-state',totalCostUSD:1.25}])).toEqual({model:'native-model',turns:1,toolCallCount:1,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z'),totalCostUsd:1.25})
+ expect(importedSessionMetadata([user,user,{type:'user',uuid:'tool',message:{content:[{type:'tool_result'}]}},{type:'user',isMeta:true,message:{content:'Meta'}},{type:'assistant',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'tool_use',id:'tool-id'}]}},{type:'assistant',message:{model:'<synthetic>',content:[{type:'tool_use',id:'tool-id'}]}},{type:'cost-state',totalCostUSD:1.25}], 'native-session', '/fixture')).toEqual({nativeLaunch:{sessionId:'native-session',cwd:'/fixture'},model:'native-model',turns:1,toolCallCount:1,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z'),totalCostUsd:1.25})
 });
 
 it('onboarding imports the same native metadata into thread context and remains idempotent', async () => {

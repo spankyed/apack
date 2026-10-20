@@ -1598,6 +1598,19 @@ interface ClaudeNativeJournalEntry {
     row: Record<string, unknown>;
 }
 
+/** Persisted launch intent; credentials, resolved settings and process capabilities stay backend-only. */
+interface ClaudeNativeLaunch {
+    sessionId: string;
+    cwd: string;
+    model?: string;
+    permissionMode?: PermissionMode;
+    allowedTools?: string[];
+    disallowedTools?: string[];
+    appendSystemPrompt?: string;
+    addDir?: string[];
+    pluginDir?: string[];
+}
+
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
@@ -2428,7 +2441,9 @@ interface ClaudeNativeTaskInputReceipt {
     mode: 'queued' | 'resumed';
 }
 
-type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'columns' | 'env' | 'rows'>;
+type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'columns' | 'env' | 'rows'> & {
+    resume?: ClaudeNativeLaunch;
+};
 
 interface ClaudeNativeTerminalOptions {
     sessionId: string;
@@ -3564,6 +3579,7 @@ interface CliServiceType {
         clearHandle(key: string): void;
         /** Explicitly move an idle live conversation into its native terminal interface. */
         openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>;
+        getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined>;
         getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined;
         /**
          * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run

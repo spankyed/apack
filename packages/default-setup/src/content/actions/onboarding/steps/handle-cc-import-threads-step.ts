@@ -169,7 +169,7 @@ async function importCcSessions(services: Services, toImport: any[]) {
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       services.repository.threadCommands.update(newThreadId, {
         context: { ...thread?.context, claudeCode: { sessionId: session.id, cwd: cwd || undefined,
-          sessionWorktree: false, chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript) } },
+          sessionWorktree: false, chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript, session.id, cwd || undefined) } },
         tags: [...(thread?.tags || ['imported']), 'claude-code'],
       });
 

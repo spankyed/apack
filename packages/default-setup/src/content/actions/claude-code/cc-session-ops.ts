@@ -230,7 +230,7 @@ async function handleResume(
   persistClaudeState(services, targetThreadId, {
     sessionId,
     historyError: undefined,
-    ...importedSessionMetadata(transcript),
+    ...importedSessionMetadata(transcript, sessionId, (session as any).cwd),
     cwd: (session as any).cwd || '',
     sessionWorktree: false,
   });
@@ -341,7 +341,7 @@ async function handleImport(
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       const ccState = {
         sessionId: session.id, sessionWorktree: false, cwd: (session as any).cwd || undefined,
-        chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript),
+        chatState: 'idle', permissionMode: 'default', ...importedSessionMetadata(transcript, session.id, (session as any).cwd),
       };
 
       // Write full session state to thread context (source of truth).

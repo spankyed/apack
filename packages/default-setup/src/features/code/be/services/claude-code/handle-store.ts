@@ -1,3 +1,5 @@
+import type { ClaudeNativeLaunch } from '../../../common/native-launch.ts'
+import {ClaudeNativeLaunchSchema,snapshotClaudeNativeLaunch} from './native-launch.ts'
 import type { ClaudePreparedNativeTerminal, ClaudeNativeTerminalOwner, ClaudeNativeTerminalOptions } from './terminal-owner.ts'
 import type { QueryHandle } from './query.ts'
 import { createClaudeConversation, type ClaudeConversation, type ClaudeTurnConsumer } from './conversation.ts'
@@ -103,18 +105,34 @@ export function clearHandle(key: string): void {
   } else stop(key)
 }
 
-export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows'>
+export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows'> & { resume?: ClaudeNativeLaunch }
 export function getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined { return terminals.get(key) }
 
+/** Read launch intent from the current original owner; never persist settings or credentials. */
+export async function getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined> {
+  const native = terminals.get(key), retained = terminalResumes.get(key)
+  if (retained) {
+    const state = native?.state, metadata = state?.session
+    return snapshotClaudeNativeLaunch({...retained, sessionId: state?.sessionId ?? retained.sessionId, cwd: metadata?.cwd ?? state?.cwd ?? retained.cwd, model: native?.modelSelection ?? metadata?.model ?? retained.model, permissionMode: metadata?.permissionMode ?? retained.permissionMode})
+  }
+  const prior = conversations.get(key)
+  if (!prior?.owner.sessionId || prior.owner.closing) return
+  const permissionMode = await prior.owner.handle.getPermissionMode()
+  if (conversations.get(key) !== prior || prior.owner.closing) return
+  const launch = JSON.parse(prior.launchKey)
+  return snapshotClaudeNativeLaunch({...launch, sessionId: prior.owner.sessionId!, cwd: prior.owner.sessionCwd ?? launch.cwd, model: prior.owner.modelSelection ?? launch.model, permissionMode})
+}
+
 /** Explicit handoff/reopen; reservation and read-only preflight keep one session writer. */
-export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: Omit<ClaudeNativeTerminalOptions, 'settings'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
-  const previous = conversations.get(key), resume = terminalResumes.get(key)
+export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
+  const {resume: saved, ...overrides} = options
+  const previous = conversations.get(key), retained = terminalResumes.get(key), resume = saved ? ClaudeNativeLaunchSchema.parse(saved) : retained
   if ((!previous && (!resume || !readResume)) || previous?.owner.closing || previous && !previous.owner.sessionId || isConversationBusy(key) || terminals.has(key) || terminalTransitions.has(key)) throw new Error('Native terminal handoff needs an idle live Claude conversation or a stopped native session')
   const ticket = {}, abort = new AbortController()
   starting.set(key, ticket); terminalTransitions.set(key, abort)
   let prepared: ClaudePreparedNativeTerminal | undefined
   let published = false
-  const current = () => !abort.signal.aborted && starting.get(key) === ticket && (previous ? conversations.get(key) === previous && !previous.owner.busy : terminalResumes.get(key) === resume)
+  const current = () => !abort.signal.aborted && starting.get(key) === ticket && (previous ? conversations.get(key) === previous && !previous.owner.busy : terminalResumes.get(key) === retained)
   try {
     await draining.get(key)
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
@@ -125,13 +143,13 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
-      launch = { ...options, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
+      launch = { ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
         allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: prior.addDir, pluginDir: prior.pluginDir }
     } else {
-      launch = { ...resume!, ...options }
+      const intent = { ...resume!, ...overrides }
       // Original native settings/policy are read again; no cached helpers run after Stop.
-      const fresh = await readResume!({ ...launch, signal: abort.signal })
-      settings = fresh.settings; launch.permissionMode = fresh.permissionMode
+      const fresh = await readResume!({ ...intent, signal: abort.signal })
+      settings = fresh.settings; launch = { ...intent, permissionMode: fresh.permissionMode }
     }
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
     if (typeof launch.cwd !== 'string' || !launch.cwd) throw new Error('Native terminal handoff has no current working directory')

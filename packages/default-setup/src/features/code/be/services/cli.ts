@@ -1,3 +1,4 @@
+import type { ClaudeNativeLaunch } from '../../common/native-launch.ts'
 import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalOwner } from './claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalHandoffOptions } from './claude-code/handle-store.ts'
@@ -18,7 +19,7 @@ import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-co
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
-import { storeHandle, getHandle, clearHandle, openNativeTerminal, getNativeTerminal, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
+import { storeHandle, getHandle, clearHandle, getNativeLaunch, openNativeTerminal, getNativeTerminal, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
 import { codexExec } from './codex/runner.ts'
 import type { CodexExecOptions, CodexExecResult } from './codex/runner.ts'
 import { testCli, isCliName } from '../utils/resolve-cli.ts'
@@ -91,6 +92,7 @@ export interface CliServiceType {
     clearHandle(key: string): void
     /** Explicitly move an idle live conversation into its native terminal interface. */
     openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>
+    getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined>
     getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined
     /**
      * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
@@ -222,6 +224,7 @@ function createCliService(): CliServiceType {
           return { settings, permissionMode }
         } finally { await handle.close() }
       }) },
+      getNativeLaunch,
       getNativeTerminal,
       isConversationBusy,
       isCurrentTurn,

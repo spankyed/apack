@@ -225,8 +225,11 @@ export async function consumeStream(
           log.debug('[stream] persisting sessionId from system/init', {
             threadId, sessionId: line.session_id, cwd: line.cwd || 'NONE',
           });
+          const nativeLaunch = await services.cli.claudeCode.getNativeLaunch(threadId);
+          if (!stillCurrent()) throw new Error('Claude turn was superseded');
           persistClaudeState(services, threadId, {
             sessionId: line.session_id,
+            nativeLaunch: nativeLaunch?.sessionId === line.session_id ? nativeLaunch : undefined,
             lastTurnAt: Date.now(),
             cwd: line.cwd || undefined,
             sessionWorktree: ctx.useWorktree ?? false,

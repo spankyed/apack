@@ -24,12 +24,12 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   const events = new PassThrough({ objectMode: true });
   let sequence = 0;
   const native = { events: events as AsyncIterable<StreamLine>, send: vi.fn(() => `input-${++sequence}`),
-    hasPendingBackgroundTasks: () => false, close: vi.fn(async () => { events.end(); }), kill: vi.fn(() => events.end()),
+    hasPendingBackgroundTasks: () => false, getPermissionMode: vi.fn(async () => 'acceptEdits'), close: vi.fn(async () => { events.end(); }), kill: vi.fn(() => events.end()),
     setPermissionMode: vi.fn(async mode => mode),
     setModel: vi.fn(async () => {}),
   } as unknown as QueryHandle;
   const opened = vi.fn(async (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume));
-  mockService<Services, 'cli'>('cli', { claudeCode: { openConversation: opened, getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation,
+  mockService<Services, 'cli'>('cli', { claudeCode: { openConversation: opened, getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, getNativeLaunch: store.getNativeLaunch,
     isConversationBusy: store.isConversationBusy, closeIdleConversation: store.closeIdleConversation,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
     sessionExists: vi.fn(async () => true),
@@ -38,7 +38,8 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   const emit = vi.fn();
-  mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToPlugin: vi.fn() });
+  // Compiled flows consume the real completion bus; direct source runs record it.
+  if (mode === 'source') mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToPlugin: vi.fn() });
   const completions = () => emit.mock.calls.map(([, event]) => event).filter(event => event.eventType === 'cc.stream.completed');
   const finish = async (number: number) => {
     events.write({ type: 'command_lifecycle', state: 'started', command_uuid: `input-${number}` });
@@ -130,11 +131,11 @@ it('preserves native assistant rows when one provider reply becomes several tran
   repository.threadCommands.update(id, { context: { claudeCode: { cwd: '/fixture' } } });
   const events = new PassThrough({ objectMode: true });
   const native = { events: events as AsyncIterable<StreamLine>, send: vi.fn(() => 'input-paired'),
-    hasPendingBackgroundTasks: () => false, close: vi.fn(async () => events.end()), kill: vi.fn(() => events.end()),
+    hasPendingBackgroundTasks: () => false, getPermissionMode: vi.fn(async () => 'acceptEdits'), close: vi.fn(async () => events.end()), kill: vi.fn(() => events.end()),
   } as unknown as QueryHandle;
   mockService<Services, 'cli'>('cli', { claudeCode: {
     openConversation: (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume),
-    getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, isConversationBusy: store.isConversationBusy,
+    getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, getNativeLaunch: store.getNativeLaunch, isConversationBusy: store.isConversationBusy,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
     sessionExists: vi.fn(async () => true),
   } as never });
