@@ -61,25 +61,27 @@ test('reviews original native image PDF and notebook results', async ({ app, app
   await appPage.setViewportSize({ width: 680, height: 600 })
   const composer = card.locator('[contenteditable="true"]')
   const receipts:any[]=[]
-  for(const[index,name]of ['release-cover.png','release-notes.pdf','release-analysis.ipynb'].entries()){
-    const turn=index+1,id='native_media_'+turn
+  const pdfPages=process.env.CLAUDE_RESEARCH_PDF_PAGES==='1'
+  const cases=pdfPages?[{turn:4,name:'release-notes.pdf'},{turn:5,name:'release-notes.pdf'},{turn:6,name:'empty-release.pdf'}]:['release-cover.png','release-notes.pdf','release-analysis.ipynb'].map((name,index)=>({turn:index+1,name}))
+  for(const{turn,name}of cases){
+    const id='native_media_'+turn
     await composer.fill('ResearchMediaTurn'+turn+' Review '+name+' for release.');await card.getByRole('button',{name:'Send',exact:true}).click()
-    const approval=appPage.getByTestId('native-read-approval');await expect(approval).toBeVisible({timeout:15000});await expect(approval.getByTestId('native-read-path')).toHaveText(join(workspace!,name));await approval.getByRole('button',{name:'Approve',exact:true}).click();await expect(approval).toBeHidden();await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+    const approval=appPage.getByTestId('native-read-approval');if(turn!==5){await expect(approval).toBeVisible({timeout:15000});await expect(approval.getByTestId('native-read-path')).toHaveText(join(workspace!,name));await approval.getByRole('button',{name:'Approve',exact:true}).click();await expect(approval).toBeHidden()}await expect.poll(async()=>(await context()).turns).toBe((pdfPages?turn-3:turn)+1);await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
     const draft='Keep my release notes while reviewing '+name;await composer.fill(draft)
     const tools=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="'+id+'"]');await expect(tools).toHaveCount(1)
     const toggle=tools.getByRole('button').first();if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()
     const result=tools.locator('[data-native-tool-result="'+id+'"] [data-native-tool-format]');await expect(result).toBeVisible();await expect(result).not.toContainText('controls unavailable')
     const readReceipt=async()=>JSON.parse(await readFile(join(workspace!,'native-media-result-'+id+'.json'),'utf8').catch(()=>'{}'))
-    await expect.poll(async()=>(await readReceipt()).props?.output?.type).toBe(['image','pdf','notebook'][index]);const receipt=await readReceipt();expect(receipt.props.tool).toBe('Read');expect(receipt.props.isErrored).toBe(false)
+    await expect.poll(async()=>(await readReceipt()).props?.tool_use_id).toBe(id);const receipt=await readReceipt();expect(receipt.props.tool).toBe('Read');expect(receipt.props.isErrored).toBe(pdfPages);if(pdfPages)await expect(result).toContainText(turn===4?'pdftoppm is not installed':turn===5?'Invalid pages parameter':'PDF file is empty');else expect(receipt.props.output.type).toBe(['image','pdf','notebook'][turn-1])
     let original:any,originalCall:any
     for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);original=rows.find((row:any)=>row.type==='user'&&row.message?.content?.some?.((block:any)=>block.type==='tool_result'&&block.tool_use_id===id));originalCall=rows.find((row:any)=>row.type==='assistant'&&row.message?.content?.some?.((block:any)=>block.type==='tool_use'&&block.id===id));if(original)break}catch(error:any){if(error.code!=='ENOENT')throw error}}
     expect(original?.uuid).toBeTruthy();expect(receipt.props.output).toEqual(original.toolUseResult)
     const frames=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).flatMap((view:any)=>view.state?.transcriptMessages??[]));expect(frames.find((frame:any)=>frame.component==='ToolResult'&&frame.uuid===id)).toMatchObject({resultUuid:original.uuid,assistantUuid:originalCall.uuid})
-    receipts.push({id,name,type:receipt.props.output.type,formatted:await result.innerText(),nativeResultUuid:original.uuid,nativeAssistantUuid:originalCall.uuid,output:receipt.props.output})
+    receipts.push({id,name,type:pdfPages?'error':receipt.props.output.type,formatted:await result.innerText(),nativeResultUuid:original.uuid,nativeAssistantUuid:originalCall.uuid,output:receipt.props.output})
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-media-'+turn+'-'+size.width+'.png')})}
     if(await toggle.getAttribute('aria-expanded')==='true')await toggle.click();expect((await context()).native.state.nativePid).toBe(boundNativePid)
   }
   await writeFile(join(workspace!,'native-media-app-proof.json'),JSON.stringify(receipts))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue this saved media review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(5);expect((await context()).sessionId).toBe(sessionId)
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeReadMedia:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeReadMedia:true,...(pdfPages?{nativePdfPageFailures:true,pdfExtractionAvailable:false}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
