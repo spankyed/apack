@@ -48,7 +48,7 @@
 </template>
 <script setup lang="ts">
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
@@ -105,7 +105,7 @@ let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnR
 let submission: { revision: number; text: string; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview | { commandPending: true }): void; reject(error: Error): void } | undefined
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
-function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
+function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
   if (uiMount.value) {
@@ -197,7 +197,8 @@ function focus(value: ClaudeUiFocusEvent) { if (uiMount.value) actor.send({ type
 function edit(value: ClaudePromptEdit) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value }) }
 function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value }) }
 function host(value: ClaudePromptHostResponse) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
-onBeforeUnmount(() => { detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
+onMounted(() => { window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
+onBeforeUnmount(() => { window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
 </script>
 
 <style scoped>

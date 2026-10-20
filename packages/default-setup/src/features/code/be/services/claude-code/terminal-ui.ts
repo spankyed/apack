@@ -24,7 +24,7 @@ export function createClaudeTerminalUiTransport(options: {
       hosts.set(id, host)
       return () => { if (hosts.get(id) === host) promptHosts.detach(id) }
     },
-    answers(id) { const host = hosts.get(id); return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : [] },
+    answers(id) { const host = hosts.get(id); return host && host.available?.() !== false ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : [] },
     detach(id) { hosts.delete(id); for (const pending of [...hostRequests.values()]) if (pending.clientId === id) pending.cancel() },
   }
   const transport: ClaudeTerminalUiTransport = {

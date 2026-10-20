@@ -332,7 +332,7 @@ const nativeFocus = computed(() => {
 function renewNativeUi() {
   const mount = nativeUiMount.value
   if (mount && mount.threadId === currentThread.value?.id) {
-    actor.send({ type: 'CLAUDE_UI_MOUNT', ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockExpansion.value })
+    actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockExpansion.value })
     actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
   }
 }
@@ -419,6 +419,8 @@ function pressNativeUi(actionId: string, href?: string) {
   if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 onMounted(() => {
+  window.addEventListener('focus', renewNativeUi)
+  window.addEventListener('blur', renewNativeUi)
   stopNativeUiWatch = watch([() => currentThread.value?.id, () => !!currentThread.value?.context?.claudeCode, () => nativeTerminalActive.value, () => taskView.value?.[1].state?.ownerId, () => taskView.value?.[1].state?.view?.kind === 'agent' ? taskView.value[1].state!.view!.revision : 0, () => !!agentSelection.value], ([threadId, enabled, terminalActive, nativeOwnerId]) => {
     detachNativeUi()
     if (!threadId || !enabled || terminalActive || agentSelection.value || nativeOwnerId && taskView.value?.[1].state?.view?.kind !== 'main') return
@@ -429,7 +431,7 @@ onMounted(() => {
     heartbeat = setInterval(renew, 10000)
   }, { immediate: true })
 })
-onUnmounted(() => { stopNativeUiWatch?.(); detachNativeUi() })
+onUnmounted(() => { window.removeEventListener('focus', renewNativeUi); window.removeEventListener('blur', renewNativeUi); stopNativeUiWatch?.(); detachNativeUi() })
 watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), renewNativeUi, { flush: 'post' })
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)

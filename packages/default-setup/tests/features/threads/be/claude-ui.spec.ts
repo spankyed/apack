@@ -17,7 +17,7 @@ async function native(threadId = 'thread') {
   return { ui, owner, events }
 }
 const mountId = randomUUID()
-const mount = { type: 'CLAUDE_UI_MOUNT', threadId: 'thread', mountId } as const
+const mount = { type: 'CLAUDE_UI_MOUNT', promptFocused: true, threadId: 'thread', mountId } as const
 const reply = () => vi.fn<(event: OutgoingThreadsEvents) => void>()
 function action(delivery: ReturnType<typeof reply>): string {
   const event = delivery.mock.calls.at(-1)?.[0]
@@ -306,4 +306,21 @@ it('retires a replaced actor without a reply route only with its scoped lease cr
   handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT', resumeKey }, 'new')
   handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_PRESS', actionId: action(other) }, 'other', other); await vi.advanceTimersByTimeAsync(100)
   expect(ui.detach).toHaveBeenCalledOnce(); expect(ui.press).toHaveBeenCalledOnce()
+})
+
+
+it('updates reverse-host eligibility on window focus without replacing the native drawing or attachment', async () => {
+  const { ui } = await native(); const delivery = reply()
+  handleClaudeUiView(mount, 'window-one', delivery); await vi.advanceTimersByTimeAsync(100)
+  const id = action(delivery), host = ui.servePrompt.mock.calls[0][1]
+  expect(host.available?.()).toBe(true)
+  handleClaudeUiView({ ...mount, promptFocused: false }, 'window-one', delivery)
+  await vi.advanceTimersByTimeAsync(100)
+  expect(host.available?.()).toBe(false)
+  expect(ui.attach).toHaveBeenCalledTimes(2); expect(ui.detach).not.toHaveBeenCalled()
+  expect(action(delivery)).toBe(id)
+  handleClaudeUiView(mount, 'window-one', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(host.available?.()).toBe(true)
+  expect(ui.attach).toHaveBeenCalledTimes(3); expect(ui.servePrompt).toHaveBeenCalledOnce()
+  expect(action(delivery)).toBe(id)
 })

@@ -237,8 +237,19 @@ export function mountClaudeUi(options: {
   })()
   void owner.done.then(() => dispose(), () => dispose()).catch(() => {})
 
+  let promptHostRefresh = Promise.resolve()
   return {
     ready,
+    refreshPromptHost() {
+      const refresh = promptHostRefresh.then(async () => {
+        await ready
+        if (!attached || !current()) return
+        // Original duplicate attachment updates answers without replacing the client/drawing.
+        await owner.handle.ui.attach({ ...client, ...((options.nativeView ?? owner.nativeView) ? { native_view: options.nativeView ?? owner.nativeView } : {}) })
+      })
+      promptHostRefresh = refresh.catch(() => {})
+      return refresh
+    },
     dispose,
     async submitParentCommand(revision: number, text: string, hasReferences: boolean): Promise<import('./ui-controls.ts').ClaudeParentCommandResult> {
       await ready

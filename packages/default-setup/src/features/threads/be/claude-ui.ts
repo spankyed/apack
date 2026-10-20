@@ -16,6 +16,7 @@ import { registerThreadTeardown } from './thread-teardown.ts'
 type ClaudePromptHostOperation = { [Kind in ClaudePromptHostRequest['kind']]: Omit<Extract<ClaudePromptHostRequest, { kind: Kind }>, 'requestId' | 'revision' | 'expiresAt'> }[ClaudePromptHostRequest['kind']]
 
 interface ClaudeUiView {
+  promptFocused: boolean
   client: string
   resumeKey: string
   attachmentId?: string
@@ -96,6 +97,7 @@ function bind(view: ClaudeUiView): void {
     })
   }
   const promptHost: ClaudePromptHost = {
+    available: () => viewCurrent(view) && view.owner === owner && view.promptFocused,
     async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
     async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
     async selection(signal, expiresAt) {
@@ -148,6 +150,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (previous && previous[1].threadId === event.threadId && previous[1].mountId === event.mountId) drop(previous[0], previous[1])
     return
   }
+  if (event.type === 'CLAUDE_UI_MOUNT' && typeof event.promptFocused !== 'boolean') return
   if ((event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT') && event.resumeKey !== undefined && !validId(event.resumeKey)) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.messageIds !== undefined && (!Array.isArray(event.messageIds) || !event.messageIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256))) return
   if (event.type === 'CLAUDE_UI_MOUNT' && event.userExpansion !== undefined && (!event.userExpansion || typeof event.userExpansion !== 'object' || Array.isArray(event.userExpansion) || !Object.entries(event.userExpansion).every(([id, value]) => id.length > 0 && id.length <= 256 && typeof value === 'boolean'))) return
@@ -272,7 +275,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   }
   if (!view) {
     if (views.size >= 256 || [...views.values()].filter(item => item.client === client).length >= 16) return
-    view = { client, resumeKey: randomUUID(), threadId: event.threadId, mountId: event.mountId, nativeView: event.nativeView ? { ...event.nativeView } : undefined, expires: 0, messageIds: new Set(), userExpansion: new Map(), blockExpansion: new Map(), reply, state: { status: 'disconnected' } }
+    view = { client, promptFocused: event.promptFocused, resumeKey: randomUUID(), threadId: event.threadId, mountId: event.mountId, nativeView: event.nativeView ? { ...event.nativeView } : undefined, expires: 0, messageIds: new Set(), userExpansion: new Map(), blockExpansion: new Map(), reply, state: { status: 'disconnected' } }
     views.set(key, view)
   }
   if (event.messageIds !== undefined) {
@@ -280,10 +283,13 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   }
   if (event.userExpansion !== undefined) view.userExpansion = new Map(Object.entries(event.userExpansion))
   if (event.blockExpansion !== undefined) view.blockExpansion = new Map(Object.entries(event.blockExpansion).map(([id, indices]) => [id, new Set(indices)]))
+  const promptFocusChanged = view.promptFocused !== event.promptFocused
+  view.promptFocused = event.promptFocused
   view.reply = reply
   view.expires = Date.now() + 30000
   publish(view, view.state)
   bind(view)
+  if (promptFocusChanged) void view.mount?.refreshPromptHost().catch(() => { /* A retired/unavailable owner cannot advertise a new host. */ })
   timer ??= setInterval(() => {
     for (const [entryKey, entry] of views) {
       if (entry.expires <= Date.now()) drop(entryKey, entry)

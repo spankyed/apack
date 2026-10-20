@@ -20,6 +20,7 @@ const request = z.object({ subtype: z.enum(['ui_prompt_read', 'ui_prompt_fill', 
 export type ClaudePromptHostBox = z.infer<typeof box>
 export type ClaudePromptHostFill = z.infer<typeof fill>
 export interface ClaudePromptHost {
+  available?(): boolean
   read(signal: AbortSignal, expiresAt: number): Promise<ClaudePromptHostBox | undefined>
   fill(input: ClaudePromptHostFill, signal: AbortSignal, expiresAt: number): Promise<boolean>
   suggest?(text: string, signal: AbortSignal, expiresAt: number): Promise<boolean>
@@ -46,7 +47,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
     },
     answers(client: string): string[] {
       const host = hosts.get(client)
-      return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : []
+      return host && host.available?.() !== false ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : []
     },
     detach,
     receive(line: ControlRequestLine): boolean {
@@ -66,7 +67,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       const fillInput = input?.success ? input.data : undefined
       const textInput = !read && !filling && !selecting ? z.string().max(1000000).safeParse(line.request.text) : undefined
       const requestText = textInput?.success && (copying || textInput.data.trim()) ? textInput.data : undefined
-      if (!host || (selecting && !host.selection) || (filling && !fillInput) || (!read && !filling && !selecting && (!(copying ? host.copy : host.suggest) || requestText === undefined))) { reply(fallback); return true }
+      if (!host || host.available?.() === false || (selecting && !host.selection) || (filling && !fillInput) || (!read && !filling && !selecting && (!(copying ? host.copy : host.suggest) || requestText === undefined))) { reply(fallback); return true }
       const expiresAt = Date.now() + 3500
       const abort = new AbortController()
       const timer = setTimeout(() => finish(), 4000)

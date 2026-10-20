@@ -10,11 +10,11 @@ afterAll(startFeTestRuntime({ client: { send: sent } }))
 
 it('ignores another view/thread and late replies after unmount without reviving a closed slot', () => {
   const actor = createActor(threadsState).start()
-  actor.send({ type: 'CLAUDE_UI_MOUNT', mountId: 'mounted', threadId: 'thread-one' })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, mountId: 'mounted', threadId: 'thread-one' })
   const state = { status: 'live' as const, tree: { kind: 'button' as const, label: 'Run', actionId: 'opaque' } }
   actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'other', threadId: 'thread-one', state })
   actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-two', state })
-  expect(actor.getSnapshot().context.nativeUiViews).toEqual({ mounted: { threadId: 'thread-one', state: { status: 'connecting' }, mountRequest: { type: 'CLAUDE_UI_MOUNT', mountId: 'mounted', threadId: 'thread-one' } } })
+  expect(actor.getSnapshot().context.nativeUiViews).toEqual({ mounted: { threadId: 'thread-one', state: { status: 'connecting' }, mountRequest: { type: 'CLAUDE_UI_MOUNT', promptFocused: true, mountId: 'mounted', threadId: 'thread-one' } } })
   actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'mounted', threadId: 'thread-one', state })
   expect(actor.getSnapshot().context.nativeUiViews.mounted?.state).toEqual(state)
   actor.send({ type: 'CLAUDE_UI_UNMOUNT', mountId: 'mounted', threadId: 'thread-one' })
@@ -26,7 +26,7 @@ it('ignores another view/thread and late replies after unmount without reviving 
 
 it('correlates native draft replies with the latest edit in the mounted thread slot', () => {
   const actor = createActor(threadsState).start()
-  actor.send({ type: 'CLAUDE_UI_MOUNT', mountId: 'mounted', threadId: 'thread-one' })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, mountId: 'mounted', threadId: 'thread-one' })
   const edit = { type: 'CLAUDE_PROMPT_EDIT' as const, mountId: 'mounted', threadId: 'thread-one', by: 'person' as const, text: 'draft', cursor: 5 }
   actor.send({ ...edit, revision: 1 }); actor.send({ ...edit, revision: 2 })
   const reply = { type: 'CLAUDE_PROMPT_STATE' as const, mountId: 'mounted', threadId: 'thread-one', result: { revision: 1, status: 'applied' as const, frame: { text: 'OLD', cursor: 3 } } }
@@ -46,7 +46,7 @@ it('correlates native draft replies with the latest edit in the mounted thread s
 it('rejects completion replies from another view or an older edit and retires rows on edit/unmount', () => {
   const actor = createActor(threadsState).start()
   const identity = { mountId: 'view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity, revision: 1, by: 'app', text: 'tok', cursor: 3 })
   actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity, revision: 1, text: 'tok', cursor: 3 })
   const result = { revision: 1, status: 'ready' as const, result: { start: 0, suggestions: [{ text: 'token' }] } }
@@ -66,7 +66,7 @@ it('rejects completion replies from another view or an older edit and retires ro
 
 it('rejects foreign and superseded focus and clears a pending redirect when the person moves again', () => {
   const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   const focus = { type: 'CLAUDE_UI_FOCUS' as const, ...identity, revision: 1, isHeld: true, focusId: 'one', by: 'person' as const }
   actor.send(focus); actor.send({ ...focus, revision: 2, focusId: 'two' })
   const reply = { type: 'CLAUDE_UI_FOCUS_STATE' as const, ...identity, result: { revision: 1, moved: true, focusId: 'old' } }
@@ -81,7 +81,7 @@ it('rejects foreign and superseded focus and clears a pending redirect when the 
 
 it('routes only the current prompt host response and retires requests when the owner disconnects', () => {
   const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   const request = { requestId: 'request', revision: 1, expiresAt: Date.now() + 3000, kind: 'read' as const }
   actor.send({ type: 'CLAUDE_PROMPT_HOST_REQUEST', ...identity, threadId: 'foreign', request })
   expect(actor.getSnapshot().context.nativeUiViews.view?.promptHostRequest).toBeUndefined()
@@ -97,7 +97,7 @@ it('routes only the current prompt host response and retires requests when the o
 
 it('forwards an Agent input once for its mounted thread and refuses foreign or retired slots', () => {
   const actor = createActor(threadsState).start(), identity = { mountId: 'agent-view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity, nativeView: { ownerId: 'owner', sessionId: 'session', revision: 2, taskId: 'agent' } })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity, nativeView: { ownerId: 'owner', sessionId: 'session', revision: 2, taskId: 'agent' } })
   sent.mockClear()
   const input = { type: 'CLAUDE_UI_AGENT_INPUT' as const, ...identity, revision: 1, text: 'User reply' }
   actor.send({ ...input, threadId: 'foreign' }); actor.send(input)
@@ -109,19 +109,19 @@ it('forwards an Agent input once for its mounted thread and refuses foreign or r
 
 it('renews a native view using its issued credential and ignores an obsolete lease-expiry answer', () => {
   const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native-attachment', state: { status: 'live', tree: { kind: 'text', text: 'native' } } })
-  sent.mockClear(); actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
-  expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', resumeKey }) }))
+  sent.mockClear(); actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
+  expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, resumeKey }) }))
   sent.mockClear(); actor.send({ type: 'CLAUDE_UI_LEASE_EXPIRED', ...identity, resumeKey: 'old-key' })
   expect(sent).not.toHaveBeenCalled(); expect(actor.getSnapshot().context.nativeUiViews.view?.resumeKey).toBe(resumeKey)
   actor.send({ type: 'CLAUDE_UI_LEASE_EXPIRED', ...identity, resumeKey })
   expect(actor.getSnapshot().context.nativeUiViews.view?.resumeKey).toBeUndefined()
-  expect(sent).toHaveBeenLastCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', resumeKey: undefined }) }))
+  expect(sent).toHaveBeenLastCalledWith(expect.objectContaining({ event: expect.objectContaining({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, resumeKey: undefined }) }))
   actor.stop()
 })
 it('resumes active native UI and terminal views on subscription startup without losing mount context', () => {
-  const actor = createActor(threadsState).start(), mount = { type: 'CLAUDE_UI_MOUNT' as const, mountId: 'view', threadId: 'thread', messageIds: ['message'], userExpansion: { message: true } }
+  const actor = createActor(threadsState).start(), mount = { type: 'CLAUDE_UI_MOUNT' as const, promptFocused: true, mountId: 'view', threadId: 'thread', messageIds: ['message'], userExpansion: { message: true } }
   actor.send(mount); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' })
   actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'view', threadId: 'thread', resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
   sent.mockClear()
@@ -133,7 +133,7 @@ it('resumes active native UI and terminal views on subscription startup without 
 })
 it('carries the issued lease when a native view closes after its connection changes', () => {
   const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
-  actor.send({ type: 'CLAUDE_UI_MOUNT', ...identity })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
   sent.mockClear(); actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity })
   expect(sent).toHaveBeenLastCalledWith(expect.objectContaining({ event: { type: 'CLAUDE_UI_UNMOUNT', ...identity, resumeKey } }))
@@ -152,7 +152,7 @@ it('defers replaced-actor cleanup to accepted startup data and drains it once', 
   actor.send(startup)
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT')).toHaveLength(1)
   queueClaudeUiRetirement({ ...release, mountId: 'late-old-view' })
-  actor.send({ type: 'CLAUDE_UI_MOUNT', threadId: 'current-thread', mountId: 'new-view' })
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, threadId: 'current-thread', mountId: 'new-view' })
   actor.send({ type: 'CLAUDE_UI_STATE', threadId: 'current-thread', mountId: 'new-view', resumeKey, state: { status: 'live', tree: { kind: 'text', text: 'ready' } } })
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT').map(([message]) => message.event.mountId)).toEqual(['old-view', 'late-old-view'])
   expect(takeClaudeUiRetirements()).toEqual([])

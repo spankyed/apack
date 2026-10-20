@@ -149,3 +149,21 @@ it('refuses late selection after the original mounted host retires', async () =>
   detach(); expect(f.answer()).toMatchObject({ response: { response: {} } })
   resolve({ text: 'Retired private selection' }); await flush(); expect(f.write).toHaveBeenCalledOnce(); f.hosts.close()
 })
+
+
+it('withdraws unavailable reverse APIs and refuses raced requests without losing the mounted host', async () => {
+  const f = fixture(); let active = true
+  Object.assign(f.host, { available: () => active })
+  expect(f.hosts.answers('view')).toEqual(['ui_prompt_read', 'ui_prompt_fill'])
+  active = false
+  expect(f.hosts.answers('view')).toEqual([])
+  f.hosts.receive(read('inactive-read')); f.hosts.receive(fill('inactive-fill')); await flush()
+  expect(f.host.read).not.toHaveBeenCalled(); expect(f.host.fill).not.toHaveBeenCalled()
+  expect(f.answer()).toMatchObject({ response: { response: { filled: false } } })
+  active = true
+  expect(f.hosts.answers('view')).toEqual(['ui_prompt_read', 'ui_prompt_fill'])
+  f.hosts.receive(read('active-again')); await flush()
+  expect(f.host.read).toHaveBeenCalledOnce()
+  expect(f.answer()).toMatchObject({ response: { response: { text: 'draft 👋' } } })
+  f.hosts.close()
+})
