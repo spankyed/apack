@@ -1,6 +1,7 @@
 <template>
-  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-visible:ring-1 focus-visible:ring-blue-400" :style="style" @click.capture="capturedClick" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
+  <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-within:ring-1 focus-within:ring-blue-400" :style="style" @focus.self="focusKeyboard" @click.capture="capturedClick" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
     <slot />
+    <textarea v-if="node.keys" ref="textInput" data-native-client-text-input aria-label="Client text input" tabindex="-1" rows="1" maxlength="16384" autocomplete="off" autocapitalize="off" :spellcheck="false" class="pointer-events-none absolute left-0 top-0 h-px w-px resize-none overflow-hidden border-0 bg-transparent p-0 opacity-0" @compositionstart="compositionStart" @compositionend="compositionEnd" @input="textChanged" />
     <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre" style="width:100ch;height:1lh">0</span>
   </div>
 </template>
@@ -11,9 +12,27 @@ import type {ClaudeUiNode} from '#features/code/be/services/claude-code/ui-prese
 import type {ClaudeUiClientInput} from '#features/code/be/services/claude-code/ui-controls.ts'
 const props=defineProps<{node:Extract<ClaudeUiNode,{kind:'client'}>}>()
 const returnFocus=inject(claudeClientReturnFocus,undefined)
-const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),measure=ref<HTMLElement|null>(null)
+const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),textInput=ref<HTMLTextAreaElement|null>(null),measure=ref<HTMLElement|null>(null)
 const dimension=(value:number|string|undefined,unit:string)=>typeof value==='number'?`${value}${unit}`:value
 const style=computed<CSSProperties>(()=>({width:dimension(props.node.layout?.width,'ch')??'fit-content',height:dimension(props.node.layout?.height,'lh'),flexGrow:props.node.layout?.flexGrow,maxWidth:'100%'}))
+let live=true,composing=false,compositionClient:string|undefined,completedComposition:string|undefined
+function focusKeyboard(){if(props.node.keys)textInput.value?.focus({preventScroll:true})}
+function cancelComposition(){composing=false;compositionClient=undefined;completedComposition=undefined;if(textInput.value)textInput.value.value=''}
+function commitText(text:string){if(!live||!props.node.keys)return;for(const character of text)send?.(props.node.id,{kind:'key',key:character===' '?'space':character==='\n'?'return':character==='\t'?'tab':character})}
+function compositionStart(){composing=true;compositionClient=props.node.id;completedComposition=undefined}
+function compositionEnd(event:CompositionEvent){
+ const text=event.data,current=compositionClient===props.node.id
+ composing=false;compositionClient=undefined;completedComposition=text
+ if(textInput.value)textInput.value.value=''
+ if(current)commitText(text)
+}
+function textChanged(event:Event){
+ const input=event as InputEvent;if(composing||input.isComposing)return
+ const text=textInput.value?.value||input.data||''
+ if(textInput.value)textInput.value.value=''
+ if(completedComposition!==undefined){const duplicate=text===completedComposition;completedComposition=undefined;if(duplicate)return}
+ commitText(text)
+}
 let suppressPointerClick=false
 let lastPointer={x:0,y:0}
 let observer:ResizeObserver|undefined,frame:number|undefined,lastLayout='',captured:HTMLElement|undefined,pointerId:number|undefined,pending:Extract<ClaudeUiClientInput,{kind:'pointer'}>|undefined
@@ -34,11 +53,12 @@ function flush(){if(pending){send?.(props.node.id,pending);pending=undefined}}
 function capturedClick(event:MouseEvent){if(suppressPointerClick&&event.detail>0){suppressPointerClick=false;event.preventDefault();event.stopImmediatePropagation();focusClient(event)}}
 function focusClient(event:MouseEvent){if(props.node.keys&&event.target instanceof HTMLElement&&!event.target.closest('input,textarea,select'))region.value?.focus({preventScroll:true})}
 function key(event:KeyboardEvent){
- if(event.target!==region.value||event.isComposing||event.key==='Process'||event.key==='Dead')return
+ if((event.target!==region.value&&event.target!==textInput.value)||composing||event.isComposing||event.key==='Process'||event.key==='Dead')return
+ completedComposition=undefined
  const terminal=region.value?.closest('[data-native-placement="InfoNotice"],[data-native-placement="TurnDuration"]')
  if(event.key==='Escape'){if(terminal&&returnFocus){event.preventDefault();event.stopPropagation();returnFocus();}return}
  if(!props.node.keys)return
- if(event.ctrlKey&&['c','d'].includes(event.key.toLowerCase())){const site=region.value?.closest<HTMLElement>('.native-extension-surface');if(site)site.focus({preventScroll:true});else if(terminal&&returnFocus){event.preventDefault();event.stopPropagation();returnFocus();}else region.value?.blur();return}
+ if(event.ctrlKey&&['c','d'].includes(event.key.toLowerCase())){const site=region.value?.closest<HTMLElement>('.native-extension-surface');if(site)site.focus({preventScroll:true});else if(terminal&&returnFocus){event.preventDefault();event.stopPropagation();returnFocus();}else {textInput.value?.blur();region.value?.blur()}return}
  if(['Shift','Control','Alt','Meta','AltGraph','CapsLock','NumLock','ScrollLock'].includes(event.key))return
  const names:Record<string,string>={' ':'space',ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Enter:'return',Tab:'tab',Backspace:'backspace',Delete:'delete',PageUp:'pageup',PageDown:'pagedown',Home:'home',End:'end'}
  const name=names[event.key]??event.key;if(name.length>32)return
@@ -69,6 +89,7 @@ function pointer(event:PointerEvent){
 function release(){if(pointerId!==undefined&&captured?.hasPointerCapture?.(pointerId))captured.releasePointerCapture(pointerId);captured=undefined;pointerId=undefined}
 function cancel(){flush();if(pointerId!==undefined)send?.(props.node.id,{kind:'pointer',type:'up',...lastPointer});release()}
 onMounted(()=>{observer=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(schedule);if(region.value)observer?.observe(region.value);schedule()})
-watch(()=>props.node.id,()=>{release();lastPointer={x:0,y:0};lastLayout='';void nextTick(schedule)})
-onBeforeUnmount(()=>{cancel();observer?.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)})
+watch(()=>props.node.id,()=>{cancelComposition();release();lastPointer={x:0,y:0};lastLayout='';void nextTick(schedule)})
+watch(()=>props.node.keys,value=>{if(!value)cancelComposition()},{flush:'sync'})
+onBeforeUnmount(()=>{live=false;cancelComposition();cancel();observer?.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)})
 </script>

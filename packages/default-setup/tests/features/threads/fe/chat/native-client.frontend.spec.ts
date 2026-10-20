@@ -1,4 +1,4 @@
-import {createApp,h,nextTick,provide,type App} from 'vue'
+import {createApp,h,nextTick,provide,ref,type App} from 'vue'
 import NativeUiClient from '#features/threads/fe/chat/NativeUiClient.vue'
 import {claudeClientInput,claudeClientReturnFocus} from '#features/threads/fe/chat/native-client-input.ts'
 let app:App|undefined
@@ -6,9 +6,9 @@ const pointer=(type:string,init:MouseEventInit&{pointerId:number})=>Object.assig
 const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
 async function mount(returnFocus?:()=>void){
- const send=vi.fn(),root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:{kind:'client',id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]}},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
- return {root,send,region:root.querySelector<HTMLElement>('[data-native-client]')!}
+ const send=vi.fn(),root=document.createElement('div'),node=ref({kind:'client' as const,id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]});document.body.append(root)
+ app=createApp({setup(){provide(claudeClientInput,send);if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:node.value},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
+ return {root,send,node,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
  const {region,root,send}=await mount();region.focus()
@@ -37,7 +37,7 @@ it('reports fractional region coordinates and retains pointer capture outside it
 })
 
 it('gives the Client keyboard focus after its button click while leaving nested text input local',async()=>{
- const {region,root}=await mount();root.querySelector('button')!.click();expect(document.activeElement).toBe(region)
+ const {region,root}=await mount();root.querySelector('button')!.click();expect(document.activeElement).toBe(region.querySelector('[data-native-client-text-input]'))
  const input=root.querySelector('textarea')!;input.focus();input.click();expect(document.activeElement).toBe(input)
 })
 
@@ -49,7 +49,7 @@ it('does not activate a captured child button when the pointer is released outsi
   button.dispatchEvent(pointer('pointerdown',{pointerId:7,clientX:10,clientY:10,button:0,buttons:1,bubbles:true}))
   button.dispatchEvent(pointer('pointerup',{pointerId:7,clientX:200,clientY:200,button:0,bubbles:true}))
   button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail:1}))
-  expect(press).not.toHaveBeenCalled();expect(document.activeElement).toBe(region)
+  expect(press).not.toHaveBeenCalled();expect(document.activeElement).toBe(region.querySelector('[data-native-client-text-input]'))
   document.elementFromPoint=()=>button
   button.dispatchEvent(pointer('pointerdown',{pointerId:8,clientX:10,clientY:10,button:0,buttons:1,bubbles:true}))
   button.dispatchEvent(pointer('pointerup',{pointerId:8,clientX:10,clientY:10,button:0,bubbles:true}))
@@ -91,4 +91,36 @@ it('reports intrinsic cell geometry without rounding its fractional CSS width do
  await new Promise(resolve=>requestAnimationFrame(resolve))
  expect(send).toHaveBeenLastCalledWith(id,{kind:'resize',columns:4,rows:1})
  }finally{vi.unstubAllGlobals()}
+})
+
+it('keeps composition preview local across redraws and commits Unicode once in either browser event order',async()=>{
+ const {region,send}=await mount(),input=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ region.focus();send.mockClear()
+ input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ input.value='にほん';input.dispatchEvent(new InputEvent('input',{data:'にほん',isComposing:true,bubbles:true}))
+ input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
+ await nextTick();expect(input.value).toBe('にほん');expect(send).not.toHaveBeenCalled()
+ input.value='日本語';input.dispatchEvent(new CompositionEvent('compositionend',{data:'日本語',bubbles:true}))
+ input.value='日本語';input.dispatchEvent(new InputEvent('input',{data:'日本語',bubbles:true}))
+ expect(send.mock.calls).toEqual(['日','本','語'].map(key=>[id,{kind:'key',key}]))
+ send.mockClear();input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ input.value='😀';input.dispatchEvent(new InputEvent('input',{data:'😀',isComposing:true,bubbles:true}))
+ input.dispatchEvent(new CompositionEvent('compositionend',{data:'😀',bubbles:true}))
+ expect(send).toHaveBeenCalledExactlyOnceWith(id,{kind:'key',key:'😀'})
+})
+
+it('refuses a released Client composition commit',async()=>{
+ const {region,send}=await mount(),input=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));send.mockClear();app!.unmount();app=undefined
+ input.dispatchEvent(new CompositionEvent('compositionend',{data:'late',bubbles:true}))
+ expect(send).not.toHaveBeenCalled()
+})
+
+it('cancels empty composition and refuses a replaced Client final event on the retained input',async()=>{
+ const {region,send,node}=await mount(),input=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ region.focus();send.mockClear();input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));input.value='cancelled preview'
+ input.dispatchEvent(new CompositionEvent('compositionend',{data:'',bubbles:true}));expect(send).not.toHaveBeenCalled()
+ input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));input.value='stale preview';node.value.id='replacement';await nextTick()
+ input.dispatchEvent(new CompositionEvent('compositionend',{data:'stale',bubbles:true}));input.value='stale';input.dispatchEvent(new InputEvent('input',{data:'stale',bubbles:true}))
+ expect(send.mock.calls.filter(([,event])=>event.kind==='key')).toEqual([])
 })
