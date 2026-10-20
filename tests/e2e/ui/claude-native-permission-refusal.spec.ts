@@ -113,10 +113,13 @@ test('shows native permission refusal without losing a staged Plan or draft and 
     await appPage.setViewportSize({width,height:width===680?600:900})
     await appPage.keyboard.press('Escape')
     const trigger=appPage.getByRole('button',{name:/^Permissions:/})
-    await trigger.scrollIntoViewIfNeeded();await expect(trigger).toBeInViewport({ratio:1});await trigger.click()
+    await trigger.scrollIntoViewIfNeeded();await expect(trigger).toBeInViewport({ratio:0.999});await trigger.click()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-permission-refusal-'+width+'.png')})
-    await expect(refusal).toBeInViewport({ratio:1});await expect(bypass).toBeInViewport({ratio:1})
-    chooserViews.push({width,height:width===680?600:900,error:await refusal.boundingBox(),button:await bypass.boundingBox()})
+    await expect(refusal).toBeInViewport({ratio:0.999});await expect(bypass).toBeInViewport({ratio:0.999})
+    // IntersectionObserver rounds fractional CSS-pixel borders; also bound every edge explicitly.
+    const height=width===680?600:900,error=await refusal.boundingBox(),button=await bypass.boundingBox()
+    for(const box of [error,button]){expect(box).toBeTruthy();expect(box!.x).toBeGreaterThanOrEqual(-0.25);expect(box!.y).toBeGreaterThanOrEqual(-0.25);expect(box!.x+box!.width).toBeLessThanOrEqual(width+0.25);expect(box!.y+box!.height).toBeLessThanOrEqual(height+0.25)}
+    chooserViews.push({width,height,error,button})
   }
   await appPage.getByRole('button',{name:'Ask',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.permissionMode).toBe('default')
