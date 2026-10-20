@@ -10,6 +10,7 @@ import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeN
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import * as pty from 'node-pty'
+import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
 import { randomUUID } from 'node:crypto'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
@@ -90,6 +91,9 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   // Advertise app rendering capabilities only when the caller has not chosen an override.
   if (!terminalEnv.NO_COLOR) terminalEnv.FORCE_COLOR ??= '3'
   terminalEnv.FORCE_HYPERLINK ??= '1'
+  // Native automatic detection only admits kitty/ghostty. Our Unicode-placeholder
+  // consumer uses Claude's explicit custom-terminal opt-in; never spoof that identity.
+  terminalEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES ??= '1'
   const readJournal = createClaudeNativeJournalReader()
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []
@@ -140,8 +144,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       for (const directory of options.addDir ?? []) args.push('--add-dir', directory)
       if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
       terminal = pty.spawn(executable, args, { cwd: options.cwd, env: terminalEnv, name: 'xterm-256color', cols: options.columns ?? 100, rows: options.rows ?? 30 })
+      const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) terminal?.write(text) })
       terminal.onData(text => {
         if (closed) return
+        graphicsQuery(text)
         const bytes = Buffer.from(text)
         if (bytes.length > 262144) {
           let from = bytes.length - 262144

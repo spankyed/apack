@@ -239,3 +239,10 @@ it('presents a native-validated Raster as inert fixed cells without actions or p
  expect(result.tree).toEqual({kind:'raster',columns:8,rows:2,nativeAnsi:'Release \nready   ',plugin:'native'});expect(result.actions.size).toBe(0)
  expect(()=>createClaudeUiDrawing({type:'NativeRaster',props:{columns:513,rows:1,ansi:'bad'}})).toThrow('Invalid native Raster')
 })
+
+it('accepts inert byte Images without source paths/actions and rejects invalid byte dimensions',()=>{
+ const props={columns:8,rows:2,alt:'Native cover',format:'rgba',data:'/4gA/w==',width:1,height:1}
+ const drawing=createClaudeUiDrawing({type:'NativeImage',props,part:{plugin:'native'}})
+ expect(drawing.tree).toEqual({kind:'image',...props,plugin:'native'});expect(drawing.actions.size).toBe(0)
+ for(const override of [{data:'file:///private/image'},{width:2},{columns:513},{format:'png',data:'AAAA'},{data:'x'.repeat(65537)}])expect(()=>createClaudeUiDrawing({type:'NativeImage',props:{...props,...override}})).toThrow()
+})

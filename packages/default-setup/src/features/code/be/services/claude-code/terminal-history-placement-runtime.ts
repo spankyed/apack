@@ -103,7 +103,7 @@ function nativeTerminalPlacements(n){
   if(nativeDrawingUsesEngine(tree)&&drawing===undefined)continue;
   let drawingId=0;if(drawing&&typeof drawing==='object'){if(!composerFactoryIds.has(drawing))composerFactoryIds.set(drawing,++composerFactorySequence);drawingId=composerFactoryIds.get(drawing);}
   const id=source.component==='InfoNotice'?'notice-'+createHash('sha256').update(source.id).digest('hex'):source.id,anchorIds=terminalAnchorIds(n,source);
-  const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,input.viewport,input.props,raw,hosted,props,drawingId,anchorIds,clientIdentities])).digest('hex');
+  const fingerprint=createHash('sha256').update(JSON.stringify([source.fingerprint,input.viewport,input.props,raw,hosted,props,drawingId,anchorIds,clientIdentities,nativeImageFingerprint(n,tree,{component:source.component,requestId:input.requestId})])).digest('hex');
   result.set(JSON.stringify([source.component,id]),{...source,id,input,props,tree:hosted,drawing,hooked,anchorIds,clients:clientLeases,fingerprint});
  }
  return result;

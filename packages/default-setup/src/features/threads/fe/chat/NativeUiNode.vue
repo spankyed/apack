@@ -3,6 +3,7 @@
     <NativeUiNode v-for="(child, index) in node.children" :key="child.kind === 'input' || child.kind === 'select' ? child.actionId : index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </div>
   <NativeUiClient v-else-if="node.kind === 'client'" :key="node.id" :node="node"><NativeUiNode v-for="(child,index) in node.children" :key="index" :node="child" @press="(id,href)=>emit('press',id,href)" @field="emit('field',$event)" /></NativeUiClient>
+  <NativeUiImage v-else-if="node.kind === 'image'" :node="node" />
   <NativeUiRaster v-else-if="node.kind === 'raster'" :node="node" />
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
@@ -33,6 +34,7 @@ import { openLink } from '@apackdev/sdk/fe'
 import NativeUiClient from './NativeUiClient.vue'
 import NativeUiSvg from './NativeUiSvg.vue'
 import NativeUiRaster from './NativeUiRaster.vue'
+import NativeUiImage from './NativeUiImage.vue'
 import { claudeUiBoxPaint, claudeUiColor, claudeUiTextPaint, claudeTextPaint, type ClaudeTextPaint } from './native-ui-paint.ts'
 import { claudeHoverSurface, claudeHoverBox } from './native-ui-hover.ts'
 import NativeUiDocument from './NativeUiDocument.vue'

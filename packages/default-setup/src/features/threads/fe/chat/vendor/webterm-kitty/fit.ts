@@ -1,0 +1,96 @@
+/**
+ * Copyright (c) 2017 The xterm.js authors. All rights reserved.
+ * @license MIT
+ */
+
+import type { Terminal, ITerminalAddon, IRenderDimensions } from '@app/claude-terminal-xterm';
+// Same default as the published addon bundle; the monorepo-only constants import is absent.
+const DEFAULT_SCROLL_BAR_WIDTH = 14;
+
+interface ITerminalDimensions {
+  /**
+   * The number of rows in the terminal.
+   */
+  rows: number;
+
+  /**
+   * The number of columns in the terminal.
+   */
+  cols: number;
+}
+
+const enum Constants {
+  MINIMUM_COLS = 2,
+  MINIMUM_ROWS = 1
+}
+
+function getWindow(e: Node): Window {
+  if (e?.ownerDocument?.defaultView) {
+    return e.ownerDocument.defaultView;
+  }
+
+  return window;
+}
+function _getComputedStyle(el: HTMLElement): CSSStyleDeclaration {
+  return getWindow(el).getComputedStyle(el, null);
+}
+
+export class FitAddon implements ITerminalAddon {
+  private _terminal: Terminal | undefined;
+
+  public activate(terminal: Terminal): void {
+    this._terminal = terminal;
+  }
+
+  public dispose(): void {}
+
+  public fit(): void {
+    const dims = this.proposeDimensions();
+    if (!dims || !this._terminal || isNaN(dims.cols) || isNaN(dims.rows)) {
+      return;
+    }
+
+    this._terminal.resize(dims.cols, dims.rows);
+  }
+
+  public proposeDimensions(): ITerminalDimensions | undefined {
+    if (!this._terminal) {
+      return undefined;
+    }
+
+    if (!this._terminal.element || !this._terminal.element.parentElement) {
+      return undefined;
+    }
+
+    const dims: IRenderDimensions | undefined = this._terminal.dimensions;
+
+    if (!dims || dims.css.cell.width === 0 || dims.css.cell.height === 0) {
+      return undefined;
+    }
+
+    const showScrollbar = this._terminal.options.scrollbar?.showScrollbar ?? true;
+    const scrollbarWidth = (this._terminal.options.scrollback === 0 || !showScrollbar
+      ? 0
+      : (this._terminal.options.scrollbar?.width ?? DEFAULT_SCROLL_BAR_WIDTH));
+
+    const parentElementStyle = _getComputedStyle(this._terminal.element.parentElement);
+    const parentElementHeight = Math.max(0, parseInt(parentElementStyle.getPropertyValue('height'), 10) || 0);
+    const parentElementWidth = Math.max(0, parseInt(parentElementStyle.getPropertyValue('width'), 10) || 0);
+    const elementStyle = _getComputedStyle(this._terminal.element);
+    const elementPadding = {
+      top: parseInt(elementStyle.getPropertyValue('padding-top'), 10) || 0,
+      bottom: parseInt(elementStyle.getPropertyValue('padding-bottom'), 10) || 0,
+      right: parseInt(elementStyle.getPropertyValue('padding-right'), 10) || 0,
+      left: parseInt(elementStyle.getPropertyValue('padding-left'), 10) || 0
+    };
+    const elementPaddingVer = elementPadding.top + elementPadding.bottom;
+    const elementPaddingHor = elementPadding.right + elementPadding.left;
+    const availableHeight = parentElementHeight - elementPaddingVer;
+    const availableWidth = parentElementWidth - elementPaddingHor - scrollbarWidth;
+    const geometry = {
+      cols: Math.max(Constants.MINIMUM_COLS, Math.floor(availableWidth / dims.css.cell.width)),
+      rows: Math.max(Constants.MINIMUM_ROWS, Math.floor(availableHeight / dims.css.cell.height))
+    };
+    return geometry;
+  }
+}

@@ -27,6 +27,7 @@
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",
     "@antv/g6": "^5.0.48",
+    "@app/claude-terminal-xterm": "npm:@xterm/xterm@6.1.0-beta.290",
     "@floating-ui/vue": "^1.1.11",
     "@leeoniya/ufuzzy": "^1.0.18",
     "@vscode/ripgrep": "^1.17.1",

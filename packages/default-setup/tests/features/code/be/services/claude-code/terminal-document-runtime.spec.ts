@@ -6,7 +6,7 @@ function fixture() {
   const n = { documentDefaults: { $Et: () => ({ tasks: {}, taskDecorations: {}, settings: { originalSetting: true }, originalDefault: true }) }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, appProvider: { d_: provider }, documentRendering: { $d: { CodeBlock: code, MarkdownBlock: 'original MarkdownBlock', BodyColumns: { Provider: columns } } }, questionOptions: { j: () => 'session' }, staticRender: { v6e: render } }
   const theme = { text: '#abcdef' }
   const hashes=new WeakMap<Function,string>()
-  const draw = vm.runInNewContext(claudeTerminalDocumentRuntime + ';nativeDocumentTree', { createHash,composerFunctionHashes:hashes,nativeThemeProvider: () => ({ type: 'live theme', value: { resolvedTheme: theme } }), process: { stdout: { columns: 80 } }, AbortController })
+  const draw = vm.runInNewContext(claudeTerminalDocumentRuntime + ';nativeDocumentTree', { Buffer,createHash,composerFunctionHashes:hashes,nativeThemeProvider: () => ({ type: 'live theme', value: { resolvedTheme: theme } }), process: { stdout: { columns: 80 } }, AbortController })
   return { n, render, draw, provider, code, columns, theme,hashes }
 }
 it('uses original CodeBlock under fresh export, current theme and body width without changing source or callbacks', async () => {
@@ -92,11 +92,23 @@ it('mirrors only the original mounted Image alt fallback under its exact native 
  expect(f.render).not.toHaveBeenCalled();expect(node.props.source.file).toBe('/private/native-owned-image.png')
  await expect(f.draw(f.n,node,{terminalScope:{...scope,requestId:'foreign'}})).rejects.toThrow('not mounted')
  fiber.child.memoizedProps={children:{type:'ink-raw-ansi'}}
- await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('pixel delivery')
+ await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('pixel placement')
 })
 it('refuses a changed native Image renderer instead of guessing fallback from an arbitrary text node',async()=>{
  const f=fixture();function Fo(){};const scope={component:'InfoNotice',requestId:'notice'},props={source:{png:'native'},columns:1,rows:1,alt:'cover'}
  const fiber={type:Fo,memoizedProps:{...props,plugin:'native'},return:{memoizedProps:{value:scope}},child:{memoizedProps:{dimColor:true,children:'cover'}}}
  ;(f.n as any).themeRoots={ai:()=>({get:()=>({container:{current:fiber}})})}
  await expect(f.draw(f.n,{type:'Image',props,image:{plugin:'native'}},{terminalScope:scope})).rejects.toThrow('renderer changed')
+})
+
+it('projects only original allocated Image bytes and observes accepted swaps without trusting stale drawing source',async()=>{
+ const f=fixture();function Fo(){};f.hashes.set(Fo,'90ffae0a8b68a15a4c68fa3ca5513e524c112e97e31aac7c1abc7bf8a217f6cf')
+ const scope={component:'InfoNotice',requestId:'native-notice'},source={rgba:'/4gA/w==',width:1,height:1},props={key:'cover',source,columns:8,rows:2,alt:'Release cover'}
+ const images={live:new Map([[7,{isSent:true}]])},held={current:{reactKey:'original key',source,box:'8x2'}},fiber:any={type:Fo,memoizedProps:{...props,elementKey:'cover',plugin:'native'},return:{memoizedProps:{value:scope}},memoizedState:{memoizedState:{id:7,images},next:{memoizedState:held}},child:{memoizedProps:{width:8,height:2,overflow:'hidden',children:{type:'ink-raw-ansi'}}}}
+ ;(f.n as any).themeRoots={ai:()=>({get:()=>({container:{current:fiber},terminalImages:images})})}
+ const node={type:'Image',props,image:{plugin:'native'}}
+ expect(await f.draw(f.n,node,{terminalScope:scope})).toMatchObject({type:'NativeImage',props:{format:'rgba',data:'/4gA/w==',width:1,height:1,columns:8,rows:2}})
+ held.current.source={rgba:'AIj//w==',width:1,height:1}
+ expect(await f.draw(f.n,node,{terminalScope:scope})).toMatchObject({props:{data:'AIj//w=='}});expect(node.props.source).toBe(source)
+ images.live.delete(7);await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('no admitted byte source')
 })

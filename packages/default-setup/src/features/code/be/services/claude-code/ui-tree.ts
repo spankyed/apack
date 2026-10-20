@@ -98,6 +98,13 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
     if (!record(value) || typeof value.type !== 'string') throw new ClaudeProtocolError('native UI node must have a component type')
     const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : inheritedPlugin
     const attribution = plugin === undefined ? {} : { plugin }
+    if (value.type === 'NativeImage') {
+      const p=value.props
+      if(!record(p)||!Number.isSafeInteger(p.columns)||Number(p.columns)<1||Number(p.columns)>512||!Number.isSafeInteger(p.rows)||Number(p.rows)<1||Number(p.rows)>256||typeof p.alt!=='string'||p.alt.length>4096||typeof p.data!=='string'||!p.data.length||p.data.length>65536||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(p.data)||(p.format!=='png'&&p.format!=='rgba'))throw new ClaudeProtocolError('Invalid native Image presentation')
+      if(p.format==='rgba'&&(!Number.isSafeInteger(p.width)||Number(p.width)<1||!Number.isSafeInteger(p.height)||Number(p.height)<1||Number(p.width)*Number(p.height)*4!==Buffer.from(p.data,'base64').length))throw new ClaudeProtocolError('Invalid native Image dimensions')
+      if(p.format==='png'){const bytes=Buffer.from(p.data,'base64');if(bytes.length<24||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||bytes.subarray(12,16).toString()!=='IHDR'||!bytes.readUInt32BE(16)||!bytes.readUInt32BE(20)||bytes.readUInt32BE(16)*bytes.readUInt32BE(20)>4096*4096)throw new ClaudeProtocolError('Invalid or oversized native PNG')}
+      return {kind:'image',columns:Number(p.columns),rows:Number(p.rows),alt:p.alt,format:p.format,data:p.data,...(p.format==='rgba'?{width:Number(p.width),height:Number(p.height)}:{}),...attribution}
+    }
     if (value.type === 'NativeRaster') {
       const props=value.props
       if(!record(props)||!Number.isSafeInteger(props.columns)||Number(props.columns)<1||Number(props.columns)>512||!Number.isSafeInteger(props.rows)||Number(props.rows)<1||Number(props.rows)>256||typeof props.ansi!=='string'||props.ansi.length>65536)throw new ClaudeProtocolError('Invalid native Raster presentation')

@@ -49,3 +49,12 @@ it.each([undefined, '2'])('honors native NO_COLOR precedence, explicit FORCE_COL
     if (color === undefined) expect(env).not.toHaveProperty('FORCE_COLOR')
   } finally { await prepared.dispose() }
 })
+
+it.each([[undefined,'1'],['',''],['0','0'],['1','1']])('declares image support while preserving caller opt-out: %s',async(images,expected)=>{
+ vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES',undefined)
+ let exited:((event:{exitCode:number})=>void)|undefined
+ native.spawn.mockImplementation(()=>({pid:0,onData(){},onExit(callback:typeof exited){exited=callback},kill(){exited?.({exitCode:0})}}))
+ const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},env:{CLAUDE_CODE_FORCE_TERMINAL_IMAGES:images}})
+ await prepared.start()
+ try{expect(native.spawn.mock.calls[0][2].env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(expected)}finally{await prepared.dispose()}
+})
