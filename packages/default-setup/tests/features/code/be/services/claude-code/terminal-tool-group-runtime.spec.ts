@@ -40,3 +40,20 @@ it('retires group Client work and reports one invalidation when source traversal
  x.f.refresh(x.n);expect(x.n.nativeClients.release).toHaveBeenCalledWith('view','ToolGroup','native-group');expect(x.publish).toHaveBeenCalledOnce()
  x.f.refresh(x.n);expect(x.publish).toHaveBeenCalledOnce()
 })
+
+// Native summary metadata can change without changing tool calls.
+it('retires disclosure actions when original summary metadata changes with stable calls',()=>{
+ const x=fixture(),message=x.props.message as typeof x.props.message & {agentCount?:number;latestThinkingSummary?:string}
+ const original=x.f.groups(x.n).get('native-group'),key=JSON.stringify(['view','native-group'])
+ x.f.frames.set(key,{clientId:'view',id:'native-group',revision:original.revision,expanded:false,shownExpanded:false})
+ const button=x.f.draw({client_id:'view',instance_id:'native-group'},{type:'engine'},1).children[0]
+ const request={subtype:'ui_press',client_id:'view',component:'ToolGroup',instance_id:'native-group',instance_revision:1,key:'expand-group',...button.press}
+ message.agentCount=2;message.latestThinkingSummary='Reviewing release compatibility'
+ const updated=x.f.groups(x.n).get('native-group')
+ expect(updated.calls).toEqual(original.calls)
+ expect(updated.revision).not.toBe(original.revision)
+ expect(()=>x.f.check(x.n,request)).toThrow('changed or expired')
+ expect(x.f.press(x.n,request,new AbortController())).toEqual({handled:false})
+ x.f.refresh(x.n)
+ expect(x.n.nativeClients.suspend).toHaveBeenCalledWith([{surface:'desktop',component:'ToolGroup',requestId:'native-group'}])
+})

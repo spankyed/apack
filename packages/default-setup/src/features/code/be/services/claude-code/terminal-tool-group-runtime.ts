@@ -10,7 +10,7 @@ function nativeToolGroups(n){
    const blocks=message.messages.flatMap(row=>row.type==='assistant'?[row]:row.type==='grouped_tool_use'?row.messages:[]).map(row=>row.message.content[0]).filter(block=>block?.type==='tool_use');
    if(blocks.length&&blocks.length<=256&&new Set(blocks.map(block=>block.id)).size===blocks.length&&blocks.every(block=>typeof block.id==='string'&&block.id&&block.id.length<=256)){
     const calls=blocks.map(block=>{const result=props.lookups.toolResultByToolUseID.get(block.id);return {tool_use_id:block.id,tool:block.name,input:block.input,isRunning:props.inProgressToolUseIDs.has(block.id),isErrored:props.lookups.erroredToolUseIDs.has(block.id),isInterrupted:n.engine.aK.isInterruptedCall(result),output:result?.type==='user'?result.toolUseResult:undefined};});
-    const memberRevisions=calls.map(call=>createHash('sha256').update(JSON.stringify([call,props.lookups.toolResultByToolUseID.get(call.tool_use_id)?.uuid])).digest('hex')),isActive=props.isActiveCollapsedGroup===true,revision=createHash('sha256').update(JSON.stringify([message.uuid,memberRevisions,isActive])).digest('hex');
+    const memberRevisions=calls.map(call=>createHash('sha256').update(JSON.stringify([call,props.lookups.toolResultByToolUseID.get(call.tool_use_id)?.uuid])).digest('hex')),isActive=props.isActiveCollapsedGroup===true,revision=createHash('sha256').update(JSON.stringify([message,memberRevisions,isActive])).digest('hex');
     if(groups.has(message.uuid)&&groups.get(message.uuid).revision!==revision)ambiguous.add(message.uuid);
     groups.set(message.uuid,{id:message.uuid,calls,memberRevisions,isActive,revision});
    }
