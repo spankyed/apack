@@ -9,7 +9,7 @@ test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testIn
 test('mirrors original pending workflow duration and completion', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const { pendingWorkflow } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { pendingWorkflow, workflowQueue } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   test.skip(!pendingWorkflow, 'Explicit private native pending-duration profile required')
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -97,11 +97,23 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await expect.poll(async () => (await context()).claude.chatState).toBe('working')
     const during = (await context()).native.state.activity
     const earlier = new Set((await frames()).map((frame: any) => frame.uuid))
+    const queue=async()=>JSON.parse(await readFile(join(workspace!,'native-queued-completion.json'),'utf8').catch(()=>'{}'))
+    let held: any
+    if(workflowQueue){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await writeFile(join(workspace!,'native-parent-delay-request'),'delay');await expect.poll(()=>readFile(join(workspace!,'native-parent-delay-ready'),'utf8').catch(()=>'')).toBe('ready')}
     await composer.fill('Check the release checklist while the workflow continues.')
     await card.getByRole('button', { name: 'Send', exact: true }).click()
+    if(workflowQueue){
+      await expect.poll(()=>readFile(join(workspace!,'native-parent-delay-active'),'utf8').catch(()=>'')).toBe('active')
+      await writeFile(join(workspace!,'native-pending-duration-release'),'release')
+      const eligible=(snapshot:any)=>snapshot.queue.some((command:any)=>command.mode==='task-notification'&&snapshot.tasks.some((task:any)=>task.id===command.taskId&&task.type==='local_workflow'&&task.status==='completed'))
+      await expect.poll(async()=>(await queue()).snapshots?.some(eligible),{timeout:10000}).toBe(true)
+      held=(await queue()).snapshots.find(eligible);expect(held.counts.pendingWorkflows).toBe(1)
+      await expect.poll(async()=>(await context()).native.state.activity?.pendingWorkflows).toBe(1)
+    }else{
     await expect.poll(async () => (await frames()).some((frame: any) => !earlier.has(frame.uuid) && /Waiting for.*dynamic workflow/.test(frame.engineOutput ?? ''))).toBe(true)
     await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     await expect.poll(async () => (await context()).claude.chatState).toBe('working')
+    }
     const draft = 'Keep this release-review draft while the worker finishes.'
     await composer.fill(draft)
     for (const size of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
@@ -114,6 +126,7 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await expect.poll(async () => (await context()).native.state.activity?.pendingWorkflows, { timeout: 15000 }).toBe(0)
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     const after = (await context()).native.state.activity
+    if(workflowQueue){const drained=(await queue()).snapshots.at(-1);expect(drained.counts.pendingWorkflows).toBe(0);await writeFile(join(workspace!,'native-queued-completion-proof.json'),JSON.stringify({held,drained}))}
     const before = new Set((await frames()).map((frame: any) => frame.uuid))
     await composer.fill('Continue the release review after the worker finishes.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await frames()).some((frame: any) => !before.has(frame.uuid) && /for \d/.test(frame.engineOutput ?? '') && !/Waiting for/.test(frame.engineOutput ?? '')), { timeout: 15000 }).toBe(true)
@@ -127,6 +140,6 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill('Continue the same session after the pending worker review.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })
