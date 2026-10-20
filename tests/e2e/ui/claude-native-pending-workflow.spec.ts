@@ -6,6 +6,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 const workflowEditor=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR==='1'
 const workflowEditorWithheld=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR_WITHHELD==='1'
+const workflowDeny=process.env.CLAUDE_RESEARCH_WORKFLOW_DENY==='1',workflowWithheld=workflowEditorWithheld||process.env.CLAUDE_RESEARCH_WORKFLOW_WITHHELD==='1'
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testInfo.expectedStatus && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('native-pending-workflow-failure.png') }).catch(() => {}) })
 test('mirrors original pending workflow duration and completion', async ({ app, appPage }, testInfo) => {
@@ -78,12 +79,31 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     const approval = appPage.getByRole('region', { name: 'Workflow approval', exact: true })
     await expect(approval).toBeVisible()
     const summary=approval.getByTestId('native-workflow-summary'),retainedDraft='Keep review notes while inspecting the workflow.'
-    if(workflowEditorWithheld){
+    if(workflowWithheld){
       await expect(approval).toContainText('Claude withheld this script');await expect(approval.getByTestId('native-workflow-script')).toHaveCount(0);await expect(summary).toHaveCount(0)
       await expect(approval.getByRole('button',{name:'Allow',exact:true})).toBeDisabled();await expect(approval.getByRole('button',{name:'Edit in native interface',exact:true})).toBeEnabled()
-      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await approval.getByRole('button',{name:'Edit in native interface',exact:true}).scrollIntoViewIfNeeded();await expect(approval.getByRole('button',{name:'Edit in native interface',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-withheld-'+size.width+'.png')})}
+      if(!workflowDeny)for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await approval.getByRole('button',{name:'Edit in native interface',exact:true}).scrollIntoViewIfNeeded();await expect(approval.getByRole('button',{name:'Edit in native interface',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-withheld-'+size.width+'.png')})}
     }else{await expect(approval.getByTestId('native-workflow-description')).toContainText('Review release notes');await expect(summary).toContainText('Review');await expect(summary).toContainText('Return the synthetic worker marker only.')}
     await expect(composer).toBeHidden()
+    if(workflowDeny){
+      const feedback='Keep this workflow local; do not launch review workers.'
+      await approval.getByText('Add a reason for denying',{exact:true}).click();const field=approval.getByRole('textbox',{name:'Reason for denying',exact:true});await field.fill(feedback)
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await field.scrollIntoViewIfNeeded();await expect(field).toBeInViewport();await expect(approval.getByRole('button',{name:'Deny',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-denial-'+size.width+'.png')})}
+      await approval.getByRole('button',{name:'Deny',exact:true}).click();await expect(approval).toHaveCount(0)
+      await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+      const tasks=JSON.parse(await readFile(join(workspace!,'native-workflow-state.json'),'utf8'));expect(tasks).toEqual([])
+      const journal=async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{return (await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}catch(error:any){if(error.code!=='ENOENT')throw error}}return []}
+      const refusal=async()=>(await journal()).flatMap(row=>Array.isArray(row.message?.content)?row.message.content:[]).find(block=>block.type==='tool_result'&&block.tool_use_id==='status_agent_fixture'&&block.is_error===true&&JSON.stringify(block.content).includes(feedback))
+      await expect.poll(async()=>!!await refusal()).toBe(true)
+      const draft='Keep the release notes after denying the workflow.';await composer.fill(draft)
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-denial-recovery-'+size.width+'.png')})}
+      expect((await context()).native.state.nativePid).toBe(boundNativePid);expect((await context()).native.state.activity?.pendingWorkflows??0).toBe(0)
+      await writeFile(join(workspace!,'native-workflow-denial-proof.json'),JSON.stringify({feedback,tasks,refusal:await refusal(),withheld:workflowWithheld,draft}))
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+      const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+      await composer.fill('Continue after refusing the workflow.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowDenied:true,nativeWorkflowFeedback:true,nativeNoWorkflowStarted:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    }
     let editorBeforeToken:string|undefined,editorAfterToken:string|undefined
     if(workflowEditor){
       editorBeforeToken=(await context()).claude.pendingControlRequest.nativeTerminal.workflow.token
