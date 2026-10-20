@@ -97,14 +97,24 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
       const journal=async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{return (await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}catch(error:any){if(error.code!=='ENOENT')throw error}}return []}
       const refusal=async()=>(await journal()).flatMap(row=>Array.isArray(row.message?.content)?row.message.content:[]).find(block=>block.type==='tool_result'&&block.tool_use_id==='status_agent_fixture'&&block.is_error===true&&JSON.stringify(block.content).includes(feedback))
       await expect.poll(async()=>!!await refusal()).toBe(true)
+      if(process.env.CLAUDE_RESEARCH_WORKFLOW_RESULT_REVIEW==='1'){
+        const reviewed=async()=>(await context()).ui?.state.transcriptMessages?.find((frame:any)=>frame.component==='ToolUse'&&frame.uuid==='status_agent_fixture')
+        await expect.poll(async()=>(await reviewed())?.body.status).toBe('live')
+        await expect.poll(async()=>(await reviewed())?.engineOutput).toContain('Review release notes')
+        expect((await reviewed()).engineOutput).toContain('Full Workflow script omitted from this view.')
+        await expect.poll(async()=>(await context()).ui?.state.transcriptMessages?.find((frame:any)=>frame.component==='ToolResult'&&frame.uuid==='status_agent_fixture')?.body.status).toBe('live')
+        const row=appPage.locator('[data-native-tool-use="status_agent_fixture"]')
+        for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await row.scrollIntoViewIfNeeded();await expect(row).toContainText('Review release notes');await expect(row).not.toContainText('controls unavailable');await appPage.screenshot({path:testInfo.outputPath('native-workflow-bounded-result-'+size.width+'.png')})}
+        await writeFile(join(workspace!,'native-workflow-bounded-result-proof.json'),JSON.stringify({toolUse:await reviewed(),sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
+      }
       const draft='Keep the release notes after denying the workflow.';await composer.fill(draft)
       for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-denial-recovery-'+size.width+'.png')})}
       expect((await context()).native.state.nativePid).toBe(boundNativePid);expect((await context()).native.state.activity?.pendingWorkflows??0).toBe(0)
-      await writeFile(join(workspace!,'native-workflow-denial-proof.json'),JSON.stringify({feedback,tasks,refusal:await refusal(),withheld:workflowWithheld,draft}))
+      await writeFile(join(workspace!,'native-workflow-denial-proof.json'),JSON.stringify({feedback,tasks,refusal:await refusal(),withheld:workflowWithheld,draft,transcriptFrames:(await context()).ui?.state.transcriptMessages}))
       await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
       const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
       await composer.fill('Continue after refusing the workflow.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowDenied:true,nativeWorkflowFeedback:true,nativeNoWorkflowStarted:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowDenied:true,...(process.env.CLAUDE_RESEARCH_WORKFLOW_RESULT_REVIEW==='1'?{nativeWorkflowBoundedReview:true}:{}),nativeWorkflowFeedback:true,nativeNoWorkflowStarted:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
     }
     let editorBeforeToken:string|undefined,editorAfterToken:string|undefined
     if(workflowEditor){

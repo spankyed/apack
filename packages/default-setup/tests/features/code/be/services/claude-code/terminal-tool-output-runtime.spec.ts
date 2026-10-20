@@ -3,7 +3,7 @@ import { claudeTerminalToolOutputRuntime } from '#features/code/be/services/clau
 
 function fixture() {
   const theme = { type: 'original-theme-provider', value: { resolvedTheme: { text: '#123456' } } }
-  const helpers = vm.runInNewContext(`${claudeTerminalToolOutputRuntime};({format:formatNativeToolResult,usesEngine:nativeDrawingUsesEngine})`, { process: { stdout: { columns: 90 } }, nativeThemeProvider: () => theme })
+  const helpers = vm.runInNewContext(`${claudeTerminalToolOutputRuntime};({formatUse:formatNativeToolUse,format:formatNativeToolResult,usesEngine:nativeDrawingUsesEngine})`, { process: { stdout: { columns: 90 } }, nativeThemeProvider: () => theme })
   const n = {
     toolExport: { uer: vi.fn((tools: unknown) => tools) },
     jsx: { e: (type: unknown, props: unknown) => ({ type, props }) },
@@ -12,7 +12,7 @@ function fixture() {
     runtime: { sQt: vi.fn(() => ({ lookups: { original: true }, inProgressToolUseIDs: new Set() })) },
     staticRender: { v6e: vi.fn(async () => '\u001b[32mOriginal formatted output\u001b[0m') },
   }
-  return { n, theme, format: helpers.format, usesEngine: helpers.usesEngine }
+  return { n, theme, formatUse: helpers.formatUse, format: helpers.format, usesEngine: helpers.usesEngine }
 }
 it('uses original export providers without giving the temporary store ownership of live tasks', async () => {
   const f = fixture(), block = { type: 'tool_result', tool_use_id: 'original-tool' }, sibling = { type: 'tool_result', tool_use_id: 'sibling-tool' }
@@ -55,4 +55,21 @@ it('refuses publication when the request is cancelled while the original rendere
  const pending=f.format(f.n,facts,{}, {tools:[],signal:controller.signal})
  controller.abort();finish('late native drawing')
  await expect(pending).rejects.toThrow(/aborted/i)
+})
+
+it('uses original compact rendering for oversized Workflow calls without mutating their script', async () => {
+ const f=fixture(),script='x'.repeat(200289),block={type:'tool_use',id:'workflow',name:'Workflow',input:{script}},message={message:{content:[block]}},facts={message,messages:[message],block}
+ const output=await f.formatUse(f.n,facts,{tool:'Workflow',input:block.input},{tools:[]})
+ const tree=(f.n.staticRender.v6e.mock.calls[0] as unknown as [any])[0],rendered=tree.props.children.props.children
+ expect(rendered.props.verbose).toBe(false);expect(rendered.props.message.message.content[0].input.script).toBe(script)
+ expect(output).toContain('Original formatted output');expect(output).toContain('Full Workflow script omitted from this view.')
+ expect(block.input.script).toBe(script)
+})
+it('keeps ordinary Workflow calls and other tools on their original verbose rendering', async () => {
+ for(const [name,script] of [['Workflow','small script'],['Bash','x'.repeat(70000)]]){
+  const f=fixture(),block={type:'tool_use',id:'tool',name,input:{script}},message={message:{content:[block]}}
+  const output=await f.formatUse(f.n,{message,messages:[message],block},{tool:name,input:block.input},{tools:[]})
+  expect((f.n.staticRender.v6e.mock.calls[0] as unknown as [any])[0].props.children.props.children.props.verbose).toBe(true)
+  expect(output).not.toContain('Full Workflow script omitted')
+ }
 })
