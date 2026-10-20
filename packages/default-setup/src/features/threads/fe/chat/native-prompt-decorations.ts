@@ -25,11 +25,20 @@ export function createClaudePromptDecorations() {
 }
 
 /** Decorations are presentation only: no marks, draft characters or submitted text are added. */
-export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer, sourcePositions?: ReadonlyMap<number, number>): DecorationSet {
+export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNullable<ClaudeUiPromptFrame['decorations']>, serialize: ClaudePromptSerializer, sourcePositions?: ReadonlyMap<number, number>, sourceOffsets?: ReadonlyMap<number, number>): DecorationSet {
   const drawn: Decoration[] = []
   const positions = new Map<string, number | undefined>()
   const position = (offset: number, bias: -1 | 0 | 1) => {
-    if (sourcePositions) return sourcePositions.get(offset)
+    if (sourcePositions) {
+      const exact = sourcePositions.get(offset)
+      if (exact !== undefined) return exact
+      if (!sourceOffsets) return
+    }
+    if (sourceOffsets) {
+      const canonical = sourceOffsets.get(offset)
+      if (canonical === undefined) return
+      offset = canonical
+    }
     const address = `${offset}:${bias}`
     if (!positions.has(address)) positions.set(address, findClaudePromptPosition(doc, offset, serialize, bias))
     return positions.get(address)

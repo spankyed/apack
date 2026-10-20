@@ -445,13 +445,21 @@ it('normalizes decorated native fills and preserves their paint through app ackn
   bridge.dispose()
 })
 
-it('preserves the draft if a source decoration boundary changes Markdown interpretation', async () => {
+it.each([
+  {text:'*   first\n*   second',start:0,end:7,canonical:'- first\n- second',paint:'fir'},
+  {text:'__Title__\n\n*   first',start:1,end:8,canonical:'**Title**\n\n- first',paint:'Title'},
+  {text:'__😀 Title__\n\n*   first',start:1,end:11,canonical:'**😀 Title**\n\n- first',paint:'😀 Title'},
+  {text:'*   same\n*   same',start:10,end:17,canonical:'- same\n- same',paint:'same'},
+])('maps source syntax decoration boundaries without rejecting a valid native rewrite: $text', async ({text,start,end,canonical,paint}) => {
   editor.commands.setContent('safe')
-  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
-  const text = '*   first\n*   second'
-  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start: 0, end: 7, color: 'red' }] } })
-  expect(serialize(editor.state.doc)).toBe('safe')
-  expect(await bridge.settle()).toBe(false)
+  const send=vi.fn(),problem=vi.fn(),bridge = bindClaudePromptEditor(editor, send, problem)
+  bridge.receive({ revision: bridge.revision, status: 'applied', frame: { text, cursor: text.length, decorations: [{ start, end, color: 'red' }] } })
+  expect(serialize(editor.state.doc)).toBe(canonical)
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe(paint)
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({by:'app',text:canonical}))
+  const ack=send.mock.lastCall![0];bridge.receive({revision:ack.revision,status:'applied',frame:{text:ack.text,cursor:ack.cursor}})
+  expect(editor.view.dom.querySelector('.claude-prompt-decoration')?.textContent).toBe(paint)
+  expect(problem).toHaveBeenLastCalledWith(undefined)
   bridge.dispose()
 })
 

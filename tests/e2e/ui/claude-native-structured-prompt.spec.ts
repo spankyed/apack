@@ -7,12 +7,12 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('round-trips decorated structured replace append and cursor insertion through original native APIs', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia,promptSyntax}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -36,8 +36,15 @@ test('round-trips decorated structured replace append and cursor insertion throu
   const input = section.locator('textarea.xterm-helper-textarea')
   // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
+    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));
+    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);
+    const cols=row?.match(/columns:\s*(\d+)/)?.[1];return cols?{cols:Number(cols),rows:200}:undefined;
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0
@@ -95,6 +102,21 @@ test('round-trips decorated structured replace append and cursor insertion throu
   expect((await receipts())[1].result.isFilled).toBe(true)
   await expect(composer.locator('li')).toHaveText(['Verify behavior','Document migration'])
   await expect(composer.locator('.claude-prompt-decoration')).toHaveText('Verify behavior')
+  if(promptSyntax){
+    const paint=composer.locator('.claude-prompt-decoration');await expect(composer.locator('li strong')).toHaveText('Verify behavior');await expect(paint).toHaveCSS('text-decoration-line','underline');
+    const raw=(await receipts())[1].input;expect(raw.text).toContain('*   __Verify behavior__');expect(raw.decorations[0].start).toBe(raw.text.indexOf('*')+1);expect(raw.decorations[0].end).toBe(raw.text.indexOf('Verify behavior')+'Verify behavior'.length+1);
+    expect((await receipts())[1].after.text).toContain('- **Verify behavior**');
+    // Screenshot caret hiding mutates contenteditable styles and can trigger a DOM-observer selection edit.
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900});
+      await paint.scrollIntoViewIfNeeded();await expect(paint).toBeInViewport();
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-prompt-syntax-'+width+'.png')});
+      await expect(paint).toHaveText('Verify behavior');
+    }
+    await appPage.setViewportSize({width:1400,height:900});
+  }
+
   await composer.locator('p').filter({hasText:'Review changes.'}).click();await composer.press('Control+a')
   await card.getByRole('button',{name:'Add review note',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(3)
@@ -103,10 +125,10 @@ test('round-trips decorated structured replace append and cursor insertion throu
   expect(proof[2].before.cursor).toBe(proof[2].before.text.indexOf('Review changes.'))
   await expect(composer.locator('.claude-prompt-decoration')).toHaveText('Please')
   expect(proof[2].after.text).toContain('Please Review changes.')
-  expect(proof[2].after.text).toContain('- Verify behavior')
+  expect(proof[2].after.text).toContain(promptSyntax?'- **Verify behavior**':'- Verify behavior')
   expect(proof[2].after.text).not.toContain('apackNativeOffset')
   if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')==='true')await tools.click()
-  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')});if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-structured-prompt-compact-checklist.png')})}}
+  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')});if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-structured-prompt-compact-checklist.png')})}}
   const before=(await context()).messages.length
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text))).toBe(true)
@@ -117,5 +139,5 @@ test('round-trips decorated structured replace append and cursor insertion throu
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

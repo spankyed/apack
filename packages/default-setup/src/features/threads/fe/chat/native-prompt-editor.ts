@@ -119,7 +119,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const prepared = prepareDraft(input, expectedRevision)
     if (!prepared) return false
     const { next, runs } = prepared
-    const drawn = drawClaudePromptDecorations(next.doc, runs, serialize, next.sourcePositions)
+    const drawn = drawClaudePromptDecorations(next.doc, runs, serialize, next.sourcePositions, next.sourceOffsets)
     fillPaint = origin === 'app' ? { revision: revision + 1, text: serialize(next.doc), drawn } : undefined
     const tr = editor.state.tr.replaceWith(0, editor.state.doc.content.size, next.doc.content)
     tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null).setMeta('claude-prompt-by', origin)
@@ -186,7 +186,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         // A text/cursor acknowledgment carries no selection-range change.
         if (next.doc !== snapshot.doc || reply.frame.cursor !== snapshot.cursor) tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null)
         // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
-        const drawn = reply.frame.decorations ? drawClaudePromptDecorations(tr.doc, reply.frame.decorations, serialize, next.sourcePositions) : fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.drawn : drawClaudePromptDecorations(tr.doc, [], serialize)
+        const drawn = reply.frame.decorations ? drawClaudePromptDecorations(tr.doc, reply.frame.decorations, serialize, next.sourcePositions, next.sourceOffsets) : fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.drawn : drawClaudePromptDecorations(tr.doc, [], serialize)
         tr.setMeta(decorations.key, drawn)
         fillPaint = next.normalized ? { revision: revision + 1, text: serialize(tr.doc), drawn } : undefined
         editor.view.dispatch(tr)
