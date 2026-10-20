@@ -23,6 +23,15 @@ test('restores original pre-Plan context after cold restart and exits Plan throu
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.locator('[contenteditable="true"]'),status=card.getByTestId('composer-native-status')
  const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator('textarea.xterm-helper-textarea')
  const context=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {phase:c.phase,threadId:c.currentThread?.id,sessionId:c.currentThread?.context?.claudeCode?.sessionId,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id)} as any})
+ await appPage.evaluate(()=>{
+  const actor=(window as any).applicationState.system.get('default-setup/threads'),scope=window as any;scope.savedPlanPhaseTrace=[];
+  actor.system.inspect((entry:any)=>{
+   if(entry.actorRef!==actor||!['@xstate.event','@xstate.snapshot'].includes(entry.type))return;
+   const c=actor.getSnapshot().context,key='apack.claude-composer-phase:'+JSON.stringify([['main'],c.currentThread?.id]);
+   scope.savedPlanPhaseTrace.push({kind:entry.type,event:entry.event?.type,eventPhase:entry.event?.phase,source:entry.event?.source,phase:c.phase,mode:c.mode,threadId:c.currentThread?.id,stored:localStorage.getItem(key)});
+  });
+ })
+ try {
  await expect(composer).toHaveText(editText);await expect(card.getByRole('button',{name:'Edit',exact:true})).toBeVisible()
  expect((await context()).claude.permissionMode).toBe('plan')
  expect((await context()).claude.additionalDirs).toEqual([firstDirectory,secondDirectory])
@@ -79,4 +88,9 @@ test('restores original pre-Plan context after cold restart and exits Plan throu
  await writeFile(join(workspace!,'native-staged-directory-proof.json'),JSON.stringify({firstDirectory,secondDirectory,launch,additionalDirs,boundNativePid,reopenedNativePid,sessionId}))
  await writeFile(join(workspace!,'native-composer-phase-proof.json'),JSON.stringify({sessionId,boundNativePid,reopenedNativePid,originalMode,planText,editText,printPlanText,printEditText,beforePrintMode:beforePrint.claude.permissionMode,printPermissionMode:(await context()).claude.permissionMode,reopenedPrePlanMode:planned.claude.prePlanMode,plannedMode:planned.claude.permissionMode,editedMode:edited.claude.permissionMode,history:await history(),priorMainPid:saved.mainPid,priorApiPid:saved.apiPid,coldMainPid:electronApp.process().pid,coldApiPid:api.pid,historyBefore:saved.history,costBefore:saved.cost,toolCallCountBefore:saved.toolCallCount}))
  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeComposerPhase:true,nativeComposerCold:true,nativeComposerSavedPlan:true,nativeComposerPhaseReload:false,nativeComposerPhaseOnSend:true,nativeComposerPhaseRestore:true,nativeStagedDirectories:true,nativeStagedDirectoryHandoff:true,nativeStagedDirectoryReopen:true,nativeStagedDirectoryRead:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,reopenedNativePid,browserErrors:errors}))
+ }catch(error){
+  await writeFile(join(workspace!,'native-saved-plan-failure.json'),JSON.stringify({context:await context(),trace:await appPage.evaluate(()=>(window as any).savedPlanPhaseTrace)}));
+  await appPage.screenshot({path:testInfo.outputPath('native-saved-plan-failure.png')});throw error;
+ }
+
 })

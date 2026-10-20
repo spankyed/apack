@@ -758,7 +758,9 @@ const threadsState = setup({
         ? (newMode in updatedPhaseByModeName ? updatedPhaseByModeName[newMode] : modeConfig.phases[0].name)
         : undefined;
 
-      return { mode: newMode, phase: newPhase, phaseByModeName: updatedPhaseByModeName };
+      const stagedPhase = newMode === 'Claude Code' && context.currentThread?.context?.claudeCode && context.currentThread.id
+        ? readClaudeComposerPhase(context.currentThread.id)?.phase : undefined;
+      return { mode: newMode, phase: stagedPhase ?? newPhase, phaseByModeName: updatedPhaseByModeName };
     }),
     stageClaudePhase: assign(({ context, event }) => {
       const { phase } = typeOf('STAGE_CLAUDE_PHASE', event);

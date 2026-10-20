@@ -211,6 +211,8 @@ it('passes the selected phase to an explicit print Send and retires leftover nat
  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(thread.id)!})
  actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Edit'})
  expect(readClaudeComposerPhase(thread.id)?.phase).toBe('Edit')
+ actor.send({type:'SET_MODE',mode:'Birth'});actor.send({type:'SET_MODE',mode:'Claude Code'})
+ expect(actor.getSnapshot().context.phase).toBe('Edit')
  sent.mockClear();actor.send({type:'SEND_MESSAGE',text:'Continue in print Edit'})
  expect(sent).toHaveBeenCalledWith(expect.objectContaining({event:expect.objectContaining({type:'USER_MSG',threadId:thread.id,phase:'Edit',text:'Continue in print Edit'})}))
  expect(readClaudeComposerPhase(thread.id)).toBeUndefined();expect(actor.getSnapshot().context.phase).toBe('Edit');actor.stop()
