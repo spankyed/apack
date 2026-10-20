@@ -153,9 +153,10 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       const permissionMode = await readUntilAborted(() => previous.owner.handle.getPermissionMode(), abort.signal)
       if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
       const prior = JSON.parse(previous.launchKey) as Omit<ClaudeNativeTerminalOptions, 'settings' | 'sessionId'>
+      if (resume && (resume.sessionId !== previous.owner.sessionId || resume.cwd !== (previous.owner.sessionCwd ?? prior.cwd))) throw new Error('Staged native launch no longer matches the active session')
       // Print-only flags (notably worktree) do not belong to a resumed native launch.
       launch = { ...overrides, cwd: previous.owner.sessionCwd ?? prior.cwd, sessionId: previous.owner.sessionId!, model: typeof settings.applied?.model === 'string' ? settings.applied.model : previous.owner.modelSelection ?? prior.model, permissionMode,
-        allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: prior.addDir, pluginDir: prior.pluginDir }
+        allowedTools: prior.allowedTools, disallowedTools: prior.disallowedTools, appendSystemPrompt: prior.appendSystemPrompt, addDir: resume?.addDir === undefined ? prior.addDir : [...new Set([...(prior.addDir ?? []), ...resume.addDir])], pluginDir: prior.pluginDir }
     } else {
       const intent = { ...resume!, ...overrides }
       // Original native settings/policy are read again; no cached helpers run after Stop.

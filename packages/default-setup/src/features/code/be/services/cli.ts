@@ -272,12 +272,20 @@ function createCliService(): CliServiceType {
       },
       async readSettings() {
         const settingsPath = path.join(configDir(), 'settings.json')
+        let raw: string
         try {
-          const raw = await fs.promises.readFile(settingsPath, 'utf-8')
-          return JSON.parse(raw)
-        } catch {
-          return {}
+          raw = await fs.promises.readFile(settingsPath, 'utf-8')
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+          throw error
         }
+        let settings: unknown
+        try { settings = JSON.parse(raw) }
+        catch { throw new Error('Claude Code settings.json is not valid JSON; repair it before editing.') }
+        if (settings === null || typeof settings !== 'object' || Array.isArray(settings)) {
+          throw new Error('Claude Code settings.json must contain an object; repair it before editing.')
+        }
+        return settings as Record<string, any>
       },
       async writeSettings(settings) {
         const settingsPath = path.join(configDir(), 'settings.json')

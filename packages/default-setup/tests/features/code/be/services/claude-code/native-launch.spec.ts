@@ -14,3 +14,11 @@ it('refuses a stale identity, invalid mode or extra settings instead of launchin
  expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:launch,permissionMode:'invented'})).toThrow()
  expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:{...launch,settings:{}}})).toThrow()
 })
+
+it('merges newly staged roots with retained attachment roots without mutating either snapshot',()=>{
+ const addDir=['/attached'],additionalDirs=['/extra project','/attached'],saved={...launch,addDir}
+ expect(readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved,additionalDirs})?.addDir).toEqual(['/attached','/extra project'])
+ expect(addDir).toEqual(['/attached']);expect(additionalDirs).toEqual(['/extra project','/attached'])
+ expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved,additionalDirs:['']})).toThrow()
+ expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved,additionalDirs:'bad'})).toThrow()
+})

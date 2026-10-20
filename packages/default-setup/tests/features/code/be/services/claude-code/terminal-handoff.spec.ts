@@ -152,3 +152,16 @@ it('aborts a pending read-only handoff without closing the print owner or admitt
  const native=terminal();mocks.prepare.mockResolvedValueOnce({start:async()=>native,dispose:vi.fn(async()=>{})});
  expect(await openNativeTerminal('thread',{},mocks.prepare)).toBe(native);expect(mocks.prepare.mock.calls[0][0].signal.aborted).toBe(false);
 });
+
+
+it('applies staged directory roots during a live print handoff while preserving original launch restrictions',async()=>{
+ await printOwner();const native=terminal();mocks.prepare.mockResolvedValue({start:async()=>native,dispose:async()=>{}})
+ await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',addDir:['/extra project']}},mocks.prepare)
+ expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({sessionId:session,cwd:'/native-cwd',addDir:['/extra project'],model:'native-model',permissionMode:'plan'}))
+ expect((await getNativeLaunch('thread'))?.addDir).toEqual(['/extra project'])
+})
+it('refuses staged roots from a different session before closing the live print owner',async()=>{
+ const first=await printOwner()
+ await expect(openNativeTerminal('thread',{resume:{sessionId:'22222222-2222-4222-8222-222222222222',cwd:'/native-cwd',addDir:['/foreign']}},mocks.prepare)).rejects.toThrow('matches')
+ expect(mocks.prepare).not.toHaveBeenCalled();expect(first.handle.close).not.toHaveBeenCalled()
+})

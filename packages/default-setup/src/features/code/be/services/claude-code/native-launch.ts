@@ -23,5 +23,7 @@ export function readSavedClaudeNativeLaunch(state: Record<string, unknown> | und
   if (launch.sessionId !== state.sessionId || launch.cwd !== state.cwd) throw new Error('Saved native launch no longer matches this session')
   const model = state.modelOverride === undefined ? launch.model : state.modelOverride === 'default' ? undefined : z.string().min(1).parse(state.modelOverride)
   const permissionMode = state.permissionMode === undefined ? launch.permissionMode : PermissionModeSchema.parse(state.permissionMode)
-  return {...launch,model,permissionMode}
+  const staged = state.additionalDirs === undefined ? undefined : z.array(z.string().min(1)).parse(state.additionalDirs)
+  const addDir = staged === undefined ? launch.addDir : [...new Set([...(launch.addDir ?? []), ...staged])]
+  return {...launch,model,permissionMode,...(addDir === undefined ? {} : {addDir})}
 }
