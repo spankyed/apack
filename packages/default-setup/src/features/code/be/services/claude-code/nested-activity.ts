@@ -103,9 +103,9 @@ export function createClaudeNestedActivity() {
       const task = line.type === 'system' && line.subtype === 'task_notification' && typeof line.task_id === 'string' ? tasks.get(taskKey(line)) : undefined
       if (task) {
         const report = record(line.handback_report)
-        if (line.status !== 'completed' || line.handback !== 'send' || line.session_id !== task.session || line.run_id !== task.run
+        if (line.status !== 'completed' || !['send', 'flagged'].includes(line.handback as string) || line.session_id !== task.session || line.run_id !== task.run
           || line.tool_use_id !== undefined && line.tool_use_id !== task.parent || typeof report?.text !== 'string'
-          || report.warning !== undefined && typeof report.warning !== 'string') return false
+          || report.warning !== undefined && typeof report.warning !== 'string' || line.handback === 'flagged' && (typeof report.warning !== 'string' || !report.warning.trim())) return false
         if (closed || task.reported) return true
         if (!deliver(event)) {
           const bytes = Buffer.byteLength(JSON.stringify(event), 'utf8')

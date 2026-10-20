@@ -67,3 +67,17 @@ it('routes one complete handback only to its started task owner, including a lat
   expect(activity.takeAccounting()).toEqual({toolCallCount:0,mutatedPaths:[],hadErrors:false})
   activity.close();activity.receive(report);expect(receive).toHaveBeenCalledTimes(1)
 })
+
+it('retains an original flagged report only with its mandatory safety warning', () => {
+  const activity=createClaudeNestedActivity(),receive=vi.fn()
+  activity.register('root',receive)
+  activity.receive({type:'system',subtype:'task_started',task_type:'local_agent',task_id:'child',tool_use_id:'root',session_id:'session',run_id:'run'} as StreamLine)
+  const report={type:'system',subtype:'task_notification',task_id:'child',tool_use_id:'root',session_id:'session',run_id:'run',status:'completed',handback:'flagged',handback_report:{text:'Original report',warning:'SECURITY WARNING: Original native review warning'},uuid:'flagged'} as StreamLine
+  expect(activity.receive({...report,handback_report:{text:'Missing warning'}} as StreamLine)).toBe(false)
+  expect(activity.receive({...report,handback_report:{text:'Empty warning',warning:' '}} as StreamLine)).toBe(false)
+  expect(receive).not.toHaveBeenCalled()
+  expect(activity.receive(report)).toBe(true)
+  expect(receive).toHaveBeenCalledExactlyOnceWith(report)
+  activity.receive({...report,uuid:'repeat'} as StreamLine)
+  expect(receive).toHaveBeenCalledOnce()
+})

@@ -57,7 +57,7 @@ test('shows the original Agent handback report and warning with parent continuat
     const report=appPage.getByRole('region',{name:'Agent report',exact:true});
     await expect(report).toHaveCount(reportCount,{timeout:25000});
     await expect(report.last()).toContainText(expectedReport);
-    if(fixture.nested||fixture.duplicate)await expect(report.getByRole('alert')).toHaveCount(0);else await expect(report.getByRole('alert')).toContainText('unavailable');
+    if(fixture.nested||fixture.duplicate)await expect(report.getByRole('alert')).toHaveCount(0);else await expect(report.getByRole('alert')).toContainText(fixture.classifierOutcome==='blocked'?'auto mode blocked':fixture.classifierOutcome==='refused'?'UNREVIEWED':'unavailable');
     await expect.poll(async()=>(await snapshot()).turns).toBeGreaterThanOrEqual(2);
     await expect.poll(async()=>(await snapshot()).state).toBe('success');
     const completed=await snapshot();
@@ -66,6 +66,7 @@ test('shows the original Agent handback report and warning with parent continuat
     expect(nativeResults.filter((e:any)=>e.num_turns===0&&e.result==='')).toHaveLength(reportCount);
     expect(completed.turns).toBe(nativeTurns.length);
     const handbackEvent=(await wire()).find((e:any)=>e.type==='system'&&e.subtype==='task_notification'&&e.handback_report?.text===expectedReport);
+    if(fixture.classifierOutcome)expect(handbackEvent.handback).toBe('flagged');
     expect(handbackEvent.handback_report.text).toBe(expectedReport);
     const personMessages=completed.messages.filter((m:any)=>m.sender==='user');
     expect(personMessages).toHaveLength(1);
@@ -98,6 +99,11 @@ test('shows the original Agent handback report and warning with parent continuat
       }
       await appPage.screenshot({path:testInfo.outputPath('native-handback-'+width+'.png')});
       if(width===680){
+        if(fixture.classifierOutcome==='refused'){
+          const warning=report.getByRole('alert');await warning.evaluate(node=>node.scrollIntoView({block:'start'}));
+          await expect(warning).toBeInViewport();await expect(editor).toHaveText(draft);
+          await appPage.screenshot({path:testInfo.outputPath('native-handback-680-warning.png')});
+        }
         const body=report.last().locator('div.whitespace-pre-wrap').last();
         await body.evaluate(node=>node.scrollIntoView({block:'end'}));
         await expect.poll(()=>body.evaluate(node=>{const r=node.getBoundingClientRect();return node.contains(document.elementFromPoint(r.left+r.width/2,r.bottom-4))})).toBe(true);
@@ -115,7 +121,7 @@ test('shows the original Agent handback report and warning with parent continuat
     await expect.poll(async()=>(await snapshot()).state).toBe('success');
     const after=await snapshot();expect(after.messages.filter((m:any)=>m.sender==='user')).toHaveLength(2);expect(after.sessionId).toBe(before.sessionId);expect(after.threadId).toBe(before.threadId);
     await expect(report).toHaveCount(reportCount);expect(errors).toEqual([]);
-    await writeFile(join(workspace!,'composer-app-evidence.json'),JSON.stringify({actualApp:true,nativeHandbackReport:true,nativeHandbackWarning:!fixture.nested&&!fixture.duplicate,nativeDuplicateHandback:!!fixture.duplicate,nativeNestedHandback:!!fixture.nested,nativeHandbackParentContinuation:true,nativeRetainedDraft:true,before:{sessionId:before.sessionId,turns:before.turns},after:{sessionId:after.sessionId,turns:after.turns},handbacks:delivered[0].handbacks,nativeResults:nativeResults.map((e:any)=>({uuid:e.uuid,result:e.result,subtype:e.subtype,num_turns:e.num_turns})),handbackEvent,errors},null,2));
+    await writeFile(join(workspace!,'composer-app-evidence.json'),JSON.stringify({actualApp:true,nativeHandbackReport:true,nativeHandbackFlagged:!!fixture.classifierOutcome,nativeHandbackWarning:!fixture.nested&&!fixture.duplicate,nativeDuplicateHandback:!!fixture.duplicate,nativeNestedHandback:!!fixture.nested,nativeHandbackParentContinuation:true,nativeRetainedDraft:true,before:{sessionId:before.sessionId,turns:before.turns},after:{sessionId:after.sessionId,turns:after.turns},handbacks:delivered[0].handbacks,nativeResults:nativeResults.map((e:any)=>({uuid:e.uuid,result:e.result,subtype:e.subtype,num_turns:e.num_turns})),handbackEvent,errors},null,2));
   }catch(error){
     await writeFile(join(workspace!,'native-handback-app-failure.json'),JSON.stringify(await snapshot(),null,2));
     await appPage.screenshot({path:testInfo.outputPath('native-handback-failure.png')});throw error;
