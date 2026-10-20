@@ -957,7 +957,11 @@ async function control(request,abort){
    while(toolResultFrames.size>256)toolResultFrames.delete(toolResultFrames.keys().next().value);
   }
   if(groupFacts){
-   if(nativeDrawingUsesEngine(result.tree))engineOutput=await formatNativeToolGroup(n,groupFacts,value.viewport?.columns);
+   if(nativeDrawingUsesEngine(result.tree)){
+    if(!groupFacts.calls.length&&result.props.isExpanded===true){
+     const binding=originalContext??n.runtime.ey(),parts=[];for(const message of groupFacts.message.messages){abort.signal.throwIfAborted();parts.push(await renderNativeToolMessage(n,{messages:groupFacts.message.messages},message,{tools:binding.tools(),columns:value.viewport?.columns,signal:abort.signal}));if(parts.join('\n').length>65536)throw Error('Native notification output exceeds limit');}engineOutput=parts.join('\n');
+    }else engineOutput=await formatNativeToolGroup(n,groupFacts,value.viewport?.columns);
+   }
    abort.signal.throwIfAborted();if(!clientViewCurrent(n,clientId)||instanceRevision!==undefined&&!instanceLifetimes.active(request,instanceRevision))throw Error('Native group lifetime expired while formatting');
    if(nativeToolGroups(n).get(value.instance_id)?.revision!==groupFacts.revision)throw Error('Native tool group changed while rendering');
    if(typeof result.props.isExpanded!=='boolean')throw Error('Native group expansion rewrite is invalid');
