@@ -1,7 +1,8 @@
 <template>
   <div ref="region" :data-native-client="node.id" :data-native-plugin="node.plugin" tabindex="0" class="native-client relative min-w-0 overflow-hidden font-mono outline-none focus-within:ring-1 focus-within:ring-blue-400" :style="style" @focus.self="focusKeyboard" @click.capture="capturedClick" @click="focusClient" @keydown="key" @pointerdown="pointer" @pointermove="pointer" @pointerup="pointer" @pointerenter="pointer" @pointerleave="pointer" @pointercancel="cancel">
     <slot />
-    <textarea v-if="node.keys" ref="textInput" data-native-client-text-input aria-label="Client text input" tabindex="-1" rows="1" maxlength="16384" autocomplete="off" autocapitalize="off" :spellcheck="false" class="pointer-events-none absolute left-0 top-0 h-px w-px resize-none overflow-hidden border-0 bg-transparent p-0 opacity-0" @compositionstart="compositionStart" @compositionend="compositionEnd" @input="textChanged" />
+    <textarea v-if="node.keys" ref="textInput" data-native-client-text-input aria-label="Client text input" tabindex="-1" rows="1" maxlength="16384" autocomplete="off" autocapitalize="off" :spellcheck="false" class="pointer-events-none absolute left-0 top-0 h-px w-px resize-none overflow-hidden border-0 bg-transparent p-0 opacity-0" @compositionstart="compositionStart" @compositionupdate="compositionUpdate" @compositionend="compositionEnd" @input="textChanged" />
+    <span v-if="compositionPreview" data-native-client-composition aria-hidden="true" class="pointer-events-none absolute bottom-0 left-0 max-w-full truncate rounded bg-neutral-800 px-1 text-neutral-100 underline decoration-blue-400">{{ compositionPreview }}</span>
     <span ref="measure" aria-hidden="true" class="pointer-events-none invisible absolute whitespace-pre" style="width:100ch;height:1lh">0</span>
   </div>
 </template>
@@ -12,22 +13,24 @@ import type {ClaudeUiNode} from '#features/code/be/services/claude-code/ui-prese
 import type {ClaudeUiClientInput} from '#features/code/be/services/claude-code/ui-controls.ts'
 const props=defineProps<{node:Extract<ClaudeUiNode,{kind:'client'}>}>()
 const returnFocus=inject(claudeClientReturnFocus,undefined)
-const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),textInput=ref<HTMLTextAreaElement|null>(null),measure=ref<HTMLElement|null>(null)
+const send=inject(claudeClientInput,undefined),region=ref<HTMLElement|null>(null),textInput=ref<HTMLTextAreaElement|null>(null),compositionPreview=ref(''),measure=ref<HTMLElement|null>(null)
 const dimension=(value:number|string|undefined,unit:string)=>typeof value==='number'?`${value}${unit}`:value
 const style=computed<CSSProperties>(()=>({width:dimension(props.node.layout?.width,'ch')??'fit-content',height:dimension(props.node.layout?.height,'lh'),flexGrow:props.node.layout?.flexGrow,maxWidth:'100%'}))
 let live=true,composing=false,compositionClient:string|undefined,completedComposition:string|undefined
 function focusKeyboard(){if(props.node.keys)textInput.value?.focus({preventScroll:true})}
-function cancelComposition(){composing=false;compositionClient=undefined;completedComposition=undefined;if(textInput.value)textInput.value.value=''}
+function cancelComposition(){compositionPreview.value='';composing=false;compositionClient=undefined;completedComposition=undefined;if(textInput.value)textInput.value.value=''}
 function commitText(text:string){if(!live||!props.node.keys)return;for(const character of text)send?.(props.node.id,{kind:'key',key:character===' '?'space':character==='\n'?'return':character==='\t'?'tab':character})}
-function compositionStart(){composing=true;compositionClient=props.node.id;completedComposition=undefined}
+function compositionStart(){compositionPreview.value='';composing=true;compositionClient=props.node.id;completedComposition=undefined}
+function compositionUpdate(event:CompositionEvent){if(live&&compositionClient===props.node.id)compositionPreview.value=event.data}
 function compositionEnd(event:CompositionEvent){
+ compositionPreview.value=''
  const text=event.data,current=compositionClient===props.node.id
  composing=false;compositionClient=undefined;completedComposition=text
  if(textInput.value)textInput.value.value=''
  if(current)commitText(text)
 }
 function textChanged(event:Event){
- const input=event as InputEvent;if(composing||input.isComposing)return
+ const input=event as InputEvent;if(composing||input.isComposing){compositionPreview.value=textInput.value?.value||input.data||'';return}
  const text=textInput.value?.value||input.data||''
  if(textInput.value)textInput.value.value=''
  if(completedComposition!==undefined){const duplicate=text===completedComposition;completedComposition=undefined;if(duplicate)return}

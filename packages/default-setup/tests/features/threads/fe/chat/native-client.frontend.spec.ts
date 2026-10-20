@@ -99,7 +99,7 @@ it('keeps composition preview local across redraws and commits Unicode once in e
  input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
  input.value='にほん';input.dispatchEvent(new InputEvent('input',{data:'にほん',isComposing:true,bubbles:true}))
  input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
- await nextTick();expect(input.value).toBe('にほん');expect(send).not.toHaveBeenCalled()
+ await nextTick();expect(region.querySelector('[data-native-client-composition]')?.textContent).toBe('にほん');expect(input.value).toBe('にほん');expect(send).not.toHaveBeenCalled()
  input.value='日本語';input.dispatchEvent(new CompositionEvent('compositionend',{data:'日本語',bubbles:true}))
  input.value='日本語';input.dispatchEvent(new InputEvent('input',{data:'日本語',bubbles:true}))
  expect(send.mock.calls).toEqual(['日','本','語'].map(key=>[id,{kind:'key',key}]))

@@ -59,7 +59,7 @@ test('commits root Client IME text once across original native redraws', async (
     let theme = false, security = false, navigated = false, trustAt = 0, attempts = 0
     await expect.poll(async () => {
       const current = await context(), kind = recognizeOnboardingPrompt(await screen(), workspace)
-      if (current.native?.state.status === 'live') return current.native.state.mainStatus?.includes('Workspace ready') === true
+      if (current.native?.state.status === 'live') return current.native.state.mainStatus?.includes('AppNativeMain '+sessionId) === true
       if (kind === 'theme' && !theme) { theme = true; await input.press('Enter') }
       else if (kind === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
       else if (kind === 'workspace-trust' && !navigated) { navigated = true; trustAt = Date.now(); await input.press('ArrowDown') }
@@ -78,16 +78,20 @@ test('commits root Client IME text once across original native redraws', async (
     await expect(region).toBeVisible();await region.click();await expect(proxy).toBeFocused()
     const native=async()=>JSON.parse(await readFile(join(workspace!,'native-root-ime-state.json'),'utf8').catch(()=>'{}'))
     const cdp=await appPage.context().newCDPSession(appPage)
+    const startingTurns=(await context()).native.state.session.turns;expect(typeof startingTurns).toBe('number')
     await cdp.send('Input.imeSetComposition',{text:'にほん',selectionStart:3,selectionEnd:3})
-    await expect(proxy).toHaveValue('にほん')
+    await expect(proxy).toHaveValue('にほん');await expect(region.locator('[data-native-client-composition]')).toHaveText('にほん')
     const beforeRedraw=await native();await expect.poll(async()=>(await native()).ticks).toBeGreaterThan(beforeRedraw.ticks+2)
     const afterRedraw=await native();expect(afterRedraw.text).toBe('');expect(afterRedraw.keys).toEqual([]);await expect(proxy).toHaveValue('にほん');await expect(composer).toHaveText(draft)
+    await appPage.screenshot({path:testInfo.outputPath('native-root-ime-preview.png')})
     await cdp.send('Input.insertText',{text:'日本語'})
     await expect.poll(async()=>(await native()).text).toBe('日本語')
-    const committed=await native();expect(committed.keys).toEqual(['日','本','語']);await expect(proxy).toHaveValue('');await expect(composer).toHaveText(draft)
+    const committed=await native();expect(committed.keys).toEqual(['日','本','語']);await expect(proxy).toHaveValue('');await expect(region.locator('[data-native-client-composition]')).toHaveCount(0);await expect(composer).toHaveText(draft)
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await region.scrollIntoViewIfNeeded();await expect(region).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-root-ime-'+size.width+'.png')})}
+    expect((await context()).native.state.session.turns).toBe(startingTurns)
     await cdp.detach();expect((await context()).native.state.nativePid).toBe(boundNativePid)
     await writeFile(join(workspace!,'native-root-ime-proof.json'),JSON.stringify({beforeRedraw,afterRedraw,committed}))
+    await tools.click();await composer.focus();await expect(composer).toHaveText(draft);await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='user'&&message.text===draft)).toBe(true)
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
     const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
     await composer.fill('Continue after the Client composition review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
