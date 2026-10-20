@@ -36,10 +36,10 @@
           <NativeStatusText data-testid="native-main-status" class="native-summary__text" :text="view.state.mainStatus" />
         </div>
         <div v-if="view?.state?.tasks.length" class="native-agents">
-          <div class="native-section-label">Agents <span class="native-count">{{ view.state.tasks.length }}</span></div>
-          <ul aria-label="Native Claude agents" class="native-agent-list">
+          <div class="native-section-label">Tasks <span class="native-count">{{ view.state.tasks.length }}</span></div>
+          <ul aria-label="Native Claude tasks" class="native-agent-list">
             <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="native-agent">
-              <div class="native-agent__heading"><span class="native-agent__name">{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
+              <div class="native-agent__heading"><span class="native-agent__name">{{ task.kind === 'workflow' ? 'Workflow · ' : '' }}{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
               <NativeStatusText v-if="task.statusText" class="native-agent__detail" :text="task.statusText" />
               <NativeTaskControls :task="{ ...task, ownerId: view.state.ownerId, sessionId: view.state.sessionId }" />
             </li>

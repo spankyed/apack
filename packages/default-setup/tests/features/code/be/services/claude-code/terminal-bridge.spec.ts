@@ -343,3 +343,19 @@ it('retires focus selection on native view/session changes and rejects stale sel
   expect((await request('/native-focus', { ...body, sequence: 2 })).status).toBe(409)
   expect((await request('/native-focus', { ...body, sequence: 2, viewRevision: 2 })).status).toBe(400)
 })
+
+it('publishes native Workflow tasks independently of Agent polls and refuses stale replacement', async () => {
+ const changed=vi.fn();bridge=await createClaudeTerminalBridge({sessionId:session,settings:{effective:{},sources:[]},ownsProcess:async pid=>pid===process.pid,changed,enter(){}})
+ await request('/observer-ready',{sessionId:session,pid:process.pid})
+ const body={sessionId:session,pid:process.pid,sequence:1,activity:{pendingAgents:0,pendingWorkflows:0},workflows:[{id:'workflow-a',name:'Release review',status:'completed'}]}
+ expect((await request('/native-activity',body)).status).toBe(200)
+ expect(bridge.projection.tasks).toEqual([{id:'workflow-a',kind:'workflow',name:'Release review',status:'completed'}])
+ await request('/poll',{sessionId:session,agents:[]});expect(bridge.projection.tasks).toHaveLength(1)
+ const before=changed.mock.calls.length
+ expect((await request('/native-activity',{...body,sequence:2,workflows:[{...body.workflows[0],status:'killed'}]})).status).toBe(200)
+ expect(changed.mock.calls.length).toBe(before+1);expect(bridge.projection.tasks[0].status).toBe('killed')
+ expect((await request('/native-activity',body)).status).toBe(409)
+ expect((await request('/native-activity',{...body,sequence:3,pid:process.pid+1,workflows:[]})).status).toBe(409)
+ expect(bridge.projection.tasks).toHaveLength(1)
+ expect((await request('/native-activity',{...body,sequence:3,workflows:[]})).status).toBe(200);expect(bridge.projection.tasks).toEqual([])
+})

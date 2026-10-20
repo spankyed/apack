@@ -1,5 +1,6 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
-export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskControl(n,binding,request,abort,current){
+export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status}));}
+async function nativeTaskControl(n,binding,request,abort,current){
  current();
  if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
@@ -12,9 +13,15 @@ export const claudeTerminalTaskRuntime = String.raw`async function nativeTaskCon
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};
  }
- const matches=Object.values(registry.all()).filter(task=>n.runtime.flt(task)?.id===request.task_id);
+ const matches=Object.values(registry.all()).filter(task=>task.type==='local_workflow'?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
+ if(task.type==='local_workflow'){
+  if(!['inspect','stop'].includes(request.operation))throw Error('Workflow tasks support inspection and native stop only');
+  if(request.operation==='stop'){await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};}
+  const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined,start=numeric(task.startTime),end=numeric(task.endTime);
+  current();return {details:{taskId:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,canInput:false,canMessage:false,workflow:{...(typeof task.workflowName==='string'?{name:task.workflowName.slice(0,256)}:{}),...(typeof task.workflowRunId==='string'?{runId:task.workflowRunId.slice(0,256)}:{}),agentCount:numeric(task.agentCount)??0,phaseCount:Array.isArray(task.phases)?task.phases.length:0},metadata:{promptTruncated:false,errorTruncated:(task.error?.length??0)>16384,...(typeof task.error==='string'?{error:task.error.slice(0,16384)}:{}),...(start===undefined?{}:{elapsedMs:Math.max(0,(end??Date.now())-start)}),tokenCount:numeric(task.totalTokens),toolUseCount:numeric(task.totalToolCalls)},messages:[],truncated:false}};
+ }
  if(request.operation==='foreground'){
   if(typeof binding.view?.show!=='function'||await binding.view.show({agentId:request.task_id})!=='shown')throw Error('Native Agent view is unavailable');
   current();if(context.getAppState().viewingAgentTaskId!==task.id)throw Error('Native view moved during selection');

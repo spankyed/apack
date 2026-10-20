@@ -8,16 +8,22 @@ const validId = (value: unknown): value is string => typeof value === 'string' &
 export function createClaudeTerminalStatus(sessionId: string) {
   let currentSession = sessionId
   let mainStatus: string | undefined
-  let agents: ClaudeNativeTerminalTask[] = []
+  let agents: ClaudeNativeTerminalTask[] = [], workflows: ClaudeNativeTerminalTask[] = []
   const decorations = new Map<string, { status: string; text: string }>()
   const epochs = new Map<string, bigint>()
   return {
     get sessionId() { return currentSession },
     get mainStatus() { return mainStatus },
-    get tasks(): ClaudeNativeTerminalTask[] { return agents.map(agent => ({ ...agent, ...(decorations.get(agent.id)?.status === agent.status ? { statusText: decorations.get(agent.id)!.text } : {}) })) },
+    get tasks(): ClaudeNativeTerminalTask[] { return [...agents, ...workflows].map(agent => ({ ...agent, ...(decorations.get(agent.id)?.status === agent.status ? { statusText: decorations.get(agent.id)!.text } : {}) })) },
+    updateWorkflows(id: string, values: unknown): boolean {
+      if (id !== currentSession || !Array.isArray(values)) return false
+      const next: ClaudeNativeTerminalTask[] = [], seen = new Set<string>()
+      for (const value of values.slice(0, 256)) { const task = record(value); if (!task || !validId(task.id) || seen.has(task.id) || typeof task.status !== 'string' || typeof task.name !== 'string') return false; seen.add(task.id); next.push({ id: task.id, kind: 'workflow', name: task.name.slice(0, 256), status: task.status.slice(0, 64) }) }
+      workflows = next; return true
+    },
     updateSession(id: string, values: unknown): boolean {
       if (!/^[0-9a-f-]{36}$/i.test(id) || !Array.isArray(values)) return false
-      if (id !== currentSession) { currentSession = id; mainStatus = undefined; decorations.clear(); epochs.clear() }
+      if (id !== currentSession) { currentSession = id; workflows = []; mainStatus = undefined; decorations.clear(); epochs.clear() }
       const next: ClaudeNativeTerminalTask[] = []
       const seen = new Set<string>()
       for (const value of values.slice(0, 256)) {
@@ -44,7 +50,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
       const eligible = new Map<string, string>()
       for (const value of event.tasks.slice(0, 256)) {
         const task = record(value)
-        if (task && validId(task.id) && typeof task.status === 'string' && agents.some(agent => agent.id === task.id && agent.status === task.status)) eligible.set(task.id, task.status)
+        if (task && validId(task.id) && typeof task.status === 'string' && agents.some(agent => agent.kind !== 'workflow' && agent.id === task.id && agent.status === task.status)) eligible.set(task.id, task.status)
       }
       for (const line of event.stdout.split('\n')) {
         let value: unknown
@@ -58,6 +64,6 @@ export function createClaudeTerminalStatus(sessionId: string) {
     clearOutput() { mainStatus = undefined; decorations.clear() },
     clearDecorations() { decorations.clear() },
     clearMain() { mainStatus = undefined },
-    clear() { mainStatus = undefined; agents = []; decorations.clear(); epochs.clear() },
+    clear() { mainStatus = undefined; agents = []; workflows = []; decorations.clear(); epochs.clear() },
   }
 }

@@ -143,6 +143,32 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill(retainedDraft);await expect(composer).toHaveText(retainedDraft)
     const tasks = async () => JSON.parse(await readFile(join(workspace!, 'native-workflow-state.json'), 'utf8').catch(() => '[]'))
     await expect.poll(async () => (await tasks()).some((task: any) => task.type === 'local_workflow' && task.status === 'running'), { timeout: 15000 }).toBe(true)
+    if(process.env.CLAUDE_RESEARCH_WORKFLOW_TASK_CONTROLS==='1'){
+      const original=(await tasks()).find((task:any)=>task.type==='local_workflow'&&task.status==='running'),taskId=original.id
+      await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.kind).toBe('workflow')
+      const workflowRegion=appPage.getByRole('region',{name:'Native Claude workflows',exact:true}),row=workflowRegion.locator('[data-native-workflow-id="'+taskId+'"]')
+      await expect(row).toContainText('Review release notes');await expect(row).toContainText('running');await expect(row.getByRole('button',{name:'Open Agent',exact:true})).toHaveCount(0)
+      const draft='Keep the release review notes while stopping this workflow.';await composer.fill(draft)
+      await row.getByRole('button',{name:'Workflow details',exact:true}).click()
+      const details=row.getByRole('region',{name:'Workflow details',exact:true});await expect(details).toContainText('release-review');await expect(details).toContainText('wf_')
+      expect((await context()).native.task.details.taskId).toBe(taskId);expect((await context()).native.task.details.canInput).toBe(false);expect((await context()).native.task.details.canMessage).toBe(false)
+      const initialDetails=(await context()).native.task.details
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-details-'+size.width+'.png')})}
+      await row.getByRole('button',{name:'Hide Workflow details',exact:true}).click()
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await workflowRegion.scrollIntoViewIfNeeded();await expect(row.getByRole('button',{name:'Stop Workflow',exact:true})).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByText('AppNativeMain '+sessionId,{exact:false})).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-running-'+size.width+'.png')})}
+      await row.getByRole('button',{name:'Stop Workflow',exact:true}).click();await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.status).toBe('killed')
+      await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status).toBe('killed');await expect(row).toContainText('Stopped');await expect(row.getByRole('button',{name:'Stop Workflow',exact:true})).toBeDisabled()
+      await expect.poll(async()=>(await context()).native.state.activity?.pendingWorkflows??0).toBe(0);await expect(composer).toHaveText(draft)
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await row.getByRole('button',{name:'Workflow details',exact:true}).click();
+      await row.getByRole('button',{name:'Refresh details',exact:true}).click();await expect.poll(async()=>(await context()).native.task.details?.status).toBe('killed')
+      await writeFile(join(workspace!,'native-workflow-task-controls-proof.json'),JSON.stringify({taskId,initialDetails,stoppedDetails:(await context()).native.task.details,nativeTasks:await tasks(),draft,sameNativeOwner:true}))
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+      const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+      await composer.fill('Continue after stopping the workflow.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowTaskControls:true,nativeWorkflowTaskStop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    }
+
     await expect.poll(async () => (await frames()).some((frame: any) => /Waiting for.*dynamic workflow/.test(frame.engineOutput ?? '')), { timeout: 15000 }).toBe(true)
     const pendingFrame = (await frames()).findLast((frame: any) => /Waiting for.*dynamic workflow/.test(frame.engineOutput ?? ''))
     const waitingRow = appPage.locator('[data-native-placement="TurnDuration"]').filter({ hasText: /Waiting for.*dynamic workflow/ }).last()

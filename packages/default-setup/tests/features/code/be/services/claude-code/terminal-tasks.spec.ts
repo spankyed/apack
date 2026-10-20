@@ -167,3 +167,13 @@ it('returns from a retired native view safely but refuses empty task identity', 
   expect(f.show).not.toHaveBeenCalled()
   expect(await f.request('background')).toEqual({ view: { taskId: null } })
 })
+
+it('keeps Workflow identity and stop native without admitting Agent-only operations', async () => {
+ const f=fixture();f.tasks.push({id:'workflow-a',agentId:'not-an-agent',type:'local_workflow',status:'running',description:'Review release notes'})
+ const result=await f.request('inspect','workflow-a')
+ expect(result.details).toMatchObject({taskId:'workflow-a',name:'Review release notes',status:'running',canInput:false,canMessage:false,workflow:{agentCount:0,phaseCount:0},messages:[]})
+ expect(f.saved).not.toHaveBeenCalled();expect(f.registry.getTranscript).not.toHaveBeenCalled()
+ for(const operation of ['foreground','send','input'])await expect(f.request(operation,'workflow-a')).rejects.toThrow('inspection and native stop only')
+ expect(await f.request('stop','workflow-a')).toEqual({stopped:true});expect(f.stop).toHaveBeenCalledWith('workflow-a',expect.objectContaining({taskRegistry:f.registry,source:'user'}))
+ expect(f.show).not.toHaveBeenCalled();expect(f.runner).not.toHaveBeenCalled()
+})

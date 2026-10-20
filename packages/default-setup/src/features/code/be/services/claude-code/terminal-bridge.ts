@@ -55,7 +55,7 @@ export async function createClaudeTerminalBridge(options: {
   const matches = (value: Record<string, unknown>) => value.kind === 'subagent' ? !!subagentCommand && value.command === subagentCommand : value.kind === 'main' && !!mainCommand && (value.command === mainCommand || value.command === prefixCommand(mainCommand))
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let focus: ClaudeNativeTerminalState['focus'], focusSequence = 0, focusRecord: string | undefined
-  let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0
+  let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
   let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
@@ -72,7 +72,7 @@ export async function createClaudeTerminalBridge(options: {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
       if (request.url === '/observer-ready') {
@@ -95,9 +95,11 @@ export async function createClaudeTerminalBridge(options: {
         const counts = object(value.activity)
         if (!counts || !['pendingAgents', 'pendingWorkflows'].every(key => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1) return reply(400, {})
         const next = { pendingAgents: counts.pendingAgents as number, pendingWorkflows: counts.pendingWorkflows as number }
-        if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && JSON.stringify(activity) !== JSON.stringify(next)) return reply(409, {})
-        const changed = JSON.stringify(activity) !== JSON.stringify(next)
-        activitySequence = value.sequence as number; activity = next
+        const encoded = JSON.stringify([next, value.workflows ?? []])
+        if ((value.sequence as number) < activitySequence || value.sequence === activitySequence && activityRecord !== encoded) return reply(409, {})
+        if (value.workflows !== undefined && !projection.updateWorkflows(value.sessionId, value.workflows)) return reply(400, {})
+        const changed = activityRecord !== encoded
+        activitySequence = value.sequence as number; activityRecord = encoded; activity = next
         if (changed) options.changed()
         return reply(200, {})
       }

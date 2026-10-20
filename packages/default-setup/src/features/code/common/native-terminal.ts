@@ -1,5 +1,6 @@
 /** Native task ids and terminal owners are independent of apack thread ids. */
 export interface ClaudeNativeTerminalTask {
+  kind?: 'workflow'
   id: string
   name: string
   status: string
@@ -47,6 +48,7 @@ export interface ClaudeNativeTerminalState {
 }
 
 export interface ClaudeNativeTaskDetails {
+  workflow?: { name?: string; runId?: string; agentCount: number; phaseCount: number }
   taskId: string
   name: string
   status: string

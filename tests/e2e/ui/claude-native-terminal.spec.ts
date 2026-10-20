@@ -88,7 +88,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   await expect.poll(async () => (await nativeText()).includes('Native history fixture refused'), { timeout: 5000 }).toBe(true)
   await input.press('Control+u')
   await input.pressSequentially('RewriteNativeHistoryFixture', { delay: 1 }); await input.press('Enter')
-  const tasks = section.getByRole('list', { name: 'Native Claude agents', exact: true })
+  const tasks = section.getByRole('list', { name: 'Native Claude tasks', exact: true })
   await appPage.waitForTimeout(500)
   await appPage.screenshot({ path: testInfo.outputPath('apack-native-terminal-before-agent.png') })
   // This native notice is shown when the worker first selects auto mode on a loopback endpoint.
