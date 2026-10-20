@@ -16,6 +16,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     catch (error: any) { if (error instanceof SyntaxError || error.code === 'ENOENT') return {}; throw error }
   }
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
+  const socketFrames:any[]=[];const cdp=fileLayout?await appPage.context().newCDPSession(appPage):undefined;if(cdp){await cdp.send('Network.enable');cdp.on('Network.webSocketFrameReceived',event=>{if(!/CLAUDE_UI_STATE|CLAUDE_TERMINAL_STATE/.test(event.response.payloadData)&&(()=>{try{const frame=JSON.parse(event.response.payloadData);return !!frame.error||!!frame.result?.data}catch{return true}})())socketFrames.push({at:Date.now(),id:event.requestId,data:event.response.payloadData});if(socketFrames.length>1000)socketFrames.shift()})}
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
@@ -28,7 +29,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { backendReload: state.view, threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
@@ -80,9 +81,11 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     return appPage.locator(`[data-native-tool-activity][data-native-tool-ids~="${id}"]`)
   }
 
+  let acceptedLongUser:{uuid:string;text:string}|undefined
+  const promptForTurn=(turn:number)=>'ResearchFileTurn'+turn+(fileLayout&&turn===4?'\n'+Array.from({length:30},(_,i)=>'Review user expansion line '+(i+1)+': preserve this release checklist.').join('\n'):'')
   for (const turn of [1, 2, 3, 4, 5, 6, 7]) {
     const isEdit = [3, 5, 7].includes(turn)
-    await composer.fill('ResearchFileTurn' + turn)
+    await composer.fill(promptForTurn(turn))
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     const panel = appPage.getByTestId(isEdit ? 'native-edit-approval' : 'native-write-approval')
     await expect(panel).toBeVisible({ timeout: 15000 })
@@ -110,6 +113,15 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       await appPage.screenshot({ path: testInfo.outputPath('apack-native-file-compact-' + turn + '.png') })
     }
     if(fileLayout&&turn===4){
+      let user:any
+      await expect.poll(async()=>{user=(await context()).messages.find((message:any)=>message.sender==='user'&&message.text.startsWith('ResearchFileTurn4')&&message.text.includes('Review user expansion line 30:'));return !!user?.context?.cliUuid}).toBe(true)
+      acceptedLongUser={uuid:user.context.cliUuid,text:user.text}
+      for(let line=1;line<=30;line++)expect(user.text).toContain('Review user expansion line '+line+': preserve this release checklist.')
+      const row=appPage.locator('[data-chat-message="'+user.id+'"]')
+      await appPage.setViewportSize({width:1100,height:900})
+      await row.getByRole('button',{name:'Expand user message',exact:true}).click()
+      await expect(row.locator('[data-native-user]')).toContainText('Review user expansion line 30:')
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-long-user-expanded.png')})
       for(const width of [1100,680]){
         await appPage.setViewportSize({width,height:width===680?600:900})
         const transcript=appPage.getByTestId('chat-transcript');await expect(transcript).toBeVisible();expect((await transcript.boundingBox())!.height).toBeGreaterThan(80)
@@ -123,7 +135,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       }
     }
     await panel.getByRole('button', { name: turn <= 3 ? 'Allow once' : turn === 7 ? 'Cancel' : 'Deny', exact: true }).click()
-    try{await expect(panel).toBeHidden()}catch(error){await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2));await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')});throw error}
+    try{await expect(panel).toBeHidden()}catch(error){const snapshot=await context();const {open}=await import('lmdb');const db=open({path:join(workspace!,'app-data/apack/ears-db'),readOnly:true,maxDbs:8,compression:true});try{const attrs=db.openDB({name:'attrs',encoding:'json'});const ids=[snapshot.threadId,snapshot.claude.pendingControlRequest?.approvalMessageId];const rows=[...attrs.getRange()].filter(row=>ids.some(id=>id&&String(row.key).includes(id))&&/context|blockResponse|responseTimestamp/.test(String(row.key)));await writeFile(join(workspace!,'native-file-live-backend.json'),JSON.stringify({at:Date.now(),rows},null,2))}finally{await db.close()}await writeFile(join(workspace!,'native-file-socket-frames.json'),JSON.stringify(socketFrames));await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2));await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')});await appPage.evaluate(() => {const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'OPEN_THREAD_CHAT',threadId:actor.getSnapshot().context.currentThread.id})});await appPage.waitForTimeout(1200);await writeFile(join(workspace!,'native-file-decision-reloaded.json'),JSON.stringify({turn,context:await context()},null,2));throw error}
     if (turn === 7) await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
     else await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     const expected = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : 'edited\n'
@@ -347,10 +359,11 @@ test('reviews native file creation, overwrite and edit before one-time decisions
     try { journal = (await readFile(join(workspace!, '.claude/projects', bucket, sessionId + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); break } catch (error: any) { if (error.code !== 'ENOENT') throw error }
   }
   for (const turn of [1, 2, 3, 4, 5, 6, 7]) {
-    const original = journal.find(row => row.type === 'user' && row.message?.content === 'ResearchFileTurn' + turn)
+    const original = journal.find(row => row.type === 'user' && row.message?.content === (fileLayout&&turn===4?acceptedLongUser?.text:promptForTurn(turn)))
     expect(original?.uuid).toBeTruthy()
     await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === original.uuid).length).toBe(1)
   }
+  if(acceptedLongUser)expect(journal.find(row=>row.uuid===acceptedLongUser!.uuid)?.message?.content).toBe(acceptedLongUser.text)
   const nativeCost = journal.filter(row => row.type === 'cost-state').at(-1).totalCostUSD
   await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
   await composer.fill('Continue after file decisions.')

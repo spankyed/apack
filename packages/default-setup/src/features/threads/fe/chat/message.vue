@@ -3,10 +3,14 @@
     v-if="!groupedSuppressed"
     :data-chat-message="message.id"
     :class="[
-      'flex pb-3 animate-fade-in w-full',
+      'relative flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'
     ]"
   >
+    <!-- Measure against the transcript width; native expansion can change the drawn bubble's width. -->
+    <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
+      <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+    </div>
     <!-- Marker message: compact divider with toggle -->
     <div v-if="isMarker" class="flex items-center gap-3 w-full px-4 py-1">
       <div class="flex-1 h-px bg-neutral-700/50"></div>
@@ -142,10 +146,6 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
-        <!-- Measure original user text independently of plugin-controlled display and controls. -->
-        <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
-          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
-        </div>
 
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
