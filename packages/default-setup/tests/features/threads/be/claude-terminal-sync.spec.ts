@@ -198,3 +198,16 @@ it('reports native pending workflows as working without turning them into Agents
     await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ chatState: 'paused' }))
   } finally { await release() }
 })
+
+it('persists a consumed journal batch even when native dialog discovery fails during that flush', async () => {
+  const uuid='99999999-9999-9999-9999-999999999999'
+  let release!:()=>Promise<void>
+  const readJournal=vi.fn().mockResolvedValueOnce({entries:[{sessionId,row:{sessionId,uuid,type:'user',origin:{kind:'human'},message:{content:'Managed media submission'}}}],pending:false,problems:[]}).mockResolvedValue({entries:[],pending:false,problems:[]})
+  const getWorkflowDialogs=vi.fn().mockRejectedValueOnce(new Error('Transient native dialog discovery failure')).mockResolvedValue([])
+  const owner={state:{ownerId:'owner',sessionId,status:'live',tasks:[]},busy:false,readJournal,getWorkflowDialogs,getFileDialogs:async()=>[],getBashDialogs:async()=>[],getQuestionDialogs:async()=>[],getPlanDialogs:async()=>[],beforeRelease(listener:()=>Promise<void>){release=listener}} as unknown as ClaudeNativeTerminalOwner
+  const {syncClaudeTerminalThread}=await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId,owner,()=>true)
+  await vi.waitFor(()=>expect(getWorkflowDialogs).toHaveBeenCalled())
+  await release()
+  expect(fake.messages).toEqual([expect.objectContaining({sender:'user',text:'Managed media submission',context:expect.objectContaining({cliUuid:uuid})})])
+})

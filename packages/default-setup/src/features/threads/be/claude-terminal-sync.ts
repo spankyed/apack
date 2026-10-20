@@ -72,6 +72,45 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const batch = await owner.readJournal()
         journalPending = batch.pending
         problem = batch.problems.length ? batch.problems.join('; ') : undefined
+        if (!current() || !repository.threadQueries.byId(threadId)) return
+        // Journal reads advance their cursor. Persist rows before fallible dialog RPCs.
+        for (const entry of batch.entries) {
+          const message = object(entry.row.message)
+          if (entry.row.isSidechain === true || entry.row.agentId !== undefined || entry.row.parent_tool_use_id) continue
+          if (entry.row.type === 'user' && Array.isArray(message?.content)) {
+            for (const value of message.content) {
+              const block = object(value)
+              if (block?.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue
+              const text = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map(object).filter(value => value?.type === 'text').map(value => value?.text).join('\n') : ''
+              const nativeResult = object(entry.row.toolUseResult)
+              const singleResult = message.content.filter(value => object(value)?.type === 'tool_result').length === 1
+              const agentId = singleResult && typeof nativeResult?.agentId === 'string' && nativeResult.agentId.length > 0 && nativeResult.agentId.length <= 256 ? nativeResult.agentId : undefined
+              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true, ...(typeof entry.row.uuid === 'string' ? { uuid: entry.row.uuid } : {}),
+                ...(agentId && typeof entry.row.sourceToolAssistantUUID === 'string' ? { agentId, assistantUuid: entry.row.sourceToolAssistantUUID } : {}) })
+            }
+          }
+          if (entry.row.type === 'assistant' && Array.isArray(message?.content)) {
+            const existing = nativeMessages.get(JSON.stringify([entry.sessionId, entry.row.uuid]))
+            for (const value of message.content) {
+              const block = object(value), key = JSON.stringify([entry.sessionId, block?.id])
+              if (block?.type === 'tool_use' && typeof block.id === 'string' && !toolIds.has(key) && (!existing || existing.terminal)) {
+                toolIds.add(key); toolCounts.set(entry.sessionId, (toolCounts.get(entry.sessionId) ?? 0) + 1)
+              }
+            }
+          }
+          const projected = projectClaudeTerminalHistory(entry)
+          if (projected?.sender === 'user' && typeof entry.row.timestamp === 'string') { const time = Date.parse(entry.row.timestamp); if (Number.isFinite(time)) lastTurnAt = Math.max(lastTurnAt ?? 0, time) }
+          upsert(entry)
+        }
+        for (const [key, entry] of pendingTools) {
+          const message = object(entry.row.message), blocks = Array.isArray(message?.content) ? message.content.map(object) : []
+          if (['exited', 'error'].includes(owner.state.status) || blocks.filter(block => block?.type === 'tool_use').every(block => results.has(JSON.stringify([entry.sessionId, block?.id])))) { pendingTools.delete(key); upsert(entry) }
+        }
+        const taskSnapshot = JSON.stringify([owner.state.sessionId, owner.state.tasks])
+        if (taskSnapshot !== lastTaskSnapshot) {
+          lastTaskSnapshot = taskSnapshot
+          for (const entry of agentRows.values()) upsert(entry)
+        }
         const workflows = await owner.getWorkflowDialogs()
         const reads = await owner.getFileDialogs()
         const bashes = await owner.getBashDialogs()
@@ -128,43 +167,6 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, workflow: dialog.presentation } } } }
           repository.threadCommands.update(threadId, { context })
           broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
-        }
-        for (const entry of batch.entries) {
-          const message = object(entry.row.message)
-          if (entry.row.isSidechain === true || entry.row.agentId !== undefined || entry.row.parent_tool_use_id) continue
-          if (entry.row.type === 'user' && Array.isArray(message?.content)) {
-            for (const value of message.content) {
-              const block = object(value)
-              if (block?.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue
-              const text = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map(object).filter(value => value?.type === 'text').map(value => value?.text).join('\n') : ''
-              const nativeResult = object(entry.row.toolUseResult)
-              const singleResult = message.content.filter(value => object(value)?.type === 'tool_result').length === 1
-              const agentId = singleResult && typeof nativeResult?.agentId === 'string' && nativeResult.agentId.length > 0 && nativeResult.agentId.length <= 256 ? nativeResult.agentId : undefined
-              results.set(JSON.stringify([entry.sessionId, block.tool_use_id]), { text, error: block.is_error === true, ...(typeof entry.row.uuid === 'string' ? { uuid: entry.row.uuid } : {}),
-                ...(agentId && typeof entry.row.sourceToolAssistantUUID === 'string' ? { agentId, assistantUuid: entry.row.sourceToolAssistantUUID } : {}) })
-            }
-          }
-          if (entry.row.type === 'assistant' && Array.isArray(message?.content)) {
-            const existing = nativeMessages.get(JSON.stringify([entry.sessionId, entry.row.uuid]))
-            for (const value of message.content) {
-              const block = object(value), key = JSON.stringify([entry.sessionId, block?.id])
-              if (block?.type === 'tool_use' && typeof block.id === 'string' && !toolIds.has(key) && (!existing || existing.terminal)) {
-                toolIds.add(key); toolCounts.set(entry.sessionId, (toolCounts.get(entry.sessionId) ?? 0) + 1)
-              }
-            }
-          }
-          const projected = projectClaudeTerminalHistory(entry)
-          if (projected?.sender === 'user' && typeof entry.row.timestamp === 'string') { const time = Date.parse(entry.row.timestamp); if (Number.isFinite(time)) lastTurnAt = Math.max(lastTurnAt ?? 0, time) }
-          upsert(entry)
-        }
-        for (const [key, entry] of pendingTools) {
-          const message = object(entry.row.message), blocks = Array.isArray(message?.content) ? message.content.map(object) : []
-          if (['exited', 'error'].includes(owner.state.status) || blocks.filter(block => block?.type === 'tool_use').every(block => results.has(JSON.stringify([entry.sessionId, block?.id])))) { pendingTools.delete(key); upsert(entry) }
-        }
-        const taskSnapshot = JSON.stringify([owner.state.sessionId, owner.state.tasks])
-        if (taskSnapshot !== lastTaskSnapshot) {
-          lastTaskSnapshot = taskSnapshot
-          for (const entry of agentRows.values()) upsert(entry)
         }
         const state = owner.state, metadata = state.session
         const working = owner.busy || state.status === 'live' && !!state.activity && (state.activity.pendingAgents > 0 || state.activity.pendingWorkflows > 0)
