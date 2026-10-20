@@ -9,7 +9,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ '--composer-history-reserve': nativeToolsExpanded ? '2rem' : nativeComposerHeight ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight}px))` : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
+        :style="{ '--composer-history-reserve': nativeToolsExpanded ? 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)' : nativeComposerHeight ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight}px))` : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @paste.capture="handlePaste"

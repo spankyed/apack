@@ -107,10 +107,10 @@ test('round-trips decorated structured replace append and cursor insertion throu
     for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(excerpt).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-selection-'+width+'.png')})}
     const user=appPage.locator('[data-native-selection-row]').filter({hasText:'Review the release notes for this project.'}).first()
     const userUuid=await user.getAttribute('data-native-selection-row'),pointerProof=[]
-    for(const width of [1100,680]){
+    for(const {width,expanded} of [{width:1100,expanded:false},{width:680,expanded:false},{width:1100,expanded:true},{width:680,expanded:true}]){
       await appPage.setViewportSize({width,height:width===680?600:900})
       const sessionTools=card.getByRole('button',{name:'Session tools',exact:true})
-      if(await sessionTools.getAttribute('aria-expanded')==='true')await sessionTools.click()
+      if((await sessionTools.getAttribute('aria-expanded')==='true')!==expanded)await sessionTools.click()
       await composer.fill('Review the pending release notes.');await composer.focus()
       await user.scrollIntoViewIfNeeded()
       const point=await user.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf('Review the release notes for this project.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+6);const b=range.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2}}}throw Error('Visible user text not found')})
@@ -120,14 +120,15 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await expect.poll(()=>appPage.evaluate(()=>document.getSelection()?.toString().trim())).toBe('Review')
       const selected=await appPage.evaluate(()=>document.getSelection()!.toString())
       await expect(composer).toHaveText('Review the pending release notes.')
-      await appPage.screenshot({path:testInfo.outputPath('native-user-selection-'+width+'.png')})
+      await appPage.screenshot({path:testInfo.outputPath('native-user-selection-'+width+'-'+expanded+'.png')})
       if(await sessionTools.getAttribute('aria-expanded')!=='true')await sessionTools.click()
       const beforeSelection=(await selectedReceipts()).length;await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(beforeSelection+1)
       expect((await selectedReceipts()).at(-1)).toEqual({selected:true,value:{text:selected,requestId:userUuid}})
       await composer.focus();await composer.press('End');await composer.pressSequentially(' Confirmed.')
       await expect(composer).toHaveText('Review the pending release notes. Confirmed.')
       await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
-      pointerProof.push({width,selected,userUuid,draft:await composer.innerText()})
+      const transcript=await appPage.getByTestId('chat-transcript').boundingBox();expect(transcript!.height).toBeGreaterThanOrEqual(64)
+      pointerProof.push({width,expanded,transcriptHeight:transcript!.height,selected,userUuid,draft:await composer.innerText()})
     }
     await writeFile(join(workspace!,'native-user-body-pointer-proof.json'),JSON.stringify(pointerProof,null,2))
     await composer.fill('Review the pending release notes.')
