@@ -1,5 +1,6 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
-export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status}));}
+export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&settled&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
+function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
 const workflowControllerIds=new WeakMap();
 function nativeWorkflowWorker(task,event){
  if(task.status!=='running'||!['start','progress'].includes(event?.state)||typeof event.agentId!=='string')return;
@@ -28,9 +29,32 @@ function nativeWorkflowProgress(n,task){
  if(!withheld&&Array.isArray(task.logs)&&task.logs.length>100)truncated=true;
  return {progress,logs,...(output!==undefined?{output}:{}),outputUnavailable,truncated};
 }
+async function resumeNativeWorkflow(n,binding,task,abort,current){
+ if(!nativeWorkflowTaskFlags(n,task).canResume)throw Error('Native Workflow is not paused and settled');
+ const candidates=[...clients].filter(clientId=>clientViewCurrent(n,clientId));
+ if(candidates.length!==1||nativeViewFacts(n,binding,abort).view.kind!=='main')throw Error('Return to the app main conversation before resuming a Workflow');
+ const command=n.engine.Rs('workflows',binding.commands());
+ if(command?.type!=='local-jsx'||command!==n.workflowCommand.default)throw Error('Original Workflow command is unavailable');
+ current();const text=n.workflowTasks.Bar(task);if(typeof text!=='string'||text.length>32768)throw Error('Native Workflow resume request exceeds the app preview limit');
+ const clientId=candidates[0],prepared=await nativeParentCommand(n,{operation:'prepare',client_id:clientId,text:'/workflows'});
+ if(prepared.kind!=='prepared')throw Error('Original Workflow command was not admitted');
+ const ticket=parentCommands.get(prepared.id);ticket.workflowResumeTaskId=task.id;
+ let panel,invoked=false;
+ try{
+  await nativeParentCommand(n,{operation:'start',client_id:clientId,command_id:prepared.id});
+  const deadline=Date.now()+3500;let state;
+  while(Date.now()<deadline){current();state=await nativeParentCommand(n,{operation:'read',client_id:clientId,command_id:prepared.id});if(state.kind==='failed')throw Error(state.message??'Native Workflow command failed');if(state.kind==='finished')break;await new Promise(resolve=>setTimeout(resolve,20));}
+  panel=agentCommandDialogs.get(state?.result?.id);
+  if(state?.kind!=='finished'||state.result?.kind!=='panel'||!panel||typeof panel.workflowDone!=='function')throw Error('Original Workflow resume callback is unavailable');
+  current();const latest=binding.toolContext(abort).taskRegistry.get(task.id);
+  if(latest?.workflowRunId!==task.workflowRunId||!nativeWorkflowTaskFlags(n,latest).canResume||n.workflowTasks.Bar(latest)!==text)throw Error('Native Workflow changed before resuming');
+  invoked=true;panel.workflowDone(text,{shouldQuery:true,display:'system',metaMessages:[text]});await panel.done;current();
+  return {resume:{taskId:task.id,runId:task.workflowRunId,requested:true}};
+ }finally{if(panel&&!invoked&&!panel.closed){panel.cancel();await panel.done;}}
+}
 async function nativeTaskControl(n,binding,request,abort,current){
  current();
- if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background','skip_worker','retry_worker'].includes(request.operation))throw Error('Invalid native task operation');
+ if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background','skip_worker','retry_worker','pause_workflow','resume_workflow'].includes(request.operation))throw Error('Invalid native task operation');
  const context=binding.toolContext(abort),registry=context.taskRegistry;
  if(request.operation==='background'){
   await retireNativeAgentCommands();current();
@@ -45,6 +69,11 @@ async function nativeTaskControl(n,binding,request,abort,current){
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
  if(task.type==='local_workflow'){
+  if(request.operation==='pause_workflow'){
+   if(task.status!=='running'||n.workflowTasks.UAe(task.id,registry)!==true)throw Error('Native Workflow pause refused');
+   current();return {paused:true};
+  }
+  if(request.operation==='resume_workflow')return resumeNativeWorkflow(n,binding,task,abort,current);
   if(['skip_worker','retry_worker'].includes(request.operation)){
    const worker=request.worker;if(typeof worker?.agentId!=='string'||worker.agentId.length>256||typeof worker.token!=='string'||!/^[a-f0-9]{64}$/.test(worker.token))throw Error('Invalid Workflow worker target');
    const event=(task.workflowProgress??[]).find(event=>event.type==='workflow_agent'&&event.agentId===worker.agentId&&nativeWorkflowWorker(task,event)===worker.token);
@@ -56,14 +85,14 @@ async function nativeTaskControl(n,binding,request,abort,current){
   if(!['inspect','stop'].includes(request.operation))throw Error('Workflow tasks support inspection and native stop only');
   if(request.operation==='stop'){await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};}
   const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined,start=numeric(task.startTime),end=numeric(task.endTime);
-  current();return {details:{taskId:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,canInput:false,canMessage:false,workflow:{...nativeWorkflowProgress(n,task),...(typeof task.workflowName==='string'?{name:task.workflowName.slice(0,256)}:{}),...(typeof task.workflowRunId==='string'?{runId:task.workflowRunId.slice(0,256)}:{}),agentCount:numeric(task.agentCount)??0,phaseCount:Array.isArray(task.phases)?task.phases.length:0},metadata:{promptTruncated:false,errorTruncated:(task.error?.length??0)>16384,...(typeof task.error==='string'?{error:task.error.slice(0,16384)}:{}),...(start===undefined?{}:{elapsedMs:Math.max(0,(end??Date.now())-start)}),tokenCount:numeric(task.totalTokens),toolUseCount:numeric(task.totalToolCalls)},messages:[],truncated:false}};
+  current();return {details:{taskId:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,canInput:false,canMessage:false,workflow:{...nativeWorkflowProgress(n,task),...nativeWorkflowTaskFlags(n,task),...(typeof task.workflowName==='string'?{name:task.workflowName.slice(0,256)}:{}),...(typeof task.workflowRunId==='string'?{runId:task.workflowRunId.slice(0,256)}:{}),agentCount:numeric(task.agentCount)??0,phaseCount:Array.isArray(task.phases)?task.phases.length:0},metadata:{promptTruncated:false,errorTruncated:(task.error?.length??0)>16384,...(typeof task.error==='string'?{error:task.error.slice(0,16384)}:{}),...(start===undefined?{}:{elapsedMs:Math.max(0,(end??Date.now())-start)}),tokenCount:numeric(task.totalTokens),toolUseCount:numeric(task.totalToolCalls)},messages:[],truncated:false}};
  }
  if(request.operation==='foreground'){
   if(typeof binding.view?.show!=='function'||await binding.view.show({agentId:request.task_id})!=='shown')throw Error('Native Agent view is unavailable');
   current();if(context.getAppState().viewingAgentTaskId!==task.id)throw Error('Native view moved during selection');
   return {view:{taskId:request.task_id}};
  }
- if(['skip_worker','retry_worker'].includes(request.operation))throw Error('Worker controls require a native Workflow');
+ if(['skip_worker','retry_worker','pause_workflow','resume_workflow'].includes(request.operation))throw Error('Worker controls require a native Workflow');
  const liveTeammate=task.type==='in_process_teammate'&&!['completed','failed','killed'].includes(task.status);
  const endedTeammateAddress=task.type==='in_process_teammate'&&!liveTeammate&&request.task_id.includes('@');
  const canMessage=!endedTeammateAddress&&typeof binding.tools==='function'&&binding.tools().some(tool=>tool.name==='SendMessage');

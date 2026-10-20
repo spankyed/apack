@@ -11,16 +11,18 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
-  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
+  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
 export interface ClaudeTerminalTaskState {
   ownerId: string
   taskId: string
   revision: number
-  operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker'
+  operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow'
   status: 'pending' | 'done' | 'error'
   view?: { taskId: string | null }
+  paused?: boolean
+  resume?: { taskId: string; runId: string; requested: true }
   worker?: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt
   input?: import('#features/code/common/native-terminal.ts').ClaudeNativeTaskInputReceipt
   sent?: boolean
@@ -136,7 +138,7 @@ export function createClaudeTerminalViews(dependencies: {
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
       if (event.type === 'CLAUDE_TERMINAL_TASK') {
-        if (typeof event.taskId !== 'string' || !event.taskId || event.taskId.length > 256 || !['inspect', 'stop', 'send', 'input', 'foreground', 'background', 'skip_worker', 'retry_worker'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || event.operation !== 'background' && !owner.state.tasks.some(task => task.id === event.taskId)) return
+        if (typeof event.taskId !== 'string' || !event.taskId || event.taskId.length > 256 || !['inspect', 'stop', 'send', 'input', 'foreground', 'background', 'skip_worker', 'retry_worker', 'pause_workflow', 'resume_workflow'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || event.operation !== 'background' && !owner.state.tasks.some(task => task.id === event.taskId)) return
         if ((event.operation === 'send' || event.operation === 'input') && (typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384)) return
         if ((event.operation === 'skip_worker' || event.operation === 'retry_worker') && (typeof event.worker?.agentId !== 'string' || !event.worker.agentId || event.worker.agentId.length > 256 || typeof event.worker.token !== 'string' || !/^[a-f0-9]{64}$/.test(event.worker.token))) return
         const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(target.task?.taskId === event.taskId ? { details: target.task.details } : {}) }
@@ -152,7 +154,8 @@ export function createClaudeTerminalViews(dependencies: {
           if (!current()) return
           if (event.operation === 'foreground' && result.view?.taskId !== event.taskId || event.operation === 'background' && result.view?.taskId !== null || event.operation === 'input' && !result.input || event.operation === 'send' && result.sent !== true || event.operation === 'stop' && result.stopped !== true || event.operation === 'inspect' && result.details?.taskId !== event.taskId) throw new Error('Native task response did not match')
           if ((event.operation === 'skip_worker' || event.operation === 'retry_worker') && (result.worker?.accepted !== true || result.worker.agentId !== event.worker.agentId || result.worker.operation !== event.operation)) throw new Error('Native worker response did not match')
-          target.task = { ...task, status: 'done', worker: result.worker, sent: result.sent, view: result.view, input: result.input, details: result.details ?? task.details }; publish(key, target)
+          if (event.operation === 'pause_workflow' && result.paused !== true || event.operation === 'resume_workflow' && (result.resume?.requested !== true || result.resume.taskId !== event.taskId)) throw new Error('Native Workflow response did not match')
+          target.task = { ...task, status: 'done', paused:result.paused,resume:result.resume, worker: result.worker, sent: result.sent, view: result.view, input: result.input, details: result.details ?? task.details }; publish(key, target)
         }).catch(error => {
           if (!current()) return
           target.task = { ...task, status: 'error', problem: error instanceof Error ? error.message : 'Native task operation failed' }; publish(key, target)

@@ -347,9 +347,9 @@ it('retires focus selection on native view/session changes and rejects stale sel
 it('publishes native Workflow tasks independently of Agent polls and refuses stale replacement', async () => {
  const changed=vi.fn();bridge=await createClaudeTerminalBridge({sessionId:session,settings:{effective:{},sources:[]},ownsProcess:async pid=>pid===process.pid,changed,enter(){}})
  await request('/observer-ready',{sessionId:session,pid:process.pid})
- const body={sessionId:session,pid:process.pid,sequence:1,activity:{pendingAgents:0,pendingWorkflows:0},workflows:[{id:'workflow-a',name:'Release review',status:'completed'}]}
+ const body={sessionId:session,pid:process.pid,sequence:1,activity:{pendingAgents:0,pendingWorkflows:0},workflows:[{id:'workflow-a',name:'Release review',status:'completed',settled:true,canPause:false,canResume:false,canStop:false}]}
  expect((await request('/native-activity',body)).status).toBe(200)
- expect(bridge.projection.tasks).toEqual([{id:'workflow-a',kind:'workflow',name:'Release review',status:'completed'}])
+ expect(bridge.projection.tasks).toEqual([{id:'workflow-a',kind:'workflow',name:'Release review',status:'completed',settled:true,canPause:false,canResume:false,canStop:false}])
  await request('/poll',{sessionId:session,agents:[]});expect(bridge.projection.tasks).toHaveLength(1)
  const before=changed.mock.calls.length
  expect((await request('/native-activity',{...body,sequence:2,workflows:[{...body.workflows[0],status:'killed'}]})).status).toBe(200)

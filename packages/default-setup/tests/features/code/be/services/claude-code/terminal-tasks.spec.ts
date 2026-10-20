@@ -9,6 +9,7 @@ function fixture() {
   const nativeState: { viewingAgentTaskId?: string } = {}
   const show = vi.fn(async (value: { agentId?: string }) => { nativeState.viewingAgentTaskId = value.agentId === undefined ? undefined : tasks.find(task => task.agentId === value.agentId)?.id; return 'shown' })
   const context = { messageQueue, getMessages, taskRegistry: registry, session: {}, storageV5: {}, getAppState: vi.fn(() => nativeState), setAppState: vi.fn() }
+  const pause=vi.fn(()=>true)
   const stop = vi.fn(async () => {}), saved = vi.fn(async (): Promise<Record<string, unknown>[]> => [{ uuid: 'saved', type: 'user', message: { content: 'Task instruction' } }, { uuid: 'hidden', type: 'user', isMeta: true, message: { content: 'Hidden context' } }])
   const pin = vi.fn(), append = vi.fn(), queue = vi.fn(), raceQueue = vi.fn(() => true)
   class ResumeRace extends Error {}
@@ -19,8 +20,8 @@ function fixture() {
   const message = vi.fn((value: unknown) => value)
   const runner = vi.fn(async function* (call: { id: string }, _assistant: unknown, _permission: unknown, _context: unknown, _clock: unknown) { yield { message: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: call.id, ...(denied ? { is_error: true, content: 'Native refusal' } : {}) }] }, toolUseResult: { success: !denied } } } })
   const run = vm.runInNewContext(claudeTerminalTaskRuntime + ';nativeTaskControl', { randomUUID: () => '12345678-1234-1234-1234-123456789abc', retireNativeAgentCommands: async () => {} }) as (n: unknown, binding: unknown, request: unknown, abort: unknown, current: () => void) => Promise<any>
-  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
-  return { show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
+  const request = (operation: string, id = 'agent-a', current: () => void = vi.fn(), text = 'User instruction') => run({ transcriptState:{AE:()=>true}, workflowTasks:{UAe:pause}, runtime: { Jgr: (origin: { kind?: string } | undefined) => ({ kind: origin?.kind === 'human' ? 'composer' : 'unclassified' }), Dhs: pin, Ae: (value: unknown) => ({ uuid: '12345678-1234-1234-1234-123456789abc', ...value as object }), WXt: append, jXt: queue, CZ: raceQueue, Ewe: (text: string) => 'Native envelope: '+text, Z2: runner, _d: message, flt: (task: typeof tasks[number]) => ({ id: task.agentId }) }, taskInputGate: { ekt: liveGate }, taskControls: { gAe: stop }, taskResume: { MQ: resume, Y$: (value: any) => value?.deniedByPlugin !== undefined, OQ: ResumeRace, uSe: ResumeRace } }, { view: { show }, tools: () => tools, canUseTool, toolContext: () => context, savedAgentMessages: saved }, { operation, task_id: id, text }, new AbortController(), current)
+  return { pause, show, nativeState, liveGate, messageQueue, getMessages, pin, append, queue, resume, raceQueue, ResumeRace, setResumeResult(value: unknown) { resumeResult = value }, tasks, registry, context, stop, saved, request, runner, message, canUseTool, tools, refuse() { denied = true } }
 }
 it('stops the exact native registry task through the original user-stop callback', async () => {
   const f = fixture(); expect(await f.request('stop')).toEqual({ stopped: true })
@@ -225,4 +226,25 @@ it('withdraws Workflow worker controls at terminal states and never invents nati
  f.event.state='start';f.task.status='completed';expect(f.token()).toBeUndefined()
  await expect(f.request('skip_worker','0'.repeat(64))).rejects.toThrow('changed or expired')
  expect(f.skip).not.toHaveBeenCalled()
+})
+
+it('uses native pause acknowledgement and original loop settlement for Workflow controls', async () => {
+ const f=fixture();f.tasks.push({id:'workflow-a',agentId:'not-an-agent',type:'local_workflow',status:'running',description:'Review'})
+ expect(await f.request('pause_workflow','workflow-a')).toEqual({paused:true});expect(f.pause).toHaveBeenCalledWith('workflow-a',f.registry)
+ f.pause.mockReturnValue(false);await expect(f.request('pause_workflow','workflow-a')).rejects.toThrow('pause refused')
+ const flags=vm.runInNewContext(claudeTerminalTaskRuntime+';nativeWorkflowTaskFlags'),task={id:'workflow-a',status:'completed',scriptPath:'/private/workflow.js',workflowRunId:'run-a'}
+ let settled=false;const n={transcriptState:{AE:()=>settled}}
+ expect(flags(n,task)).toMatchObject({settled:false,canStop:true,canResume:false})
+ task.status='paused';expect(flags(n,task).canResume).toBe(false)
+ settled=true;expect(flags(n,task)).toMatchObject({settled:true,canStop:false,canResume:true})
+})
+it('resumes a settled paused Workflow only through the original admitted command callback and meta request', async () => {
+ const done=vi.fn(),cancel=vi.fn(),task={id:'workflow-a',status:'paused',scriptPath:'/private/workflow.js',workflowRunId:'run-a'},ticket:any={},panel:any={workflowDone:done,cancel,closed:false,done:Promise.resolve()},parentCommands=new Map([['ticket',ticket]]),agentCommandDialogs=new Map([['panel',panel]])
+ const nativeParentCommand=vi.fn(async(_n:unknown,request:any)=>request.operation==='prepare'?{kind:'prepared',id:'ticket'}:request.operation==='start'?{kind:'running'}:{kind:'finished',result:{kind:'panel',id:'panel'}})
+ const text='Original Bar resume request',command={type:'local-jsx'},n={transcriptState:{AE:()=>true},workflowTasks:{Bar:()=>text},workflowCommand:{default:command},engine:{Rs:()=>command}},binding={commands:()=>[command],toolContext:()=>({taskRegistry:{get:()=>task}})}
+ const resume=vm.runInNewContext(claudeTerminalTaskRuntime+';resumeNativeWorkflow',{clients:new Set(['client']),clientViewCurrent:()=>true,nativeViewFacts:()=>({view:{kind:'main'}}),parentCommands,agentCommandDialogs,nativeParentCommand})
+ expect(await resume(n,binding,task,new AbortController(),()=>{})).toEqual({resume:{taskId:'workflow-a',runId:'run-a',requested:true}})
+ expect(ticket.workflowResumeTaskId).toBe('workflow-a');expect(done).toHaveBeenCalledExactlyOnceWith(text,{shouldQuery:true,display:'system',metaMessages:[text]});expect(cancel).not.toHaveBeenCalled()
+ task.status='running';await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('not paused and settled')
+ task.status='paused';panel.workflowDone=undefined;await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('callback is unavailable');expect(cancel).toHaveBeenCalledTimes(1)
 })

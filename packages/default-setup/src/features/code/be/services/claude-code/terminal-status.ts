@@ -18,7 +18,7 @@ export function createClaudeTerminalStatus(sessionId: string) {
     updateWorkflows(id: string, values: unknown): boolean {
       if (id !== currentSession || !Array.isArray(values)) return false
       const next: ClaudeNativeTerminalTask[] = [], seen = new Set<string>()
-      for (const value of values.slice(0, 256)) { const task = record(value); if (!task || !validId(task.id) || seen.has(task.id) || typeof task.status !== 'string' || typeof task.name !== 'string') return false; seen.add(task.id); next.push({ id: task.id, kind: 'workflow', name: task.name.slice(0, 256), status: task.status.slice(0, 64) }) }
+      for (const value of values.slice(0, 256)) { const task = record(value); if (!task || !validId(task.id) || seen.has(task.id) || typeof task.status !== 'string' || typeof task.name !== 'string' || !['settled','canPause','canResume','canStop'].every(key=>typeof task[key]==='boolean')) return false; seen.add(task.id); next.push({ id: task.id, kind: 'workflow', settled:task.settled as boolean,canPause:task.canPause as boolean,canResume:task.canResume as boolean,canStop:task.canStop as boolean, name: task.name.slice(0, 256), status: task.status.slice(0, 64) }) }
       workflows = next; return true
     },
     updateSession(id: string, values: unknown): boolean {

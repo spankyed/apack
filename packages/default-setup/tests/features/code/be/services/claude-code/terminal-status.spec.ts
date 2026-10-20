@@ -36,8 +36,8 @@ it('clears all state and rejects stale callbacks across a native conversation re
 
 it('projects Workflows separately and refuses Agent status decoration for them', () => {
  const status=createClaudeTerminalStatus('12345678-1234-1234-1234-123456789abc')
- expect(status.updateWorkflows(status.sessionId,[{id:'workflow-a',name:'Review release notes',status:'running'}])).toBe(true)
- expect(status.tasks).toEqual([{id:'workflow-a',kind:'workflow',name:'Review release notes',status:'running'}])
+ expect(status.updateWorkflows(status.sessionId,[{id:'workflow-a',name:'Review release notes',status:'running',settled:false,canPause:true,canResume:false,canStop:true}])).toBe(true)
+ expect(status.tasks).toEqual([{id:'workflow-a',kind:'workflow',name:'Review release notes',status:'running',settled:false,canPause:true,canResume:false,canStop:true}])
  status.accept({sessionId:status.sessionId,kind:'subagent',stdout:JSON.stringify({id:'workflow-a',content:'Wrong Agent status'}),truncated:false,startedAt:'1',code:0,tasks:[{id:'workflow-a',status:'running'}]})
  expect(status.tasks[0].statusText).toBeUndefined()
  status.updateSession(status.sessionId,[{id:'agent-a',type:'reviewer',status:'running'}]);expect(status.tasks.find(task=>task.id==='workflow-a')?.kind).toBe('workflow')
