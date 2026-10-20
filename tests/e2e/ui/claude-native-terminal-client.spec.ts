@@ -67,7 +67,17 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
   const composer = card.locator('[contenteditable="true"]')
   const info=appPage.locator('[data-native-placement="InfoNotice"] [data-native-client]').filter({hasText:'InfoNotice Client'}).first()
-  await expect(info).toContainText('InfoNotice Client count=0 key=none',{timeout:10000})
+  try{await expect(info).toContainText('InfoNotice Client count=0 key=none',{timeout:10000})}catch(error){if(process.env.CLAUDE_RESEARCH_RASTER==='1'){await writeFile(join(workspace!,'native-raster-failure.json'),JSON.stringify(await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})));await appPage.screenshot({path:testInfo.outputPath('native-raster-failure.png')})}throw error}
+  if(process.env.CLAUDE_RESEARCH_RASTER==='1'){
+    const raster=appPage.locator('[data-native-placement="InfoNotice"] [data-native-raster]').first();await expect(raster).toHaveText('Release \nready   ');await expect(raster).toHaveAttribute('data-columns','8');await expect(raster).toHaveAttribute('data-rows','2')
+    const draft='Keep my release notes while the terminal drawing changes.';await composer.fill(draft)
+    await info.focus();await info.press('r');await expect(raster).toHaveText('Release \nupdated ')
+    const frames=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).flatMap((view:any)=>view.state?.frames??[]))
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await raster.scrollIntoViewIfNeeded();await expect(raster).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-raster-'+size.width+'.png')})}
+    await writeFile(join(workspace!,'native-raster-app-proof.json'),JSON.stringify({text:await raster.innerText(),columns:8,rows:2,frames,draft,sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after inspecting the terminal drawing.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeRaster:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+  }
   await appPage.locator('.cursor-row-resize').click({button:'right'})
   await composer.fill('Draft retained while using native terminal Clients')
   await info.scrollIntoViewIfNeeded();await info.focus();await info.press('k')

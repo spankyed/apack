@@ -98,6 +98,11 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
     if (!record(value) || typeof value.type !== 'string') throw new ClaudeProtocolError('native UI node must have a component type')
     const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : inheritedPlugin
     const attribution = plugin === undefined ? {} : { plugin }
+    if (value.type === 'NativeRaster') {
+      const props=value.props
+      if(!record(props)||!Number.isSafeInteger(props.columns)||Number(props.columns)<1||Number(props.columns)>512||!Number.isSafeInteger(props.rows)||Number(props.rows)<1||Number(props.rows)>256||typeof props.ansi!=='string'||props.ansi.length>65536)throw new ClaudeProtocolError('Invalid native Raster presentation')
+      return {kind:'raster',columns:Number(props.columns),rows:Number(props.rows),nativeAnsi:props.ansi,...attribution}
+    }
     if (value.type === 'NativeClient') {
       const props=value.props
       if(!record(props)||typeof props.id!=='string'||!/^[a-f0-9-]{36}$/i.test(props.id)||!Array.isArray(value.children)||typeof props.pointer!=='boolean'||typeof props.keys!=='boolean')throw new ClaudeProtocolError('Invalid native Client presentation')

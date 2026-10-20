@@ -59,3 +59,23 @@ it('renders native Markdown without mounting its callback or changing its origin
   expect(drawn.props._apackMarkdownAnsi).toBe('\x1b[31mOriginal code\x1b[39m')
   expect(JSON.stringify(f.render.mock.calls[0]![0])).toContain('original MarkdownBlock')
 })
+
+it('uses original Raster decoding and palette rendering without forwarding source bytes or inventing controls',async()=>{
+ const f=fixture(),words=new Uint32Array([0x2588,0xff8800,0x1000000]);
+ const decode=vi.fn(()=>({words})),paint=vi.fn(()=>"\x1b[38;2;255;136;0m█"),palette={};
+ ;(f.n as any).engine={yCr:decode,gAs:paint,j7s:()=>palette,FPe:()=>true}
+ const tree={type:'Raster',props:{key:'chart',columns:1,rows:1,cells:'original packed cells'},raster:{plugin:'native-plugin'}}
+ const result=await f.draw(f.n,tree)
+ expect(decode).toHaveBeenCalledWith('original packed cells',1,1);expect(paint).toHaveBeenCalledWith(words,{columns:1,rows:1},palette)
+ expect(result).toEqual({type:'NativeRaster',props:{columns:1,rows:1,ansi:'\x1b[38;2;255;136;0m█'},part:{plugin:'native-plugin'}})
+ expect(tree.props.cells).toBe('original packed cells')
+ decode.mockReturnValue({problem:'invalid cell'} as any);await expect(f.draw(f.n,tree)).rejects.toThrow('invalid cell')
+})
+it('bounds native Raster output explicitly and refuses retired Raster eligibility',async()=>{
+ const f=fixture();let eligible=true
+ ;(f.n as any).engine={yCr:()=>({words:[]}),gAs:()=>{eligible=false;return 'x'.repeat(65537)},j7s:()=>({}),FPe:()=>eligible}
+ const tree={type:'Raster',props:{columns:512,rows:256,cells:'native'},raster:{plugin:'native-plugin'}}
+ await expect(f.draw(f.n,tree)).rejects.toThrow('eligibility changed')
+ ;(f.n as any).engine.FPe=()=>true
+ expect(await f.draw(f.n,tree)).toMatchObject({type:'Text',children:['Raster preview exceeds this view. Open the native interface to inspect it.']})
+})

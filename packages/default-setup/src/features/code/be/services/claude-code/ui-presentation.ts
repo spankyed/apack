@@ -71,6 +71,7 @@ export interface ClaudeUiHover {
 
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
+  | { kind: 'raster'; columns: number; rows: number; nativeAnsi: string; plugin?: string }
   | { kind: 'client'; id: string; pointer: boolean; keys: boolean; layout?: Pick<ClaudeUiBoxLayout,'width'|'height'|'flexGrow'>; children: ClaudeUiNode[]; plugin?: string }
   | { kind: 'text'; hover?: ClaudeUiHover; text: string; children?: ClaudeUiNode[]; style?: ClaudeUiTextStyle; plugin?: string }
   | { kind: 'svg'; source: string; alt: string; width?: number; height?: number; interactive: boolean; plugin?: string }

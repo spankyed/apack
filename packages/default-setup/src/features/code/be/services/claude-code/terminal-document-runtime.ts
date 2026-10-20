@@ -10,6 +10,15 @@ async function nativeDocumentTree(n,tree,options={}){
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   if(++nodes>1024)throw Error('Native document node limit');
   let result=value;
+  if(value.type==='Raster'){
+   const {columns,rows,cells}=value.props??{};
+   if(!Number.isInteger(columns)||columns<1||columns>512||!Number.isInteger(rows)||rows<1||rows>256||typeof value.raster?.plugin!=='string')throw Error('Invalid native Raster');
+   const decoded=n.engine.yCr(cells,columns,rows);if(decoded.problem!==undefined)throw Error(decoded.problem);
+   const ansi=n.engine.gAs(decoded.words,{columns,rows},n.engine.j7s());
+   if(typeof ansi!=='string')throw Error('Native Raster renderer returned invalid output');
+   result=ansi.length<=65536&&bytes+ansi.length<=65536?{type:'NativeRaster',props:{columns,rows,ansi},part:{plugin:value.raster.plugin}}:{type:'Text',props:{dimColor:true},children:['Raster preview exceeds this view. Open the native interface to inspect it.'],part:{plugin:value.raster.plugin}};
+   bytes+=Math.min(ansi.length,65536);
+  }
   if(value.type==='Code'||value.type==='Markdown'){
    const props={...value.props},markdown=value.type==='Markdown',annotation=markdown?'_apackMarkdownAnsi':'_apackCodeAnsi',source=markdown?props.text:props.source;delete props[annotation];
    if(typeof source==='string'&&source.length<=32768){
@@ -32,7 +41,7 @@ async function nativeDocumentTree(n,tree,options={}){
  };
  const result=await visit(tree);
  const pending=[result];let checked=0;
- while(pending.length){const node=pending.pop();if(++checked>1024)throw Error('Native document eligibility limit');if(!node||typeof node!=='object')continue;for(const plugin of [node.part?.plugin,node.client?.plugin])if(typeof plugin==='string'&&n.engine?.FPe(plugin)===false)throw Error('Native document eligibility changed while formatting');if(Array.isArray(node.children))pending.push(...node.children);}
+ while(pending.length){const node=pending.pop();if(++checked>1024)throw Error('Native document eligibility limit');if(!node||typeof node!=='object')continue;for(const plugin of [node.part?.plugin,node.client?.plugin,node.raster?.plugin,node.image?.plugin])if(typeof plugin==='string'&&n.engine?.FPe(plugin)===false)throw Error('Native document eligibility changed while formatting');if(Array.isArray(node.children))pending.push(...node.children);}
  options.signal?.throwIfAborted();
  if(nativeDocumentSyntaxFlag(n)!==syntaxFlag)throw Error('Native document settings changed while formatting');
  if(JSON.stringify(nativeThemeProvider(n).value.resolvedTheme)!==initialTheme)throw Error('Native document theme changed while formatting');

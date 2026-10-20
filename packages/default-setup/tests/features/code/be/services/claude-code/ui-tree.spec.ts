@@ -233,3 +233,9 @@ it.each(['wrap', 'end', 'middle', 'truncate', 'truncate-start', 'truncate-middle
 it.each(['ellipsis', 'wrap-stream', false, 0, {}])('rejects undeclared native Text wrapping mode %j', wrap => {
   expect(() => createClaudeUiDrawing({ type: 'Text', props: { wrap }, children: ['notes'] })).toThrow('native Text style is invalid')
 })
+
+it('presents a native-validated Raster as inert fixed cells without actions or pixel/file source',()=>{
+ const result=createClaudeUiDrawing({type:'NativeRaster',props:{columns:8,rows:2,ansi:'Release \nready   '},part:{plugin:'native'}})
+ expect(result.tree).toEqual({kind:'raster',columns:8,rows:2,nativeAnsi:'Release \nready   ',plugin:'native'});expect(result.actions.size).toBe(0)
+ expect(()=>createClaudeUiDrawing({type:'NativeRaster',props:{columns:513,rows:1,ansi:'bad'}})).toThrow('Invalid native Raster')
+})
