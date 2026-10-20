@@ -50,6 +50,38 @@ test('shows the original Agent handback report and warning with parent continuat
   const wire=async()=> (await readFile(join(workspace!,'handback-native-events.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));
   const draft='Keep my release notes while the Agent reports back.';
   try {
+    if(fixture.cancelCaller){
+      await expect.poll(async()=>{try{return await readFile(join(workspace!,'caller-cancel-ready'),'utf8')}catch{return ''}}).toBe('ready');
+      const before=await snapshot();expect(before.sessionId).toBeTruthy();
+      const starts=(await wire()).filter((event:any)=>event.type==='system'&&event.subtype==='task_started');
+      expect(starts).toHaveLength(2);const caller=starts.find((event:any)=>event.spawn_depth===1),leaf=starts.find((event:any)=>event.spawn_depth===2);
+      expect(leaf.parent_task_id).toBe(caller.task_id);expect(leaf.is_backgrounded).toBe(false);
+      await editor.fill(draft);await writeFile(join(workspace!,'release-caller-cancel'),'ready');
+      await expect.poll(async()=>(await wire()).filter((event:any)=>event.type==='system'&&event.subtype==='task_notification'&&event.status==='stopped').length).toBe(2);
+      await expect.poll(async()=>(await snapshot()).state).toBe('success');
+      const completed=await snapshot(),events=await wire(),results=events.filter((event:any)=>event.type==='result');
+      expect(events.some((event:any)=>event.handback_report)).toBe(false);
+      expect(events.some((event:any)=>event.type==='assistant'&&event.message?.content?.some((block:any)=>block.type==='tool_use'&&block.name==='SubagentHandback'))).toBe(false);
+      expect(completed.messages.filter((message:any)=>message.sender==='user')).toHaveLength(1);
+      expect(completed.messages.filter((message:any)=>!message.deleted&&message.text==='Thinking…')).toHaveLength(0);
+      await expect(appPage.getByRole('region',{name:'Agent report',exact:true})).toHaveCount(0);
+      await expect(editor).toHaveText(draft);
+      for(const width of [1100,680]){
+        await appPage.setViewportSize({width,height:width===680?600:900});
+        for(const target of [editor,card.getByRole('button',{name:'Send',exact:true})]){
+          await expect(target).toBeInViewport();
+          expect(await target.evaluate(node=>{const r=node.getBoundingClientRect();return node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})).toBe(true);
+        }
+        await appPage.screenshot({path:testInfo.outputPath('native-handback-cancel-'+width+'.png')});
+      }
+      await app.navigate('host/settings');await app.navigate('default-setup/threads');await expect(editor).toHaveText(draft);
+      await editor.fill('Continue planning after cancelling the release review.');await card.getByRole('button',{name:'Send',exact:true}).click();
+      await expect.poll(async()=>(await snapshot()).turns).toBe(completed.turns+1);await expect.poll(async()=>(await snapshot()).state).toBe('success');
+      const after=await snapshot();expect(after.sessionId).toBe(before.sessionId);expect(after.messages.filter((message:any)=>message.sender==='user')).toHaveLength(2);
+      await expect(appPage.getByRole('region',{name:'Agent report',exact:true})).toHaveCount(0);expect(errors).toEqual([]);
+      await writeFile(join(workspace!,'composer-app-evidence.json'),JSON.stringify({actualApp:true,nativeCallerCancelled:true,nativeForegroundChildCancelled:true,nativeNoHandbackAdmitted:true,nativeRetainedDraft:true,sameSessionContinuation:true,before:{sessionId:before.sessionId,turns:before.turns},after:{sessionId:after.sessionId,turns:after.turns},starts,notifications:events.filter((event:any)=>event.type==='system'&&event.subtype==='task_notification'),nativeResults:results.map((event:any)=>({num_turns:event.num_turns,subagent_stats:event.subagent_stats})),errors},null,2));
+      return;
+    }
     await expect.poll(async()=>(await snapshot()).turns).toBe(1);
     const before=await snapshot();expect(before.sessionId).toBeTruthy();
     await expect(editor).toBeVisible();await editor.fill(draft);
