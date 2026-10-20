@@ -225,6 +225,7 @@ import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/refe
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
 import { copyClaudeUiText } from './native-ui-clipboard.ts'
+import { claudePromptSourceReferences } from './native-prompt-source.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
@@ -246,18 +247,12 @@ import type { Component } from 'vue'
 import Button from '@apackdev/ui/design/button'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusIndicator from './status-indicator.vue'
-import type { ClaudeUiMountState, AgentThreadData, AgentMode, MessageReferences, QuickPrompt } from '#generated/types.ts'
+import type { ClaudeUiMountState, AgentThreadData, AgentMode, MessageReferences, ContextReference, QuickPrompt } from '#generated/types.ts'
 import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { matchesHotkey, useSurfaceStorage, type HotkeyEvent, type HotkeysMap } from '@apackdev/sdk/fe'
 import QuickPromptsPopup from './QuickPromptsPopup.vue'
 import RevertHistoryPopup from './RevertHistoryPopup.vue'
 
-interface ContextReference {
-  refType: 'thread' | 'document' | 'note'
-  refId: string
-  shortCode: string
-  label: string
-}
 
 const props = defineProps<{
   currentThread: AgentThreadData | null
@@ -792,6 +787,7 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   if (!editor) return []
   const refs: ContextReference[] = []
   editor.state.doc.descendants((node) => {
+    if (node.type.name === 'claudePromptSource') refs.push(...claudePromptSourceReferences(node))
     if (node.type.name === 'reference') {
       refs.push({
         refType: node.attrs.refType,
@@ -821,9 +817,9 @@ const handleSubmit = async () => {
       }
     }
     if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
-    const md = ((editor.storage as any).markdown.getMarkdown() as string)
-      .replace(/(\n&nbsp;)+$/, '')
-      .trim()
+    const serialized = (editor.storage as any).markdown.getMarkdown() as string
+    const md = editor.state.doc.childCount === 1 && editor.state.doc.firstChild?.type.name === 'claudePromptSource'
+      ? serialized : serialized.replace(/(\n&nbsp;)+$/, '').trim()
     if (!editor.state.doc.textContent.trim() && !hasAttachments.value) return
     const doc = editor.state.doc
     const entityId = props.currentThread?.id || 'chat-attachments'

@@ -2375,6 +2375,7 @@
       "suggestions": {
         "extensions": {
           "referenceSuggestion": "src/extensions/tiptap/reference-suggestion.ts#ReferenceSuggestion",
+          "claudePromptSource": "src/features/threads/fe/chat/native-prompt-source.ts#ClaudePromptSource",
           "commandViewerDecoration": "src/extensions/tiptap/command-viewer-decoration.ts#CommandViewerDecoration"
         },
         "popups": {

@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { rewriteClaudePromptSource } from './native-prompt-source.ts'
 import { createClaudePromptSuggestion } from './native-prompt-suggestion.ts'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
 import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
@@ -97,7 +98,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
     const cursor = offset + input.text.length
     const runs = (input.decorations ?? []).map(run => ({ ...run, start: run.start + offset, end: run.end + offset }))
-    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parse, runs.flatMap(run => [run.start, run.end]))
+    let next = rewriteClaudePromptDocument(snapshot, { text, cursor }, serialize, parse, runs.flatMap(run => [run.start, run.end])) ?? rewriteClaudePromptSource(snapshot, { text, cursor }, serialize)
     if (!next) {
       let atoms = false
       snapshot.doc.descendants(node => { if (node.isAtom && !node.isText) atoms = true })
@@ -177,7 +178,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (editor.state.doc !== snapshot.doc || !editor.state.selection.eq(selection)) { finishPending(false); return }
       if (reply.status === 'error') { onProblem(reply.message); finishPending(false); return }
       if (reply.frame.superseded) { finishPending(false); return }
-      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse, reply.frame.decorations?.flatMap(run => [run.start, run.end]))
+      const next = rewriteClaudePromptDocument(snapshot, reply.frame, serialize, parse, reply.frame.decorations?.flatMap(run => [run.start, run.end])) ?? rewriteClaudePromptSource(snapshot, reply.frame, serialize)
       if (!next) { onProblem('Claude prompt rewrite cannot be represented without changing editor structure'); finishPending(false); return }
       applying = true
       try {
