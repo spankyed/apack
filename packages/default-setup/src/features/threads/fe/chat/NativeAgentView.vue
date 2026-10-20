@@ -7,7 +7,7 @@
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
-    <details v-if="state?.agent?.metadata" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400"><summary class="cursor-pointer py-1">Agent details</summary><div class="max-h-36 overflow-y-auto overscroll-contain py-2"><NativeAgentDetails :details="state.agent" /></div></details>
+    <details v-if="state?.agent?.metadata" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400"><summary class="cursor-pointer py-1">Agent details</summary><div class="max-h-36 overflow-y-auto overscroll-contain py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
     <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
     <div v-show="!panelActive && !outputActive" class="relative min-h-0 flex-1">
@@ -19,6 +19,7 @@
         <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field" />
         <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
       </article>
+      <NativeAgentHandback v-if="state?.agent?.handback" :report="state.agent.handback" />
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>
       </div>
     </div>
@@ -53,6 +54,7 @@ import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useClaudeAgentScroll, type ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
+import NativeAgentHandback from '#extensions/blocks/display/NativeAgentHandback.vue'
 import NativeAgentDetails from '#extensions/blocks/display/NativeAgentDetails.vue'
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'

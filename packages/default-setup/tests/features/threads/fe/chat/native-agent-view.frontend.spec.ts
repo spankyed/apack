@@ -5,7 +5,7 @@ import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#featur
 const send = vi.fn()
 let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
 vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {}, focus: () => {}, detach: () => {} }) }))
-vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => ({ send }) }))
+vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<input aria-label="Agent draft" :disabled="disabled" />' } }))
@@ -94,4 +94,17 @@ it('gives the original panel ownership and restores the editor after native clos
   context.nativeUiViews[f.ui].state.agentInput = { revision: 9, status: 'panel_done' }; await nextTick(); await nextTick()
   expect(f.root.querySelector('[role="dialog"]')).toBeNull()
   expect(document.activeElement).toBe(f.root.querySelector('input'))
+})
+
+it('keeps the complete attributed report in the transcript outside collapsed metadata', async () => {
+  const f = await mount()
+  context.nativeUiViews[f.ui].state.agent.handback = { taskId: 'agent', text: 'Release review complete.\nCheck the migration example before publishing.', warning: 'Original classifier warning' }
+  await nextTick()
+  const reports = f.root.querySelectorAll('[aria-label="Agent report"]')
+  expect(reports).toHaveLength(1)
+  expect(reports[0].closest('[aria-label="Agent transcript"]')).not.toBeNull()
+  expect(reports[0].closest('details')).toBeNull()
+  expect(reports[0].textContent).toContain('Check the migration example before publishing.')
+  expect(reports[0].querySelector('[role="alert"]')?.textContent).toBe('Original classifier warning')
+  expect(f.button('Back to conversation').disabled).toBe(false)
 })
