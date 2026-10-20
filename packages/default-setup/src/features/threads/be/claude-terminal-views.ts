@@ -80,7 +80,7 @@ export function createClaudeTerminalViews(dependencies: {
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string, signal: AbortSignal): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
-  beforeViewChange?(client: string, threadId: string): Promise<void>
+  beforeViewChange?(client: string, threadId: string): Promise<void | (() => void)>
   command?(client: string, threadId: string, mountId: string, revision: number, text: string, hasReferences: boolean): Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeParentCommandResult>
   prepareInput?(text: string, references?: MessageReferences): Promise<{ text: string; images: ClaudeNativeImage[] }>
 }) {
@@ -172,10 +172,12 @@ export function createClaudeTerminalViews(dependencies: {
         target.task = task; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.task === task
         void Promise.resolve().then(async () => {
-          if (event.operation === 'foreground') await dependencies.beforeViewChange?.(target.client, event.threadId)
-          if (!current()) return undefined
-          if (event.operation === 'skip_worker' || event.operation === 'retry_worker') return owner.operateTask(event.taskId, event.operation, undefined, event.worker)
-          return (event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation)
+          const resume = event.operation === 'foreground' || event.operation === 'background' ? await dependencies.beforeViewChange?.(target.client, event.threadId) : undefined
+          try {
+            if (!current()) return undefined
+            if (event.operation === 'skip_worker' || event.operation === 'retry_worker') return await owner.operateTask(event.taskId, event.operation, undefined, event.worker)
+            return await ((event.operation === 'send' || event.operation === 'input') ? owner.operateTask(event.taskId, event.operation, event.text) : owner.operateTask(event.taskId, event.operation))
+          } finally { resume?.() }
         }).then(result => {
           if (!result) return
           if (!current()) return

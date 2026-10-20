@@ -46,6 +46,31 @@ export async function releaseClaudeUiViews(client: string, threadId: string): Pr
   for (const [key, view] of views) if (view.client === client && view.threadId === threadId) drop(key, view)
   await Promise.all([...retiring].filter(view => view.client === client && view.threadId === threadId).map(view => view.done))
 }
+const viewTransitions = new Map<string, number>()
+/** Native Agent selection is shared by the session, so every window must release its old host. */
+export async function suspendClaudeUiThreadViews(threadId: string): Promise<() => void> {
+  viewTransitions.set(threadId, (viewTransitions.get(threadId) ?? 0) + 1)
+  let released = false
+  const resume = () => {
+    if (released) return
+    released = true
+    const remaining = (viewTransitions.get(threadId) ?? 1) - 1
+    if (remaining) viewTransitions.set(threadId, remaining)
+    else {
+      viewTransitions.delete(threadId)
+      for (const view of views.values()) if (view.threadId === threadId) bind(view)
+    }
+  }
+  for (const view of views.values()) if (view.threadId === threadId) {
+    view.pendingPrompt?.finish()
+    retire(view)
+    view.mount = undefined; view.owner = undefined; view.attachmentId = undefined
+    publish(view, { status: 'disconnected' })
+  }
+  try { await Promise.all([...retiring].filter(view => view.threadId === threadId).map(view => view.done)) }
+  catch (error) { resume(); throw error }
+  return resume
+}
 let timer: ReturnType<typeof setInterval> | undefined
 const validId = (id: string) => /^[0-9a-f-]{36}$/i.test(id)
 const keyOf = (client: string, mountId: string) => JSON.stringify([client, mountId])
@@ -65,6 +90,7 @@ function drop(key: string, view: ClaudeUiView): void {
   if (!views.size && timer) { clearInterval(timer); timer = undefined }
 }
 function bind(view: ClaudeUiView): void {
+  if (viewTransitions.has(view.threadId)) return
   const owner = getClaudeUiOwner(view.threadId, view.nativeView)
   if (owner === view.owner) { view.mount?.refreshTranscript(); return }
   view.pendingPrompt?.finish()

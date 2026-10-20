@@ -258,3 +258,20 @@ it('drains a late published owner after cancellation without attaching it to the
  await vi.waitFor(()=>expect(close).toHaveBeenCalledOnce());expect(replies.at(-1)).toMatchObject({opening:true,cancelling:true});expect(replies.at(-1)!.state).toBeUndefined();finish();
  await vi.waitFor(()=>expect(replies.at(-1)!.opening).toBe(false));views.clear();
 });
+
+
+it.each(['foreground', 'background'] as const)('holds shared UI suspension until %s completes and resumes after native failure', async operation => {
+  const resume = vi.fn(), release = vi.fn(async () => resume), f = fixture(undefined, release)
+  f.owner.state.tasks.push({ id: 'agent', name: 'Worker', status: 'running' })
+  let fail!: (error: Error) => void
+  vi.mocked(f.owner.operateTask).mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
+  try {
+    f.views.handle(mount, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent', revision: 1, operation }, 'window', f.send)
+    await vi.waitFor(() => expect(f.owner.operateTask).toHaveBeenCalledOnce())
+    expect(resume).not.toHaveBeenCalled()
+    fail(Error('native view refused'))
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)?.[0].task).toMatchObject({ status: 'error', problem: 'native view refused' }))
+    expect(resume).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})

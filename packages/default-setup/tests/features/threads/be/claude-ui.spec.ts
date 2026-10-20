@@ -1,7 +1,7 @@
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { PassThrough } from 'node:stream'
 import { randomUUID } from 'node:crypto'
-import { handleClaudeUiView, clearClaudeUiViews, releaseClaudeUiViews } from '#features/threads/be/claude-ui.ts'
+import { handleClaudeUiView, clearClaudeUiViews, releaseClaudeUiViews, suspendClaudeUiThreadViews } from '#features/threads/be/claude-ui.ts'
 import { openConversation, killAllHandles, closeIdleConversation } from '#features/code/be/services/claude-code/handle-store.ts'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
@@ -323,4 +323,22 @@ it('updates reverse-host eligibility on window focus without replacing the nativ
   expect(host.available?.()).toBe(true)
   expect(ui.attach).toHaveBeenCalledTimes(3); expect(ui.servePrompt).toHaveBeenCalledOnce()
   expect(action(delivery)).toBe(id)
+})
+
+
+it('suspends every window on one native thread, fences renewals and restores fresh hosts after the transition', async () => {
+  const first = await native(), other = await native('unaffected'), a = reply(), b = reply(), untouched = reply()
+  handleClaudeUiView(mount, 'window-one', a)
+  handleClaudeUiView({ ...mount, mountId: randomUUID() }, 'window-two', b)
+  handleClaudeUiView({ ...mount, threadId: 'unaffected', mountId: randomUUID() }, 'window-three', untouched)
+  await vi.advanceTimersByTimeAsync(100)
+  const old = action(a), keep = action(untouched), release = await suspendClaudeUiThreadViews('thread')
+  expect(first.ui.detach).toHaveBeenCalledTimes(2); expect(other.ui.detach).not.toHaveBeenCalled()
+  handleClaudeUiView(mount, 'window-one', a); await vi.advanceTimersByTimeAsync(100)
+  expect(first.ui.attach).toHaveBeenCalledTimes(2)
+  expect(action(untouched)).toBe(keep)
+  release(); await vi.advanceTimersByTimeAsync(100)
+  expect(first.ui.attach).toHaveBeenCalledTimes(4); expect(action(a)).not.toBe(old)
+  release(); await vi.advanceTimersByTimeAsync(100)
+  expect(first.ui.attach).toHaveBeenCalledTimes(4)
 })
