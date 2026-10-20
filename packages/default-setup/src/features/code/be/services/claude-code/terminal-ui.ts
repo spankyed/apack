@@ -24,7 +24,7 @@ export function createClaudeTerminalUiTransport(options: {
       hosts.set(id, host)
       return () => { if (hosts.get(id) === host) promptHosts.detach(id) }
     },
-    answers(id) { const host = hosts.get(id); return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : [])] : [] },
+    answers(id) { const host = hosts.get(id); return host ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : [] },
     detach(id) { hosts.delete(id); for (const pending of [...hostRequests.values()]) if (pending.clientId === id) pending.cancel() },
   }
   const transport: ClaudeTerminalUiTransport = {
@@ -77,7 +77,7 @@ export function createClaudeTerminalUiTransport(options: {
         || !/^[a-f0-9-]{36}$/i.test(value.request_id) || hostRequests.has(value.request_id) || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1
         || hostSequences.has(value.sequence as number) || (value.sequence as number) <= highestHostSequence - 4096
         || hostRequests.size >= 128 || !request || typeof request !== 'object' || Array.isArray(request)
-        || !['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy'].includes(String(request.subtype)) || typeof request.client_id !== 'string') return false
+        || !['ui_prompt_read', 'ui_prompt_fill', 'ui_prompt_suggest', 'ui_copy', 'ui_read_selection'].includes(String(request.subtype)) || typeof request.client_id !== 'string') return false
       const id = value.request_id, sequence = value.sequence as number
       highestHostSequence = Math.max(highestHostSequence, sequence); hostSequences.add(sequence)
       for (const prior of hostSequences) if (prior <= highestHostSequence - 4096) hostSequences.delete(prior)

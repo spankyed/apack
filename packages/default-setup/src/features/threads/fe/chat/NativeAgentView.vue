@@ -47,6 +47,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
@@ -72,6 +73,10 @@ const actor: ThreadsState = usePlugin(), uiMount = ref<string>(), terminalMount 
 const context = useSelector(actor, state => state.context)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
 const state = computed(() => snapshot.value?.state)
+const selectionRoot = ref<HTMLElement | null>(null)
+const pageSelection = provideClaudeUiSelection(() => selectionRoot.value)
+watch(() => JSON.stringify([uiMount.value, state.value?.agent?.messages.filter(message => message.role === 'user').at(-1)?.uuid]), pageSelection.clear)
+
 const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame => [frame.uuid, frame])))
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
 const selectedOwner = computed(() => {

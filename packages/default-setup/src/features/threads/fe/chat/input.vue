@@ -223,6 +223,7 @@ import NativeUiNotices from './NativeUiNotices.vue'
 import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
 import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
+import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
 import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { Plugin } from '@tiptap/pm/state'
@@ -398,8 +399,15 @@ watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   update(); editor.on('transaction', update)
   onCleanup(() => { editor.off('transaction', update) })
 })
+const pageSelection = useClaudeUiSelection()
 watch(() => props.nativePrompt?.hostRequest, request => {
   if (!request) return
+  if (request.kind === 'selection') {
+    const owner = promptEditor, epoch = composerEpoch, mountId = props.nativePrompt?.mountId, attachment = props.nativePrompt?.attachmentId
+    void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => composerEpoch === epoch && !!owner && promptEditor === owner && props.nativePrompt?.mountId === mountId && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)
+      .then(submitted => emit('native-prompt-host-response', { requestId: request.requestId, kind: 'selection', submitted }))
+    return
+  }
   if (request.kind === 'copy') {
     const owner = promptEditor, attachment = props.nativePrompt?.attachmentId
     void copyClaudeUiText(request.text, request.expiresAt, () => !!owner && promptEditor === owner && props.nativePrompt?.attachmentId === attachment && props.nativePrompt?.hostRequest === request)

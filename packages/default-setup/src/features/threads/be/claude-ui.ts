@@ -1,3 +1,4 @@
+import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
 import { selectClaudeTranscriptRows } from '#features/code/be/services/claude-code/ui-transcript-rows.ts'
@@ -97,6 +98,14 @@ function bind(view: ClaudeUiView): void {
   const promptHost: ClaudePromptHost = {
     async read(signal, expiresAt) { const answer = await ask({ kind: 'read' }, signal, expiresAt); return answer?.kind === 'read' ? answer.box : undefined },
     async fill(input, signal, expiresAt) { const answer = await ask({ kind: 'fill', input }, signal, expiresAt); return answer?.kind === 'fill' && answer.filled },
+    async selection(signal, expiresAt) {
+      const reply = await createClaudeSelectionReply(signal, expiresAt, () => viewCurrent(view) && view.owner === owner)
+      if (!reply.url) return undefined
+      try {
+        const [selection, acknowledgement] = await Promise.all([reply.result, ask({ kind: 'selection', replyUrl: reply.url }, signal, expiresAt)])
+        return acknowledgement?.kind === 'selection' && acknowledgement.submitted && !signal.aborted && viewCurrent(view) && view.owner === owner ? selection : undefined
+      } finally { reply.close() }
+    },
     async copy(text, signal, expiresAt) { const answer = await ask({ kind: 'copy', text }, signal, expiresAt); return answer?.kind === 'copy' && answer.copied },
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }

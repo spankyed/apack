@@ -12,7 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('round-trips decorated structured replace append and cursor insertion through original native APIs', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -91,6 +91,22 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await popup.locator('.reference-suggestion-item').filter({has:appPage.getByText((await context()).topic,{exact:true})}).click();await expect(popup).toBeHidden()
   }
 
+  const selectedReceipts=async()=>JSON.parse(await readFile(join(workspace!,'native-selection-receipts.json'),'utf8').catch(()=>'[]'))
+  const excerpt=card.getByRole('button',{name:'Review selected excerpt',exact:true})
+  if(uiSelection){
+    const assistant=appPage.locator('[data-native-selection-row]').filter({hasText:'Fixture completed.'}).first()
+    await expect(assistant).toBeVisible()
+    const requestId=await assistant.getAttribute('data-native-selection-row')
+    await assistant.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf('Fixture completed.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+7);const selection=document.getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Native assistant text not found')})
+    await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(1)
+    expect((await selectedReceipts())[0]).toEqual({selected:true,value:{text:'Fixture',requestId}})
+    await expect(composer).toHaveText('Review the pending release notes.')
+    const expected=await appPage.evaluate(()=>{const first=document.querySelector('[data-native-selection-row]')!,last=Array.from(document.querySelectorAll('[data-native-selection-row]')).find(row=>row.textContent?.includes('Fixture completed.'))!;const filter={acceptNode:(node:Node)=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT};const firstWalker=document.createTreeWalker(first,NodeFilter.SHOW_TEXT,filter),lastWalker=document.createTreeWalker(last,NodeFilter.SHOW_TEXT,filter),start=firstWalker.nextNode()!,end=lastWalker.nextNode()!;const range=document.createRange();range.setStart(start,0);range.setEnd(end,end.textContent!.length);const selected=document.getSelection()!;selected.removeAllRanges();selected.addRange(range);document.dispatchEvent(new Event('selectionchange'));return selected.toString()})
+    await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(2)
+    expect((await selectedReceipts())[1]).toEqual({selected:true,value:{text:expected}})
+    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(excerpt).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-selection-'+width+'.png')})}
+    await appPage.setViewportSize({width:1400,height:900})
+  }
   if(uiCopy){
     const original=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}));
     const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-copy-receipts.json'),'utf8').catch(()=>'[]'));
@@ -162,11 +178,22 @@ test('round-trips decorated structured replace append and cursor insertion throu
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text))).toBe(true)
   if(promptMedia){const sent=(await context()).messages.slice(before).find((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text));expect(sent.references.images).toHaveLength(1);expect(sent.references.context).toEqual(expect.arrayContaining([expect.objectContaining({refType:'thread',refId:(await context()).threadId})]));await expect(card.getByTitle('release-marker 1.png',{exact:true})).toHaveCount(0)}
+  if(uiSelection){
+    await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+    await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(3)
+    expect((await selectedReceipts())[2]).toEqual({selected:false})
+    const log=await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8')
+    const responses=[...log.matchAll(/Incoming: "CLAUDE_PROMPT_HOST_RESPONSE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes("kind: ")&&row.includes('selection'))
+    expect(responses.length).toBeGreaterThanOrEqual(3)
+    expect(responses.every(row=>!row.includes('text:')&&!row.includes('instance_id:'))).toBe(true)
+    await writeFile(join(workspace!,'native-selection-app-proof.json'),JSON.stringify({receipts:await selectedReceipts(),metadataOnlyBusResponses:responses.length},null,2))
+  }
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-structured-prompt-proof.json'),JSON.stringify({receipts:proof,canonical:proof[2].after.text}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,nativeSelection:uiSelection===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

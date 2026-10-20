@@ -238,6 +238,7 @@ import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
+import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import ChatInput from './input.vue'
 import NativeToolApproval from './NativeToolApproval.vue'
 import { ClaudeBashApprovalPresentationSchema } from '#features/code/common/native-bash-approval.ts'
@@ -286,12 +287,16 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
   observer.observe(element); update()
   onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
 }, { flush: 'post' })
+const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
+const pageSelection = provideClaudeUiSelection(() => composerAreaRef.value)
+watch(() => JSON.stringify([currentThread.value?.id, nativeUiMount.value?.mountId, allMessages.value.filter(message => message.sender === 'user').at(-1)?.id]), pageSelection.clear)
+
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 
 // Scroll preservation for prepending older messages
@@ -313,7 +318,6 @@ function isTailMessage(msg: MessageEntity): boolean {
   return !msgs.slice(idx + 1).some(m => m.sender === 'user' && !m.status)
 }
 
-const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const nativeBlockExpansion = ref<Record<string, number[]>>({})
 const nativeUserExpansion = ref<Record<string, boolean>>({})
 const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)

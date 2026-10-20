@@ -18,6 +18,7 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
+import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
 import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import type { Editor } from '@tiptap/core'
@@ -53,8 +54,15 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
 }, { flush: 'post' })
 watch(() => props.prompt, value => { if (value) bridge?.receive(value) })
 watch(() => props.completions, value => { if (value) bridge?.receiveCompletions(value) })
+const pageSelection = useClaudeUiSelection()
 watch(() => props.hostRequest, request => {
   if (!request) return
+  if (request.kind === 'selection') {
+    const owner = bridge, attachment = props.attachmentId
+    void replyClaudeUiSelection(request.replyUrl, pageSelection, request.expiresAt, () => alive && !!owner && bridge === owner && props.attachmentId === attachment && props.hostRequest === request)
+      .then(submitted => emit('host', { requestId: request.requestId, kind: 'selection', submitted }))
+    return
+  }
   if (request.kind === 'copy') {
     const owner = bridge, attachment = props.attachmentId
     void copyClaudeUiText(request.text, request.expiresAt, () => alive && !!owner && bridge === owner && props.attachmentId === attachment && props.hostRequest === request)

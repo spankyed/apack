@@ -2,6 +2,7 @@
   <div
     v-if="!groupedSuppressed"
     :data-chat-message="message.id"
+    :data-native-selection-row="selectionRowId"
     :class="[
       'relative flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'
@@ -315,6 +316,11 @@ const forking = ref(false)
 const revertMenu = useContextMenu()
 
 const isUser = computed(() => props.message.sender === 'user')
+const selectionRowId = computed(() => {
+  const context = props.message.context
+  if (!props.isClaudeCodeThread || !['user', 'assistant'].includes(props.message.sender) || Array.isArray(context?.claudeNativeMessages) && context.claudeNativeMessages.length > 1) return undefined
+  return typeof context?.cliUuid === 'string' ? context.cliUuid : undefined
+})
 const statusIndicator = computed(() => {
   if (!isUser.value || !props.message.status) return null
   if (props.message.status === 'queued') return { label: 'Queued', dotClass: 'bg-amber-500 animate-pulse', textClass: 'text-neutral-400' }

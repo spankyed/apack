@@ -126,3 +126,26 @@ it('retires pending clipboard answers when their host is detached', async () => 
   detach();expect(f.answer()).toMatchObject({ response: { response: { copied: false } } })
   resolve(true);await flush();expect(f.write).toHaveBeenCalledOnce();f.hosts.close()
 })
+
+it('advertises selection only for its desktop host and preserves exact text and native row identity', async () => {
+  const f = fixture(), selection = vi.fn(async () => ({ text: 'Selected 👋\nexact', instance_id: 'native-row' }))
+  const request = { ...read('selection'), request: { ...read().request, subtype: 'ui_read_selection' } }
+  expect(f.hosts.answers('view')).not.toContain('ui_read_selection')
+  f.hosts.receive(request); await flush(); expect(f.answer()).toMatchObject({ response: { response: {} } })
+  f.detach(); f.hosts.register('view', { ...f.host, selection })
+  expect(f.hosts.answers('view')).toContain('ui_read_selection')
+  f.hosts.receive({ ...request, request_id: 'selected' }); await flush()
+  expect(selection).toHaveBeenCalledOnce()
+  expect(f.answer()).toMatchObject({ response: { request_id: 'selected', response: { text: 'Selected 👋\nexact', instance_id: 'native-row' } } })
+  f.hosts.receive({ ...request, request_id: 'mobile', request: { ...request.request, surface: 'mobile' } }); await flush()
+  expect(selection).toHaveBeenCalledOnce(); expect(f.answer()).toMatchObject({ response: { response: {} } })
+  f.hosts.close()
+})
+
+it('refuses late selection after the original mounted host retires', async () => {
+  const f = fixture(); let resolve!: (value: { text: string }) => void
+  f.detach(); const detach = f.hosts.register('view', { ...f.host, selection: () => new Promise(yes => { resolve = yes }) })
+  f.hosts.receive({ ...read('selection'), request: { ...read().request, subtype: 'ui_read_selection' } }); await flush()
+  detach(); expect(f.answer()).toMatchObject({ response: { response: {} } })
+  resolve({ text: 'Retired private selection' }); await flush(); expect(f.write).toHaveBeenCalledOnce(); f.hosts.close()
+})
