@@ -66,33 +66,39 @@ test('keeps native status, submissions and history available under managed-only 
     expect(current.native.state.pid).toBe(ownerIdentity.pid); expect(current.native.state.ownerId).toBe(ownerIdentity.ownerId); expect(current.native.state.sessionId).toBe(sessionId)
   }
   if(process.env.CLAUDE_RESEARCH_HELD_HELPER==='1'){
+    const kind=process.env.CLAUDE_RESEARCH_HELD_HELPER_KIND==='subagent'?'subagent':'main',subagent=kind==='subagent'
+    let taskId:string|undefined
     const observerPath=JSON.parse(await readFile(join(workspace!,'native-observer-path.json'),'utf8')).path
     const generations=async()=>JSON.parse(await readFile(observerPath,'utf8')).generations
     const before=await generations(),draft='Keep this draft across a managed helper transition.'
     const samples:string[]=[];
-    await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');(window as any).__heldHelperSamples=[];(window as any).__heldHelperSubscription=actor.subscribe((snapshot:any)=>{for(const view of Object.values(snapshot.context.nativeTerminalViews) as any[])(window as any).__heldHelperSamples.push(view.state?.mainStatus??'')})})
+    await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');(window as any).__heldHelperSamples=[];(window as any).__heldHelperSubscription=actor.subscribe((snapshot:any)=>{for(const view of Object.values(snapshot.context.nativeTerminalViews) as any[])(window as any).__heldHelperSamples.push([view.state?.mainStatus??'',...(view.state?.tasks??[]).map((task:any)=>task.statusText??'')].join(' | '))})})
     const composer=card.locator('[contenteditable="true"]');await composer.fill(draft)
     await writeFile(join(workspace!,'held-helper-arm'),'armed')
+    if(subagent){await composer.fill('Review the project with a background worker.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');await composer.fill(draft);await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='running')).toBe(true);taskId=(await context()).native.state.tasks.find((task:any)=>task.status==='running').id;await appPage.getByRole('button',{name:/^Native tools/}).first().click()}
     const started=async()=>JSON.parse(await readFile(join(workspace!,'held-helper-started.json'),'utf8').catch(()=>'{}'))
     await expect.poll(async()=>(await started()).pid,{timeout:10000}).toBeGreaterThan(0)
     await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:true}))
-    await expect.poll(async()=>(await generations()).main!==before.main,{timeout:10000}).toBe(true)
+    await expect.poll(async()=>(await generations())[kind]!==before[kind],{timeout:10000}).toBe(true)
     const restricted=await generations();await writeFile(join(workspace!,'held-helper-release'),'release')
     const posts=async()=>(await readFile(join(workspace!,'held-helper-native-posts.jsonl'),'utf8').catch(()=>'')).split('\n').filter(Boolean).map(line=>JSON.parse(line))
-    await expect.poll(async()=>(await posts()).some(row=>row.generation===before.main&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'))).toBe(true)
-    const raw=(await posts()).find(row=>row.generation===before.main&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'));expect(raw.generation).toBe(before.main);expect(raw.stdout.includes('STALE_HELD_HELPER')||raw.signal==='aborted'||raw.signal==='SIGTERM').toBe(true)
-    await expect.poll(async()=>{const text=(await context()).native.state.mainStatus??'';samples.push(text);expect(text).not.toContain('STALE_HELD_HELPER');return text.includes('AppNativeMain '+sessionId)}).toBe(true)
+    await expect.poll(async()=>(await posts()).some(row=>row.generation===before[kind]&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'))).toBe(true)
+    const raw=(await posts()).find(row=>row.generation===before[kind]&&(row.stdout.includes('STALE_HELD_HELPER')||row.signal==='aborted'||row.signal==='SIGTERM'));expect(raw.generation).toBe(before[kind]);expect(raw.stdout.includes('STALE_HELD_HELPER')||raw.signal==='aborted'||raw.signal==='SIGTERM').toBe(true)
+    await expect.poll(async()=>{const native=(await context()).native.state,text=subagent?(native.tasks.find((task:any)=>task.id===taskId)?.statusText??''):(native.mainStatus??'');samples.push(text);expect(text).not.toContain('STALE_HELD_HELPER');return text.includes(subagent?'AppNativeAgent running':'AppNativeMain '+sessionId)}).toBe(true)
+    if(subagent){expect((await started()).taskIds).toContain(taskId);expect(raw.tasks.some((task:any)=>task.id===taskId&&task.status==='running')).toBe(true);await expect(appPage.locator('[data-native-agent-id="'+taskId+'"]')).toContainText('AppNativeAgent running')}
     await expect(status).not.toContainText('STALE_HELD_HELPER');await expect(composer).toHaveText(draft)
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(status).toContainText('AppNativeMain '+sessionId);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-held-helper-'+size.width+'.png')})}
-    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:false}));await expect.poll(async()=>(await generations()).main!==restricted.main).toBe(true)
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(status).toContainText('AppNativeMain '+sessionId);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-held-helper-'+kind+'-'+size.width+'.png')})}
+    await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:false}));await expect.poll(async()=>(await generations())[kind]!==restricted[kind]).toBe(true)
     await expect(status).toContainText('AppNativeMain '+sessionId);await expect(composer).toHaveText(draft)
+    if(subagent)await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.statusText,{timeout:10000}).toContain('AppNativeAgent running')
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
     samples.push(...await appPage.evaluate(()=>{(window as any).__heldHelperSubscription.unsubscribe();return (window as any).__heldHelperSamples}));expect(samples.every(text=>!text.includes('STALE_HELD_HELPER'))).toBe(true)
-    await writeFile(join(workspace!,'native-held-helper-proof.json'),JSON.stringify({started:await started(),finished:JSON.parse(await readFile(join(workspace!,'held-helper-finished.json'),'utf8').catch(()=>'null')),before,restricted,restored:await generations(),samples,raw}))
+    await writeFile(join(workspace!,'native-held-helper-proof.json'),JSON.stringify({started:await started(),finished:JSON.parse(await readFile(join(workspace!,'held-helper-finished.json'),'utf8').catch(()=>'null')),before,restricted,restored:await generations(),samples,raw,kind,taskId}))
+    if(subagent){await writeFile(join(workspace!,'native-pending-duration-release'),'release');await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.id===taskId&&task.status==='completed'),{timeout:20000}).toBe(true)}
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
     const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
     await composer.fill('Continue after the held native helper.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativeHeldHelper:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativeHeldHelper:true,...(subagent?{nativeHeldSubagentHelper:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
   }
   let nativePolicySameCommandEpochs=false,nativePolicyClientRetirement=false,nativePolicyDrawingRestoration=false
   if(transition){
