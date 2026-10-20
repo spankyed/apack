@@ -98,7 +98,9 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   await expect(bypass).toHaveAttribute('aria-pressed','false')
   await bypass.click()
   const refusal=appPage.getByRole('alert').filter({hasText:'Cannot set permission mode to bypassPermissions'})
-  const nativeReason='Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions'
+  const settingsRestriction=process.env.CLAUDE_RESEARCH_PERMISSION_RESTRICTION==='settings'
+  const notLaunchedReason='Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions'
+  const nativeReason=settingsRestriction?'Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration':notLaunchedReason
   await expect(refusal).toHaveText(nativeReason)
   await expect(bypass).toBeEnabled();await expect(bypass).toHaveAttribute('aria-pressed','false')
   const afterRefusal=await context()
@@ -108,6 +110,25 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   expect(await humanRows()).toEqual(historyBefore)
   expect(await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)).toBe(staged.stored)
   await expect(composer).toHaveText(planText)
+  const settingsTransitions=[]
+  if(settingsRestriction){
+    const settingsPath=join(workspace!,'.claude/settings.json')
+    for(const disabled of [false,true]){
+      const settings=JSON.parse(await readFile(settingsPath,'utf8'))
+      if(disabled)settings.permissions.disableBypassPermissionsMode='disable'
+      else delete settings.permissions.disableBypassPermissionsMode
+      await writeFile(settingsPath,JSON.stringify(settings))
+      await expect.poll(async()=>{
+        await expect(bypass).toBeEnabled();await bypass.click();await expect(bypass).toBeEnabled()
+        return refusal.textContent()
+      },{timeout:12000,intervals:[300]}).toBe(disabled?nativeReason:notLaunchedReason)
+      const current=await context(),stored=await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)
+      expect(current.claude.permissionMode).toBe(originalMode);expect(current.native.state.session.permissionMode).toBe(originalMode)
+      expect(current.native.state.nativePid).toBe(boundNativePid);expect(stored).toBe(staged.stored)
+      expect(await humanRows()).toEqual(historyBefore);await expect(composer).toHaveText(planText)
+      settingsTransitions.push({disabled,reason:await refusal.textContent(),mode:current.claude.permissionMode,nativeMode:current.native.state.session.permissionMode,nativePid:current.native.state.nativePid,staged:stored})
+    }
+  }
   const chooserViews=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
@@ -151,6 +172,6 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after verifying the release review phases.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-composer-phase-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,originalMode,nativeReason,chooserViews,refusedMode:afterRefusal.claude.permissionMode,refusedNativeMode:afterRefusal.native.state.session.permissionMode,planText,editText,staged,historyBefore,plannedMode:planned.claude.permissionMode,editedMode:edited.claude.permissionMode,history:await humanRows()}))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeComposerPhase:true,nativePermissionRefusal:true,nativeComposerPhaseOnSend:true,nativeComposerPhaseRestore:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-composer-phase-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,originalMode,nativeReason,settingsTransitions,chooserViews,refusedMode:afterRefusal.claude.permissionMode,refusedNativeMode:afterRefusal.native.state.session.permissionMode,planText,editText,staged,historyBefore,plannedMode:planned.claude.permissionMode,editedMode:edited.claude.permissionMode,history:await humanRows()}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeComposerPhase:true,nativePermissionRefusal:true,...(settingsRestriction?{nativePermissionSettingsRestriction:true}:{}),nativeComposerPhaseOnSend:true,nativeComposerPhaseRestore:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
