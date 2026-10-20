@@ -48,7 +48,7 @@ export interface ClaudeNativeTerminalState {
 }
 
 export interface ClaudeNativeTaskDetails {
-  workflow?: { name?: string; runId?: string; agentCount: number; phaseCount: number }
+  workflow?: { name?: string; runId?: string; agentCount: number; phaseCount: number; progress: { type: 'workflow_phase' | 'workflow_agent' | 'workflow_log'; index?: number; phaseIndex?: number; tokens?: number; toolCalls?: number; title?: string; kind?: string; label?: string; state?: string; phaseTitle?: string; agentId?: string; model?: string; error?: string; resultPreview?: string; message?: string; cached?: boolean; skipped?: boolean }[]; logs: string[]; output?: string; outputUnavailable: boolean; truncated: boolean }
   taskId: string
   name: string
   status: string

@@ -177,3 +177,21 @@ it('keeps Workflow identity and stop native without admitting Agent-only operati
  expect(await f.request('stop','workflow-a')).toEqual({stopped:true});expect(f.stop).toHaveBeenCalledWith('workflow-a',expect.objectContaining({taskRegistry:f.registry,source:'user'}))
  expect(f.show).not.toHaveBeenCalled();expect(f.runner).not.toHaveBeenCalled()
 })
+
+it('previews original Workflow phase/worker progress and terminal output without rewriting native state', () => {
+ const project=vm.runInNewContext(claudeTerminalTaskRuntime+';nativeWorkflowProgress')
+ const task={workflowProgress:[{type:'workflow_phase',index:1,title:'Review',kind:'parallel'},{type:'workflow_agent',index:1,label:'Release reviewer',phaseIndex:1,state:'done',resultPreview:'Worker result',tokens:12}],logs:['Review finished'],result:{review:'ready'}}
+ const before=JSON.stringify(task),result=project({},task)
+ expect(result).toMatchObject({progress:task.workflowProgress,logs:task.logs,output:'{"review":"ready"}',outputUnavailable:false,truncated:false})
+ expect(JSON.stringify(task)).toBe(before)
+})
+it('uses original Workflow withholding sanitizers and bounds previews explicitly', () => {
+ const project=vm.runInNewContext(claudeTerminalTaskRuntime+';nativeWorkflowProgress'),sanitize=vi.fn(()=>[{type:'workflow_phase',index:1,title:'phase 1'}]),filter=vi.fn((event:any)=>event.type!=='workflow_log')
+ const hidden={workflowProgress:[{type:'workflow_phase',index:1,title:'Private phase'},{type:'workflow_log',message:'Private log'}],logs:['Private log'],withholdScriptFromSdkEvents:true}
+ expect(project({workflowTasks:{$ar:sanitize,mAn:filter}},hidden)).toMatchObject({progress:[{type:'workflow_phase',index:1,title:'phase 1'}],logs:[]})
+ expect(sanitize).toHaveBeenCalledWith([hidden.workflowProgress[0]])
+ const circular:any={};circular.self=circular
+ const bounded=project({},{workflowProgress:Array.from({length:101},(_,index)=>({type:'workflow_agent',index,label:'x'.repeat(10000)})),result:circular})
+ expect(bounded.progress).toHaveLength(100);expect(bounded.truncated).toBe(true);expect(bounded.outputUnavailable).toBe(true)
+ expect(bounded.progress.reduce((sum:number,event:any)=>sum+(event.label?.length??0),0)).toBeLessThanOrEqual(65536)
+})

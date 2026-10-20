@@ -1,5 +1,25 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status}));}
+function nativeWorkflowProgress(n,task){
+ let budget=65536,truncated=false;
+ const text=value=>{if(typeof value!=='string')return;const limit=Math.min(4096,budget);if(value.length>limit)truncated=true;const shown=value.slice(0,limit);budget-=shown.length;return shown;};
+ const raw=Array.isArray(task.workflowProgress)?task.workflowProgress:[],withheld=task.withholdScriptFromSdkEvents===true;
+ const visible=withheld?n.workflowTasks.$ar(raw.filter(n.workflowTasks.mAn)):raw;
+ if(visible.length>100)truncated=true;
+ const progress=visible.slice(-100).flatMap(event=>{
+  if(!['workflow_phase','workflow_agent','workflow_log'].includes(event.type))return [];
+  const item={type:event.type};
+  for(const key of ['index','phaseIndex','tokens','toolCalls'])if(Number.isSafeInteger(event[key])&&event[key]>=0)item[key]=event[key];
+  for(const key of ['title','kind','label','state','phaseTitle','agentId','model','error','resultPreview','message']){const value=text(event[key]);if(value!==undefined)item[key]=value;}
+  for(const key of ['cached','skipped'])if(typeof event[key]==='boolean')item[key]=event[key];
+  return [item];
+ });
+ let output,outputUnavailable=false;
+ if(task.result!==undefined){try{let nodes=0;const encoded=JSON.stringify(task.result,(_key,value)=>{if(++nodes>10000)throw Error('Workflow result preview exceeds node limit');return value;});if(typeof encoded==='string'){const limit=Math.min(32768,budget);output=encoded.slice(0,limit);if(output.length<encoded.length)truncated=true;budget-=output.length;}}catch{outputUnavailable=true;}}
+ const logs=withheld?[]:(Array.isArray(task.logs)?task.logs:[]).slice(-100).flatMap(line=>typeof line==='string'?[text(line)]:[]);
+ if(!withheld&&Array.isArray(task.logs)&&task.logs.length>100)truncated=true;
+ return {progress,logs,...(output!==undefined?{output}:{}),outputUnavailable,truncated};
+}
 async function nativeTaskControl(n,binding,request,abort,current){
  current();
  if(typeof request.task_id!=='string'||!request.task_id||request.task_id.length>256||!['inspect','stop','send','input','foreground','background'].includes(request.operation))throw Error('Invalid native task operation');
@@ -20,7 +40,7 @@ async function nativeTaskControl(n,binding,request,abort,current){
   if(!['inspect','stop'].includes(request.operation))throw Error('Workflow tasks support inspection and native stop only');
   if(request.operation==='stop'){await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};}
   const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined,start=numeric(task.startTime),end=numeric(task.endTime);
-  current();return {details:{taskId:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,canInput:false,canMessage:false,workflow:{...(typeof task.workflowName==='string'?{name:task.workflowName.slice(0,256)}:{}),...(typeof task.workflowRunId==='string'?{runId:task.workflowRunId.slice(0,256)}:{}),agentCount:numeric(task.agentCount)??0,phaseCount:Array.isArray(task.phases)?task.phases.length:0},metadata:{promptTruncated:false,errorTruncated:(task.error?.length??0)>16384,...(typeof task.error==='string'?{error:task.error.slice(0,16384)}:{}),...(start===undefined?{}:{elapsedMs:Math.max(0,(end??Date.now())-start)}),tokenCount:numeric(task.totalTokens),toolUseCount:numeric(task.totalToolCalls)},messages:[],truncated:false}};
+  current();return {details:{taskId:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,canInput:false,canMessage:false,workflow:{...nativeWorkflowProgress(n,task),...(typeof task.workflowName==='string'?{name:task.workflowName.slice(0,256)}:{}),...(typeof task.workflowRunId==='string'?{runId:task.workflowRunId.slice(0,256)}:{}),agentCount:numeric(task.agentCount)??0,phaseCount:Array.isArray(task.phases)?task.phases.length:0},metadata:{promptTruncated:false,errorTruncated:(task.error?.length??0)>16384,...(typeof task.error==='string'?{error:task.error.slice(0,16384)}:{}),...(start===undefined?{}:{elapsedMs:Math.max(0,(end??Date.now())-start)}),tokenCount:numeric(task.totalTokens),toolUseCount:numeric(task.totalToolCalls)},messages:[],truncated:false}};
  }
  if(request.operation==='foreground'){
   if(typeof binding.view?.show!=='function'||await binding.view.show({agentId:request.task_id})!=='shown')throw Error('Native Agent view is unavailable');

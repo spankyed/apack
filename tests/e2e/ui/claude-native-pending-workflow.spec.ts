@@ -74,6 +74,7 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     }, { timeout: 25000, intervals: [250] }).toBe(true)
     const boundNativePid = (await context()).native.state.nativePid
     const composer = card.locator('[contenteditable="true"]')
+    async function composerUncovered(){for(const target of [card.getByText('AppNativeMain '+sessionId,{exact:false}),composer,card.getByRole('button',{name:'Send',exact:true})])await expect.poll(()=>target.evaluate(element=>{const box=element.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);return !!hit&&(hit===element||element.contains(hit))})).toBe(true)}
     const frames = async () => ((await context()).ui?.state.transcriptMessages ?? []).filter((frame: any) => frame.component === 'TurnDuration' && frame.body.status === 'live')
     await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
     await composer.fill('Use a workflow to review the release notes.')
@@ -150,23 +151,27 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
       await expect(row).toContainText('Review release notes');await expect(row).toContainText('running');await expect(row.getByRole('button',{name:'Open Agent',exact:true})).toHaveCount(0)
       const draft='Keep the release review notes while stopping this workflow.';await composer.fill(draft)
       await row.getByRole('button',{name:'Workflow details',exact:true}).click()
-      const details=row.getByRole('region',{name:'Workflow details',exact:true});await expect(details).toContainText('release-review');await expect(details).toContainText('wf_')
+      const details=appPage.getByRole('dialog',{name:'Workflow details',exact:true});await expect(details).toContainText('release-review');await expect(details).toContainText('wf_')
       expect((await context()).native.task.details.taskId).toBe(taskId);expect((await context()).native.task.details.canInput).toBe(false);expect((await context()).native.task.details.canMessage).toBe(false)
       const initialDetails=(await context()).native.task.details
-      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-details-'+size.width+'.png')})}
-      await row.getByRole('button',{name:'Hide Workflow details',exact:true}).click()
+      if(process.env.CLAUDE_RESEARCH_WORKFLOW_PROGRESS==='1'){await expect(details.getByRole('region',{name:'Workflow phases',exact:true})).toContainText('Review');await expect(details.getByRole('region',{name:'Workflow workers',exact:true})).toContainText('Release reviewer');await expect(details.getByRole('region',{name:'Workflow logs',exact:true})).toContainText('Release review started')}
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByText('AppNativeMain '+sessionId,{exact:false})).toBeInViewport();await expect(composer).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await composerUncovered();await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-details-'+size.width+'.png')})}
+      await appPage.getByRole('button',{name:'Close Workflow details',exact:true}).click()
       for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await workflowRegion.scrollIntoViewIfNeeded();await expect(row.getByRole('button',{name:'Stop Workflow',exact:true})).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByText('AppNativeMain '+sessionId,{exact:false})).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-running-'+size.width+'.png')})}
-      await row.getByRole('button',{name:'Stop Workflow',exact:true}).click();await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.status).toBe('killed')
-      await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status).toBe('killed');await expect(row).toContainText('Stopped');await expect(row.getByRole('button',{name:'Stop Workflow',exact:true})).toBeDisabled()
+      const completed=process.env.CLAUDE_RESEARCH_WORKFLOW_PROGRESS==='1',terminalStatus=completed?'completed':'killed'
+      if(completed)await writeFile(join(workspace!,'native-pending-duration-release'),'release');else await row.getByRole('button',{name:'Stop Workflow',exact:true}).click()
+      await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.status,{timeout:15000}).toBe(terminalStatus)
+      await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status).toBe(terminalStatus);await expect(row).toContainText(completed?'completed':'Stopped');await expect(row.getByRole('button',{name:'Stop Workflow',exact:true})).toBeDisabled()
       await expect.poll(async()=>(await context()).native.state.activity?.pendingWorkflows??0).toBe(0);await expect(composer).toHaveText(draft)
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
       await row.getByRole('button',{name:'Workflow details',exact:true}).click();
-      await row.getByRole('button',{name:'Refresh details',exact:true}).click();await expect.poll(async()=>(await context()).native.task.details?.status).toBe('killed')
+      await appPage.getByRole('button',{name:'Refresh details',exact:true}).click();await expect.poll(async()=>(await context()).native.task.details?.status).toBe(terminalStatus)
+      if(completed){await expect(details.getByRole('region',{name:'Workflow logs',exact:true})).toContainText('Release review finished');await expect(details.getByRole('region',{name:'Workflow result',exact:true})).toContainText('SubagentFixtureComplete');await expect(details.getByRole('region',{name:'Workflow workers',exact:true})).toContainText('done');for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByText('AppNativeMain '+sessionId,{exact:false})).toBeInViewport();await expect(composer).toHaveText(draft);await composerUncovered();await appPage.screenshot({path:testInfo.outputPath('native-workflow-task-completed-'+size.width+'.png')})}}
       await writeFile(join(workspace!,'native-workflow-task-controls-proof.json'),JSON.stringify({taskId,initialDetails,stoppedDetails:(await context()).native.task.details,nativeTasks:await tasks(),draft,sameNativeOwner:true}))
       await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
       const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
       await composer.fill('Continue after stopping the workflow.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowTaskControls:true,nativeWorkflowTaskStop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowTaskControls:true,nativeWorkflowTaskStop:!completed,...(completed?{nativeWorkflowProgress:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
     }
 
     await expect.poll(async () => (await frames()).some((frame: any) => /Waiting for.*dynamic workflow/.test(frame.engineOutput ?? '')), { timeout: 15000 }).toBe(true)
