@@ -208,7 +208,7 @@
           </div>
         </details>
 
-        <!-- Permission mode — segmented control. Takes effect on next turn. -->
+        <!-- Selection follows the acknowledged native mode. -->
         <div class="pt-2 mt-2 border-t border-neutral-800">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-[10px] uppercase tracking-wide text-neutral-500">Permission</span>
@@ -220,9 +220,11 @@
               :key="opt.value"
               type="button"
               @click="selectPermissionMode(opt.value)"
+              :disabled="!!permissionChange?.call"
+              :aria-pressed="permissionMode === opt.value"
               :title="opt.tooltip"
               :class="[
-                'flex-1 px-2 py-1 text-xs font-medium transition-colors border-r border-neutral-700 last:border-r-0',
+                'flex-1 px-2 py-1 text-xs font-medium transition-colors border-r border-neutral-700 last:border-r-0 disabled:opacity-50 disabled:cursor-wait',
                 permissionMode === opt.value
                   ? (opt.value === 'bypassPermissions'
                     ? 'bg-yellow-600 text-yellow-50'
@@ -233,6 +235,8 @@
               {{ opt.label }}
             </button>
           </div>
+          <p v-if="permissionChange?.call" role="status" class="mt-1.5 text-xs text-neutral-400">Waiting for Claude…</p>
+          <p v-else-if="permissionChange?.reason" role="alert" class="mt-1.5 text-xs text-amber-300 break-words">{{ permissionChange.reason }}</p>
         </div>
 
         <!-- Worktree toggle -->
@@ -271,7 +275,7 @@ import { Wrench, Copy, Check, MessageSquare } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { sendToSystem, sendToSurface } from '#generated/events.ts'
 
 
 type PermissionMode =
@@ -455,6 +459,9 @@ const permissionDescription = computed(
   () => permissionOptions.find(o => o.value === permissionMode.value)?.description ?? '',
 )
 
+const permissionChanges = usePluginState('threads', s => s.permissionModeChanges)
+const permissionChange = computed(() => permissionChanges.value[currentThreadId.value ?? ''])
+
 function selectPermissionMode(mode: PermissionMode) {
   if (mode === permissionMode.value) return
   const threadId = currentThreadId.value
@@ -462,11 +469,7 @@ function selectPermissionMode(mode: PermissionMode) {
     console.warn('[claude-session-artifact] no current thread; cannot update permission mode')
     return
   }
-  sendToSystem('threads', {
-    type: 'FORWARD_BRAIN_EVENT',
-    eventType: 'user.update.permissionMode',
-    payload: { threadId, mode },
-  })
+  sendToPlugin('threads', { type: 'SET_CLAUDE_PERMISSION_MODE', threadId, mode })
 }
 
 function clearGoal() {

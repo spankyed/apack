@@ -46,6 +46,7 @@ export interface ThreadsContext {
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
   nativeTerminalViews: Record<string, { threadId: string } & import('../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot>;
   nativeUiViews: Record<string, { threadId: string; resumeKey?: string; attachmentId?: string; mountRequest?: import('../be/types.ts').ClaudeUiMountRequest; state: ClaudeUiMountState; promptHostRequest?: ClaudePromptHostRequest; focusRevision?: number; focusSite?: string; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
+  permissionModeChanges: Record<string, { call: string | null; reason?: string }>;
   // Chat/agent
   currentThread: AgentThreadData | null;
   recentThreadIds: string[];
@@ -72,6 +73,7 @@ export interface ThreadsContext {
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */
 export type ThreadsInboxEvent =
+  | { type: 'SET_CLAUDE_PERMISSION_MODE'; threadId: string; mode: import('../../code/be/services/claude-code/types.ts').PermissionMode }
   | { type: 'SELECT_ARTIFACT'; artifactId: string }
   | { type: 'OPEN_THREAD_CHAT'; threadId: string }
   | { type: 'VIEW_THREAD'; threadId: string }

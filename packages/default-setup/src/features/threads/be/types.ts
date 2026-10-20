@@ -517,6 +517,7 @@ export type IncomingThreadsEvents =
   | { type: 'USER_COMMAND'; command: string; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string }
   | { type: 'TOGGLE_COMPACTED'; markerId: string; compacted: boolean }
   | { type: 'DELETE_MESSAGE'; messageId: string }
+  | { type: 'SET_CLAUDE_PERMISSION_MODE'; threadId: string; mode: PermissionMode }
   | { type: 'FORWARD_BRAIN_EVENT'; eventType: string; payload?: any }
   | { type: 'GET_ARCHIVED_THREADS' }
   | { type: 'REFRESH_THREADS' }
@@ -526,6 +527,7 @@ export type IncomingThreadsEvents =
   | { type: 'THREAD_DELETED'; threadId: string }
 
 export type OutgoingThreadsEvents =
+  | { type: 'CLAUDE_PERMISSION_MODE_RESULT'; threadId: string; success: boolean; reason?: string }
   | import('./claude-terminal-views.ts').ClaudeTerminalViewReply
   | { type: 'CLAUDE_PROMPT_COMPLETIONS'; threadId: string; mountId: string; result: ClaudePromptCompletionReply }
   | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }

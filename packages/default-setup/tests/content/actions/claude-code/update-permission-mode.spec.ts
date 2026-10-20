@@ -4,15 +4,24 @@ import { services, type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { action } from '../../../../src/content/actions/claude-code/update-permission-mode.ts';
 
+let getHandle: ReturnType<typeof vi.fn>;
+let getNativeTerminal: ReturnType<typeof vi.fn>;
+let updateMessageState: ReturnType<typeof vi.fn>;
+let updateChatState: ReturnType<typeof vi.fn>;
+
 function setup(handle?: { setPermissionMode: ReturnType<typeof vi.fn>; respond?: ReturnType<typeof vi.fn> }, pending = false) {
   const { id } = repository.threadCommands.create({ topic: 'Permission mode', instructions: '', tags: [] });
   repository.threadCommands.update(id, { context: { claudeCode: { permissionMode: 'default',
     ...(pending ? { pendingControlRequest: { requestId: 'permission-1', toolName: 'Write',
       approvalMessageId: 'approval-1', originalInput: { file_path: '/fixture' } } } : {}),
   } } });
-  mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => handle), getNativeTerminal: vi.fn() } as never });
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
-  mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
+  getHandle = vi.fn(() => handle);
+  getNativeTerminal = vi.fn();
+  updateMessageState = vi.fn();
+  updateChatState = vi.fn();
+  mockService<Services, 'cli'>('cli', { claudeCode: { getHandle, getNativeTerminal } as never });
+  mockService<Services, 'chat'>('chat', { updateMessageState });
+  mockService<Services, 'threads'>('threads', { updateChatState });
   return id;
 }
 function state(id: Parameters<typeof repository.threadQueries.byId>[0]) {
@@ -38,7 +47,7 @@ describe('CC: Update Permission Mode', () => {
     await expect(action({ threadId, mode: 'bypassPermissions' }, services)).resolves.toEqual({ success: false, reason: 'disabled by policy' });
     expect(state(threadId)).toMatchObject({ permissionMode: 'default', pendingControlRequest: { requestId: 'permission-1' } });
     expect(respond).not.toHaveBeenCalled();
-    expect(services.chat.updateMessageState).not.toHaveBeenCalled();
+    expect(updateMessageState).not.toHaveBeenCalled();
   });
 
   it('saves a valid next-turn choice without a running process and rejects unknown modes', async () => {
@@ -55,7 +64,7 @@ describe('CC: Update Permission Mode', () => {
     expect(respond).toHaveBeenCalledWith('permission-1', { behavior: 'allow', updatedInput: { file_path: '/fixture' } });
     expect(state(threadId)).toMatchObject({ permissionMode: 'bypassPermissions', isRunning: true });
     expect(state(threadId)?.pendingControlRequest).toBeUndefined();
-    expect(services.threads.updateChatState).toHaveBeenCalledWith(threadId, 'working');
+    expect(updateChatState).toHaveBeenCalledWith(threadId, 'working');
   });
 
   it('keeps a replacement user-interaction request when it changes during the mode acknowledgement', async () => {
@@ -77,7 +86,7 @@ describe('CC: Update Permission Mode', () => {
     const original = { setPermissionMode: vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; })), respond };
     const threadId = setup(original, true);
     const update = action({ threadId, mode: 'bypassPermissions' }, services);
-    vi.mocked(services.cli.claudeCode.getHandle).mockReturnValue({ setPermissionMode: vi.fn() } as never);
+    getHandle.mockReturnValue({ setPermissionMode: vi.fn() } as never);
     acknowledge('bypassPermissions');
     await expect(update).resolves.toMatchObject({ success: false, reason: 'active Claude session changed while changing mode' });
     expect(respond).not.toHaveBeenCalled();
@@ -91,24 +100,24 @@ describe('native terminal permission ownership', () => {
   it('persists only the acknowledged native mode', async () => {
     const threadId = setup();
     let acknowledge!: (mode: string) => void;
-    const native = { setPermissionMode: vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; })) };
-    vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(native as never);
+    const native = { state: { session: { prePlanMode: 'default' } }, setPermissionMode: vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; })) };
+    getNativeTerminal.mockReturnValue(native as never);
     const changing = action({ threadId, mode: 'plan' }, services);
     expect(state(threadId)?.permissionMode).toBe('default');
     acknowledge('plan');
     await expect(changing).resolves.toEqual({ success: true });
     expect(native.setPermissionMode).toHaveBeenCalledWith('plan');
-    expect(state(threadId)?.permissionMode).toBe('plan');
+    expect(state(threadId)).toMatchObject({ permissionMode: 'plan', prePlanMode: 'default' });
   });
   it('retains app mode when native policy refuses or the owner changes', async () => {
     const threadId = setup();
     const native = { setPermissionMode: vi.fn().mockRejectedValue(new Error('Native policy refused')) };
-    vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(native as never);
+    getNativeTerminal.mockReturnValue(native as never);
     await expect(action({ threadId, mode: 'plan' }, services)).resolves.toEqual({ success: false, reason: 'Native policy refused' });
     let acknowledge!: (mode: string) => void;
     native.setPermissionMode.mockImplementation(() => new Promise<string>(resolve => { acknowledge = resolve; }));
     const changing = action({ threadId, mode: 'plan' }, services);
-    vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue(undefined);
+    getNativeTerminal.mockReturnValue(undefined);
     acknowledge('plan');
     await expect(changing).resolves.toMatchObject({ success: false });
     expect(state(threadId)?.permissionMode).toBe('default');

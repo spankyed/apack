@@ -836,6 +836,20 @@ export const threadsSystem = setup({
         payload: { threadId },
       });
     },
+    setClaudePermissionMode: async ({ event, reply }) => {
+      // A chooser outcome belongs only to the window that requested it.
+      if (!reply) return;
+      const { threadId, mode } = threadsSpec.typeOf('SET_CLAUDE_PERMISSION_MODE', event);
+      try {
+        const result = await services.action.executeIfFound('CC: Update Permission Mode', { threadId, mode });
+        reply({ type: 'CLAUDE_PERMISSION_MODE_RESULT', threadId,
+          success: result?.success === true,
+          ...(result?.success === true ? {} : { reason: result?.reason ?? 'Permission action is unavailable' }),
+        });
+      } catch (error) {
+        reply({ type: 'CLAUDE_PERMISSION_MODE_RESULT', threadId, success: false, reason: errorMessage(error) });
+      }
+    },
     forwardBrainEvent: ({ event }) => {
       const { eventType, payload } = threadsSpec.typeOf('FORWARD_BRAIN_EVENT', event);
       sendToSystem('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType, payload });
@@ -1006,6 +1020,7 @@ export const threadsSystem = setup({
           PAUSE_TURN: {
             actions: 'pauseTurn',
           },
+          SET_CLAUDE_PERMISSION_MODE: { actions: 'setClaudePermissionMode' },
           FORWARD_BRAIN_EVENT: {
             actions: 'forwardBrainEvent',
           },

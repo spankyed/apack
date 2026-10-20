@@ -5,6 +5,7 @@ import { ref as featureRef } from '#generated/ref.ts'
 const storage = surfaceStorage(featureRef('threads'))
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
+import { answersCall, newCall } from '@apackdev/sdk/events'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import { safeEvents } from '@apackdev/sdk/fe';
@@ -145,6 +146,7 @@ type SystemEvent =
   | { type: 'ARCHIVED_THREADS_DATA'; threads: any[] }
 
 type UIEvent =
+  | Extract<import('./contract.ts').ThreadsInboxEvent, { type: 'SET_CLAUDE_PERMISSION_MODE' }>
   | import('../be/claude-terminal-views.ts').ClaudeTerminalViewRequest
   | ClaudeUiViewRequest
   // Thread management events
@@ -1502,6 +1504,7 @@ const threadsState = setup({
     threadsExport: { status: 'idle' as const, errors: [], filePath: '', threadCount: 0 },
     nativeTerminalViews: {},
     nativeUiViews: {},
+    permissionModeChanges: {},
     // Chat/agent
     currentThread: defaultChatThread,
     recentThreadIds: [] as string[],
@@ -1524,6 +1527,21 @@ const threadsState = setup({
     sidebarArchivedThreads: [],
   }),
   on: {
+    SET_CLAUDE_PERMISSION_MODE: { actions: enqueueActions(({ context, event, enqueue }) => {
+      if (context.permissionModeChanges[event.threadId]?.call) return;
+      const call = newCall();
+      enqueue.assign(({ context }) => ({ permissionModeChanges: {
+        ...context.permissionModeChanges, [event.threadId]: { call },
+      } }));
+      enqueue(() => sendToSystem(id, event, { call }));
+    }) },
+    CLAUDE_PERMISSION_MODE_RESULT: { actions: assign(({ context, event }) => {
+      const pending = context.permissionModeChanges[event.threadId];
+      if (!pending || !answersCall(event, pending.call)) return {};
+      return { permissionModeChanges: { ...context.permissionModeChanges,
+        [event.threadId]: { call: null, ...(event.success ? {} : { reason: event.reason ?? 'Permission change was refused' }) },
+      } };
+    }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
     CLAUDE_UI_MOUNT: { actions: [assign(({ context, event }) => ({ nativeUiViews: {
       ...context.nativeUiViews, [event.mountId]: { ...(context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } }), mountRequest: event },
