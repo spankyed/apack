@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const workflowStanding=process.env.CLAUDE_RESEARCH_WORKFLOW_STANDING==='1'
 const workflowEditor=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR==='1'
 const workflowEditorWithheld=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR_WITHHELD==='1'
 const workflowDeny=process.env.CLAUDE_RESEARCH_WORKFLOW_DENY==='1',workflowWithheld=workflowEditorWithheld||process.env.CLAUDE_RESEARCH_WORKFLOW_WITHHELD==='1'
@@ -126,7 +127,7 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
       await approval.getByRole('button',{name:'View workflow summary',exact:true}).click();await expect(summary).toContainText('Return the synthetic worker marker only.')
     }
     await writeFile(join(workspace!,'native-workflow-summary-proof.json'),JSON.stringify({summaryText,scriptText,retainedDraft,normalAndCompact:true}))
-    await approval.getByRole('button', { name: 'Yes, run it', exact: true }).click()
+    if(workflowStanding){const standing=approval.getByRole('combobox',{name:'Workflow approval choice',exact:true});await expect(standing).toBeVisible();await standing.selectOption('yes-always');for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await standing.scrollIntoViewIfNeeded();await expect(standing).toBeInViewport();await expect(approval.getByRole('button',{name:/don't ask again/})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-standing-'+size.width+'.png')})}await approval.getByRole('button',{name:/don't ask again/}).click()}else await approval.getByRole('button', { name: 'Yes, run it', exact: true }).click()
     await expect(approval).toHaveCount(0)
     await composer.fill(retainedDraft);await expect(composer).toHaveText(retainedDraft)
     const tasks = async () => JSON.parse(await readFile(join(workspace!, 'native-workflow-state.json'), 'utf8').catch(() => '[]'))
@@ -192,6 +193,6 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill('Continue the same session after the pending worker review.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, nativeWorkflowSummary: true, ...(workflowEditor?{nativeWorkflowEditor:true,...(workflowEditorWithheld?{nativeWorkflowEditorWithheld:true}:{})}:{}), nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, ...(workflowStanding?{nativeWorkflowStanding:true}:{}), nativeWorkflowSummary: true, ...(workflowEditor?{nativeWorkflowEditor:true,...(workflowEditorWithheld?{nativeWorkflowEditorWithheld:true}:{})}:{}), nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })
