@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const workflowGrantScope=process.env.CLAUDE_RESEARCH_WORKFLOW_GRANT_SCOPE==='1'
 const workflowStanding=process.env.CLAUDE_RESEARCH_WORKFLOW_STANDING==='1'
 const workflowEditor=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR==='1'
 const workflowEditorWithheld=process.env.CLAUDE_RESEARCH_WORKFLOW_EDITOR_WITHHELD==='1'
@@ -180,6 +181,21 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     const after = (await context()).native.state.activity
     if(workflowQueue){const drained=(await queue()).snapshots.at(-1);expect(drained.counts.pendingWorkflows).toBe(0);await writeFile(join(workspace!,'native-queued-completion-proof.json'),JSON.stringify({held,drained}))}
+    if(workflowGrantScope){
+      const approvalIds=async()=>{const inspection=JSON.parse(await readFile(join(workspace!,'native-dialog-shapes.json'),'utf8'));return [...new Set(inspection.events.flatMap((event:any)=>event.value?.open??[]).filter((dialog:any)=>dialog.kind==='permission_workflow').map((dialog:any)=>dialog.id))]}
+      const initialApprovalCount=(await approvalIds()).length,priorTasks=(await tasks()).map((task:any)=>task.id)
+      await composer.fill('Run the saved release review again.');await card.getByRole('button',{name:'Send',exact:true}).click()
+      await expect.poll(async()=>(await tasks()).some((task:any)=>!priorTasks.includes(task.id)&&task.status==='completed'),{timeout:15000}).toBe(true)
+      await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await expect(approval).toHaveCount(0)
+      const repeatedApprovalCount=(await approvalIds()).length;expect(repeatedApprovalCount).toBe(initialApprovalCount)
+      const repeatedTasks=await tasks();await composer.fill('Run the separate security review.');await card.getByRole('button',{name:'Send',exact:true}).click()
+      await expect(approval).toBeVisible();await expect(approval.getByTestId('native-workflow-description')).toContainText('Review security notes')
+      const unrelatedToken=(await context()).claude.pendingControlRequest.nativeTerminal.workflow.token
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(approval.getByRole('button',{name:'Deny',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-workflow-unrelated-'+size.width+'.png')})}
+      await approval.getByRole('button',{name:'Deny',exact:true}).click();await expect(approval).toHaveCount(0);await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+      expect((await tasks()).map((task:any)=>task.id)).toEqual(repeatedTasks.map((task:any)=>task.id))
+      await writeFile(join(workspace!,'native-workflow-grant-scope-proof.json'),JSON.stringify({initialApprovalCount,repeatedApprovalCount,priorTasks,repeatedTasks,unrelatedToken,finalApprovalIds:await approvalIds(),unrelatedNotLaunched:true}))
+    }
     const before = new Set((await frames()).map((frame: any) => frame.uuid))
     await composer.fill('Continue the release review after the worker finishes.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await frames()).some((frame: any) => !before.has(frame.uuid) && /for \d/.test(frame.engineOutput ?? '') && !/Waiting for/.test(frame.engineOutput ?? '')), { timeout: 15000 }).toBe(true)
@@ -193,6 +209,6 @@ test('mirrors original pending workflow duration and completion', async ({ app, 
     await composer.fill('Continue the same session after the pending worker review.'); await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, ...(workflowStanding?{nativeWorkflowStanding:true}:{}), nativeWorkflowSummary: true, ...(workflowEditor?{nativeWorkflowEditor:true,...(workflowEditorWithheld?{nativeWorkflowEditorWithheld:true}:{})}:{}), nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'task-controls', nativeQueuedCompletion:workflowQueue===true,nativePendingDuration: true, nativeWorkflowApproval: true, ...(workflowGrantScope?{nativeWorkflowMatchingRepeat:true,nativeWorkflowUnrelatedDenied:true}:{}), ...(workflowStanding?{nativeWorkflowStanding:true}:{}), nativeWorkflowSummary: true, ...(workflowEditor?{nativeWorkflowEditor:true,...(workflowEditorWithheld?{nativeWorkflowEditorWithheld:true}:{})}:{}), nativeWorkflowActivity: true, nativeWorkflowConcurrentPrompt: true, nativePendingWorkflow: true, nativePendingCompletion: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } finally { await writeFile(join(workspace!, 'native-pending-duration-screen.txt'), lastScreen); terminal.dispose() }
 })
