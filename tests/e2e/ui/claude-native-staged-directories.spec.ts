@@ -49,7 +49,7 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
     const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));
     const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);
-    const cols=row?.match(/columns:\s*(\d+)/)?.[1];return cols?{cols:Number(cols),rows:200}:undefined;
+    const cols=row?.match(/columns:\s*(\d+)/)?.[1],rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined;
   }
   await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
@@ -89,13 +89,25 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
 
   const draft='Keep reviewing the staged project folders.'
   const stop=async()=>{await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/);const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()}
-  const read=async(turn:number)=>{const before=(await context()).messages.filter((message:any)=>message.text?.includes('Directory review complete.')).length;await composer.fill('ResearchDirectoryTurn'+turn);await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await expect.poll(async()=>(await context()).messages.filter((message:any)=>message.text?.includes('Directory review complete.')).length).toBeGreaterThan(before)}
+  const read=async(turn:number)=>{const before=(await context()).messages.filter((message:any)=>message.text?.includes('Directory review complete.')).length;await composer.fill('ResearchDirectoryTurn'+turn);await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');const approval=appPage.getByRole('region',{name:'Read approval',exact:true});await expect(approval).toBeVisible();await expect(approval.getByTestId('native-read-path')).toHaveText(turn===1?directoryFixture.file:directoryFixture.secondFile);await approval.getByRole('button',{name:'Approve',exact:true}).click();await expect(approval).toHaveCount(0);await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await expect.poll(async()=>(await context()).messages.filter((message:any)=>message.text?.includes('Directory review complete.')).length).toBeGreaterThan(before)}
   await read(1);await composer.fill(draft)
   await expect.poll(async()=>(await context()).claude.nativeLaunch?.addDir).toContain(firstDirectory)
   await stop();await stageDirectory(secondDirectory)
   await expect(composer).toHaveText(draft)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  await expect.poll(async()=>(await context()).native?.state.status,{timeout:25000}).toBe('live')
+  let reopenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined,reopenSequence=0,reopenNavigated=false,reopenTrustAt=0,reopenTrustAttempts=0
+  try{await expect.poll(async()=>{
+    const native=(await context()).native;if(!native?.state||typeof native.state.nativePid!=='number'||native.state.nativePid===boundNativePid)return false;if(native.state.status==='live')return true;if(['error','exited'].includes(native.state.status))throw Error('Native reopen ended before trust was accepted')
+    if(!reopenTerminal){const size=await resize();if(!size)return false;reopenTerminal=new Terminal({cols:size.cols,rows:size.rows,allowProposedApi:true})}
+    const chunks=native.output.filter((chunk:any)=>chunk.sequence>reopenSequence);if(chunks.length){await new Promise<void>(resolve=>reopenTerminal!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));reopenSequence=chunks.at(-1).sequence}
+    const buffer=reopenTerminal.buffer.active,text=Array.from({length:reopenTerminal.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n'),screen=recognizeOnboardingPrompt(text,workspace)
+    await writeFile(join(workspace!,'native-directory-reopen-gate.json'),JSON.stringify({state:native.state,text,screen,reopenNavigated,reopenTrustAttempts}))
+    if((screen==='workspace-trust'||screen==='workspace-trust-selected')&&!reopenNavigated)await appPage.screenshot({path:testInfo.outputPath('native-directory-reopen-trust.png')})
+    if(screen==='workspace-trust'&&!reopenNavigated){reopenNavigated=true;reopenTrustAt=Date.now();await input.press('ArrowDown')}
+    else if(screen==='workspace-trust-selected'&&reopenTrustAttempts===0&&(!reopenNavigated||Date.now()-reopenTrustAt>1200)){reopenTrustAttempts++;reopenTrustAt=Date.now();await input.press('Enter')}
+    return native.state.status==='live'
+  },{timeout:25000,intervals:[250]}).toBe(true)}finally{reopenTerminal?.dispose()}
+
   const reopenedNativePid=(await context()).native.state.nativePid;expect(reopenedNativePid).not.toBe(boundNativePid)
   expect((await context()).native.state.sessionId).toBe(sessionId)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
