@@ -14,8 +14,29 @@
           @crumb-click="(target: string, info?: any) => send({ type: 'TRAIL_CLICK', target, info })"
           @menu-action="handleMenuAction"
         />
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          <SurfacePane :surface="activeSurface" area="canvas" :target="targetView" />
+        <div ref="content" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            v-show="!canShowChat || canvasShare > 0"
+            class="min-h-0 overflow-y-auto"
+            :style="{ flex: canShowChat ? `${canvasShare} 1 0%` : '1 1 0%' }"
+          >
+            <SurfacePane :surface="activeSurface" area="canvas" :target="targetView" />
+          </div>
+          <PanelResizer
+            v-if="canShowChat"
+            orientation="vertical"
+            :collapsed="canvasShare === 0"
+            @resize="handleCanvasResize"
+            @click="canvasShare = canvasShare === 0 ? 35 : 0"
+          />
+          <ChatArea
+            v-if="canShowChat"
+            data-onboarding-id="chat-area"
+            class="relative min-h-0 overflow-hidden"
+            :style="{ flex: `${100 - canvasShare} 1 0%`, minHeight: 'min(180px, 100%)' }"
+          >
+            <SurfacePane :surface="activeSurface" area="chat" />
+          </ChatArea>
         </div>
       </div>
 
@@ -43,6 +64,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { PanelRight } from 'lucide-vue-next'
 import { applicationState } from '@/main'
+import ChatArea from '@/views/layout/ChatArea.vue'
 import InspectionPanel from '@/views/layout/InspectionPanel.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import PopoutTitlebar from '@/views/layout/PopoutTitlebar.vue'
@@ -63,6 +85,17 @@ const breadcrumbs = useSelector(applicationState, (state) => state.context.bread
 const contextMenuItems = useSelector(applicationState, (state) => state.context.contextMenuItems)
 const targetView = useSelector(applicationState, (state) => state.context.targetView)
 const panelSizes = useSelector(applicationState, (state) => state.context.panelSizes)
+
+const content = ref<HTMLElement>()
+// Each popout keeps its own split; resizing it must not move the main window's canvas.
+const canvasShare = ref(35)
+const canShowChat = computed(() => !!activeSurface.value.chat)
+const handleCanvasResize = (delta: number) => {
+  const height = content.value?.clientHeight
+  if (!height) return
+  const maximum = Math.max(0, (height - 180) / height * 100)
+  canvasShare.value = Math.max(0, Math.min(maximum, canvasShare.value + delta / height * 100))
+}
 
 const canShowPanel = computed(() => !!activeSurface.value.panel)
 const isPanelOpen = computed(() => panelSizes.value.inspectionWidth > 0)
