@@ -108,10 +108,26 @@ test('persists original Config callbacks and returns to composing', async ({ app
     await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden();await expect(composer).toBeFocused()
     await composer.fill('Keep this release review after changing '+change.label+'.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
   }
+  const userSettings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
+  for(const language of ['French','']){
+    await open();const keyboard=panel.locator('textarea.xterm-helper-textarea')
+    await keyboard.pressSequentially('Language');await expect.poll(screen).toContain('Language')
+    await keyboard.press('ArrowDown');await keyboard.press('Enter')
+    await keyboard.press('Control+u');if(language)await keyboard.pressSequentially(language);await keyboard.press('Enter')
+    await expect.poll(async()=>(await userSettings()).language).toBe(language===''?undefined:language)
+    receipts.push({label:'Language',value:language,settings:await userSettings(),screen:await screen()})
+    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await appPage.screenshot({path:testInfo.outputPath('native-config-language-'+(language||'cleared')+'-'+width+'.png')})}
+    await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden();await expect(composer).toBeFocused()
+    if(language==='French'){
+      const before=(await context()).turns
+      await composer.fill('Summarize the release review in one sentence.');await card.getByRole('button',{name:'Send',exact:true}).click()
+      await expect.poll(async()=>(await context()).turns).toBeGreaterThan(before)
+    }
+  }
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after configuring the release review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-config-callbacks-proof.json'),JSON.stringify({receipts,sessionId,boundNativePid},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigCallbacks:true,nativeConfigPersistence:true,nativeConfigReturn:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigLanguage:true,nativeConfigCallbacks:true,nativeConfigPersistence:true,nativeConfigReturn:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
