@@ -298,7 +298,7 @@ it('routes only current mount focus identities and drops late replies after redr
   const focusId = latest(), event = { revision: 1, isHeld: true, by: 'person' as const, focusId }
   f.ui.focus.mockResolvedValueOnce({ moved: true, element: { plugin: 'fixture', key: 'run' } })
   await expect(view.focus(event)).resolves.toEqual({ revision: 1, moved: true, focusId })
-  expect(f.ui.focus).toHaveBeenCalledWith(expect.objectContaining({ component: 'AbovePrompt', instance_id: 'above-prompt', element: { plugin: 'fixture', key: 'run' } }))
+  expect(f.ui.focus).toHaveBeenCalledWith(expect.objectContaining({ component: 'AbovePrompt', instance_id: expect.stringMatching(/^apack-[a-f0-9-]+:above-prompt$/), element: { plugin: 'fixture', key: 'run' } }))
   await expect(view.focus({ ...event, revision: 2, focusId: 'foreign' })).resolves.toBeUndefined()
   expect(f.ui.focus).toHaveBeenCalledTimes(1)
   const pending = deferred<{ moved: boolean; element: { plugin: string; key: string } | null }>()
@@ -320,7 +320,7 @@ it('scopes plugin focus pushes to the attached client, canonical site and live d
   const f = fixture(), view = f.mount()
   await view.ready; await vi.advanceTimersByTimeAsync(50)
   const clientId = (f.ui.attach.mock.calls[0] as unknown as [{ client_id: string }])[0].client_id
-  const push = { type: 'system', subtype: 'ui_focus', client_id: clientId, component: 'AbovePrompt', instance_id: 'above-prompt', plugin: 'fixture', key: 'run' }
+  const push = { type: 'system', subtype: 'ui_focus', client_id: clientId, component: 'AbovePrompt', instance_id: `${clientId}:above-prompt`, plugin: 'fixture', key: 'run' }
   const deliver = (value: object) => { for (const listener of f.listeners) listener(value as StreamLine) }
   for (const change of [{ client_id: 'foreign' }, { component: 'Pane' }, { instance_id: 'foreign' }, { plugin: 'foreign' }, { key: 'unknown' }]) deliver({ ...push, ...change })
   expect(f.focusRequests).toEqual([])
@@ -554,4 +554,15 @@ it('publishes only valid current-owner prompt palettes without rerendering nativ
  expect(f.states.at(-1)?.promptPalette?.text).toBe('#123456');
  await view.dispose();expect(f.states.at(-1)?.promptPalette).toBeUndefined();
  const updates=f.states.length;listener({type:'system',subtype:'ui_prompt_theme',palette:{text:'#abcdef'}} as StreamLine);expect(f.states).toHaveLength(updates);
+})
+
+
+it('gives simultaneous composer mounts distinct native render sites on the same owner', async () => {
+  const f = fixture(), first = f.mount(), second = f.mount()
+  await Promise.all([first.ready, second.ready]); await vi.advanceTimersByTimeAsync(50)
+  const sites = f.ui.render.mock.calls as unknown as [{ client_id: string; instance_id: string }][]
+  expect(sites).toHaveLength(2)
+  expect(new Set(sites.map(([site]) => site.instance_id)).size).toBe(2)
+  for (const [site] of sites) expect(site.instance_id).toBe(`${site.client_id}:above-prompt`)
+  await first.dispose(); await second.dispose()
 })

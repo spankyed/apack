@@ -34,7 +34,7 @@ export function mountClaudeUi(options: {
 }) {
   const { owner } = options
   const client = { client_id: `apack-${randomUUID()}`, surface: 'desktop' as const }
-  const instanceId = 'above-prompt'
+  const instanceId = `${client.client_id}:above-prompt`
   let disposed = false
   let attached = false
   let attachmentError: string | undefined
