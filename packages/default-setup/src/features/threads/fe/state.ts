@@ -789,6 +789,9 @@ const threadsState = setup({
     },
     sendMessage: enqueueActions(({ enqueue, context, event }) => {
       const { text, references } = typeOf('SEND_MESSAGE', event);
+      // Explicit print submission supersedes a leftover next-native-turn choice.
+      const staged = context.currentThread?.id ? readClaudeComposerPhase(context.currentThread.id) : undefined;
+      if (staged && context.currentThread?.id) commitClaudeComposerPhase(context.currentThread.id, staged.revision);
       sendToSystem(id, {
         type: 'USER_MSG',
         text,

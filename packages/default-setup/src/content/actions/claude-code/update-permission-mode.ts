@@ -51,7 +51,8 @@ export async function action(
   if (control && (currentNative ?? currentHandle) !== control || !control && currentNative) {
     return { success: false, reason: 'active Claude session changed while changing mode' };
   }
-  const updates: Record<string, unknown> = { permissionMode: mode };
+  const updates: Record<string, unknown> = { permissionMode: mode,
+    prePlanMode: mode === 'plan' ? currentNative?.state.session?.prePlanMode ?? (prior.permissionMode === 'plan' ? prior.prePlanMode : prior.permissionMode ?? 'default') : undefined };
 
   // If switching to bypass and there's a paused control request, auto-approve it.
   if (mode === 'bypassPermissions') {

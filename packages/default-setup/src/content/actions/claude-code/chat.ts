@@ -278,7 +278,9 @@ export async function action(
 
   // Read the user's current permission-mode and worktree choices.
   const activePermissionMode = prior?.permissionMode ?? 'acceptEdits';
-  const effectivePermissionMode = phase === 'Plan' ? 'plan' : activePermissionMode;
+  const effectivePermissionMode = phase === 'Plan' ? 'plan' : phase === 'Edit' && activePermissionMode === 'plan' ? prior?.prePlanMode ?? 'default' : activePermissionMode;
+  const prePlanMode = effectivePermissionMode === 'plan' ? activePermissionMode === 'plan' ? prior?.prePlanMode : activePermissionMode : undefined;
+  const startupPermissionMode = effectivePermissionMode === 'plan' ? prePlanMode ?? 'default' : effectivePermissionMode;
   const useWorktree = prior?.useWorktree ?? false;
   log.debug('active settings', { permissionMode: effectivePermissionMode, worktree: useWorktree });
 
@@ -350,7 +352,7 @@ export async function action(
       revertTo: revertTo?.cliUuid ?? null,
       forkFrom: forkFrom?.cliUuid ?? null,
       forkSession: !!(forkFrom || revertTo),
-      permissionMode: effectivePermissionMode,
+      permissionMode: startupPermissionMode,
       // Make the user's live bypass toggle available; this does not select bypass mode.
       allowDangerouslySkipPermissions: true,
       hasSystemPrompt: !!composedSystemPrompt,
@@ -438,7 +440,7 @@ export async function action(
       resume: resumeSessionId,
       model,
       includePartialMessages: true,
-      permissionMode: effectivePermissionMode,
+      permissionMode: startupPermissionMode,
       // Make the user's live bypass toggle available; this does not select bypass mode.
       allowDangerouslySkipPermissions: true,
       allowedTools: allowedTools ?? DEFAULT_ALLOWED_TOOLS,
@@ -473,7 +475,12 @@ export async function action(
       turn => consumeConversationTurn(turn, { services, threadId, text: '',
         sessionCwd: services.cli.claudeCode.getConversation(threadId)?.owner.sessionCwd ?? sessionCwd, useWorktree,
         phase: getClaudeState(services, threadId)?.permissionMode === 'plan' ? 'Plan' : undefined }));
-    if (conversation) await owner.handle.setPermissionMode(effectivePermissionMode as any);
+    const acknowledgedMode = conversation || effectivePermissionMode === 'plan'
+      ? await owner.handle.setPermissionMode(effectivePermissionMode)
+      : await owner.handle.getPermissionMode();
+    if (acknowledgedMode !== effectivePermissionMode) throw new Error('Native composer permission mode was not acknowledged');
+    if (services.cli.claudeCode.getConversation(threadId)?.owner !== owner || owner.closing) throw new Error('Claude conversation changed while applying composer phase');
+    persistClaudeState(services, threadId, { permissionMode: acknowledgedMode, prePlanMode: acknowledgedMode === 'plan' ? prePlanMode : undefined });
     if (owner.busy) {
       enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
       if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);

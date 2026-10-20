@@ -11,10 +11,10 @@ vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({cre
   projection:f.projection, session:{metadata:{permissionMode:'default'},update:f.update},
   uiTransport:{request:f.request}, submit:f.submit,
 })}))
-async function fixture() {
+async function fixture(options: {permissionMode?: 'plan';prePlanMode?: 'acceptEdits'} = {}) {
   let exit!: (event:{exitCode:number})=>void
   f.spawn.mockImplementation(() => ({pid:0,onData(){},onExit(callback:typeof exit){exit=callback},kill(){exit({exitCode:0})}}))
-  const prepared = await prepareClaudeNativeTerminal({sessionId:f.projection.sessionId,cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
+  const prepared = await prepareClaudeNativeTerminal({sessionId:f.projection.sessionId,cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},...options})
   return {prepared,owner:await prepared.start()}
 }
 beforeEach(() => {
@@ -26,11 +26,11 @@ it('requires the native phase acknowledgement before admitting the human prompt'
   const {prepared,owner}=await fixture()
   try {
     const order:string[]=[]
-    f.request.mockImplementation(async request => {order.push(request.subtype);return request.subtype==='apack_parent_prompt_state'?{main:true}:{mode:'plan'}})
+    f.request.mockImplementation(async request => {order.push(request.subtype);return request.subtype==='apack_parent_prompt_state'?{main:true}:{mode:'plan',prePlanMode:'default'}})
     f.submit.mockImplementation(async () => {order.push('human');return {sessionId:f.projection.sessionId,uuid:'original',text:'My plan'}})
     await expect(owner.submit('My plan',undefined,'Plan')).resolves.toMatchObject({uuid:'original'})
     expect(order).toEqual(['apack_parent_prompt_state','apack_set_composer_phase','human'])
-    expect(f.update).toHaveBeenCalledWith({permissionMode:'plan'})
+    expect(f.update).toHaveBeenCalledWith({permissionMode:'plan',prePlanMode:'default'})
   } finally {await prepared.dispose()}
 })
 it.each(['refused','unacknowledged','session-changed'])('retains the prompt when phase application is %s', async failure => {
@@ -72,4 +72,17 @@ it('waits for an outstanding permission change before admitting a parent prompt'
     expect(f.submit).not.toHaveBeenCalled()
     release({mode:'acceptEdits'});await changing
   } finally {await prepared.dispose()}
+})
+
+it('checks saved Plan restoration through the existing session-bound owner snapshot before parent admission',async()=>{
+ const {prepared,owner}=await fixture({permissionMode:'plan',prePlanMode:'acceptEdits'})
+ try{
+  const order:string[]=[]
+  f.request.mockImplementation(async request=>{order.push(request.subtype);return request.subtype==='apack_owner_snapshot'?{sessionId:f.projection.sessionId}:request.subtype==='apack_parent_prompt_state'?{main:true}:{mode:'acceptEdits'}})
+  f.submit.mockImplementation(async()=>{order.push('human');return {sessionId:f.projection.sessionId,uuid:'original',text:'Edit'}})
+  await owner.submit('Edit',undefined,'Edit')
+  expect(order).toEqual(['apack_owner_snapshot','apack_parent_prompt_state','apack_set_composer_phase','human'])
+  order.length=0;await owner.submit('Continue',undefined,'Edit')
+  expect(order).toEqual(['apack_parent_prompt_state','apack_set_composer_phase','human'])
+ }finally{await prepared.dispose()}
 })

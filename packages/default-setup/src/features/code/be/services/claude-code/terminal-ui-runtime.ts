@@ -640,6 +640,18 @@ function checkpointNativeCost(n,sessionId){
  costCheckpoint=result.then(()=>{},()=>{});
  return result;
 }
+let planContextRestored=false;
+function restoreNativePlanContext(n,context,sessionId){
+ if(planContextRestored||config.restorePlan?.sessionId!==sessionId)return;
+ const before=context.getAppState().toolPermissionContext;
+ if(before.mode==='plan'&&before.prePlanMode!==config.restorePlan.mode){
+  for(const mode of [config.restorePlan.mode,'plan']){
+   const result=n.permissions.bC(mode,context.getAppState().toolPermissionContext,update=>context.setToolPermissionContext(update));
+   if(!result.ok||context.getAppState().toolPermissionContext.mode!==result.mode)throw Object.assign(Error(result.error??'Native Plan restoration was not acknowledged'),{apackPlanRestore:true});
+  }
+ }
+ planContextRestored=true;
+}
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
@@ -663,6 +675,7 @@ async function control(request,abort){
   const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js');
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
+  restoreNativePlanContext(n,binding.toolContext(abort),sessionId);
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
@@ -673,7 +686,7 @@ async function control(request,abort){
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
-  return {sessionId,view,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
+  return {sessionId,view,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
  if(request.subtype==='apack_plan_dialogs'){
   let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
@@ -843,7 +856,7 @@ async function control(request,abort){
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native permission controls are not ready');
   const context=binding.toolContext(new AbortController());
   const before=context.getAppState().toolPermissionContext;
-  if(request.subtype==='apack_get_permission_mode')return {mode:before.mode};
+  if(request.subtype==='apack_get_permission_mode')return {mode:before.mode,prePlanMode:before.prePlanMode};
   let requestedMode=request.mode;
   if(request.subtype==='apack_set_composer_phase'){
    if(request.phase!=='Plan'&&request.phase!=='Edit')throw Error('Invalid native composer phase');
@@ -853,7 +866,7 @@ async function control(request,abort){
   if(!result.ok)throw Error(result.error);
   const mode=context.getAppState().toolPermissionContext.mode;
   if(mode!==result.mode)throw Error('Native permission mode was not applied');
-  return {mode};
+  return {mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode};
  }
  if(request.subtype==='apack_prompt_outcome')return promptOutcome(n,request.submission_id);
  if(request.subtype==='apack_terminal_draft'){
@@ -1146,6 +1159,6 @@ const ownerTimer=setInterval(async()=>{
    if(outcome.drop)await ownerPost('/submission',{id:pending.id,drop:outcome.drop});
    else if(outcome.accepted){await ownerPost('/append',{...outcome.accepted,submissionId:pending.id});await ownerPost('/submission',{id:pending.id,accepted:true});}
   }
- }catch{}finally{ownerReading=false;}
+ }catch(error){if(error?.apackPlanRestore===true)await ownerPost('/observer-error',{message:error.message}).catch(()=>{});}finally{ownerReading=false;}
 },250);ownerTimer.unref();
 `

@@ -105,7 +105,7 @@ export function clearHandle(key: string): void {
   } else stop(key)
 }
 
-export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows' | 'signal'> & { resume?: ClaudeNativeLaunch }
+export type ClaudeNativeTerminalHandoffOptions = Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'columns' | 'rows' | 'signal' | 'prePlanMode'> & { resume?: ClaudeNativeLaunch }
 export function getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined { return terminals.get(key) }
 
 /** Read launch intent from the current original owner; never persist settings or credentials. */
@@ -113,7 +113,7 @@ export async function getNativeLaunch(key: string): Promise<ClaudeNativeLaunch |
   const native = terminals.get(key), retained = terminalResumes.get(key)
   if (retained) {
     const state = native?.state, metadata = state?.session
-    return snapshotClaudeNativeLaunch({...retained, sessionId: state?.sessionId ?? retained.sessionId, cwd: metadata?.cwd ?? state?.cwd ?? retained.cwd, model: native?.modelSelection ?? metadata?.model ?? retained.model, permissionMode: metadata?.permissionMode ?? retained.permissionMode})
+    return snapshotClaudeNativeLaunch({...retained, sessionId: state?.sessionId ?? retained.sessionId, cwd: metadata?.cwd ?? state?.cwd ?? retained.cwd, model: native?.modelSelection ?? metadata?.model ?? retained.model, permissionMode: metadata?.permissionMode ?? retained.permissionMode, prePlanMode: metadata?.permissionMode ? metadata.prePlanMode : retained.prePlanMode})
   }
   const prior = conversations.get(key)
   if (!prior?.owner.sessionId || prior.owner.closing) return
@@ -178,6 +178,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
       launch.sessionId = state.sessionId; launch.cwd = state.session?.cwd ?? state.cwd
       launch.model = owner.modelSelection ?? state.session?.model ?? launch.model
       launch.permissionMode = state.session?.permissionMode ?? launch.permissionMode
+      if (state.session?.permissionMode) launch.prePlanMode = state.session.prePlanMode
     })
     void owner.done.finally(() => { if (terminals.get(key) === owner) terminals.delete(key) })
     return owner

@@ -86,6 +86,8 @@ export interface ClaudeCodeThreadState {
   recentTools?: Array<{ name: string; summary: string; at: number }>;
   /** Permission policy for the next turn. */
   permissionMode?: PermissionMode;
+  /** Native acknowledged mode to restore when leaving Plan across process ownership changes. */
+  prePlanMode?: PermissionMode;
   /** Whether to run in a git worktree for isolated file mutations. */
   useWorktree?: boolean;
   /** Whether the current sessionId was created with --worktree. */

@@ -22,6 +22,7 @@ const command = (value: unknown): string | undefined => { const entry = object(v
 /** Native plugin and native-invoked command helpers share one private, session-scoped broker. */
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
+  restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }
   settings: ClaudeSettings
   bunOptions?: string
   ownsProcess?(pid: number): Promise<boolean>
@@ -155,7 +156,7 @@ export async function createClaudeTerminalBridge(options: {
             try {
               const result = object(await ui.transport.request({ subtype: 'apack_get_permission_mode' }))
               const mode = PermissionModeSchema.safeParse(result?.mode)
-              if (mode.success && session.metadata && projection.sessionId === sessionId) session.update({ ...session.metadata, permissionMode: mode.data })
+              if (mode.success && session.metadata && projection.sessionId === sessionId) session.update({ ...session.metadata, permissionMode: mode.data, prePlanMode: result?.prePlanMode })
             } catch { /* Native terminal host may not be bound yet; the next poll retries. */ }
           }
         }
@@ -286,7 +287,7 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
     let observerWrite = Promise.resolve()
     saveObserver = () => {
-      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, originalBunOptions: options.bunOptions, generations })
+      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, restorePlan: options.restorePlan, originalBunOptions: options.bunOptions, generations })
       observerWrite = observerWrite.catch(() => {}).then(async () => {
         const temporary = observerConfig + '.' + randomUUID() + '.tmp'
         await writeFile(temporary, snapshot, { mode: 0o600 })

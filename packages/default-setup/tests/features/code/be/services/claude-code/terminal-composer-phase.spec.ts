@@ -15,7 +15,7 @@ function fixture(mode: string, prePlanMode?: string) {
 }
 it.each([['default','Plan',undefined,'plan'],['acceptEdits','Plan',undefined,'plan'],['plan','Edit','acceptEdits','acceptEdits'],['plan','Edit',undefined,'default'],['default','Edit',undefined,'default']])('uses original permission controls for %s to %s', (mode,phase,prior,expected) => {
   const f = fixture(mode,prior)
-  expect(f.run(phase)).toEqual({mode:expected})
+  expect(f.run(phase)).toMatchObject({mode:expected})
   expect(f.apply.mock.calls[0]![0]).toBe(expected)
 })
 it('preserves the original gate refusal and never applies an invented phase', () => {

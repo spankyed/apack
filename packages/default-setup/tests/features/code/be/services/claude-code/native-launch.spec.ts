@@ -22,3 +22,13 @@ it('merges newly staged roots with retained attachment roots without mutating ei
  expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved,additionalDirs:['']})).toThrow()
  expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved,additionalDirs:'bad'})).toThrow()
 })
+
+it('keeps the acknowledged pre-Plan mode with Plan and clears it after an explicit mode change',()=>{
+ const saved={...launch,permissionMode:'plan',prePlanMode:'acceptEdits'}
+ const state={sessionId,cwd:'/saved',nativeLaunch:saved,permissionMode:'plan',prePlanMode:'acceptEdits'}
+ expect(readSavedClaudeNativeLaunch(state)).toMatchObject({permissionMode:'plan',prePlanMode:'acceptEdits'})
+ expect(readSavedClaudeNativeLaunch({...state,permissionMode:'default'})?.prePlanMode).toBeUndefined()
+ expect(()=>readSavedClaudeNativeLaunch({...state,prePlanMode:'plan'})).toThrow()
+ expect(()=>readSavedClaudeNativeLaunch({...state,prePlanMode:'invalid'})).toThrow()
+ expect(saved.prePlanMode).toBe('acceptEdits')
+})

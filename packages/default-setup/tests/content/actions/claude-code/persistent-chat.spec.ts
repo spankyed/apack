@@ -170,3 +170,23 @@ it('preserves native assistant rows when one provider reply becomes several tran
     { uuid: 'native-row-b', sessionId: 'paired-session', apiMessageId: 'same-provider-id', text: 'Repeated text', start: 14, end: 27 },
   ] });
 });
+
+
+it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','acceptEdits','acceptEdits',undefined],[undefined,'plan','acceptEdits','plan','acceptEdits']] as const)('acknowledges print phase %s and preserves the original pre-Plan choice',async(phase,priorMode,priorPrePlan,target,expectedPrePlan)=>{
+ const {id}=repository.threadCommands.create({topic:'Print phase transition',instructions:'',tags:[]})
+ repository.threadCommands.update(id,{context:{claudeCode:{cwd:'/fixture',permissionMode:priorMode,prePlanMode:priorPrePlan}}})
+ const events=new PassThrough({objectMode:true})
+ const native={events:events as AsyncIterable<StreamLine>,send:vi.fn(()=>'phase-input'),hasPendingBackgroundTasks:()=>false,getPermissionMode:vi.fn(async()=>target),setPermissionMode:vi.fn(async mode=>mode),close:vi.fn(async()=>events.end()),kill:vi.fn(()=>events.end())} as unknown as QueryHandle
+ const opened=vi.fn(async(key,launchKey,_options,consume)=>store.openConversation(key,launchKey,async()=>native,consume))
+ mockService<Services,'cli'>('cli',{claudeCode:{openConversation:opened,getNativeTerminal:store.getNativeTerminal,getConversation:store.getConversation,getNativeLaunch:store.getNativeLaunch,isConversationBusy:store.isConversationBusy,closeIdleConversation:store.closeIdleConversation,getHandle:store.getHandle,isCurrentTurn:store.isCurrentTurn,clearHandle:store.clearHandle,storeHandle:store.storeHandle,sessionExists:vi.fn(async()=>true)} as never})
+ mockService<Services,'chat'>('chat',{...chatService,resolveReferences:vi.fn(async()=>({textPrefix:'',imageBlocks:[]}))} as never)
+ mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
+ mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})
+ mockService<Services,'emitter'>('emitter',{sendToSystem:vi.fn(),broadcastToPlugin:vi.fn()})
+ const user=repository.chatCommands.addMessage({threadId:id,sender:'user',text:'Phase review'})
+ expect(await chat({threadId:id,text:'Phase review',messageId:user.id,phase},services,{} as never,'')).toMatchObject({streaming:true})
+ expect(opened.mock.calls[0]![2].permissionMode).toBe('acceptEdits')
+ if(target==='plan')expect(native.setPermissionMode).toHaveBeenCalledWith('plan')
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({permissionMode:target,prePlanMode:expectedPrePlan})
+ expect(native.send).toHaveBeenCalledOnce()
+})

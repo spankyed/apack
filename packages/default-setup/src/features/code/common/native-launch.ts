@@ -6,6 +6,7 @@ export interface ClaudeNativeLaunch {
   cwd: string
   model?: string
   permissionMode?: PermissionMode
+  prePlanMode?: PermissionMode
   allowedTools?: string[]
   disallowedTools?: string[]
   appendSystemPrompt?: string

@@ -203,3 +203,15 @@ it('keeps a loaded native phase when startup hydration arrives later', () => {
   expect(actor.getSnapshot().context.phase).toBe('Edit')
   actor.stop()
 })
+
+it('passes the selected phase to an explicit print Send and retires leftover native staging',()=>{
+ const thread=repository.threadCommands.create({topic:'Return to print',instructions:''})
+ repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId:'saved-plan',permissionMode:'plan'}}})
+ const actor=createActor(threadsState).start()
+ actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(thread.id)!})
+ actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Edit'})
+ expect(readClaudeComposerPhase(thread.id)?.phase).toBe('Edit')
+ sent.mockClear();actor.send({type:'SEND_MESSAGE',text:'Continue in print Edit'})
+ expect(sent).toHaveBeenCalledWith(expect.objectContaining({event:expect.objectContaining({type:'USER_MSG',threadId:thread.id,phase:'Edit',text:'Continue in print Edit'})}))
+ expect(readClaudeComposerPhase(thread.id)).toBeUndefined();expect(actor.getSnapshot().context.phase).toBe('Edit');actor.stop()
+})
