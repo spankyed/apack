@@ -93,6 +93,7 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   expect(staged.phase).toBe('Plan');expect(JSON.parse(staged.stored!).phase).toBe('Plan')
   const details=appPage.locator('summary').filter({hasText:'Details'}).first()
   await details.click()
+  await appPage.getByRole('button',{name:/^Permissions:/}).click()
   const bypass=appPage.getByRole('button',{name:'Bypass',exact:true})
   await expect(bypass).toHaveAttribute('aria-pressed','false')
   await bypass.click()
@@ -107,10 +108,15 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   expect(await humanRows()).toEqual(historyBefore)
   expect(await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)).toBe(staged.stored)
   await expect(composer).toHaveText(planText)
+  const chooserViews=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
-    await refusal.scrollIntoViewIfNeeded();await expect(refusal).toBeInViewport();await expect(bypass).toBeInViewport()
+    await appPage.keyboard.press('Escape')
+    const trigger=appPage.getByRole('button',{name:/^Permissions:/})
+    await trigger.scrollIntoViewIfNeeded();await expect(trigger).toBeInViewport({ratio:1});await trigger.click()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-permission-refusal-'+width+'.png')})
+    await expect(refusal).toBeInViewport({ratio:1});await expect(bypass).toBeInViewport({ratio:1})
+    chooserViews.push({width,height:width===680?600:900,error:await refusal.boundingBox(),button:await bypass.boundingBox()})
   }
   await appPage.getByRole('button',{name:'Ask',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.permissionMode).toBe('default')
@@ -121,6 +127,7 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   expect((await context()).native.state.session.permissionMode).toBe(originalMode)
   expect(await humanRows()).toEqual(historyBefore)
   expect(await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)).toBe(staged.stored)
+  await appPage.keyboard.press('Escape')
   await details.click()
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
@@ -141,6 +148,6 @@ test('shows native permission refusal without losing a staged Plan or draft and 
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after verifying the release review phases.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-composer-phase-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,originalMode,nativeReason,refusedMode:afterRefusal.claude.permissionMode,refusedNativeMode:afterRefusal.native.state.session.permissionMode,planText,editText,staged,historyBefore,plannedMode:planned.claude.permissionMode,editedMode:edited.claude.permissionMode,history:await humanRows()}))
+  await writeFile(join(workspace!,'native-composer-phase-proof.json'),JSON.stringify({sessionId,boundNativePid,threadId,originalMode,nativeReason,chooserViews,refusedMode:afterRefusal.claude.permissionMode,refusedNativeMode:afterRefusal.native.state.session.permissionMode,planText,editText,staged,historyBefore,plannedMode:planned.claude.permissionMode,editedMode:edited.claude.permissionMode,history:await humanRows()}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeComposerPhase:true,nativePermissionRefusal:true,nativeComposerPhaseOnSend:true,nativeComposerPhaseRestore:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

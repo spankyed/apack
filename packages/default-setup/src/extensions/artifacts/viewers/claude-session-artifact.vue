@@ -214,6 +214,16 @@
             <span class="text-[10px] uppercase tracking-wide text-neutral-500">Permission</span>
             <span class="text-[10px] text-neutral-600">{{ permissionDescription }}</span>
           </div>
+          <PopoverRoot>
+            <PopoverTrigger as-child>
+              <button type="button" class="flex w-full items-center justify-between rounded-md border border-neutral-700 bg-neutral-900/40 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800">
+                <span>Permissions: {{ permissionOptions.find(option => option.value === permissionMode)?.label ?? permissionMode }}</span>
+                <ChevronDown :size="12" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverPortal>
+              <PopoverContent aria-label="Claude Code permissions" side="bottom" align="start" :side-offset="6" :collision-padding="16" class="z-50 w-[22rem] max-w-[calc(100vw-2rem)] max-h-[var(--reka-popover-content-available-height)] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl">
+                <p class="mb-2 text-xs font-medium text-neutral-200">Claude Code permissions</p>
           <div class="flex rounded-md border border-neutral-700 overflow-hidden">
             <button
               v-for="opt in permissionOptions"
@@ -237,6 +247,9 @@
           </div>
           <p v-if="permissionChange?.call" role="status" class="mt-1.5 text-xs text-neutral-400">Waiting for Claude…</p>
           <p v-else-if="permissionChange?.reason" role="alert" class="mt-1.5 text-xs text-amber-300 break-words">{{ permissionChange.reason }}</p>
+              </PopoverContent>
+            </PopoverPortal>
+          </PopoverRoot>
         </div>
 
         <!-- Worktree toggle -->
@@ -271,7 +284,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Wrench, Copy, Check, MessageSquare } from 'lucide-vue-next'
+import { Wrench, Copy, Check, MessageSquare, ChevronDown } from 'lucide-vue-next'
+import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent } from 'reka-ui'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
