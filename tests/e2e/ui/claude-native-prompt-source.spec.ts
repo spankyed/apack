@@ -117,6 +117,19 @@ test('edits exact native source at reference URI and fence carets without losing
     await appPage.setViewportSize({width,height:width===680?600:900})
     await composer.press('Meta+ArrowDown');await composer.press('End')
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+    await expect.poll(async()=>{
+      const geometry=await card.getByTestId('composer-editor-area').evaluate(area=>{
+        const selection=window.getSelection();if(!selection?.rangeCount)return {visible:false}
+        const caret=selection.getRangeAt(0).getBoundingClientRect(),viewport=area.getBoundingClientRect()
+        let top=Math.max(0,viewport.top),bottom=Math.min(innerHeight,viewport.bottom)
+        for(let node=selection.anchorNode?.parentElement;node;node=node.parentElement){
+          if(/auto|scroll|hidden|clip/.test(getComputedStyle(node).overflowY)){const rect=node.getBoundingClientRect();top=Math.max(top,rect.top);bottom=Math.min(bottom,rect.bottom)}
+        }
+        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
+      })
+      await writeFile(join(workspace!,'native-prompt-source-caret-'+width+'.json'),JSON.stringify(geometry))
+      return geometry.visible
+    }).toBe(true)
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-prompt-source-end-'+width+'.png')})
   }
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')

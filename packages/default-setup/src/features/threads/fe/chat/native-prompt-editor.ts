@@ -52,6 +52,17 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     clearPerson = setTimeout(() => { person = false; key = undefined }, 0)
   }
   const dom = editor.view.dom
+  let revealFrame: number | undefined
+  const revealSourceCaret = () => {
+    if (!disposed && !editor.isDestroyed && editor.isFocused && dom.ownerDocument.hasFocus() && editor.state.doc.firstChild?.type.name === 'claudePromptSource') editor.view.dispatch(editor.state.tr.scrollIntoView())
+  }
+  const sourceResize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame)
+    revealFrame = requestAnimationFrame(() => { revealFrame = undefined; revealSourceCaret() })
+  })
+  sourceResize?.observe(dom)
+  if (dom.parentElement) sourceResize?.observe(dom.parentElement)
+  const stopSourceReveal = () => { sourceResize?.disconnect(); if (revealFrame !== undefined) cancelAnimationFrame(revealFrame) }
   const events = ['beforeinput', 'keydown', 'paste', 'drop', 'pointerdown'] as const
   for (const event of events) dom.addEventListener(event, intent, true)
   // Browser selection changes can arrive in a later task than their key/pointer event.
@@ -143,7 +154,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     if (transaction.docChanged || transaction.selectionSet) publish(transaction.getMeta('claude-prompt-by'))
   }
   const compositionEnd = () => { intent(); publish() }
-  const destroyed = () => finishPending(false)
+  const destroyed = () => { stopSourceReveal(); finishPending(false) }
   editor.on('destroy', destroyed)
   editor.on('transaction', transaction)
   dom.addEventListener('compositionend', compositionEnd)
@@ -190,6 +201,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         const drawn = reply.frame.decorations ? drawClaudePromptDecorations(tr.doc, reply.frame.decorations, serialize, next.sourcePositions, next.sourceOffsets) : fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.drawn : drawClaudePromptDecorations(tr.doc, [], serialize)
         tr.setMeta(decorations.key, drawn)
         fillPaint = next.normalized ? { revision: revision + 1, text: serialize(tr.doc), drawn } : undefined
+        if (next.doc.firstChild?.type.name === 'claudePromptSource' && editor.isFocused && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
         editor.view.dispatch(tr)
         if (fillPaint) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
         onProblem(undefined)
@@ -225,6 +237,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return true
     },
     dispose() {
+      stopSourceReveal()
       disposed = true; selectionKey = undefined; fillPaint = undefined; finishPending(false); retireCompletions()
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)
