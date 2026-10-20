@@ -105,6 +105,32 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(2)
     expect((await selectedReceipts())[1]).toEqual({selected:true,value:{text:expected}})
     for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(excerpt).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-selection-'+width+'.png')})}
+    const user=appPage.locator('[data-native-selection-row]').filter({hasText:'Review the release notes for this project.'}).first()
+    const userUuid=await user.getAttribute('data-native-selection-row'),pointerProof=[]
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      const sessionTools=card.getByRole('button',{name:'Session tools',exact:true})
+      if(await sessionTools.getAttribute('aria-expanded')==='true')await sessionTools.click()
+      await composer.fill('Review the pending release notes.');await composer.focus()
+      await user.scrollIntoViewIfNeeded()
+      const point=await user.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf('Review the release notes for this project.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+6);const b=range.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2}}}throw Error('Visible user text not found')})
+      await writeFile(join(workspace!,'native-user-pointer-target-'+width+'.json'),JSON.stringify(await appPage.evaluate(point=>{const el=document.elementFromPoint(point.x,point.y);return {point,hit:el?.outerHTML.slice(0,1500),focus:document.activeElement?.outerHTML.slice(0,500),ancestors:el?[el,...Array.from((function*(node){while(node.parentElement){node=node.parentElement;yield node}})(el))].slice(0,12).map(node=>({tag:node.tagName,class:node.className,select:getComputedStyle(node).userSelect})):[]}},point),null,2))
+      await appPage.mouse.dblclick(point.x,point.y)
+      await appPage.screenshot({path:testInfo.outputPath('native-user-pointer-diagnostic-'+width+'.png')})
+      await expect.poll(()=>appPage.evaluate(()=>document.getSelection()?.toString().trim())).toBe('Review')
+      const selected=await appPage.evaluate(()=>document.getSelection()!.toString())
+      await expect(composer).toHaveText('Review the pending release notes.')
+      await appPage.screenshot({path:testInfo.outputPath('native-user-selection-'+width+'.png')})
+      if(await sessionTools.getAttribute('aria-expanded')!=='true')await sessionTools.click()
+      const beforeSelection=(await selectedReceipts()).length;await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(beforeSelection+1)
+      expect((await selectedReceipts()).at(-1)).toEqual({selected:true,value:{text:selected,requestId:userUuid}})
+      await composer.focus();await composer.press('End');await composer.pressSequentially(' Confirmed.')
+      await expect(composer).toHaveText('Review the pending release notes. Confirmed.')
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+      pointerProof.push({width,selected,userUuid,draft:await composer.innerText()})
+    }
+    await writeFile(join(workspace!,'native-user-body-pointer-proof.json'),JSON.stringify(pointerProof,null,2))
+    await composer.fill('Review the pending release notes.')
     await appPage.setViewportSize({width:1400,height:900})
   }
   if(uiCopy){
@@ -181,8 +207,8 @@ test('round-trips decorated structured replace append and cursor insertion throu
   if(uiSelection){
     await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
     if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
-    await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(3)
-    expect((await selectedReceipts())[2]).toEqual({selected:false})
+    const count=(await selectedReceipts()).length;await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(count+1)
+    expect((await selectedReceipts()).at(-1)).toEqual({selected:false})
     const log=await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8')
     const responses=[...log.matchAll(/Incoming: "CLAUDE_PROMPT_HOST_RESPONSE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes("kind: ")&&row.includes('selection'))
     expect(responses.length).toBeGreaterThanOrEqual(3)
@@ -195,5 +221,5 @@ test('round-trips decorated structured replace append and cursor insertion throu
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,nativeSelection:uiSelection===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,nativeSelection:uiSelection===true,nativeUserBodyPointer:uiSelection===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
