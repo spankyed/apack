@@ -142,10 +142,11 @@ test('preserves literal parent and Agent drafts through remount and exact native
     }).toBe(true)
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-source-'+width+'.png')})
   }
+  const submitted=sent.trimEnd() // Original native submit normalizes trailing whitespace after invisible-character screening.
   await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentComposer).toHaveText('')
-  await expect.poll(async()=>appPage.evaluate(text=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).some((view:any)=>view.state?.agent?.messages?.some((message:any)=>message.role==='user'&&message.text===text)),sent)).toBe(true)
+  await expect.poll(async()=>appPage.evaluate(text=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).some((view:any)=>view.state?.agent?.messages?.some((message:any)=>message.role==='user'&&message.text===text)),submitted)).toBe(true)
   const files=await readdir(join(workspace!,'.claude/projects'),{recursive:true});let receipt:any
-  await expect.poll(async()=>{for(const file of files.filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))){const rows=(await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').map(line=>JSON.parse(line));receipt=rows.find(row=>row.type==='user'&&row.isMeta===true&&row.origin?.kind==='human'&&typeof row.message?.content==='string'&&row.message.content.includes(sent)&&row.message.content.split(sent).length===2);if(receipt)return true}return false}).toBe(true)
+  await expect.poll(async()=>{for(const file of files.filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))){const rows=(await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').map(line=>JSON.parse(line));receipt=rows.find(row=>row.type==='user'&&row.isMeta===true&&row.origin?.kind==='human'&&typeof row.message?.content==='string'&&row.message.content.includes(submitted)&&row.message.content.split(submitted).length===2);if(receipt)return true}return false}).toBe(true)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await expect(composer.locator('[data-claude-prompt-source]')).toHaveText(parent.text)
   expect((await readDraft(card)).value).toEqual({text:parent.text,cursor:parent.cursor})
@@ -155,6 +156,6 @@ test('preserves literal parent and Agent drafts through remount and exact native
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after verifying the worker review.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-agent-source-proof.json'),JSON.stringify({taskId,parent,agent,sent,reads:await reads(),edits:await edits(),remounted:true,nativeUuid:receipt.uuid,sessionId,boundNativePid}))
+  await writeFile(join(workspace!,'native-agent-source-proof.json'),JSON.stringify({taskId,parent,agent,sent,submitted,reads:await reads(),edits:await edits(),remounted:true,nativeUuid:receipt.uuid,sessionId,boundNativePid}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeAgentSource:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
