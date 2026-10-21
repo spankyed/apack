@@ -178,7 +178,8 @@ test('routes live native Button actions through the retained main and Agent app 
   const staleSequence=(old.actionKeyResult?.sequence??0)+1,retiredCount=(await receipts()).length
   await appPage.evaluate(({mountId,revision,sequence})=>{
     const actor=(window as any).applicationState.system.get('default-setup/threads')
-    actor.send({type:'CLAUDE_UI_KEY',threadId:actor.getSnapshot().context.currentThread.id,mountId,revision,sequence,event:{key:'r',ctrl:true,alt:true,super:false,shift:false,from_composer:true}})
+    // The shell supplies the plugin delivery address; raw actor.send has no backend reply channel.
+    ;(window as any).applicationState.send({type:'SEND_TO_PLUGIN',plugin:'default-setup/threads',events:[{type:'CLAUDE_UI_KEY',threadId:actor.getSnapshot().context.currentThread.id,mountId,revision,sequence,event:{key:'r',ctrl:true,alt:true,super:false,shift:false,from_composer:true}}]})
   },{mountId:old.mountId,revision:old.state.actionKeys.revision,sequence:staleSequence})
   await expect.poll(async()=>appPage.evaluate(({mountId,sequence})=>{
     const result=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews[mountId]?.actionKeyResult
