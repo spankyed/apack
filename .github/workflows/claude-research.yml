@@ -30,6 +30,7 @@ jobs:
         run: |
           git rev-parse HEAD
           sw_vers
+          sysctl -n hw.memsize
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch})'
       - name: Install dependencies
         env:
@@ -39,6 +40,8 @@ jobs:
         shell: bash
         run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         shell: bash
         run: npm run build:runtime -- --cores 2 2>&1 | tee "$RUNNER_TEMP/claude-research-runtime-build.log"
       - name: Replay pinned native app journey
@@ -58,6 +61,8 @@ jobs:
             ${{ runner.temp }}/claude-research-*/output/**
             ${{ runner.temp }}/claude-research-*/workspaces/**/electron-results/**
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-proof.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-receipts.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-caret-*.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/model-calls.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/.claude/projects/**/*.jsonl

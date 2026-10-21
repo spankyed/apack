@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "4f5744650ff6192a786a14d419ee317d27ea1fc5",
+  "researchCommit": "c8beb9fab24198e10c1a512245b6be2a41e68e89",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -85,7 +85,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "0a9948a64e4a10ab7e383f31aa788ae9f9838c42c9ec0b36be9a59bf4fb99b14",
+    "src/integration/apack-terminal-owner-app.mjs": "91b06d12a1d34fb7ab2f5321fe50e7a85fe08b86516d3224bbe48ba0ee220cf4",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -119,7 +119,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "0163f393dff6368455f5bf34d7cb7ee3a57aad5cdae5a33593bf0db0f70a664d",
+    "src/integration/run-apack-controls.mjs": "28c565108ce5b71726bf02ad3b8d9ecbc2bc2b0cc455401e7ad61055749739a4",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -245,5 +245,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "4ce66cbb916d9e91b3ba6b50fde8fbdce05e47b7e6cfa3517344106febf463fb"
+  "archiveSha256": "3d617e31cea5aa5d2d7704cce5110d6eb5644457e74ea7423f592b4d60c81c9f"
 }

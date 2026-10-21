@@ -22,7 +22,8 @@ gh workflow run ci.yml --repo spankyed/apack --ref session/claude-code-research 
   -f claude_research=true -f claude_research_case=agent-source
 ```
 
-Available cases: `agent-source`, `source-fill`, `everyday`. These replay existing scoped journeys;
+Available cases: `agent-source`, `field-bounds`, `source-fill`, `everyday`.
+`agent-and-fields` runs the Agent baseline and field milestone sequentially from one candidate build. These replay existing scoped journeys;
 they do not establish full feature parity or replace final F1–F5 acceptance. CI retains original
 run records, proofs, synthetic model requests, screenshots and traces. Download and inspect the
 resulting artifact before claiming app acceptance on that runner.

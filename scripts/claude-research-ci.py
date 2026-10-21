@@ -12,6 +12,7 @@ from urllib.request import urlopen
 
 CASES = {
     'agent-source': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_SOURCE': '1'},
+    'field-bounds': {'CLAUDE_RESEARCH_PROMPT_THEME': 'structured', 'CLAUDE_RESEARCH_FIELD_BOUNDS': '1'},
     'source-fill': {'CLAUDE_RESEARCH_PROMPT_THEME': 'structured', 'CLAUDE_RESEARCH_SOURCE_FILL': '1'},
     'everyday': {'CLAUDE_RESEARCH_PROMPT_THEME': 'everyday'},
 }
@@ -95,5 +96,6 @@ if(result.status!=='complete')process.exitCode=1;
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <agent-source|source-fill|everyday>')
-    run(sys.argv[1])
+        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
+    for case in (['agent-source', 'field-bounds'] if sys.argv[1] == 'agent-and-fields' else [sys.argv[1]]):
+        run(case)
