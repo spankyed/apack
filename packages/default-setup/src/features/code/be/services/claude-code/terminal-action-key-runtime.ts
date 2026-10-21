@@ -112,7 +112,8 @@ function createNativeActionKeyBridge({current,view,changed,provider=readNativeAc
   const continuing=pendingClient===request.client_id&&ownedPending(p)&&pendingBindings===before.bindingHash;
   if(request.revision!==before.keys.revision&&!continuing)return {handled:false,action_keys:snapshot(n,request.client_id)};
   const name=input.key==='enter'?'return':input.key===' '?'space':input.key;
-  const event=new n.nativeKeyEvents.zDe({name,sequence:input.key==='enter'?'\r':input.key==='escape'?'\x1b':input.key.length===1?input.key:'',ctrl:input.ctrl,shift:input.shift,meta:input.alt,super:input.super,fn:false});
+  // Native construction falls back from meta to option; plain chord keys need explicit false.
+  const event=new n.nativeKeyEvents.zDe({name,sequence:input.key==='enter'?'\r':input.key==='escape'?'\x1b':input.key.length===1?input.key:'',ctrl:input.ctrl,shift:input.shift,meta:input.alt,option:false,super:input.super,fn:false});
   const normalized=n.nativeKeyBindings.Xwe(event);
   if(!continuing&&(!normalized||input.from_composer&&!input.ctrl&&!input.alt&&!input.super||!before.keys.bindings.some(chord=>n.nativeKeyBindings.FUe(chord[0],normalized))))return {handled:false,action_keys:snapshot(n,request.client_id)};
   let admitted;

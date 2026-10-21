@@ -28,7 +28,7 @@ function fixture() {
   const provider = { props, context, capture, node, owner: { focusManager: { activeElement: { nodeName: 'native-editable' } }, rootNode: {} } }
   class Key {
     name: string; key: string; ctrl: boolean; meta: boolean; shift: boolean; superKey: boolean; defaultPrevented = false; stopped = false
-    constructor(value: any) { this.name = this.key = value.name; this.ctrl = value.ctrl; this.meta = value.meta; this.shift = value.shift; this.superKey = value.super }
+    constructor(value: any) { this.name = this.key = value.name; this.ctrl = value.ctrl; this.meta = value.meta ? true : value.option; this.shift = value.shift; this.superKey = value.super }
     stopImmediatePropagation() { this.stopped = true }
   }
   const n = {
@@ -121,4 +121,16 @@ it('withdraws optional shortcut metadata instead of failing an otherwise valid l
   const tree = { type: 'Box', children: Array.from({ length: 8193 }, () => ({ type: 'Text', children: [] })) }
   expect(() => f.bridge.capture(f.n, { surface: 'desktop', client_id: 'main-window', component: 'AbovePrompt', instance_id: 'above', instance_revision: 1 }, tree)).not.toThrow()
   expect(f.bridge.snapshot(f.n, 'main-window').bindings).toEqual([])
+})
+
+
+it('provides the native option fallback for unmodified key strokes', async () => {
+  const f = fixture()
+  f.props.bindings = [{ action: 'review', context: 'Global', chord: [{ key: 'u', ctrl: false, alt: false, meta: false, shift: false, super: false }] }]
+  f.draw('AbovePrompt', 'above', 1)
+  const keys = f.bridge.snapshot(f.n, 'main-window')
+  const event = { key: 'u', ctrl: false, alt: false, shift: false, super: false, from_composer: false }
+  expect(await f.bridge.key(f.n, { client_id: 'main-window', revision: keys.revision, event }, new AbortController(), f.press)).toMatchObject({ handled: true })
+  expect(f.n.nativeKeyEvents.R8.dispatchDiscrete.mock.calls[0]![1].meta).toBe(false)
+  expect(f.press).toHaveBeenCalledOnce(); expect(f.terminal).not.toHaveBeenCalled()
 })
