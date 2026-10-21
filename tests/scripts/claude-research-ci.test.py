@@ -60,6 +60,21 @@ class ReplayBoundary(unittest.TestCase):
             fetch.assert_not_called()
             launch.assert_not_called()
 
+    def test_linux_route_requires_real_platform_architecture_and_container_marker(self):
+        for system, arch, container in [('darwin', 'arm64', True), ('linux', 'x86_64', True), ('linux', 'aarch64', False)]:
+            with self.subTest(system=system, arch=arch, container=container), patch.object(ci.sys, 'platform', system), patch.object(ci.platform, 'machine', return_value=arch), patch.object(ci.Path, 'is_file', return_value=container):
+                with self.assertRaisesRegex(RuntimeError, 'Linux arm64 Docker container'):
+                    ci.validate_host(True)
+        with patch.object(ci.sys, 'platform', 'linux'), patch.object(ci.platform, 'machine', return_value='aarch64'), patch.object(ci.Path, 'is_file', return_value=True):
+            self.assertEqual(ci.validate_host(True), 'linux-arm64')
+
+    def test_linux_route_does_not_silently_adopt_other_profiles(self):
+        with patch.object(ci, 'validate_host', return_value='linux-arm64'), patch.object(ci, 'urlopen') as fetch, patch.object(ci.subprocess, 'run') as launch:
+            with self.assertRaisesRegex(ValueError, 'adoption currently covers'):
+                ci.run('native-action-contexts', linux_container=True)
+            fetch.assert_not_called()
+            launch.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

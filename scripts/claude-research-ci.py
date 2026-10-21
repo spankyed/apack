@@ -1,4 +1,4 @@
-"""Replay a pinned Claude integration journey only on a disposable GitHub macOS runner."""
+"""Replay a pinned Claude integration journey on a disposable GitHub Mac or the explicit local Linux container."""
 import hashlib
 import json
 import os
@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from urllib.request import urlopen
 
 CASES = {
@@ -55,22 +56,39 @@ def unpack_tools(bundle, manifest, destination):
             seen.add(member.name)
 
 
-def run(case):
+def validate_host(linux_container=False):
+    if linux_container:
+        if sys.platform != 'linux' or platform.machine() not in ('aarch64', 'arm64') or not Path('/.dockerenv').is_file():
+            raise RuntimeError('Linux Claude acceptance requires the Linux arm64 Docker container')
+        return 'linux-arm64'
     if (os.environ.get('GITHUB_ACTIONS') != 'true'
             or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted'
             or sys.platform != 'darwin' or platform.machine() != 'arm64'):
         raise RuntimeError('Native Claude acceptance requires a disposable GitHub-hosted macOS arm64 runner')
+    return 'darwin-arm64'
+
+
+def run(case, linux_container=False):
+    target_platform = validate_host(linux_container)
+    if linux_container and case != 'action-panes-app':
+        raise ValueError('Linux container adoption currently covers action-panes-app only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')
     checkout = Path(__file__).resolve().parents[1]
     fixture = checkout / 'tests/fixtures/claude-research'
     manifest = json.loads((fixture / 'manifest.json').read_text())
-    root = Path(os.environ['RUNNER_TEMP']) / ('claude-research-' + case)
-    root.mkdir(exist_ok=False)
+    if linux_container:
+        base = Path(os.environ.get('APACK_CLAUDE_RESEARCH_OUTPUT', '/work/.apack/claude-research-linux'))
+        base.mkdir(parents=True, exist_ok=True)
+        root = Path(tempfile.mkdtemp(prefix=case+'-', dir=base))
+    else:
+        root = Path(os.environ['RUNNER_TEMP']) / ('claude-research-' + case)
+        root.mkdir(exist_ok=False)
+    print('Claude evidence directory: '+str(root), flush=True)
     research = root / 'research'
     unpack_tools(fixture / 'runner.tgz', manifest, research)
-    target = manifest['target']
-    if target['version'] != '2.1.302' or target['platform'] != 'darwin-arm64':
+    target = json.loads((fixture / 'linux-arm64.json').read_text()) if linux_container else manifest['target']
+    if target['version'] != '2.1.302' or target['platform'] != target_platform:
         raise ValueError('Explicit pinned-target review required')
     package = root / 'native.tgz'
     with urlopen(target['url'], timeout=60) as response, package.open('wb') as output:
@@ -90,6 +108,8 @@ def run(case):
     env = {key: value for key, value in os.environ.items() if not key.startswith('CLAUDE_RESEARCH_')}
     env.update(CASES[case])
     env['APACK_CHAIN_CORES'] = '2'
+    if linux_container:
+        env['NODE_OPTIONS'] = (env.get('NODE_OPTIONS', '')+' --import='+str(fixture / 'linux-electron-launch.mjs')).strip()
     script = """import {probeApackControls} from './src/integration/run-apack-controls.mjs';
 const [checkout,binary,root]=process.argv.slice(1);
 const result=await probeApackControls(checkout,binary,root+'/workspaces',root+'/output','terminal-plan-app-theme');
@@ -103,12 +123,14 @@ const result=await probeNativeActionKeys(binary,root+'/workspaces',root+'/output
 console.log(JSON.stringify(result,null,2));
 if(result.status!=='complete')process.exitCode=1;
 """.replace('__scenario__', json.dumps('contexts' if case == 'native-action-contexts' else 'baseline'))
-    (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case}, indent=2) + '\n')
+    (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target}, indent=2) + '\n')
     subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=240 if case in ['action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    linux_container = sys.argv[1:2] == ['--linux-container']
+    args = sys.argv[2:] if linux_container else sys.argv[1:]
+    if len(args) != 1:
         raise SystemExit('Usage: python3 scripts/claude-research-ci.py <native-action-keys|native-action-contexts|action-keys-app|action-contexts-app|action-dialog-app|action-panes-app|agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
-    for case in (['agent-source', 'field-bounds'] if sys.argv[1] == 'agent-and-fields' else [sys.argv[1]]):
-        run(case)
+    for case in (['agent-source', 'field-bounds'] if args[0] == 'agent-and-fields' else [args[0]]):
+        run(case, linux_container=linux_container)
