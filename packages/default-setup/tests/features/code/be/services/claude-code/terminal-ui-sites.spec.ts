@@ -139,3 +139,32 @@ it('preserves the latest absolute viewport offset through the original native sc
   deny = true
   expect(await api.remoteScroll(native, { ...request, offset: 17, by: 3 })).toMatchObject({ moved: false, offset: 14, deny: 'native restriction' })
 })
+
+
+it('registers client-owned AbovePrompt fields for original focus and refuses foreign or retired views', async () => {
+  const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();'), end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
+  let current = true
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({recordDrawing,remoteFocus,remoteScroll})`, {
+    Map, Set, AbortController, Promise, clients: new Set(['app', 'other']), clientViewCurrent: () => current, publish() {},
+  })
+  const scrolls = new Map(), focuses = new Map(), calls: any[] = []
+  const native = { runtime: { f4: 'above-prompt', kV: (component: string, id: string) => `${component}:${id}`, xbe: () => scrolls, Eat: () => focuses, k7t: () => ({ emit() {} }), v7t: async ({input}: any) => {
+    calls.push(input)
+    const entry = focuses.get(`${input.component}:${input.requestId}`)
+    const deny = entry.commit({ plugin: input.plugin, element: input.element, origin: input.origin })
+    return deny ? {deny} : {}
+  } }, session: { Ket: () => [{plugin:'notes', element:'review-notes'}] } }
+  const request = { client_id: 'app', component: 'AbovePrompt', instance_id: 'app:above-prompt' }
+  api.recordDrawing(native, {...request, props:{}}, {})
+  const focus = {...request, is_held:true, by:'person', element:{plugin:'notes',key:'review-notes'}}
+  expect(await api.remoteFocus(native, focus)).toEqual({moved:true,element:{plugin:'notes',key:'review-notes'}})
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({component:'AbovePrompt',requestId:'app:above-prompt',plugin:'notes',element:'review-notes',origin:{kind:'person'}})
+  expect(await api.remoteFocus(native, {...focus,instance_id:'other:above-prompt'})).toMatchObject({moved:false,deny:'no such site'})
+  expect(await api.remoteFocus(native, {...focus,instance_id:'unowned'})).toMatchObject({moved:false,deny:'no such site'})
+  const entry = focuses.get('AbovePrompt:app:above-prompt')
+  current = false
+  expect(await api.remoteFocus(native,focus)).toMatchObject({moved:false,deny:'no such site'})
+  expect(entry.commit({plugin:'notes',element:'review-notes',origin:{kind:'person'}})).toBe('no such site')
+  expect(calls).toHaveLength(1)
+})

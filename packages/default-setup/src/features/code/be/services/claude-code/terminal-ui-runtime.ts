@@ -107,7 +107,8 @@ function currentToolResultAction(n,request){
  const frame=toolResultFrames.get(JSON.stringify([request.client_id,request.instance_id]));
  if(!frame||toolResultFacts(n,request.instance_id,frame.resultUuid,frame.assistantUuid)?.fingerprint!==frame.fingerprint)throw Error('Native tool result changed or expired');
 }
-function siteExists(n,component,id){return component==='AbovePrompt'&&id===n.runtime.f4||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
+// ui-mount owns a client-specific AbovePrompt instance; the terminal keeps its original singleton.
+function siteExists(n,component,id,clientId){return component==='AbovePrompt'&&(id===n.runtime.f4||typeof clientId==='string'&&id===clientId+':above-prompt')||component==='Pane'&&paneRoster(n).panes.some(pane=>pane.id===id);}
 function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
 function dropSite(n,key){
  const site=sites.get(key);if(!site)return;sites.delete(key);site.abort.abort();
@@ -118,7 +119,7 @@ function refreshSite(n,site){
  const key=n.runtime.kV(site.component,site.id),scrolls=n.runtime.xbe(),focuses=n.runtime.Eat();
  if(scrolls.get(key)!==site.scrollEntry)site.previousScroll=scrolls.get(key);
  if(focuses.get(key)!==site.focusEntry)site.previousFocus=focuses.get(key);
- const current=()=>sites.get(key)===site&&clients.has(site.clientId)&&siteExists(n,site.component,site.id);
+ const current=()=>sites.get(key)===site&&clients.has(site.clientId)&&clientViewCurrent(n,site.clientId)&&siteExists(n,site.component,site.id,site.clientId);
  const moved=()=>publish({type:'system',subtype:'ui_scroll',client_id:site.clientId,component:site.component,instance_id:site.id,offset:siteOffset(site),...(site.follow?{follow_end:true}:{})});
  site.scrollEntry={component:site.component,requestId:site.id,owner:site.owner,bodyRows:site.bodyRows,contentRows:site.contentRows,maxOffset:Math.max(0,site.contentRows-site.bodyRows),offset:()=>siteOffset(site),keyRows:(plugin,key)=>{const row=site.keyed.find(row=>row.plugin===plugin&&row.key===key);return row&&{top:row.top,bottom:row.bottom};},commit:(offset,origin)=>{
   if(!current()||origin.kind==='person'&&site.superseded)return false;
@@ -136,7 +137,7 @@ function refreshSite(n,site){
  scrolls.set(key,site.scrollEntry);focuses.set(key,site.focusEntry);
 }
 function remoteSite(n,clientId,component,id){
- if(!clients.has(clientId)||!siteExists(n,component,id))return;
+ if(!clients.has(clientId)||!clientViewCurrent(n,clientId)||!siteExists(n,component,id,clientId))return;
  const key=n.runtime.kV(component,id);let site=sites.get(key);
  if(site&&site.clientId!==clientId){dropSite(n,key);site=undefined;}
  if(!site){site={clientId,component,id,owner:component==='Pane'?paneRoster(n).panes.find(pane=>pane.id===id)?.plugin:undefined,offset:0,bodyRows:0,contentRows:0,keyed:[],focusables:[],held:false,follow:false,abort:new AbortController()};sites.set(key,site);}
@@ -144,7 +145,7 @@ function remoteSite(n,clientId,component,id){
 }
 function synchronizePanes(n){
  const state=n.roster.Ui().getState();
- for(const [key,site] of sites){if(!siteExists(n,site.component,site.id)){dropSite(n,key);continue;}if(site.component==='Pane'){site.held=state.focusedId===site.id;if(!site.held)site.holder=undefined;}refreshSite(n,site);}
+ for(const [key,site] of sites){if(!siteExists(n,site.component,site.id,site.clientId)){dropSite(n,key);continue;}if(site.component==='Pane'){site.held=state.focusedId===site.id;if(!site.held)site.holder=undefined;}refreshSite(n,site);}
 }
 function siteTurn(site,kind,report,merge,run){
  const state=site[kind]??(site[kind]={});
