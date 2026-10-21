@@ -114,6 +114,9 @@ test('round trips native source fills with line breaks and explicit context with
     await expect(composer.locator('.claude-prompt-decoration')).toHaveCount(0)
     await composer.focus();await composer.pressSequentially('!');await expect(literal).not.toHaveText(text)
     await composer.press('Backspace');await expect(literal).toHaveText(text)
+    const width=linked?1100:680;await appPage.setViewportSize({width,height:linked?900:600})
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-source-reload-'+(linked?'linked':'fresh')+'-'+width+'.png')})
     reloads.push({linked,text,selection:before.value.selection,references,restoredDocument:true,editable:true,sameNativePid:true})
   }
   await addReference('Use release context')

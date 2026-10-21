@@ -34,6 +34,7 @@ interface ClaudeUiView {
   mount?: ReturnType<typeof mountClaudeUi>
 }
 const views = new Map<string, ClaudeUiView>()
+const retiredMounts = new Map<string, { threadId: string; expires: number }>()
 const retiring = new Set<{ client: string; threadId: string; done: Promise<void> }>()
 function retire(view: ClaudeUiView): void {
   if (!view.mount) return
@@ -81,7 +82,8 @@ function publish(view: ClaudeUiView, state: ClaudeUiMountState): void {
   view.state = state
   view.reply({ type: 'CLAUDE_UI_STATE', threadId: view.threadId, mountId: view.mountId, resumeKey: view.resumeKey, attachmentId: view.attachmentId, state })
 }
-function drop(key: string, view: ClaudeUiView): void {
+function drop(key: string, view: ClaudeUiView, retired = false): void {
+  if (retired) retiredMounts.set(key, { threadId: view.threadId, expires: Date.now() + 30000 })
   views.delete(key)
   view.pendingPrompt?.finish()
   // A stopped thread can remain visible; explicitly retire the frontend drawing as well.
@@ -173,7 +175,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
   if (!reply) {
     if (event.type !== 'CLAUDE_UI_UNMOUNT' || !event.resumeKey || !validId(event.resumeKey)) return
     const previous = [...views.entries()].find(([, candidate]) => candidate.resumeKey === event.resumeKey)
-    if (previous && previous[1].threadId === event.threadId && previous[1].mountId === event.mountId) drop(previous[0], previous[1])
+    if (previous && previous[1].threadId === event.threadId && previous[1].mountId === event.mountId) drop(previous[0], previous[1], true)
     return
   }
   if (event.type === 'CLAUDE_UI_MOUNT' && typeof event.promptFocused !== 'boolean') return
@@ -186,6 +188,9 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (!target || typeof target !== 'object' || ![target.ownerId, target.sessionId, target.taskId].every(id => typeof id === 'string' && id.length > 0 && id.length <= 256) || !Number.isSafeInteger(target.revision) || target.revision < 1) return
   }
   const key = keyOf(client, event.mountId)
+  // A queued heartbeat must never recreate a view after its explicit unmount.
+  for (const [id, retired] of retiredMounts) if (retired.expires <= Date.now()) retiredMounts.delete(id)
+  if (event.type === 'CLAUDE_UI_MOUNT' && retiredMounts.has(key)) return
   let view = views.get(key)
   if (!view && (event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT') && event.resumeKey) {
     const previous = [...views.entries()].find(([, candidate]) => candidate.resumeKey === event.resumeKey)
@@ -196,7 +201,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     }
     const [oldKey, candidate] = previous
     if (candidate.mountId !== event.mountId || candidate.threadId !== event.threadId || event.type === 'CLAUDE_UI_MOUNT' && !sameNativeView(candidate.nativeView, event.nativeView)) return
-    if (event.type === 'CLAUDE_UI_UNMOUNT') { drop(oldKey, candidate); return }
+    if (event.type === 'CLAUDE_UI_UNMOUNT') { drop(oldKey, candidate, true); return }
     // Resume the same physical window; another connection needs its server-issued credential.
     views.delete(oldKey); candidate.pendingPrompt?.finish()
     candidate.client = client; candidate.reply = reply; candidate.resumeKey = randomUUID()
@@ -281,7 +286,11 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     }).catch(() => { /* delivery connection closed */ })
     return
   }
-  if (event.type === 'CLAUDE_UI_UNMOUNT') { if (view) drop(key, view); return }
+  if (event.type === 'CLAUDE_UI_UNMOUNT') {
+    if (view) drop(key, view, true)
+    else retiredMounts.set(key, { threadId: event.threadId, expires: Date.now() + 30000 })
+    return
+  }
   if(event.type==='CLAUDE_UI_CLIENT'){
     if(!view||!validId(event.id))return
     bind(view)
@@ -326,6 +335,7 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
 }
 
 export function clearClaudeUiViews(threadId?: string): void {
+  for (const [key, retired] of retiredMounts) if (threadId === undefined || retired.threadId === threadId) retiredMounts.delete(key)
   for (const [key, view] of views) if (threadId === undefined || view.threadId === threadId) drop(key, view)
 }
 registerThreadTeardown(clearClaudeUiViews)

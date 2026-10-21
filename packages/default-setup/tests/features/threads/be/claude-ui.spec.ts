@@ -342,3 +342,20 @@ it('suspends every window on one native thread, fences renewals and restores fre
   release(); await vi.advanceTimersByTimeAsync(100)
   expect(first.ui.attach).toHaveBeenCalledTimes(4)
 })
+
+it('refuses queued renewals after explicit unmount while allowing a fresh view in the same window', async () => {
+  const { ui } = await native(), delivery = reply()
+  handleClaudeUiView(mount, 'reload-window', delivery); await vi.advanceTimersByTimeAsync(100)
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'reload-window', delivery)
+  handleClaudeUiView(mount, 'reload-window', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).toHaveBeenCalledTimes(1)
+  handleClaudeUiView({ ...mount, mountId: randomUUID() }, 'reload-window', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).toHaveBeenCalledTimes(2)
+})
+
+it('does not revive a queued initial mount delivered after its unmount', async () => {
+  const { ui } = await native(), delivery = reply()
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'transient-view', delivery)
+  handleClaudeUiView(mount, 'transient-view', delivery); await vi.advanceTimersByTimeAsync(100)
+  expect(ui.attach).not.toHaveBeenCalled()
+})
