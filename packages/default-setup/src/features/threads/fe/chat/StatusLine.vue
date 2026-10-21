@@ -1,5 +1,5 @@
 <template>
-  <div ref="strip" v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'" :style="{ minHeight: minimumHeight === undefined ? undefined : minimumHeight + 'px' }"
+  <div ref="strip" v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'" :style="{ minHeight: stripMinimumHeight }"
     class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
@@ -39,7 +39,11 @@ const displayPath = computed(() => {
   return segments.length > 2 ? segments.at(-1) : props.statusLine
 })
 const emit = defineEmits<{ 'tools-expanded': [expanded: boolean]; click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
-const strip = ref<HTMLElement | null>(null), minimumHeight = ref<number>()
+const strip = ref<HTMLElement | null>(null), minimumHeight = ref<number>(), naturalMinimumHeight = ref<number>()
+const stripMinimumHeight = computed(() => {
+  const natural = toolsOpen.value && naturalMinimumHeight.value ? `min(${naturalMinimumHeight.value}px, calc(var(--composer-available-height) * 0.5))` : undefined
+  return minimumHeight.value === undefined ? natural : natural ? `max(${minimumHeight.value}px, ${natural})` : minimumHeight.value + 'px'
+})
 const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: nativeSite, cellWidth: () => (cellMeasure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
 // Resizing must reveal the complete focused field, even when focus itself does not change.
@@ -62,12 +66,22 @@ function revealFocusedField() {
 }
 watch(nativeSite, (site, _previous, cleanup) => {
   if (!site) return
-  const observer = new ResizeObserver(revealFocusedField)
+  const measure = () => {
+    const content = site.querySelector<HTMLElement>('[data-native-scroll-content]'), owner = strip.value
+    if (content && owner) {
+      const paint = getComputedStyle(site)
+      const padding = (parseFloat(paint.paddingTop) || 0) + (parseFloat(paint.paddingBottom) || 0)
+      naturalMinimumHeight.value = Math.ceil(owner.getBoundingClientRect().height - site.getBoundingClientRect().height + padding + content.scrollHeight)
+    }
+    revealFocusedField()
+  }
+  const observer = new ResizeObserver(measure)
   observer.observe(site)
   // Feedback and row fitting can resize a focused field while its site stays unchanged.
   const content = site.querySelector<HTMLElement>('[data-native-scroll-content]')
   if (content) observer.observe(content)
-  cleanup(() => observer.disconnect())
+  measure()
+  cleanup(() => { observer.disconnect(); naturalMinimumHeight.value = undefined })
 }, { flush: 'post' })
 let focusRevision = 0
 let applyingFocus = false

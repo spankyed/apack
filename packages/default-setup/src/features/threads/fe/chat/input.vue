@@ -339,12 +339,35 @@ function focusComposer() {
 const nativeActivityHeight = ref(0), nativeHintHeight = ref(0), nativeModeHeight = ref(0)
 const nativeComposerHeight = computed(() => nativeActivityHeight.value + Math.max(nativeHintHeight.value, nativeModeHeight.value))
 const nativeToolsExpanded = ref(false), nativeFieldFocused = ref(false)
+const nativeToolsRequiredHeight = ref(0), inputFormPadding = ref(0)
+watch(inputCardRef, (card, _previous, cleanup) => {
+  if (!card) return
+  let frame: number | undefined
+  const measure = () => {
+    frame = undefined
+    nativeToolsRequiredHeight.value = Math.ceil(card.scrollHeight + card.offsetHeight - card.clientHeight)
+    const form = card.closest('form')
+    if (form) {
+      const paint = getComputedStyle(form)
+      inputFormPadding.value = (parseFloat(paint.paddingTop) || 0) + (parseFloat(paint.paddingBottom) || 0)
+    }
+  }
+  const schedule = () => { if (frame === undefined) frame = requestAnimationFrame(measure) }
+  const observer = new ResizeObserver(schedule)
+  const observe = () => { observer.disconnect(); observer.observe(card); for (const child of Array.from(card.children)) observer.observe(child); schedule() }
+  const mutations = new MutationObserver(observe)
+  mutations.observe(card, { childList: true }); observe()
+  cleanup(() => { observer.disconnect(); mutations.disconnect(); if (frame !== undefined) cancelAnimationFrame(frame) })
+}, { flush: 'post' })
 function isNativeField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.matches('textarea[data-native-focus-id], select[data-native-focus-id]') && !target.closest('[data-native-client]')
 }
 const nativeHistoryReserve = computed(() => {
   const expanded = 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)'
-  if (nativeToolsExpanded.value) return nativeFieldFocused.value ? `var(--composer-field-history-reserve, ${expanded})` : expanded
+  if (nativeToolsExpanded.value) {
+    if (nativeFieldFocused.value) return `var(--composer-field-history-reserve, ${expanded})`
+    return nativeToolsRequiredHeight.value ? `min(${expanded}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : expanded
+  }
   return nativeComposerHeight.value ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
 })
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
