@@ -1,13 +1,11 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
-test.afterEach(async({appPage},info) => { terminalScreen?.dispose(); terminalScreen = undefined; if(info.status!==info.expectedStatus)await appPage.screenshot({caret:'initial',path:info.outputPath('agent-ime-lifetime-failure.png')}).catch(()=>{}) })
+test.afterEach(async({appPage},info) => { if(info.status!==info.expectedStatus)await appPage.screenshot({caret:'initial',path:info.outputPath('agent-ime-lifetime-failure.png')}).catch(()=>{}) })
 test('keeps committed Agent input when native return interrupts genuine Chromium preedit', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
@@ -32,30 +30,17 @@ test('keeps committed Agent input when native return interrupts genuine Chromium
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
-  ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
-  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
-  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
-  let lastSequence = 0
-  let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
-  await expect.poll(async () => {
-    const current = await context(), native = current.native
-    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
-    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
-    const buffer = terminalScreen!.buffer.active
-    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
-    const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
-    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
-    else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
-    else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
-    else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
-    else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
-  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  let theme=false,security=false,navigated=false,trusted=false
+  await expect.poll(async()=>{
+    const native=(await context()).native
+    const text=native?.output?.map((chunk:any)=>chunk.text).join('')??''
+    const screen=recognizeOnboardingPrompt(text,workspace)
+    if(screen==='theme'&&!theme){theme=true;await input.press('Enter')}
+    else if(screen==='security-notes'&&theme&&!security){security=true;await input.press('Enter')}
+    else if(screen==='workspace-trust'&&!navigated){navigated=true;await input.press('ArrowDown')}
+    else if(screen==='workspace-trust-selected'&&navigated&&!trusted){trusted=true;await input.press('Enter')}
+    return native?.state?.status==='live'&&native.state.mainStatus?.includes('Session ready')
+  },{timeout:25000,intervals:[250]}).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
