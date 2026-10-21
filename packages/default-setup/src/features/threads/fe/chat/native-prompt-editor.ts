@@ -65,6 +65,24 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   const stopSourceReveal = () => { sourceResize?.disconnect(); if (revealFrame !== undefined) cancelAnimationFrame(revealFrame) }
   const events = ['beforeinput', 'keydown', 'paste', 'drop', 'pointerdown'] as const
   for (const event of events) dom.addEventListener(event, intent, true)
+  // A native reply can arrive between browser caret movement and selectionchange delivery.
+  // Adopt that visible selection before any acknowledgement transaction paints the old one.
+  function synchronizeSelection(): void {
+    if (disposed || applying || editor.isDestroyed || editor.view.composing || dom.ownerDocument.activeElement !== dom) return
+    const selection = dom.ownerDocument.getSelection()
+    if (!selection?.anchorNode || !selection.focusNode || !dom.contains(selection.anchorNode) || !dom.contains(selection.focusNode)) return
+    let anchor: number, head: number
+    try {
+      anchor = editor.view.posAtDOM(selection.anchorNode, selection.anchorOffset)
+      head = editor.view.posAtDOM(selection.focusNode, selection.focusOffset)
+    } catch { return } // Leave an unfinished browser content mutation to ProseMirror's observer.
+    if (anchor < 0 || head < 0 || anchor > editor.state.doc.content.size || head > editor.state.doc.content.size) return
+    if (anchor === editor.state.selection.anchor && head === editor.state.selection.head) return
+    const observedKey = selectionKey
+    intent(); key = observedKey; selectionKey = observedKey
+    const next = TextSelection.between(editor.state.doc.resolve(anchor), editor.state.doc.resolve(head))
+    editor.view.dispatch(editor.state.tr.setSelection(next).setMeta('claude-prompt-by', 'person'))
+  }
   // Browser selection changes can arrive in a later task than their key/pointer event.
   // Capture before ProseMirror's document observer publishes the resulting selection.
   const selectionChanged = () => {
@@ -74,6 +92,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     }
     const observedKey = selectionKey
     intent(); key = observedKey; selectionKey = observedKey
+    synchronizeSelection()
   }
   dom.ownerDocument.addEventListener('selectionchange', selectionChanged, true)
 
@@ -178,6 +197,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   return {
     get revision() { return revision },
     readDraft() {
+      synchronizeSelection()
       if (disposed || editor.isDestroyed || editor.view.composing) return
       const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
       return snapshot ? { text: snapshot.text, cursor: snapshot.cursor } : undefined
@@ -198,6 +218,8 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     receive(reply: ClaudePromptReply) {
       if (disposed || !pending || reply.revision !== pending.revision || editor.isDestroyed) return
       if (editor.view.composing) { finishPending(false); return }
+      synchronizeSelection()
+      if (!pending || reply.revision !== pending.revision) return
       const { snapshot, selection } = pending
       if (editor.state.doc !== snapshot.doc || !editor.state.selection.eq(selection)) { finishPending(false); return }
       if (reply.status === 'error') { onProblem(reply.message); finishPending(false); return }

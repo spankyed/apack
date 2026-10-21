@@ -554,3 +554,40 @@ it('maps decoration boundaries inside noncanonical code fences without changing 
   expect(captureClaudePromptDocument(editor.state.doc,editor.state.selection.head,serialize)?.cursor).toBe(canonical.indexOf('ready')+5)
   bridge.dispose()
 })
+
+it('keeps a newer browser caret when a native acknowledgement arrives before selectionchange', () => {
+  editor.commands.setContent('worker draft')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    const request = send.mock.lastCall![0]
+    expect(request.cursor).toBe('worker draft'.length)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 3, text, 3)
+    // The browser has moved; ProseMirror has not received its delayed selectionchange yet.
+    expect(editor.state.selection.head).toBe('worker draft'.length + 1)
+    bridge.receive({ revision: request.revision, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(bridge.readDraft()).toEqual({ text: 'worker draft', cursor: 3 })
+    expect(document.getSelection()!.focusOffset).toBe(3)
+  } finally { bridge.dispose() }
+})
+
+
+it('does not adopt a pending browser selection because an unrelated native reply arrived', () => {
+  editor.commands.setContent('worker draft')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  try {
+    const request = send.mock.lastCall![0], text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 3, text, 3)
+    bridge.receive({ revision: request.revision - 1, status: 'applied', frame: { text: request.text, cursor: request.cursor } })
+    expect(editor.state.selection.head).toBe('worker draft'.length + 1)
+    expect(send).toHaveBeenCalledOnce()
+    expect(document.getSelection()!.focusOffset).toBe(3)
+  } finally { bridge.dispose() }
+})
