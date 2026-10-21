@@ -75,13 +75,17 @@ watch(nativeSite, (site, _previous, cleanup) => {
     }
     revealFocusedField()
   }
-  const observer = new ResizeObserver(measure)
+  let live = true, frame: number | undefined
+  const schedule = () => {
+    if (live && frame === undefined) frame = requestAnimationFrame(() => { frame = undefined; if (live) measure() })
+  }
+  const observer = new ResizeObserver(schedule)
   observer.observe(site)
   // Feedback and row fitting can resize a focused field while its site stays unchanged.
   const content = site.querySelector<HTMLElement>('[data-native-scroll-content]')
   if (content) observer.observe(content)
-  measure()
-  cleanup(() => { observer.disconnect(); naturalMinimumHeight.value = undefined })
+  schedule()
+  cleanup(() => { live = false; observer.disconnect(); if (frame !== undefined) cancelAnimationFrame(frame); naturalMinimumHeight.value = undefined })
 }, { flush: 'post' })
 let focusRevision = 0
 let applyingFocus = false
