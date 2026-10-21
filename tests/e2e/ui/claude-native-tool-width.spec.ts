@@ -93,12 +93,18 @@ test('formats the original tool result at its mounted row width through resize',
     await expect(status).toBeInViewport({ratio:1});await expect(formatted).toBeInViewport({ratio:1})
     const sample={width,columns,text,engineOutput:frame.engineOutput,report:reports.at(-1)};samples.push(sample)
     await writeFile(join(workspace!,'native-tool-width-partial.json'),JSON.stringify({samples,reports}))
-    if(samples.length<=2)await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-tool-width-'+width+'.png')})
   }
   expect(samples[0].columns).toBeGreaterThan(samples[1].columns);expect(samples[2].columns).toBe(samples[0].columns)
   expect(samples[0].engineOutput).not.toBe(samples[1].engineOutput);expect(samples[2].engineOutput).toBe(samples[0].engineOutput)
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-tool-width-proof.json'),JSON.stringify({sessionId,boundNativePid,source,draft,samples,reports,noPhantomTurn:true}))
+  await composer.focus()
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===680?600:900});await result.scrollIntoViewIfNeeded()
+    await expect(status).toBeInViewport({ratio:1});await expect(formatted).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+    await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-tool-width-'+width+'.png')})
+  }
   await cdp.detach()
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
