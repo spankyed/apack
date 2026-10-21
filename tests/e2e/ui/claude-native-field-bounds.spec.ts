@@ -9,7 +9,14 @@ delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus) await appPage.screenshot({path:testInfo.outputPath('native-field-failure.png')}).catch(() => {})
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await appPage.screenshot({path:testInfo.outputPath('native-field-failure.png')}).catch(() => {})
+    await writeFile(join(workspace!,'native-field-bounds-layout-failure.json'),JSON.stringify(await appPage.evaluate(()=>{
+      const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+      const field=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release review notes"]')
+      return {events:(window as any).__nativeFieldEvents,active:{tag:document.activeElement?.tagName,label:document.activeElement?.getAttribute('aria-label')},field:field?{valueLength:field.value.length,focusId:field.dataset.nativeFocusId,selection:[field.selectionStart,field.selectionEnd]}:null,views:state.nativeUiViews}
+    })).catch(error=>({captureError:String(error)}))))
+  }
   terminalScreen?.dispose(); terminalScreen = undefined
 })
 test('edits long native review notes within the actual site viewport without submitting chat', async ({ app, appPage }, testInfo) => {
@@ -95,6 +102,24 @@ test('edits long native review notes within the actual site viewport without sub
   const notes=card.getByRole('textbox',{name:'Release review notes',exact:true})
   await expect(notes).toHaveValue(initial.value);expect(initial.value.length).toBeGreaterThan(16384);expect(initial.rows).toBe(80)
   expect(await notes.getAttribute('maxlength')).toBe('16384')
+  await appPage.evaluate(()=>{
+    const events:unknown[]=[];(window as any).__nativeFieldEvents=events
+    for(const name of ['focusin','focusout','keydown'])document.addEventListener(name,event=>{
+      if(events.length>=60)return
+      const target=event.target as HTMLElement
+      const row:any={type:event.type,key:(event as KeyboardEvent).key,composing:(event as KeyboardEvent).isComposing,target:target.tagName,label:target.getAttribute('aria-label'),focusId:target.dataset.nativeFocusId}
+      events.push(row)
+      requestAnimationFrame(()=>{row.prevented=event.defaultPrevented;row.active=document.activeElement?.getAttribute('aria-label');row.alert=document.querySelector('[data-onboarding-id="agent-chat-input"] [role=alert]')?.textContent})
+    },true)
+  })
+  await notes.click()
+  await expect(notes).toBeFocused()
+  await expect.poll(async()=>appPage.evaluate(()=>{
+    const context=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+    const field=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release review notes"]')
+    return Object.values(context.nativeUiViews).some((view:any)=>view.threadId===context.currentThread?.id&&view.focus?.focusId===field?.dataset.nativeFocusId)
+  }),{message:'Original native focus acknowledges the actual field before typing'}).toBe(true)
+  await expect(notes).toBeFocused()
   await notes.press('Enter')
   await expect(card.getByRole('alert')).toContainText('Shorten this field to 16,384 characters')
   await expect(notes).toHaveValue(initial.value);await expect(composer).toHaveText(draft)
