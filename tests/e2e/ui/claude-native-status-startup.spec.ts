@@ -59,7 +59,7 @@ test('renders original initial helper output in the ordinary composer without an
   await composer.fill(draft);const before=await context(),samples=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900});await expect(composer).toHaveText(draft)
-    await expect(status).toHaveText('Session readyReviewing release notes')
+    await expect(status).toHaveText('Session ready\nReviewing release notes')
     await expect(status).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.count())expect(await tools.getAttribute('aria-expanded')).toBe('false')
     samples.push({width,status:(await context()).native.state.mainStatus,at:Date.now()})
