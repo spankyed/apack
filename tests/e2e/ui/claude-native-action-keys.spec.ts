@@ -175,7 +175,17 @@ test('routes live native Button actions through the retained main and Agent app 
       await panel.getByRole('button',{name:'Close Release notes',exact:true}).click();await shown(second);await read('pane:'+second,width)
       await panel.getByRole('button',{name:'Close Migration notes',exact:true}).click()
       await expect.poll(async()=>(await ui())?.state.panes?.roster.panes.length??0).toBe(0);await expect(panel).toBeHidden();await read('above-last',width)
+      const layout = await card.getByRole('button',{name:'Send',exact:true}).evaluate(button => {
+        const ancestors=[]
+        for(let node:HTMLElement|null=button;node;node=node.parentElement){
+          const box=node.getBoundingClientRect(),style=getComputedStyle(node)
+          ancestors.push({tag:node.tagName,classes:node.className,testId:node.dataset.testid,top:box.top,bottom:box.bottom,height:box.height,clientHeight:node.clientHeight,scrollHeight:node.scrollHeight,scrollTop:node.scrollTop,minHeight:style.minHeight,maxHeight:style.maxHeight,overflowY:style.overflowY,display:style.display,flexShrink:style.flexShrink,available:style.getPropertyValue('--composer-available-height')})
+        }
+        return {width:innerWidth,height:innerHeight,ancestors}
+      })
+      await writeFile(join(workspace!,'native-action-pane-closed-layout-'+width+'.json'),JSON.stringify(layout))
       await appPage.screenshot({path:testInfo.outputPath('native-action-pane-closed-'+width+'.png')})
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     }
     expect((await receipts()).length).toBe(12)
     const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((r:any)=>r.id)).toEqual(before.messages.map((r:any)=>r.id));expect(after.native.state.nativePid).toBe(boundNativePid)
