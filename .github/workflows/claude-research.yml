@@ -37,11 +37,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build candidate pack
-        if: inputs.case != 'native-action-keys'
+        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
         shell: bash
         run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
-        if: inputs.case != 'native-action-keys'
+        if: inputs.case != 'native-action-keys' && inputs.case != 'native-action-contexts'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         shell: bash
