@@ -8,4 +8,11 @@ if ! command -v xvfb-run >/dev/null; then
 fi
 export APACK_CHAIN_CORES=2
 npm run build:runtime -- --cores 2
+# The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
+if [[ "$(id -u)" == 0 ]]; then
+  evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/node_modules/.cache/claude-research-linux}"
+  mkdir -p "$evidence"
+  chown node:node "$evidence"
+  exec runuser -u node -- xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/claude-research-ci.py --linux-container "${1:-action-panes-app}"
+fi
 exec xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/claude-research-ci.py --linux-container "${1:-action-panes-app}"
