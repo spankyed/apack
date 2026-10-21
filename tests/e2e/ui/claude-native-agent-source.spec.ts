@@ -123,11 +123,11 @@ test('preserves literal parent and Agent drafts through remount and exact native
   await expect(agentComposer.locator('[data-claude-prompt-source]')).toHaveText(agent.text)
   const remounted=await readDraft(form);expect(remounted.view.agentId).toBe(taskId)
   expect(remounted.value).toEqual({text:agent.text,cursor:agent.cursor})
-  await agentComposer.focus();await agentComposer.press('Meta+ArrowDown');await agentComposer.press('End');await agentComposer.press('Shift+Enter');await agentComposer.pressSequentially('Checked worker notes.')
+  await agentComposer.focus();await agentComposer.press('Shift+Enter');await agentComposer.pressSequentially('Checked worker notes.')
   const sent=(await readDraft(form)).value.text
-  expect(sent).toBe(agent.text+'\nChecked worker notes.')
+  expect(sent).toBe(agent.text.slice(0,agent.cursor)+'\nChecked worker notes.'+agent.text.slice(agent.cursor))
   for(const width of [1100,680]){
-    await appPage.setViewportSize({width,height:width===680?600:900});await agentComposer.focus();await agentComposer.press('Meta+ArrowDown');await agentComposer.press('End')
+    await appPage.setViewportSize({width,height:width===680?600:900});await agentComposer.focus()
     await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
     await expect(agentComposer.locator('[data-claude-prompt-source]')).toContainText('Checked worker notes.')
     await expect.poll(async()=>{
