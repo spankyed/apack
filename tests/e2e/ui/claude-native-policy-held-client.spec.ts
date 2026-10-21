@@ -88,19 +88,21 @@ test('retires a focused held Client press across native policy restriction and r
   await expect.poll(async()=>(await receipt('native-policy-held-settled.json'))?.nonce,{timeout:10000,message:'Original held middleware finishes after restoration; native cancellation/HTTP timeout must not be relabeled as successful stale acknowledgement'}).toBe(nonce)
   const heldSettled=await receipt('native-policy-held-settled.json'),afterHeld=await readClient()
   expect(heldSettled.result.element).toBe('held-policy-action');expect(afterHeld.pressed).toBe(0)
-  for(const width of [1100,680]){
-    await appPage.setViewportSize({width,height:width===680?600:900})
-    await expect(composer).toHaveText(parent.text)
-    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
-    await expect(client.getByRole('button',{name:'Apply policy action',exact:true})).toBeInViewport({ratio:1})
-    await appPage.screenshot({path:testInfo.outputPath('native-policy-held-restored-'+width+'.png')})
-  }
   await client.getByRole('button',{name:'Apply policy action',exact:true}).click()
   await expect.poll(async()=>(await readClient())?.pressed).toBe(1)
   const freshDraft=await receipt('native-policy-fresh-draft.json');expect(freshDraft).toEqual(parent)
   const afterFresh=await readClient(),after=await context()
   expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,afterHeld,afterFresh,freshDraft,noPhantomTurn:true}))
+  await composer.focus()
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===680?600:900})
+    await expect(composer).toHaveText(parent.text)
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+    await expect(client.getByRole('button',{name:'Apply policy action',exact:true})).toBeInViewport({ratio:1})
+    await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-policy-held-restored-'+width+'.png')})
+  }
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
