@@ -10,6 +10,17 @@ const clientInput = z.discriminatedUnion('kind',[
  z.object({kind:z.literal('key'),key:z.string().min(1).max(32).refine(key=>key!=='escape'),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),meta:z.literal(true).optional()}).strict(),clientPointer,
 ])
 export type ClaudeUiClientInput = z.infer<typeof clientInput>
+// Parsed native binding data, not keybinding strings or native callback handles.
+const actionStroke = z.object({ key: z.string(), ctrl: z.boolean(), alt: z.boolean(), shift: z.boolean(), meta: z.boolean(), super: z.boolean() }).strict()
+const actionKeys = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/), bindings: z.array(z.array(actionStroke)), continuations: z.array(z.array(actionStroke)), pending: z.array(actionStroke).nullable() }).strict()
+const actionKeyEvent = z.object({ key: z.string().min(1).max(32), ctrl: z.boolean(), alt: z.boolean(), shift: z.boolean(), super: z.boolean(), from_composer: z.boolean() }).strict()
+const actionKeyRequest = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/), event: actionKeyEvent }).strict()
+export type ClaudeUiActionKeyState = z.infer<typeof actionKeys>
+export type ClaudeUiActionKeyRequest = z.infer<typeof actionKeyRequest>
+export function readClaudeUiActionKeys(value: unknown): ClaudeUiActionKeyState | undefined {
+  const parsed = actionKeys.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
 const toolGroup = z.object({id:z.string().min(1).max(256),anchorIds:z.array(z.string().min(1).max(256)).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
 export type ClaudeUiToolGroup = z.infer<typeof toolGroup>
 const composerPlacement=z.object({component:z.enum(['Spinner','SessionMode','PromptHint']),id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
@@ -82,7 +93,7 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>
@@ -235,6 +246,12 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     async focus(options: ClaudeUiFocus): Promise<ClaudeUiFocusResult> {
       const valid = focus.parse(options)
       return focusResult.parse(await request({ subtype: 'ui_focus', ...valid }))
+    },
+    /** Native resolves configured keys; no terminal callback handle is accepted from the renderer. */
+    async key(options: ClaudeUiActionKeyRequest & { client_id: string }) {
+      const valid = actionKeyRequest.extend({ client_id: clientId }).parse(options)
+      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native action keys are unavailable')
+      return z.object({ handled: z.boolean(), action_keys: actionKeys }).strict().parse(await request({ subtype: 'apack_ui_action_key', ...valid }))
     },
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
     async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {

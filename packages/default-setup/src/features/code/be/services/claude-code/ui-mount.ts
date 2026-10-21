@@ -1,3 +1,4 @@
+import { readClaudeUiActionKeys, type ClaudeUiActionKeyState, type ClaudeUiActionKeyRequest } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeQuestionHost } from './ui-question-host.ts'
 import { selectClaudeAgentTranscriptRows } from './ui-agent-transcript.ts'
@@ -18,7 +19,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -54,6 +55,8 @@ export function mountClaudeUi(options: {
   let disposal: Promise<void> | undefined
   let unsubscribe = () => {}
   let promptPalette: Record<string, string> | undefined
+  let actionKeyState: ClaudeUiActionKeyState | undefined
+  let keyQueue: Promise<unknown> = Promise.resolve()
   let lastState: ClaudeUiMountState = { status: 'connecting' }
   let agent: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails | undefined
   let agentProblem: string | undefined
@@ -104,7 +107,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -151,6 +154,7 @@ export function mountClaudeUi(options: {
       const result = await owner.handle.ui.render({ ...client, component: 'AbovePrompt', instance_id: instanceId, props: {} })
       if (!current() || revision !== generation) return
       drawing = createClaudeUiDrawing(result.tree, fieldDrawing, drawing)
+      actionKeyState = result._apack_action_keys
       function stamp(node: import('./ui-presentation.ts').ClaudeUiNode): void {
         if (node.kind === 'box' || node.kind === 'client') node.children.forEach(stamp)
         else if (node.kind === 'input' || node.kind === 'select') node.revision = completed.get(node.actionId) ?? 0
@@ -173,6 +177,7 @@ export function mountClaudeUi(options: {
   function dispose(): Promise<void> {
     if (disposal) return disposal
     disposed = true
+    actionKeyState = undefined
     if (agentTimer) clearInterval(agentTimer)
     agentTimer = undefined
     panes?.dispose()
@@ -210,6 +215,10 @@ export function mountClaudeUi(options: {
     question.receive(line)
     panes?.receive(line)
     scroll.receive(line)
+    if (line.type === 'system' && line.subtype === 'apack_ui_action_keys' && line.client_id === client.client_id && current()) {
+      actionKeyState = readClaudeUiActionKeys(line.action_keys)
+      publish(lastState)
+    }
     if (line.type === 'system' && line.subtype === 'ui_prompt_theme' && current()) {
       const palette = readClaudePromptPalette(line.palette)
       if (palette) { promptPalette = palette; publish(lastState) }
@@ -402,6 +411,24 @@ export function mountClaudeUi(options: {
       return { handled: current() && result.handled }
     },
     /** No retry: a native press may have applied its side effect even if its reply was lost. */
+    key(request: ClaudeUiActionKeyRequest): Promise<{ handled: boolean }> {
+      const operation = keyQueue.then(async () => {
+        await ready
+        if (!current() || !attached) return { handled: false }
+        try {
+          const result = await owner.handle.ui.key({ client_id: client.client_id, ...request })
+          if (!current() || !attached) return { handled: false }
+          actionKeyState = result.action_keys
+          publish(lastState)
+          return { handled: result.handled }
+        } catch {
+          if (current()) { actionKeyState = undefined; publish(lastState); invalidate() }
+          return { handled: false }
+        }
+      })
+      keyQueue = operation.catch(() => {})
+      return operation
+    },
     async press(actionId: string, href?: string): Promise<{ handled: boolean }> {
       if (question.ownsAction(actionId)) return question.press(actionId, href)
       if (messages.ownsAction(actionId)) return messages.press(actionId, href)

@@ -66,6 +66,8 @@ jobs:
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-capability-onboarding.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-keys.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-app-inspection.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-app-failure.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-receipts.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-caret-*.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-layout-*.json

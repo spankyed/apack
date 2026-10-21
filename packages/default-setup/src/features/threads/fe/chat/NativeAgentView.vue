@@ -1,5 +1,5 @@
 <template>
-  <section ref="selectionRoot" v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape">
+  <section ref="selectionRoot" v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape" @keydown.capture="nativeActionKey($event, selectionRoot)" @focusout="nativeActionKey.leave($event, selectionRoot)">
     <header class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
       <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
@@ -47,6 +47,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
@@ -103,6 +104,10 @@ let commandDraft: { revision: number; text: string } | undefined
 const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0, stopRevision = 0
 let submission: { revision: number; text: string; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview | { commandPending: true }): void; reject(error: Error): void } | undefined
+const nativeActionKey = createClaudeActionKeyHandler(() => ({
+  scope: props.active && uiMount.value && snapshot.value?.attachmentId ? `${uiMount.value}:${snapshot.value.attachmentId}` : undefined,
+  keys: state.value?.actionKeys, result: snapshot.value?.actionKeyResult,
+}), request => { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_KEY', ...identity(), ...request }) })
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
 function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
@@ -197,8 +202,8 @@ function focus(value: ClaudeUiFocusEvent) { if (uiMount.value) actor.send({ type
 function edit(value: ClaudePromptEdit) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value }) }
 function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value }) }
 function host(value: ClaudePromptHostResponse) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
-onMounted(() => { window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
-onBeforeUnmount(() => { window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
+onMounted(() => { window.addEventListener('blur', nativeActionKey.cancel); window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
+onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cancel); window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
 </script>
 
 <style scoped>

@@ -297,6 +297,17 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     void view.mount?.clientEvent({id:event.id,sequence:event.sequence,event:event.event}).catch(()=>{})
     return
   }
+  if (event.type === 'CLAUDE_UI_KEY') {
+    if (!view || !Number.isSafeInteger(event.sequence) || event.sequence < 1) return
+    bind(view)
+    const target = view, mount = target.mount
+    if (mount) void mount.key({ revision: event.revision, event: event.event }).then(result => {
+      if (viewCurrent(target) && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) {
+        target.reply({ type: 'CLAUDE_UI_KEY_RESULT', threadId: target.threadId, mountId: target.mountId, sequence: event.sequence, handled: result.handled, actionKeys: target.state.actionKeys })
+      }
+    }).catch(() => { /* key failure must leave ordinary composing available */ })
+    return
+  }
   if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {
     if (!view || !validId(event.actionId)) return
     bind(view)

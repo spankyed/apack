@@ -217,3 +217,19 @@ it('passes the selected phase to an explicit print Send and retires leftover nat
  expect(sent).toHaveBeenCalledWith(expect.objectContaining({event:expect.objectContaining({type:'USER_MSG',threadId:thread.id,phase:'Edit',text:'Continue in print Edit'})}))
  expect(readClaudeComposerPhase(thread.id)).toBeUndefined();expect(actor.getSnapshot().context.phase).toBe('Edit');actor.stop()
 })
+
+it('keeps native key acknowledgements in their mounted thread and ignores older or retired replies', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'key-view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
+  const result = { type: 'CLAUDE_UI_KEY_RESULT' as const, ...identity, sequence: 2, handled: true }
+  actor.send({ ...result, threadId: 'foreign' })
+  expect(actor.getSnapshot().context.nativeUiViews[identity.mountId]?.actionKeyResult).toBeUndefined()
+  actor.send(result)
+  expect(actor.getSnapshot().context.nativeUiViews[identity.mountId]?.actionKeyResult).toMatchObject({ sequence: 2, handled: true })
+  actor.send({ ...result, sequence: 1, handled: false })
+  expect(actor.getSnapshot().context.nativeUiViews[identity.mountId]?.actionKeyResult?.sequence).toBe(2)
+  actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity })
+  actor.send({ ...result, sequence: 3 })
+  expect(actor.getSnapshot().context.nativeUiViews[identity.mountId]).toBeUndefined()
+  actor.stop()
+})

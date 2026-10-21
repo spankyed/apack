@@ -39,7 +39,7 @@
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
-        <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area">
+        <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <!-- Agent Chat Content -->
@@ -240,6 +240,7 @@ import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
+import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import ChatInput from './input.vue'
 import NativeToolApproval from './NativeToolApproval.vue'
 import { ClaudeBashApprovalPresentationSchema } from '#features/code/common/native-bash-approval.ts'
@@ -322,6 +323,11 @@ function isTailMessage(msg: MessageEntity): boolean {
 const nativeBlockExpansion = ref<Record<string, number[]>>({})
 const nativeUserExpansion = ref<Record<string, boolean>>({})
 const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
+const nativeActionKey = createClaudeActionKeyHandler(() => {
+  const mount = nativeUiMount.value
+  const view = mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId] : undefined
+  return { scope: mount && view?.attachmentId ? `${mount.mountId}:${view.attachmentId}` : undefined, keys: view?.state.actionKeys, result: view?.actionKeyResult }
+}, request => { const mount = nativeUiMount.value; if (mount) actor.send({ type: 'CLAUDE_UI_KEY', ...mount, ...request }) })
 const nativeUiDrawing = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
@@ -771,8 +777,8 @@ function onKeydown(e: KeyboardEvent) {
     handleToggleThreadSidebar()
   }
 }
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onMounted(() => { window.addEventListener('keydown', onKeydown); window.addEventListener('blur', nativeActionKey.cancel) })
+onUnmounted(() => { window.removeEventListener('keydown', onKeydown); window.removeEventListener('blur', nativeActionKey.cancel) })
 
 function handleToggleThreadSidebar() {
   if (showInlineDashboard.value) {

@@ -1622,6 +1622,14 @@ const threadsState = setup({
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
+    CLAUDE_UI_KEY_RESULT: { actions: assign(({ context, event }) => {
+      const view = context.nativeUiViews[event.mountId]
+      if (!view || view.threadId !== event.threadId || (view.actionKeyResult?.sequence ?? 0) >= event.sequence) return {}
+      return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, actionKeyResult: { sequence: event.sequence, handled: event.handled, actionKeys: event.actionKeys } } } }
+    }) },
+    CLAUDE_UI_KEY: { actions: ({ context, event }) => {
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+    } },
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },

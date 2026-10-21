@@ -16,6 +16,7 @@ function fixture() {
   const listeners = new Set<(event: StreamLine) => void>()
   const ui = { terminalPlacements:vi.fn(async()=>[] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiTerminalPlacement[]),composerPlacements:vi.fn(async()=>[]), toolGroups:vi.fn(async()=>[]), releaseInstance: vi.fn(async () => ({ released: true })), prepareParentCommand: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['prepareParentCommand']>(async () => ({ kind: 'not_command' })), startParentCommand: vi.fn(async () => ({ kind: 'running' as const, id: '12345678-1234-1234-1234-123456789abc' })), readParentCommand: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['readParentCommand']>(async () => ({ kind: 'finished', id: '12345678-1234-1234-1234-123456789abc', result: { kind: 'command_complete', commandName: 'clear', messageId: '12345678-1234-1234-1234-123456789abc' } })), agentPanel: vi.fn(async (_options: unknown) => ({ open: false })), answerAgentCommand: vi.fn(async (_options: unknown) => ({ answered: true as const })), submitAgent: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['submitAgent']>(async () => ({ kind: 'input' as const, messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'running' })), clientEvent: vi.fn(async () => ({handled:true})), scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn(() => () => {}), focus: vi.fn(async (_options: unknown) => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async (_options:{client_id:string}) => ({ surfaces: ['desktop' as const] })),
     detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
+    key: vi.fn<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiControls['key']>(async (_request: unknown) => ({ handled: true, action_keys: { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyState['pending'] } })),
     render: vi.fn<() => Promise<import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiRenderResult>>(async () => rendered()), press: vi.fn(async () => ({ handled: true })) }
   let current = true
   const owner = { handle: { ui }, done: done.promise, subscribe(listener: (event: StreamLine) => void) { listeners.add(listener); return () => { listeners.delete(listener) } } }
@@ -565,4 +566,43 @@ it('gives simultaneous composer mounts distinct native render sites on the same 
   expect(new Set(sites.map(([site]) => site.instance_id)).size).toBe(2)
   for (const [site] of sites) expect(site.instance_id).toBe(`${site.client_id}:above-prompt`)
   await first.dispose(); await second.dispose()
+})
+
+
+it('accepts key metadata only for its mounted client and serializes chord requests without retiring click capabilities', async () => {
+  const f = fixture(), view = f.mount()
+  await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const id = f.ui.attach.mock.calls[0]![0].client_id, click = f.action()
+  const stroke = { key: 'u', ctrl: true, alt: true, meta: false, super: false, shift: false }
+  const keys = { revision: 'b'.repeat(64), bindings: [[stroke]], continuations: [], pending: null }
+  const receive = (client_id: string) => { for (const listener of f.listeners) listener({ type: 'system', subtype: 'apack_ui_action_keys', client_id, action_keys: keys } as StreamLine) }
+  receive('foreign-window'); expect(f.states.at(-1)?.actionKeys).toBeUndefined()
+  receive(id); expect(f.states.at(-1)?.actionKeys).toEqual(keys)
+  const held = deferred<{ handled: boolean; action_keys: import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyState }>()
+  f.ui.key.mockImplementationOnce(() => held.promise)
+  const request = { revision: keys.revision, event: { key: 'u', ctrl: true, alt: true, super: false, shift: false, from_composer: true } }
+  const first = view.key(request), second = view.key(request)
+  await vi.advanceTimersByTimeAsync(0); expect(f.ui.key).toHaveBeenCalledOnce()
+  expect(f.action()).toBe(click)
+  held.resolve({ handled: true, action_keys: { ...keys, pending: [stroke] } })
+  await expect(first).resolves.toEqual({ handled: true }); await expect(second).resolves.toEqual({ handled: true })
+  expect(f.ui.key).toHaveBeenCalledTimes(2)
+  expect(f.ui.key).toHaveBeenCalledWith({ client_id: id, ...request })
+  expect(f.ui.press).not.toHaveBeenCalled()
+  await view.dispose()
+})
+
+it('discards a held key acknowledgement and queued keys after the mounted view detaches', async () => {
+  const f = fixture(), view = f.mount()
+  await view.ready; await vi.advanceTimersByTimeAsync(50)
+  const held = deferred<{ handled: boolean; action_keys: import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyState }>()
+  f.ui.key.mockImplementationOnce(() => held.promise)
+  const request = { revision: 'a'.repeat(64), event: { key: 'u', ctrl: true, alt: true, super: false, shift: false, from_composer: true } }
+  const first = view.key(request), second = view.key(request)
+  await vi.advanceTimersByTimeAsync(0)
+  await view.dispose()
+  held.resolve({ handled: true, action_keys: { revision: request.revision, bindings: [], continuations: [], pending: null } })
+  await expect(first).resolves.toEqual({ handled: false }); await expect(second).resolves.toEqual({ handled: false })
+  expect(f.ui.key).toHaveBeenCalledOnce()
+  expect(f.states.at(-1)?.actionKeys).toBeUndefined()
 })

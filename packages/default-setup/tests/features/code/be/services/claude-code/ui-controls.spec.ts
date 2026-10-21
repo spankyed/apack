@@ -318,3 +318,26 @@ describe('print Client projection', () => {
     expect(bridge.action).toHaveBeenCalledTimes(2)
   })
 })
+
+
+it('admits only validated action keys on the existing native-owner transport', async () => {
+  const action_keys = { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null }
+  const request = vi.fn(async () => ({ handled: true, action_keys }))
+  const native = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  const key = { client_id: client.client_id, revision: action_keys.revision, event: { key: 'u', ctrl: true, alt: true, shift: false, super: false, from_composer: true } }
+  await expect(native.key(key)).resolves.toEqual({ handled: true, action_keys })
+  expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_action_key', ...key })
+  await expect(native.key({ ...key, handle: 99 } as typeof key)).rejects.toThrow()
+  const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  await expect(print.key(key)).rejects.toThrow('native action keys are unavailable')
+  expect(request).toHaveBeenCalledOnce()
+})
+
+it('ignores malformed optional key metadata without discarding a valid native drawing', async () => {
+  const tree = { type: 'Button', props: { key: 'keep', label: 'Keep reviewing' }, press: { plugin: 'fixture', handle: 1 } }
+  const request = vi.fn(async () => ({ tree, props: {}, rewritten: false, hooked: true, _apack_action_keys: { revision: 'invalid' } }))
+  const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
+  const result = await ui.render({ ...client, component: 'AbovePrompt', instance_id: 'above', props: {} })
+  expect(result.tree).toEqual(tree)
+  expect(result._apack_action_keys).toBeUndefined()
+})

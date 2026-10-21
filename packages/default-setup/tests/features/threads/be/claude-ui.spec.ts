@@ -11,6 +11,7 @@ async function native(threadId = 'thread') {
   const events = new PassThrough({ objectMode: true })
   const ui = { scroll: vi.fn(async () => ({ moved: true, offset: 0 })), panes: vi.fn(async () => ({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null })), showPane: vi.fn(async () => ({ shown_id: null })), focusPane: vi.fn(async () => ({ focused_id: null })), closePane: vi.fn(async () => ({ closed: true })), servePrompt: vi.fn((_id: string, _host: ClaudePromptHost) => () => {}), focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })), promptAutocomplete: vi.fn(async () => ({ suggestions: [{ text: 'native', label: 'Native row' }], start: 0 })), promptEdit: vi.fn(async () => ({ text: 'native draft', cursor: 12 })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })), attach: vi.fn(async () => ({ surfaces: ['desktop'] })), detach: vi.fn(async () => ({ detached: true, surfaces: [] })),
     render: vi.fn(async () => ({ tree: { type: 'Button', props: { label: 'Run', key: 'run' }, press: { plugin: 'fixture', handle: 1 } }, props: {}, hooked: true, rewritten: true })),
+    key: vi.fn(async () => ({ handled: true, action_keys: { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null } })),
     press: vi.fn(async () => ({ handled: true })) }
   const handle = { ui, events, kill: () => events.end(), close: async () => { events.end() } } as unknown as QueryHandle
   const owner = await openConversation(threadId, 'fixture', async () => handle, async () => {})
@@ -358,4 +359,27 @@ it('does not revive a queued initial mount delivered after its unmount', async (
   handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'transient-view', delivery)
   handleClaudeUiView(mount, 'transient-view', delivery); await vi.advanceTimersByTimeAsync(100)
   expect(ui.attach).not.toHaveBeenCalled()
+})
+
+
+it('routes action keys only through the current connection and mounted thread', async () => {
+  const { ui } = await native(), delivery = reply(), foreign = reply()
+  handleClaudeUiView(mount, 'owner-window', delivery)
+  await vi.advanceTimersByTimeAsync(100)
+  const request = { type: 'CLAUDE_UI_KEY' as const, sequence: 1, threadId: mount.threadId, mountId, revision: 'a'.repeat(64), event: { key: 'u', ctrl: true, alt: true, shift: false, super: false, from_composer: true } }
+  handleClaudeUiView(request, 'foreign-window', foreign)
+  handleClaudeUiView({ ...request, threadId: 'foreign-thread' }, 'owner-window', delivery)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(ui.key).not.toHaveBeenCalled()
+  handleClaudeUiView(request, 'owner-window', delivery)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(ui.key).toHaveBeenCalledOnce()
+  expect(delivery.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'CLAUDE_UI_KEY_RESULT', sequence: 1, handled: true, mountId })
+  expect(ui.key).toHaveBeenCalledWith({ client_id: expect.any(String), revision: request.revision, event: request.event })
+  handleClaudeUiView({ ...mount, type: 'CLAUDE_UI_UNMOUNT' }, 'owner-window', delivery)
+  await vi.advanceTimersByTimeAsync(0)
+  handleClaudeUiView(request, 'owner-window', delivery)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(ui.key).toHaveBeenCalledOnce()
+  expect(foreign).not.toHaveBeenCalled()
 })

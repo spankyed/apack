@@ -477,6 +477,7 @@ export type AgentSettings = ThreadsSettings['chat'];
 export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; promptFocused: boolean; threadId: string; mountId: string; resumeKey?: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
 
 export type ClaudeUiViewRequest =
+  | ({ type: 'CLAUDE_UI_KEY'; threadId: string; mountId: string; sequence: number } & import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyRequest)
   | { type: 'CLAUDE_UI_COMMAND_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
   | { type: 'CLAUDE_UI_COMMAND_DECISION'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
   | { type: 'CLAUDE_UI_AGENT_INPUT'; threadId: string; mountId: string; revision: number; text: string }
@@ -527,6 +528,7 @@ export type IncomingThreadsEvents =
   | { type: 'THREAD_DELETED'; threadId: string }
 
 export type OutgoingThreadsEvents =
+  | { type: 'CLAUDE_UI_KEY_RESULT'; threadId: string; mountId: string; sequence: number; handled: boolean; actionKeys?: ClaudeUiMountState['actionKeys'] }
   | { type: 'CLAUDE_PERMISSION_MODE_RESULT'; threadId: string; success: boolean; reason?: string }
   | import('./claude-terminal-views.ts').ClaudeTerminalViewReply
   | { type: 'CLAUDE_PROMPT_COMPLETIONS'; threadId: string; mountId: string; result: ClaudePromptCompletionReply }
