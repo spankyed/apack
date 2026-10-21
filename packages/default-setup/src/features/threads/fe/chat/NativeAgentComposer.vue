@@ -56,9 +56,39 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
     if (snapshot) { committedState = editor.state; emit('draft', snapshot.text) }
   })
   const compositionDom = editor.view.dom
+  let pointerFocus = false, focusActive = true
+  const pointer = () => { pointerFocus = compositionDom.ownerDocument.activeElement !== compositionDom }
+  const blur = () => { pointerFocus = false }
+  const focus = () => {
+    const fromPointer = pointerFocus; pointerFocus = false
+    if (fromPointer || adoptedEditor !== editor || editor.isDestroyed || editor.view.composing) return
+    const retained = editor.state
+    // Browser focus may install a default DOM caret after its focus event. Align it before the next input task.
+    queueMicrotask(() => {
+      if (!focusActive || !alive || editor.isDestroyed || editorRef.value?.editor !== editor || editor.view.composing
+        || compositionDom.ownerDocument.activeElement !== compositionDom || editor.state.doc !== retained.doc) return
+      if (!editor.state.selection.eq(retained.selection) || editor.state.storedMarks !== retained.storedMarks) {
+        editor.view.dispatch(editor.state.tr.setSelection(retained.selection).setStoredMarks(retained.storedMarks)
+          .setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false))
+      }
+      editor.view.focus()
+    })
+  }
   editor.on('transaction', remember)
   compositionDom.addEventListener('compositionend', composed)
-  cleanup(() => { editor.off('transaction', remember); compositionDom.removeEventListener('compositionend', composed) })
+  compositionDom.addEventListener('pointerdown', pointer, true)
+  compositionDom.addEventListener('pointercancel', blur)
+  compositionDom.addEventListener('blur', blur)
+  compositionDom.addEventListener('focus', focus, true)
+  cleanup(() => {
+    focusActive = false
+    editor.off('transaction', remember)
+    compositionDom.removeEventListener('compositionend', composed)
+    compositionDom.removeEventListener('pointerdown', pointer, true)
+    compositionDom.removeEventListener('pointercancel', blur)
+    compositionDom.removeEventListener('blur', blur)
+    compositionDom.removeEventListener('focus', focus, true)
+  })
 
   if (!mountId) return
   bridge = bindClaudePromptEditor(editor, value => emit('edit', value), value => { nativeProblem.value = value }, props.promptRevision, {
