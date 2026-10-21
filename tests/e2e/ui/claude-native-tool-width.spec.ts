@@ -61,6 +61,8 @@ test('formats the original tool result at its mounted row width through resize',
   await approval.getByRole('button',{name:'Allow once',exact:true}).click();await expect(approval).toBeHidden()
   await expect.poll(async()=>readFile(join(workspace!,'file-fixture.txt'),'utf8').catch(()=>null)).toBe('created\n')
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+  await expect.poll(async()=>(await context()).messages.some((message:any)=>message.text==='File fixture completed.')).toBe(true)
+  const diff=card.getByRole('button',{name:'Close Diff',exact:true});if(await diff.isVisible())await diff.click()
   const before=await context(),draft='Keep these release review notes while inspecting the file result.'
   await composer.fill(draft)
   const source=JSON.parse(await readFile(join(workspace!,'native-tool-width-source.json'),'utf8')).source
