@@ -90,7 +90,18 @@ test('routes live native Button actions through the retained main and Agent app 
 
 
 
-  const receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-action-app-receipts.json'),'utf8').catch(()=>'[]'))
+  const receipts=async()=>{
+    // The native worker rewrites its own JSON file; a reader can observe its truncated prefix.
+    for(let attempt=0;attempt<50;attempt++){
+      try{return JSON.parse(await readFile(join(workspace!,'native-action-app-receipts.json'),'utf8'))}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code==='ENOENT')return []
+        if(!(error instanceof SyntaxError)||attempt===49)throw error
+        await new Promise(resolve=>setTimeout(resolve,20))
+      }
+    }
+    throw new Error('Native action receipt snapshot did not settle')
+  }
   const ui=()=>appPage.evaluate(()=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
     const entries=Object.entries(state.nativeUiViews) as [string,any][]
