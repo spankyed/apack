@@ -14,6 +14,7 @@ const test = base.extend<{ nativeActionSession: Awaited<ReturnType<typeof prepar
 })
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 const contextMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS === '1'
+const dialogMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_DIALOG === '1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
@@ -94,15 +95,17 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   const composer = card.locator('[contenteditable="true"]')
-  const seedTurns = (await context()).turns
-  await composer.fill('Review the release notes with a worker.')
-  await card.getByRole('button',{name:'Send',exact:true}).click()
-  // Original background completion adds its own parent notification turn after the task completes.
-  await expect.poll(async()=>{
-    const current=await context(),native=current.native.state
-    return native.tasks.some((task:any)=>task.status==='completed') && current.turns===seedTurns+2
-      && native.busy===false && native.activity?.pendingAgents===0
-  },{timeout:20000,message:'Seed parent turn and queued Agent completion drain before the no-phantom-turn baseline'}).toBe(true)
+  if(!dialogMode){
+    const seedTurns = (await context()).turns
+    await composer.fill('Review the release notes with a worker.')
+    await card.getByRole('button',{name:'Send',exact:true}).click()
+    // Original background completion adds its own parent notification turn after the task completes.
+    await expect.poll(async()=>{
+      const current=await context(),native=current.native.state
+      return native.tasks.some((task:any)=>task.status==='completed') && current.turns===seedTurns+2
+        && native.busy===false && native.activity?.pendingAgents===0
+    },{timeout:20000,message:'Seed parent turn and queued Agent completion drain before the no-phantom-turn baseline'}).toBe(true)
+  }
   const before=await context()
   return { nativeActionAppBindings, errors, card, context, sessionId, section, boundNativePid, helperObservation, status, composer, inspect, before }
 }
@@ -110,10 +113,10 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
 test('routes live native Button actions through the retained main and Agent app drafts', async ({ appPage, nativeActionSession }, testInfo) => {
   test.setTimeout(90000)
   const { nativeActionAppBindings, errors, card, context, sessionId, section, boundNativePid, helperObservation, status, composer, inspect, before } = nativeActionSession
-  const receipts=async()=>{
+  const receipts=async(name='native-action-app-receipts.json')=>{
     // The native worker rewrites its own JSON file; a reader can observe its truncated prefix.
     for(let attempt=0;attempt<50;attempt++){
-      try{return JSON.parse(await readFile(join(workspace!,'native-action-app-receipts.json'),'utf8'))}
+      try{return JSON.parse(await readFile(join(workspace!,name),'utf8'))}
       catch(error){
         if((error as NodeJS.ErrnoException).code==='ENOENT')return []
         if(!(error instanceof SyntaxError)||attempt===49)throw error
@@ -143,6 +146,49 @@ test('routes live native Button actions through the retained main and Agent app 
   }
   const parent=await prepare(composer,'Keep release guidance while reviewing the current changes.')
   await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key===(contextMode?'k':'u'))).toBe(true)
+  if(dialogMode){
+    await composer.focus();await composer.press('Control+Alt+u')
+    const panel=appPage.getByTestId('native-question-panel')
+    await expect(panel).toBeVisible();await expect(panel.getByText('Continue reviewing the release guidance?',{exact:true})).toBeVisible()
+    await expect.poll(async()=>(await receipts()).length).toBe(1)
+    expect((await receipts())[0].value).toEqual(parent)
+    await expect.poll(async()=>(await inspect()).samples.at(-1)?.dialogCount??0).toBeGreaterThan(0)
+    const holdStarted=Date.now(),widths:number[]=[]
+    // Real human deliberation must outlive the outer UI RPC's five-second inactivity timeout.
+    await expect.poll(async()=>{await expect(panel).toBeVisible();return Date.now()-holdStarted>=8000},{timeout:10000,intervals:[200]}).toBe(true)
+    const heldMs=Date.now()-holdStarted
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      await expect(panel.getByRole('radio',{name:'Continue',exact:true})).toBeInViewport({ratio:1})
+      await expect(panel.getByRole('button',{name:'Submit answers',exact:true})).toBeInViewport({ratio:1})
+      expect((await ui())?.state.actionKeys?.bindings.length??0).toBe(0)
+      await panel.getByRole('radio',{name:'Continue',exact:true}).focus();await appPage.keyboard.press('Control+Alt+u')
+      expect((await receipts()).length).toBe(1);await expect(panel).toBeVisible()
+      await appPage.screenshot({path:testInfo.outputPath('native-action-dialog-'+width+'.png')});widths.push(width)
+    }
+    await panel.getByRole('radio',{name:'Continue',exact:true}).check()
+    await panel.getByRole('button',{name:'Submit answers',exact:true}).click();await expect(panel).toBeHidden()
+    await expect.poll(async()=>(await receipts('native-action-dialog-answer.json')).answer).toBe('Continue')
+    const answer=await receipts('native-action-dialog-answer.json');expect(answer.value).toEqual(parent)
+    await expect(composer).toHaveText(parent.text)
+    await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((keys:any)=>keys.length===1&&keys[0].key==='u')).toBe(true)
+    await readWithKey(composer,parent)
+    expect((await receipts()).length).toBe(2)
+    const after=await context();expect(after.turns).toBe(before.turns);expect(after.native.state.nativePid).toBe(boundNativePid)
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+    await appPage.screenshot({path:testInfo.outputPath('native-action-dialog-recovered-680.png')})
+    const proof={sessionId,boundNativePid,parent,answer,receipts:await receipts(),heldMs,widths,dialogSuppressedShortcut:true,noPhantomTurn:true,helperObservation}
+    await writeFile(join(workspace!,'native-action-dialog-phase-proof.json'),JSON.stringify(proof))
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
+    await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
+    const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+    await expect(composer).toHaveText(parent.text);await composer.fill('Continue after reviewing the release question.');await card.getByRole('button',{name:'Send',exact:true}).click()
+    await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000,message:'Same-session print continuation succeeds after the original question'}).toBe('success')
+    expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+    await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({...proof,receipts:await receipts()}))
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeDesktopActionKeys:true,nativeActionKeyDialog:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+    return
+  }
   if(contextMode){
     const contextCases:any[]=[];let contextSequence=0
     const attachedUi=async()=>{await expect.poll(async()=>{const current=await ui();return current?.state.status==='live'&&current.state.actionKeys?.bindings.some((keys:any)=>keys[0]?.key==='k')}).toBe(true);return ui()}

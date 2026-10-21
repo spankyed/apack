@@ -37,7 +37,7 @@ on:
       claude_research_case:
         description: Claude native app journey or selected Agent/field milestone
         type: choice
-        options: [native-action-keys, native-action-contexts, action-keys-app, action-contexts-app, agent-source, field-bounds, agent-and-fields, source-fill, everyday]
+        options: [native-action-keys, native-action-contexts, action-keys-app, action-contexts-app, action-dialog-app, agent-source, field-bounds, agent-and-fields, source-fill, everyday]
         default: agent-source
       strict_chain:
         description: Run only the full strict chain with two cores on a disposable macOS runner
