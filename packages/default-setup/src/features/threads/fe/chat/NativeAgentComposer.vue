@@ -1,12 +1,14 @@
 <template>
-  <form :style="promptThemeStyle" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
-    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-    <StatusLine :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
-    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor max-h-40 min-h-20 overflow-y-auto px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
+  <form :style="promptThemeStyle" :class="{ 'native-agent-composer--tools': toolsExpanded }" class="native-agent-composer mx-4 mb-4 flex min-h-28 min-w-0 shrink flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#202022]" aria-label="Agent message" @submit.prevent="submit" @keydown.capture="leaveEditor">
+    <div class="native-agent-body flex min-h-0 flex-1 flex-col overflow-clip" :class="{ 'native-agent-body--tools': toolsExpanded }">
+    <StatusLine class="shrink-0" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
+    <div class="native-agent-draft-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
+    <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
     <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
       <button v-for="(row, index) in offers" :key="index" type="button" class="block w-full px-4 py-2 text-left text-xs text-neutral-300 hover:bg-white/5" @mousedown.prevent @click="bridge?.selectCompletion(index, row.offerId)">{{ row.label ?? row.text }}</button>
     </div>
     <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
+    </div>
     </div>
     <div class="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
@@ -30,6 +32,7 @@ import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
 const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
+const toolsExpanded = ref(false)
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
@@ -117,10 +120,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 11rem)); }
+.native-agent-composer { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 10rem)); }
+.native-agent-composer--tools { max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 11rem)); }
+.native-agent-composer :deep([data-testid="composer-session-strip"]) { padding: .5rem 1rem; }
+.native-agent-body--tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.native-agent-body--tools .native-agent-draft-scroll { overflow: visible; }
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
 @media (max-height: 700px) {
   .native-agent-composer { margin-bottom: .75rem; }
-  .native-agent-composer :deep(.native-agent-editor) { min-height: 4rem; max-height: 6rem; padding-block: .5rem; }
+  .native-agent-composer :deep(.native-agent-editor) { min-height: 2.5rem; padding-block: .5rem; }
 }
 </style>

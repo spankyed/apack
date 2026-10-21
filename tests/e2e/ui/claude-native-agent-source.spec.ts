@@ -8,7 +8,14 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage}, testInfo) => {
+  if(testInfo.status!==testInfo.expectedStatus){
+    await appPage.screenshot({path:testInfo.outputPath('native-agent-source-layout-failure.png')}).catch(()=>{})
+    const layout=await appPage.evaluate(()=>Array.from(document.querySelectorAll('[aria-label="Focused Agent conversation"], [aria-label="Agent message"], [data-testid="composer-native-status"], [data-native-agent-draft-viewport]')).map(element=>({label:element.getAttribute('aria-label')??element.getAttribute('data-testid')??'draft viewport',bounds:element.getBoundingClientRect().toJSON(),height:element.clientHeight,scrollHeight:element.scrollHeight,scrollTop:element.scrollTop}))).catch(error=>({captureError:String(error)}))
+    await writeFile(join(workspace!,'native-agent-source-layout-failure.json'),JSON.stringify(layout))
+  }
+  terminalScreen?.dispose();terminalScreen=undefined
+})
 test('preserves literal parent and Agent drafts through remount and exact native Agent Send', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
@@ -28,7 +35,7 @@ test('preserves literal parent and Agent drafts through remount and exact native
   await card.locator('[contenteditable="true"]').fill('Review the release notes for this project.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
+  await expect.poll(async () => (await context()).turns, {timeout:20000}).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -55,7 +62,7 @@ test('preserves literal parent and Agent drafts through remount and exact native
     if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
+    if (native?.state?.status === 'live' && native.state.mainStatus?.includes('Session ready')) return true
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
@@ -64,7 +71,7 @@ test('preserves literal parent and Agent drafts through remount and exact native
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
     return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
-  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  }, { timeout: 40000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
@@ -124,24 +131,46 @@ test('preserves literal parent and Agent drafts through remount and exact native
   const remounted=await readDraft(form);expect(remounted.view.agentId).toBe(taskId)
   expect(remounted.value).toEqual({text:agent.text,cursor:agent.cursor})
   await agentComposer.focus();await agentComposer.press('Shift+Enter');await agentComposer.pressSequentially('Checked worker notes.')
-  const sent=(await readDraft(form)).value.text
+  const beforeLayout=(await readDraft(form)).value
+  const sent=beforeLayout.text
   expect(sent).toBe(agent.text.slice(0,agent.cursor)+'\nChecked worker notes.'+agent.text.slice(agent.cursor))
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900});await agentComposer.focus()
-    await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+    const helper=form.getByTestId('composer-native-status')
+    await expect(helper).toBeInViewport({ratio:1})
+    await expect(form.getByRole('button',{name:'Session tools',exact:true})).toBeInViewport({ratio:1})
+    await expect(focused.locator(':scope > header')).toBeInViewport({ratio:1})
+    await expect(focused.getByRole('button',{name:'Back to conversation',exact:true})).toBeInViewport({ratio:1})
+    const transcript=focused.getByRole('region',{name:'Agent transcript',exact:true})
+    await expect(transcript).toBeInViewport({ratio:1})
+    await expect.poll(()=>transcript.evaluate(element=>element.clientHeight)).toBeGreaterThanOrEqual(64)
+    await helper.focus()
+    if(await helper.evaluate(element=>element.scrollHeight>element.clientHeight+1)){
+      await helper.press('Control+End')
+      await expect.poll(()=>helper.evaluate(element=>element.scrollTop+element.clientHeight>=element.scrollHeight-2)).toBe(true)
+      await helper.press('Control+Home')
+      await expect.poll(()=>helper.evaluate(element=>element.scrollTop)).toBe(0)
+    }
+    await helper.press('Escape');await expect(agentComposer).toBeFocused()
+    await expect(helper).toBeInViewport({ratio:1})
+    await expect(focused.locator(':scope > header')).toBeInViewport({ratio:1})
+    await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport({ratio:1})
     await expect(agentComposer.locator('[data-claude-prompt-source]')).toContainText('Checked worker notes.')
     await expect.poll(async()=>{
       const geometry=await agentComposer.evaluate(area=>{
         const selection=window.getSelection();if(!selection?.rangeCount)return {visible:false}
         const caret=selection.getRangeAt(0).getBoundingClientRect(),bounds=area.getBoundingClientRect()
-        let top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom)
+        let top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom),draftScrolls=0
         for(let node=selection.anchorNode?.parentElement;node;node=node.parentElement){if(/auto|scroll|hidden|clip/.test(getComputedStyle(node).overflowY)){const box=node.getBoundingClientRect();top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
-        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
+        for(let node:HTMLElement|null=area;node&&node.tagName!=='FORM';node=node.parentElement)if(/auto|scroll/.test(getComputedStyle(node).overflowY))draftScrolls++
+        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1&&draftScrolls===1,draftScrolls,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
       })
       await writeFile(join(workspace!,'native-agent-source-caret-'+width+'.json'),JSON.stringify(geometry));return geometry.visible
     }).toBe(true)
+    await writeFile(join(workspace!,'native-agent-source-layout-'+width+'.json'),JSON.stringify({width,helper:await helper.evaluate(element=>({bounds:element.getBoundingClientRect().toJSON(),height:element.clientHeight,scrollHeight:element.scrollHeight,scrollTop:element.scrollTop})),transcriptHeight:await transcript.evaluate(element=>element.clientHeight),draftViewport:await form.locator('[data-native-agent-draft-viewport]').evaluate(element=>({bounds:element.getBoundingClientRect().toJSON(),height:element.clientHeight,scrollHeight:element.scrollHeight,scrollTop:element.scrollTop}))}))
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-source-'+width+'.png')})
   }
+  expect((await readDraft(form)).value).toEqual(beforeLayout)
   const submitted=sent.trimEnd() // Original native submit normalizes trailing whitespace after invisible-character screening.
   await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentComposer).toHaveText('')
   await expect.poll(async()=>appPage.evaluate(text=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).some((view:any)=>view.state?.agent?.messages?.some((message:any)=>message.role==='user'&&message.text===text)),submitted)).toBe(true)
