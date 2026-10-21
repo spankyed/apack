@@ -197,6 +197,7 @@
 </template>
 
 <script setup lang="ts">
+import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { readClaudeComposerPhase, commitClaudeComposerPhase } from './native-composer-phase.ts'
 import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
@@ -410,6 +411,7 @@ function detachNativeUi() {
   }
   pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
+provide(claudeTranscriptLayout, event => { const mount = nativeUiMount.value; if (mount) actor.send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...mount, ...event }) })
 provide(claudeClientReturnFocus,()=>mainComposer.value?.focus())
 let nativeClientSequence=0
 provide(claudeClientInput,(id,event)=>{

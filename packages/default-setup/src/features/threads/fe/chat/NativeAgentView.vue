@@ -47,9 +47,10 @@
   </section>
 </template>
 <script setup lang="ts">
+import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
-import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { usePlugin } from '@apackdev/sdk/fe'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
@@ -196,6 +197,7 @@ function panelResize(size: { columns: number; rows: number }) {
 watch(commandActive, value => emit('pending', value || pending.value || returning.value || stopping.value))
 function escape(event: KeyboardEvent) { if (!event.isComposing && !event.defaultPrevented && !pending.value) { event.preventDefault(); event.stopPropagation(); if (commandActive.value) decideCommand('cancel'); else returnToParent() } }
 function press(actionId: string, href?: string) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? { href } : {}) }) }
+provide(claudeTranscriptLayout, event => { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event }) })
 function field(value: ClaudeUiFieldEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_FIELD', ...identity(), ...value }) }
 function scroll(value: ClaudeUiScrollEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_SCROLL', ...identity(), ...value }) }
 function focus(value: ClaudeUiFocusEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_FOCUS', ...identity(), ...value }) }

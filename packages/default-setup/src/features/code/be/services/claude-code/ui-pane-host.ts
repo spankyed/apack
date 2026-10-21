@@ -1,6 +1,6 @@
 import { createClaudeSiteScroll } from './ui-site-scroll.ts'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
-import type { ClaudeUiControls, ClaudeUiPaneRoster } from './ui-controls.ts'
+import type { ClaudeUiControls, ClaudeUiPaneRoster, ClaudeUiActionKeyState } from './ui-controls.ts'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFieldEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply } from './ui-presentation.ts'
 
 /** Panes share the view's native attachment and lifetime, but never its composer callbacks. */

@@ -9,6 +9,7 @@ type Entry = {
   row: ClaudeUiTranscriptRow
   epoch: number
   instanceRevision: number
+  columns?: number
   released?: boolean
   failedLease?: boolean
   releasePromise?: Promise<void>
@@ -89,7 +90,7 @@ export function createClaudeTranscriptMessageHost(options: {
       if (prior && sameSource(prior.row, row)) { if(row.component==='ToolGroup')prior.groupExpanded=row.isExpanded;prior.row = row; retire(prior); changed = true; continue }
       const sameInstance = prior?.row.sessionId === row.sessionId && !prior.failedLease
       if (prior && !sameInstance) void release(prior)
-      entries.set(rowKey(row), { row, instanceRevision: sameInstance ? prior!.instanceRevision : ++nextInstanceRevision, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: originalDisplayText(row), revisions: new Map(), completed: new Map() })
+      entries.set(rowKey(row), { row, columns: sameInstance ? prior?.columns : undefined, instanceRevision: sameInstance ? prior!.instanceRevision : ++nextInstanceRevision, epoch: 0, dirty: true, pressing: false, body: { status: 'rendering' }, displayText: originalDisplayText(row), revisions: new Map(), completed: new Map() })
       changed = true
     }
     if (changed) publish()
@@ -123,6 +124,7 @@ export function createClaudeTranscriptMessageHost(options: {
         try {
           if(entry.failedLease){await release(entry);if(!valid(entry)||epoch!==entry.epoch)continue;entry.instanceRevision=++nextInstanceRevision;entry.released=false;entry.failedLease=false}
           const result = await options.ui.render({ ...options.client, component: entry.row.component, instance_id: entry.row.uuid, instance_revision: entry.instanceRevision,
+            ...(entry.columns ? { viewport: { columns: entry.columns, rows: 24 } } : {}),
             props: 'sourceRevision' in entry.row ? {source_revision:entry.row.sourceRevision}
               : entry.row.component === 'ToolGroup' ? {source_revision:entry.row.revision,isExpanded:entry.row.isExpanded}
               : entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
@@ -176,7 +178,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function refresh() { if (!current()) return; sync(); if ([...entries.values()].some(entry => entry.dirty)) schedule() }
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
-    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
     start() { started = true; refresh(); void refreshGroups() },
     refresh,
     receive(line: Record<string, unknown>) {
@@ -197,6 +199,16 @@ export function createClaudeTranscriptMessageHost(options: {
 
     },
     dispose() { if (disposal) return disposal; disposed = true; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled([...releases]).then(() => {}); return disposal },
+    layout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) {
+      if (!['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(event.component)
+        || !Number.isSafeInteger(event.columns) || event.columns < 20 || event.columns > 240) return
+      const entry = entries.get(JSON.stringify([event.component, event.uuid]))
+      if (!entry || !valid(entry) || entry.instanceRevision !== event.instanceRevision || entry.columns === event.columns) return
+      entry.columns = event.columns
+      retire(entry)
+      publish()
+      schedule()
+    },
     ownsAction(id: string) { return [...entries.values()].some(entry => entry.drawing?.actions.has(id)) },
     ownsField(id: string) { return [...entries.values()].some(entry => entry.fields?.fields.has(id)) },
     async press(id: string, href?: string): Promise<{ handled: boolean }> {

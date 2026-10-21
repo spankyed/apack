@@ -1,7 +1,7 @@
 <template>
   <NativeTranscriptMessage :frame="frame" @press="press" @field="field">
     <template #engine>
-      <div v-if="frame.engineOutput !== undefined" class="whitespace-pre-wrap break-words text-xs"><NativeStatusText :text="frame.engineOutput" /></div>
+      <div v-if="frame.engineOutput !== undefined" data-native-tool-format class="font-mono whitespace-pre-wrap break-words text-xs"><NativeStatusText :text="frame.engineOutput" /></div>
       <p v-else-if="!expanded" class="my-1 text-xs text-neutral-400">{{ label }}</p>
       <ToolActivityBlock v-if="expanded && frame.tools.length" :entries="frame.tools" :label="label" :state="frame.isActive ? 'streaming' : 'done'" :native-expansion="expanded" :skip-native-groups="true" :native-grouped="true" />
       <ToolActivityBlock v-for="artifact in frame.artifacts" :key="artifact.artifactId" :entries="[]" label="" state="done" :artifact-ref="artifact" :skip-native-groups="true" :native-grouped="true" />

@@ -4,7 +4,7 @@ import type { ClaudeUiTranscriptFrame } from '#features/code/be/services/claude-
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor',()=>({default:{render:()=>null}}))
 let app:App|undefined
 afterEach(()=>{app?.unmount();document.body.replaceChildren()})
-const frame=(uuid:string,messageId:string,component:'TurnDuration'|'InfoNotice'):ClaudeUiTranscriptFrame=>({component,uuid,messageId,sessionId:'session',sourceRevision:'a'.repeat(64),text:'',start:0,end:0,displayText:'',engineOutput:'\x1b[31mNative line <script>literal</script>\x1b[0m',body:{status:'live',tree:{kind:'box',children:[{kind:'unsupported',component:'engine'},{kind:'button',label:'Inspect native line',actionId:uuid}]}}})
+const frame=(uuid:string,messageId:string,component:'TurnDuration'|'InfoNotice'):ClaudeUiTranscriptFrame=>({instanceRevision:1,component,uuid,messageId,sessionId:'session',sourceRevision:'a'.repeat(64),text:'',start:0,end:0,displayText:'',engineOutput:'\x1b[31mNative line <script>literal</script>\x1b[0m',body:{status:'live',tree:{kind:'box',children:[{kind:'unsupported',component:'engine'},{kind:'button',label:'Inspect native line',actionId:uuid}]}}})
 it('keeps native duration rows at their exact owning message and forwards only their own controls',()=>{
  const root=document.createElement('div');document.body.append(root);const press=vi.fn()
  app=createApp({render:()=>h(NativeTerminalPlacements,{frames:[frame('one','first','TurnDuration'),frame('two','second','TurnDuration'),frame('notice','composer','InfoNotice')],component:'TurnDuration',messageId:'second',onPress:press})});app.mount(root)

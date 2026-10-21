@@ -1,8 +1,8 @@
 <template>
   <div :class="component === 'ToolUse' ? 'flex min-w-0 flex-1 items-center gap-2' : 'min-w-0'">
-    <NativeTranscriptMessage v-if="frame" :frame="frame" @press="(id, href) => bridge?.press(id, href)" @field="bridge?.field($event)">
+    <NativeTranscriptMessage v-if="frame" class="min-w-0 flex-1" :frame="frame" @press="(id, href) => bridge?.press(id, href)" @field="bridge?.field($event)">
       <template #engine>
-        <pre v-if="frame.engineOutput !== undefined" data-native-tool-format class="m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs"><span v-for="(part, index) in engineParts" :key="index" :style="part.style">{{ part.text }}</span></pre>
+        <pre v-if="frame.engineOutput !== undefined" data-native-tool-format class="font-mono m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs"><span v-for="(part, index) in engineParts" :key="index" :style="part.style">{{ part.text }}</span></pre>
         <pre v-else-if="frame.outputRewritten" class="m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs text-neutral-300">{{ frame.displayText }}</pre>
         <slot v-else />
       </template>

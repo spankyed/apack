@@ -152,7 +152,14 @@ export type ClaudeUiTranscriptRow = ClaudeUiTranscriptRowSource & (
   | { component: 'TurnDuration' | 'InfoNotice'; sourceRevision: string }
   | { component: 'UserMessage'; origin: { kind: string; name?: string; asUser?: boolean; server?: string }; isExpanded: boolean }
 )
+export interface ClaudeUiTranscriptLayout {
+  component: 'ToolUse' | 'ToolResult' | 'ToolProgress' | 'ToolGroup'
+  uuid: string
+  instanceRevision: number
+  columns: number
+}
 export type ClaudeUiTranscriptFrame = ClaudeUiTranscriptRow & {
+  instanceRevision: number
   nativeHint?: boolean
   groupExpanded?: boolean
   displayText: string

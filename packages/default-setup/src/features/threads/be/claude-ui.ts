@@ -241,6 +241,12 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     view.mount?.notice(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_TRANSCRIPT_LAYOUT') {
+    if (!view) return
+    bind(view)
+    view.mount?.transcriptLayout(event)
+    return
+  }
   if (event.type === 'CLAUDE_UI_SCROLL') {
     if (!view) return
     bind(view)

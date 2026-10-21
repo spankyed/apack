@@ -336,6 +336,7 @@ export function mountClaudeUi(options: {
     },
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },
+    transcriptLayout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) { messages.layout(event) },
     scroll(event: import('./ui-presentation.ts').ClaudeUiScrollEvent) { if (event.paneId) panes?.scroll(event); else scroll.report(event) },
     pane(event: import('./ui-presentation.ts').ClaudeUiPaneEvent) { return panes?.operate(event) },
     get promptRevision() { return promptRevision },
