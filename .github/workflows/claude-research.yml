@@ -36,9 +36,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build candidate pack
-        run: npm run build:default-setup
+        shell: bash
+        run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
-        run: npm run build:runtime -- --cores 2
+        shell: bash
+        run: npm run build:runtime -- --cores 2 2>&1 | tee "$RUNNER_TEMP/claude-research-runtime-build.log"
       - name: Replay pinned native app journey
         env:
           CLAUDE_RESEARCH_CASE: ${{ inputs.case }}
@@ -51,6 +53,7 @@ jobs:
           retention-days: 7
           include-hidden-files: true
           path: |
+            ${{ runner.temp }}/claude-research-*-build.log
             ${{ runner.temp }}/claude-research-*/provenance.json
             ${{ runner.temp }}/claude-research-*/output/**
             ${{ runner.temp }}/claude-research-*/workspaces/**/electron-results/**
