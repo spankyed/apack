@@ -36,13 +36,27 @@ function measureRows() {
   if (!control || !root || props.node.kind !== 'input') return
   const style = getComputedStyle(control), line = parseFloat(style.lineHeight) || 20
   const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0)
-  let available = globalThis.innerHeight || line + padding
-  const site = control.closest('[data-native-scroll-content]')?.parentElement
-  if (site?.clientHeight) { const paint = getComputedStyle(site); available = Math.min(available, site.clientHeight - (parseFloat(paint.paddingTop) || 0) - (parseFloat(paint.paddingBottom) || 0)) }
-  for (let parent = root.parentElement; parent; parent = parent.parentElement) {
-    if (/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowY) && parent.clientHeight) available = Math.min(available, parent.clientHeight)
+  const viewport = globalThis.innerHeight || line + padding
+  const previousRows = control.rows, previousMaxHeight = control.style.maxHeight
+  const scrollPositions: [HTMLElement, number][] = [[control, control.scrollTop]]
+  for (let parent = root.parentElement; parent; parent = parent.parentElement) scrollPositions.push([parent, parent.scrollTop])
+  let available = viewport, chrome = 0
+  try {
+    // Measure the requested size before fitting it. Measuring only the already-fitted site
+    // makes an intrinsically sized flex surface keep its compact one-row height forever.
+    control.rows = Math.min(props.node.rows, Math.max(1, Math.floor((viewport - padding) / line)))
+    control.style.maxHeight = viewport + 'px'
+    const site = control.closest('[data-native-scroll-content]')?.parentElement
+    if (site?.clientHeight) { const paint = getComputedStyle(site); available = Math.min(available, site.clientHeight - (parseFloat(paint.paddingTop) || 0) - (parseFloat(paint.paddingBottom) || 0)) }
+    for (let parent = root.parentElement; parent; parent = parent.parentElement) {
+      if (/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowY) && parent.clientHeight) available = Math.min(available, parent.clientHeight)
+    }
+    chrome = Math.max(0, root.getBoundingClientRect().height - control.getBoundingClientRect().height)
+  } finally {
+    control.rows = previousRows
+    control.style.maxHeight = previousMaxHeight
+    for (const [element, top] of scrollPositions) element.scrollTop = top
   }
-  const chrome = Math.max(0, root.getBoundingClientRect().height - control.getBoundingClientRect().height)
   maximumHeight.value = Math.max(line + padding, available - chrome)
   visibleRows.value = Math.min(props.node.rows, Math.max(1, Math.floor((maximumHeight.value - padding) / line)))
 }

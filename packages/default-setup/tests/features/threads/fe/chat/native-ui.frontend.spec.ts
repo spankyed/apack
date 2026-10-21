@@ -670,6 +670,30 @@ it('fits requested multiline rows to its site without losing long text, selectio
 })
 
 
+it('regrows an intrinsically sized native field after compact fitting without changing its draft or scroll', async () => {
+  vi.stubGlobal('innerHeight', 900)
+  const value = 'Release notes\n' + 'Preserved detail\n'.repeat(40)
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'input', actionId: 'growing-field', revision: 0, submitLabel: 'save', label: 'Growing notes', value, rows: 80, autoFocus: false } } })
+  const control = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Growing notes"]')!
+  const label = control.closest('label')!, site = control.closest('[data-native-scroll-content]')!.parentElement!
+  control.style.lineHeight = '20px'; control.style.padding = '0'; control.style.borderWidth = '0'
+  let capacity = 60
+  // The site's intrinsic height follows its field until the surrounding layout caps it.
+  Object.defineProperty(site, 'clientHeight', { configurable: true, get: () => Math.min(capacity, control.rows * 20 + 40) })
+  vi.spyOn(control, 'getBoundingClientRect').mockImplementation(() => ({ height: control.rows * 20 }) as DOMRect)
+  vi.spyOn(label, 'getBoundingClientRect').mockImplementation(() => ({ height: control.rows * 20 + 40 }) as DOMRect)
+  control.focus(); control.setSelectionRange(30, 35); control.scrollTop = 120; site.scrollTop = 45
+  resizeObservers.forEach(notify => notify())
+  await vi.waitFor(() => expect(control.rows).toBe(1))
+  capacity = 300; resizeObservers.forEach(notify => notify())
+  await vi.waitFor(() => expect(control.rows).toBe(13))
+  expect(control.value).toBe(value)
+  expect([control.selectionStart, control.selectionEnd]).toEqual([30, 35])
+  expect(control.scrollTop).toBe(120); expect(site.scrollTop).toBe(45)
+  expect(document.activeElement).toBe(control); expect(f.field).not.toHaveBeenCalled()
+})
+
+
 it('reserves a complete focused field and feedback row when its compact site is too short', async () => {
   const value = 'detail '.repeat(2600)
   const f = await mount({nativeUi:{status:'live',tree:{kind:'input',actionId:'notes',focusId:'notes-focus',revision:0,label:'Release notes',submitLabel:'save',value,rows:80,autoFocus:false}}})

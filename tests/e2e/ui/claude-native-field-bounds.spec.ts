@@ -14,7 +14,7 @@ test.afterEach(async ({appPage}, testInfo) => {
     const failure = await appPage.evaluate(()=>{
       const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
       const field=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release review notes"]')
-      return {events:(window as any).__nativeFieldEvents,active:{tag:document.activeElement?.tagName,label:document.activeElement?.getAttribute('aria-label')},field:field?{valueLength:field.value.length,focusId:field.dataset.nativeFocusId,selection:[field.selectionStart,field.selectionEnd]}:null,views:state.nativeUiViews}
+      return {events:(window as any).__nativeFieldEvents,active:{tag:document.activeElement?.tagName,label:document.activeElement?.getAttribute('aria-label')},field:field?{valueLength:field.value.length,focusId:field.dataset.nativeFocusId,selection:[field.selectionStart,field.selectionEnd],rows:field.rows,bounds:field.getBoundingClientRect().toJSON(),ancestors:Array.from((function*(){for(let parent=field.parentElement;parent;parent=parent.parentElement)yield parent})()).map(parent=>({tag:parent.tagName,classes:parent.className,height:parent.clientHeight,scrollHeight:parent.scrollHeight,overflow:getComputedStyle(parent).overflowY}))}:null,views:state.nativeUiViews}
     }).catch(error=>({captureError:String(error)}))
     await writeFile(join(workspace!,'native-field-bounds-layout-failure.json'),JSON.stringify(failure))
   }
@@ -142,16 +142,22 @@ test('edits long native review notes within the actual site viewport without sub
   await expect.poll(async()=>(await receipts()).at(-1)).toMatchObject({kind:'change',value:revised})
   await expect(card.getByRole('alert')).toHaveCount(0)
   const geometry:Record<string,unknown>={}
-  for(const width of [1100,680]){
+  let compactRows = 0
+  await notes.evaluate(control=>(control as HTMLTextAreaElement).setSelectionRange(20,35))
+  for(const [label,width] of [['1100',1100],['680',680],['1100-return',1100]] as const){
     await appPage.setViewportSize({width,height:width===680?600:900});await notes.focus()
     await expect.poll(async()=>{
       const value=await notes.evaluate(control=>{
-        const field=control.closest('label')!,site=control.closest('[data-native-scroll-content]')!.parentElement!,box=field.getBoundingClientRect(),bounds=site.getBoundingClientRect(),textarea=control as HTMLTextAreaElement
-        return {fits:box.height<=site.clientHeight+1&&box.top>=bounds.top-1&&box.bottom<=bounds.bottom+1,fieldHeight:box.height,siteHeight:site.clientHeight,fieldTop:box.top,siteTop:bounds.top,rows:textarea.rows,valueLength:textarea.value.length}
-      });geometry[String(width)]=value;return value.fits
-    }).toBe(true)
-    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer).toHaveText(draft)
-    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-field-bounds-'+width+'.png')})
+        const field=control.closest('label')!,site=control.closest('[data-native-scroll-content]')!.parentElement!,box=field.getBoundingClientRect(),bounds=site.getBoundingClientRect(),textarea=control as HTMLTextAreaElement,paint=getComputedStyle(control)
+        return {fits:box.height<=site.clientHeight+1&&box.top>=bounds.top-1&&box.bottom<=bounds.bottom+1,fieldHeight:box.height,siteHeight:site.clientHeight,fieldTop:box.top,siteTop:bounds.top,rows:textarea.rows,inputHeight:textarea.clientHeight,visibleLines:(textarea.clientHeight-parseFloat(paint.paddingTop)-parseFloat(paint.paddingBottom))/parseFloat(paint.lineHeight),valueLength:textarea.value.length}
+      });geometry[label]=value
+      if(width===680)compactRows=value.rows
+      return value.fits && (width===680 || (value.rows>=3 && value.visibleLines>=2.5 && (label!=='1100-return' || value.rows>compactRows)))
+    },{message:'Native field fits its site and regains multiline reading space after compact resize'}).toBe(true)
+    await expect(notes).toHaveValue(revised)
+    expect(await notes.evaluate(control=>[(control as HTMLTextAreaElement).selectionStart,(control as HTMLTextAreaElement).selectionEnd])).toEqual([20,35])
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1});await expect(composer).toHaveText(draft)
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-field-bounds-'+label+'.png')})
   }
   await notes.press('Enter')
   await expect.poll(async()=>(await receipts()).at(-1)).toMatchObject({kind:'submit',value:revised})
