@@ -26,7 +26,7 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-else class="group max-w-full min-w-0">
+    <div v-else class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame }">
       <!-- Aside: collapsed interactive message (click to expand) -->
       <div v-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
@@ -294,6 +294,8 @@ provide(claudeToolDrawings, {
   view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },
 })
 
+
+const hasNativeToolFrame = computed(() => (props.nativeFrames ?? []).some(frame => ['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(frame.component)))
 
 const groupedSuppressed = computed(() => {
   if(props.message.text?.trim()||!props.message.blocks?.length||props.message.blocks.some(block=>block.type!=='tool-activity'))return false

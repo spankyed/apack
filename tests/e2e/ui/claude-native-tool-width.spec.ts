@@ -65,13 +65,13 @@ test('formats the original tool result at its mounted row width through resize',
   await composer.fill(draft)
   const source=JSON.parse(await readFile(join(workspace!,'native-tool-width-source.json'),'utf8')).source
   const block=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="file_fixture_1"]').first()
-  const toggle=block.getByRole('button').first();if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()
   const result=block.locator('[data-native-tool-result="file_fixture_1"]'),formatted=result.locator('[data-native-tool-format]')
+  if(!await formatted.isVisible()){const disclosure=block.locator('button[aria-expanded]').first();await expect(disclosure).toBeVisible();if(await disclosure.getAttribute('aria-expanded')!=='true')await disclosure.click()}
   await expect(formatted).toBeVisible()
   const cdp=await appPage.context().newCDPSession(appPage),reports:any[]=[]
   await cdp.send('Network.enable')
   cdp.on('Network.webSocketFrameSent',event=>{
-    try{const frame=JSON.parse(event.response.payloadData);for(const item of Array.isArray(frame)?frame:[frame]){const input=item.params?.input;if(input?.event?.type==='CLAUDE_UI_TRANSCRIPT_LAYOUT'&&input.event.component==='ToolResult'&&input.event.uuid==='file_fixture_1')reports.push({at:Date.now(),...input.event})}}catch{}
+    try{const frame=JSON.parse(event.response.payloadData);for(const item of Array.isArray(frame)?frame:[frame]){const input=item.params?.input;if(input?.event?.type==='CLAUDE_UI_TRANSCRIPT_LAYOUT'&&input.event.component==='ToolResult'&&input.event.uuid==='file_fixture_1'){reports.push({at:Date.now(),...input.event});void writeFile(join(workspace!,'native-tool-width-reports.json'),JSON.stringify(reports))}}}catch{}
   })
   const samples:any[]=[]
   // Begin at a different width so every retained sample has an independently observed layout report.
