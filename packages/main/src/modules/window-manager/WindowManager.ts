@@ -169,6 +169,7 @@ class WindowManager implements AppModule {
     });
 
     ipcMain.on('zoom:changed', (event, zoomFactor: number) => {
+      if (process.platform !== 'darwin') return;
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win) {
         const y = Math.round((42 * zoomFactor - 12) / 2);
