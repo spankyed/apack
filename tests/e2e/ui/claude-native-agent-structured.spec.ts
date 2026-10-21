@@ -6,7 +6,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async({appPage},info) => { if(info.status!==info.expectedStatus)await appPage.screenshot({caret:'initial',path:info.outputPath('agent-structured-failure.png')}).catch(()=>{}) })
-test('keeps selected Agent structured fills and decorations in their original owner through submission', async ({ app, appPage }, testInfo) => {
+test('keeps selected Agent structured fills and decorations in their original owner through submission', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
@@ -92,13 +92,21 @@ test('keeps selected Agent structured fills and decorations in their original ow
   await expect.poll(async()=>(await reads()).at(-1)?.value.text).toBe(finalCanonical);const finalNative=(await reads()).at(-1)
   if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
   const afterFill=await context();expect(afterFill.turns).toBe(before.turns);expect(afterFill.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(afterFill.native.state.nativePid).toBe(boundNativePid)
+  const window=await electronApp.browserWindow(appPage),captures:any[]=[]
+  await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
     for(const part of ['outline','checklist']){
       await (part==='outline'?field.locator('h1'):field.locator('li').last()).scrollIntoViewIfNeeded()
       await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport({ratio:1})
       expect(await field.evaluate(element=>(element as any).editor.storage.markdown.getMarkdown())).toBe(finalCanonical)
-      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('agent-structured-'+part+'-'+width+'.png')})
+      await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
+      const height=width===680?600:900
+      const capture=await window.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),contentSize:win.getContentSize(),png:image.toPNG().toString('base64')}},{width,height})
+      expect(capture.pixels).toEqual({width,height})
+      const file='agent-structured-'+part+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'))
+      captures.push({file,viewport:{width,height},pixels:capture.pixels,contentSize:capture.contentSize,method:'owned Electron webContents.capturePage'})
+      await writeFile(join(workspace!,'native-agent-structured-captures.json'),JSON.stringify(captures))
     }
   }
   await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(field).toHaveText('')
@@ -109,7 +117,7 @@ test('keeps selected Agent structured fills and decorations in their original ow
   const readCount=(await reads()).length;await card.getByRole('button',{name:'Read review draft',exact:true}).click();await expect.poll(async()=>(await reads()).length).toBe(readCount+1)
   const parentNative=(await reads()).at(-1);expect(parentNative.value.text).toBe(parent);expect(parentNative.view?.agentId).toBeUndefined()
   if(await parentTools.getAttribute('aria-expanded')==='true')await parentTools.click()
-  await writeFile(join(workspace!,'native-agent-structured-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,parentDraft:parent,receipts:proofReceipts,finalCanonical,finalNative,parentNative,nativeUuid:humanRows[0].uuid,nativeHumanMatches:humanRows.length,noPhantomTurn:true,edits:await edits()}))
+  await writeFile(join(workspace!,'native-agent-structured-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,parentDraft:parent,receipts:proofReceipts,finalCanonical,finalNative,parentNative,nativeUuid:humanRows[0].uuid,nativeHumanMatches:humanRows.length,noPhantomTurn:true,captures,edits:await edits()}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing the structured worker draft.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
