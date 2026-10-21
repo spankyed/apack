@@ -62,7 +62,6 @@ test('formats the original tool result at its mounted row width through resize',
   await expect.poll(async()=>readFile(join(workspace!,'file-fixture.txt'),'utf8').catch(()=>null)).toBe('created\n')
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   await expect.poll(async()=>(await context()).messages.some((message:any)=>message.text==='File fixture completed.')).toBe(true)
-  const diff=appPage.getByRole('button',{name:'Close Diff',exact:true});if(await diff.isVisible())await diff.click();await expect(diff).toHaveCount(0)
   const before=await context(),draft='Keep these release review notes while inspecting the file result.'
   await composer.fill(draft)
   const source=JSON.parse(await readFile(join(workspace!,'native-tool-width-source.json'),'utf8')).source
@@ -70,6 +69,8 @@ test('formats the original tool result at its mounted row width through resize',
   const result=block.locator('[data-native-tool-result="file_fixture_1"]'),formatted=result.locator('[data-native-tool-format]')
   if(!await formatted.isVisible()){const disclosure=block.locator('button[aria-expanded]').first();await expect(disclosure).toBeVisible();if(await disclosure.getAttribute('aria-expanded')!=='true')await disclosure.click()}
   await expect(formatted).toBeVisible()
+  const diff=appPage.getByRole('button',{name:'Close Diff',exact:true});await expect(diff).toBeVisible();await diff.click();await expect(diff).toHaveCount(0)
+
   const cdp=await appPage.context().newCDPSession(appPage),reports:any[]=[]
   await cdp.send('Network.enable')
   cdp.on('Network.webSocketFrameSent',event=>{
