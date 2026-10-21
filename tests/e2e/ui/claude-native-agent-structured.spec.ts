@@ -102,7 +102,11 @@ test('keeps selected Agent structured fills and decorations in their original ow
       expect(await field.evaluate(element=>(element as any).editor.storage.markdown.getMarkdown())).toBe(finalCanonical)
       await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
       const height=width===680?600:900
-      const capture=await window.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),contentSize:win.getContentSize(),png:image.toPNG().toString('base64')}},{width,height})
+      let captureTimer:ReturnType<typeof setTimeout>|undefined
+      const capture=await Promise.race([
+        window.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),contentSize:win.getContentSize(),png:image.toPNG().toString('base64')}},{width,height}),
+        new Promise<never>((_resolve,reject)=>{captureTimer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)}),
+      ]).finally(()=>{if(captureTimer)clearTimeout(captureTimer)})
       expect(capture.pixels).toEqual({width,height})
       const file='agent-structured-'+part+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'))
       captures.push({file,viewport:{width,height},pixels:capture.pixels,contentSize:capture.contentSize,method:'owned Electron webContents.capturePage'})
