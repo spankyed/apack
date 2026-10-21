@@ -55,6 +55,9 @@ watch(nativeSite, (site, _previous, cleanup) => {
   if (!site) return
   const observer = new ResizeObserver(revealFocusedField)
   observer.observe(site)
+  // Feedback and row fitting can resize a focused field while its site stays unchanged.
+  const content = site.querySelector<HTMLElement>('[data-native-scroll-content]')
+  if (content) observer.observe(content)
   cleanup(() => observer.disconnect())
 }, { flush: 'post' })
 let focusRevision = 0

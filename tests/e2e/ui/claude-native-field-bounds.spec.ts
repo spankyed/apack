@@ -96,6 +96,12 @@ test('edits long native review notes within the actual site viewport without sub
   await expect(notes).toHaveValue(initial.value);await expect(composer).toHaveText(draft)
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900});await notes.focus()
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-field-bounds-limit-before-'+width+'.png')})
+    await writeFile(join(workspace!,'native-field-bounds-layout-'+width+'.json'),JSON.stringify(await notes.evaluate(control=>{
+      const rect=(element:Element|null)=>element?.getBoundingClientRect().toJSON()
+      const site=control.closest('[data-native-scroll-content]')?.parentElement
+      return {field:rect(control.closest('label')),input:rect(control),alert:rect(control.closest('label')?.querySelector('[role=alert]')??null),site:rect(site??null),scrollTop:site?.scrollTop,viewport:{width:innerWidth,height:innerHeight}}
+    })))
     await expect(card.getByRole('alert')).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-field-bounds-limit-'+width+'.png')})
   }

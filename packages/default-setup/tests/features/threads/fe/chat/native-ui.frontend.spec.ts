@@ -7,9 +7,11 @@ import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
 let resizeObservers: (() => void)[]
+let observedElements: Element[]
 beforeEach(() => {
   resizeObservers = []
-  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeObservers.push(callback) } observe() {} disconnect() {} })
+  observedElements = []
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resizeObservers.push(callback) } observe(element: Element) { observedElements.push(element) } disconnect() {} })
   startFeTestRuntime()
 })
 let app: App | undefined
@@ -583,12 +585,17 @@ it('reveals the focused field label on viewport resize without moving focus from
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'input', revision: 0, submitLabel: 'send', actionId: 'field', focusId: 'keyed-field', label: 'Native draft', value: 'Retained input', rows: 2, autoFocus: false } } })
   await nextTick()
   const site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = site.querySelector<HTMLElement>('[data-native-scroll-id]')!, input = site.querySelector<HTMLTextAreaElement>('textarea')!
-  let height = 100
+  let height = 100, fieldHeight = 80
+  expect(observedElements).toContain(site.querySelector('[data-native-scroll-content]'))
   Object.defineProperties(site, { clientHeight: { get: () => height }, scrollHeight: { value: 500 } })
   site.getBoundingClientRect = () => ({ top: 0, bottom: height, height, width: 300 }) as DOMRect
-  field.getBoundingClientRect = () => ({ top: 300 - site.scrollTop, bottom: 380 - site.scrollTop, height: 80, width: 300 }) as DOMRect
+  field.getBoundingClientRect = () => ({ top: 300 - site.scrollTop, bottom: 300 + fieldHeight - site.scrollTop, height: fieldHeight, width: 300 }) as DOMRect
   input.focus()
   expect(site.scrollTop).toBe(280)
+  fieldHeight = 96
+  resizeObservers.forEach(callback => callback())
+  expect(site.scrollTop).toBe(296)
+  expect(document.activeElement).toBe(input)
   height = 60
   resizeObservers.forEach(callback => callback())
   expect(site.scrollTop).toBe(300)
