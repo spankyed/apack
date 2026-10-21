@@ -1,6 +1,9 @@
 <template>
   <label ref="field" class="native-field flex min-w-0 flex-col gap-1.5" :style="fieldTheme" :data-native-plugin="node.plugin" :data-native-scroll-id="node.focusId">
-    <span v-if="node.label" class="native-field-label text-[11px] leading-4 tracking-wide">{{ node.label }}</span>
+    <span v-if="node.label || node.kind === 'input'" class="flex min-w-0 items-baseline justify-between gap-3">
+      <span v-if="node.label" class="native-field-label min-w-0 text-[11px] leading-4 tracking-wide">{{ node.label }}</span>
+      <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="native-field-hint shrink-0 whitespace-nowrap text-[10px]">Enter: {{ node.submitLabel }}</span>
+    </span>
     <select v-if="node.kind === 'select'" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :aria-label="node.label || 'Claude selection'"
       class="h-9 min-w-0 max-w-full rounded-lg border border-current bg-transparent px-2.5 text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @change="pick">
       <option v-for="option in node.options" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -10,7 +13,6 @@
       class="min-w-0 max-w-full resize-y rounded-lg border border-current bg-transparent px-3 py-2 text-[13px] leading-5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
       @input="change" @compositionstart="compositionStart" @compositionend="compositionEnd" @keydown="keydown" @focus="focused = true" @blur="focused = false" />
     <span v-if="problem" :id="'native-field-problem-' + node.actionId" role="alert" class="text-xs text-red-300">{{ problem }}</span>
-    <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="native-field-hint text-[10px]">Enter: {{ node.submitLabel }}</span>
   </label>
 </template>
 

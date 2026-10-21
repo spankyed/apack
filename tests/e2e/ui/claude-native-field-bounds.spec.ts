@@ -133,7 +133,7 @@ test('edits long native review notes within the actual site viewport without sub
       const site=control.closest('[data-native-scroll-content]')?.parentElement
       return {field:rect(control.closest('label')),input:rect(control),alert:rect(control.closest('label')?.querySelector('[role=alert]')??null),site:rect(site??null),scrollTop:site?.scrollTop,viewport:{width:innerWidth,height:innerHeight}}
     })))
-    await expect(card.getByRole('alert')).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+    await expect(card.getByRole('alert')).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-field-bounds-limit-'+width+'.png')})
   }
   const revised='  Reviewed release notes\n'+'detail '.repeat(1800)+'\nKeep trailing spaces.  '

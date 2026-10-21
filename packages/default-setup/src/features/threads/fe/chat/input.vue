@@ -9,9 +9,11 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ '--composer-history-reserve': nativeToolsExpanded ? 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)' : nativeComposerHeight ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight}px))` : undefined, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
+        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
+        @focusin="nativeFieldFocused = isNativeField($event.target)"
+        @focusout="nativeFieldFocused = isNativeField($event.relatedTarget)"
         @paste.capture="handlePaste"
         @dragenter="onDragEnter"
         @dragleave="onDragLeave"
@@ -336,7 +338,15 @@ function focusComposer() {
 }
 const nativeActivityHeight = ref(0), nativeHintHeight = ref(0), nativeModeHeight = ref(0)
 const nativeComposerHeight = computed(() => nativeActivityHeight.value + Math.max(nativeHintHeight.value, nativeModeHeight.value))
-const nativeToolsExpanded = ref(false)
+const nativeToolsExpanded = ref(false), nativeFieldFocused = ref(false)
+function isNativeField(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.matches('textarea[data-native-focus-id], select[data-native-focus-id]') && !target.closest('[data-native-client]')
+}
+const nativeHistoryReserve = computed(() => {
+  const expanded = 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)'
+  if (nativeToolsExpanded.value) return nativeFieldFocused.value ? `var(--composer-field-history-reserve, ${expanded})` : expanded
+  return nativeComposerHeight.value ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
+})
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {
   const editor = tiptapRef.value?.editor
@@ -892,7 +902,7 @@ const handleSubmit = async () => {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 @media (max-height: 700px) {
-  .input { --composer-default-history-reserve: 2rem; }
+  .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
   .input :global([data-testid="composer-editor-area"]), .input :global(.composer-document) { min-height: 40px; }
   .input :global(.composer-document) { padding-top: 8px; padding-bottom: 8px; }
   .input :global(.ProseMirror) { min-height: 24px; }

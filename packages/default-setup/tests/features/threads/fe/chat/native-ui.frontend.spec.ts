@@ -668,3 +668,29 @@ it('fits requested multiline rows to its site without losing long text, selectio
   await nextTick(); expect(f.root.querySelector('[role=alert]')).toBeNull()
   expect(f.submit).not.toHaveBeenCalled()
 })
+
+
+it('reserves a complete focused field and feedback row when its compact site is too short', async () => {
+  const value = 'detail '.repeat(2600)
+  const f = await mount({nativeUi:{status:'live',tree:{kind:'input',actionId:'notes',focusId:'notes-focus',revision:0,label:'Release notes',submitLabel:'save',value,rows:80,autoFocus:false}}})
+  const strip = f.root.querySelector<HTMLElement>('[data-testid="composer-session-strip"]')!, site = f.root.querySelector<HTMLElement>('.native-extension-surface')!, field = site.querySelector<HTMLElement>('.native-field')!, control = field.querySelector<HTMLTextAreaElement>('textarea')!
+  let fieldHeight = 60
+  strip.getBoundingClientRect = () => ({height:128}) as DOMRect
+  site.getBoundingClientRect = () => ({top:0,bottom:45,height:45}) as DOMRect
+  field.getBoundingClientRect = () => ({top:0,bottom:fieldHeight,height:fieldHeight}) as DOMRect
+  control.getBoundingClientRect = () => ({height:38}) as DOMRect
+  Object.defineProperties(site,{clientHeight:{value:45},scrollHeight:{value:200}})
+  site.style.paddingTop = '12px'; site.style.paddingBottom = '12px'
+  control.style.lineHeight = '20px'; control.style.paddingTop = '8px'; control.style.paddingBottom = '8px'; control.style.borderTopWidth = '1px'; control.style.borderBottomWidth = '1px'
+  control.focus(); await nextTick()
+  expect(strip.style.minHeight).toBe('167px')
+  control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
+  await nextTick(); fieldHeight = 82
+  resizeObservers.forEach(callback=>callback()); await nextTick()
+  expect(strip.style.minHeight).toBe('189px')
+  expect(field.querySelector('[role=alert]')?.textContent).toContain('Shorten this field')
+  expect(control.value).toBe(value); expect(document.activeElement).toBe(control)
+  expect(f.field).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled()
+  f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!.focus(); await nextTick()
+  expect(strip.style.minHeight).toBe('')
+})

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'"
+  <div ref="strip" v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'" :style="{ minHeight: minimumHeight === undefined ? undefined : minimumHeight + 'px' }"
     class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
@@ -39,15 +39,24 @@ const displayPath = computed(() => {
   return segments.length > 2 ? segments.at(-1) : props.statusLine
 })
 const emit = defineEmits<{ 'tools-expanded': [expanded: boolean]; click: []; 'return-focus': []; press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
+const strip = ref<HTMLElement | null>(null), minimumHeight = ref<number>()
 const nativeSite = ref<HTMLElement | null>(null), cellMeasure = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: nativeSite, cellWidth: () => (cellMeasure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.nativeUi?.scroll, emit: event => emit('scroll', event) })
 // Resizing must reveal the complete focused field, even when focus itself does not change.
 function revealFocusedField() {
   const site = nativeSite.value, active = document.activeElement
-  if (!site || !(active instanceof HTMLElement) || !site.contains(active) || !active.matches('input, textarea, select, [role="textbox"]') || active.closest('[data-native-client]')) return
+  if (!site || !(active instanceof HTMLElement) || !site.contains(active) || !active.matches('input, textarea, select, [role="textbox"]') || active.closest('[data-native-client]')) { minimumHeight.value = undefined; return }
   const field = active.closest<HTMLElement>('[data-native-scroll-id]')
   if (!field) return
   const bounds = site.getBoundingClientRect(), control = field.getBoundingClientRect()
+  if (strip.value && site.clientHeight && active.matches('textarea, select')) {
+    const paint = getComputedStyle(active), sitePaint = getComputedStyle(site)
+    const number = (value: string) => parseFloat(value) || 0
+    const oneRow = active.tagName === 'SELECT' ? active.getBoundingClientRect().height : (number(paint.lineHeight) || 20) + number(paint.paddingTop) + number(paint.paddingBottom) + number(paint.borderTopWidth) + number(paint.borderBottomWidth)
+    const fieldChrome = Math.max(0, control.height - active.getBoundingClientRect().height)
+    const stripChrome = Math.max(0, strip.value.getBoundingClientRect().height - bounds.height)
+    minimumHeight.value = Math.ceil(stripChrome + number(sitePaint.paddingTop) + number(sitePaint.paddingBottom) + fieldChrome + oneRow)
+  }
   if (control.top < bounds.top || control.height > bounds.height) scroll.reveal(site.scrollTop + control.top - bounds.top)
   else if (control.bottom > bounds.bottom) scroll.reveal(site.scrollTop + control.bottom - bounds.bottom)
 }
@@ -75,6 +84,7 @@ function reportFocusIn(event: FocusEvent) {
 }
 function reportFocusOut(event: FocusEvent) {
   if (nativeSite.value?.contains(event.relatedTarget as Node | null)) return
+  minimumHeight.value = undefined
   if (!held) return
   held = false
   emit('focus-report', { revision: ++focusRevision, isHeld: false, by: 'person' })
