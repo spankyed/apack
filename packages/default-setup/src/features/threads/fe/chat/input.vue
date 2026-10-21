@@ -917,6 +917,8 @@ const handleSubmit = async () => {
 <style lang="scss" module>
 .input :global(.ProseMirror[data-native-suggestion="true"] p.is-editor-empty:first-child)::before { content: none; }
 .input :global(.tiptap-wrapper .ProseMirror) { padding: 0; }
+/* The draft area owns scrolling so the caret stays above the fixed composer controls. */
+.input :global(.composer-document .ProseMirror) { max-height: none; overflow: visible; }
 .input {
   --composer-default-history-reserve: clamp(8rem, calc(var(--composer-available-height) * 0.3), 10rem);
   border-color: rgba(255, 255, 255, 0.09);

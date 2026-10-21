@@ -65,7 +65,8 @@ test('keeps multiline prose and long tokens readable across ordinary composer re
     const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),rects:any[]=[];let node:Node|null
     while((node=walker.nextNode())){if(!node.textContent?.length)continue;const range=document.createRange();range.selectNodeContents(node);rects.push(...Array.from(range.getClientRects(),r=>({left:r.left,right:r.right,top:r.top,bottom:r.bottom})));}
     const selection=document.getSelection(),caret=selection?.rangeCount?selection.getRangeAt(0).getBoundingClientRect():undefined
-    return {lines:new Set(rects.map(r=>Math.round(r.top))).size,horizontalOverflow:rects.some(r=>r.left<root.left-2||r.right>root.right+2),root:{left:root.left,right:root.right},scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,caret:caret?{left:caret.left,right:caret.right,top:caret.top,bottom:caret.bottom}:null,caretVisible:!!caret&&caret.left>=root.left-2&&caret.right<=root.right+2&&caret.top>=Math.max(site.top,card.top)-2&&caret.bottom<=Math.min(site.bottom,card.bottom)+2,whiteSpace:getComputedStyle(element).whiteSpace,canonical:editor.storage.markdown.getMarkdown()}
+    const scrollers=[];for(let parent:HTMLElement|null=element as HTMLElement;parent;parent=parent.parentElement){if(['auto','scroll'].includes(getComputedStyle(parent).overflowY)&&parent.scrollHeight>parent.clientHeight+1)scrollers.push({tag:parent.tagName,testId:parent.dataset.testid??null,scrollTop:parent.scrollTop,clientHeight:parent.clientHeight,scrollHeight:parent.scrollHeight});if(parent.hasAttribute('data-onboarding-id'))break}
+    return {scrollers,lines:new Set(rects.map(r=>Math.round(r.top))).size,horizontalOverflow:rects.some(r=>r.left<root.left-2||r.right>root.right+2),root:{left:root.left,right:root.right},scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,caret:caret?{left:caret.left,right:caret.right,top:caret.top,bottom:caret.bottom}:null,caretVisible:!!caret&&caret.left>=root.left-2&&caret.right<=root.right+2&&caret.top>=Math.max(site.top,card.top)-2&&caret.bottom<=Math.min(site.bottom,card.bottom)+2,whiteSpace:getComputedStyle(element).whiteSpace,canonical:editor.storage.markdown.getMarkdown()}
   })
   for(const [index,width] of [1100,680,1100].entries()){
     await appPage.setViewportSize({width,height:width===680?600:900});await composer.focus();await composer.press('Control+End')
@@ -74,7 +75,7 @@ test('keeps multiline prose and long tokens readable across ordinary composer re
     const geometry=await measure();samples.push({width,canonical:geometry.canonical,geometry})
     await writeFile(join(workspace!,'native-composer-wrap-partial.json'),JSON.stringify({canonical,samples}))
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-composer-wrap-'+index+'-'+width+'.png')})
-    expect(geometry.canonical).toBe(canonical);expect(geometry.horizontalOverflow).toBe(false);expect(geometry.caretVisible).toBe(true)
+    expect(geometry.canonical).toBe(canonical);expect(geometry.horizontalOverflow).toBe(false);expect(geometry.caretVisible).toBe(true);expect(geometry.scrollers.length).toBeLessThanOrEqual(1)
   }
   expect(samples[1].geometry.lines).toBeGreaterThan(samples[0].geometry.lines)
   expect(samples[2].geometry.lines).toBe(samples[0].geometry.lines)
