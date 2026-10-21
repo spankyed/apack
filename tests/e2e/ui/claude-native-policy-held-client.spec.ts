@@ -100,6 +100,11 @@ test('retires a focused held Client press across native policy restriction and r
     await expect(composer).toHaveText(parent.text)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     await expect(client.getByRole('button',{name:'Apply policy action',exact:true})).toBeInViewport({ratio:1})
+    const layout = await card.evaluate(card => {
+      const measure=(element:Element|null)=>{if(!element)return null;const box=element.getBoundingClientRect();return {top:box.top,bottom:box.bottom,height:box.height,clientHeight:element.clientHeight,scrollHeight:element.scrollHeight,scrollTop:element.scrollTop}}
+      return {width:innerWidth,height:innerHeight,card:measure(card),strip:measure(card.querySelector('[data-testid="composer-session-strip"]')),site:measure(card.querySelector('.native-extension-surface')),client:measure(card.querySelector('[data-native-client]')),action:measure(card.querySelector('[aria-label="Apply policy action"]')),send:measure(card.querySelector('[aria-label="Send"]')),transcript:measure(document.querySelector('[data-testid="chat-transcript"]')),reserve:getComputedStyle(card).getPropertyValue('--composer-history-reserve')}
+    })
+    await writeFile(join(workspace!,'native-policy-held-layout-'+width+'.json'),JSON.stringify(layout))
     await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-policy-held-restored-'+width+'.png')})
   }
