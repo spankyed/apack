@@ -133,7 +133,7 @@ test('routes live native Button actions through the retained main and Agent app 
     return entry?{mountId:entry[0],...entry[1]}:undefined
   })
   const prepare=async(editor:typeof composer,text:string)=>{
-    await editor.fill(text);await editor.press('Meta+ArrowLeft')
+    await editor.fill(text);await editor.press(process.platform==='darwin'?'Meta+ArrowLeft':'Home')
     for(let i=0;i<9;i++)await editor.press('ArrowRight')
     expect(await editor.evaluate(element=>{const selection=getSelection();if(!selection?.anchorNode)return -1;const range=document.createRange();range.selectNodeContents(element);range.setEnd(selection.anchorNode,selection.anchorOffset);return range.toString().length})).toBe(9)
     return {text,cursor:9}

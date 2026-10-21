@@ -1,3 +1,4 @@
+import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeTerminalRasterRuntime } from './terminal-raster-runtime.ts'
 import { claudeTerminalFocusRuntime } from './terminal-focus-runtime.ts'
 import { claudeTerminalWorkflowRuntime } from './terminal-workflow-runtime.ts'
@@ -18,7 +19,7 @@ import { claudeTerminalTaskRuntime } from './terminal-task-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 import { claudeTerminalActionKeyRuntime } from './terminal-action-key-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
-export const claudeTerminalUiRuntime = String.raw`import http from 'node:http';
+export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.raw`import http from 'node:http';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
@@ -1188,4 +1189,4 @@ const ownerTimer=setInterval(async()=>{
   }
  }catch(error){if(error?.apackPlanRestore===true)await ownerPost('/observer-error',{message:error.message}).catch(()=>{});}finally{ownerReading=false;}
 },250);ownerTimer.unref();
-`
+`, 'terminal')

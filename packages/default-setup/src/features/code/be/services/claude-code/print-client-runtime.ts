@@ -1,9 +1,10 @@
+import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
 
 /** Runs inside the original print CLI; authored UI modules stay in its original sandbox. */
 export function createClaudePrintClientRuntime(config: { socketPath: string; token: string; epoch: string; originalBunOptions?: string }): string {
-  return `import {createServer} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {readFileSync} from 'node:fs';
+  return withClaudeNativePlatformRuntime(`import {createServer} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {readFileSync} from 'node:fs';
 const config=${JSON.stringify(config)};
 ${claudeTerminalClientRuntime}
 ${claudeNativeThemeRuntime}
@@ -89,5 +90,5 @@ server.on('error',()=>{});server.listen(config.socketPath);server.unref();
 const sweep=setInterval(()=>{const now=Date.now();for(const[key,at]of latestAt){if(!scopes.has(key)&&now-at>10000){latestAt.delete(key);latest.delete(key);}}if(roster){const attached=new Set(roster.Kw.list().map(client=>client.clientId));for(const[key]of scopes){const[client,component,instance]=JSON.parse(key);if(!attached.has(client)){scopes.delete(key);pendingInvalidations.delete(key);host.release(client,component,instance);}}if(!scopes.size){stopThemeWatch?.();stopThemeWatch=undefined;themePalette=undefined;}}},1000);sweep.unref();
 process.once('exit',()=>{clearInterval(sweep);stopThemeWatch?.();host?.detach();if(invalidating)clearTimeout(invalidating);server.close();});
 }
-`
+`, 'print')
 }

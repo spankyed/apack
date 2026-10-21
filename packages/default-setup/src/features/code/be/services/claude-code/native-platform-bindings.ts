@@ -1,0 +1,481 @@
+/** Source-reviewed Claude 2.1.302 Linux arm64 transport metadata; no recovered implementation.
+ * Provenance: claude-code-research/docs/reviews/native-platform-bindings-2.1.302-linux-arm64.json.
+ * Keep original module objects, callbacks and eligibility; these aliases grant no app capability.
+ */
+export const claudeNativeLinuxBindings: {
+  binarySha256: string
+  platform: string
+  modules: Record<string, { module: string; exports: Record<string, string> }>
+  functionNames: Record<string, string>
+  functionHashes: Record<string, string>
+} = {
+  "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
+  "platform": "linux",
+  "modules": {
+    "chunk-002p0hd2.js": {
+      "module": "chunk-ztnrxvr2.js",
+      "exports": {
+        "d_": "l_"
+      }
+    },
+    "chunk-0xdgy4bd.js": {
+      "module": "chunk-25pk6nzd.js",
+      "exports": {
+        "BKe": "IVe",
+        "dRe": "nAe",
+        "jKe": "MVe",
+        "Ooe": "Toe",
+        "SC": "hT"
+      }
+    },
+    "chunk-174fh6cj.js": {
+      "module": "chunk-x1j6664s.js",
+      "exports": {
+        "R8": "b9",
+        "zDe": "FNe"
+      }
+    },
+    "chunk-1pjd7qsk.js": {
+      "module": "chunk-x1ap3wr2.js",
+      "exports": {
+        "me": "me",
+        "ut": "ut"
+      }
+    },
+    "chunk-1svntv7y.js": {
+      "module": "chunk-kk4w2k56.js",
+      "exports": {
+        "s4t": "zYt"
+      }
+    },
+    "chunk-25a3z2dq.js": {
+      "module": "chunk-zdg1acdm.js",
+      "exports": {
+        "km": "Em"
+      }
+    },
+    "chunk-27d659a1.js": {
+      "module": "chunk-z3j1e9q1.js",
+      "exports": {
+        "Ar": "Cr",
+        "ce": "ce"
+      }
+    },
+    "chunk-2bb0j573.js": {
+      "module": "chunk-9gw2deqq.js",
+      "exports": {
+        "dOe": "dIe",
+        "kae": "Eae"
+      }
+    },
+    "chunk-3m4t81ea.js": {
+      "module": "chunk-kh5rzqad.js",
+      "exports": {
+        "hv": "gk",
+        "kTe": "yRe",
+        "Y_n": "M_n"
+      }
+    },
+    "chunk-4hec5rn1.js": {
+      "module": "chunk-4hec5rn1.js",
+      "exports": {
+        "e": "e"
+      }
+    },
+    "chunk-4z4q4qvr.js": {
+      "module": "chunk-96tadcsr.js",
+      "exports": {
+        "UKe": "OVe"
+      }
+    },
+    "chunk-5c94ftfz.js": {
+      "module": "chunk-44ndrywt.js",
+      "exports": {
+        "Fx": "Nx",
+        "yp": "_p"
+      }
+    },
+    "chunk-5feck2gp.js": {
+      "module": "chunk-xy72b2cp.js",
+      "exports": {
+        "ETt": "uRt",
+        "vcr": "ncr"
+      }
+    },
+    "chunk-6f1afc3k.js": {
+      "module": "chunk-j63zwyqg.js",
+      "exports": {
+        "ntr": "Ler"
+      }
+    },
+    "chunk-7m5psxad.js": {
+      "module": "chunk-h8hsfd8j.js",
+      "exports": {
+        "Q_n": "L_n"
+      }
+    },
+    "chunk-9qecvs92.js": {
+      "module": "chunk-9w9v5dc2.js",
+      "exports": {
+        "gk": "fE"
+      }
+    },
+    "chunk-a32bd1ts.js": {
+      "module": "chunk-pm3yrtx5.js",
+      "exports": {
+        "Aze": "b2e",
+        "d2t": "JWt",
+        "I9s": "K3s",
+        "Ket": "Bet",
+        "kGr": "Jzr",
+        "n_n": "Fyn",
+        "o_n": "Uyn",
+        "r_n": "$yn",
+        "rwt": "YSt"
+      }
+    },
+    "chunk-aen4nr7w.js": {
+      "module": "chunk-ffqvm9ne.js",
+      "exports": {
+        "Mot": "Tot",
+        "urs": "Rns",
+        "Z_e": "K_e"
+      }
+    },
+    "chunk-at6jwec6.js": {
+      "module": "chunk-xeadjvxg.js",
+      "exports": {
+        "yQ": "dQ"
+      }
+    },
+    "chunk-bkgw23zx.js": {
+      "module": "chunk-03xfr9cf.js",
+      "exports": {
+        "IS": "Pb"
+      }
+    },
+    "chunk-c7857g1z.js": {
+      "module": "chunk-b8zkf93e.js",
+      "exports": {
+        "Ss": "bs"
+      }
+    },
+    "chunk-c7wcn77x.js": {
+      "module": "chunk-m86ay9q5.js",
+      "exports": {
+        "aK": "QK",
+        "Cie": "_ie",
+        "FPe": "OPe",
+        "gAs": "PRs",
+        "htn": "ttn",
+        "I9e": "k5e",
+        "j7s": "oJs",
+        "r5": "Y6",
+        "Rs": "As",
+        "tut": "Kct",
+        "vfe": "_fe",
+        "yCr": "XEr"
+      }
+    },
+    "chunk-ck4jw7jw.js": {
+      "module": "chunk-3bwt2mt1.js",
+      "exports": {
+        "BG": "OG"
+      }
+    },
+    "chunk-e980bbar.js": {
+      "module": "chunk-xk8eawt5.js",
+      "exports": {
+        "R3r": "GYr",
+        "x3r": "qYr",
+        "A3r": "zYr"
+      }
+    },
+    "chunk-ehw6t5ag.js": {
+      "module": "chunk-96rvtq6x.js",
+      "exports": {
+        "ATo": "tRo",
+        "bYe": "f8e"
+      }
+    },
+    "chunk-gnpc8ecg.js": {
+      "module": "chunk-rc12c6pc.js",
+      "exports": {
+        "dEn": "Kwn"
+      }
+    },
+    "chunk-gpwdwjeb.js": {
+      "module": "chunk-5gsccsnc.js",
+      "exports": {
+        "bC": "yT",
+        "nV": "Kq",
+        "vSe": "ybe"
+      }
+    },
+    "chunk-hdxpvbx1.js": {
+      "module": "chunk-26c4qsbq.js",
+      "exports": {
+        "EN": "_F",
+        "gu": "gu",
+        "Hzo": "d2o",
+        "j": "j",
+        "q": "V",
+        "s3": "Q4",
+        "Sye": "mye",
+        "x$": "kU",
+        "yjr": "J1r",
+        "ZCe": "qTe",
+        "Ze": "Ze"
+      }
+    },
+    "chunk-hqtnbrjd.js": {
+      "module": "chunk-a7b8k0bt.js",
+      "exports": {
+        "_d": "_d",
+        "$i": "Ui",
+        "adt": "Zlt",
+        "Ae": "Ce",
+        "AXs": "W8s",
+        "Cf": "Tf",
+        "CXs": "H8s",
+        "CZ": "yZ",
+        "Dhs": "Xgs",
+        "DS": "Db",
+        "Eat": "mat",
+        "Ewe": "hwe",
+        "ey": "Zh",
+        "f4": "o6",
+        "flt": "slt",
+        "GYt": "P8t",
+        "Hco": "sco",
+        "ilo": "Oao",
+        "j_r": "w_r",
+        "Jgr": "Pgr",
+        "jXt": "AXt",
+        "k7t": "cJt",
+        "kfo": "Ypo",
+        "kV": "gK",
+        "lpe": "rpe",
+        "lY": "Z9",
+        "mdt": "idt",
+        "nxe": "YAe",
+        "o7t": "zXt",
+        "Ou": "Iu",
+        "qgr": "Cgr",
+        "rat": "Yit",
+        "RXs": "z8s",
+        "sQt": "G7t",
+        "TXs": "j8s",
+        "ty": "ey",
+        "v7t": "dJt",
+        "vxt": "pxt",
+        "WXt": "xXt",
+        "xbe": "kSe",
+        "Z2": "jz",
+        "Zao": "Eao"
+      }
+    },
+    "chunk-hz2qqf17.js": {
+      "module": "chunk-bdbpj3va.js",
+      "exports": {
+        "$d": "Ud"
+      }
+    },
+    "chunk-jg0h78vk.js": {
+      "module": "chunk-agb8z93h.js",
+      "exports": {
+        "MQ": "TQ",
+        "OQ": "EQ",
+        "uSe": "obe",
+        "Y$": "WU"
+      }
+    },
+    "chunk-mn4kxp8g.js": {
+      "module": "chunk-hdd0yqb1.js",
+      "exports": {
+        "$bn": "ESn",
+        "v6e": "yqe"
+      }
+    },
+    "chunk-nhvhsxnt.js": {
+      "module": "chunk-7ny4q7f3.js",
+      "exports": {
+        "Ms": "Ms"
+      }
+    },
+    "chunk-nkxb8t4d.js": {
+      "module": "chunk-e5gg28e5.js",
+      "exports": {
+        "avr": "Kvr",
+        "GY": "N8",
+        "Hwe": "Owe",
+        "Kw": "qw",
+        "rct": "Jdt",
+        "Ui": "Bi"
+      }
+    },
+    "chunk-nmzacz4p.js": {
+      "module": "chunk-re8gp6ef.js",
+      "exports": {
+        "gAe": "lCe"
+      }
+    },
+    "chunk-pbm0yhpt.js": {
+      "module": "chunk-51et8965.js",
+      "exports": {
+        "$Et": "Ovt"
+      }
+    },
+    "chunk-pg10s5g1.js": {
+      "module": "chunk-f7hx5xpd.js",
+      "exports": {
+        "ai": "ai"
+      }
+    },
+    "chunk-r2k35jby.js": {
+      "module": "chunk-yrfyfs96.js",
+      "exports": {
+        "bDe": "pNe",
+        "h3": "aY"
+      }
+    },
+    "chunk-rhvre9pz.js": {
+      "module": "chunk-y2gemzb9.js",
+      "exports": {
+        "Cxn": "ixn"
+      }
+    },
+    "chunk-rpe8kh25.js": {
+      "module": "chunk-6ttkme7r.js",
+      "exports": {}
+    },
+    "chunk-sbny5rjh.js": {
+      "module": "chunk-fygapyts.js",
+      "exports": {
+        "Le": "Le"
+      }
+    },
+    "chunk-ste1xxgx.js": {
+      "module": "chunk-825wyb0p.js",
+      "exports": {
+        "uer": "VZn"
+      }
+    },
+    "chunk-swjk3jdr.js": {
+      "module": "chunk-n93kb4q0.js",
+      "exports": {
+        "G8s": "i9s",
+        "Qar": "Oar"
+      }
+    },
+    "chunk-tdpa6qc1.js": {
+      "module": "chunk-rwa37pyy.js",
+      "exports": {
+        "n": "n",
+        "s": "s"
+      }
+    },
+    "chunk-tkvjaryv.js": {
+      "module": "chunk-8r8e96ag.js",
+      "exports": {
+        "_ot": "mot",
+        "$ar": "war",
+        "Bar": "Ear",
+        "mAn": "pCn",
+        "Sot": "got",
+        "UAe": "NCe"
+      }
+    },
+    "chunk-tnpfcesk.js": {
+      "module": "chunk-qa2233dq.js",
+      "exports": {
+        "AE": "Rv",
+        "vws": "$Ss",
+        "wOt": "cIt"
+      }
+    },
+    "chunk-tt5gpzxk.js": {
+      "module": "chunk-1sfna10x.js",
+      "exports": {
+        "is": "is"
+      }
+    },
+    "chunk-tvszjqy2.js": {
+      "module": "chunk-yybetdc6.js",
+      "exports": {
+        "fCs": "AEs",
+        "FUe": "xBe",
+        "hCs": "OEs",
+        "o_o": "Ayo",
+        "Xwe": "zwe"
+      }
+    },
+    "chunk-wn0572jb.js": {
+      "module": "chunk-4d6w6jsm.js",
+      "exports": {
+        "_Jo": "VJo",
+        "e5r": "X6r",
+        "ioe": "Zre",
+        "n5r": "Q6r",
+        "Uvn": "Akn"
+      }
+    },
+    "chunk-xh5v0djg.js": {
+      "module": "chunk-e1wp9qx0.js",
+      "exports": {
+        "_gt": "ngt",
+        "VL": "jL",
+        "zL": "HL"
+      }
+    },
+    "chunk-yr5kjc3d.js": {
+      "module": "chunk-227thhvd.js",
+      "exports": {
+        "default": "default"
+      }
+    },
+    "chunk-ysbnj2tj.js": {
+      "module": "chunk-nebghjw0.js",
+      "exports": {
+        "ekt": "Kkt"
+      }
+    }
+  },
+  "functionNames": {
+    "nvt": "Vvt",
+    "Yt": "Yt",
+    "Jc": "Jc",
+    "vtr": "ltr",
+    "OH": "HH",
+    "vY": "FY",
+    "Tst": "Ist",
+    "Sat": "xat",
+    "Gt": "Gt",
+    "Xx": "Jx",
+    "Fo": "Fo",
+    "Pg": "Pg",
+    "Uo": "Lo",
+    "Eg": "Eg",
+    "yd": "yd",
+    "bo": "bo",
+    "Xe": "Xe"
+  },
+  "functionHashes": {
+    "6edf8bd3b931a479f0396aaba3c24e95d024688ff923fdeb4786595753da185c": "6563259c5d677b1c33363242e541aa98a4d226bf8fb720dcf9f7a64821d06e19",
+    "e5fe403fa1df1d1a78036cc6c000de59e2f1fd60f012b324b1fd5ce1ea7f6ad9": "67b6f6d6fabc7b738ce595dc096150635d37f39f599aa3c0ba51e13c4fd7a32a",
+    "4207025ab73a47de5622a9f7628917c325044e37f0710e1bbc4a2fb58fb6fb57": "4d2b69f6975bb44e13815dc5cf0d9c8adbcd55b662941e6e94b5528d7b9c2a47",
+    "303032488d6858b55a00a4718644628955b5beadbdf79e9161609313fe9ee5e2": "6dd0a5c56c394dcd471801de5ea55218fa71a9fd115ca414f7fe69d307e07972",
+    "102949adbd5d8849d10b15d5d7bc64d7e98466e46a23fa0ad704c86ae02b8b8a": "01229725eeaf28c146dc3565fb3cfe35bc5e4f79a221f365237f5822bf6ca68d",
+    "0e01508dc7198c1522cbf5658ec5b6b83f4ce8068ddeee35694dc501b6103dd5": "a9180b3ae3fe34f4dedbf9909549e5f8b619cbeecaf496fd14672ce6f12b87c5",
+    "a1c816cf807cd385354df0a915bea27b7ade8b971aca77ac266d0af49522686a": "901af1f49dc68eef91ff62beaa68d239ff29b9efd2949c39b919581fdc95c578",
+    "4d3297fd160d4c1497f0a21f0f98372ea53943f0e951256c3fbd8ac13dd5b406": "75f96c345a594435dc3860f526a59aa6d98ff34114b4f218aa80dcafb6d076ff",
+    "6823a3f796c86b23af27d79c7298106e83e975be017609701b37268da846db9b": "a51210dfebc7fb9ba696380dad2fad6768c7f80893cf4a16c01c55fb6d84ecf9",
+    "c9216d60891ddbee9f6c3b4b737f771eda26ce91860b0a6d92aecb21e4490477": "0e7566cce9f53ad23eb36d882f5d1dbf7441635c30689a0ca0474fd83f583de3",
+    "90ffae0a8b68a15a4c68fa3ca5513e524c112e97e31aac7c1abc7bf8a217f6cf": "112b8aff4927d46af0d55d2380d4975acc6281a2bcf38d5c29965ca471e13dba",
+    "53b5427fec9b423983b721ed3152f419c62aab735d8d0fc50a797d92c80c40a8": "eabd7946ad27cb13080775366ed6a5b92c52c7fc8de832aa8029ab965c96f072",
+    "32790fda3445a2da7f59d62c7e62ea9ecdb8602f82e5ab51b0497e192d687ef1": "b8b58136141c0c081c0581ccf2ee57e12f2b3baf1cae0ca91ed834728cc526b4",
+    "bae302522b9c14ab6c8c71b843f47f1c52e70b334e7a32d51b1f9e8c4132e451": "72dc3ee76d3260301aa38cb32e949fa26ac9a55347cd0d56991b337a5f0fc4f8",
+    "b9e8fced6d2763d7e2373765523e8c6219f677ea5cdd8473f5c292ed9639787f": "091cb8a18009a8e01ca885acd12954da8e465b1e1ecf0976e5335912953dbebe",
+    "f612e6600d8ec2d378c7bd5894c3cc2ebe49626b792959c3fe69e78745b527fc": "fd5e444b3bce4e98ed25fc6f61d16a9385a56bc852093da6235bace0b593ccf7"
+  }
+}
