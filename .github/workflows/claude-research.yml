@@ -37,14 +37,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build candidate pack
+        if: inputs.case != 'native-action-keys'
         shell: bash
         run: npm run build:default-setup 2>&1 | tee "$RUNNER_TEMP/claude-research-pack-build.log"
       - name: Build matching app runtime
+        if: inputs.case != 'native-action-keys'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         shell: bash
         run: npm run build:runtime -- --cores 2 2>&1 | tee "$RUNNER_TEMP/claude-research-runtime-build.log"
-      - name: Replay pinned native app journey
+      - name: Replay pinned native journey
         env:
           CLAUDE_RESEARCH_CASE: ${{ inputs.case }}
         run: python3 scripts/claude-research-ci.py "$CLAUDE_RESEARCH_CASE"
@@ -63,6 +65,7 @@ jobs:
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-proof.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-initial.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-capability-onboarding.json
+            ${{ runner.temp }}/claude-research-*/workspaces/**/native-action-keys.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-receipts.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-caret-*.json
             ${{ runner.temp }}/claude-research-*/workspaces/**/native-*-layout-*.json

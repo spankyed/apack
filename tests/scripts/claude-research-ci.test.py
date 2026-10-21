@@ -54,8 +54,9 @@ class ReplayBoundary(unittest.TestCase):
 
     def test_refuses_local_native_execution_before_network_or_launch(self):
         with patch.dict(ci.os.environ, {'GITHUB_ACTIONS': 'false'}), patch.object(ci, 'urlopen') as fetch, patch.object(ci.subprocess, 'run') as launch:
-            with self.assertRaisesRegex(RuntimeError, 'disposable GitHub-hosted'):
-                ci.run('agent-source')
+            for case in ci.CASES:
+                with self.subTest(case=case), self.assertRaisesRegex(RuntimeError, 'disposable GitHub-hosted'):
+                    ci.run(case)
             fetch.assert_not_called()
             launch.assert_not_called()
 

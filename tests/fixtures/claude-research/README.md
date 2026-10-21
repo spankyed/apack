@@ -22,7 +22,9 @@ gh workflow run ci.yml --repo spankyed/apack --ref session/claude-code-research 
   -f claude_research=true -f claude_research_case=agent-source
 ```
 
-Available cases: `agent-source`, `field-bounds`, `source-fill`, `everyday`.
+Available app cases: `agent-source`, `field-bounds`, `source-fill`, `everyday`.
+`native-action-keys` runs only the original terminal configured-action discovery baseline,
+skipping both app builds. It does not establish ordinary-composer support.
 `agent-and-fields` runs the Agent baseline and field milestone sequentially from one candidate build. These replay existing scoped journeys;
 they do not establish full feature parity or replace final F1–F5 acceptance. CI retains original
 run records, proofs, synthetic model requests, screenshots and traces. Download and inspect the
