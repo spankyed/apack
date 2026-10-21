@@ -15,10 +15,13 @@ export function normalizeClaudeAgentDraftText(doc: Editor['state']['doc'], text:
 const markdown = (editor: Editor, doc = editor.state.doc): string => normalizeClaudeAgentDraftText(doc,
   (editor.storage as unknown as { markdown: { serializer: { serialize(value: typeof doc): string } } }).markdown.serializer.serialize(doc))
 
-export function captureClaudeAgentDraft(editor: Editor): ClaudeAgentDraftSnapshot | undefined {
-  if (editor.isDestroyed || editor.view.composing) return
-  return { text: markdown(editor), doc: editor.getJSON(), selection: editor.state.selection.toJSON(),
-    ...(editor.state.storedMarks ? { storedMarks: editor.state.storedMarks.map(mark => mark.toJSON()) } : {}) }
+/** A caller may retain an immutable committed state before an IME mutates the live document. */
+export function captureClaudeAgentDraft(editor: Editor, committedState?: Editor['state']): ClaudeAgentDraftSnapshot | undefined {
+  if (editor.isDestroyed || !committedState && editor.view.composing) return
+  const state = committedState ?? editor.state
+  if (state.doc.type.schema !== editor.schema) return
+  return { text: markdown(editor, state.doc), doc: state.doc.toJSON(), selection: state.selection.toJSON(),
+    ...(state.storedMarks ? { storedMarks: state.storedMarks.map(mark => mark.toJSON()) } : {}) }
 }
 
 /** Restore the same draft. A fresh editor may supply its untouched initial document before Markdown normalization. */

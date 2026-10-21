@@ -37,16 +37,28 @@ const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string
 const offers = ref<(ClaudePromptCompletionRow & { offerId: string })[]>([])
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.ui?.promptPalette))
 let bridge: ReturnType<typeof bindClaudePromptEditor> | undefined, alive = true, adoptedEditor: Editor | undefined
+let committedState: Editor['state'] | undefined
 watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmentId], ([editor, mountId], _old, cleanup) => {
   bridge?.dispose(); bridge = undefined; offers.value = []
   if (!editor) return
   nativePromptEditors.add(editor); cleanup(() => nativePromptEditors.delete(editor))
   if (adoptedEditor !== editor) {
     const saved = props.draftSnapshot, initialDocument = editor.state.doc
-    const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft, initialDocument) }
+    const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft, initialDocument); committedState = editor.state }
     if (editor.isInitialized) adopt()
     else { editor.on('create', adopt); cleanup(() => editor.off('create', adopt)) }
   }
+
+  const remember = () => { if (adoptedEditor === editor && !editor.view.composing) committedState = editor.state }
+  const composed = () => queueMicrotask(() => {
+    if (!alive || editor.isDestroyed || adoptedEditor !== editor || editorRef.value?.editor !== editor) return
+    const snapshot = captureClaudeAgentDraft(editor)
+    if (snapshot) { committedState = editor.state; emit('draft', snapshot.text) }
+  })
+  const compositionDom = editor.view.dom
+  editor.on('transaction', remember)
+  compositionDom.addEventListener('compositionend', composed)
+  cleanup(() => { editor.off('transaction', remember); compositionDom.removeEventListener('compositionend', composed) })
 
   if (!mountId) return
   bridge = bindClaudePromptEditor(editor, value => emit('edit', value), value => { nativeProblem.value = value }, props.promptRevision, {
@@ -81,6 +93,7 @@ watch(() => props.hostRequest, request => {
 })
 function updateDraft(text: string) {
   const editor = editorRef.value?.editor
+  if (editor?.view.composing) return
   emit('draft', editor ? normalizeClaudeAgentDraftText(editor.state.doc, text) : text)
 }
 function leaveEditor(event: KeyboardEvent) {
@@ -114,7 +127,7 @@ async function submit() {
 defineExpose({ focus: () => editorRef.value?.editor?.commands.focus() })
 onBeforeUnmount(() => {
   const editor = editorRef.value?.editor
-  if (editor && adoptedEditor === editor) { const snapshot = captureClaudeAgentDraft(editor); if (snapshot) emit('draft-snapshot', snapshot) }
+  if (editor && adoptedEditor === editor) { const snapshot = captureClaudeAgentDraft(editor, editor.view.composing ? committedState : undefined); if (snapshot) { if (snapshot.text !== props.draft) emit('draft', snapshot.text); emit('draft-snapshot', snapshot) } }
   alive = false; bridge?.dispose()
 })
 </script>
