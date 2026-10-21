@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "bf3a986c69b0ced13e7d614bc10c183354f38d27",
+  "researchCommit": "23110dc8c9bbc56f68d5b4bf0fed66e5d22f808b",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -159,7 +159,7 @@
     "src/protocol/model-catalog.mjs": "c8e657c876462985a800def971b42a69ddd7e08f7249f5e7e37bcf406635ceeb",
     "src/protocol/model-settings.mjs": "627aa8b0068d01d145397c8e3acef6b3196600d1a8eb3d86c462e34182557d2f",
     "src/protocol/native-action-key-inspector.mjs": "b46f96cfe85347289c173dca3c6ed4be28508a2926f24f302fbd6c116ab534dd",
-    "src/protocol/native-action-keys.mjs": "3a906252e36bb7878ae7e9b1566ad7019403a9fadc697d5518cb580b6ffb897f",
+    "src/protocol/native-action-keys.mjs": "f70b23211c0f3a449d069f4a13df1b173a2578ad0fb83b9d0cfcd3b1cffd2f73",
     "src/protocol/native-client-control-observer.mjs": "49e8b20fe9b014ee94414ec080b50abc3a315a375fc90f0b86875fc3ad0432b6",
     "src/protocol/native-client-layout-fixture.mjs": "1327122ed5e9af094e7c269e196fc48439e5413406575a5211ba9d445d85ccf7",
     "src/protocol/native-client-lifecycle-fixture.mjs": "133338eec54a8135d1710b6e79a0de4790de7ee738daba6798b19589b9c4a287",
@@ -248,5 +248,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "bde437dcc52217cfa584f5117433a8f60dd67d50e929a453f8c19f2c06cdcab8"
+  "archiveSha256": "a859d7ccf9fedb30178e1e1efefad7c0ec90d4f641419612f0b817a67b81c253"
 }
