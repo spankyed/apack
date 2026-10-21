@@ -81,3 +81,14 @@ it('both composed preloads parse and route native module imports through the pla
     expect(source).not.toContain("await import('/$bunfs/root/")
   }
 })
+
+it('admits every schema used by the actual computed native request dispatcher', async () => {
+  const declaration = claudeTerminalUiRuntime.match(/const schemaNames=(\{[^\n]+\});/)
+  expect(declaration).not.toBeNull()
+  const schemas = vm.runInNewContext('(' + declaration![1] + ')') as Record<string, string>
+  const spec = claudeNativeLinuxBindings.modules['chunk-5c94ftfz.js']
+  const original = Object.fromEntries(Object.values(spec.exports).map(name => [name, vi.fn()]))
+  const module = await fixture().api.importClaudeNativeModule('chunk-5c94ftfz.js', async () => original)
+  expect(Object.keys(schemas)).toHaveLength(14)
+  for (const name of Object.values(schemas)) expect(module[name]).toBe(original[spec.exports[name]])
+})

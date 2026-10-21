@@ -92,7 +92,21 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-44ndrywt.js",
       "exports": {
         "Fx": "Nx",
-        "yp": "_p"
+        "yp": "_p",
+        "HUt": "kBt",
+        "MUt": "vBt",
+        "xUt": "_Bt",
+        "PUt": "bBt",
+        "IUt": "SBt",
+        "OUt": "wBt",
+        "DUt": "EBt",
+        "LUt": "TBt",
+        "M5n": "g3n",
+        "H5n": "h3n",
+        "D5n": "y3n",
+        "vUt": "pBt",
+        "AUt": "hBt",
+        "RUt": "yBt"
       }
     },
     "chunk-5feck2gp.js": {
