@@ -78,7 +78,7 @@ def run(case, linux_container=False):
     fixture = checkout / 'tests/fixtures/claude-research'
     manifest = json.loads((fixture / 'manifest.json').read_text())
     if linux_container:
-        base = Path(os.environ.get('APACK_CLAUDE_RESEARCH_OUTPUT', '/work/.apack/claude-research-linux'))
+        base = Path(os.environ.get('APACK_CLAUDE_RESEARCH_OUTPUT', '/work/node_modules/.cache/claude-research-linux'))
         base.mkdir(parents=True, exist_ok=True)
         root = Path(tempfile.mkdtemp(prefix=case+'-', dir=base))
     else:
