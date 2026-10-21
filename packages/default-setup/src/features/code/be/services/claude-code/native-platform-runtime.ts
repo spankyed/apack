@@ -77,13 +77,13 @@ export function rewriteClaudeNativePlatformSelectors(source: string): string {
   let result = source
   result = result.replace(/await import\('\/\$bunfs\/root\/(chunk-[a-z0-9]+\.js)'\)/g, "await importClaudeNativeModule('$1')")
   for (const hash of Object.keys(claudeNativeLinuxBindings.functionHashes)) {
-    result = result.replace(new RegExp(`(['\"])${hash}\\1`, 'g'), `nativeFunctionHash('${hash}')`)
+    result = result.replace(new RegExp(`(['"])${hash}\\1`, 'g'), `nativeFunctionHash('${hash}')`)
   }
   for (const name of Object.keys(claudeNativeLinuxBindings.functionNames)) {
     const escaped = escapePattern(name)
     result = result.replace(new RegExp(`\\.name===['"]${escaped}['"]`, 'g'), `.name===nativeFunctionName('${name}')`)
     result = result.replace(new RegExp(`\\bname:['"]${escaped}['"]`, 'g'), `name:nativeFunctionName('${name}')`)
-    result = result.replace(new RegExp(`(?:\\b${escaped}|['\"]${escaped}['\"]):(?=\\{|nativeFunctionHash\\()`, 'g'), `[nativeFunctionName('${name}')]:`)
+    result = result.replace(new RegExp(`(?:\\b${escaped}|['"]${escaped}['"]):(?=\\{|nativeFunctionHash\\()`, 'g'), `[nativeFunctionName('${name}')]:`)
   }
   return result
 }
