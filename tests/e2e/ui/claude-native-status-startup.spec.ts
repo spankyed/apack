@@ -65,8 +65,10 @@ test('renders original initial helper output in the ordinary composer without an
     samples.push({width,status:(await context()).native.state.mainStatus,at:Date.now()})
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-status-startup-'+width+'.png')})
   }
+  // Startup may buffer the original completion (202) until authoritative native poll metadata arrives.
+  // Exact mounted caption above is required as well; a queued receipt alone never proves rendering.
   const lines=async(name:string)=>(await readFile(join(workspace!,name),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
-  await expect.poll(async()=>(await lines('status-startup-posts.jsonl')).some(row=>row.kind==='main'&&row.code===0&&row.httpStatus===200&&row.parentPid===boundNativePid&&row.stdout.includes('Session ready'))).toBe(true)
+  await expect.poll(async()=>(await lines('status-startup-posts.jsonl')).some(row=>row.kind==='main'&&row.code===0&&[200,202].includes(row.httpStatus)&&row.parentPid===boundNativePid&&row.stdout.includes('Session ready'))).toBe(true)
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-status-startup-proof.json'),JSON.stringify({startedAt,initialLive,sessionId,boundNativePid,samples,helper:await lines('status-startup-helper.jsonl'),posts:await lines('status-startup-posts.jsonl'),noPhantomTurn:true}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
