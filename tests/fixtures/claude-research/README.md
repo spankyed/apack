@@ -1,0 +1,28 @@
+# Claude research CI replay tools
+
+`runner.tgz` contains only authored research tools from the commit in `manifest.json`.
+It contains no recovered Claude implementation, native binary, private traffic, credentials or
+`node_modules`. The fixture is generated, not a second maintained copy of the research tools.
+
+Regenerate from the research checkout after committing its tools:
+
+```sh
+python3 tools/export-ci-replay.py /absolute/path/to/apack/tests/fixtures/claude-research
+```
+
+The exporter uses committed Git blobs, normalized archive metadata and per-file SHA-256 hashes.
+The CI launcher verifies the archive and every file, downloads the explicitly pinned official
+native package and checks both package and binary hashes before execution. It refuses local or
+non-GitHub-hosted execution. The user's installed CLI and settings are never used.
+
+Dispatch only the selected journey on the existing PR branch:
+
+```sh
+gh workflow run ci.yml --repo spankyed/apack --ref session/claude-code-research \
+  -f claude_research=true -f claude_research_case=agent-source
+```
+
+Available cases: `agent-source`, `source-fill`, `everyday`. These replay existing scoped journeys;
+they do not establish full feature parity or replace final F1–F5 acceptance. CI retains original
+run records, proofs, synthetic model requests, screenshots and traces. Download and inspect the
+resulting artifact before claiming app acceptance on that runner.
