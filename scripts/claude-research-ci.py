@@ -17,6 +17,7 @@ CASES = {
     'action-keys-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1'},
     'action-contexts-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS': '1'},
     'action-dialog-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_DIALOG': '1'},
+    'policy-held-client-app': {'CLAUDE_RESEARCH_POLICY_HELD_CLIENT': '1'},
     'action-panes-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_ACTION_KEYS_APP': '1', 'CLAUDE_RESEARCH_ACTION_KEY_PANES': '1'},
     'agent-source': {'CLAUDE_RESEARCH_PROMPT_THEME': 'rich-selection', 'CLAUDE_RESEARCH_AGENT_SOURCE': '1'},
     'field-bounds': {'CLAUDE_RESEARCH_PROMPT_THEME': 'structured', 'CLAUDE_RESEARCH_FIELD_BOUNDS': '1'},
@@ -70,8 +71,8 @@ def validate_host(linux_container=False):
 
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
-    if linux_container and case != 'action-panes-app':
-        raise ValueError('Linux container adoption currently covers action-panes-app only')
+    if linux_container and case not in ['action-panes-app', 'policy-held-client-app']:
+        raise ValueError('Linux container adoption covers reviewed pane and held-policy profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')
     checkout = Path(__file__).resolve().parents[1]
@@ -116,6 +117,8 @@ const result=await probeApackControls(checkout,binary,root+'/workspaces',root+'/
 console.log(JSON.stringify(result,null,2));
 if(result.status!=='complete')process.exitCode=1;
 """
+    if case == 'policy-held-client-app':
+        script = script.replace('terminal-plan-app-theme', 'terminal-managed-transition-app')
     if case in ['native-action-keys', 'native-action-contexts']:
         script = """import {probeNativeActionKeys} from './src/protocol/native-action-keys.mjs';
 const [checkout,binary,root]=process.argv.slice(1);
@@ -131,6 +134,6 @@ if __name__ == '__main__':
     linux_container = sys.argv[1:2] == ['--linux-container']
     args = sys.argv[2:] if linux_container else sys.argv[1:]
     if len(args) != 1:
-        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <native-action-keys|native-action-contexts|action-keys-app|action-contexts-app|action-dialog-app|action-panes-app|agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
+        raise SystemExit('Usage: python3 scripts/claude-research-ci.py <native-action-keys|native-action-contexts|action-keys-app|action-contexts-app|action-dialog-app|action-panes-app|policy-held-client-app|agent-source|field-bounds|agent-and-fields|source-fill|everyday>')
     for case in (['agent-source', 'field-bounds'] if args[0] == 'agent-and-fields' else [args[0]]):
         run(case, linux_container=linux_container)
