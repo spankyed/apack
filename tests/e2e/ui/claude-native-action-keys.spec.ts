@@ -182,12 +182,14 @@ test('routes live native Button actions through the retained main and Agent app 
     expect((await chordRead(composer,parent)).view.agentId).toBeUndefined()
     const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((row:any)=>row.id)).toEqual(before.messages.map((row:any)=>row.id));expect(after.native.state.nativePid).toBe(boundNativePid)
     expect((await inspect()).contextControl).toMatchObject({sequence:8,owned:false})
+    const phaseProof={sessionId,boundNativePid,taskId,parent,agent,receipts:await receipts(),contextCases,contextSequence,contextLeaseReleased:true,parentReturned:true,noPhantomTurn:true,helperObservation}
+    await writeFile(join(workspace!,'native-action-context-phase-proof.json'),JSON.stringify(phaseProof))
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
     await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
     const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
     await expect(composer).toHaveText(parent.text);await composer.fill('Continue after checking release shortcut contexts.');await card.getByRole('button',{name:'Send',exact:true}).click()
-    await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-    await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,parent,agent,receipts:await receipts(),contextCases,contextSequence,contextLeaseReleased:true,parentReturned:true,noPhantomTurn:true,helperObservation}))
+    await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000,message:'Cold same-session print continuation reaches the app success state'}).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+    await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({...phaseProof,receipts:await receipts()}))
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeDesktopActionKeys:true,nativeActionKeyContexts:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
     return
   }
