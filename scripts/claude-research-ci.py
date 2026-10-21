@@ -73,7 +73,7 @@ def validate_host(linux_container=False):
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
     if linux_container and case not in ['action-panes-app', 'policy-held-client-app', 'prompt-timeout-app']:
-        raise ValueError('Linux container adoption covers reviewed pane and held-policy profiles only')
+        raise ValueError('Linux container adoption covers reviewed pane, held-policy and prompt-timeout profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')
     checkout = Path(__file__).resolve().parents[1]
