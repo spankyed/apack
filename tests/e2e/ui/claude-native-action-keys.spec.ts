@@ -94,9 +94,15 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   const composer = card.locator('[contenteditable="true"]')
+  const seedTurns = (await context()).turns
   await composer.fill('Review the release notes with a worker.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
+  // Original background completion adds its own parent notification turn after the task completes.
+  await expect.poll(async()=>{
+    const current=await context(),native=current.native.state
+    return native.tasks.some((task:any)=>task.status==='completed') && current.turns===seedTurns+2
+      && native.busy===false && native.activity?.pendingAgents===0
+  },{timeout:20000,message:'Seed parent turn and queued Agent completion drain before the no-phantom-turn baseline'}).toBe(true)
   const before=await context()
   return { nativeActionAppBindings, errors, card, context, sessionId, section, boundNativePid, helperObservation, status, composer, inspect, before }
 }
