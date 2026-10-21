@@ -17,10 +17,10 @@ function fixture() {
     press: vi.fn(async () => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })),
     focus: vi.fn(async () => ({ moved: true, element: null as { plugin: string; key: string } | null })),
   }
-  const publish = vi.fn(), requestFocus = vi.fn()
-  const host = createClaudePaneHost({ ui, client: { client_id: 'view', surface: 'desktop' }, current: () => current, publish, requestFocus })
+  const publish = vi.fn(), requestFocus = vi.fn(), actionKeys = vi.fn()
+  const host = createClaudePaneHost({ ui, client: { client_id: 'view', surface: 'desktop' }, current: () => current, publish, requestFocus, actionKeys })
   const nodes = () => { const body = host.state?.body; if (body?.status !== 'live' || body.tree.kind !== 'box') throw Error('expected pane body'); return body.tree.children }
-  return { host, ui, publish, requestFocus, nodes, replace: () => { current = false }, roster: (next: ClaudeUiPaneRoster) => { roster = next } }
+  return { host, ui, publish, requestFocus, actionKeys, nodes, replace: () => { current = false }, roster: (next: ClaudeUiPaneRoster) => { roster = next } }
 }
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
@@ -91,4 +91,23 @@ it('keeps pane controls live while a native tool group changes',async()=>{
  expect(f.ui.render).toHaveBeenCalledTimes(before)
  await expect(f.host.press(button.actionId!)).resolves.toEqual({handled:true})
  f.host.dispose()
+})
+
+it('publishes the returned pane shortcut revision before its replacement body becomes live', async () => {
+  const f = fixture()
+  const keys = { revision: 'a'.repeat(64), bindings: [], continuations: [], pending: null }
+  f.ui.render.mockImplementation(async () => ({ tree: { type: 'Box', children: [] }, props: {}, hooked: true, rewritten: true, _apack_action_keys: keys }))
+  await f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.actionKeys).toHaveBeenLastCalledWith(keys)
+  f.ui.closePane.mockImplementation(async () => {
+    f.roster({ panes: [{ id: 'b', title: 'B', plugin: 'fixture' }], shown_id: 'b', focused_id: null, focus_requested_id: null })
+    return { closed: true }
+  })
+  keys.revision = 'b'.repeat(64)
+  await f.host.operate({ kind: 'close', id: 'a' }); await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.state?.roster.shown_id).toBe('b')
+  expect(f.host.state?.body.status).toBe('live')
+  expect(f.actionKeys).toHaveBeenLastCalledWith(keys)
+  expect(f.actionKeys.mock.invocationCallOrder.at(-1)).toBeLessThan(f.publish.mock.invocationCallOrder.at(-1)!)
+  f.host.dispose()
 })

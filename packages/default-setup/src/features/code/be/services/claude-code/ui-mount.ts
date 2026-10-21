@@ -206,7 +206,7 @@ export function mountClaudeUi(options: {
     return disposal
   }
 
-  panes = createClaudePaneHost({ ui: owner.handle.ui, client, current, publish: () => publish(lastState), requestFocus: options.requestFocus })
+  panes = createClaudePaneHost({ ui: owner.handle.ui, client, current, publish: () => publish(lastState), actionKeys: state => { actionKeyState = state }, requestFocus: options.requestFocus })
   publish({ status: 'connecting' })
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>

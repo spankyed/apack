@@ -9,6 +9,7 @@ export function createClaudePaneHost(options: {
   client: { client_id: string; surface: 'desktop' }
   current(): boolean
   publish(): void
+  actionKeys?(state: ClaudeUiActionKeyState | undefined): void
   requestFocus?(id: string, revision: number, paneId: string): void
 }) {
   const { ui, client } = options
@@ -75,6 +76,7 @@ export function createClaudePaneHost(options: {
       }
       stamp(drawing.tree); fields = drawing
       for (const key of revisions.keys()) if (!drawing.fields.has(key)) { revisions.delete(key); completed.delete(key) }
+      options.actionKeys?.(result._apack_action_keys)
       body = { status: 'live', tree: drawing.tree }; publish()
     } catch (error) {
       if (current() && epoch === generation) { fields = undefined; drawing = undefined; body = { status: 'error', message: error instanceof Error ? error.message : 'Native pane unavailable' }; publish() }
