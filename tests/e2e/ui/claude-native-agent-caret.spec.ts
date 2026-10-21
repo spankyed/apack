@@ -76,7 +76,6 @@ test('reconciles actual Agent Home and cursor movement with original native read
     await form.getByRole('button',{name:'Read current draft',exact:true}).click()
     await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8').catch(()=>'null'))).toEqual({text,cursor})
     const value=JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8'))
-    if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
     return value
   }
   for(const width of [1100,680]){
@@ -98,6 +97,7 @@ test('reconciles actual Agent Home and cursor movement with original native read
     await expect.poll(async()=>(await edits()).at(-1)).toMatchObject({text:expected,cursor:14})
     const finalNative=await read(14,expected);expect(finalNative).toEqual({text:expected,cursor:14})
     samples.push({width,positions,finalNative});await writeFile(join(workspace!,'native-agent-caret-samples.json'),JSON.stringify(samples))
+    const tools=form.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
     await field.focus();await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport({ratio:1})
     await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('agent-caret-'+width+'.png')})
