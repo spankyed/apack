@@ -1,3 +1,4 @@
+import { createLogger } from '@apackdev/sdk/logger'
 import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
@@ -33,6 +34,7 @@ interface ClaudeUiView {
   owner?: ClaudeUiOwner
   mount?: ReturnType<typeof mountClaudeUi>
 }
+const logger = createLogger('claude-ui')
 const views = new Map<string, ClaudeUiView>()
 const retiredMounts = new Map<string, { threadId: string; expires: number }>()
 const retiring = new Set<{ client: string; threadId: string; done: Promise<void> }>()
@@ -169,6 +171,7 @@ export async function submitClaudeParentCommand(client: string, threadId: string
 
 /** Delivery identity owns each mount. A heartbeat renews its lease without launching a process. */
 export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, reply?: Reply<OutgoingThreadsEvents>): void {
+  if (event.type === 'CLAUDE_UI_KEY') logger.debug('Native action key received', { mountId: event.mountId, sequence: event.sequence, client: !!client, reply: !!reply })
   if (!client || !validId(event.mountId) || !event.threadId || event.threadId.length > 256) return
   // A replaced frontend actor cannot receive replies. Its view can still retire its own
   // attachment using the credential issued before replacement, without claiming a new host.
@@ -301,11 +304,17 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (!view || !Number.isSafeInteger(event.sequence) || event.sequence < 1) return
     bind(view)
     const target = view, mount = target.mount
+    // Trace acknowledgement lifetime without recording the key, prompt or callback authority.
+    const identity = { mountId: target.mountId, sequence: event.sequence }
+    logger.debug('Native action key routing', { ...identity, attached: !!mount })
     if (mount) void mount.key({ revision: event.revision, event: event.event }).then(result => {
-      if (viewCurrent(target) && target.mount === mount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner) {
+      const currentView = viewCurrent(target), currentMount = target.mount === mount
+      const currentOwner = currentView && currentMount && getClaudeUiOwner(target.threadId, target.nativeView) === target.owner
+      logger.debug('Native action key completion', { ...identity, handled: result.handled, currentView, currentMount, currentOwner })
+      if (currentView && currentMount && currentOwner) {
         target.reply({ type: 'CLAUDE_UI_KEY_RESULT', threadId: target.threadId, mountId: target.mountId, sequence: event.sequence, handled: result.handled, actionKeys: target.state.actionKeys })
       }
-    }).catch(() => { /* key failure must leave ordinary composing available */ })
+    }).catch(() => { logger.debug('Native action key acknowledgement unavailable', identity) })
     return
   }
   if (event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD') {
