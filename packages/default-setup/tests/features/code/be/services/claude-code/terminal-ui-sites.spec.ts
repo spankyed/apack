@@ -22,7 +22,7 @@ it('restores the native terminal registrations when a remote drawing retires', (
   const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();')
   const end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
   const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({recordDrawing,dropSite})`, {
-    Map, Set, AbortController, Promise, clients: new Set(['app']), clientViewCurrent: (_native: unknown, id: string) => id === 'app', publish() {},
+    Map, Set, AbortController, Promise, actionKeys: { retire() {} }, clients: new Set(['app']), clientViewCurrent: (_native: unknown, id: string) => id === 'app', publish() {},
   }) as { recordDrawing(native: unknown, request: unknown, tree: unknown): void; dropSite(native: unknown, key: string): void }
   const previousScroll = {}, previousFocus = {}, scrolls = new Map<string, unknown>([['AbovePrompt:above-prompt', previousScroll]]), focuses = new Map<string, unknown>([['AbovePrompt:above-prompt', previousFocus]])
   const native = { runtime: { f4: 'above-prompt', kV: (component: string, id: string) => `${component}:${id}`, xbe: () => scrolls, Eat: () => focuses, k7t: () => ({ emit() {} }) }, session: { Ket: () => [] } }
@@ -167,4 +167,51 @@ it('registers client-owned AbovePrompt fields for original focus and refuses for
   expect(await api.remoteFocus(native,focus)).toMatchObject({moved:false,deny:'no such site'})
   expect(entry.commit({plugin:'notes',element:'review-notes',origin:{kind:'person'}})).toBe('no such site')
   expect(calls).toHaveLength(1)
+})
+
+
+it('retires hidden and closed pane shortcuts until a fresh shown drawing registers them', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const sites=new Map();')
+  const end = claudeTerminalUiRuntime.indexOf('function paneRoster(')
+  const live = new Set(['first', 'second'])
+  const state = { open: [{ id: 'first' }, { id: 'second' }], shownId: 'first', focusedId: null }
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({sites,synchronizePanes})`, {
+    Map, Set, AbortController, Promise, clients: new Set(['app']), clientViewCurrent: () => true, publish() {},
+    paneRoster: () => ({ panes: state.open, shown_id: state.shownId }),
+    actionKeys: { retire(scope: { instance_id: string }) { live.delete(scope.instance_id) } },
+  }) as { sites: Map<string, unknown>; synchronizePanes(native: unknown): void }
+  const native = { roster: { Ui: () => ({ getState: () => state }) }, runtime: { kV: (_component: string, id: string) => id, xbe: () => new Map(), Eat: () => new Map() } }
+  for (const id of ['first', 'second']) api.sites.set(id, { component: 'Pane', id, clientId: 'app', abort: new AbortController() })
+  api.synchronizePanes(native)
+  expect([...live]).toEqual(['first'])
+  state.shownId = 'second'; api.synchronizePanes(native)
+  expect([...live]).toEqual([])
+  // Visibility alone cannot revive a retired registration; only a new drawing can.
+  live.add('second'); api.synchronizePanes(native)
+  expect([...live]).toEqual(['second'])
+  state.open = []; api.synchronizePanes(native)
+  expect([...live]).toEqual([])
+  expect(api.sites.size).toBe(0)
+})
+
+
+it('admits pane action callbacks only for the current shown pane of an attached view', () => {
+  const start = claudeTerminalUiRuntime.indexOf('const clients=new Set()')
+  const end = claudeTerminalUiRuntime.indexOf('const instanceLifetimes=')
+  let shown: string | null = 'first'
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({clients,actionKeys})`, {
+    Set, Map, config: { sessionId: 'session' }, createNativeRasterMirrors: () => ({}), createNativeActionKeyBridge: (options: unknown) => options,
+    clientViewCurrent: () => true, instanceLifetimes: { active: () => true }, paneRoster: () => ({ shown_id: shown }),
+  }) as { clients: Set<string>; actionKeys: { current(native: unknown, scope: unknown): boolean } }
+  api.clients.add('app')
+  const first = { client_id: 'app', component: 'Pane', instance_id: 'first' }
+  expect(api.actionKeys.current({}, first)).toBe(true)
+  shown = 'second'
+  expect(api.actionKeys.current({}, first)).toBe(false)
+  expect(api.actionKeys.current({}, { ...first, instance_id: 'second' })).toBe(true)
+  shown = null
+  expect(api.actionKeys.current({}, first)).toBe(false)
+  expect(api.actionKeys.current({}, { ...first, component: 'AbovePrompt' })).toBe(true)
+  api.clients.delete('app')
+  expect(api.actionKeys.current({}, first)).toBe(false)
 })

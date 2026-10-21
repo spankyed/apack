@@ -25,7 +25,7 @@ const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(rea
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
- current:(n,scope)=>clients.has(scope.client_id)&&clientViewCurrent(n,scope.client_id)&&(scope.instance_revision===undefined||instanceLifetimes.active(scope,scope.instance_revision)),
+ current:(n,scope)=>clients.has(scope.client_id)&&clientViewCurrent(n,scope.client_id)&&(scope.component!=='Pane'||paneRoster(n).shown_id===scope.instance_id)&&(scope.instance_revision===undefined||instanceLifetimes.active(scope,scope.instance_revision)),
  view:n=>clientViewKey(n),
  requestId:(n,scope)=>isTerminalPlacement(scope.component)?currentTerminalPlacementAction(n,scope)?.input.requestId??scope.instance_id:scope.instance_id,
  changed:(client_id,action_keys)=>publish({type:'system',subtype:'apack_ui_action_keys',client_id,action_keys}),
@@ -120,6 +120,7 @@ function siteExists(n,component,id,clientId){return component==='AbovePrompt'&&(
 function siteOffset(site){return site.follow?Math.max(0,site.contentRows-site.bodyRows):site.offset;}
 function dropSite(n,key){
  const site=sites.get(key);if(!site)return;sites.delete(key);site.abort.abort();
+ actionKeys.retire({client_id:site.clientId,component:site.component,instance_id:site.id});
  for(const [registry,entry,previous] of [[n.runtime.xbe(),site.scrollEntry,site.previousScroll],[n.runtime.Eat(),site.focusEntry,site.previousFocus]])if(registry.get(key)===entry){if(previous)registry.set(key,previous);else registry.delete(key);}
 }
 function refreshSite(n,site){
@@ -152,7 +153,9 @@ function remoteSite(n,clientId,component,id){
  refreshSite(n,site);return site;
 }
 function synchronizePanes(n){
- const state=n.roster.Ui().getState();
+ const state=n.roster.Ui().getState(),shown=paneRoster(n).shown_id;
+ // Hidden panes unmount their original action registrations; showing one needs a fresh drawing.
+ for(const site of sites.values())if(site.component==='Pane'&&site.id!==shown)actionKeys.retire({client_id:site.clientId,component:site.component,instance_id:site.id});
  for(const [key,site] of sites){if(!siteExists(n,site.component,site.id,site.clientId)){dropSite(n,key);continue;}if(site.component==='Pane'){site.held=state.focusedId===site.id;if(!site.held)site.holder=undefined;}refreshSite(n,site);}
 }
 function siteTurn(site,kind,report,merge,run){
