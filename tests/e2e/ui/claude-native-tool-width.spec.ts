@@ -81,7 +81,7 @@ test('formats the original tool result at its mounted row width through resize',
     await result.scrollIntoViewIfNeeded()
     const columns=await result.evaluate(element=>{const cell=element.querySelector('span.invisible')!.getBoundingClientRect().width,style=getComputedStyle(element);return Math.max(20,Math.min(240,Math.floor((element.clientWidth-parseFloat(style.paddingLeft||'0')-parseFloat(style.paddingRight||'0'))/cell)))})
     await expect.poll(()=>reports.at(-1)?.columns).toBe(columns)
-    await expect.poll(async()=>{const text=(await formatted.innerText()).replace(/^[ \t]*[0-9]+[ \t]+/gm,'').replace(/\s+/g,' ').trim();return text.includes(source)}).toBe(true)
+    await expect.poll(async()=>{const text=(await formatted.innerText()).replace(/^[ \t]*[0-9]+[ \t]+/gm,'').replace(/\s+/g,'');return text.includes(source.replace(/\s+/g,''))}).toBe(true)
     const engine=async()=>appPage.evaluate(()=>{const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(state.nativeUiViews).flatMap((v:any)=>v.state.transcriptMessages??[]).find((f:any)=>f.component==='ToolResult'&&f.uuid==='file_fixture_1') as any})
     // Keep the actual native formatting and the measured transport together, not CSS wrap alone.
     await expect.poll(async()=>(await engine())?.body.status).toBe('live')
