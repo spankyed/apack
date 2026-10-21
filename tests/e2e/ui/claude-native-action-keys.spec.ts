@@ -3,7 +3,15 @@ import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
-import { test, expect } from '@apackdev/testing'
+import { test as base, expect, type AppDriver } from '@apackdev/testing'
+import type { Page } from '@playwright/test'
+
+const test = base.extend<{ nativeActionSession: Awaited<ReturnType<typeof prepareNativeActionSession>> }>({
+  // Cold app/native startup has its own deadline; interaction assertions keep their full budget.
+  nativeActionSession: [async ({ app, appPage }, use) => {
+    await use(await prepareNativeActionSession({ app, appPage }))
+  }, { timeout: 90000 }],
+})
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 const contextMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS === '1'
 delete process.env.FORCE_COLOR
@@ -17,8 +25,7 @@ test.afterEach(async ({appPage}, testInfo) => {
   }
   terminalScreen?.dispose();terminalScreen=undefined
 })
-test('routes live native Button actions through the retained main and Agent app drafts', async ({ app, appPage }, testInfo) => {
-  test.setTimeout(90000)
+async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; appPage: Page }) {
   expect(process.env.HOME).toBe(workspace)
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const { nativeActionAppBindings } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_ACTION_KEYS_FIXTURE!).href)
@@ -87,9 +94,16 @@ test('routes live native Button actions through the retained main and Agent app 
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   const composer = card.locator('[contenteditable="true"]')
+  await composer.fill('Review the release notes with a worker.')
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
+  const before=await context()
+  return { nativeActionAppBindings, errors, card, context, sessionId, section, boundNativePid, helperObservation, status, composer, inspect, before }
+}
 
-
-
+test('routes live native Button actions through the retained main and Agent app drafts', async ({ appPage, nativeActionSession }, testInfo) => {
+  test.setTimeout(90000)
+  const { nativeActionAppBindings, errors, card, context, sessionId, section, boundNativePid, helperObservation, status, composer, inspect, before } = nativeActionSession
   const receipts=async()=>{
     // The native worker rewrites its own JSON file; a reader can observe its truncated prefix.
     for(let attempt=0;attempt<50;attempt++){
@@ -121,10 +135,6 @@ test('routes live native Button actions through the retained main and Agent app 
     expect((await receipts()).at(-1).value).toEqual(expected)
     return (await receipts()).at(-1)
   }
-  await composer.fill('Review the release notes with a worker.')
-  await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
-  const before=await context()
   const parent=await prepare(composer,'Keep release guidance while reviewing the current changes.')
   await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key===(contextMode?'k':'u'))).toBe(true)
   if(contextMode){
