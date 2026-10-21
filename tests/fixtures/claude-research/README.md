@@ -23,7 +23,7 @@ gh workflow run ci.yml --repo spankyed/apack --ref session/claude-code-research 
 ```
 
 Available app cases: `agent-source`, `field-bounds`, `source-fill`, `everyday`,
-`action-keys-app`, `action-contexts-app` and `action-dialog-app`. The dialog case holds an
+`action-keys-app`, `action-contexts-app` `action-dialog-app` and `action-panes-app`. The dialog case holds an
 original shortcut-triggered question through human deliberation, checks normal/compact answering
 and restored shortcut use, then requires same-session recovery and owned shutdown.
 `native-action-keys` and `native-action-contexts` run only the original terminal configured-action discovery baseline,

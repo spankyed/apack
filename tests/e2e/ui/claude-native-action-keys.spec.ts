@@ -15,6 +15,7 @@ const test = base.extend<{ nativeActionSession: Awaited<ReturnType<typeof prepar
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 const contextMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS === '1'
 const dialogMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_DIALOG === '1'
+const paneMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_PANES === '1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
@@ -95,7 +96,7 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   const composer = card.locator('[contenteditable="true"]')
-  if(!dialogMode){
+  if(!dialogMode&&!paneMode){
     const seedTurns = (await context()).turns
     await composer.fill('Review the release notes with a worker.')
     await card.getByRole('button',{name:'Send',exact:true}).click()
@@ -146,6 +147,47 @@ test('routes live native Button actions through the retained main and Agent app 
   }
   const parent=await prepare(composer,'Keep release guidance while reviewing the current changes.')
   await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key===(contextMode?'k':'u'))).toBe(true)
+  if(paneMode){
+    const cases:{width:number;winner:string}[]=[],paneIds:{first?:string;second?:string}={}
+    const panel=appPage.locator('[data-native-pane-panel]'),tools=card.getByRole('button',{name:'Session tools',exact:true})
+    const pane=async(title:string)=>{await expect.poll(async()=>(await ui())?.state.panes?.roster.panes.find((p:any)=>p.title===title)?.id).toBeTruthy();return (await ui()).state.panes.roster.panes.find((p:any)=>p.title===title).id as string}
+    const shown=async(id:string)=>{await expect.poll(async()=>{const p=(await ui())?.state.panes;return p?.roster.shown_id===id&&p.body.status==='live'}).toBe(true)}
+    const open=async(title:string)=>{
+      if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+      await card.getByRole('button',{name:'Open '+title.toLowerCase(),exact:true}).click()
+      const id=await pane(title);await shown(id)
+      if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
+      return id
+    }
+    const read=async(winner:string,width:number)=>{const result=await readWithKey(composer,parent);expect(result.kind).toBe(winner);expect(result.view.agentId).toBeUndefined();cases.push({width,winner});await expect(composer).toHaveText(parent.text)}
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      await read('above-last',width)
+      const first=await open('Release notes');paneIds.first??=first;expect(first).toBe(paneIds.first);await read('pane:'+first,width)
+      const second=await open('Migration notes');paneIds.second??=second;expect(second).toBe(paneIds.second);await read('pane:'+second,width)
+      await panel.getByRole('tab',{name:'Release notes',exact:true}).click();await shown(first);await read('pane:'+first,width)
+      await expect(panel.getByRole('button',{name:'Close Release notes',exact:true})).toBeInViewport({ratio:1})
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+      await appPage.screenshot({path:testInfo.outputPath('native-action-pane-return-'+width+'.png')})
+      await panel.getByRole('button',{name:'Close Release notes',exact:true}).click();await shown(second);await read('pane:'+second,width)
+      await panel.getByRole('button',{name:'Close Migration notes',exact:true}).click()
+      await expect.poll(async()=>(await ui())?.state.panes?.roster.panes.length??0).toBe(0);await expect(panel).toBeHidden();await read('above-last',width)
+      await appPage.screenshot({path:testInfo.outputPath('native-action-pane-closed-'+width+'.png')})
+    }
+    expect((await receipts()).length).toBe(12)
+    const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((r:any)=>r.id)).toEqual(before.messages.map((r:any)=>r.id));expect(after.native.state.nativePid).toBe(boundNativePid)
+    const proof={sessionId,boundNativePid,parent,paneIds,cases,receipts:await receipts(),panesClosed:true,noPhantomTurn:true,helperObservation}
+    await writeFile(join(workspace!,'native-action-pane-phase-proof.json'),JSON.stringify(proof))
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
+    await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
+    const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+    await expect(composer).toHaveText(parent.text);await composer.fill('Continue after reviewing both native panes.');await card.getByRole('button',{name:'Send',exact:true}).click()
+    await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000,message:'Same-session print continuation succeeds after native pane switching'}).toBe('success')
+    expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+    await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({...proof,receipts:await receipts()}))
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeDesktopActionKeys:true,nativeActionKeyPanes:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+    return
+  }
   if(dialogMode){
     await composer.focus();await composer.press('Control+Alt+u')
     const panel=appPage.getByTestId('native-question-panel')
