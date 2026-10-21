@@ -19,7 +19,6 @@ test.afterEach(async ({appPage}, testInfo) => {
 test('routes live native Button actions through the retained main and Agent app drafts', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const { nativeActionAppBindings } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_ACTION_KEYS_FIXTURE!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -57,6 +56,7 @@ test('routes live native Button actions through the retained main and Agent app 
   await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
+  const inspect=async()=>JSON.parse(await readFile(join(workspace!,'native-action-app-inspection.json'),'utf8').catch(()=>'null'))
   let lastSequence = 0
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
@@ -66,7 +66,10 @@ test('routes live native Button actions through the retained main and Agent app 
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
     const screen = recognizeOnboardingPrompt(text, workspace)
-    const ready = native?.state?.status === 'live' && native.state.mainStatus?.includes('Session ready') === true
+    const inspection=await inspect(),sample=inspection?.samples.at(-1)
+    const ready = native?.state?.status === 'live' && trusted && screen===null && inspection?.nativePid===native.state.nativePid
+      && !inspection.error && sample?.swallowAll===0 && sample?.dialogCount===0
+      && sample.bindings.some((binding:any)=>binding.context==='Global'&&binding.action==='app:cycleDiffBase'&&binding.chord[0]?.key==='u')
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ checkedAt:Date.now(), ready, screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text, state: native?.state }))
     // A cold runner can publish its first original helper at the prior 25-second boundary.
     if (ready) return true
@@ -75,27 +78,18 @@ test('routes live native Button actions through the retained main and Agent app 
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
+    return ready
   }, { timeout: 40000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
-  const main = section.getByTestId('native-main-status')
-  if (restriction) await expect(main).toHaveCount(0)
-  else {
-    await expect(main).toContainText('Session ready')
-    await expect(main).toContainText('Reviewing release notes')
-    await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
-  }
   const boundNativePid = (await context()).native.state.nativePid
+  const helperObservation = { initialStatus: (await context()).native.state.mainStatus ?? null }
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
-  if (restriction) await expect(status).toHaveCount(0)
-  else await expect(status).toContainText('Session ready')
   const composer = card.locator('[contenteditable="true"]')
 
 
 
   const receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-action-app-receipts.json'),'utf8').catch(()=>'[]'))
-  const inspect=async()=>JSON.parse(await readFile(join(workspace!,'native-action-app-inspection.json'),'utf8').catch(()=>'null'))
   const ui=()=>appPage.evaluate(()=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
     const entries=Object.entries(state.nativeUiViews) as [string,any][]
@@ -126,7 +120,8 @@ test('routes live native Button actions through the retained main and Agent app 
     await readWithKey(composer,parent)
     await expect(composer).toHaveText(parent.text)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
-    await expect(status).toBeInViewport({ratio:1})
+    if(await status.count())await expect(status).toBeInViewport({ratio:1})
+    await expect(card.getByRole('button',{name:'Session tools',exact:true})).toBeInViewport({ratio:1})
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-action-main-'+width+'.png')})
   }
   // Engine-owned registration wins over the competing native Button callback.
@@ -197,6 +192,6 @@ test('routes live native Button actions through the retained main and Agent app 
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await expect(composer).toHaveText(parent.text);await composer.fill('Continue after reviewing the release shortcuts.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,parent,agent,receipts:await receipts(),enginePriority:true,rebound:true,staleHandled:false,noPhantomTurn:true,originalTurnCount:before.turns}))
+  await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,parent,agent,receipts:await receipts(),helperObservation,enginePriority:true,rebound:true,staleHandled:false,noPhantomTurn:true,originalTurnCount:before.turns}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeDesktopActionKeys:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

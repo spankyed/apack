@@ -1,3 +1,4 @@
+import { readClaudeUiActionKeys } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
@@ -237,7 +238,9 @@ export async function createClaudeTerminalBridge(options: {
           && typeof event.uuid === 'string' && event.uuid.length > 0 && event.uuid.length <= 128 && typeof event.plugin === 'string' && event.plugin.length > 0 && event.plugin.length <= 256
           && (typeof event.text === 'string' && event.text.length <= 10001 || event.subtype === 'ui_status' && event.text === null)
           && (event.subtype !== 'ui_toast' || Number.isSafeInteger(event.timeout_ms) && Number(event.timeout_ms) >= 0)
-        if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice) return reply(409, {})
+        const actionKeys = event.subtype === 'apack_ui_action_keys' && typeof event.client_id === 'string'
+          && /^[A-Za-z0-9._-]{1,64}$/.test(event.client_id) && readClaudeUiActionKeys(event.action_keys) !== undefined
+        if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice && !actionKeys) return reply(409, {})
         ui.receive(event); return reply(200, {})
       }
       if (request.url === '/transcript') {

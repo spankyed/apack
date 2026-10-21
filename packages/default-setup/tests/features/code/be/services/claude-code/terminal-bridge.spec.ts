@@ -382,3 +382,20 @@ it('refuses foreign checkpoint acknowledgements without publishing their cost', 
   expect((await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })).status).toBe(409)
   expect(bridge!.session.metadata).toBeUndefined()
 })
+
+
+it('forwards live action bindings only with valid metadata from the current owner and session', async () => {
+  await create()
+  const receive = vi.fn(), unsubscribe = bridge!.uiTransport.subscribe(receive)
+  const action_keys = { revision: 'a'.repeat(64), bindings: [[{ key: 'u', ctrl: true, alt: true, meta: false, shift: false, super: false }]], continuations: [], pending: null }
+  const event = { type: 'system', subtype: 'apack_ui_action_keys', client_id: 'mounted-app', action_keys }
+  try {
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid + 1, event })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: '22222222-2222-2222-2222-222222222222', pid: process.pid, event })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, client_id: '../foreign' } })).status).toBe(409)
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event: { ...event, action_keys: { ...action_keys, handle: 99 } } })).status).toBe(409)
+    expect(receive).not.toHaveBeenCalled()
+    expect((await request('/ui-event', { sessionId: session, pid: process.pid, event })).status).toBe(200)
+    expect(receive).toHaveBeenCalledExactlyOnceWith(event)
+  } finally { unsubscribe() }
+})
