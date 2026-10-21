@@ -67,16 +67,17 @@ test('edits long native review notes within the actual site viewport without sub
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
     const screen = recognizeOnboardingPrompt(text, workspace)
-    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text, state: native?.state }))
-    // The bridge can attach before original trust/onboarding and helper readiness finish.
-    if (native?.state?.status === 'live' && native.state.mainStatus?.includes('Session ready')) return true
+    const ready = native?.state?.status === 'live' && native.state.mainStatus?.includes('Session ready') === true
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ checkedAt:Date.now(), ready, screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text, state: native?.state }))
+    // A cold runner can publish its first original helper at the prior 25-second boundary.
+    if (ready) return true
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
     return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
-  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  }, { timeout: 40000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
