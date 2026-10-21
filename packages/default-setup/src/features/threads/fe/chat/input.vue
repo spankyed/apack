@@ -45,7 +45,7 @@
         <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
 
         <!-- Editor container -->
-        <div class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
+        <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
             ref="tiptapRef"
             mode="input"
@@ -329,6 +329,7 @@ interface ActionButton {
 
 const tiptapRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 const inputCardRef = ref<HTMLElement | null>(null)
+const editorAreaRef = ref<HTMLElement | null>(null)
 function focusComposer() {
   tiptapRef.value?.editor?.commands.focus()
   void nextTick(() => {
@@ -416,7 +417,7 @@ watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => p
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
     const owner = promptEditor
     setClaudeCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
-  } }, { canSuggest: () => !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
+  } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
 }, { flush: 'post' })
 watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   if (!editor) { hostPopupActive.value = false; return }

@@ -101,3 +101,27 @@ it('keeps an ordinary representable replacement rich while explicitly withdrawin
   expect(text()).toBe('**Fresh review**');expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
   expect(editor.state.doc.firstChild?.firstChild?.marks[0]?.type.name).toBe('bold');bridge.dispose()
 })
+
+
+it('reveals a focused rich draft after resize without native edits and retires queued work',()=>{
+  let resize: (()=>void)|undefined, frame: FrameRequestCallback|undefined
+  vi.stubGlobal('ResizeObserver',class {
+    constructor(callback: ()=>void){resize=callback}
+    observe(){} disconnect(){}
+  })
+  vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{frame=callback;return 1})
+  vi.stubGlobal('cancelAnimationFrame',()=>{frame=undefined})
+  const focused=vi.spyOn(document,'hasFocus').mockReturnValue(true),reveal=vi.fn(()=>true),send=vi.fn()
+  const mount=editor.view.dom.parentElement!;document.body.append(mount)
+  editor.view.setProps({handleScrollToSelection:reveal});editor.view.dom.focus();editor.isFocused=true
+  const bridge=bindClaudePromptEditor(editor,send,vi.fn()),doc=editor.state.doc,selection=editor.state.selection,revision=bridge.revision
+  send.mockClear()
+  const flush=()=>{resize!();const next=frame;frame=undefined;next?.(0)}
+  try {
+    flush();expect(reveal).toHaveBeenCalledTimes(1);expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true);expect(bridge.revision).toBe(revision);expect(send).not.toHaveBeenCalled()
+    editor.isFocused=false;flush();expect(reveal).toHaveBeenCalledTimes(1)
+    editor.isFocused=true;focused.mockReturnValue(false);flush();expect(reveal).toHaveBeenCalledTimes(1)
+    focused.mockReturnValue(true);Object.defineProperty(editor.view,'composing',{configurable:true,value:true});flush();expect(reveal).toHaveBeenCalledTimes(1)
+    Object.defineProperty(editor.view,'composing',{configurable:true,value:false});resize!();const stale=frame;bridge.dispose();stale?.(0);expect(reveal).toHaveBeenCalledTimes(1);expect(send).not.toHaveBeenCalled()
+  } finally {bridge.dispose();focused.mockRestore();mount.remove();vi.unstubAllGlobals()}
+})

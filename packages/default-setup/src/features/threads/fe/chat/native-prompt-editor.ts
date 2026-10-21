@@ -9,7 +9,7 @@ import type { ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest
 import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument, type ClaudePromptDocument } from './native-prompt-document.ts'
 
 /** A mounted view owns its revisions and listeners; it never owns the editor's lifetime. */
-export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean }) {
+export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePromptEdit) => void, onProblem: (message: string | undefined) => void, initialRevision = 0, completion?: { initialRevision?: number; request(event: ClaudePromptCompletionRequest): void; update(rows: ClaudePromptCompletionRow[], offerId?: string): void }, host?: { canSuggest(): boolean; viewport?: HTMLElement | null }) {
   const serialize = (doc: import('@tiptap/pm/model').Node): string =>
     (editor.storage as unknown as { markdown: { serializer: { serialize(doc: import('@tiptap/pm/model').Node): string } } }).markdown.serializer.serialize(doc)
   const parse = (text: string) => {
@@ -53,16 +53,17 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   }
   const dom = editor.view.dom
   let revealFrame: number | undefined
-  const revealSourceCaret = () => {
-    if (!disposed && !editor.isDestroyed && editor.isFocused && dom.ownerDocument.hasFocus() && editor.state.doc.firstChild?.type.name === 'claudePromptSource') editor.view.dispatch(editor.state.tr.scrollIntoView())
+  const revealFocusedCaret = () => {
+    if (!disposed && !editor.isDestroyed && editor.isFocused && dom.ownerDocument.hasFocus() && !editor.view.composing) editor.view.dispatch(editor.state.tr.scrollIntoView())
   }
-  const sourceResize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
+  const caretResize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
     if (revealFrame !== undefined) cancelAnimationFrame(revealFrame)
-    revealFrame = requestAnimationFrame(() => { revealFrame = undefined; revealSourceCaret() })
+    revealFrame = requestAnimationFrame(() => { revealFrame = undefined; revealFocusedCaret() })
   })
-  sourceResize?.observe(dom)
-  if (dom.parentElement) sourceResize?.observe(dom.parentElement)
-  const stopSourceReveal = () => { sourceResize?.disconnect(); if (revealFrame !== undefined) cancelAnimationFrame(revealFrame) }
+  caretResize?.observe(dom)
+  if (dom.parentElement) caretResize?.observe(dom.parentElement)
+  if (host?.viewport) caretResize?.observe(host.viewport)
+  const stopCaretReveal = () => { caretResize?.disconnect(); if (revealFrame !== undefined) cancelAnimationFrame(revealFrame) }
   const events = ['beforeinput', 'keydown', 'paste', 'drop', 'pointerdown'] as const
   for (const event of events) dom.addEventListener(event, intent, true)
   // A native reply can arrive between browser caret movement and selectionchange delivery.
@@ -186,7 +187,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     if (transaction.docChanged || transaction.selectionSet) publish(transaction.getMeta('claude-prompt-by'))
   }
   const compositionEnd = () => { intent(); publish() }
-  const destroyed = () => { stopSourceReveal(); finishPending(false) }
+  const destroyed = () => { stopCaretReveal(); finishPending(false) }
   editor.on('destroy', destroyed)
   editor.on('transaction', transaction)
   dom.addEventListener('compositionend', compositionEnd)
@@ -272,7 +273,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return true
     },
     dispose() {
-      stopSourceReveal()
+      stopCaretReveal()
       disposed = true; selectionKey = undefined; fillPaint = undefined; finishPending(false); retireCompletions()
       if (clearPerson) clearTimeout(clearPerson)
       editor.off('transaction', transaction)

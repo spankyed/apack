@@ -69,17 +69,20 @@ test('keeps multiline prose and long tokens readable across ordinary composer re
     const strip=element.closest('[data-onboarding-id]')!.querySelector<HTMLElement>('[data-testid="composer-session-strip"]')!,stripRect=strip.getBoundingClientRect()
     return {strip:{height:stripRect.height,scrollHeight:strip.scrollHeight,flexShrink:getComputedStyle(strip).flexShrink},site:{top:site.top,bottom:site.bottom},card:{top:card.top,bottom:card.bottom},scrollers,lines:new Set(rects.map(r=>Math.round(r.top))).size,horizontalOverflow:rects.some(r=>r.left<root.left-2||r.right>root.right+2),root:{left:root.left,right:root.right},scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,caret:caret?{left:caret.left,right:caret.right,top:caret.top,bottom:caret.bottom}:null,caretVisible:!!caret&&caret.left>=root.left-2&&caret.right<=root.right+2&&caret.top>=Math.max(site.top,card.top)-2&&caret.bottom<=Math.min(site.bottom,card.bottom)+2,whiteSpace:getComputedStyle(element).whiteSpace,canonical:editor.storage.markdown.getMarkdown()}
   })
-  for(const [index,width] of [1100,680,1100].entries()){
-    await appPage.setViewportSize({width,height:width===680?600:900});await composer.focus();await composer.press('Control+End')
+  for(const [index,{width,height}] of [{width:1100,height:900},{width:680,height:600},{width:680,height:800},{width:680,height:600},{width:1100,height:900}].entries()){
+    await appPage.setViewportSize({width,height});await composer.focus();await composer.press('Control+End')
     await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
-    const geometry=await measure();samples.push({width,canonical:geometry.canonical,geometry})
-    await writeFile(join(workspace!,'native-composer-wrap-partial.json'),JSON.stringify({canonical,samples}))
-    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-composer-wrap-'+index+'-'+width+'.png')})
+    let geometry=await measure()
+    try {await expect.poll(async()=>{geometry=await measure();return geometry.caretVisible}).toBe(true)} finally {
+      samples.push({width,height,canonical:geometry.canonical,geometry})
+      await writeFile(join(workspace!,'native-composer-wrap-partial.json'),JSON.stringify({canonical,samples}))
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-composer-wrap-'+index+'-'+width+'.png')})
+    }
     await expect(status).toHaveText('Session ready\nReviewing release notes');await expect(status).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     expect(geometry.canonical).toBe(canonical);expect(geometry.horizontalOverflow).toBe(false);expect(geometry.caretVisible).toBe(true);expect(geometry.scrollers.length).toBeLessThanOrEqual(1)
   }
   expect(samples[1].geometry.lines).toBeGreaterThan(samples[0].geometry.lines)
-  expect(samples[2].geometry.lines).toBe(samples[0].geometry.lines)
+  expect(samples[4].geometry.lines).toBe(samples[0].geometry.lines)
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!,'native-composer-wrap-proof.json'),JSON.stringify({sessionId,boundNativePid,canonical,samples,noPhantomTurn:true}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
