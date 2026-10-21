@@ -176,6 +176,7 @@ test('routes live native Button actions through the retained main and Agent app 
       await panel.getByRole('button',{name:'Close Migration notes',exact:true}).click()
       await expect.poll(async()=>(await ui())?.state.panes?.roster.panes.length??0).toBe(0);await expect(panel).toBeHidden();await read('above-last',width)
       const layout = await card.getByRole('button',{name:'Send',exact:true}).evaluate(button => {
+        if (!(button instanceof HTMLElement)) throw Error('Expected the app Send button')
         const ancestors=[]
         for(let node:HTMLElement|null=button;node;node=node.parentElement){
           const box=node.getBoundingClientRect(),style=getComputedStyle(node)
