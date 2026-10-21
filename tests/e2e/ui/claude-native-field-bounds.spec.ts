@@ -11,11 +11,12 @@ let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus) {
     await appPage.screenshot({path:testInfo.outputPath('native-field-failure.png')}).catch(() => {})
-    await writeFile(join(workspace!,'native-field-bounds-layout-failure.json'),JSON.stringify(await appPage.evaluate(()=>{
+    const failure = await appPage.evaluate(()=>{
       const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
       const field=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release review notes"]')
       return {events:(window as any).__nativeFieldEvents,active:{tag:document.activeElement?.tagName,label:document.activeElement?.getAttribute('aria-label')},field:field?{valueLength:field.value.length,focusId:field.dataset.nativeFocusId,selection:[field.selectionStart,field.selectionEnd]}:null,views:state.nativeUiViews}
-    })).catch(error=>({captureError:String(error)}))))
+    }).catch(error=>({captureError:String(error)}))
+    await writeFile(join(workspace!,'native-field-bounds-layout-failure.json'),JSON.stringify(failure))
   }
   terminalScreen?.dispose(); terminalScreen = undefined
 })
