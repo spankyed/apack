@@ -1,13 +1,14 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const contextMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_CONTEXTS === '1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus) {
     await appPage.screenshot({path:testInfo.outputPath('native-action-keys-failure.png')}).catch(() => {})
@@ -69,7 +70,7 @@ test('routes live native Button actions through the retained main and Agent app 
     const inspection=await inspect(),sample=inspection?.samples.at(-1)
     const ready = native?.state?.status === 'live' && trusted && screen===null && inspection?.nativePid===native.state.nativePid
       && !inspection.error && sample?.swallowAll===0 && sample?.dialogCount===0
-      && sample.bindings.some((binding:any)=>binding.context==='Global'&&binding.action==='app:cycleDiffBase'&&binding.chord[0]?.key==='u')
+      && sample.bindings.some((binding:any)=>binding.context===(contextMode?'Plugin':'Global')&&binding.action==='app:cycleDiffBase'&&binding.chord[0]?.key==='u')
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ checkedAt:Date.now(), ready, screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text, state: native?.state }))
     // A cold runner can publish its first original helper at the prior 25-second boundary.
     if (ready) return true
@@ -114,7 +115,82 @@ test('routes live native Button actions through the retained main and Agent app 
   await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
   const before=await context()
   const parent=await prepare(composer,'Keep release guidance while reviewing the current changes.')
-  await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key==='u')).toBe(true)
+  await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key===(contextMode?'k':'u'))).toBe(true)
+  if(contextMode){
+    const contextCases:any[]=[];let contextSequence=0
+    const attachedUi=async()=>{await expect.poll(async()=>{const current=await ui();return current?.state.status==='live'&&current.state.actionKeys?.bindings.some((keys:any)=>keys[0]?.key==='k')}).toBe(true);return ui()}
+    const caret=(editor:typeof composer)=>editor.evaluate(element=>{const selection=getSelection();if(!selection?.anchorNode)return -1;const range=document.createRange();range.selectNodeContents(element);range.setEnd(selection.anchorNode,selection.anchorOffset);return range.toString().length})
+    const settled=async(mountId:string,previous:number,handled:boolean)=>{
+      await expect.poll(async()=>appPage.evaluate(({mountId,previous})=>{
+        const result=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews[mountId]?.actionKeyResult
+        return result?.sequence>previous&&result.actionKeys?.pending===null?result.handled:undefined
+      },{mountId,previous})).toBe(handled)
+    }
+    const setContext=async(active:boolean)=>{
+      const previous=(await attachedUi()).state.actionKeys.revision,sequence=++contextSequence
+      const path=join(workspace!,'native-action-context-command.json')
+      await writeFile(path+'.next',JSON.stringify({sequence,operation:active?'activate':'deactivate'}));await rename(path+'.next',path)
+      await expect.poll(async()=>{const value=await inspect();return value?.contextControl?.sequence===sequence&&value.contextControl.owned===active&&value.samples.at(-1)?.activeContexts.includes('Plugin')===active}).toBe(true)
+      await expect.poll(async()=>{const revision=(await ui())?.state.actionKeys?.revision;return typeof revision==='string'&&revision!==previous}).toBe(true)
+    }
+    const chordRead=async(editor:typeof composer,expected:{text:string;cursor:number})=>{
+      const current=await attachedUi(),count=(await receipts()).length
+      await editor.focus();await editor.press('Control+Alt+k');await editor.press('u')
+      await expect.poll(async()=>(await receipts()).length).toBe(count+1)
+      expect((await receipts()).at(-1).value).toEqual(expected)
+      await settled(current.mountId,current.actionKeyResult?.sequence??0,true)
+      return (await receipts()).at(-1)
+    }
+    const runContexts=async(editor:typeof composer,expected:{text:string;cursor:number},view:'main'|'agent',width:number,taskId?:string)=>{
+      const note=async(phase:string,handled:boolean)=>{contextCases.push({view,width,phase,handled,callbacks:(await receipts()).length})}
+      const inactive=async(phase:string)=>{
+        const current=await attachedUi(),count=(await receipts()).length
+        const advertised=current.state.actionKeys.bindings.some((keys:any)=>keys.length===1&&keys[0].key==='u'&&keys[0].ctrl&&keys[0].alt)
+        await editor.focus();await editor.press('Control+Alt+u')
+        if(advertised)await settled(current.mountId,current.actionKeyResult?.sequence??0,false)
+        expect((await receipts()).length).toBe(count);await expect(editor).toHaveText(expected.text);expect(await caret(editor)).toBe(expected.cursor)
+        await note(phase,false)
+      }
+      const chord=async(phase:string)=>{const result=await chordRead(editor,expected);expect(result.view.agentId).toBe(taskId);await note(phase,true)}
+      await expect.poll(async()=>(await inspect()).samples.at(-1)?.activeContexts.includes('Plugin')).toBe(false)
+      await inactive('inactive-single');await chord('inactive-chord')
+      await setContext(true)
+      const current=await attachedUi(),result=await readWithKey(editor,expected);expect(result.view.agentId).toBe(taskId)
+      await settled(current.mountId,current.actionKeyResult?.sequence??0,true);await note('active-single',true);await chord('active-chord')
+      await setContext(false);await inactive('deactivated-single');await chord('deactivated-chord')
+      await expect(editor).toHaveText(expected.text)
+    }
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900});await runContexts(composer,parent,'main',width)
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-context-main-'+width+'.png')})
+    }
+    await appPage.getByRole('button',{name:/^Native tools/}).first().click()
+    const row=appPage.locator('[data-native-agent-id]').first(),taskId=await row.getAttribute('data-native-agent-id');expect(taskId).toBeTruthy()
+    await row.getByRole('button',{name:'Open Agent',exact:true}).click()
+    const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),agentComposer=form.locator('[contenteditable="true"]')
+    await expect(focused).toBeVisible()
+    const agent=await prepare(agentComposer,'Keep the worker review separate while changing shortcut contexts.')
+    await expect.poll(async()=>(await ui())?.mountRequest?.nativeView?.taskId).toBe(taskId)
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900});await runContexts(agentComposer,agent,'agent',width,taskId!)
+      await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport({ratio:1});await expect(focused.getByRole('button',{name:'Back to conversation',exact:true})).toBeInViewport({ratio:1})
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-context-agent-'+width+'.png')})
+    }
+    await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parent.text)
+    await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((keys:any)=>keys[0]?.key==='k')).toBe(true)
+    expect((await chordRead(composer,parent)).view.agentId).toBeUndefined()
+    const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((row:any)=>row.id)).toEqual(before.messages.map((row:any)=>row.id));expect(after.native.state.nativePid).toBe(boundNativePid)
+    expect((await inspect()).contextControl).toMatchObject({sequence:8,owned:false})
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
+    await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
+    const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+    await expect(composer).toHaveText(parent.text);await composer.fill('Continue after checking release shortcut contexts.');await card.getByRole('button',{name:'Send',exact:true}).click()
+    await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+    await writeFile(join(workspace!,'native-action-app-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,parent,agent,receipts:await receipts(),contextCases,contextSequence,contextLeaseReleased:true,parentReturned:true,noPhantomTurn:true,helperObservation}))
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeDesktopActionKeys:true,nativeActionKeyContexts:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+    return
+  }
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
     await readWithKey(composer,parent)
