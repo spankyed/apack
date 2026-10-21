@@ -62,7 +62,7 @@ test('formats the original tool result at its mounted row width through resize',
   await expect.poll(async()=>readFile(join(workspace!,'file-fixture.txt'),'utf8').catch(()=>null)).toBe('created\n')
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   await expect.poll(async()=>(await context()).messages.some((message:any)=>message.text==='File fixture completed.')).toBe(true)
-  const diff=card.getByRole('button',{name:'Close Diff',exact:true});if(await diff.isVisible())await diff.click()
+  const diff=appPage.getByRole('button',{name:'Close Diff',exact:true});if(await diff.isVisible())await diff.click();await expect(diff).toHaveCount(0)
   const before=await context(),draft='Keep these release review notes while inspecting the file result.'
   await composer.fill(draft)
   const source=JSON.parse(await readFile(join(workspace!,'native-tool-width-source.json'),'utf8')).source
@@ -90,6 +90,7 @@ test('formats the original tool result at its mounted row width through resize',
     const frame=await engine(),text=await formatted.innerText()
     await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     await expect(status).toContainText('AppNativeMain')
+    await expect(status).toBeInViewport({ratio:1});await expect(formatted).toBeInViewport({ratio:1})
     const sample={width,columns,text,engineOutput:frame.engineOutput,report:reports.at(-1)};samples.push(sample)
     await writeFile(join(workspace!,'native-tool-width-partial.json'),JSON.stringify({samples,reports}))
     if(samples.length<=2)await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-tool-width-'+width+'.png')})
