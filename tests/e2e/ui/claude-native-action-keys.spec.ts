@@ -21,6 +21,7 @@ test('routes live native Button actions through the retained main and Agent app 
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
+  const { nativeActionAppBindings } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_ACTION_KEYS_FIXTURE!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
@@ -100,8 +101,9 @@ test('routes live native Button actions through the retained main and Agent app 
     return entry?{mountId:entry[0],...entry[1]}:undefined
   })
   const prepare=async(editor:typeof composer,text:string)=>{
-    await editor.fill(text);await editor.press('Home')
+    await editor.fill(text);await editor.press('Meta+ArrowLeft')
     for(let i=0;i<9;i++)await editor.press('ArrowRight')
+    expect(await editor.evaluate(element=>{const selection=getSelection();if(!selection?.anchorNode)return -1;const range=document.createRange();range.selectNodeContents(element);range.setEnd(selection.anchorNode,selection.anchorOffset);return range.toString().length})).toBe(9)
     return {text,cursor:9}
   }
   const readWithKey=async(editor:typeof composer,expected:{text:string;cursor:number},chord='Control+Alt+u')=>{
@@ -111,6 +113,9 @@ test('routes live native Button actions through the retained main and Agent app 
     expect((await receipts()).at(-1).value).toEqual(expected)
     return (await receipts()).at(-1)
   }
+  await composer.fill('Review the release notes with a worker.')
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
   const before=await context()
   const parent=await prepare(composer,'Keep release guidance while reviewing the current changes.')
   await expect.poll(async()=>(await ui())?.state.actionKeys?.bindings.some((chord:any)=>chord[0]?.key==='u')).toBe(true)
@@ -131,6 +136,7 @@ test('routes live native Button actions through the retained main and Agent app 
   await composer.press('Control+Alt+p')
   await expect.poll(async()=>(await inspect())?.samples.at(-1)?.expandedView).toBe(priorView)
 
+  await appPage.getByRole('button',{name:/^Native tools/}).first().click()
   const row=appPage.locator('[data-native-agent-id]').first(),taskId=await row.getAttribute('data-native-agent-id')
   expect(taskId).toBeTruthy()
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
@@ -154,7 +160,7 @@ test('routes live native Button actions through the retained main and Agent app 
   await expect(composer).toHaveText(parent.text)
   await readWithKey(composer,parent)
 
-  await writeFile(join(workspace!,'.claude/keybindings.json'),JSON.stringify([{context:'Global',bindings:{'ctrl+alt+u':null,'ctrl+alt+r':'app:cycleDiffBase','ctrl+alt+k u':'app:cycleDiffBase','ctrl+alt+p':'app:toggleTodos'}}]))
+  await writeFile(join(workspace!,'.claude/keybindings.json'),JSON.stringify(nativeActionAppBindings(true)))
   await expect.poll(async()=>{
     const bindings=(await ui())?.state.actionKeys?.bindings??[]
     return bindings.some((chord:any)=>chord.length===1&&chord[0].key==='r')&&!bindings.some((chord:any)=>chord.length===1&&chord[0].key==='u')
