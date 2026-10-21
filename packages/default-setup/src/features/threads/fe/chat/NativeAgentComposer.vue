@@ -125,6 +125,8 @@ onBeforeUnmount(() => {
 .native-agent-composer :deep([data-testid="composer-session-strip"]) { padding: .5rem 1rem; }
 .native-agent-body--tools { display: block; overflow-y: auto; overscroll-behavior: contain; }
 .native-agent-body--tools .native-agent-draft-scroll { overflow: visible; }
+/* The draft viewport owns scrolling; inherited input-theme overflow must not add another. */
+.native-agent-composer :deep(.native-agent-editor .ProseMirror) { min-height: 24px; max-height: none; overflow: visible; padding: 0; }
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
 @media (max-height: 700px) {
   .native-agent-composer { margin-bottom: .75rem; }

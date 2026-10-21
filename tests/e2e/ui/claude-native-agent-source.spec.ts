@@ -161,9 +161,10 @@ test('preserves literal parent and Agent drafts through remount and exact native
         const selection=window.getSelection();if(!selection?.rangeCount)return {visible:false}
         const caret=selection.getRangeAt(0).getBoundingClientRect(),bounds=area.getBoundingClientRect()
         let top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom),draftScrolls=0
+        const scrollAncestors:unknown[]=[]
         for(let node=selection.anchorNode?.parentElement;node;node=node.parentElement){if(/auto|scroll|hidden|clip/.test(getComputedStyle(node).overflowY)){const box=node.getBoundingClientRect();top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
-        for(let node:HTMLElement|null=area;node&&node.tagName!=='FORM';node=node.parentElement)if(/auto|scroll/.test(getComputedStyle(node).overflowY))draftScrolls++
-        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1&&draftScrolls===1,draftScrolls,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
+        for(let node:HTMLElement|null=area;node&&node.tagName!=='FORM';node=node.parentElement)if(/auto|scroll/.test(getComputedStyle(node).overflowY)){draftScrolls++;scrollAncestors.push({tag:node.tagName,classes:node.className,height:node.clientHeight,scrollHeight:node.scrollHeight})}
+        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1&&draftScrolls===1,draftScrolls,scrollAncestors,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
       })
       await writeFile(join(workspace!,'native-agent-source-caret-'+width+'.json'),JSON.stringify(geometry));return geometry.visible
     }).toBe(true)
