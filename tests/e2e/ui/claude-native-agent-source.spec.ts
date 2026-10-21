@@ -130,6 +130,16 @@ test('preserves literal parent and Agent drafts through remount and exact native
     await appPage.setViewportSize({width,height:width===680?600:900});await agentComposer.focus();await agentComposer.press('Meta+ArrowDown');await agentComposer.press('End')
     await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
     await expect(agentComposer.locator('[data-claude-prompt-source]')).toContainText('Checked worker notes.')
+    await expect.poll(async()=>{
+      const geometry=await agentComposer.evaluate(area=>{
+        const selection=window.getSelection();if(!selection?.rangeCount)return {visible:false}
+        const caret=selection.getRangeAt(0).getBoundingClientRect(),bounds=area.getBoundingClientRect()
+        let top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom)
+        for(let node=selection.anchorNode?.parentElement;node;node=node.parentElement){if(/auto|scroll|hidden|clip/.test(getComputedStyle(node).overflowY)){const box=node.getBoundingClientRect();top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
+        return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
+      })
+      await writeFile(join(workspace!,'native-agent-source-caret-'+width+'.json'),JSON.stringify(geometry));return geometry.visible
+    }).toBe(true)
     await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-agent-source-'+width+'.png')})
   }
   await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentComposer).toHaveText('')

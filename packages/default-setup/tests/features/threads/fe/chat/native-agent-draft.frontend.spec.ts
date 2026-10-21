@@ -1,3 +1,4 @@
+import { ClaudePromptSource } from '#features/threads/fe/chat/native-prompt-source.ts'
 import { Editor, Node, type Content } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -15,7 +16,7 @@ const emptyParagraph = Node.create({ name: 'paragraph', priority: 1000, group: '
   addStorage: () => ({ markdown: { serialize(state: { write(text: string): void; renderInline(node: unknown): void; closeBlock(node: unknown): void }, node: { childCount: number }) { if (!node.childCount) state.write('&nbsp;'); else state.renderInline(node); state.closeBlock(node) }, parse: {} } }),
 })
 function create(content: Content, preserveEmpty = false) {
-  const editor = new Editor({ extensions: [preserveEmpty ? StarterKit.configure({ paragraph: false }) : StarterKit, Markdown, reference, ...(preserveEmpty ? [emptyParagraph] : [])], content }); editors.push(editor); return editor
+  const editor = new Editor({ extensions: [preserveEmpty ? StarterKit.configure({ paragraph: false }) : StarterKit, Markdown, reference, ClaudePromptSource, ...(preserveEmpty ? [emptyParagraph] : [])], content }); editors.push(editor); return editor
 }
 afterEach(() => { for (const editor of editors.splice(0)) editor.destroy() })
 const rich = { type: 'doc', content: [
@@ -130,4 +131,26 @@ it('restores persisted structured input without any in-memory owner and clears i
   expect(restored.getJSON()).toEqual(snapshot.doc); expect(restored.state.selection.toJSON()).toEqual(snapshot.selection)
   expect(claudeWindowStorageKey('parent-draft', owner,'?popout=plugin&pluginId=default-setup/threads')).not.toBe(key)
   restored.commands.clearContent(); detach(); expect(localStorage.getItem(key)).toBeNull()
+})
+
+it('restores exact literal source and its hidden-syntax caret only during untouched editor initialization', () => {
+  const text = '  Worker review\n\n~~~~ts\nconst ready = true\n~~~~  '
+  const original = create({ type: 'doc', content: [{ type: 'claudePromptSource', content: [{ type: 'text', text }] }] })
+  original.commands.setTextSelection(text.indexOf('~~~~') + 2)
+  const snapshot = captureClaudeAgentDraft(original)!, next = create(snapshot.text), initialDocument = next.state.doc
+  expect(captureClaudeAgentDraft(next)!.text).not.toBe(snapshot.text)
+  expect(restoreClaudeAgentDraft(next, snapshot, snapshot.text)).toBe(false)
+  expect(restoreClaudeAgentDraft(next, snapshot, snapshot.text, initialDocument)).toBe(true)
+  expect(next.getJSON()).toEqual(snapshot.doc)
+  expect(next.state.selection.toJSON()).toEqual(snapshot.selection)
+})
+
+it('preserves newer typing instead of applying an initial literal snapshot after creation', () => {
+  const text = '  raw source  '
+  const original = create({ type: 'doc', content: [{ type: 'claudePromptSource', content: [{ type: 'text', text }] }] })
+  const snapshot = captureClaudeAgentDraft(original)!, next = create(snapshot.text), initialDocument = next.state.doc
+  next.commands.insertContent('newer ')
+  const newer = next.getJSON()
+  expect(restoreClaudeAgentDraft(next, snapshot, snapshot.text, initialDocument)).toBe(false)
+  expect(next.getJSON()).toEqual(newer)
 })

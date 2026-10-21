@@ -39,8 +39,8 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
   if (!editor) return
   nativePromptEditors.add(editor); cleanup(() => nativePromptEditors.delete(editor))
   if (adoptedEditor !== editor) {
-    const saved = props.draftSnapshot
-    const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft) }
+    const saved = props.draftSnapshot, initialDocument = editor.state.doc
+    const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft, initialDocument) }
     if (editor.isInitialized) adopt()
     else { editor.on('create', adopt); cleanup(() => editor.off('create', adopt)) }
   }

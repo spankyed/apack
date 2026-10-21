@@ -21,9 +21,9 @@ export function captureClaudeAgentDraft(editor: Editor): ClaudeAgentDraftSnapsho
     ...(editor.state.storedMarks ? { storedMarks: editor.state.storedMarks.map(mark => mark.toJSON()) } : {}) }
 }
 
-/** Restore only the same canonical draft, through the current schema, as an app adoption. */
-export function restoreClaudeAgentDraft(editor: Editor, snapshot: ClaudeAgentDraftSnapshot, expectedText: string): boolean {
-  if (editor.isDestroyed || editor.view.composing || snapshot.text !== expectedText || markdown(editor) !== expectedText) return false
+/** Restore the same draft. A fresh editor may supply its untouched initial document before Markdown normalization. */
+export function restoreClaudeAgentDraft(editor: Editor, snapshot: ClaudeAgentDraftSnapshot, expectedText: string, initialDocument?: Editor['state']['doc']): boolean {
+  if (editor.isDestroyed || editor.view.composing || snapshot.text !== expectedText || (markdown(editor) !== expectedText && editor.state.doc !== initialDocument)) return false
   try {
     const doc = editor.schema.nodeFromJSON(snapshot.doc)
     doc.check()
