@@ -232,7 +232,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
         || typeof press.plugin !== 'string' || !press.plugin || press.plugin.length > 256
         || typeof press.handle !== 'number' || !Number.isSafeInteger(press.handle)) throw new ClaudeProtocolError('native UI field has invalid identity')
       for (const name of ['label', 'placeholder', 'value', 'submitLabel']) if (props[name] !== undefined && typeof props[name] !== 'string') throw new ClaudeProtocolError('native UI field has invalid text')
-      if (typeof props.value === 'string' && props.value.length > 16384) throw new ClaudeProtocolError('native UI field text exceeds limit')
+      if (value.type === 'Select' && typeof props.value === 'string' && props.value.length > 16384) throw new ClaudeProtocolError('native UI field text exceeds limit')
       const type = value.type === 'Input' ? 'input' : 'select'
       const identity = JSON.stringify([type, press.plugin, props.key, clientScope ?? null])
       if (identities.has(identity)) throw new ClaudeProtocolError('native UI field key is ambiguous')
@@ -250,7 +250,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
       if (type === 'input') {
         if (props.rows !== undefined && (typeof props.rows !== 'number' || !Number.isSafeInteger(props.rows) || props.rows < 1)) throw new ClaudeProtocolError('native UI input rows are invalid')
         fields.set(actionId, field)
-        return { kind: 'input', ...common, submitLabel: typeof props.submitLabel === 'string' ? props.submitLabel : 'submit', rows: Math.min(typeof props.rows === 'number' ? props.rows : 1, 48), ...(typeof props.placeholder === 'string' ? { placeholder: props.placeholder } : {}) }
+        return { kind: 'input', ...common, submitLabel: typeof props.submitLabel === 'string' ? props.submitLabel : 'submit', rows: typeof props.rows === 'number' ? props.rows : 1, ...(typeof props.placeholder === 'string' ? { placeholder: props.placeholder } : {}) }
       }
       if (!Array.isArray(props.options) || !props.options.length) throw new ClaudeProtocolError('native UI select requires options')
       const options = props.options.map(option => {

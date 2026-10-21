@@ -256,3 +256,11 @@ it('decodes packed native documents after wire validation without changing sourc
  expect(fallback.tree).toMatchObject({kind:'markdown',text:source,formattingFallback:true})
  expect(()=>createClaudeUiDrawing({type:'Code',props:{source,_apackDocumentPacked:{body:'~0',codes:[]}}})).toThrow()
 })
+
+it('keeps large drawn Input values and requested rows separate from reverse-input limits', () => {
+  const value = 'Release notes\n' + 'detail '.repeat(3000) + '  '
+  const drawing = createClaudeUiDrawing({ type: 'Input', props: { key: 'notes', rows: 80, value }, press: { plugin: 'fixture', handle: 1 } })
+  expect(drawing.tree).toMatchObject({ kind: 'input', value, rows: 80 })
+  expect(drawing.fields.size).toBe(1)
+  expect(() => createClaudeUiDrawing({ type: 'Input', props: { key: 'notes', rows: 0, value }, press: { plugin: 'fixture', handle: 1 } })).toThrow('rows')
+})

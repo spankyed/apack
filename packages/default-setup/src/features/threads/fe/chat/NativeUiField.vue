@@ -1,20 +1,21 @@
 <template>
-  <label class="native-field flex min-w-0 flex-col gap-1.5" :style="fieldTheme" :data-native-plugin="node.plugin" :data-native-scroll-id="node.focusId">
+  <label ref="field" class="native-field flex min-w-0 flex-col gap-1.5" :style="fieldTheme" :data-native-plugin="node.plugin" :data-native-scroll-id="node.focusId">
     <span v-if="node.label" class="native-field-label text-[11px] leading-4 tracking-wide">{{ node.label }}</span>
     <select v-if="node.kind === 'select'" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :aria-label="node.label || 'Claude selection'"
       class="h-9 min-w-0 max-w-full rounded-lg border border-current bg-transparent px-2.5 text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @change="pick">
       <option v-for="option in node.options" :key="option.value" :value="option.value">{{ option.label }}</option>
     </select>
-    <textarea v-else :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :rows="node.rows" :placeholder="node.placeholder"
-      :aria-label="node.label || 'Claude input'" maxlength="16384"
+    <textarea v-else ref="textarea" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :rows="visibleRows" :style="{ maxHeight: maximumHeight + 'px' }" :placeholder="node.placeholder"
+      :aria-label="node.label || 'Claude input'" :maxlength="nativeInputLimit" :aria-invalid="problem ? 'true' : undefined" :aria-describedby="problem ? 'native-field-problem-' + node.actionId : undefined"
       class="min-w-0 max-w-full resize-y rounded-lg border border-current bg-transparent px-3 py-2 text-[13px] leading-5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
       @input="change" @compositionstart="compositionStart" @compositionend="compositionEnd" @keydown="keydown" @focus="focused = true" @blur="focused = false" />
+    <span v-if="problem" :id="'native-field-problem-' + node.actionId" role="alert" class="text-xs text-red-300">{{ problem }}</span>
     <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="native-field-hint text-[10px]">Enter: {{ node.submitLabel }}</span>
   </label>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import type { CSSProperties } from 'vue'
 import { claudeUiColor } from './native-ui-paint.ts'
 import type { ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'
@@ -24,6 +25,42 @@ const fieldTheme = computed<CSSProperties>(() => ({
   '--native-field-text': claudeUiColor(props.node.theme?.text ?? 'text'),
   '--native-field-inverse': claudeUiColor(props.node.theme?.inverseText ?? 'inverseText'),
 }))
+const field = ref<HTMLElement>(), textarea = ref<HTMLTextAreaElement>()
+const maximumHeight = ref(Math.max(20, globalThis.innerHeight || 20))
+const visibleRows = ref(props.node.kind === 'input' ? Math.min(props.node.rows, Math.max(1, Math.floor(maximumHeight.value / 20))) : 1)
+let sizeObserver: ResizeObserver | undefined, sizeFrame: number | undefined
+function measureRows() {
+  const control = textarea.value, root = field.value
+  if (!control || !root || props.node.kind !== 'input') return
+  const style = getComputedStyle(control), line = parseFloat(style.lineHeight) || 20
+  const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0)
+  let available = globalThis.innerHeight || line + padding
+  const site = control.closest('[data-native-scroll-content]')?.parentElement
+  if (site?.clientHeight) { const paint = getComputedStyle(site); available = Math.min(available, site.clientHeight - (parseFloat(paint.paddingTop) || 0) - (parseFloat(paint.paddingBottom) || 0)) }
+  for (let parent = root.parentElement; parent; parent = parent.parentElement) {
+    if (/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowY) && parent.clientHeight) available = Math.min(available, parent.clientHeight)
+  }
+  const chrome = Math.max(0, root.getBoundingClientRect().height - control.getBoundingClientRect().height)
+  maximumHeight.value = Math.max(line + padding, available - chrome)
+  visibleRows.value = Math.min(props.node.rows, Math.max(1, Math.floor((maximumHeight.value - padding) / line)))
+}
+function scheduleRows() {
+  if (sizeFrame !== undefined) cancelAnimationFrame(sizeFrame)
+  sizeFrame = requestAnimationFrame(() => { sizeFrame = undefined; measureRows() })
+}
+onMounted(() => {
+  sizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(scheduleRows)
+  if (field.value) sizeObserver?.observe(field.value)
+  const site = field.value?.closest('[data-native-scroll-content]')?.parentElement
+  if (site) sizeObserver?.observe(site)
+  window.addEventListener('resize', scheduleRows)
+  measureRows()
+})
+watch(() => [props.node.kind, props.node.kind === 'input' ? props.node.rows : 1], scheduleRows, { flush: 'post' })
+onBeforeUnmount(() => { sizeObserver?.disconnect(); window.removeEventListener('resize', scheduleRows); if (sizeFrame !== undefined) cancelAnimationFrame(sizeFrame) })
+// Frozen native ui_input bound; a drawn value may be longer than its callback permits.
+const nativeInputLimit = 16384
+const problem = ref<string>()
 const draft = ref(props.node.value)
 let revision = props.node.revision
 let nativeValue = props.node.value
@@ -38,10 +75,14 @@ watch(() => [props.node.value, props.node.revision, props.node.kind === 'select'
     draft.value = replacement
     lastChangeValue = replacement
     replacement = undefined
+    problem.value = undefined
   }
 })
 function send(kind: ClaudeUiFieldEvent['kind']) {
-  emit('field', { actionId: props.node.actionId, revision: ++revision, kind, value: draft.value })
+  ++revision
+  if (draft.value.length > nativeInputLimit) { problem.value = 'Shorten this field to 16,384 characters before sending it to Claude.'; return }
+  problem.value = undefined
+  emit('field', { actionId: props.node.actionId, revision, kind, value: draft.value })
 }
 function change(event: Event) {
   draft.value = (event.target as HTMLTextAreaElement).value
@@ -51,7 +92,7 @@ function compositionStart() { composing = true }
 function compositionEnd(event: CompositionEvent) {
   composing = false
   change(event)
-  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement; lastChangeValue = replacement; replacement = undefined }
+  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement; lastChangeValue = replacement; replacement = undefined; problem.value = undefined }
 }
 function pick(event: Event) {
   draft.value = (event.target as HTMLSelectElement).value

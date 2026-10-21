@@ -627,3 +627,37 @@ it('truncates the original styled inline tree at measured width, redraws on resi
   app!.unmount(); app = undefined
   expect(document.body.querySelector('[aria-hidden="true"][data-native-text-wrap]')).toBeNull()
 })
+
+it('fits requested multiline rows to its site without losing long text, selection or field-only submission', async () => {
+  vi.stubGlobal('innerHeight', 1600)
+  const value = 'Long review\n' + 'detail '.repeat(2600) + '  '
+  const input = { kind: 'input' as const, actionId: 'long-field', revision: 0, submitLabel: 'save', label: 'Release notes', value, rows: 80, autoFocus: false }
+  const f = await mount({ nativeUi: { status: 'live', tree: input } })
+  const control = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Release notes"]')!
+  const label = control.closest('label')!, site = control.closest('[data-native-scroll-content]')!.parentElement!
+  let siteHeight = 1300
+  site.style.paddingTop = '10px'; site.style.paddingBottom = '10px'
+  Object.defineProperty(site, 'clientHeight', { configurable: true, get: () => siteHeight })
+  control.style.lineHeight = '20px'; control.style.padding = '0'; control.style.borderWidth = '0'
+  vi.spyOn(label, 'getBoundingClientRect').mockReturnValue({ height: 240 } as DOMRect)
+  vi.spyOn(control, 'getBoundingClientRect').mockReturnValue({ height: 200 } as DOMRect)
+  control.focus(); control.setSelectionRange(700, 705)
+  for (const notify of resizeObservers) notify()
+  await vi.waitFor(() => expect(control.rows).toBe(62))
+  expect(control.value).toBe(value); expect(control.maxLength).toBe(16384)
+  siteHeight = 220; for (const notify of resizeObservers) notify()
+  await vi.waitFor(() => expect(control.rows).toBe(8))
+  expect(control.value).toBe(value); expect([control.selectionStart, control.selectionEnd]).toEqual([700, 705])
+  expect(document.activeElement).toBe(control); expect(f.field).not.toHaveBeenCalled()
+  control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.root.querySelector('[role=alert]')?.textContent).toContain('Shorten this field')
+  expect(control.value).toBe(value); expect(f.field).not.toHaveBeenCalled()
+  f.state.nativeUi = { status: 'live', tree: { ...input, value: 'outdated native replacement', revision: 0 } }; await nextTick()
+  expect(control.value).toBe(value)
+  const revised = 'Reviewed notes\n' + 'x'.repeat(15000) + '\nKeep trailing spaces.  '
+  control.value = revised; control.dispatchEvent(new Event('input', { bubbles: true }))
+  control.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+  expect(f.field).toHaveBeenLastCalledWith({ actionId: 'long-field', revision: 3, kind: 'submit', value: revised })
+  await nextTick(); expect(f.root.querySelector('[role=alert]')).toBeNull()
+  expect(f.submit).not.toHaveBeenCalled()
+})
