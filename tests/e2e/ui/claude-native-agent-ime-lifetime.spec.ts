@@ -90,7 +90,10 @@ test('keeps committed Agent input when native return interrupts genuine Chromium
   expect(restored.doc).toEqual(committed.doc);expect(restored.selection).toEqual(committed.selection);expect(restored.storedMarks).toEqual(committed.storedMarks)
   await expect(agentComposer).toHaveText(base)
   const afterReturn=await context();expect(afterReturn.turns).toBe(before.turns);expect(afterReturn.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(afterReturn.native.state.nativePid).toBe(boundNativePid)
-  await agentComposer.focus();await appPage.keyboard.insertText('checked')
+  const beforeFocus=await state()
+  await agentComposer.focus();const afterFocus=await state()
+  await appPage.keyboard.type('checked')
+  await writeFile(join(workspace!,'native-agent-ime-lifetime-typing.json'),JSON.stringify({beforeFocus,afterFocus,afterTyping:await state(),edits:await edits()}))
   await expect(agentComposer.locator('strong')).toHaveText('checked')
   const finalText=(await state()).markdown
   const tools=form.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
