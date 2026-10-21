@@ -957,7 +957,7 @@ async function control(request,abort){
  if(['ui_panes','ui_pane_show','ui_pane_focus','ui_close'].includes(value.subtype)){
   const id=clientId??'desktop:default';
   if(!clients.has(id))throw Error('Native UI client is not attached to this owner');
-  if(value.subtype==='ui_panes')return paneRoster(n);
+  if(value.subtype==='ui_panes')return {...paneRoster(n),_apack_action_keys:actionKeys.snapshot(n,id)};
   if(value.subtype==='ui_pane_show'){n.roster.avr(value.id);return {shown_id:n.roster.Ui().getState().shownId};}
   if(value.subtype==='ui_pane_focus'){n.roster.GY(value.id);return {focused_id:n.roster.Ui().getState().focusedId};}
   await n.roster.rct(value.id,{kind:'person'});

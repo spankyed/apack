@@ -93,13 +93,15 @@ export function createClaudePaneHost(options: {
     try {
       do {
         rosterDirty = false
-        const revision = rosterEpoch, next = await ui.panes(client.client_id)
+        const revision = rosterEpoch, response = await ui.panes(client.client_id)
+        const { _apack_action_keys: actionKeys, ...next } = response
         if (!current()) return
         if (revision !== rosterEpoch) continue
         const changed = JSON.stringify(next) !== JSON.stringify(roster)
         if (next.shown_id !== roster?.shown_id) {
           epoch++; drawing = undefined; fields = undefined; revisions.clear(); completed.clear()
         }
+        if (actionKeys) options.actionKeys?.(actionKeys)
         roster = next
         for (const [id, host] of scrolls) if (!next.panes.some(pane => pane.id === id)) { host.dispose(); scrolls.delete(id); layouts.delete(id) }
         if (changed) { publish(); invalidate() }

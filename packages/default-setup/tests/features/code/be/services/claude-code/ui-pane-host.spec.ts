@@ -111,3 +111,17 @@ it('publishes the returned pane shortcut revision before its replacement body be
   expect(f.actionKeys.mock.invocationCallOrder.at(-1)).toBeLessThan(f.publish.mock.invocationCallOrder.at(-1)!)
   f.host.dispose()
 })
+
+it('publishes the final-close shortcut snapshot before removing the last pane', async () => {
+  const f = fixture(); await f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  const keys = { revision: 'c'.repeat(64), bindings: [], continuations: [], pending: null }
+  f.ui.closePane.mockImplementation(async () => {
+    f.roster({ panes: [], shown_id: null, focused_id: null, focus_requested_id: null, _apack_action_keys: keys })
+    return { closed: true }
+  })
+  await f.host.operate({ kind: 'close', id: 'a' })
+  expect(f.host.state).toBeUndefined()
+  expect(f.actionKeys).toHaveBeenLastCalledWith(keys)
+  expect(f.actionKeys.mock.invocationCallOrder.at(-1)).toBeLessThan(f.publish.mock.invocationCallOrder.at(-1)!)
+  f.host.dispose()
+})

@@ -89,7 +89,7 @@ const paneId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 const pane = z.object({ id: paneId, title: z.string(), plugin: z.string(), close_on_escape: z.literal(true).optional(),
   hold_toasts: z.literal(true).optional(), rows: z.number().int().optional(), columns: z.number().int().optional(),
 }).passthrough()
-const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(), focused_id: paneId.nullable(), focus_requested_id: paneId.nullable() }).passthrough()
+const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(), focused_id: paneId.nullable(), focus_requested_id: paneId.nullable(), _apack_action_keys: actionKeys.optional() }).passthrough()
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
