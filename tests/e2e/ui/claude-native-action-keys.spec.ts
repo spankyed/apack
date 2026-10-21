@@ -155,7 +155,9 @@ test('routes live native Button actions through the retained main and Agent app 
     const open=async(title:string)=>{
       if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
       await card.getByRole('button',{name:'Open '+title.toLowerCase(),exact:true}).click()
-      const id=await pane(title);await shown(id)
+      const id=await pane(title)
+      // Native ui.open preserves an already-focused pane; choose the new tab explicitly.
+      await panel.getByRole('tab',{name:title,exact:true}).click();await shown(id)
       if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
       return id
     }
