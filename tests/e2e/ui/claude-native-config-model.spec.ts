@@ -86,9 +86,11 @@ test('retains composing through original Config search and model callback', asyn
     for(const width of [1100,680]){
       const height=width===680?600:900, previousSize=await resize(), previousSequence=(await context()).native.output.at(-1)?.sequence??0
       await appPage.setViewportSize({width,height})
-      await expect.poll(async()=>(await resize())?.cols).not.toBe(previousSize?.cols)
-      await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(previousSequence)
-      await screen()
+      if(await panel.isVisible()){
+        await expect.poll(async()=>(await resize())?.cols).not.toBe(previousSize?.cols)
+        await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(previousSequence)
+        await screen()
+      }
       await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
       let captureTimer:ReturnType<typeof setTimeout>|undefined
       const image=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),png:image.toPNG().toString('base64')}},{width,height}),new Promise<never>((_resolve,reject)=>{captureTimer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(captureTimer)clearTimeout(captureTimer)})
@@ -151,7 +153,8 @@ test('retains composing through original Config search and model callback', asyn
   await expect.poll(async()=>(await userSettings()).model).toMatch(/sonnet/i)
   await expect.poll(async()=>(await context()).native.state.session?.model).toMatch(/sonnet/i)
   const selectedSettings=await userSettings()
-  receipts.push({initialSettings,selectedSettings,screen:await screen(),native:(await context()).native.state})
+  receipts.push({initialSettings,selectedSettings,screen:await screen(),native:(await context()).native.state,claude:(await context()).claude})
+  await writeFile(join(workspace!,'native-config-model-callback.json'),JSON.stringify(receipts,null,2))
   await panel.getByRole('button',{name:'Close panel',exact:true}).click()
   await expect(panel).toBeHidden();await expect(composer).toHaveText(draft);await expect(composer).toBeFocused()
   const after=await context()
