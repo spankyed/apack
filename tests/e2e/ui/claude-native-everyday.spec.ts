@@ -78,13 +78,20 @@ test('completes an everyday native review across Agent, approval, question and i
   else await expect(status).toContainText('Release review')
   const composer = card.locator('[contenteditable="true"]')
   const checkpoint = expect.configure({ soft: true })
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capturePage(file:string,width:number,height:number){
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    let timer:ReturnType<typeof setTimeout>|undefined
+    const image=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height}),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(timer)clearTimeout(timer)})
+    expect(image.size).toEqual({width,height});await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'))
+  }
   const screenshots: string[] = []
   const geometry: unknown[] = []
   async function capture(stage: string, editor: import('@playwright/test').Locator, controls: import('@playwright/test').Locator[], reading?: import('@playwright/test').Locator) {
     for (const [width, height] of [[1100, 900], [680, 600]] as const) {
       await appPage.setViewportSize({ width, height })
       const beforeFile = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '-before-check.png'
-      await appPage.screenshot({ path: testInfo.outputPath(beforeFile) })
+      await capturePage(beforeFile,width,height)
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined }))
       await checkpoint.poll(async () => {
         const rectangles = await Promise.all([editor, ...controls].map((control, index) => control.evaluate((element, primary) => { const r = element.getBoundingClientRect(); return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height, inside: r.top >= 0 && r.left >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.width > 0 && r.height > 0 && (primary || r.height >= 20) } }, index === 0)))
@@ -92,7 +99,7 @@ test('completes an everyday native review across Agent, approval, question and i
       }, { timeout: 1500, intervals: [100, 250] }).toBe(true)
       if (reading) await checkpoint.poll(() => reading.evaluate(element => element.clientHeight), { timeout: 1500, intervals: [100, 250] }).toBeGreaterThanOrEqual(stage === 'approval' ? 48 : 80)
       const file = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '.png'
-      await appPage.screenshot({ path: testInfo.outputPath(file) }); screenshots.push(file)
+      await capturePage(file,width,height); screenshots.push(file)
       geometry.push({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ geometry, screenshots }))
     }
