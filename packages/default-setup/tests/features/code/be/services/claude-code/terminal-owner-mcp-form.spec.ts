@@ -43,3 +43,36 @@ it('does not restore form state from an operation completed after owner exit', a
   const action = owner.operateMcpForm(request); await prepared.dispose(); resolve({ settled: false, form })
   await expect(action).rejects.toThrow('exited'); expect(owner.state.mcpForm).toBeUndefined()
 })
+
+it('retires only the captured MCP request after an already admitted field operation', async () => {
+  const { prepared, owner, form, request } = await fixture()
+  try {
+    let finish!: (value: unknown) => void; f.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const edit = owner.operateMcpForm({ ...request, action: { operation: 'edit', field: 'title', value: 'updated' } })
+    const retire = owner.cancelMcpForm(form)
+    await expect(owner.operateMcpForm(request)).rejects.toThrow('busy')
+    const next = { ...form, token: 'b'.repeat(64) }; f.request.mockResolvedValueOnce({ form: next }).mockResolvedValueOnce({ settled: true })
+    finish({ settled: false, form: next }); await edit; await retire
+    expect(f.request.mock.calls.at(-1)![0]).toMatchObject({ subtype: 'apack_operate_mcp_form', id: form.id, revision: form.revision, token: next.token, action: { operation: 'cancel' } })
+    expect(owner.state.mcpForm).toBeUndefined()
+  } finally { await prepared.dispose() }
+})
+it.each(['removed', 'replaced'] as const)('preserves a %s MCP request during captured-request retirement', async condition => {
+  const { prepared, owner, form } = await fixture()
+  try {
+    f.request.mockResolvedValueOnce({ form: condition === 'removed' ? undefined : { ...form, id: 'replacement', revision: randomUUID() } })
+    await owner.cancelMcpForm(form)
+    expect(f.request.mock.calls.filter(([request]) => request.subtype === 'apack_operate_mcp_form')).toHaveLength(0)
+    expect(owner.state.mcpForm?.id).toBe(condition === 'removed' ? undefined : 'replacement')
+  } finally { await prepared.dispose() }
+})
+
+it('does not restore a retired form from a refresh begun before captured-request cancellation', async () => {
+  const { prepared, owner, form } = await fixture()
+  try {
+    let resolve!: (value: unknown) => void; f.request.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    const old = owner.refreshMcpForm(); f.request.mockResolvedValueOnce({})
+    await owner.cancelMcpForm(form); resolve({ form }); await old
+    expect(owner.state.mcpForm).toBeUndefined()
+  } finally { await prepared.dispose() }
+})

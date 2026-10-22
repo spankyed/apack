@@ -10,7 +10,7 @@ function setup(kind: 'native' | 'print' | 'idle', pending = false, busy = kind =
   } } });
   const events: unknown[][] = [], requests: Record<string, unknown>[] = [];
   const control = { turn: { id: 'original-turn', cancelled: false } as { id: string; cancelled: boolean } | null, replace: false, refuse: false, nativeForm: false };
-  const native = { state: { sessionId: 'original-session', get mcpForm() { return control.nativeForm ? {} : undefined } }, kill: () => { events.push(['native.kill']); }, uiTransport: { request: async (request: Record<string, unknown>) => {
+  const native = { state: { sessionId: 'original-session', get mcpForm() { return control.nativeForm ? { id: 'form', revision: 'original-revision', sessionId: 'original-session' } : undefined } }, kill: () => { events.push(['native.kill']); }, cancelMcpForm: async (form: unknown) => { events.push(['native.cancelMcpForm', form]); }, uiTransport: { request: async (request: Record<string, unknown>) => {
     requests.push(request);
     if (request.subtype === 'apack_turn_state') return { turn: control.turn };
     if (control.refuse) throw new Error('Native turn changed or ended');
@@ -80,5 +80,5 @@ it('uses the current native MCP form owner when a prior permission projection ha
   const f = setup('native', true); f.control.nativeForm = true;
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, interrupted: true });
   expect(f.requests.map(request => request.subtype)).toEqual(['apack_turn_state', 'apack_abort_turn']);
-  expect(f.events).toEqual([]);
+  expect(f.events).toEqual([['native.cancelMcpForm', { id: 'form', revision: 'original-revision', sessionId: 'original-session' }]]);
 });

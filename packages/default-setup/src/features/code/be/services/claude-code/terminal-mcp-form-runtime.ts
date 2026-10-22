@@ -48,8 +48,9 @@ function nativeMcpFormPresentation(n,d){
  return {...facts,token:createHash('sha256').update(encoded).digest('hex')};
 }
 async function operateNativeMcpForm(n,request,signal){
- signal.throwIfAborted();const d=nativeMcpFormDialog(n),shown=nativeMcpFormPresentation(n,d);
- if(!shown||!shown.ready||request.id!==shown.id||request.revision!==shown.revision||request.session_id!==shown.sessionId||request.token!==shown.token)throw Error('Native MCP form changed or is not ready');
+ signal.throwIfAborted();const d=nativeMcpFormDialog(n),shown=nativeMcpFormPresentation(n,d),cancelling=request.action?.operation==='cancel';
+ // Cancellation addresses the original dialog, independent of asynchronous field validation.
+ if(!shown||!shown.ready||request.id!==shown.id||request.revision!==shown.revision||request.session_id!==shown.sessionId||!cancelling&&request.token!==shown.token)throw Error('Native MCP form changed or is not ready');
  const current=()=>{signal.throwIfAborted();const dialog=nativeMcpFormDialog(n);if(dialog.item!==d.item||dialog.payload!==d.payload||dialog.revision!==d.revision)throw Error('Native MCP form expired');const source=nativeMcpFormSource(n,dialog);if(!source?.ready)throw Error('Native MCP form controls are not ready');return source;};
  const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
  const key=async value=>{current().key({key:value,ctrl:false,meta:false,shift:false,preventDefault(){}});await settle();};

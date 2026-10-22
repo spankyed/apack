@@ -1458,10 +1458,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    cwd: string;
     revision: string;
-    id: string;
+    cwd: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1475,10 +1475,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    cwd: string;
     revision: string;
-    id: string;
+    cwd: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1917,10 +1917,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     focusedButton: z.ZodNullable<z.ZodEnum<["accept", "decline"]>>;
     textInputValue: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1933,10 +1933,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: string;
     currentFieldIndex?: number | undefined;
 }, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2855,6 +2855,7 @@ interface ClaudeNativeTerminalOwner {
     }[];
     refreshMcpForm(): Promise<void>;
     operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
+    cancelMcpForm(expected: Pick<ClaudeNativeMcpForm, 'id' | 'revision' | 'sessionId'>): Promise<void>;
     refreshNotice(): Promise<void>;
     answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
     readJournal(): Promise<ClaudeNativeJournalBatch>;

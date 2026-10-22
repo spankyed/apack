@@ -49,7 +49,7 @@ it.each(['accept', 'decline', 'cancel'])('settles %s only through an original mo
   if (operation === 'cancel') expect(f.cancel).toHaveBeenCalledOnce(); else expect(f.key.mock.calls.at(-1)?.[0].key).toBe('return')
 })
 it('refuses stale tokens, readiness, unknown fields/options and changed renderer hashes', async () => {
-  const f = fixture(); await expect(f.operate({ operation: 'cancel' }, { token: '0'.repeat(64) })).rejects.toThrow('changed')
+  const f = fixture(); await expect(f.operate({ operation: 'edit', field: 'title', value: 'new' }, { token: '0'.repeat(64) })).rejects.toThrow('changed')
   f.setReady(false); await expect(f.operate({ operation: 'cancel' })).rejects.toThrow('not ready'); f.setReady(true)
   await expect(f.operate({ operation: 'edit', field: 'foreign', value: 'x' })).rejects.toThrow('Unknown')
   await expect(f.operate({ operation: 'edit', field: 'audience', value: 'foreign' })).rejects.toThrow('options')
@@ -60,4 +60,10 @@ it('rechecks dialog lifetime after original navigation and honors aborted reques
   await expect(f.operate({ operation: 'edit', field: 'audience', value: 'public' })).rejects.toThrow('expired'); expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
   const g = fixture(), form = g.show(), abort = new AbortController(); abort.abort()
   await expect(g.api.operate(g.n, { id: form.id }, abort.signal)).rejects.toThrow(); expect(g.key).not.toHaveBeenCalled(); expect(g.cancel).not.toHaveBeenCalled()
+})
+
+it('cancels the same original request across asynchronous field-state changes but refuses a different dialog', async () => {
+  const f = fixture(), token = f.show().token; f.fields.validationErrors.date = 'Original async validation changed'
+  await expect(f.operate({ operation: 'cancel' }, { token })).resolves.toMatchObject({ settled: true }); expect(f.cancel).toHaveBeenCalledOnce()
+  const g = fixture(); await expect(g.operate({ operation: 'cancel' }, { revision: randomUUID() })).rejects.toThrow('changed'); expect(g.cancel).not.toHaveBeenCalled()
 })
