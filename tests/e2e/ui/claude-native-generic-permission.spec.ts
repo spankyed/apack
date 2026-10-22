@@ -101,7 +101,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(() => readFile(join(workspace!, 'native-generic-permission-model-ready-' + phase), 'utf8').then(() => true, () => false)).toBe(true)
     await composer.fill(draft)
-    const document = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
+    const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
     const selection = await composer.evaluate(element => (element as any).editor.state.selection.toJSON())
     await writeFile(join(workspace!, 'native-generic-permission-model-release-' + phase), 'Draft is ready')
     const approval = appPage.getByTestId('native-' + step.tool.toLowerCase() + '-approval')
@@ -139,7 +139,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
       await appPage.setViewportSize({ width, height })
       await expect(approval.getByRole('button', { name: 'Deny', exact: true })).toBeInViewport()
       await expect(approval.locator('button.approve')).toBeInViewport()
-      expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(document)
+      expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
       expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(selection)
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
       if ([1, 4].includes(phase)) {
@@ -180,17 +180,19 @@ test('preserves original generic MCP approval choices, withheld previews and the
       throw error
     }
     await expect(composer).toHaveText(draft)
-    expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(document)
+    expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
     steps.push({ phase, tool: step.tool, decision: step.decision, preview: original.nativeTerminal.genericTool, retainedDraft: true })
   }
   await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), '0')
   await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, sessionId, boundNativePid, retainedDraft: true }))
-  // Cancel already stops an approval-waiting native owner; do not start a replacement just to stop it.
-  if ((await context()).native.state.status === 'live') {
-    await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-    await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+  // The final Cancel owns shutdown. Wait for its publication instead of reopening a lagging view.
+  expect(cases.at(-1)?.decision).toBe('cancel')
+  try {
+    await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
+  } catch (error) {
+    await writeFile(join(workspace!, 'native-generic-permission-retirement-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }, null, 2))
+    throw error
   }
-  await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
   if (await section.getByRole('button', { name: 'Back to conversation', exact: true }).isVisible()) await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await composer.fill('Continue reviewing the same release session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
