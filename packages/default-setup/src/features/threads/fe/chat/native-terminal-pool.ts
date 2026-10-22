@@ -22,7 +22,8 @@ export function mountNativeTerminal(ownerId: string, container: HTMLElement, inp
     }
     const element = document.createElement('div'); element.className = 'h-full w-full'
     const term = new Terminal({ fontSize: 13, fontFamily: 'Menlo, Monaco, monospace', lineHeight: 1.15, cursorBlink: true, scrollback: 5000,
-      allowProposedApi: true, theme: { background: '#191919', foreground: '#d4d0ca', cursor: '#d3aa8e', selectionBackground: '#b68e7340' } })
+      // The terminal renderer halves this threshold for ANSI faint text; keep secondary details readable.
+      minimumContrastRatio: 7, allowProposedApi: true, theme: { background: '#191919', foreground: '#d4d0ca', cursor: '#d3aa8e', selectionBackground: '#b68e7340' } })
     const fit = new FitAddon(); term.loadAddon(fit)
     container.append(element); term.open(element)
     // Only the live PTY query responder negotiates graphics. Replaying cached drawing

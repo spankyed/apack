@@ -111,7 +111,16 @@ test('preserves selected Agent context through native Settings tabs and compact 
           const rect=(value:Element)=>{const r=value.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
           return {panel:rect(element),viewport:rect(viewport),screen:rect(screen),close:rect(close),window:{width:innerWidth,height:innerHeight}}
         })
-        samples.push({label,width,height,grid,text,geometry,view:(await context()).native.state.view})
+        const metricsContrast=label==='stats-models'?await panel.evaluate(element=>{
+          const rgb=(text:string)=>(text.match(/[\d.]+/g)??[]).slice(0,3).map(Number)
+          const light=(values:number[])=>values.map(value=>{const v=value/255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0)
+          const background=getComputedStyle(element).backgroundColor,bg=light(rgb(background))
+          return [...element.querySelectorAll('.xterm-rows span')].filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
+            const style=getComputedStyle(span),fg=light(rgb(style.color));return {text:span.textContent,color:style.color,background,opacity:Number(style.opacity),ratio:(Math.max(fg,bg)+0.05)/(Math.min(fg,bg)+0.05)}
+          })
+        }):undefined
+        if(metricsContrast){expect(metricsContrast.length).toBeGreaterThan(0);for(const metric of metricsContrast){expect(metric.ratio).toBeGreaterThanOrEqual(3);expect(metric.opacity).toBe(1)}}
+        samples.push({label,width,height,grid,text,geometry,metricsContrast,view:(await context()).native.state.view})
         await writeFile(join(workspace!,'native-agent-settings-samples.json'),JSON.stringify(samples,null,2))
         await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
       }else await expect((await focused.isVisible())?form.getByRole('button',{name:'Send to Agent',exact:true}):card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
