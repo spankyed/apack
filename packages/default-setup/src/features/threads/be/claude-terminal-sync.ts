@@ -1,7 +1,7 @@
 import type { ClaudeNativeLaunch } from '#features/code/common/native-launch.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
-import { broadcastToPlugin } from '#generated/events.ts'
+import { broadcastToSurface } from '#generated/events.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts'
@@ -78,7 +78,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       if (result.text !== row.text) repository.chatCommands.updateMessageState({ messageId: result.id, updates: { text: row.text } })
       nativeMessages.set(key, { id: result.id, terminal: true, order, timestamp })
       const message = repository.chatQueries.messageById(result.id)
-      if (message) broadcastToPlugin('threads', { type: 'MESSAGE_ADDED', threadId, message })
+      if (message) broadcastToSurface('threads', { type: 'MESSAGE_ADDED', threadId, message })
     }
   }
   async function flush() {
@@ -128,6 +128,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           for (const entry of agentRows.values()) upsert(entry)
         }
         await owner.refreshNotice()
+        const genericPermissions = await owner.getGenericToolPermissionDialogs()
         const toolPermissions = await owner.getToolPermissionDialogs()
         const workflows = await owner.getWorkflowDialogs()
         const reads = await owner.getFileDialogs()
@@ -138,60 +139,78 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
         const dialog = toolPermissions.at(0) ?? workflows.at(0) ?? reads.at(0) ?? bashes.at(0) ?? questions.at(0) ?? plans.at(0)
-        const nativeControl = object(priorControl?.nativeTerminal)
-        const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
-        if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
-          updateMessageState(priorControl.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } })
-        }
-        if (!priorControl || nativeControl && !sameDialog) {
-          let pendingControlRequest = nativeControl ? undefined : priorControl
-          if (dialog && dialog.sessionId === owner.state.sessionId) {
-            const isToolPermission = dialog.toolName === 'WebFetch' || dialog.toolName === 'Skill'
-            const isWorkflow = dialog.toolName === 'Workflow'
-            const isPlan = dialog.toolName === 'EnterPlanMode' || dialog.toolName === 'ExitPlanMode'
-            const isFile = dialog.toolName === 'Read' || dialog.toolName === 'Write' || dialog.toolName === 'Edit' || dialog.toolName === 'NotebookEdit'
-            const isToolApproval = dialog.toolName !== 'AskUserQuestion'
-            const question = isToolPermission ? dialog.toolName === 'WebFetch' ? 'Do you want to allow Claude to fetch this content?' : 'Claude may use instructions, code, or files from this Skill.' : isWorkflow ? 'Run this dynamic workflow?' : isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode?' : 'Review this plan before continuing' : isToolApproval ? isFile ? dialog.question : 'Run this shell command?' : undefined
-            const input = isToolApproval ? dialog.input : dialog.shownInput
-            const title = isToolPermission ? dialog.presentation.title : isWorkflow ? 'Review workflow' : isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode' : 'Review plan' : isToolApproval ? 'title' in dialog ? dialog.title : 'description' in dialog ? dialog.description ?? 'Run shell command' : 'Claude Code needs a decision' : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
-            const message = isToolApproval ? sendBlockMessage({ threadId, text: title, blocks: [
-              { type: 'prompt', props: { content: question } },
-              { type: 'tool-input', props: { toolName: dialog.toolName, input } },
+        const nativeControl = object(priorControl?.nativeTerminal), generic = genericPermissions.at(0)
+        if (generic && (!priorControl || nativeControl)) {
+          const same = nativeControl && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === generic.sessionId && nativeControl.dialogId === generic.id && nativeControl.revision === generic.revision
+          if (!same && nativeControl && typeof priorControl?.approvalMessageId === 'string') updateMessageState(priorControl.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } })
+          if (generic.sessionId === owner.state.sessionId && (!same || object(nativeControl?.genericTool)?.token !== generic.presentation.token)) {
+            const question = 'Do you want to proceed?'
+            const messageId = same ? priorControl!.approvalMessageId : sendBlockMessage({ threadId, text: generic.presentation.title, blocks: [
+              { type: 'prompt', props: { content: question } }, { type: 'tool-input', props: { toolName: generic.toolName, input: generic.input } },
               { type: 'approval', props: { requireReason: false, allowReason: true, autoAcceptOption: false } },
-            ], forkable: false, autoHide: true, asUser: true }) : sendBlockMessage({ threadId, text: title,
-              blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
-            if (!isToolApproval) updateMessageState(message.messageId, { context: { claudeNativeQuestion: { sessionId: dialog.sessionId, dialogId: dialog.id, ownerId: owner.state.ownerId } } })
-            pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
-              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, requestId: dialog.requestId,
-                title, ...(isToolPermission ? { tool: dialog.presentation } : {}), ...(isWorkflow ? { workflow: dialog.presentation } : {}), ...(isToolApproval ? { question, reason: dialog.reason, ...(isFile ? { ...(dialog.review ? { review: dialog.review } : {}), file: dialog.approval } : {}), ...(isPlan ? { plan: dialog.presentation } : {}), ...(dialog.toolName === 'Bash' ? { cwd: dialog.cwd, ...(dialog.choices && dialog.choiceToken ? { bash: { choices: dialog.choices, token: dialog.choiceToken } } : {}) } : {}) } : { presentation: dialog.presentation }) } }
-          }
-          if (pendingControlRequest !== priorControl) {
+            ], forkable: false, autoHide: true, asUser: true }).messageId
+            const pendingControlRequest = { requestId: generic.revision, approvalMessageId: messageId, toolName: generic.toolName, originalInput: generic.input,
+              nativeTerminal: { ownerId: owner.state.ownerId, sessionId: generic.sessionId, dialogId: generic.id, revision: generic.revision, requestId: generic.requestId,
+                title: generic.presentation.title, question, reason: generic.reason, genericTool: generic.presentation } }
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
           }
-        }
-        if (sameDialog && dialog?.toolName === 'Bash' && nativeControl && priorControl && object(nativeControl.bash)?.token !== dialog.choiceToken) {
-          const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
-            pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, bash: dialog.choices && dialog.choiceToken ? { choices: dialog.choices, token: dialog.choiceToken } : undefined } } } }
-          repository.threadCommands.update(threadId, { context })
-          broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
-        }
-        if (sameDialog && dialog && ['Read', 'Write', 'Edit', 'NotebookEdit'].includes(dialog.toolName) && nativeControl && priorControl && 'approval' in dialog && object(nativeControl.file)?.token !== dialog.approval?.token) {
-          const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
-            pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, file: dialog.approval } } } }
-          repository.threadCommands.update(threadId, { context })
-          broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
-        }
-        if (sameDialog && dialog && (dialog.toolName === 'WebFetch' || dialog.toolName === 'Skill') && nativeControl && priorControl && object(nativeControl.tool)?.token !== dialog.presentation.token) {
-          const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, title: dialog.presentation.title, tool: dialog.presentation } } } }
-          repository.threadCommands.update(threadId, { context })
-          broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
-        }
-        if (sameDialog && dialog?.toolName === 'Workflow' && nativeControl && priorControl && object(nativeControl.workflow)?.token !== dialog.presentation.token) {
-          const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, workflow: dialog.presentation } } } }
-          repository.threadCommands.update(threadId, { context })
-          broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+        } else {
+          const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
+          if (nativeControl && !sameDialog && typeof priorControl?.approvalMessageId === 'string') {
+            updateMessageState(priorControl.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } })
+          }
+          if (!priorControl || nativeControl && !sameDialog) {
+            let pendingControlRequest = nativeControl ? undefined : priorControl
+            if (dialog && dialog.sessionId === owner.state.sessionId) {
+              const isToolPermission = dialog.toolName === 'WebFetch' || dialog.toolName === 'Skill'
+              const isWorkflow = dialog.toolName === 'Workflow'
+              const isPlan = dialog.toolName === 'EnterPlanMode' || dialog.toolName === 'ExitPlanMode'
+              const isFile = dialog.toolName === 'Read' || dialog.toolName === 'Write' || dialog.toolName === 'Edit' || dialog.toolName === 'NotebookEdit'
+              const isToolApproval = dialog.toolName !== 'AskUserQuestion'
+              const question = isToolPermission ? dialog.toolName === 'WebFetch' ? 'Do you want to allow Claude to fetch this content?' : 'Claude may use instructions, code, or files from this Skill.' : isWorkflow ? 'Run this dynamic workflow?' : isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode?' : 'Review this plan before continuing' : isToolApproval ? isFile ? dialog.question : 'Run this shell command?' : undefined
+              const input = isToolApproval ? dialog.input : dialog.shownInput
+              const title = isToolPermission ? dialog.presentation.title : isWorkflow ? 'Review workflow' : isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode' : 'Review plan' : isToolApproval ? 'title' in dialog ? dialog.title : 'description' in dialog ? dialog.description ?? 'Run shell command' : 'Claude Code needs a decision' : typeof input.title === 'string' ? input.title : 'Claude Code has questions'
+              const message = isToolApproval ? sendBlockMessage({ threadId, text: title, blocks: [
+                { type: 'prompt', props: { content: question } },
+                { type: 'tool-input', props: { toolName: dialog.toolName, input } },
+                { type: 'approval', props: { requireReason: false, allowReason: true, autoAcceptOption: false } },
+              ], forkable: false, autoHide: true, asUser: true }) : sendBlockMessage({ threadId, text: title,
+                blocks: [{ type: 'prompt', props: { content: Array.isArray(input.questions) ? input.questions.map(value => object(value)?.question).filter(value => typeof value === 'string').join('\n\n') : title } }], forkable: false })
+              if (!isToolApproval) updateMessageState(message.messageId, { context: { claudeNativeQuestion: { sessionId: dialog.sessionId, dialogId: dialog.id, ownerId: owner.state.ownerId } } })
+              pendingControlRequest = { requestId: dialog.revision, approvalMessageId: message.messageId, toolName: dialog.toolName, originalInput: input,
+                nativeTerminal: { ownerId: owner.state.ownerId, sessionId: dialog.sessionId, dialogId: dialog.id, revision: dialog.revision, requestId: dialog.requestId,
+                  title, ...(isToolPermission ? { tool: dialog.presentation } : {}), ...(isWorkflow ? { workflow: dialog.presentation } : {}), ...(isToolApproval ? { question, reason: dialog.reason, ...(isFile ? { ...(dialog.review ? { review: dialog.review } : {}), file: dialog.approval } : {}), ...(isPlan ? { plan: dialog.presentation } : {}), ...(dialog.toolName === 'Bash' ? { cwd: dialog.cwd, ...(dialog.choices && dialog.choiceToken ? { bash: { choices: dialog.choices, token: dialog.choiceToken } } : {}) } : {}) } : { presentation: dialog.presentation }) } }
+            }
+            if (pendingControlRequest !== priorControl) {
+              const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }
+              repository.threadCommands.update(threadId, { context })
+              broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+            }
+          }
+          if (sameDialog && dialog?.toolName === 'Bash' && nativeControl && priorControl && object(nativeControl.bash)?.token !== dialog.choiceToken) {
+            const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
+              pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, bash: dialog.choices && dialog.choiceToken ? { choices: dialog.choices, token: dialog.choiceToken } : undefined } } } }
+            repository.threadCommands.update(threadId, { context })
+            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+          }
+          if (sameDialog && dialog && ['Read', 'Write', 'Edit', 'NotebookEdit'].includes(dialog.toolName) && nativeControl && priorControl && 'approval' in dialog && object(nativeControl.file)?.token !== dialog.approval?.token) {
+            const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
+              pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, file: dialog.approval } } } }
+            repository.threadCommands.update(threadId, { context })
+            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+          }
+          if (sameDialog && dialog && (dialog.toolName === 'WebFetch' || dialog.toolName === 'Skill') && nativeControl && priorControl && object(nativeControl.tool)?.token !== dialog.presentation.token) {
+            const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, title: dialog.presentation.title, tool: dialog.presentation } } } }
+            repository.threadCommands.update(threadId, { context })
+            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+          }
+          if (sameDialog && dialog?.toolName === 'Workflow' && nativeControl && priorControl && object(nativeControl.workflow)?.token !== dialog.presentation.token) {
+            const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, workflow: dialog.presentation } } } }
+            repository.threadCommands.update(threadId, { context })
+            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+          }
         }
         const state = owner.state, metadata = state.session
         const working = owner.busy || state.status === 'live' && !!state.activity && (state.activity.pendingAgents > 0 || state.activity.pendingWorkflows > 0)
@@ -211,10 +230,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode, prePlanMode: metadata.prePlanMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }
         repository.threadCommands.update(threadId, { context })
-        broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+        broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
         if (state.status === 'live' && metadata?.permissionMode && metadata.permissionMode !== prior.permissionMode
           && (metadata.permissionMode === 'plan' || prior.permissionMode === 'plan')) {
-          broadcastToPlugin('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
+          broadcastToSurface('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
         }
         updateChatState(threadId, chatState)
       } catch (error) {
@@ -223,7 +242,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const thread = current() ? repository.threadQueries.byId(threadId) : undefined
         if (thread && thread.context?.claudeCode?.sessionError !== problem) {
           const context = { ...thread.context, claudeCode: { ...thread.context?.claudeCode, sessionError: problem, chatState: 'error' } }
-          repository.threadCommands.update(threadId, { context }); broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } }); updateChatState(threadId, 'error')
+          repository.threadCommands.update(threadId, { context }); broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } }); updateChatState(threadId, 'error')
         }
       }
     })().finally(() => { inFlight = undefined })

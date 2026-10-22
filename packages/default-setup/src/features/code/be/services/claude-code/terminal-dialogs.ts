@@ -1,4 +1,4 @@
-import { ClaudeToolPermissionApprovalSchema } from '../../../common/native-tool-permission.ts'
+import { ClaudeGenericToolPermissionApprovalSchema, ClaudeToolPermissionApprovalSchema } from '../../../common/native-tool-permission.ts'
 import { ClaudeWorkflowApprovalSchema } from '../../../common/native-workflow-approval.ts'
 import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
 import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
@@ -123,5 +123,19 @@ export const ClaudeNativeToolPermissionDialogsSchema = z.array(ClaudeNativeToolP
 export type ClaudeNativeToolPermissionDialog = z.infer<typeof ClaudeNativeToolPermissionDialogSchema>
 export interface ClaudeNativeToolPermissionDialogResponse {
   id: string; revision: string; sessionId: string; toolName: 'WebFetch' | 'Skill';
+  choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
+}
+
+/** Exact permission_prompt; the original native payload supplies the tool identity. */
+export const ClaudeNativeGenericToolPermissionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.string().min(1).max(256),
+  presentation: ClaudeGenericToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativeGenericToolPermissionDialogsSchema = z.array(ClaudeNativeGenericToolPermissionDialogSchema).max(1)
+export type ClaudeNativeGenericToolPermissionDialog = z.infer<typeof ClaudeNativeGenericToolPermissionDialogSchema>
+export interface ClaudeNativeGenericToolPermissionDialogResponse {
+  id: string; revision: string; sessionId: string; toolName: string;
   choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
 }

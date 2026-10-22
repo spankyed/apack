@@ -1,3 +1,4 @@
+import { ClaudeNativeGenericToolPermissionDialogsSchema, type ClaudeNativeGenericToolPermissionDialog, type ClaudeNativeGenericToolPermissionDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeToolPermissionDialogsSchema, type ClaudeNativeToolPermissionDialog, type ClaudeNativeToolPermissionDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeNoticeSchema, type ClaudeNativeNotice, type ClaudeNativeNoticeResponse } from '../../../common/native-notice.ts'
 import { ClaudeNativeWorkflowDialogsSchema, type ClaudeNativeWorkflowDialog, type ClaudeNativeWorkflowDialogResponse } from './terminal-dialogs.ts'
@@ -49,6 +50,8 @@ export interface ClaudeNativeTerminalOwner {
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>
   answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>
+  getGenericToolPermissionDialogs(): Promise<ClaudeNativeGenericToolPermissionDialog[]>
+  answerGenericToolPermissionDialog(response: ClaudeNativeGenericToolPermissionDialogResponse): Promise<void>
   getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>
   answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
@@ -272,6 +275,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native workflow session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_workflow_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native workflow approval was not acknowledged')
+      },
+      async getGenericToolPermissionDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_generic_tool_permission_dialogs' }) as { dialogs?: unknown }
+        return closed ? [] : ClaudeNativeGenericToolPermissionDialogsSchema.parse(result.dialogs)
+      },
+      async answerGenericToolPermissionDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native generic permission session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_generic_tool_permission_dialog', decision: response.decision, id: response.id, revision: response.revision, session_id: response.sessionId, toolName: response.toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native generic permission was not acknowledged')
       },
       async getToolPermissionDialogs() {
         if (closed || !bridge.ready) return []

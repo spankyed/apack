@@ -209,3 +209,24 @@ it('preserves exact native-supported Skill feedback for allow and deny, and excl
     expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-exact', choiceToken: tool.token })
   } finally { app.unmount(); root.remove() }
 })
+
+
+it('shows only native generic choices and explanations, then withdraws a changed grant without a fallback', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = reactive({ token: 'a'.repeat(64), ready: true, title: 'Tool use', details: [{ label: 'Parameters', value: 'Original native withheld marker' }], choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true },
+    { value: 'yes-enable-auto-mode', label: 'Original offered mode', decision: 'allow' as const, feedback: false },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: true },
+  ] })
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'mcp__research__echo', title: tool.title, question: 'Do you want to proceed?', disabled: false, tool, choiceDescriptions: { 'yes-enable-auto-mode': 'Original mode explanation <script>literal</script>' }, onRespond: respond }) }); app.mount(root)
+  try {
+    expect(root.textContent).toContain('Original native withheld marker')
+    const select = root.querySelector('select')!; select.value = 'yes-enable-auto-mode'; select.dispatchEvent(new Event('change')); await nextTick()
+    expect(root.textContent).toContain('Original mode explanation <script>literal</script>'); expect(root.querySelector('script')).toBeNull()
+    root.querySelector<HTMLButtonElement>('.approve')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-enable-auto-mode', choiceToken: tool.token })
+    tool.choices.splice(1, 1); tool.token = 'b'.repeat(64); await nextTick()
+    expect(root.querySelector<HTMLButtonElement>('.approve')!.disabled).toBe(true)
+    expect(root.querySelector('select')).toBeNull()
+  } finally { app.unmount(); root.remove() }
+})

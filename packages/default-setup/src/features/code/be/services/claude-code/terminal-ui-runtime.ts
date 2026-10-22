@@ -1,3 +1,4 @@
+import { claudeTerminalGenericPermissionRuntime } from './terminal-generic-permission-runtime.ts'
 import { claudeTerminalToolPermissionRuntime } from './terminal-tool-permission-runtime.ts'
 import { claudeTerminalStreamRuntime } from './terminal-stream-runtime.ts'
 import { claudeNativeToolResultRuntime } from './native-tool-result-runtime.ts'
@@ -223,6 +224,7 @@ ${claudeTerminalToolGroupDrawingRuntime}
 ${claudeTerminalComposerRuntime}
 ${claudeTerminalBashRuntime}
 ${claudeTerminalFileRuntime}
+${claudeTerminalGenericPermissionRuntime}
 ${claudeTerminalToolPermissionRuntime}
 ${claudeTerminalWorkflowRuntime}
 ${claudeTerminalFocusRuntime}
@@ -508,7 +510,7 @@ function nativeDialog(n,kind){
  const open=store.getState().open;
  // Other native dialogs retain their original interface until their contracts are integrated.
  const item=open.length===1?open[0]:undefined,payload=item?.payload;
- const supported=kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
+ const supported=kind==='permission_prompt'?typeof payload?.toolName==='string'&&payload.toolName.length>0&&payload.toolName.length<=256:kind==='permission_webfetch'?payload?.toolName==='WebFetch'&&typeof payload.hostname==='string':kind==='permission_skill'?payload?.toolName==='Skill'&&typeof payload.skill==='string':kind==='permission_workflow'?payload?.toolName==='Workflow'&&typeof payload.script==='string':kind==='permission_bash'?payload?.toolName==='Bash'&&typeof payload.input?.command==='string':kind==='permission_file'?(payload?.toolName==='Read'&&payload.operationType==='read'||['Write','Edit'].includes(payload?.toolName)&&payload.operationType==='write'&&typeof payload.input?.file_path==='string'&&['file-edit-diff','file-write-diff','no-changes'].includes(payload.content?.kind)||payload?.toolName==='NotebookEdit'&&payload.operationType==='write'&&typeof payload.input?.notebook_path==='string'&&['notebook-edit-diff','no-changes'].includes(payload.content?.kind)):kind==='permission_enter_plan_mode'?payload?.toolName==='EnterPlanMode':kind==='permission_exit_plan_mode_v2'?payload?.toolName==='ExitPlanMode'&&typeof payload.plan==='string':kind==='permission_ask_user_question'&&payload?.toolName==='AskUserQuestion'&&Array.isArray(payload.questions);
  if(item?.kind!==kind||!supported||typeof payload.requestId!=='string'||!payload.input||typeof payload.input!=='object'){
   dialogRevisions.delete(kind);return {store,sessionId};
  }
@@ -763,6 +765,16 @@ async function control(request,abort){
   if(request.choice!==undefined){if(request.decision!=='allow'||request.feedback!==undefined)throw Error('Invalid native Bash choice response');await answerNativeBashChoice(n,d,request);}
   else{const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};d.store.answer(d.item.id,result);}
   dialogRevisions.delete('permission_bash');return {answered:true};
+ }
+ if(request.subtype==='apack_generic_tool_permission_dialogs'){
+  const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
+  const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;
+  return {dialogs:[{id:d.item.id,revision:d.revision,sessionId:d.sessionId,requestId:d.payload.requestId,toolName:d.payload.toolName,presentation,...(typeof d.payload.permissionResult?.message==='string'?{reason:d.payload.permissionResult.message}:{}),input:d.payload.input}]};
+ }
+ if(request.subtype==='apack_answer_generic_tool_permission_dialog'){
+  abort.signal.throwIfAborted();const d=nativeDialog(n,'permission_prompt');
+  if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native generic permission changed or expired');
+  await answerNativeGenericPermissionChoice(n,d,request);dialogRevisions.delete('permission_prompt');return {answered:true};
  }
  if(request.subtype==='apack_tool_permission_dialogs'){
   let d=nativeDialog(n,'permission_webfetch');if(!d.item)d=nativeDialog(n,'permission_skill');if(!d.item)return {dialogs:[]};

@@ -57,6 +57,7 @@
         </label>
         <p v-if="file && selectedFileChoice && (selectedChoice !== 'yes' || selectedFileChoice.label !== 'Yes')" class="permission-choice-description" data-testid="native-file-permission-choice-description">{{ selectedFileChoice.label }}</p>
         <p v-if="tool && selectedToolChoice && selectedChoice !== 'yes'" class="permission-choice-description" data-testid="native-tool-permission-choice-description">{{ selectedToolChoice.label }}</p>
+        <p v-if="choiceDescriptions?.[selectedChoice]" class="permission-choice-description">{{ choiceDescriptions[selectedChoice] }}</p>
         <label v-if="currentChoice && 'prefix' in currentChoice && currentChoice.prefix !== undefined">Command prefix
           <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="controlsDisabled" />
         </label>
@@ -83,7 +84,7 @@ import type { ClaudeWorkflowApproval } from '#features/code/common/native-workfl
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'NotebookEdit' | 'Workflow' | 'WebFetch' | 'Skill'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+const props = defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; choiceDescriptions?: Record<string, string>; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
@@ -120,7 +121,7 @@ const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string
 const permission = computed(() => props.workflow ?? props.file ?? props.tool)
 const selectedToolChoice = computed(() => props.tool?.choices.find(choice => choice.value === selectedChoice.value))
 const controlsDisabled = computed(() => props.disabled || permission.value?.ready === false)
-const standingChoices = computed(() => (props.toolName === 'Bash' ? props.bash?.choices : permission.value?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
+const standingChoices = computed(() => (props.tool ? props.tool.choices : props.toolName === 'Bash' ? props.bash?.choices : permission.value?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
 const selectedFileChoice = computed(() => props.file?.choices.find(choice => choice.value === selectedChoice.value))
 const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
 const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? (currentChoice.value && 'prefix' in currentChoice.value ? currentChoice.value.prefix : '') ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })

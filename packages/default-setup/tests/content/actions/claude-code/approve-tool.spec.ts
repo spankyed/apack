@@ -129,3 +129,17 @@ it.each(['WebFetch', 'Skill'] as const)('dispatches only the original %s choice 
   expect(answerToolPermissionDialog).toHaveBeenCalledExactlyOnceWith({ decision: 'allow', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.reason })
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined()
 })
+
+
+it.each(['mcp__research__echo', 'Bash'])('keeps original generic %s decisions out of specialized and print routes', async toolName => {
+  const { id } = setup('current')
+  const answerGenericToolPermissionDialog = vi.fn(async () => {}), answerBashDialog = vi.fn(), respond = vi.fn()
+  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], choiceDescriptions: {} } }
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName, nativeTerminal: native } } } })
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: native, answerGenericToolPermissionDialog, answerBashDialog }), getHandle: () => ({ respond }) } as never })
+  const response = { choice: 'yes', choiceToken: 'original-token', reason: '  Preserve native feedback.  ' }
+  await expect(action({ threadId: id, requestId: 'current', toolName, response }, services)).resolves.toEqual({ success: true })
+  expect(answerGenericToolPermissionDialog).toHaveBeenCalledExactlyOnceWith({ decision: 'allow', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.reason })
+  expect(answerBashDialog).not.toHaveBeenCalled(); expect(respond).not.toHaveBeenCalled()
+  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined()
+})

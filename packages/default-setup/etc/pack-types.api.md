@@ -1400,8 +1400,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     id: string;
     command: string;
     input: Record<string, unknown>;
@@ -1417,8 +1417,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     id: string;
     command: string;
     input: Record<string, unknown>;
@@ -1633,6 +1633,142 @@ interface ClaudeNativeFocusProjection {
     active: boolean;
     hidden: string[];
 }
+
+type ClaudeNativeGenericToolPermissionDialog = z.infer<typeof ClaudeNativeGenericToolPermissionDialogSchema>;
+
+interface ClaudeNativeGenericToolPermissionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    toolName: string;
+    choice: string;
+    choiceToken: string;
+    decision: 'allow' | 'deny';
+    feedback?: string;
+}
+
+/** Exact permission_prompt; the original native payload supplies the tool identity. */
+declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    requestId: z.ZodString;
+    toolName: z.ZodString;
+    presentation: z.ZodObject<{
+        token: z.ZodString;
+        ready: z.ZodBoolean;
+        choices: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            decision: z.ZodEnum<["allow", "deny"]>;
+            feedback: z.ZodBoolean;
+        }, "strip", z.ZodTypeAny, {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }, {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }>, "many">;
+    } & {
+        title: z.ZodString;
+        details: z.ZodArray<z.ZodObject<{
+            label: z.ZodString;
+            value: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            value: string;
+            label: string;
+        }, {
+            value: string;
+            label: string;
+        }>, "many">;
+    } & {
+        choiceDescriptions: z.ZodEffects<z.ZodRecord<z.ZodString, z.ZodString>, Record<string, string>, Record<string, string>>;
+    }, "strip", z.ZodTypeAny, {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+        choiceDescriptions: Record<string, string>;
+    }, {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+        choiceDescriptions: Record<string, string>;
+    }>;
+    reason: z.ZodOptional<z.ZodString>;
+    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+}, "strip", z.ZodTypeAny, {
+    revision: string;
+    id: string;
+    input: Record<string, unknown>;
+    sessionId: string;
+    requestId: string;
+    toolName: string;
+    presentation: {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+        choiceDescriptions: Record<string, string>;
+    };
+    reason?: string | undefined;
+}, {
+    revision: string;
+    id: string;
+    input: Record<string, unknown>;
+    sessionId: string;
+    requestId: string;
+    toolName: string;
+    presentation: {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+        choiceDescriptions: Record<string, string>;
+    };
+    reason?: string | undefined;
+}>;
 
 interface ClaudeNativeImage {
     mediaType: 'image/gif' | 'image/jpeg' | 'image/png' | 'image/webp';
@@ -2587,6 +2723,8 @@ interface ClaudeNativeTerminalOwner {
     answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>;
     getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>;
     answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>;
+    getGenericToolPermissionDialogs(): Promise<ClaudeNativeGenericToolPermissionDialog[]>;
+    answerGenericToolPermissionDialog(response: ClaudeNativeGenericToolPermissionDialogResponse): Promise<void>;
     getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>;
     answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>;
     getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
