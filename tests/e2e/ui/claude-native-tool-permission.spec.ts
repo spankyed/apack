@@ -105,7 +105,13 @@ test('preserves original WebFetch and Skill approval choices and the everyday dr
     const selection = await composer.evaluate(element => (element as any).editor.state.selection.toJSON())
     await writeFile(join(workspace!, 'native-tool-permission-model-release-' + phase), 'Draft is ready')
     const approval = appPage.getByTestId('native-' + step.tool.toLowerCase() + '-approval')
-    await expect(approval).toBeVisible({ timeout: 20000 })
+    try {
+      await expect(approval).toBeVisible({ timeout: 20000 })
+    } catch (error) {
+      await writeFile(join(workspace!, 'native-tool-permission-failure.json'), JSON.stringify({ phase, context: await context(), text: await appPage.locator('body').innerText() }, null, 2))
+      await capture('native-tool-permission-failure.png', 1100, 900)
+      throw error
+    }
     await expect(approval.locator('button.approve')).toBeEnabled({ timeout: 10000 })
     const original = (await context()).claude.pendingControlRequest
     expect(original.toolName).toBe(step.tool)
