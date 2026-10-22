@@ -996,7 +996,8 @@ watch(messagesContent, (el, _, onCleanup) => {
 
 <style scoped>
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
-.native-chat-shell:has([data-native-command-panel]) { min-height: calc(100vh - 3rem); }
+.native-chat-shell:has([data-native-command-panel]),
+.native-chat-shell:has([data-testid="native-mcp-form"]) { min-height: calc(100vh - 3rem); }
 </style>
 
 <style lang="scss" module>

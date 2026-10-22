@@ -122,6 +122,8 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
     if (step.scenario === 'form-accept') {
       await panel.getByLabel('Release title', { exact: true }).fill('')
       await expect.poll(async () => (await frame())?.values.title).toBe('')
+      await panel.getByLabel('Release title', { exact: true }).press('Backspace')
+      await expect.poll(async () => (await frame())?.values.title).toBeUndefined()
       await panel.getByRole('button', { name: 'Submit', exact: true }).click()
       await expect.poll(async () => (await frame())?.errors.title).toBeTruthy()
       await panel.getByLabel('Release title', { exact: true }).fill('Migration notes')
@@ -151,6 +153,7 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
           const bounds = await control.boundingBox(); expect(bounds).toBeTruthy(); expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
         }
         for (const button of ['Submit', 'Decline', 'Cancel']) await expect(panel.getByRole('button', { name: button, exact: true })).toBeInViewport({ ratio: 1 })
+        await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
         const bounds = await panel.boundingBox(); expect(bounds).toBeTruthy(); geometry.push({ width, height, bounds })
         await panel.getByLabel('Release title', { exact: true }).evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
         await capture('native-mcp-form-' + width + '-fields.png', width, height)

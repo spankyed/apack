@@ -36,3 +36,17 @@ it('keeps unsupported schema cancellation available and reports original operati
   const f = fixture(); f.state.form.schema = { type: 'object', properties: { other: { type: 'object' } } }; f.state.operation = { sequence: 1, status: 'error', problem: 'Original request expired' }; await nextTick()
   expect(f.button('Submit').disabled).toBe(true); expect(f.button('Cancel').disabled).toBe(false); expect(f.root.textContent).toContain('Original request expired'); expect(f.root.textContent).toContain('cannot be displayed')
 })
+
+it('keeps IME preedit local through native refresh and sends only the final composition once', async () => {
+  const f = fixture(); await f.type('Before'); f.input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+  f.input.value = '未'; f.input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true })); await nextTick()
+  await f.acknowledge(1, 'Before'); f.state.form.token = 'b'.repeat(64); await nextTick(); expect(f.input.value).toBe('未'); expect(f.operate).toHaveBeenCalledTimes(1); expect(f.button('Submit').disabled).toBe(true)
+  f.input.value = '完成'; f.input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '完成' })); await nextTick()
+  f.input.dispatchEvent(new InputEvent('input', { bubbles: true })); await nextTick()
+  expect(f.operate.mock.calls).toEqual([[{ operation: 'edit', field: 'title', value: 'Before' }], [{ operation: 'edit', field: 'title', value: '完成' }]])
+})
+it('forwards an extra Backspace on an empty field as native unset instead of an empty string', async () => {
+  const f = fixture(); await f.type(''); await f.acknowledge(1, '')
+  f.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'edit', field: 'title', value: null }])
+})
