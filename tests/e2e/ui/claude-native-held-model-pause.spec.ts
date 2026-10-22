@@ -117,7 +117,13 @@ test('pauses a pending native model response and rejects late output while retai
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).turns).toBeGreaterThan(before.turns)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
-  await expect.poll(async()=>(await journal()).includes('Fixture completed.')).toBe(true)
+  await expect.poll(async()=>{
+    const rows=(await journal()).split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const index=rows.findIndex(row=>row.type==='user'&&row.message?.content==='Continue the release review after pausing the pending response.')
+    if(index<0)return false
+    const next=rows.slice(index+1).find(row=>['user','assistant'].includes(row.type))
+    return next?.type==='assistant'&&next.message?.content?.some((block:any)=>block.type==='text'&&block.text==='Fixture completed.')===true
+  }).toBe(true)
   expect(await journal()).not.toContain('STALE_RELEASE_REVIEW_MUST_NOT_APPEAR')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   const continued=await context()
