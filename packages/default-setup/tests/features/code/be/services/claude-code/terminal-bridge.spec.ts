@@ -204,6 +204,8 @@ it('validates direct-owner turn facts before changing busy state and fences pend
   expect(bridge!.busy).toBe(false)
   expect((await request('/poll', { sessionId: session, agents: [], directOwner: true, busy: true, turn: null })).status).toBe(200)
   expect(bridge!.busy).toBe(true)
+  await bridge!.close()
+  expect(bridge!.busy).toBe(false)
 })
 
 it('refreshes native UI mode changes after the initial poll and uses direct owner mode metadata', async () => {
