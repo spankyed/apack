@@ -84,7 +84,11 @@ test('retains composing through original Config search and model callback', asyn
   async function capture(label:string){
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     for(const width of [1100,680]){
-      const height=width===680?600:900;await appPage.setViewportSize({width,height})
+      const height=width===680?600:900, previousSize=await resize(), previousSequence=(await context()).native.output.at(-1)?.sequence??0
+      await appPage.setViewportSize({width,height})
+      await expect.poll(async()=>(await resize())?.cols).not.toBe(previousSize?.cols)
+      await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(previousSequence)
+      await screen()
       await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
       let captureTimer:ReturnType<typeof setTimeout>|undefined
       const image=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),png:image.toPNG().toString('base64')}},{width,height}),new Promise<never>((_resolve,reject)=>{captureTimer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(captureTimer)clearTimeout(captureTimer)})
@@ -136,8 +140,14 @@ test('retains composing through original Config search and model callback', asyn
   await chooseModelRow()
   await expect.poll(screen).toMatch(/Select model/)
   await capture('model-picker')
-  await keyboard.pressSequentially('sonnet');await expect.poll(screen).toMatch(/sonnet/i)
-  await keyboard.press('ArrowDown');await keyboard.press('Enter')
+  // Original wze calls ole with canEnter=false: this Config picker has no text-search entry.
+  for(let index=0;index<6&&!/^\s*❯.*Sonnet/m.test(await screen());index++){
+    const selected=(await screen()).match(/^\s*❯.*$/m)?.[0]
+    await keyboard.press('ArrowDown')
+    await expect.poll(async()=>(await screen()).match(/^\s*❯.*$/m)?.[0]).not.toBe(selected)
+  }
+  await expect.poll(screen).toMatch(/^\s*❯.*Sonnet/m)
+  await keyboard.press('Enter')
   await expect.poll(async()=>(await userSettings()).model).toMatch(/sonnet/i)
   await expect.poll(async()=>(await context()).native.state.session?.model).toMatch(/sonnet/i)
   const selectedSettings=await userSettings()
