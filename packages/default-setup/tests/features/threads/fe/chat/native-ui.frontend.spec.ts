@@ -760,11 +760,11 @@ it('reveals the focused field label on viewport resize without moving focus from
 
 it('truncates the original styled inline tree at measured width, redraws on resize and retires its measurement', async () => {
   let width = 6
-  const oldRangeRect = Object.getOwnPropertyDescriptor(Range.prototype, 'getBoundingClientRect')
-  Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value(this: Range) { return { width: this.toString().length } as DOMRect } })
-  onTestFinished(() => { if (oldRangeRect) Object.defineProperty(Range.prototype, 'getBoundingClientRect', oldRangeRect); else Reflect.deleteProperty(Range.prototype, 'getBoundingClientRect') })
+  const oldRangeRect = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
+  Object.defineProperty(Range.prototype, 'getClientRects', { configurable: true, value(this: Range) { return [{ width: this.toString().length } as DOMRect] } })
+  onTestFinished(() => { if (oldRangeRect) Object.defineProperty(Range.prototype, 'getClientRects', oldRangeRect); else Reflect.deleteProperty(Range.prototype, 'getClientRects') })
   const elementRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-    return { width: this.textContent === '…' ? 1 : width } as DOMRect
+    return { width: this.textContent === '…' ? 1 : this.getAttribute('aria-hidden') === 'true' ? this.textContent!.length : width } as DOMRect
   })
   onTestFinished(() => elementRect.mockRestore())
   const tree: ClaudeUiMountState = { status: 'live', tree: { kind: 'text', text: 'ab', style: { wrap: 'truncate-middle' }, children: [
@@ -784,6 +784,24 @@ it('truncates the original styled inline tree at measured width, redraws on resi
   expect(JSON.stringify(tree.tree)).toContain('cdef')
   app!.unmount(); app = undefined
   expect(document.body.querySelector('[aria-hidden="true"][data-native-text-wrap]')).toBeNull()
+})
+
+it.each([
+  ['ab\ncdefghij', 'ab\nc…hij'],
+  ['ABC אבגדהוזחטי XYZ', 'ABC…XYZ'],
+])('measures disjoint text fragments without using their spatial bounding box: %s', async (value, expected) => {
+  const oldRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
+  Object.defineProperty(Range.prototype, 'getClientRects', { configurable: true, value(this: Range) {
+    // Separate line/directional fragments; their advance adds, unlike their bounds.
+    return this.toString().split(/(\n|[א-ת]+)/u).filter(Boolean).map(fragment => ({ width: fragment === '\n' ? 0 : fragment.length }))
+  } })
+  onTestFinished(() => { if (oldRects) Object.defineProperty(Range.prototype, 'getClientRects', oldRects); else Reflect.deleteProperty(Range.prototype, 'getClientRects') })
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return { width: this.textContent === '…' ? 1 : this.getAttribute('aria-hidden') === 'true' ? Math.max(...value.split('\n').map(line => line.length)) : 7 } as DOMRect
+  })
+  onTestFinished(() => rect.mockRestore())
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'text', text: value, style: { wrap: 'middle' } } } })
+  await vi.waitFor(() => expect(f.root.querySelector('[data-native-text-wrap="middle"]')?.textContent).toBe(expected))
 })
 
 it('fits requested multiline rows to its site without losing long text, selection or field-only submission', async () => {

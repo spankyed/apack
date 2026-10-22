@@ -19,7 +19,7 @@ export function useClaudeTextLayout(node: () => ClaudeUiNode, nested: Readonly<R
     if (!host || !measureRange || text === undefined || mode.value === 'wrap') return
     const width = host.getBoundingClientRect().width
     if (width <= 0) return
-    cut.value = claudeTextCut(text, width, mode.value, measureRange, ellipsisWidth)
+    cut.value = claudeTextCut(text, width, mode.value, { width: naturalWidth.value!, range: measureRange }, ellipsisWidth)
   }
   function clearMeasurement() { measurement?.remove(); measurement = undefined; measureRange = undefined }
   async function refresh() {
@@ -45,14 +45,22 @@ export function useClaudeTextLayout(node: () => ClaudeUiNode, nested: Readonly<R
     while ((next = walker.nextNode())) { const leaf = next as Text; leaves.push({ node: leaf, start: offset, end: offset + leaf.length }); offset += leaf.length }
     measureRange = (start, end) => {
       if (end <= start || !leaves.length) return 0
-      const first = leaves.find(leaf => leaf.end > start), last = leaves.find(leaf => leaf.end >= end)
-      if (!first || !last) return 0
-      const range = document.createRange(); range.setStart(first.node, start - first.start); range.setEnd(last.node, end - last.start)
-      return range.getBoundingClientRect().width
+      // Logical selections may span lines or disjoint bidi fragments. Measure each
+      // text leaf separately so element rectangles cannot duplicate its advance.
+      let advance = 0
+      for (const leaf of leaves) {
+        if (leaf.end <= start) continue
+        if (leaf.start >= end) break
+        const range = document.createRange()
+        range.setStart(leaf.node, Math.max(0, start - leaf.start))
+        range.setEnd(leaf.node, Math.min(leaf.node.length, end - leaf.start))
+        for (const rect of range.getClientRects()) advance += rect.width
+      }
+      return advance
     }
     const ellipsis = document.createElement('span'); ellipsis.textContent = '…'; clone.append(ellipsis)
     ellipsisWidth = ellipsis.getBoundingClientRect().width; ellipsis.remove()
-    naturalWidth.value = measureRange(0, text.length)
+    naturalWidth.value = clone.getBoundingClientRect().width
     await nextTick()
     if (disposed || revision !== epoch) return
     observer = new ResizeObserver(measure); observer.observe(host); measure()
