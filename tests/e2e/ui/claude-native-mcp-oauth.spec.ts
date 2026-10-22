@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -145,12 +145,20 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
   await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
   expect(await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())).toEqual(originalSelection)
-  const after=await context();expect(after.turns).toBe(before.turns);expect(after.native.state.nativePid).toBe(boundNativePid)
+  const paths=(await readdir(join(workspace!,'.claude/projects'),{recursive:true})).filter(path=>path.endsWith('/'+sessionId+'.jsonl'))
+  const journal:any[]=[];for(const path of paths)journal.push(...(await readFile(join(workspace!,'.claude/projects',path),'utf8')).split('\n').filter(Boolean).map(line=>JSON.parse(line)))
+  const ordinary=journal.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&typeof row.message?.content==='string')
+  const commandRows=ordinary.filter(row=>row.message.content.startsWith('<command-name>/mcp</command-name>'))
+  const outputRows=ordinary.filter(row=>row.message.content.startsWith('<local-command-stdout>Authentication successful. Connected to research.'))
+  const userPrompts=ordinary.filter(row=>!commandRows.includes(row)&&!outputRows.includes(row))
+  expect(commandRows).toHaveLength(1);expect(outputRows).toHaveLength(1);expect(userPrompts).toHaveLength(1)
+  expect(userPrompts[0].message.content).toBe('Review the release notes for this project.')
+  const after=await context();expect(after.turns).toBe(ordinary.length);expect(after.turns).toBe(before.turns+2);expect(after.native.state.nativePid).toBe(boundNativePid)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue this saved review after signing in to the project tools.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-mcp-oauth-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,originalDocument,originalSelection,originalStateRefusal:true,firstState:new URL(first).searchParams.get('state'),secondState:new URL(second).searchParams.get('state'),cancelledBeforeToken:true,authenticated:true,noPhantomTurn:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-mcp-oauth-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,originalDocument,originalSelection,originalStateRefusal:true,firstState:new URL(first).searchParams.get('state'),secondState:new URL(second).searchParams.get('state'),cancelledBeforeToken:true,authenticated:true,originalTurnAccounting:true,noExtraUserPrompt:true,userPromptUuid:userPrompts[0].uuid,commandUuids:[commandRows[0].uuid,outputRows[0].uuid],beforeTurns:before.turns,afterTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeMcpOAuth:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
