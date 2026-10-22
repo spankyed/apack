@@ -143,10 +143,21 @@ test('collects native MCP form and URL input with retained drafts and interrupti
       }
     }
     if (step.scenario === 'form-interrupt') {
-      const priorPid = pending.ownerPid
+      const ownerPid = pending.ownerPid
+      expect(Number.isInteger(ownerPid)).toBe(true)
+      const nativeChildren: { pid: number; args: string[] }[] = (await readFile(join(workspace!, 'native-children.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+      const serverChildren: { pid: number; ancestors: number[] }[] = (await readFile(join(workspace!, 'mcp-children.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+      const ownedServer = serverChildren.filter(child => child.ancestors.includes(ownerPid))
+      expect(ownedServer).toHaveLength(1)
+      const originalWriter = nativeChildren.filter(child => ownedServer[0].ancestors.includes(child.pid) && child.args.includes('--print') && child.args.includes(sessionId))
+      expect(originalWriter).toHaveLength(1)
+      const stoppedAt = Date.now()
       await card.getByTitle('Pause agent work', { exact: true }).click()
       await expect.poll(async () => (await context()).claude.pendingElicitation).toBeFalsy()
-      await expect.poll(() => readFile(join(workspace!, 'native-exits.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).some(row => row.pid === priorPid)), { timeout: 15000 }).toBe(true)
+      const originalExit = async () => (await readFile(join(workspace!, 'native-exits.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)).find(row => row.pid === originalWriter[0].pid)
+      await expect.poll(originalExit, { timeout: 15000 }).toBeTruthy()
+      expect((await originalExit()).at).toBeGreaterThanOrEqual(stoppedAt)
+      await writeFile(join(workspace!, 'mcp-elicitation-retirement.json'), JSON.stringify({ ownerPid, nativePid: originalWriter[0].pid, serverPid: ownedServer[0].pid, ancestors: ownedServer[0].ancestors, stoppedAt, exitedAt: (await originalExit()).at }))
     } else if (pending.mode === 'form') {
       await form.getByRole('button', { name: step.scenario === 'form-accept' ? 'Submit' : step.scenario === 'form-decline' ? 'Decline' : 'Cancel', exact: true }).click()
     } else {
