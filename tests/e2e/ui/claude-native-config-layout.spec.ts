@@ -140,7 +140,6 @@ test('keeps original Settings tabs and picker controls usable at both sizes', as
   await keyboard.press('ArrowRight')
   await expect.poll(screen).toContain('Search settings')
   await keyboard.press('ArrowDown')
-  await keyboard.press('/')
   await keyboard.pressSequentially('Model')
   await expect.poll(screen).toMatch(/⌕ Model\s+│/)
   if(!/❯ Model\s/.test(await screen())){
