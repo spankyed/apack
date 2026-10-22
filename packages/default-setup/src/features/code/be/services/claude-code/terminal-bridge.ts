@@ -150,6 +150,15 @@ export async function createClaudeTerminalBridge(options: {
             if (closed || value.sessionId !== projection.sessionId || checkpoint?.sessionId !== projection.sessionId || typeof checkpoint.totalCostUsd !== 'number' || !Number.isFinite(checkpoint.totalCostUsd) || checkpoint.totalCostUsd < 0) return reply(409, {})
             metadata.totalCostUsd = checkpoint.totalCostUsd
           }
+          // Plugin session.model reports the resolved model; Config's original selection is separate.
+          if (metadata.modelSelection === undefined) {
+            const sessionId = projection.sessionId
+            try {
+              const result = object(await ui.transport.request({ subtype: 'apack_get_model_selection', session_id: sessionId }))
+              if (closed || projection.sessionId !== sessionId || result?.sessionId !== sessionId) return reply(409, {})
+              if (typeof result.selection === 'string' && result.selection && result.selection.length <= 256) metadata.modelSelection = result.selection
+            } catch { /* Native binding may not be ready during startup; the next poll retries. */ }
+          }
           session.update(metadata)
           // Native dialogs and terminal shortcuts can change mode without a host command.
           if (object(value.metadata)?.permissionMode === undefined) {

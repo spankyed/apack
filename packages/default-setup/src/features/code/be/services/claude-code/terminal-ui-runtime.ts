@@ -851,6 +851,14 @@ async function control(request,abort){
   }
   return {title:result.newName,message:result.message};
  }
+ if(request.subtype==='apack_get_model_selection'){
+  const expected=request.session_id;
+  if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native model session changed');
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native model controls are not ready');
+  const state=binding.toolContext(abort).getAppState();
+  return {sessionId:expected,selection:state.mainLoopModelForSession??state.mainLoopModel??'default'};
+ }
  if(request.subtype==='apack_list_models')return {models:n.catalog.kae(n.catalog.dOe(request.include_unsupported_models===true))};
  if(request.subtype==='apack_set_model'){
   if(typeof request.model!=='string'||!request.model.trim()||request.model.length>256)throw Error('Invalid native model selection');

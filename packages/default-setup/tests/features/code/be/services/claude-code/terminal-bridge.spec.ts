@@ -208,15 +208,18 @@ it('validates direct-owner turn facts before changing busy state and fences pend
 
 it('refreshes native UI mode changes after the initial poll and uses direct owner mode metadata', async () => {
   await create()
-  const control = vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValueOnce({ mode: 'plan' }).mockResolvedValueOnce({ mode: 'default' })
+  let mode='plan', selection='sonnet'
+  const control = vi.spyOn(bridge!.uiTransport, 'request').mockImplementation(async input=>input.subtype==='apack_get_model_selection'?{sessionId:session,selection}:{mode})
   const metadata = { cwd: '/workspace', model: 'fixture', turns: 1, startedAt: 100 }
   await request('/poll', { sessionId: session, agents: [], metadata })
   expect(bridge!.session.metadata?.permissionMode).toBe('plan')
+  expect(bridge!.session.metadata?.modelSelection).toBe('sonnet');mode='default';selection='default'
   await request('/poll', { sessionId: session, agents: [], metadata })
   expect(bridge!.session.metadata?.permissionMode).toBe('default')
-  await request('/poll', { sessionId: session, agents: [], metadata: { ...metadata, permissionMode: 'auto' }, directOwner: true, busy: false, turn: null })
+  await request('/poll', { sessionId: session, agents: [], metadata: { ...metadata, permissionMode: 'auto', modelSelection:'haiku' }, directOwner: true, busy: false, turn: null })
   expect(bridge!.session.metadata?.permissionMode).toBe('auto')
-  expect(control).toHaveBeenCalledTimes(2)
+  expect(bridge!.session.metadata?.modelSelection).toBe('haiku')
+  expect(control).toHaveBeenCalledTimes(4)
 })
 
 it('publishes native view revisions only from its current process/session and refuses stale observations', async () => {
@@ -365,21 +368,21 @@ it('publishes changed native cost only after the original ledger checkpoint ackn
   await create()
   let release!: (value: unknown) => void
   const control = vi.spyOn(bridge!.uiTransport, 'request').mockImplementation(() => new Promise(yes => { release = yes }))
-  const pending = request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })
+  const pending = request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', modelSelection:'opus', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })
   await vi.waitFor(() => expect(control).toHaveBeenCalledWith({ subtype: 'apack_checkpoint_cost', session_id: session }))
   expect(bridge!.session.metadata).toBeUndefined()
   release({ sessionId: session, totalCostUsd: 0.43 })
   expect((await pending).status).toBe(200)
   expect(bridge!.session.metadata?.totalCostUsd).toBe(0.43)
   control.mockResolvedValue({ sessionId: session, totalCostUsd: 0.43 })
-  await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.43 } })
+  await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', modelSelection:'opus', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.43 } })
   expect(control).toHaveBeenCalledTimes(2)
 })
 
 it('refuses foreign checkpoint acknowledgements without publishing their cost', async () => {
   await create()
   vi.spyOn(bridge!.uiTransport, 'request').mockResolvedValue({ sessionId: 'foreign', totalCostUsd: 99 })
-  expect((await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })).status).toBe(409)
+  expect((await request('/poll', { sessionId: session, agents: [], metadata: { cwd: '/workspace', model: 'fixture', modelSelection:'opus', turns: 2, startedAt: 100, permissionMode: 'default', totalCostUsd: 0.42 } })).status).toBe(409)
   expect(bridge!.session.metadata).toBeUndefined()
 })
 
@@ -398,4 +401,11 @@ it('forwards live action bindings only with valid metadata from the current owne
     expect((await request('/ui-event', { sessionId: session, pid: process.pid, event })).status).toBe(200)
     expect(receive).toHaveBeenCalledExactlyOnceWith(event)
   } finally { unsubscribe() }
+})
+
+it('refuses a foreign original model selection without publishing it into the current session',async()=>{
+ await create()
+ vi.spyOn(bridge!.uiTransport,'request').mockResolvedValue({sessionId:'foreign',selection:'sonnet'})
+ expect((await request('/poll',{sessionId:session,agents:[],metadata:{cwd:'/workspace',model:'fixture',turns:1,startedAt:100,permissionMode:'default'}})).status).toBe(409)
+ expect(bridge!.session.metadata).toBeUndefined()
 })
