@@ -4,7 +4,7 @@ function nativeToolPermissionControl(n,d){
  const skill=d.item.kind==='permission_skill',web=d.item.kind==='permission_webfetch';
  if(!skill&&!web)throw Error('Unsupported native tool permission');
  const name=nativeFunctionName(skill?'WCe':'VCe');
- const expected=nativeFunctionHash(skill?'955f9ffc1db84e02a59e63f805dacaee7f9a97ea83d16f35b83753ea5ea78ff8':'7b0b27d88eabc586448a295d6ebf3c730847b371f09c607b8b503e06e3fae519');
+ const expected=skill?'955f9ffc1db84e02a59e63f805dacaee7f9a97ea83d16f35b83753ea5ea78ff8':'7b0b27d88eabc586448a295d6ebf3c730847b371f09c607b8b503e06e3fae519';
  const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native tool permission traversal exceeded bound');seen.add(fiber);

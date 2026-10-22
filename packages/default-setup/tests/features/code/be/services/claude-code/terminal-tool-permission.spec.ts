@@ -1,4 +1,5 @@
 import vm from 'node:vm'
+import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
 import { stripVTControlCharacters } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
 import { claudeTerminalToolPermissionRuntime } from '#features/code/be/services/claude-code/terminal-tool-permission-runtime.ts'
@@ -21,9 +22,12 @@ function fixture(skill = false) {
   const fiber = { updateQueue: { memoCache: { data: [cache] } }, type: producer, memoizedProps: { payload, wouldTakeAnswer: () => ready }, child: { type: Xe, memoizedProps: control } }
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (value: string) => createHash('sha256').update(value).digest('hex')
-  const runtime = vm.runInNewContext(claudeTerminalToolPermissionRuntime + ';({choices:nativeToolPermissionChoices,answer:answerNativeToolPermissionChoice})', {
+  const runtime = vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalToolPermissionRuntime) + ';({choices:nativeToolPermissionChoices,answer:answerNativeToolPermissionChoice})', {
     process: { stdout: undefined }, createHash, stripVTControlCharacters, composerFunctionHashes: new WeakMap(),
-    nativeFunctionName: (name: string) => name, nativeFunctionHash: () => hash(producer.toString()),
+    nativeFunctionName: (name: string) => name, nativeFunctionHash: (sourceHash: string) => {
+      if (!['955f9ffc1db84e02a59e63f805dacaee7f9a97ea83d16f35b83753ea5ea78ff8', '7b0b27d88eabc586448a295d6ebf3c730847b371f09c607b8b503e06e3fae519'].includes(sourceHash)) throw Error('Unreviewed native producer fingerprint')
+      return hash(producer.toString())
+    },
     nativeDialog: () => current, setTimeout,
   })
   return { runtime, n, dialog, options, control, fiber, cache, decide, open,
