@@ -25,18 +25,6 @@ export default {
       [[
         branch([
           {
-            if: "$.lastStep.result.elicitation == true",
-            steps: [action("CC: Answer MCP Elicitation", {
-              label: "answer-elicitation",
-              map: {
-                threadId: "$.steps[label=route-response].result.threadId",
-                messageId: "$.steps[label=route-response].result.messageId",
-                requestId: "$.steps[label=route-response].result.requestId",
-                response: "$.steps[label=route-response].result.response",
-              },
-            })],
-          },
-          {
             if: "$.event.data.payload.mode == 'Claude Code'",
             steps: [
               action("Claude Code Chat", {
@@ -73,6 +61,18 @@ export default {
           },
         }),
         branch([
+          {
+            if: "$.lastStep.result.elicitation == true",
+            steps: [action("CC: Answer MCP Elicitation", {
+              label: "answer-elicitation",
+              map: {
+                threadId: "$.steps[label=route-response].result.threadId",
+                messageId: "$.steps[label=route-response].result.messageId",
+                requestId: "$.steps[label=route-response].result.requestId",
+                response: "$.steps[label=route-response].result.response",
+              },
+            })],
+          },
           {
             if: "$.lastStep.result.directorySelect == true",
             steps: [
