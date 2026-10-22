@@ -27,7 +27,7 @@ export async function action(
   // Busy metadata can lag submission; an explicit Pause targets the owning native process.
   const prior = getClaudeState(services, threadId);
   const native = services.cli.claudeCode.getNativeTerminal(threadId);
-  if (native && !prior?.pendingControlRequest) {
+  if (native && !prior?.pendingControlRequest && !prior?.pendingElicitation) {
     const sessionId = native.state.sessionId;
     const current = await native.uiTransport.request({ subtype: 'apack_turn_state', session_id: sessionId }) as { turn: { id: string; cancelled: boolean } | null };
     if (services.cli.claudeCode.getNativeTerminal(threadId) !== native) return { success: false, reason: 'native owner changed' };
@@ -37,6 +37,14 @@ export async function action(
   }
   if (!prior?.isRunning && !prior?.pendingControlRequest && !native && !services.cli.claudeCode.getHandle(threadId) && !services.cli.claudeCode.isConversationBusy(threadId)) {
     return { success: true, noop: true };
+  }
+
+  if (prior?.pendingElicitation) {
+    const handle = services.cli.claudeCode.getHandle(threadId);
+    if (handle) {
+      try { await handle.interrupt(); } catch { /* Explicit Stop still retires an unresponsive owner. */ }
+      if (services.cli.claudeCode.getHandle(threadId) !== handle) return { success: false, reason: 'MCP input owner changed' };
+    }
   }
 
   killTurn(services, threadId);

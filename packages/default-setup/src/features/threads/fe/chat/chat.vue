@@ -468,11 +468,11 @@ const recordingLimitMinutes = useSelector(actor, (state) => state.context.settin
 // marked as "busy" in settings. Intentionally ignores chatStateOverrides
 // (the short-lived flash used to surface terminal states like success/error):
 // pausing a transient visual flash is semantically wrong — we only want
-// Pause/Esc to act when the agent is actually in the busy state.
+// Pause/Esc to act on active work. MCP input also retains an explicit stop action.
 const isBusy = useSelector(actor, ({ context }) => {
   const busyId = context.settings?.chatStates?.find(c => c.busy)?.id
   const threadId = context.currentThread?.id
-  return !!busyId && !!threadId && context.chatStates[threadId] === busyId
+  return !!context.currentThread?.context?.claudeCode?.pendingElicitation || !!busyId && !!threadId && context.chatStates[threadId] === busyId
 })
 const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd

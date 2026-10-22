@@ -64,3 +64,14 @@ it('preserves the owner when native turn identity changes during cancellation', 
   await expect(action({ threadId: f.id }, services)).rejects.toThrow('Native turn changed or ended');
   expect(f.events).toEqual([]);
 });
+
+it.each([false, true])('interrupts pending MCP input before stop and preserves a replacement owner: replace=%s', async replace => {
+  const f = setup('print');
+  repository.threadCommands.update(f.id, { context: { claudeCode: { isRunning: false, pendingElicitation: { requestId: 'input', approvalMessageId: 'input-message', ownerPid: 123, serverName: 'research', mode: 'url', message: 'Review' } } } });
+  const events: string[] = [], handle = { interrupt: async () => { events.push('interrupt'); current = replace ? replacement : handle; }, kill: () => { events.push('kill'); } }, replacement = { kill: () => { events.push('replacement.kill'); } };
+  let current: typeof handle | typeof replacement = handle;
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => undefined, getHandle: () => current, isConversationBusy: () => true, clearHandle: () => events.push('clear') } as never });
+  const result = await action({ threadId: f.id }, services);
+  expect(result).toEqual(replace ? { success: false, reason: 'MCP input owner changed' } : { success: true });
+  expect(events).toEqual(replace ? ['interrupt'] : ['interrupt', 'kill', 'clear']);
+});

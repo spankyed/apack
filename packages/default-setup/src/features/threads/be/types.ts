@@ -121,6 +121,8 @@ export interface MessageReferences {
  * the union, because every emit matches one of its arms.
  */
 export type BlockResponse =
+  | { buttonId: 'accept' | 'decline' | 'cancel'; content?: Record<string, import('#features/code/common/mcp-elicitation-form.ts').ClaudeMcpFormValue> }
+  | { validationFailed: true }
   | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
   /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
   | { approved: boolean; reason?: string }

@@ -2306,6 +2306,10 @@
         "kind": "input",
         "fe": "src/extensions/blocks/input/ApprovalButtons.vue"
       },
+      "mcp-elicitation": {
+        "kind": "input",
+        "fe": "src/extensions/blocks/input/McpElicitationInput.vue"
+      },
       "button-group": {
         "kind": "input",
         "fe": "src/extensions/blocks/input/ButtonGroupInput.vue"

@@ -10,6 +10,7 @@ function fixture() {
     events: events as AsyncIterable<StreamLine>,
     send: vi.fn(() => `input-${++sequence}`),
     respond: vi.fn(),
+    respondElicitation: vi.fn(),
     setModel: vi.fn().mockResolvedValue(undefined),
     cancelUserDialog: vi.fn(),
     close: vi.fn(async () => { events.end() }),
@@ -395,4 +396,36 @@ it('observes an empty idle native drain without creating a turn and still accept
  expect(turns).toHaveLength(1);expect(turns[0]!.inputId).toBe(id);expect(turns[0]!.costBaseline).toBe(5)
  expect(seen[0]).toContainEqual(expect.objectContaining({type:'result',user_message_uuid:id,num_turns:0}))
  await owner.close()
+})
+
+it('owns mixed MCP inputs and tool approvals in FIFO order with distinct response channels', async () => {
+  const f = fixture(), received: StreamLine[] = []
+  const owner = createClaudeConversation(f.native, async () => {})
+  const input = owner.start('review', async turn => { for await (const line of turn.handle.events) received.push(line); owner.release(turn.handle) })
+  f.push(started(input))
+  const request = (id: string, mode = 'form') => ({ type: 'control_request', request_id: id, request: { subtype: 'elicitation', mode, mcp_server_name: 'research', requested_schema: { type: 'object', properties: { enabled: { type: 'boolean' }, count: { type: 'integer' } }, required: ['enabled', 'count'] } } })
+  f.push(request('form'))
+  f.push({ type: 'control_request', request_id: 'tool', request: { subtype: 'can_use_tool', tool_name: 'Read', input: {} } })
+  f.push(request('url', 'url'))
+  await vi.waitFor(() => expect(received.filter(line => line.type === 'control_request')).toHaveLength(1))
+  expect(owner.hasPendingElicitation('form')).toBe(true)
+  expect(owner.hasPendingElicitation('url')).toBe(false)
+  expect(() => owner.handle.respond('form', { behavior: 'allow' })).toThrow('own response type')
+  expect(() => owner.handle.respondElicitation('url', { action: 'accept' })).toThrow('no longer pending')
+  expect(() => owner.handle.respondElicitation('form', { action: 'accept', content: { enabled: false, count: '0' } })).toThrow('invalid')
+  vi.mocked(f.native.respondElicitation).mockImplementationOnce(() => { throw Error('write failed') })
+  expect(() => owner.handle.respondElicitation('form', { action: 'accept', content: { enabled: false, count: 0 } })).toThrow('write failed')
+  expect(owner.hasPendingElicitation('form')).toBe(true)
+  owner.handle.respondElicitation('form', { action: 'accept', content: { enabled: false, count: 0 } })
+  await vi.waitFor(() => expect(received.filter(line => line.type === 'control_request')).toHaveLength(2))
+  expect(() => owner.handle.respondElicitation('form', { action: 'cancel' })).toThrow('no longer pending')
+  expect(() => owner.handle.respondElicitation('tool', { action: 'cancel' })).toThrow('no longer pending')
+  owner.handle.respond('tool', { behavior: 'deny', message: 'Keep original' })
+  await vi.waitFor(() => expect(owner.hasPendingElicitation('url')).toBe(true))
+  expect(() => owner.handle.respondElicitation('url', { action: 'accept', content: { extra: 'not a form' } })).toThrow('cannot contain')
+  f.push({ type: 'control_cancel_request', request_id: 'url' })
+  await vi.waitFor(() => expect(owner.hasPendingElicitation('url')).toBe(false))
+  expect(() => owner.handle.respondElicitation('url', { action: 'cancel' })).toThrow('no longer pending')
+  expect(f.native.respondElicitation).toHaveBeenCalledTimes(2)
+  f.push(result(1, input)); await vi.waitFor(() => expect(owner.busy).toBe(false)); await owner.close()
 })

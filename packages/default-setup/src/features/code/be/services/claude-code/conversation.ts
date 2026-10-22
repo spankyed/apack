@@ -1,3 +1,4 @@
+import { parseMcpElicitationForm, validateMcpElicitationForm } from '#features/code/common/mcp-elicitation-form.ts'
 import { createClaudeNestedActivity, type ClaudeNestedActivity } from './nested-activity.ts'
 import { ClaudeProtocolError, ClaudeResultError } from './errors.ts'
 import { normaliseResult, type QueryHandle } from './query.ts'
@@ -25,6 +26,7 @@ export interface ClaudeConversation {
   start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string
   release(handle: QueryHandle): boolean
   ownsTurn(handle: QueryHandle): boolean
+  hasPendingElicitation(requestId: string): boolean
   subscribe(listener: (event: StreamLine) => void): () => void
   close(): Promise<void>
   kill(): void
@@ -80,7 +82,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   let cumulativeCost = accountedCostUsd
   let consumerFailure: unknown
   const listeners = new Set<(event: StreamLine) => void>()
-  // Native workers can ask concurrently; present one permission or generic dialog at a time.
+  // Native workers can ask concurrently; present one permission, dialog or MCP input at a time.
   const permissionRequests = new Map<string, ControlRequestLine>()
   const settledPermissions = new Set<string>()
   let presentedPermission: string | undefined
@@ -113,6 +115,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
   }, respond(requestId, response) {
     if (settledPermissions.has(requestId)) throw new ClaudeProtocolError('native permission request has already settled')
     if (permissionRequests.get(requestId)?.request.subtype === 'request_user_dialog') throw new ClaudeProtocolError('generic dialog requires its own response type')
+    if (permissionRequests.get(requestId)?.request.subtype === 'elicitation') throw new ClaudeProtocolError('MCP elicitation requires its own response type')
     native.respond(requestId, response)
     if (permissionRequests.has(requestId)) {
       retirePermission(requestId)
@@ -120,6 +123,23 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         closing = true; activity.close(); clearPermissions(); native.kill()
         throw error
       }
+    }
+  }, respondElicitation(requestId, response) {
+    const pending = permissionRequests.get(requestId)
+    if (closing || exited || presentedPermission !== requestId || pending?.request.subtype !== 'elicitation' || settledPermissions.has(requestId))
+      throw new ClaudeProtocolError('MCP elicitation is no longer pending')
+    if (response.action === 'accept') {
+      if (pending.request.mode === 'url') {
+        if (response.content !== undefined) throw new ClaudeProtocolError('URL elicitation cannot contain form content')
+      } else {
+        const form = parseMcpElicitationForm(pending.request.requested_schema, Array.isArray(pending.request.property_order) ? pending.request.property_order as string[] : undefined)
+        if (!validateMcpElicitationForm(form, response.content).valid) throw new ClaudeProtocolError('MCP elicitation form response is invalid')
+      }
+    }
+    native.respondElicitation(requestId, response)
+    retirePermission(requestId)
+    try { showNextPermission() } catch (error) {
+      closing = true; activity.close(); clearPermissions(); native.kill(); throw error
     }
   }, cancelUserDialog(requestId) {
     if (settledPermissions.has(requestId) || permissionRequests.get(requestId)?.request.subtype !== 'request_user_dialog') throw new ClaudeProtocolError('generic dialog is no longer pending')
@@ -194,7 +214,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           const parsed = ControlRequestLineSchema.safeParse(event)
           if (!parsed.success) throw new ClaudeProtocolError('malformed native control request')
           const request = parsed.data
-          if (request.request.subtype === 'can_use_tool' || request.request.subtype === 'request_user_dialog') {
+          if (request.request.subtype === 'can_use_tool' || request.request.subtype === 'request_user_dialog' || request.request.subtype === 'elicitation') {
             const id = request.request_id
             if (!id) throw new ClaudeProtocolError('native permission request has no identity')
             if (settledPermissions.has(id) || permissionRequests.has(id)) continue
@@ -286,6 +306,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
       return inputId
     },
     ownsTurn(handle) { return active?.turn.handle === handle },
+    hasPendingElicitation(requestId) { return !closing && !exited && presentedPermission === requestId && permissionRequests.get(requestId)?.request.subtype === 'elicitation' && !settledPermissions.has(requestId) },
     release(handle) {
       if (active?.turn.handle !== handle) return false
       if (!active.terminal) {

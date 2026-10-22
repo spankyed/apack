@@ -1,3 +1,4 @@
+import type { ClaudeMcpForm } from '#features/code/common/mcp-elicitation-form.ts';
 /**
  * Helpers for reading/writing `thread.context.claudeCode` and toggling
  * the `claude-code` tag.
@@ -115,6 +116,10 @@ export interface ClaudeCodeThreadState {
    * is routed.
    */
   pendingControlRequest?: PendingControlRequest;
+  pendingElicitation?: {
+    requestId: string; approvalMessageId: string; ownerPid?: number;
+    serverName: string; mode: 'form' | 'url'; form?: ClaudeMcpForm; message: string;
+  };
   /**
    * Set when the chat action detects no CWD is configured and sends a
    * directory-picker block. Stores the original message params so the
@@ -392,6 +397,15 @@ export function dequeueMessage(services: Services, threadId: string): QueuedMess
   return msg;
 }
 
+/** Retire only this original MCP input; independent tool approvals keep their lifetime. */
+export function cancelPendingElicitation(services: Services, threadId: string, requestId: string): boolean {
+  const pending = getClaudeState(services, threadId)?.pendingElicitation;
+  if (!pending || pending.requestId !== requestId) return false;
+  services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } });
+  persistClaudeState(services, threadId, { pendingElicitation: undefined });
+  return true;
+}
+
 /** Retire only the approval named by a native cancellation; other requests may still be live. */
 export function cancelPendingControlRequest(services: Services, threadId: string, requestId: string): boolean {
   const pending = getClaudeState(services, threadId)?.pendingControlRequest;
@@ -456,6 +470,8 @@ export function killTurn(services: Services, threadId: string): void {
       blockResponse: { cancelled: true },
     } as any);
   }
+
+  if (prior?.pendingElicitation) cancelPendingElicitation(services, threadId, prior.pendingElicitation.requestId);
 
   // Invalidate queued message so the user knows to resend.
   const queued = dequeueMessage(services, threadId);

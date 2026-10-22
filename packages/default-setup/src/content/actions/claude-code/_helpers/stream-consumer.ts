@@ -1,3 +1,4 @@
+import { presentMcpElicitation } from './mcp-elicitation.ts';
 import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
 import { projectClaudeInputReplay } from './native-input-replay.ts';
 import type { ClaudeNestedActivity } from '#features/code/be/services/claude-code/nested-activity.ts';
@@ -31,7 +32,7 @@ import { createThinkingWriter } from './thinking-writer.ts';
 import { createPlanDraft } from './plan-artifact.ts';
 import { parseExitPlanModeInput, buildPlanApprovalContext } from './plan-approval.ts';
 import { parseAskUserQuestionInput } from './ask-user-question.ts';
-import { getClaudeState, persistClaudeState, cancelPendingControlRequest, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
+import { getClaudeState, persistClaudeState, cancelPendingElicitation, cancelPendingControlRequest, setRunning, dequeueMessage, updateClaudeState, updateChatState, extractStaleSessionId, markSessionBroken } from './thread-context.ts';
 import { refreshThreadContextUsage } from './context-usage.ts';
 
 /** Tools whose execution mutates files and should roll up into a diff artifact. */
@@ -194,6 +195,7 @@ export async function consumeStream(
     };
   }
 
+  const ownedElicitations = new Set<string>();
   try {
     // ─── Drain the event stream ──────────────────────────────────────────
     let eventCount = 0;
@@ -435,6 +437,15 @@ export async function consumeStream(
         const req = (line as any).request ?? {};
         const requestId = (line as any).request_id ?? '';
 
+        if (req.subtype === 'elicitation') {
+          if (presentMcpElicitation(services, threadId, handle, requestId, req)) {
+            ownedElicitations.add(requestId);
+            splitOnNextMessageStart = true;
+            services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'cc.stream.paused', payload: { threadId, toolName: 'MCP input' } });
+          }
+          continue;
+        }
+
         if (req.subtype === 'request_user_dialog') {
           handle.cancelUserDialog(requestId);
           services.chat.sendBlockMessage({ threadId, text: 'Claude Code requested a dialog that this app cannot display. The request was cancelled.', blocks: [], forkable: false });
@@ -590,7 +601,10 @@ export async function consumeStream(
 
       // ─── Control cancellation (surfaced by pump) ───────────────────
       if (line.type === 'control_cancel_request') {
-        if (stillCurrent()) cancelPendingControlRequest(services, threadId, line.request_id);
+        if (stillCurrent()) {
+          cancelPendingElicitation(services, threadId, line.request_id);
+          cancelPendingControlRequest(services, threadId, line.request_id);
+        }
         continue;
       }
 
@@ -794,7 +808,8 @@ export async function consumeStream(
     // If pause-turn already ran (isRunning=false), the kill was intentional.
     // Finalize writers cleanly and skip cleanup — pause-turn handled it.
     const state = getClaudeState(services, threadId);
-    if (!state?.isRunning) {
+    const failedMcpInput = state?.pendingElicitation?.ownerPid === handle.pid && !!state?.pendingElicitation && ownedElicitations.has(state.pendingElicitation.requestId);
+    if (!state?.isRunning && !failedMcpInput) {
       log.debug('stream consumer exiting — turn was paused');
       finaliseThinking();
       const segmentHadErrors = nestedToolErrors || toolActivity.entries.some(e => e.status === 'error');
@@ -857,6 +872,9 @@ export async function consumeStream(
       eventType: 'cc.stream.completed',
       payload: { threadId, hadErrors: true, error: message },
     });
+  } finally {
+    const pending = getClaudeState(services, threadId)?.pendingElicitation;
+    if (pending && pending.ownerPid === handle.pid && ownedElicitations.has(pending.requestId)) cancelPendingElicitation(services, threadId, pending.requestId);
   }
 }
 

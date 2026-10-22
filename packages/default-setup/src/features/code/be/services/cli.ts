@@ -1,3 +1,4 @@
+import { parseMcpElicitationForm, validateMcpElicitationForm } from '../../common/mcp-elicitation-form.ts'
 import type { ClaudeNativeLaunch } from '../../common/native-launch.ts'
 import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
 import type { ClaudeNativeTerminalOwner } from './claude-code/terminal-owner.ts'
@@ -55,6 +56,8 @@ export interface CliServiceType {
   /** Clear-cache resolve + exec test — same path as the Settings test button. */
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
+    parseMcpElicitationForm: typeof parseMcpElicitationForm
+    validateMcpElicitationForm: typeof validateMcpElicitationForm
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
     openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string; accountedCostUsd?: number }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
     getConversation(key: string): { owner: ClaudeConversation; launchKey: string } | undefined
@@ -197,6 +200,8 @@ function createCliService(): CliServiceType {
       },
     },
     claudeCode: {
+      parseMcpElicitationForm,
+      validateMcpElicitationForm,
       query(opts) {
         const cwd = opts.cwd ?? resolveCwd()
         // Default replayUserMessages=true so the CLI emits post-persistence

@@ -152,7 +152,7 @@ export async function action(
     pendingToolName: prior?.pendingControlRequest?.toolName ?? null,
   });
 
-  if (services.cli.claudeCode.isConversationBusy(threadId) && !prior?.pendingControlRequest && !prior?.isRunning) {
+  if (services.cli.claudeCode.isConversationBusy(threadId) && !prior?.pendingControlRequest && !prior?.pendingElicitation && !prior?.isRunning) {
     enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
     if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
     return { success: true, queued: true };
@@ -174,14 +174,14 @@ export async function action(
     setRunning(services, threadId, false);
   }
 
-  // If the turn is paused on a permission prompt (isRunning=false but
-  // pendingControlRequest exists), kill the old CLI subprocess so the old
+  // If the turn is paused on permission or MCP input, kill the old
+  // CLI subprocess so its input retires and the old
   // consumer exits cleanly, then proceed with this message as a new turn.
-  if (prior?.pendingControlRequest) {
+  if (prior?.pendingControlRequest || prior?.pendingElicitation) {
     log.info('[concurrency-guard] killing paused turn — will invalidate approval block', {
       threadId,
-      toolName: prior.pendingControlRequest.toolName,
-      approvalMessageId: prior.pendingControlRequest.approvalMessageId,
+      toolName: prior.pendingControlRequest?.toolName ?? 'MCP input',
+      approvalMessageId: prior.pendingControlRequest?.approvalMessageId ?? prior.pendingElicitation?.approvalMessageId,
     });
     killTurn(services, threadId);
   }

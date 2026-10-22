@@ -370,6 +370,11 @@ type BlockMessageOptions = BlockMessageBase & AutoHideOptions;
  * the union, because every emit matches one of its arms.
  */
 type BlockResponse = {
+    buttonId: 'accept' | 'cancel' | 'decline';
+    content?: Record<string, ClaudeMcpFormValue>;
+} | {
+    validationFailed: true;
+} | {
     nativeQuestionAnswer: ClaudeQuestionAnswer;
     nativeQuestionRenderToken?: string;
     nativeQuestionDraftStarted?: boolean;
@@ -807,6 +812,7 @@ interface ClaudeConversation {
     start(input: string | UserInputMessage, consume: ClaudeTurnConsumer): string;
     release(handle: QueryHandle): boolean;
     ownsTurn(handle: QueryHandle): boolean;
+    hasPendingElicitation(requestId: string): boolean;
     subscribe(listener: (event: StreamLine) => void): () => void;
     close(): Promise<void>;
     kill(): void;
@@ -1059,6 +1065,38 @@ declare const ClaudeMcpElicitationAnswerSchema: z.ZodEffects<z.ZodObject<{
     action: "accept" | "cancel" | "decline";
     content?: Record<string, string | number | boolean | string[]> | undefined;
 }>;
+
+interface ClaudeMcpForm {
+    fields: ClaudeMcpFormField[];
+}
+
+interface ClaudeMcpFormField {
+    name: string;
+    type: 'array' | 'boolean' | 'integer' | 'number' | 'string';
+    title: string;
+    description?: string;
+    required: boolean;
+    options?: Array<{
+        value: string;
+        label: string;
+    }>;
+    minLength?: number;
+    maxLength?: number;
+    format?: 'date' | 'date-time' | 'email' | 'uri';
+    minimum?: number;
+    maximum?: number;
+    minItems?: number;
+    maxItems?: number;
+    default?: ClaudeMcpFormValue;
+}
+
+interface ClaudeMcpFormValidation {
+    valid: boolean;
+    errors: Record<string, string>;
+    content?: Record<string, ClaudeMcpFormValue>;
+}
+
+type ClaudeMcpFormValue = string | number | boolean | string[];
 
 type ClaudeMcpStatus = z.infer<typeof ClaudeMcpStatusSchema>;
 
@@ -4315,6 +4353,8 @@ interface CliServiceType {
         error: string;
     }>;
     claudeCode: {
+        parseMcpElicitationForm: typeof parseMcpElicitationForm;
+        validateMcpElicitationForm: typeof validateMcpElicitationForm;
         query(opts: Omit<QueryOptions, 'cwd'> & {
             cwd?: string;
         }): Promise<QueryHandle>;
@@ -11729,6 +11769,9 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
+/** Interpret the pinned native MCP primitive form surface; unknown constructs fail visibly. */
+declare function parseMcpElicitationForm(input: unknown, propertyOrder?: string[]): ClaudeMcpForm;
+
 declare const press: z.ZodObject<{
     client_id: z.ZodString;
     surface: z.ZodEnum<["desktop", "mobile", "vscode"]>;
@@ -13217,6 +13260,9 @@ declare function updateChatState(threadId: EARS.EntityId, chatState: string): vo
  * });
  */
 declare function updateMessageState(messageId: EARS.EntityId, updates: Partial<Pick<MessageEntity, 'blockResponse' | 'blocks' | 'compacted' | 'context' | 'forkable' | 'references' | 'responseTimestamp' | 'status' | 'text'>>): void;
+
+/** Validate without coercion, default insertion or silently deleting unknown response properties. */
+declare function validateMcpElicitationForm(form: ClaudeMcpForm, input: unknown): ClaudeMcpFormValidation;
 
 /** Parse a Codex JSONL file into an array of entries. */
 declare function viewByFile(filePath: string, opts?: {

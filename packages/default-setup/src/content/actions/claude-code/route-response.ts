@@ -55,6 +55,11 @@ export async function action(
     };
   }
 
+  if (state?.pendingElicitation?.approvalMessageId === messageId) return {
+    success: true, elicitation: true, threadId, messageId,
+    requestId: state.pendingElicitation.requestId, response,
+  };
+
   const pending = state?.pendingControlRequest;
 
   if (!pending || pending.approvalMessageId !== messageId) {

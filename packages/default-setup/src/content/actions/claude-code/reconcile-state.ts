@@ -1,3 +1,4 @@
+import { cancelPendingElicitation } from './_helpers/thread-context.ts';
 /**
  * CC: Reconcile State — clears stale Claude Code run-state left over from a previous process.
  *
@@ -32,14 +33,19 @@ export async function action(_params: Record<string, any>, services: Services) {
   for (const thread of threads) {
     const cc = thread.context?.claudeCode;
     const isPaused = thread.chatState === 'paused';
+    const elicitation = cc?.pendingElicitation;
+    const owner = elicitation ? services.cli.claudeCode.getConversation(thread.id)?.owner : undefined;
+    if (elicitation && owner?.handle.pid === elicitation.ownerPid && owner?.hasPendingElicitation(elicitation.requestId)) continue;
+    if (elicitation) cancelPendingElicitation(services, thread.id, elicitation.requestId);
 
     const needsContextRepair = cc && (
+      cc.pendingElicitation !== undefined ||
       cc.isRunning === true ||
       cc.autoAcceptEdits !== undefined ||
       cc.queuedMessage !== undefined ||
       (!isPaused && cc.pendingControlRequest !== undefined)
     );
-    const staleChatState = thread.chatState === 'working';
+    const staleChatState = thread.chatState === 'working' || !!elicitation && isPaused && !cc?.pendingControlRequest;
 
     if (!needsContextRepair && !staleChatState) continue;
 
@@ -49,6 +55,7 @@ export async function action(_params: Record<string, any>, services: Services) {
       const nextCc = {
         ...cc,
         isRunning: false,
+        pendingElicitation: undefined,
         autoAcceptEdits: undefined,
         queuedMessage: undefined,
         ...(!isPaused && { pendingControlRequest: undefined }),
