@@ -115,7 +115,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
           const rgb=(text:string)=>(text.match(/[\d.]+/g)??[]).slice(0,3).map(Number)
           const light=(values:number[])=>values.map(value=>{const v=value/255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0)
           const background=getComputedStyle(element).backgroundColor,bg=light(rgb(background))
-          return [...element.querySelectorAll('.xterm-rows span')].filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
+          return Array.from(element.querySelectorAll('.xterm-rows span')).filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
             const style=getComputedStyle(span),fg=light(rgb(style.color));return {text:span.textContent,color:style.color,background,opacity:Number(style.opacity),ratio:(Math.max(fg,bg)+0.05)/(Math.min(fg,bg)+0.05)}
           })
         }):undefined
