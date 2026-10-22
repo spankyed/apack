@@ -830,6 +830,14 @@ export const threadsSystem = setup({
     }) }),
     pauseTurn: ({ event }) => {
       const { threadId } = threadsSpec.typeOf('PAUSE_TURN', event);
+      const state = repository.threadQueries.byId(threadId as EARS.EntityId)?.context?.claudeCode;
+      // Interactive native work can outlive its original print flow. Dialog cancellation still belongs to that flow.
+      if (services.cli.claudeCode.getNativeTerminal(threadId) && !state?.pendingControlRequest) {
+        void services.action.executeIfFound('CC: Pause Turn', { threadId }).then(result => {
+          if (result?.success !== true) logger.warn('Native Pause refused', { threadId, reason: result?.reason ?? 'Pause action unavailable' });
+        }).catch(error => logger.error('Native Pause failed', { threadId, error: errorMessage(error) }));
+        return;
+      }
       sendToSystem('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'user.thread.pause',
