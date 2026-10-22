@@ -10,6 +10,16 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({ appPage, electronApp }, testInfo) => {
+  if (!workspace || testInfo.status === testInfo.expectedStatus) return
+  try {
+    const context = await appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, claude: state.currentThread?.context?.claudeCode, native: state.nativeTerminalViews } })
+    await writeFile(join(workspace, 'native-mcp-form-final-failure.json'), JSON.stringify({ context, text: await appPage.locator('body').innerText() }, null, 2))
+    const window = await electronApp.browserWindow(appPage), size = appPage.viewportSize() ?? { width: 1100, height: 900 }
+    const png = await window.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), size)
+    await writeFile(testInfo.outputPath('native-mcp-form-final-failure.png'), Buffer.from(png, 'base64'))
+  } catch { /* Keep the original assertion/trace if teardown has already disconnected the app. */ }
+})
 test('uses original terminal MCP fields, validation and decisions with cancellation recovery', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(180000)
   expect(process.env.HOME).toBe(workspace)

@@ -233,3 +233,16 @@ it('keeps native key acknowledgements in their mounted thread and ignores older 
   expect(actor.getSnapshot().context.nativeUiViews[identity.mountId]).toBeUndefined()
   actor.stop()
 })
+
+it('retains native MCP form acknowledgments only in the live addressed terminal view', () => {
+  const actor = createActor(threadsState).start(), identity = { mountId: 'mcp-view', threadId: 'thread' }
+  actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
+  const reply = { type: 'CLAUDE_TERMINAL_STATE' as const, ...identity, opening: false, output: [], mcpOperation: { sequence: 1, status: 'done' as const } }
+  actor.send({ ...reply, threadId: 'foreign' })
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.mcpOperation).toBeUndefined()
+  actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]?.mcpOperation).toEqual(reply.mcpOperation)
+  actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity }); actor.send(reply)
+  expect(actor.getSnapshot().context.nativeTerminalViews[identity.mountId]).toBeUndefined()
+  actor.stop()
+})
