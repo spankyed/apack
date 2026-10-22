@@ -12,6 +12,7 @@ export const claudeNativeLinuxBindings: {
   "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
   "platform": "linux",
   "modules": {
+    "chunk-p22r2x2e.js": { "module": "chunk-mct2b85z.js", "exports": { "AM": "E0" } },
     "chunk-002p0hd2.js": {
       "module": "chunk-ztnrxvr2.js",
       "exports": {
@@ -456,6 +457,9 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "ZCo": "m_o",
+    "tet": "iet",
+    "Fet": "Wet",
     "nvt": "Vvt",
     "Yt": "Yt",
     "Jc": "Jc",
@@ -479,6 +483,10 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "275d086d7b1ac78d0b4b1939853b2a4fe61e3bc9062ab8c6e7fb281589c3c2db": "19dfe0b34faf911b552505295edf61552342b1693db35368422ec24188057bb2",
+    "ba2a4f9045e565e0ac28db116418d4758517b2a2007cc6ae64a40ec73fc4277d": "f9ab5cf602703c4ea7dd602d9e75579c8e06cded225d9e27ee9259920c2d4a23",
+    "c09e34983d996a1a05efed050f5a2f796a68dc838f95090729f83ee627eabb16": "de1c22efcb2efc173ef34470a1588e3d3c79b4abf68ae8e545e733834558e0cb",
+    "2804d5c249ad1589908e897ff8786895851b0c7200aa1fc57068444739efadb3": "38d94bb0e0583f30c3b2e2b1b930963b0d16451db713aede600746541f49dc0a",
     "6edf8bd3b931a479f0396aaba3c24e95d024688ff923fdeb4786595753da185c": "6563259c5d677b1c33363242e541aa98a4d226bf8fb720dcf9f7a64821d06e19",
     "e5fe403fa1df1d1a78036cc6c000de59e2f1fd60f012b324b1fd5ce1ea7f6ad9": "67b6f6d6fabc7b738ce595dc096150635d37f39f599aa3c0ba51e13c4fd7a32a",
     "4207025ab73a47de5622a9f7628917c325044e37f0710e1bbc4a2fb58fb6fb57": "4d2b69f6975bb44e13815dc5cf0d9c8adbcd55b662941e6e94b5528d7b9c2a47",

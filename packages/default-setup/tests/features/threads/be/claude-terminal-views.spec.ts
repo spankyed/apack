@@ -7,7 +7,7 @@ function fixture(prepareInput?: Parameters<typeof createClaudeTerminalViews>[0][
   const output = [{ sequence: 1, text: 'native\r\n' }]
   const owner = { state: { ownerId: randomUUID(), sessionId: randomUUID(), cwd: '/fixture', status: 'live', tasks: [] }, output,
     subscribe: vi.fn((listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) }),
-    answerNotice: vi.fn(async () => {}),
+    answerNotice: vi.fn(async () => {}), operateMcpForm: vi.fn(async () => {}),
     operateTask: vi.fn(async () => ({ stopped: true })),
     submit: vi.fn(async (text: string) => ({ sessionId: owner.state.sessionId, uuid: randomUUID(), text })), input: vi.fn(), resize: vi.fn(), close: vi.fn(async () => {}), kill: vi.fn() } as unknown as ClaudeNativeTerminalOwner
   let current: ClaudeNativeTerminalOwner | undefined = owner
@@ -289,5 +289,29 @@ it('carries the selected phase only to the authenticated owner and preserves a n
     await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].submission).toMatchObject({status:'rejected',problem:'Original policy refusal'}))
     expect(f.owner.submit).toHaveBeenCalledExactlyOnceWith(submit.text, undefined, 'Plan')
     expect(f.send.mock.calls.at(-1)![0].submission?.receipt).toBeUndefined()
+  } finally { f.views.clear() }
+})
+
+it('addresses MCP operations to the live lease and deduplicates pending and completed sequences', async () => {
+  const f = fixture(); let finish!: () => void
+  vi.mocked(f.owner.operateMcpForm).mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM' as const, ownerId: f.owner.state.ownerId, sequence: 1, request: { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'cancel' as const } } }
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, ownerId: 'foreign' }, 'one', f.send)
+    expect(f.owner.operateMcpForm).not.toHaveBeenCalled()
+    f.views.handle(request, 'one', f.send); f.views.handle(request, 'one', f.send); f.views.handle({ ...request, sequence: 2 }, 'one', f.send)
+    await Promise.resolve(); expect(f.owner.operateMcpForm).toHaveBeenCalledExactlyOnceWith(request.request)
+    finish(); await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].mcpOperation?.status).toBe('done'))
+    f.views.handle(request, 'one', f.send); expect(f.owner.operateMcpForm).toHaveBeenCalledOnce()
+  } finally { f.views.clear() }
+})
+it('withdraws queued MCP work when its view detaches before dispatch', async () => {
+  const f = fixture()
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_MCP_FORM', ownerId: f.owner.state.ownerId, sequence: 1, request: { id: 'dialog', revision: randomUUID(), sessionId: f.owner.state.sessionId, token: 'a'.repeat(64), action: { operation: 'accept' } } }, 'one', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', f.send)
+    await Promise.resolve(); expect(f.owner.operateMcpForm).not.toHaveBeenCalled(); expect(f.owner.close).not.toHaveBeenCalled()
   } finally { f.views.clear() }
 })

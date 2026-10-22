@@ -1458,10 +1458,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
-    command: string;
+    revision: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1475,10 +1475,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
-    command: string;
+    revision: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1867,6 +1867,88 @@ interface ClaudeNativeLaunch {
     addDir?: string[];
     pluginDir?: string[];
 }
+
+type ClaudeNativeMcpForm = z.infer<typeof ClaudeNativeMcpFormSchema>;
+
+type ClaudeNativeMcpFormOperation = z.infer<typeof ClaudeNativeMcpFormOperationSchema>;
+
+declare const ClaudeNativeMcpFormOperationSchema: z.ZodDiscriminatedUnion<"operation", [z.ZodObject<{
+    operation: z.ZodLiteral<"edit">;
+    field: z.ZodString;
+    value: z.ZodNullable<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString, "many">]>>;
+}, "strict", z.ZodTypeAny, {
+    value: string | number | boolean | string[] | null;
+    operation: "edit";
+    field: string;
+}, {
+    value: string | number | boolean | string[] | null;
+    operation: "edit";
+    field: string;
+}>, z.ZodObject<{
+    operation: z.ZodEnum<["accept", "decline", "cancel"]>;
+}, "strict", z.ZodTypeAny, {
+    operation: "accept" | "cancel" | "decline";
+}, {
+    operation: "accept" | "cancel" | "decline";
+}>]>;
+
+interface ClaudeNativeMcpFormRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    action: ClaudeNativeMcpFormOperation;
+}
+
+declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    token: z.ZodString;
+    ready: z.ZodBoolean;
+    serverName: z.ZodString;
+    message: z.ZodString;
+    schema: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+    propertyOrder: z.ZodArray<z.ZodString, "many">;
+    values: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString, "many">]>>;
+    errors: z.ZodRecord<z.ZodString, z.ZodString>;
+    resolvingFields: z.ZodArray<z.ZodString, "many">;
+    currentFieldIndex: z.ZodOptional<z.ZodNumber>;
+    focusedButton: z.ZodNullable<z.ZodEnum<["accept", "decline"]>>;
+    textInputValue: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    ready: boolean;
+    revision: string;
+    message: string;
+    values: Record<string, string | number | boolean | string[]>;
+    id: string;
+    sessionId: string;
+    errors: Record<string, string>;
+    token: string;
+    serverName: string;
+    schema: Record<string, unknown>;
+    propertyOrder: string[];
+    resolvingFields: string[];
+    focusedButton: "accept" | "decline" | null;
+    textInputValue: string;
+    currentFieldIndex?: number | undefined;
+}, {
+    ready: boolean;
+    revision: string;
+    message: string;
+    values: Record<string, string | number | boolean | string[]>;
+    id: string;
+    sessionId: string;
+    errors: Record<string, string>;
+    token: string;
+    serverName: string;
+    schema: Record<string, unknown>;
+    propertyOrder: string[];
+    resolvingFields: string[];
+    focusedButton: "accept" | "decline" | null;
+    textInputValue: string;
+    currentFieldIndex?: number | undefined;
+}>;
 
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
@@ -2771,6 +2853,8 @@ interface ClaudeNativeTerminalOwner {
         sequence: number;
         text: string;
     }[];
+    refreshMcpForm(): Promise<void>;
+    operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
     refreshNotice(): Promise<void>;
     answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
     readJournal(): Promise<ClaudeNativeJournalBatch>;
@@ -2846,6 +2930,7 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    mcpForm?: ClaudeNativeMcpForm;
     notice?: ClaudeNativeNotice;
     /** Original native selected view, independent of the app thread. Undefined until observed. */
     view?: ClaudeNativeTerminalView;
@@ -3670,11 +3755,21 @@ type ClaudeTerminalViewRequest = {
     ownerId: string;
     notice: ClaudeNativeNoticeResponse;
 } | {
+    type: 'CLAUDE_TERMINAL_MCP_FORM';
+    ownerId: string;
+    sequence: number;
+    request: ClaudeNativeMcpFormRequest;
+} | {
     type: 'CLAUDE_TERMINAL_CLOSE';
     ownerId: string;
 });
 
 type ClaudeTerminalViewSnapshot = {
+    mcpOperation?: {
+        sequence: number;
+        status: 'done' | 'error' | 'pending';
+        problem?: string;
+    };
     noticeAnswer?: {
         id: string;
         revision: string;

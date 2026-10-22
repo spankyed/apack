@@ -15,6 +15,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
+  | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
 export interface ClaudeTerminalTaskState {
@@ -41,6 +42,7 @@ export interface ClaudeTerminalSubmissionState {
   problem?: string
 }
 export type ClaudeTerminalViewSnapshot = {
+  mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
   submission?: ClaudeTerminalSubmissionState
@@ -69,6 +71,7 @@ interface View {
   launch?: {id: string; abort: AbortController}
   problem?: string
   queued?: boolean
+  mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
   submission?: ClaudeTerminalSubmissionState
@@ -96,13 +99,13 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state: view.owner?.state, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.task = undefined; view.noticeAnswer = undefined
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -155,6 +158,18 @@ export function createClaudeTerminalViews(dependencies: {
       }
       const owner = dependencies.get(event.threadId)
       if (!owner || owner !== target.owner || event.ownerId !== owner.state.ownerId) return
+      if (event.type === 'CLAUDE_TERMINAL_MCP_FORM') {
+        if (!Number.isSafeInteger(event.sequence) || event.sequence <= (target.mcpOperation?.sequence ?? 0) || target.mcpOperation?.status === 'pending') return
+        const operation: NonNullable<ClaudeTerminalViewSnapshot['mcpOperation']> = { sequence: event.sequence, status: 'pending' }
+        target.mcpOperation = operation; publish(key, target)
+        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.mcpOperation === operation
+        void Promise.resolve().then(() => { if (current()) return owner.operateMcpForm(event.request) }).then(() => {
+          if (current()) { target.mcpOperation = { ...operation, status: 'done' }; publish(key, target) }
+        }).catch(error => {
+          if (current()) { target.mcpOperation = { ...operation, status: 'error', problem: error instanceof Error ? error.message : 'Native MCP form action failed' }; publish(key, target) }
+        })
+        return
+      }
       if (event.type === 'CLAUDE_TERMINAL_NOTICE') {
         const notice = owner.state.notice, response = event.notice
         if (!notice || !response || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId || !['continue', 'interrupt'].includes(response.decision) || target.noticeAnswer?.status === 'pending') return

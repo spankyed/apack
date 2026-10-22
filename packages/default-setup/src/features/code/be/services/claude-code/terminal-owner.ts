@@ -1,3 +1,4 @@
+import { ClaudeNativeMcpFormSchema, ClaudeNativeMcpFormOperationSchema, type ClaudeNativeMcpFormRequest } from '../../../common/native-mcp-form.ts'
 import { ClaudeNativeGenericToolPermissionDialogsSchema, type ClaudeNativeGenericToolPermissionDialog, type ClaudeNativeGenericToolPermissionDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeToolPermissionDialogsSchema, type ClaudeNativeToolPermissionDialog, type ClaudeNativeToolPermissionDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeNoticeSchema, type ClaudeNativeNotice, type ClaudeNativeNoticeResponse } from '../../../common/native-notice.ts'
@@ -33,6 +34,8 @@ export interface ClaudeNativeTerminalOwner {
   beforeRelease(listener: () => Promise<void>): void
   /** Raw native terminal bytes, sequenced independently of presentation metadata. */
   readonly output: readonly { sequence: number; text: string }[]
+  refreshMcpForm(): Promise<void>
+  operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>
   refreshNotice(): Promise<void>
   answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>
   readJournal(): Promise<ClaudeNativeJournalBatch>
@@ -173,15 +176,45 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.signal?.aborted) kill()
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
+    let mcpForm: import('../../../common/native-mcp-form.ts').ClaudeNativeMcpForm | undefined
+    let operatingMcpForm = false, mcpFormEpoch = 0
     let notice: ClaudeNativeNotice | undefined
     let changingView = false, preparingParent = false, planRestorationChecked = false
     return {
-      get state() { return { notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { mcpForm: closed ? undefined : mcpForm, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport: bridge.uiTransport,
+      async refreshMcpForm() {
+        if (closed || operatingMcpForm) return
+        const epoch = mcpFormEpoch
+        try {
+          const result = await bridge.uiTransport.request({ subtype: 'apack_mcp_form' }) as { form?: unknown }
+          if (closed || operatingMcpForm || epoch !== mcpFormEpoch) return
+          const next = result.form == null ? undefined : ClaudeNativeMcpFormSchema.parse(result.form)
+          if (next && next.sessionId !== bridge.projection.sessionId) throw new Error('Native MCP form session changed')
+          if (JSON.stringify(next) !== JSON.stringify(mcpForm)) { mcpForm = next; changed() }
+        } catch (error) {
+          if (!closed && epoch === mcpFormEpoch && !operatingMcpForm && mcpForm) { mcpForm = undefined; changed() }
+          throw error
+        }
+      },
+      async operateMcpForm(request) {
+        if (closed || operatingMcpForm || !mcpForm || request.sessionId !== bridge.projection.sessionId || request.id !== mcpForm.id || request.revision !== mcpForm.revision || request.token !== mcpForm.token) throw new Error('Native MCP form changed or is busy')
+        const action = ClaudeNativeMcpFormOperationSchema.parse(request.action)
+        operatingMcpForm = true; mcpFormEpoch++
+        try {
+          const result = await bridge.uiTransport.request({ subtype: 'apack_operate_mcp_form', id: request.id, revision: request.revision, session_id: request.sessionId, token: request.token, action }) as { form?: unknown; settled?: unknown }
+          if (closed) throw new Error('Native MCP form owner exited')
+          if (typeof result.settled !== 'boolean') throw new Error('Native MCP form action was not acknowledged')
+          const next = result.form == null ? undefined : ClaudeNativeMcpFormSchema.parse(result.form)
+          if (result.settled ? next !== undefined : !next || next.id !== request.id || next.revision !== request.revision || next.sessionId !== request.sessionId) throw new Error('Native MCP form action returned a different request')
+          if (next && next.sessionId !== bridge.projection.sessionId) throw new Error('Native MCP form session changed')
+          mcpForm = next; changed()
+        } finally { operatingMcpForm = false }
+      },
       async refreshNotice() {
         if (closed || !bridge.ready) return
         const sessionId = bridge.projection.sessionId

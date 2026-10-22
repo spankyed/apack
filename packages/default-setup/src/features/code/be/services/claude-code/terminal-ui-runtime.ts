@@ -1,3 +1,4 @@
+import { claudeTerminalMcpFormRuntime } from './terminal-mcp-form-runtime.ts'
 import { claudeTerminalGenericPermissionRuntime } from './terminal-generic-permission-runtime.ts'
 import { claudeTerminalToolPermissionRuntime } from './terminal-tool-permission-runtime.ts'
 import { claudeTerminalStreamRuntime } from './terminal-stream-runtime.ts'
@@ -288,6 +289,7 @@ async function initialize(){
   const toolRendering=await import('/$bunfs/root/chunk-r2k35jby.js'),staticRender=await import('/$bunfs/root/chunk-mn4kxp8g.js'),appProvider=await import('/$bunfs/root/chunk-002p0hd2.js'),toolExport=await import('/$bunfs/root/chunk-ste1xxgx.js'),jsx=await import('/$bunfs/root/chunk-4hec5rn1.js');
   const documentRendering=await import('/$bunfs/root/chunk-hz2qqf17.js'),documentDefaults=await import('/$bunfs/root/chunk-pbm0yhpt.js');
   const themeRoots=await import('/$bunfs/root/chunk-pg10s5g1.js');
+  const mcpInputTiming=await import('/$bunfs/root/chunk-p22r2x2e.js');
   const nativeKeyEvents=await import('/$bunfs/root/chunk-174fh6cj.js'),nativeKeyBindings=await import('/$bunfs/root/chunk-tvszjqy2.js'),nativeKeyDialogs=await import('/$bunfs/root/chunk-9qecvs92.js');
   const themePreferences=await import('/$bunfs/root/chunk-gnpc8ecg.js');
   const rename=await import('/$bunfs/root/chunk-swjk3jdr.js');
@@ -319,7 +321,7 @@ async function initialize(){
   let previousRoster=JSON.stringify(paneRoster(modules));
   runtime.k7t().subscribe(()=>{for(const site of sites.values())refreshSite(modules,site);});
   roster.Ui().subscribe(()=>{synchronizePanes(modules);const current=paneRoster(modules),encoded=JSON.stringify(current);if(encoded===previousRoster)return;previousRoster=encoded;publish({type:'system',subtype:'ui_panes',...current});});
-  return native={nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
+  return native={mcpInputTiming,nativeKeyEvents,nativeKeyBindings,nativeKeyDialogs,nativeHost,nativeClients,clientRuntime,documentRendering,documentDefaults,gate,engine,session,roster,schemas,runtime,commandInput,commandOutput,commandTags,commandEntities,toolBackground,terminalComponents,transcriptState,toolRendering,staticRender,appProvider,toolExport,jsx,themeRoots,themePreferences,rename,taskControls,workflowTasks,workflowCommand,taskResume,taskInputGate,mcp,mcpControls,permissions,models,catalog,questionTool,questionOptions,questionText,paths,planConsent,planAuto,planNormalize,planTool,planTeams,planStore,planProactivity};
  })();
  return initializing;
 }
@@ -487,6 +489,7 @@ function drainCompletion(n,clientId,state){
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
 const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
 let mcpControlActive=false;
+${claudeTerminalMcpFormRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
@@ -766,6 +769,8 @@ async function control(request,abort){
   else{const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};d.store.answer(d.item.id,result);}
   dialogRevisions.delete('permission_bash');return {answered:true};
  }
+ if(request.subtype==='apack_mcp_form'){const d=nativeMcpFormDialog(n);return {form:nativeMcpFormPresentation(n,d)};}
+ if(request.subtype==='apack_operate_mcp_form')return operateNativeMcpForm(n,request,abort.signal);
  if(request.subtype==='apack_generic_tool_permission_dialogs'){
   const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
   const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;

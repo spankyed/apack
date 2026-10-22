@@ -42,6 +42,7 @@
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
+          <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -240,6 +241,7 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
+import NativeMcpForm from './NativeMcpForm.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
@@ -303,6 +305,12 @@ const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerm
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm
+  if (!mount || !owner || !form) return
+  actor.send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+    request: { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, action } })
+}
 const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
 const pageSelection = provideClaudeUiSelection(() => composerAreaRef.value)
 watch(() => JSON.stringify([currentThread.value?.id, nativeUiMount.value?.mountId, allMessages.value.filter(message => message.sender === 'user').at(-1)?.id]), pageSelection.clear)

@@ -29,6 +29,7 @@ export interface ClaudeNativeFocusProjection {
 }
 
 export interface ClaudeNativeTerminalState {
+  mcpForm?: import('./native-mcp-form.ts').ClaudeNativeMcpForm
   notice?: import('./native-notice.ts').ClaudeNativeNotice
   /** Original native selected view, independent of the app thread. Undefined until observed. */
   view?: ClaudeNativeTerminalView
