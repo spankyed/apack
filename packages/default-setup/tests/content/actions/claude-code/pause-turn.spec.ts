@@ -8,34 +8,59 @@ function setup(kind: 'native' | 'print' | 'idle', pending = false, busy = kind =
   repository.threadCommands.update(id, { context: { claudeCode: { isRunning: kind === 'print',
     ...(pending ? { pendingControlRequest: { requestId: 'permission', toolName: 'Write', approvalMessageId: 'approval' } } : {}),
   } } });
-  const native = { kill: vi.fn() }, print = { kill: vi.fn() };
-  const getNativeTerminal = vi.fn(() => kind === 'native' ? native : undefined);
-  const clearHandle = vi.fn();
-  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal, getHandle: vi.fn(() => kind === 'print' ? print : undefined), isConversationBusy: vi.fn(() => busy), clearHandle } as never });
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
-  mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
-  mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-  return { id, native, print, getNativeTerminal, clearHandle };
+  const events: unknown[][] = [], requests: Record<string, unknown>[] = [];
+  const control = { turn: { id: 'original-turn', cancelled: false } as { id: string; cancelled: boolean } | null, replace: false, refuse: false };
+  const native = { state: { sessionId: 'original-session' }, kill: () => { events.push(['native.kill']); }, uiTransport: { request: async (request: Record<string, unknown>) => {
+    requests.push(request);
+    if (request.subtype === 'apack_turn_state') return { turn: control.turn };
+    if (control.refuse) throw new Error('Native turn changed or ended');
+    return { cancelled: true };
+  } } };
+  const print = { kill: () => { events.push(['print.kill']); } };
+  let nativeReads = 0;
+  mockService<Services, 'cli'>('cli', { claudeCode: {
+    getNativeTerminal: () => kind === 'native' && !(control.replace && nativeReads++ > 0) ? native : undefined,
+    getHandle: () => kind === 'print' ? print : undefined,
+    isConversationBusy: () => busy,
+    clearHandle: (threadId: string) => { events.push(['clearHandle', threadId]); },
+  } as never });
+  mockService<Services, 'chat'>('chat', { updateMessageState: (messageId: any, value: any) => { events.push(['message', messageId, value]); } });
+  mockService<Services, 'threads'>('threads', { updateChatState: (threadId: any, value: any) => { events.push(['state', threadId, value]); } });
+  mockService<Services, 'logger'>('logger', { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} });
+  return { id, events, requests, control };
 }
-it.each(['native', 'print'] as const)('pauses the owning %s process and clears pending interaction', async kind => {
+it.each(['native', 'print'] as const)('stops the owning %s process for pending-dialog cancellation', async kind => {
   const f = setup(kind, true);
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true });
-  expect(kind === 'native' ? f.native.kill : f.print.kill).toHaveBeenCalledOnce();
-  expect(kind === 'native' ? f.print.kill : f.native.kill).not.toHaveBeenCalled();
-  expect(f.clearHandle).toHaveBeenCalledWith(f.id);
+  expect(f.events.filter(row => row[0] === kind + '.kill')).toHaveLength(1);
+  expect(f.events).toContainEqual(['clearHandle', f.id]);
   expect(repository.threadQueries.byId(f.id)?.context?.claudeCode).toMatchObject({ isRunning: false, pendingControlRequest: undefined });
-  expect(services.chat.updateMessageState).toHaveBeenCalledWith('approval', expect.objectContaining({ blockResponse: { cancelled: true } }));
+  expect(f.events).toContainEqual(['message', 'approval', expect.objectContaining({ blockResponse: { cancelled: true } })]);
+  expect(f.requests).toEqual([]);
 });
 it('leaves an idle thread alone', async () => {
   const f = setup('idle');
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, noop: true });
-  expect(f.native.kill).not.toHaveBeenCalled(); expect(f.print.kill).not.toHaveBeenCalled(); expect(f.clearHandle).not.toHaveBeenCalled();
+  expect(f.events).toEqual([]);
 });
-
-it('honors Pause for the native owner before the next busy-state poll arrives', async () => {
+it('interrupts the original native turn without killing its owner even before the next busy poll', async () => {
   const f = setup('native', false, false);
-  await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true });
-  expect(f.native.kill).toHaveBeenCalledOnce();
-  expect(f.print.kill).not.toHaveBeenCalled();
-  expect(f.clearHandle).toHaveBeenCalledWith(f.id);
+  await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, interrupted: true });
+  expect(f.requests).toEqual([{ subtype: 'apack_turn_state', session_id: 'original-session' }, { subtype: 'apack_abort_turn', session_id: 'original-session', turn_id: 'original-turn' }]);
+  expect(f.events).toEqual([]);
+});
+it.each([null, { id: 'ending-turn', cancelled: true }])('does not stop the native owner without an active cancellable turn', async turn => {
+  const f = setup('native'); f.control.turn = turn;
+  await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, noop: true });
+  expect(f.requests).toHaveLength(1); expect(f.events).toEqual([]);
+});
+it('refuses a replaced owner before issuing cancellation', async () => {
+  const f = setup('native'); f.control.replace = true;
+  await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: false, reason: 'native owner changed' });
+  expect(f.requests).toHaveLength(1); expect(f.events).toEqual([]);
+});
+it('preserves the owner when native turn identity changes during cancellation', async () => {
+  const f = setup('native'); f.control.refuse = true;
+  await expect(action({ threadId: f.id }, services)).rejects.toThrow('Native turn changed or ended');
+  expect(f.events).toEqual([]);
 });

@@ -401,7 +401,7 @@
       },
       "Action:CC: Pause Turn": {
         "category": "claude-code",
-        "description": "Kills the CLI subprocess and ends the turn on user pause.",
+        "description": "Interrupts active Claude Code work on user pause.",
         "entityType": "Action",
         "input": {
           "threadId": {

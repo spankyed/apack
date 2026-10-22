@@ -409,6 +409,15 @@ async function prepareTerminalPrompt(n,text,id,allowEmpty=false){
  if(filled)preparedPrompt={id,text:actual,before};
  return {filled};
 }
+function nativeTurnControl(n,request,signal,sessionId){
+ if(request.session_id!==sessionId)throw Error('Native turn session changed');
+ const turn=n.runtime.lpe();
+ if(request.subtype==='apack_turn_state')return {turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null};
+ // Original oxr / $.turn.abort: a delayed request must never end a replacement turn.
+ if(!turn||typeof request.turn_id!=='string'||turn.turnId!==request.turn_id)throw Error('Native turn changed or ended');
+ if(turn.cancelled())return {cancelled:false,ending:true};
+ signal.throwIfAborted();turn.cancel();return {cancelled:true};
+}
 // Keep remote edit state separate from the hidden terminal draft used for submission.
 const edits=new Map();
 function clearEdit(clientId){
@@ -689,6 +698,10 @@ async function control(request,abort){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native parent view is unavailable');
   return {main:binding.toolContext(abort).getAppState().viewingAgentTaskId===undefined};
+ }
+ if(request.subtype==='apack_turn_state'||request.subtype==='apack_abort_turn'){
+  const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js');
+  return nativeTurnControl(n,request,abort.signal,String(globals.q()));
  }
  if(request.subtype==='apack_owner_snapshot'){
   const binding=originalContext??n.runtime.ey();
