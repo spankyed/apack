@@ -122,10 +122,14 @@ test('collects native MCP form and URL input with retained drafts and interrupti
         const button = pending.mode === 'form' ? form.getByRole('button', { name: 'Submit', exact: true }) : appPage.getByRole('button', { name: 'Completed', exact: true })
         await button.scrollIntoViewIfNeeded(); await expect(button).toBeInViewport({ ratio: 1 })
         expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
-        const capture = async (suffix: string) => {
+        const capture = async (suffix: string, anchor = button) => {
+          await anchor.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }))
+          await appPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+          await expect(anchor).toBeInViewport({ ratio: 1 })
           const name = 'mcp-input-' + pending.mode + '-' + width + suffix + '.png'
           await appPage.evaluate(() => document.fonts.ready)
           const captured = await nativeWindow.evaluate(async (window, size) => { const image = await window.webContents.capturePage({ x: 0, y: 0, ...size }); return image.toPNG().toString('base64') }, { width, height })
+          await expect(anchor).toBeInViewport({ ratio: 1 })
           await writeFile(testInfo.outputPath(name), Buffer.from(captured, 'base64')); captures.push(name)
         }
         if (pending.mode === 'form') {
@@ -136,7 +140,7 @@ test('collects native MCP form and URL input with retained drafts and interrupti
             expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
           }
           await form.getByLabel('Release title').scrollIntoViewIfNeeded()
-          await capture('-fields')
+          await capture('-fields', form.getByLabel('Release title'))
           await button.scrollIntoViewIfNeeded()
           for (const name of ['Submit', 'Decline', 'Cancel']) {
             await expect(form.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 })
