@@ -250,7 +250,8 @@ test('preserves declared native Text wrapping at actual width and through resize
   if (await section.getByRole('button', { name: 'Back to conversation', exact: true }).isVisible()) await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await composer.fill('Continue the release review in the same session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect.poll(async () => (await context()).claude.chatState).toBe('success')
+  // Same-session print recovery includes the existing 10s initialize budget before its response.
+  await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000, message: 'Original same-session initialize and response complete' }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-text-wrap-app.json'), JSON.stringify({ evidence, sessionId, boundNativePid }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
