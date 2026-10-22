@@ -100,15 +100,17 @@ test('opens original MCP management without replacing the everyday draft', async
   await expect.poll(screen).toContain('research')
   const keyboard=panel.locator('textarea.xterm-helper-textarea')
   await keyboard.press('Enter')
-  await expect.poll(screen).toMatch(/research|echo/i)
-  for(const width of [1100,680]){
+  await expect.poll(screen).toContain('Research MCP Server')
+  for(const {stage,width} of [{stage:'details',width:1100},{stage:'details',width:680},{stage:'tools',width:680}]){
+    if(stage==='tools'){await keyboard.press('Enter');await expect.poll(screen).toMatch(/echo/i)}
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
-    await expect(panel.locator('.xterm-rows')).toContainText('research')
+    await expect(panel.locator('.xterm-rows')).toContainText(stage==='tools'?/echo/i:'Research MCP Server')
+    await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*back/i)
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
     const paint=await panel.locator('.xterm-rows').innerText(),native=await screen()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     const capture=await nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size)
-    expect(capture.size).toEqual(size);const file='native-mcp-panel-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'));captures.push({file,...size,paint,native})
+    expect(capture.size).toEqual(size);const file='native-mcp-panel-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'));captures.push({file,stage,...size,paint,native})
   }
   await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
   await expect(composer).toHaveText(draft)
