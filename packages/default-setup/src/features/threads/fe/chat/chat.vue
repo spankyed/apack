@@ -90,6 +90,7 @@
                 <NativeToolGroup v-for="group in (nativeUiDrawing?.transcriptMessages ?? []).filter(frame => frame.component === 'ToolGroup' && !frame.tools.length && frame.messageId === message.id)" :key="group.uuid" :frame="group as Extract<typeof group, {component: 'ToolGroup'}>" @press="pressNativeUi" @field="editNativeUi" />
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="message.id" @press="pressNativeUi" @field="editNativeUi" />
                 </template>
+                <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -231,6 +232,7 @@ function rotateQuote() {
 import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
 import { claudeClientInput, claudeClientReturnFocus } from './native-client-input.ts'
 import ChatMessage from './message.vue'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'

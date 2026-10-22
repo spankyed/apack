@@ -409,3 +409,23 @@ it('refuses a foreign original model selection without publishing it into the cu
  expect((await request('/poll',{sessionId:session,agents:[],metadata:{cwd:'/workspace',model:'fixture',turns:1,startedAt:100,permissionMode:'default'}})).status).toBe(409)
  expect(bridge!.session.metadata).toBeUndefined()
 })
+
+it('fences transient native previews and clears them across view changes and close', async () => {
+  await create()
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 1, view: { kind: 'main' } })
+  const body = { sessionId: session, pid: process.pid, viewRevision: 1, sequence: 1, preview: { turnId: 'turn', output: 'Original partial line' } }
+  expect((await request('/native-preview', body)).status).toBe(200)
+  expect(bridge!.preview).toEqual(body.preview)
+  expect((await request('/native-preview', { ...body, pid: process.pid + 1, sequence: 2 })).status).toBe(409)
+  expect((await request('/native-preview', { ...body, preview: { ...body.preview, output: 'replayed mutation' } })).status).toBe(409)
+  expect((await request('/native-preview', { ...body, sequence: 2, preview: null })).status).toBe(200)
+  expect(bridge!.preview).toBeUndefined()
+  expect((await request('/native-preview', body)).status).toBe(409)
+  expect((await request('/native-preview', { ...body, sequence: 3 })).status).toBe(200)
+  await request('/native-view', { sessionId: session, pid: process.pid, sequence: 2, view: { kind: 'agent', registryId: 'registry', taskId: 'agent' } })
+  expect(bridge!.preview).toBeUndefined()
+  expect((await request('/native-preview', { ...body, sequence: 4 })).status).toBe(409)
+  expect((await request('/native-preview', { ...body, viewRevision: 2, sequence: 4 })).status).toBe(400)
+  await bridge!.close()
+  expect(bridge!.preview).toBeUndefined()
+})

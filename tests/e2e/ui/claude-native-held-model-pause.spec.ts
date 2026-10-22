@@ -115,6 +115,7 @@ test('pauses a pending native model response and rejects late output while retai
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   expect((await context()).native.state.status).toBe('live')
+  if(streaming)await expect(appPage.locator('[data-native-stream-preview]')).toBeHidden()
   expect((await context()).turns).toBe(before.turns)
   for(const width of [1100,680])await capture('paused',width)
   await writeFile(join(workspace!,'native-held-model-release'),'release after original native cancellation')

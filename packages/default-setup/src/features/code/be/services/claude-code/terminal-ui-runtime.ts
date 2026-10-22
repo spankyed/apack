@@ -1,3 +1,4 @@
+import { claudeTerminalStreamRuntime } from './terminal-stream-runtime.ts'
 import { claudeNativeToolResultRuntime } from './native-tool-result-runtime.ts'
 import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeTerminalRasterRuntime } from './terminal-raster-runtime.ts'
@@ -222,6 +223,7 @@ ${claudeTerminalBashRuntime}
 ${claudeTerminalFileRuntime}
 ${claudeTerminalWorkflowRuntime}
 ${claudeTerminalFocusRuntime}
+${claudeTerminalStreamRuntime}
 ${claudeTerminalDocumentRuntime}
 ${claudeTerminalRasterRuntime}
 ${claudeTerminalHistoryPlacementRuntime}
@@ -708,7 +710,8 @@ async function control(request,abort){
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
-  if(request.policy_only===true)return {...facts,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
+  if(request.policy_only===true)return {...facts,preview,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
@@ -1172,13 +1175,15 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false,reportedView,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0;
+let ownerReading=false,ownerIndependent=false,reportedView,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
+  const previewKey=JSON.stringify([gate.sessionId,gate.sequence,gate.preview]);
+  if(previewKey!==reportedPreview&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
   const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);
   if(focusKey!==reportedFocus){await ownerPost('/native-focus',{sessionId:gate.sessionId,pid:process.pid,sequence:++focusSequence,viewRevision:gate.sequence,focus:gate.focus});reportedFocus=focusKey;}
   const activityKey=JSON.stringify([gate.sessionId,gate.activity,gate.workflows]);

@@ -58,6 +58,7 @@ export async function createClaudeTerminalBridge(options: {
   let lastTurn: ClaudeNativeTerminalState['lastTurn']
   let focus: ClaudeNativeTerminalState['focus'], focusSequence = 0, focusRecord: string | undefined
   let activity: ClaudeNativeTerminalState['activity'], activitySequence = 0, activityRecord: string | undefined
+  let preview: ClaudeNativeTerminalState['preview'], previewSequence = 0, previewRecord: string | undefined
   let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
@@ -74,12 +75,23 @@ export async function createClaudeTerminalBridge(options: {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
+      }
+      if (request.url === '/native-preview') {
+        if (value.sessionId !== projection.sessionId || value.pid !== observerPid || !nativeView || value.viewRevision !== nativeView.revision) return reply(409, {})
+        const next = value.preview === null ? undefined : object(value.preview)
+        if (!Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1 || value.preview !== null && (!next || typeof next.turnId !== 'string' || !next.turnId || next.turnId.length > 256 || typeof next.output !== 'string' || next.output.length > 65536 || nativeView.kind !== 'main')) return reply(400, {})
+        const encoded = JSON.stringify([value.viewRevision, value.preview])
+        if ((value.sequence as number) < previewSequence || value.sequence === previewSequence && encoded !== previewRecord) return reply(409, {})
+        previewSequence = value.sequence as number; previewRecord = encoded
+        const current = next ? { turnId: next.turnId as string, output: next.output as string } : undefined
+        if (JSON.stringify(current) !== JSON.stringify(preview)) { preview = current; options.changed() }
+        return reply(200, {})
       }
       if (request.url === '/native-focus') {
         if (value.sessionId !== projection.sessionId || value.pid !== observerPid || !nativeView || value.viewRevision !== nativeView.revision) return reply(409, {})
@@ -142,7 +154,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if (!policyChanged && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
+        if (changedSession) { preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -221,7 +233,7 @@ export async function createClaudeTerminalBridge(options: {
         const next: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView = view.kind === 'main' ? { kind: 'main', revision: value.sequence as number } : { kind: 'agent', revision: value.sequence as number, registryId: view.registryId as string, ...(typeof view.taskId === 'string' ? { taskId: view.taskId } : {}) }
         if (value.sequence === nativeViewSequence && JSON.stringify(next) !== JSON.stringify(nativeView)) return reply(409, {})
         nativeViewSequence = value.sequence as number
-        if (JSON.stringify(next) !== JSON.stringify(nativeView)) { focus = undefined; nativeView = next; options.changed() }
+        if (JSON.stringify(next) !== JSON.stringify(nativeView)) { preview = undefined; focus = undefined; nativeView = next; options.changed() }
         return reply(200, {})
       }
       if (request.url === '/ui-ready') {
@@ -332,6 +344,7 @@ export async function createClaudeTerminalBridge(options: {
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
       get focus() { return focus },
+      get preview() { return closed ? undefined : preview },
       get activity() { return activity },
       get busy() { return busy || !!pending },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
