@@ -147,7 +147,7 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
       for (const [width, height] of [[1100, 900], [680, 600]]) {
         await appPage.setViewportSize({ width, height })
         for (const field of ['Release title', 'Include archived notes', 'Additional reviewers', 'Reviewer email', 'Review date', 'Audience', 'Sections to review']) {
-          const control = panel.getByLabel(field, { exact: true }); await control.scrollIntoViewIfNeeded(); await expect(control).toBeInViewport({ ratio: 1 })
+          const control = panel.getByLabel(field, { exact: true }); await control.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })); await appPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))); await expect(control).toBeInViewport({ ratio: 1 })
           const bounds = await control.boundingBox(); expect(bounds).toBeTruthy(); expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
         }
         for (const button of ['Submit', 'Decline', 'Cancel']) await expect(panel.getByRole('button', { name: button, exact: true })).toBeInViewport({ ratio: 1 })
