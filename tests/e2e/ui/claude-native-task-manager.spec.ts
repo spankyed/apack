@@ -97,12 +97,18 @@ test('opens original task management from the default composer and stops its bac
   const nativeWindow=await electronApp.browserWindow(appPage),captures:any[]=[]
   async function capture(label:string,width:number){
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
-    if(await taskPanel.isVisible())await expect(taskPanel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
+    let paint:string|undefined
+    if(await taskPanel.isVisible()){
+      await expect(taskPanel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
+      await expect(taskPanel.locator('.xterm-rows')).toContainText('Shell details')
+      await expect(taskPanel.locator('.xterm-rows')).toContainText(/x\s+to\s+stop/i)
+      paint=await taskPanel.locator('.xterm-rows').innerText()
+    }
     else {await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()}
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     let timer:ReturnType<typeof setTimeout>|undefined
     const captured=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(timer)clearTimeout(timer)})
-    expect(captured.size).toEqual(size);const file='active-cancel-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(captured.png,'base64'));captures.push({file,...size})
+    expect(captured.size).toEqual(size);const file='active-cancel-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(captured.png,'base64'));captures.push({file,...size,paint})
   }
   expect(await alive()).toBe(true)
   const before=await context(),stoppedAt=Date.now()
@@ -130,6 +136,7 @@ test('opens original task management from the default composer and stops its bac
     const buffer=terminalScreen!.buffer.active,text=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
     await writeFile(join(workspace!,'native-task-manager-screen.txt'),text);return text
   }
+  await expect.poll(taskScreen).toContain('Shell details')
   await expect.poll(taskScreen).toMatch(/native-bash-wait\.py|Write disposable synthetic fixture/)
   const managerScreens:any[]=[]
   for(const width of [1100,680]){await capture('manager',width);managerScreens.push({width,text:await taskScreen()})}
