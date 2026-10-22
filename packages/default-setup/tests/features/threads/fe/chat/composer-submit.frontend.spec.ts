@@ -32,7 +32,7 @@ vi.mock('#features/threads/fe/chat/ModePhaseSelector.vue', () => ({ default: { r
 vi.mock('#features/threads/fe/chat/FileBlock.vue', () => ({ default: { render: () => null } }))
 vi.mock('#features/threads/fe/chat/ImageThumbnail.vue', () => ({ default: { render: () => null } }))
 
-beforeEach(() => { previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime(); localStorage.clear() })
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime(); localStorage.clear() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
@@ -342,4 +342,29 @@ it.each(['confirm', 'cancel'] as const)('clears only a confirmed unchanged nativ
   f.state.nativeUi = { status: 'connecting', agentInput: { revision: 1, status: 'command_done', decision } }
   await nextTick()
   expect(editor.state.doc.textContent).toBe(decision === 'confirm' ? '' : 'first')
+})
+
+
+it('opens original Claude settings without sending or clearing the draft, selection or pending attachments',async()=>{
+  const f=await nativeMount(),upload=vi.spyOn(window.electronAPI!.media,'upload')
+  let finish!:()=>void
+  f.state.nativeSubmit=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve}))
+  attachments.pendingImages.value=[image('review.png')];attachments.pendingFiles.value=[file('review.txt')]
+  editor.commands.setTextSelection({from:2,to:4});await nextTick()
+  const request=f.prompt.mock.lastCall![0];f.state.nativePrompt!.reply={revision:request.revision,status:'applied',frame:{text:request.text,cursor:request.cursor}};await nextTick()
+  const doc=editor.state.doc,selection=editor.state.selection
+  const button=f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!;button.click();button.click()
+  await vi.waitFor(()=>expect(f.state.nativeSubmit).toHaveBeenCalledExactlyOnceWith('/config',{}))
+  finish();await vi.waitFor(()=>expect(button.disabled).toBe(false))
+  expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true)
+  expect(attachments.pendingImages.value.map(value=>value.name)).toEqual(['review.png']);expect(attachments.pendingFiles.value.map(value=>value.name)).toEqual(['review.txt'])
+  expect(upload).not.toHaveBeenCalled();expect(f.send).not.toHaveBeenCalled();expect(localStorage.getItem('chat-sent-history')).toBeNull()
+})
+it('retains the settings draft on native refusal and retires a waiting action when its attachment changes',async()=>{
+  const f=await nativeMount();f.state.nativeSubmit=vi.fn(async()=>{throw new Error('Native settings refused')});await nextTick()
+  f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click()
+  await vi.waitFor(()=>expect(f.root.textContent).toContain('Native settings refused'));expect(editor.state.doc.textContent).toBe('first')
+  f.state.nativeSubmit=vi.fn(async()=>{});editor.commands.insertContent(' newer');await nextTick()
+  f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click();f.state.nativePrompt={mountId:'replacement-native-view'}
+  await nextTick();await nextTick();expect(f.state.nativeSubmit).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toBe('first newer');expect(f.send).not.toHaveBeenCalled()
 })
