@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -148,11 +148,26 @@ test('reviews original notebook cells and preserves denied content and the every
     expect(capture.size).toEqual(size);const file='native-notebook-restored-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'));captures.push({file,mode:'restored',...size})
   }
   for(const kind of ['replace','insert','delete'])await expect.poll(async()=>readFile(join(workspace!,'native-notebook-result-native_notebook_'+kind+'.json'),'utf8').then(()=>true,()=>false)).toBe(true)
+  const nativeResults:Record<string,unknown>={}
+  for(const kind of ['replace','insert','delete']){
+    const file=join(workspace!,'native-notebook-result-native_notebook_'+kind+'.json')
+    nativeResults[kind]=JSON.parse(await readFile(file,'utf8')).props
+    await rename(file,file+'.native-owner')
+  }
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue the saved release review after editing the notebook.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-notebook-edit-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,previews,formats,originalDocument,originalSelection,retainedDraft:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
+  const printResults:Record<string,unknown>={}
+  for(const kind of ['replace','insert','delete']){
+    const file=join(workspace!,'native-notebook-result-native_notebook_'+kind+'.json')
+    await expect.poll(async()=>readFile(file,'utf8').then(text=>JSON.parse(text).props,()=>null)).toEqual(nativeResults[kind])
+    printResults[kind]=JSON.parse(await readFile(file,'utf8')).props
+    expect(printResults[kind]).not.toHaveProperty('source_uuid')
+    expect(printResults[kind]).not.toHaveProperty('session_id')
+    if(kind!=='delete')expect(printResults[kind]).toHaveProperty('output')
+  }
+  await writeFile(join(workspace!,'native-notebook-edit-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,previews,formats,nativeResults,printResults,originalDocument,originalSelection,retainedDraft:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeNotebookEdit:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

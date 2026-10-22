@@ -147,7 +147,7 @@ it('retains structured result rewrites only in presentation and retires controls
   f.ui.render.mockResolvedValueOnce({ tree: { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: 1 } }, props: { output: { file: '<script>literal</script>' } }, rewritten: true, hooked: true, output_rewritten: true, engine_output: '\u001b[32mOriginal formatted result\u001b[0m' })
   f.host.start(); await vi.advanceTimersByTimeAsync(50)
   expect(f.host.state).toHaveLength(2)
-  expect(f.ui.render).toHaveBeenCalledWith(expect.objectContaining({ component: 'ToolResult', instance_id: 'a', props: { source_uuid: 'result-uuid', assistant_uuid: 'assistant-uuid', text: 'Stored original', tool: 'Read', isErrored: false } }))
+  expect(f.ui.render).toHaveBeenCalledWith(expect.objectContaining({ component: 'ToolResult', instance_id: 'a', props: { session_id: 'session', source_uuid: 'result-uuid', assistant_uuid: 'assistant-uuid', text: 'Stored original', tool: 'Read', isErrored: false } }))
   const frame = f.host.state.find(row => row.component === 'ToolResult')!
   expect(frame).toMatchObject({ text: 'Stored original', outputRewritten: true, engineOutput: '\u001b[32mOriginal formatted result\u001b[0m', displayText: JSON.stringify({ file: '<script>literal</script>' }, null, 2) })
   if (frame.body.status !== 'live' || frame.body.tree.kind !== 'button') throw Error('result button')

@@ -129,7 +129,7 @@ export function createClaudeTranscriptMessageHost(options: {
               : entry.row.component === 'ToolGroup' ? {source_revision:entry.row.revision,isExpanded:entry.row.isExpanded}
               : entry.row.component === 'AssistantMessage' ? { text: originalDisplayText(entry.row), isFirstOfReply: entry.row.isFirstOfReply, ...(entry.row.isSummary ? { isSummary: true } : {}) }
               : (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? { assistant_uuid: entry.row.assistantUuid }
-              : entry.row.component === 'ToolResult' ? { source_uuid: entry.row.resultUuid, assistant_uuid: entry.row.assistantUuid, text: entry.row.text, tool: entry.row.tool, isErrored: entry.row.isErrored }
+              : entry.row.component === 'ToolResult' ? { session_id: entry.row.sessionId, source_uuid: entry.row.resultUuid, assistant_uuid: entry.row.assistantUuid, text: entry.row.text, tool: entry.row.tool, isErrored: entry.row.isErrored }
               : entry.row.component === 'CommandOutput' ? { text: entry.row.text, isErrored: entry.row.isErrored }
               : entry.row.component === 'UserMessage' ? { text: entry.row.text, origin: entry.row.origin, isExpanded: entry.row.isExpanded } : {} })
           if (!valid(entry) || epoch !== entry.epoch) { if (!present(entry)) void release(entry); continue }

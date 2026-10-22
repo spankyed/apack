@@ -10,6 +10,7 @@ import type { ClaudePromptHostFill } from './ui-prompt-host.ts'
 import type { ClaudeUiRender, ClaudeUiRenderResult, ClaudeUiPress, ClaudeUiInput, ClaudeUiSelect, ClaudeUiClientInput } from './ui-controls.ts'
 
 export interface ClaudePrintClientProjection {
+  prepareRender?(request: ClaudeUiRender): Promise<void>
   project(request: ClaudeUiRender, frame: ClaudeUiRenderResult): Promise<ClaudeUiRenderResult>
   action(request: (ClaudeUiPress | ClaudeUiInput | ClaudeUiSelect) & { subtype: string }): Promise<unknown | undefined>
   event(request: { client_id: string; id: string; sequence: number; event: ClaudeUiClientInput }): Promise<unknown>
@@ -66,6 +67,7 @@ export async function prepareClaudePrintClients(options: { bunOptions?: string; 
     return send(operation, value, frame)
   }
   const projection: ClaudePrintClientProjection = {
+    async prepareRender(value) { await request('prepare-render', value) },
     async project(value, frame) {
       const key = keyOf(value), clients = hasClient(frame.tree)
       scopes.set(key, { clientId: value.client_id, clients })

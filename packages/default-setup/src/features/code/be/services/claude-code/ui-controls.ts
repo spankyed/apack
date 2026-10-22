@@ -218,6 +218,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async render(options: ClaudeUiRender): Promise<ClaudeUiRenderResult> {
       const valid = render.parse(options)
+      if(valid.component==='ToolResult')await printClients?.prepareRender?.(valid)
       const frame = renderResult.parse(await request({ subtype: 'ui_render', ...valid }))
       return printClients ? renderResult.parse(await printClients.project(valid, frame)) : frame
     },

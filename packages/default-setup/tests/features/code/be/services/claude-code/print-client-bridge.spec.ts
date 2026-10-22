@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { readFile } from 'node:fs/promises'
@@ -31,7 +32,7 @@ it('requires an owned native palette for ordinary print drawings and parses its 
     await expect(bridge.projection.event({ client_id: site.client_id, id: 'unused', sequence: 1, event: { kind: 'resize', columns: 5, rows: 1 } })).resolves.toEqual({ handled: false })
     expect(bridge.bunOptions).toMatch(/^--preload=user-module.mjs --preload=file:/)
     const generated = createClaudePrintClientRuntime({ socketPath: '/tmp/owned', token: 'private', epoch: 'process' })
-    expect(() => new Function(generated.slice(generated.indexOf('\n') + 1))).not.toThrow()
+    const parsed=spawnSync(process.execPath,['--check','--input-type=module'],{input:generated,encoding:'utf8'});expect(parsed.stderr).toBe('');expect(parsed.status).toBe(0)
   } finally { await bridge.close() }
 })
 it('refuses a native channel outside the owned launcher ancestry', async () => {

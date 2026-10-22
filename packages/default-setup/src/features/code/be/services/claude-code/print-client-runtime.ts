@@ -1,3 +1,4 @@
+import { claudeNativeToolResultRuntime } from './native-tool-result-runtime.ts'
 import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
 import { claudeTerminalClientRuntime } from './terminal-client-runtime.ts'
@@ -8,6 +9,7 @@ export function createClaudePrintClientRuntime(config: { socketPath: string; tok
 const config=${JSON.stringify(config)};
 ${claudeTerminalClientRuntime}
 ${claudeNativeThemeRuntime}
+${claudeNativeToolResultRuntime}
 ` + String.raw`
 if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')==='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37'){
 if(config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
@@ -29,7 +31,10 @@ async function palette(){
 }
 function initialize(){return initialization??=(async()=>{
  themeSettings=await import('/$bunfs/root/chunk-c7857g1z.js');themeResolver=await import('/$bunfs/root/chunk-4z4q4qvr.js');themeFiles=await import('/$bunfs/root/chunk-5feck2gp.js');
+ const source=await import('/$bunfs/root/chunk-hqtnbrjd.js'),session=await import('/$bunfs/root/chunk-hdxpvbx1.js');
  engine=await import('/$bunfs/root/chunk-c7wcn77x.js');gate=await import('/$bunfs/root/chunk-wn0572jb.js');clients=await import('/$bunfs/root/chunk-e980bbar.js');roster=await import('/$bunfs/root/chunk-nkxb8t4d.js');
+ const originalRender=engine.I9e.run;
+ engine.I9e.run=function(value){return Reflect.apply(originalRender,this,[nativePrintToolRender(value,source.ey(),session.q())]);};
  const registry=()=>clients.x3r({port:clients.A3r({run:({plugin,message})=>engine.I9e.clientMessage({plugin,component:message.component,requestId:message.requestId,key:message.element,module:message.module,data:message.data}).then(value=>value??{})})});
  host=createNativeClientHost(registry,invalidate,clients.R3r,{
   current:entry=>{const scope=scopes.get(scopeKey(entry.client,entry.component,entry.requestId));return scope&&scope.revision===entry.instanceRevision&&roster.Kw.list().some(client=>client.clientId===entry.client);},
@@ -42,6 +47,7 @@ function validSite(value){if(!value||typeof value.client_id!=='string'||!/^[A-Za
 async function operation(body,live){
  await initialize();const value=body.value;
  if(body.operation==='decorations'){if(!value||typeof value.client_id!=='string'||!roster.Kw.list().some(client=>client.clientId===value.client_id))throw Error('Print prompt owner is unavailable');await gate._Jo('desktop');return nativePaletteDecorations(await palette(),value.decorations);}
+ if(body.operation==='prepare-render'){validSite(value);if(value.surface!=='desktop')throw Error('Print render surface is unavailable');return {ready:true};}
  if(body.operation==='project'){
   validSite(value);if(value.surface!=='desktop')throw Error('Print Client surface is unavailable');
   const key=scopeKey(value.client_id,value.component,value.instance_id),sequence=body.sequence;
