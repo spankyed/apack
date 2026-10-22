@@ -14,6 +14,7 @@ test('pauses a pending native model response and rejects late output while retai
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
+  const streaming=process.env.CLAUDE_RESEARCH_STREAMING_MODEL_PAUSE==='1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -85,6 +86,7 @@ test('pauses a pending native model response and rejects late output while retai
   const marker=async(name:string)=>JSON.parse(await readFile(join(workspace!,'native-held-model-'+name+'.json'),'utf8').catch(()=>'{}'))
   await expect.poll(async()=>(await marker('ready')).ready).toBe(true)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(true)
+  if(streaming)await expect(appPage.getByText('I am reviewing the migration guidance before continuing.',{exact:true})).toBeVisible()
   const draft='Keep my migration notes while pausing this review.'
   await composer.fill(draft)
   const nativeWindow=await electronApp.browserWindow(appPage),captures:any[]=[]
@@ -137,6 +139,6 @@ test('pauses a pending native model response and rejects late output while retai
   expect((await context()).sessionId).toBe(sessionId)
   expect(await journal()).not.toContain('STALE_RELEASE_REVIEW_MUST_NOT_APPEAR')
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-held-model-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,ownerRetained:true,lateOutputRejected:true,beforeTurns:before.turns,continuedTurns:continued.turns},null,2))
+  await writeFile(join(workspace!,'native-held-model-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,ownerRetained:true,lateOutputRejected:true,streamingStarted:streaming,partialVisible:streaming,beforeTurns:before.turns,continuedTurns:continued.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHeldModelPause:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
