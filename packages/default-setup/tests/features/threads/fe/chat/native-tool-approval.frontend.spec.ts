@@ -161,3 +161,51 @@ it('does not manufacture a cell diff when the original notebook preview is withh
   try { expect(root.textContent).toContain('Notebook is too large to preview'); expect(root.querySelector('[data-testid="native-file-before"],[data-testid="native-file-after"]')).toBeNull(); expect(root.textContent).not.toContain('This cell will be removed.') }
   finally { app.unmount(); root.remove() }
 })
+
+it('shows only original WebFetch scopes and native preview, gates readiness and sends the current choice token', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = reactive({ token: 'a'.repeat(64), ready: false, title: 'Fetch', details: [{ label: 'URL', value: 'Original withheld URL marker' }], choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: false },
+    { value: 'yes-dont-ask-again-domain', label: 'Original domain permission scope', decision: 'allow' as const, feedback: false },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: false },
+  ] })
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'WebFetch', title: tool.title, question: 'Fetch this content?', disabled: false, tool, onRespond: respond }) }); app.mount(root)
+  try {
+    expect(root.textContent).toContain('Original withheld URL marker')
+    expect(root.querySelector('textarea')).toBeNull()
+    expect(root.querySelector<HTMLButtonElement>('.approve')!.disabled).toBe(true)
+    expect(root.querySelector<HTMLButtonElement>('.deny')!.disabled).toBe(true)
+    tool.ready = true; tool.token = 'b'.repeat(64); await nextTick()
+    const select = root.querySelector('select')!
+    expect(Array.from(select.options).map(option => option.value)).toEqual(['yes', 'yes-dont-ask-again-domain'])
+    select.value = 'yes-dont-ask-again-domain'; select.dispatchEvent(new Event('change')); await nextTick()
+    expect(root.querySelector('[data-testid="native-tool-permission-choice-description"]')?.textContent).toBe('Original domain permission scope')
+    root.querySelector<HTMLButtonElement>('.approve')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-dont-ask-again-domain', choiceToken: tool.token })
+    tool.choices.splice(1, 1); await nextTick()
+    expect(root.querySelector<HTMLButtonElement>('.approve')!.disabled).toBe(true)
+  } finally { app.unmount(); root.remove() }
+})
+
+it('preserves exact native-supported Skill feedback for allow and deny, and excludes it from standing choices', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = { token: 'a'.repeat(64), ready: true, title: 'Use skill?', details: [{ label: 'Skill', value: 'release-review' }], choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true },
+    { value: 'yes-exact', label: 'Remember this original skill', decision: 'allow' as const, feedback: false },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: true },
+  ] }
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Skill', title: tool.title, question: 'Use this skill?', disabled: false, tool, onRespond: respond }) }); app.mount(root)
+  try {
+    const feedback = root.querySelector('textarea')!
+    expect(feedback.getAttribute('aria-label')).toBe('Feedback for Claude')
+    feedback.value = '  Review the migration notes first.  '; feedback.dispatchEvent(new Event('input')); await nextTick()
+    root.querySelector<HTMLButtonElement>('.approve')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: tool.token, reason: feedback.value })
+    root.querySelector<HTMLButtonElement>('.deny')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: false, choice: 'no', choiceToken: tool.token, reason: feedback.value })
+    const select = root.querySelector('select')!; select.value = 'yes-exact'; select.dispatchEvent(new Event('change')); await nextTick()
+    expect(feedback.disabled).toBe(true)
+    root.querySelector<HTMLButtonElement>('.approve')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-exact', choiceToken: tool.token })
+  } finally { app.unmount(); root.remove() }
+})

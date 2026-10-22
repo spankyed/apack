@@ -1,3 +1,4 @@
+import { ClaudeToolPermissionApprovalSchema } from '../../../common/native-tool-permission.ts'
 import { ClaudeWorkflowApprovalSchema } from '../../../common/native-workflow-approval.ts'
 import { ClaudeBashApprovalPresentationSchema } from '../../../common/native-bash-approval.ts'
 import { ClaudePlanPresentationSchema } from '../../../common/native-plan.ts'
@@ -109,4 +110,18 @@ export const ClaudeNativeWorkflowDialogsSchema = z.array(ClaudeNativeWorkflowDia
 export type ClaudeNativeWorkflowDialog = z.infer<typeof ClaudeNativeWorkflowDialogSchema>
 export interface ClaudeNativeWorkflowDialogResponse {
   id: string; revision: string; sessionId: string; decision: 'allow' | 'deny'; choice?: string; choiceToken: string; feedback?: string
+}
+
+/** Original WebFetch/Skill approval; only original choice tokens cross back to native. */
+export const ClaudeNativeToolPermissionDialogSchema = z.object({
+  id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['WebFetch', 'Skill']),
+  presentation: ClaudeToolPermissionApprovalSchema, reason: z.string().max(16000).optional(),
+  input: z.record(z.string(), z.unknown()),
+})
+export const ClaudeNativeToolPermissionDialogsSchema = z.array(ClaudeNativeToolPermissionDialogSchema).max(1)
+export type ClaudeNativeToolPermissionDialog = z.infer<typeof ClaudeNativeToolPermissionDialogSchema>
+export interface ClaudeNativeToolPermissionDialogResponse {
+  id: string; revision: string; sessionId: string; toolName: 'WebFetch' | 'Skill';
+  choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
 }

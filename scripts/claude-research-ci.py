@@ -12,6 +12,7 @@ import tempfile
 from urllib.request import urlopen
 
 CASES = {
+    'tool-permissions-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_TOOL_PERMISSIONS': '1'},
     'text-direction-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'text-wrap', 'CLAUDE_RESEARCH_TEXT_DIRECTION': '1'},
     'text-measurement-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'text-wrap', 'CLAUDE_RESEARCH_TEXT_MEASUREMENT': '1'},
     'resting-hover-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'text-wrap', 'CLAUDE_RESEARCH_RESTING_HOVER': '1'},
@@ -111,7 +112,7 @@ def prepare_native_package(target, package, supplied_archive=None):
 
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
-    if linux_container and case not in ['text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
+    if linux_container and case not in ['tool-permissions-app', 'text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
         raise ValueError('Linux container adoption covers reviewed pane, held-policy, prompt-timeout, tool-width Agent IME lifetime and Agent caret profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')

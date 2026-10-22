@@ -1,3 +1,4 @@
+import { ClaudeNativeToolPermissionDialogsSchema, type ClaudeNativeToolPermissionDialog, type ClaudeNativeToolPermissionDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeNoticeSchema, type ClaudeNativeNotice, type ClaudeNativeNoticeResponse } from '../../../common/native-notice.ts'
 import { ClaudeNativeWorkflowDialogsSchema, type ClaudeNativeWorkflowDialog, type ClaudeNativeWorkflowDialogResponse } from './terminal-dialogs.ts'
 import { ClaudeNativeTaskResultSchema } from './terminal-tasks.ts'
@@ -48,6 +49,8 @@ export interface ClaudeNativeTerminalOwner {
   answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>
   getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>
   answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>
+  getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>
+  answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>
   getFileDialogs(): Promise<ClaudeNativeFileDialog[]>
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
@@ -269,6 +272,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native workflow session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_workflow_dialog', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native workflow approval was not acknowledged')
+      },
+      async getToolPermissionDialogs() {
+        if (closed || !bridge.ready) return []
+        const result = await bridge.uiTransport.request({ subtype: 'apack_tool_permission_dialogs' }) as { dialogs?: unknown }
+        return closed ? [] : ClaudeNativeToolPermissionDialogsSchema.parse(result.dialogs)
+      },
+      async answerToolPermissionDialog(response) {
+        if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native tool permission session expired')
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_tool_permission_dialog', decision: response.decision, id: response.id, revision: response.revision, session_id: response.sessionId, toolName: response.toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
+        if (result.answered !== true) throw new Error('Native tool permission was not acknowledged')
       },
       async getFileDialogs() {
         if (closed || !bridge.ready) return []

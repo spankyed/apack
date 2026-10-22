@@ -117,3 +117,15 @@ it('keeps native clear-context choices out of the print-session reset branch', a
   repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: pending } } })
   expect(await routeResponse({ threadId: id, messageId: 'approval', response: { approved: true, clearContext: true } }, services)).toMatchObject({ clearContext: true })
 })
+
+it.each(['WebFetch', 'Skill'] as const)('dispatches only the original %s choice token with exact feedback', async toolName => {
+  const { id } = setup('current')
+  const answerToolPermissionDialog = vi.fn(async () => {})
+  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision' }
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName, nativeTerminal: native } } } })
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: native, answerToolPermissionDialog }) } as never })
+  const response = { choice: 'yes', choiceToken: 'original-token', reason: '  Keep exact native feedback.  ' }
+  await expect(action({ threadId: id, requestId: 'current', toolName, response }, services)).resolves.toEqual({ success: true })
+  expect(answerToolPermissionDialog).toHaveBeenCalledExactlyOnceWith({ decision: 'allow', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.reason })
+  expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined()
+})

@@ -28,6 +28,9 @@
         <template v-if="workflow.canEdit"><button type="button" class="workflow-preview-toggle" :disabled="controlsDisabled" @click="emit('edit-workflow')">Edit in native interface</button><p class="reason">Press Ctrl+G there to open your configured editor, then return here to review before approving.</p></template>
         <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
       </template>
+      <dl v-else-if="tool" class="tool-details">
+        <template v-for="(detail, index) in tool.details" :key="index"><dt>{{ detail.label }}</dt><dd><NativeStatusText :text="detail.value" /></dd></template>
+      </dl>
       <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
       <section v-if="review" class="change-review" :aria-label="review.notebook ? 'Proposed notebook change' : 'Proposed file change'" data-testid="native-file-review">
         <p v-if="review.notebook" data-testid="native-notebook-operation" class="change-label">{{ review.notebook.editMode === 'delete' ? 'Delete cell' : review.notebook.editMode === 'insert' ? 'Insert cell' : 'Replace cell' }}<template v-if="review.notebook.cellId"> · {{ review.notebook.editMode === 'insert' ? 'After cell' : 'Cell' }} {{ review.notebook.cellId }}</template><template v-else-if="review.notebook.editMode === 'insert'"> · At notebook start</template><template v-if="review.notebook.cellType"> · {{ review.notebook.cellType }}</template></p>
@@ -40,44 +43,47 @@
           <p v-if="review.replaceAll" role="note">Replace all matching occurrences</p>
         </template>
       </section>
+      <p v-if="tool && !tool.ready" role="status" class="reason">Waiting for Claude’s approval controls…</p>
       <p v-if="cwd" class="reason">Working directory</p>
       <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
       <p v-if="reason" class="reason">{{ reason }}</p>
-      <details v-if="standingChoices.length" :open="!!file || !!workflow" class="standing-permission">
+      <details v-if="standingChoices.length" :open="!!file || !!workflow || !!tool" class="standing-permission">
         <summary>Remember permission or change mode</summary>
         <label>Approval choice
           <select v-model="selectedChoice" :aria-label="`${toolName} approval choice`" :disabled="controlsDisabled">
-            <option v-if="!workflow || workflow.choices.some(choice => choice.value === 'yes')" value="yes">{{ workflow?.choices.find(choice => choice.value === 'yes')?.label ?? file?.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' }}</option>
+            <option v-if="tool ? tool.choices.some(choice => choice.value === 'yes') : !workflow || workflow.choices.some(choice => choice.value === 'yes')" value="yes">{{ tool?.choices.find(choice => choice.value === 'yes')?.label ?? workflow?.choices.find(choice => choice.value === 'yes')?.label ?? file?.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' }}</option>
             <option v-for="choice in standingChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</option>
           </select>
         </label>
         <p v-if="file && selectedFileChoice && (selectedChoice !== 'yes' || selectedFileChoice.label !== 'Yes')" class="permission-choice-description" data-testid="native-file-permission-choice-description">{{ selectedFileChoice.label }}</p>
+        <p v-if="tool && selectedToolChoice && selectedChoice !== 'yes'" class="permission-choice-description" data-testid="native-tool-permission-choice-description">{{ selectedToolChoice.label }}</p>
         <label v-if="currentChoice && 'prefix' in currentChoice && currentChoice.prefix !== undefined">Command prefix
           <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="controlsDisabled" />
         </label>
       </details>
-      <details>
-        <summary>Add a reason for denying</summary>
-        <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="controlsDisabled" />
+      <details v-if="!tool || tool.choices.some(choice => choice.feedback)">
+        <summary>{{ tool ? 'Add feedback' : 'Add a reason for denying' }}</summary>
+        <textarea v-model="feedback" :aria-label="tool ? 'Feedback for Claude' : 'Reason for denying'" rows="2" maxlength="4000" :disabled="controlsDisabled || !!tool && !selectedToolChoice?.feedback" />
       </details>
     </div>
     <footer>
       <button type="button" class="cancel" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="decisions">
-        <button type="button" class="deny" :disabled="controlsDisabled" @click="deny">Deny</button>
-        <button type="button" class="approve" :disabled="controlsDisabled || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" class="deny" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === 'no')" @click="deny">Deny</button>
+        <button type="button" class="approve" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
+import type { ClaudeToolPermissionApproval } from '#features/code/common/native-tool-permission.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = defineProps<{ workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'NotebookEdit' | 'Workflow'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+const props = defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'NotebookEdit' | 'Workflow' | 'WebFetch' | 'Skill'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
@@ -111,7 +117,8 @@ onBeforeUnmount(() => {
 })
 const feedback = ref('')
 const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string>>({})
-const permission = computed(() => props.workflow ?? props.file)
+const permission = computed(() => props.workflow ?? props.file ?? props.tool)
+const selectedToolChoice = computed(() => props.tool?.choices.find(choice => choice.value === selectedChoice.value))
 const controlsDisabled = computed(() => props.disabled || permission.value?.ready === false)
 const standingChoices = computed(() => (props.toolName === 'Bash' ? props.bash?.choices : permission.value?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
 const selectedFileChoice = computed(() => props.file?.choices.find(choice => choice.value === selectedChoice.value))
@@ -119,13 +126,17 @@ const currentChoice = computed(() => standingChoices.value.find(choice => choice
 const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? (currentChoice.value && 'prefix' in currentChoice.value ? currentChoice.value.prefix : '') ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
 function deny() {
   if (controlsDisabled.value) return
+  if (props.tool) {
+    const no = props.tool.choices.find(choice => choice.value === 'no'); if (!no) return
+    emit('respond', { approved: false, choice: no.value, choiceToken: props.tool.token, ...(no.feedback && feedback.value ? { reason: feedback.value } : {}) }); return
+  }
   emit('respond', { approved: false, reason: feedback.value.trim() || undefined, ...(permission.value ? { choice: 'no', choiceToken: permission.value.token } : {}) })
 }
 function approve() {
   if (controlsDisabled.value) return
   if (permission.value) {
     const choice = permission.value.choices.find(choice => choice.value === selectedChoice.value)
-    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: permission.value.token })
+    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: permission.value.token, ...(props.tool && choice.feedback && feedback.value ? { reason: feedback.value } : {}) })
     return
   }
   const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
@@ -140,6 +151,9 @@ header { flex: none; display: flex; align-items: center; justify-content: space-
 h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .details { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
 .question { margin: 0 0 6px; color: #aaa; }
+.tool-details { margin: 0; }
+.tool-details dt { margin-top: 8px; color: #aaa; }
+.tool-details dd { margin: 4px 0 0; padding: 8px 10px; border-radius: 6px; background: #191919; white-space: pre-wrap; overflow-wrap: anywhere; }
 code { white-space: pre-wrap; display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
 .change-review { margin-top: 10px; }
 .change-label { margin: 8px 0 4px; color: #aaa; }

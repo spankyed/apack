@@ -1402,8 +1402,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1419,8 +1419,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -2587,6 +2587,8 @@ interface ClaudeNativeTerminalOwner {
     answerPlanDialog(response: ClaudeNativePlanDialogResponse): Promise<void>;
     getWorkflowDialogs(): Promise<ClaudeNativeWorkflowDialog[]>;
     answerWorkflowDialog(response: ClaudeNativeWorkflowDialogResponse): Promise<void>;
+    getToolPermissionDialogs(): Promise<ClaudeNativeToolPermissionDialog[]>;
+    answerToolPermissionDialog(response: ClaudeNativeToolPermissionDialogResponse): Promise<void>;
     getFileDialogs(): Promise<ClaudeNativeFileDialog[]>;
     answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>;
     operateTask(taskId: string, operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop', text?: string, worker?: ClaudeNativeWorkflowWorkerTarget): Promise<{
@@ -2693,6 +2695,136 @@ type ClaudeNativeTerminalView = {
     registryId: string;
     taskId?: string;
 };
+
+type ClaudeNativeToolPermissionDialog = z.infer<typeof ClaudeNativeToolPermissionDialogSchema>;
+
+interface ClaudeNativeToolPermissionDialogResponse {
+    id: string;
+    revision: string;
+    sessionId: string;
+    toolName: 'Skill' | 'WebFetch';
+    choice: string;
+    choiceToken: string;
+    decision: 'allow' | 'deny';
+    feedback?: string;
+}
+
+/** Original WebFetch/Skill approval; only original choice tokens cross back to native. */
+declare const ClaudeNativeToolPermissionDialogSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    requestId: z.ZodString;
+    toolName: z.ZodEnum<["WebFetch", "Skill"]>;
+    presentation: z.ZodObject<{
+        token: z.ZodString;
+        ready: z.ZodBoolean;
+        choices: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            decision: z.ZodEnum<["allow", "deny"]>;
+            feedback: z.ZodBoolean;
+        }, "strip", z.ZodTypeAny, {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }, {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }>, "many">;
+    } & {
+        title: z.ZodString;
+        details: z.ZodArray<z.ZodObject<{
+            label: z.ZodString;
+            value: z.ZodString;
+        }, "strip", z.ZodTypeAny, {
+            value: string;
+            label: string;
+        }, {
+            value: string;
+            label: string;
+        }>, "many">;
+    }, "strip", z.ZodTypeAny, {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+    }, {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+    }>;
+    reason: z.ZodOptional<z.ZodString>;
+    input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+}, "strip", z.ZodTypeAny, {
+    revision: string;
+    id: string;
+    input: Record<string, unknown>;
+    sessionId: string;
+    requestId: string;
+    toolName: "Skill" | "WebFetch";
+    presentation: {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+    };
+    reason?: string | undefined;
+}, {
+    revision: string;
+    id: string;
+    input: Record<string, unknown>;
+    sessionId: string;
+    requestId: string;
+    toolName: "Skill" | "WebFetch";
+    presentation: {
+        ready: boolean;
+        title: string;
+        token: string;
+        choices: {
+            value: string;
+            label: string;
+            decision: "allow" | "deny";
+            feedback: boolean;
+        }[];
+        details: {
+            value: string;
+            label: string;
+        }[];
+    };
+    reason?: string | undefined;
+}>;
 
 type ClaudeNativeWorkflowDialog = z.infer<typeof ClaudeNativeWorkflowDialogSchema>;
 

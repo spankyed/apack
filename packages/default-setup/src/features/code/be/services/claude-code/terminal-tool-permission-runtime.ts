@@ -17,7 +17,7 @@ function nativeToolPermissionControl(n,d){
     const child=children.pop();if(!child||visited.has(child))continue;if(visited.size>=2048)throw Error('Native tool permission controls exceeded bound');visited.add(child);
     const control=child.memoizedProps;
     if(typeof child.type==='function'&&Array.isArray(control?.options)&&(skill?typeof control.onSelect==='function':child.type.name===nativeFunctionName('Xe')&&typeof control.onChange==='function'))
-     matches.push({control,ready:typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()===true,skill});
+     matches.push({fiber,control,ready:typeof fiber.memoizedProps.wouldTakeAnswer==='function'&&fiber.memoizedProps.wouldTakeAnswer()===true,skill});
     if(child.sibling)children.push(child.sibling);if(child.child)children.push(child.child);
    }
   }
@@ -25,6 +25,25 @@ function nativeToolPermissionControl(n,d){
  }
  if(matches.length!==1)return;
  const source=matches[0];if(source.control.options.length>16)throw Error('Native tool permission choice limit');return source;
+}
+function nativeToolPermissionPreview(source){
+ if(!source)return;
+ const size=source.skill?48:53;
+ const caches=source.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===size);
+ if(caches?.length!==1)return;
+ const cache=caches[0],title=cache[size-1]?.props?.title,details=[];
+ if(typeof title!=='string'||!title.length||title.length>4000)return;
+ if(source.skill){
+  if(typeof cache[28]?.display==='string')details.push({label:'Skill',value:cache[28].display});
+  if(typeof cache[6]?.text==='string'&&cache[6].text)details.push({label:'Description',value:cache[6].text});
+ }else{
+  const url=cache[3],prompt=cache[5];
+  if(!url||!['full','withheld'].includes(url.kind)||typeof prompt?.text!=='string')return;
+  const value=url.kind==='full'?url.text:url.marker;if(typeof value!=='string')return;
+  details.push({label:'URL',value});if(prompt.text)details.push({label:'Prompt',value:prompt.text});
+ }
+ if(details.some(detail=>detail.value.length>200000))return;
+ return {title,details};
 }
 async function nativeToolPermissionChoices(n,d){
  const source=nativeToolPermissionControl(n,d),choices=[];
@@ -38,19 +57,20 @@ async function nativeToolPermissionChoices(n,d){
    label=await n.staticRender.$bn(n.jsx.e(theme.type,{value:theme.value,children:label}),{columns:100});
   }
   if(typeof label!=='string'||!label.trim()||label.length>4000)throw Error('Invalid native tool permission label');
-  choices.push({value:option.value,label:label.trim(),decision:option.value==='no'?'deny':'allow',feedback:source.skill&&['accept','reject'].includes(option.feedbackConfig?.type)});
+  choices.push({value:option.value,label:stripVTControlCharacters(label).trim(),decision:option.value==='no'?'deny':'allow',feedback:source.skill&&['accept','reject'].includes(option.feedbackConfig?.type)});
  }
  if(new Set(choices.map(choice=>choice.value)).size!==choices.length)throw Error('Ambiguous native tool permission choices');
  const current=nativeToolPermissionControl(n,d);
  if(current?.control!==source?.control)throw Error('Native tool permission changed while formatting');
- const ready=current?.ready===true,token=createHash('sha256').update(JSON.stringify([d.revision,ready,choices])).digest('hex');
- return {source:current,ready,choices,token};
+ const preview=nativeToolPermissionPreview(current),ready=current?.ready===true&&preview!==undefined,token=createHash('sha256').update(JSON.stringify([d.revision,ready,choices,preview])).digest('hex');
+ return {source:current,ready,choices,token,title:preview?.title??(d.item.kind==='permission_skill'?'Skill permission':'Fetch permission'),details:preview?.details??[]};
 }
 async function answerNativeToolPermissionChoice(n,d,request){
  let shown=await nativeToolPermissionChoices(n,d);
  if(!shown.ready||request.choiceToken!==shown.token)throw Error('Native tool permission choices changed or are not ready');
  const choice=shown.choices.find(value=>value.value===request.choice);
  if(!choice)throw Error('Unknown native tool permission choice');
+ if(request.decision!==choice.decision)throw Error('Native tool permission choice does not match decision');
  if(request.feedback!==undefined&&(!choice.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported native tool permission feedback');
  const current=nativeDialog(n,d.item.kind);
  if(current.item!==d.item||current.payload!==d.payload||current.revision!==d.revision||current.sessionId!==d.sessionId)throw Error('Native tool permission expired');
