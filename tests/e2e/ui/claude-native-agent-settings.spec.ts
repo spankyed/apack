@@ -141,7 +141,9 @@ test('preserves selected Agent context through native Settings tabs and compact 
   const workerMessageCount=await focused.locator('[data-native-agent-message]').count()
   const humanRows=async()=>{
     const result:string[]=[]
-    for(const file of (await readdir(join(workspace!,'.claude/projects'),{recursive:true})).filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))){
+    const files=(await readdir(join(workspace!,'.claude/projects'),{recursive:true})).filter(file=>file.endsWith('.jsonl')&&file.includes('agent-'+taskId))
+    expect(files.length).toBeGreaterThan(0)
+    for(const file of files){
       for(const line of (await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').filter(Boolean)){
         const row=JSON.parse(line);if(row.type==='user'&&row.isMeta===true&&row.origin?.kind==='human')result.push(row.uuid)
       }
@@ -149,6 +151,16 @@ test('preserves selected Agent context through native Settings tabs and compact 
     return result
   }
   const originalHumans=await humanRows()
+  const usageRows:any[]=[]
+  for(const file of (await readdir(join(workspace!,'.claude/projects'),{recursive:true})).filter(file=>file.endsWith('.jsonl'))){
+    for(const line of (await readFile(join(workspace!,'.claude/projects',file),'utf8')).trim().split('\n').filter(Boolean)){
+      const row=JSON.parse(line);if(row.type==='assistant'&&row.message?.usage)usageRows.push(row)
+    }
+  }
+  expect(usageRows.length).toBeGreaterThan(0)
+  expect(new Set(usageRows.map(row=>row.uuid)).size).toBe(usageRows.length)
+  const expectedStatsTokens=usageRows.reduce((total,row)=>total+['input_tokens','output_tokens','cache_creation_input_tokens','cache_read_input_tokens'].reduce((sum,key)=>sum+(row.message.usage[key]??0),0),0)
+  expect(expectedStatsTokens).toBeGreaterThan(0)
   async function open(){
     await form.getByRole('button',{name:'Claude settings',exact:true}).click()
     await expect(panel).toBeVisible();await expect(panel).toContainText('Agent · '+agentName)
@@ -186,15 +198,19 @@ test('preserves selected Agent context through native Settings tabs and compact 
   await open();await focusTabs();await keyboard.press('ArrowRight')
   await expect.poll(screen).toContain('Total cost:');await capture('usage-tab')
   await keyboard.press('ArrowRight')
-  // Original jAn/H fail closed for transcript scans without verified organization policy.
-  await expect.poll(screen).toMatch(/Couldn't (?:verify|load) your organization's policy[\s\S]*usage\s+stats/i)
-  await capture('stats-policy');await close();await capture('retained-agent')
+  await expect.poll(screen).toMatch(new RegExp('Total tokens:\\s+'+expectedStatsTokens+'\\b'))
+  await expect.poll(screen).toContain('Favorite model:');await capture('stats-overview')
+  const beforeStatsFocus=(await context()).native.output.at(-1)?.sequence??0
+  await keyboard.press('ArrowDown')
+  await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(beforeStatsFocus)
+  await keyboard.press('ArrowRight');await expect.poll(screen).toContain('Tokens per Day');await capture('stats-models')
+  await close();await capture('retained-agent')
   expect(await focused.locator('[data-native-agent-message]').count()).toBe(workerMessageCount)
   expect(await humanRows()).toEqual(originalHumans)
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parent)
   await capture('retained-parent')
-  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures},null,2))
+  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures},null,2))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing worker settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
