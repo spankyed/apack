@@ -35,8 +35,14 @@ test('completes an everyday native review across Agent, approval, question and i
   const input = section.locator('textarea.xterm-helper-textarea')
   // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
+    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1)
+    const cols=row?.match(/columns:\s*(\d+)/)?.[1],rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0
@@ -156,7 +162,14 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-pause-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
   await composer.fill('Keep this note after interruption.')
   await card.getByTitle('Pause agent work', { exact: true }).click()
+  await expect.poll(async () => (await context()).native.state.busy).toBe(false)
+  expect((await context()).native.state.status).toBe('live')
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  await expect(composer).toHaveText('Keep this note after interruption.')
+  await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+  await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
+  const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await expect(composer).toHaveText('Keep this note after interruption.')
   const ledger = async () => {
     for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
@@ -190,5 +203,5 @@ test('completes an everyday native review across Agent, approval, question and i
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativePauseOwnerRetained: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
 })
