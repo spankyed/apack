@@ -15,6 +15,7 @@ test('pauses a pending native model response and rejects late output while retai
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const streaming=process.env.CLAUDE_RESEARCH_STREAMING_MODEL_PAUSE==='1'
+  const rich=process.env.CLAUDE_RESEARCH_STREAMING_MODEL_RICH==='1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -98,16 +99,24 @@ test('pauses a pending native model response and rejects late output while retai
   }
   const draft='Keep my migration notes while pausing this review.'
   await composer.fill(draft)
-  const nativeWindow=await electronApp.browserWindow(appPage),captures:any[]=[]
-  async function capture(label:string,width:number){
+  const nativeWindow=await electronApp.browserWindow(appPage),captures:any[]=[],richCaptures:any[]=[]
+  async function capture(label:string,width:number,records:any[]=captures){
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
     await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     let timer:ReturnType<typeof setTimeout>|undefined
     const captured=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(timer)clearTimeout(timer)})
-    expect(captured.size).toEqual(size);const file='held-model-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(captured.png,'base64'));captures.push({file,...size})
+    expect(captured.size).toEqual(size);const file='held-model-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(captured.png,'base64'));records.push({file,...size})
   }
 
+  if(rich){
+    const preview=appPage.locator('[data-native-stream-preview]')
+    for(const text of ['Migration review','Keep the migration notes.','Verify the release checklist.','const release = { reviewed: true };','console.log(release.reviewed);'])await expect(preview).toContainText(text)
+    await expect(preview).not.toContainText('UNFINISHED_REVIEW_TAIL_MUST_STAY_HIDDEN')
+    await appPage.setViewportSize({width:1100,height:900})
+    await preview.getByText('Migration review',{exact:false}).first().scrollIntoViewIfNeeded()
+    await capture('rich-heading',1100,richCaptures)
+  }
   if(streaming){
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900})
@@ -121,6 +130,7 @@ test('pauses a pending native model response and rejects late output while retai
       await expect(preview).toBeInViewport();await expect(composer).toHaveText(draft)
     }
   }
+  if(rich)await capture('rich-code',680,richCaptures)
   await capture('pending',680)
   const before=await context()
   await card.getByTitle('Pause agent work',{exact:true}).click()
@@ -162,6 +172,6 @@ test('pauses a pending native model response and rejects late output while retai
   expect((await context()).sessionId).toBe(sessionId)
   expect(await journal()).not.toContain('STALE_RELEASE_REVIEW_MUST_NOT_APPEAR')
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-held-model-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,ownerRetained:true,lateOutputRejected:true,streamingStarted:streaming,partialVisible:streaming,beforeTurns:before.turns,continuedTurns:continued.turns},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHeldModelPause:true,nativeStreamingModelPause:streaming,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-held-model-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,ownerRetained:true,lateOutputRejected:true,streamingStarted:streaming,partialVisible:streaming,richPreviewVerified:rich,richCaptures,beforeTurns:before.turns,continuedTurns:continued.turns},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHeldModelPause:true,nativeStreamingModelPause:streaming,nativeStreamingModelRich:rich,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
