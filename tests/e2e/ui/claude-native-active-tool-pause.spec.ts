@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -105,28 +105,42 @@ test('pauses original active Bash work while retaining its native owner and inde
   await capture('running',680);expect(await alive()).toBe(true)
   const before=await context(),stoppedAt=Date.now()
   await card.getByTitle('Pause agent work',{exact:true}).click()
-  await expect.poll(alive,{timeout:5000}).toBe(false)
-  const childRetiredAt=Date.now()
-  await writeFile(join(workspace!,'native-bash-release'),'released after owner stop')
-  expect(await exists()).toBe(false)
+  const journal=async()=>{
+    const paths=(await readdir(join(workspace!,'.claude/projects'),{recursive:true})).filter(path=>path.endsWith('/'+sessionId+'.jsonl'))
+    const rows:any[]=[];for(const path of paths)rows.push(...(await readFile(join(workspace!,'.claude/projects',path),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)))
+    return rows
+  }
+  const backgrounded=async()=>(await journal()).find(row=>row.type==='user'&&row.toolUseResult?.backgroundedByTurnAbort===true)
+  await expect.poll(async()=>(await backgrounded())?.toolUseResult?.backgroundTaskId).toBeTruthy()
+  const backgroundReceipt=await backgrounded();expect(await alive()).toBe(true);expect(await exists()).toBe(false)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   expect((await context()).native.state.status).toBe('live');expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  await expect(composer).toHaveText(draft);await capture('stopped',1100);await capture('stopped',680)
-  expect(await alive()).toBe(false);expect(await exists()).toBe(false)
-  const after=await context();expect(after.sessionId).toBe(sessionId)
+  const tools=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="toolu_research_fixture_1"]')
+  const toggle=tools.getByRole('button').first();if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()
+  const pausedResult=tools.locator('[data-native-tool-result="toolu_research_fixture_1"] [data-native-tool-format]')
+  await expect(pausedResult).toContainText(/background/i)
+  await expect(composer).toHaveText(draft)
+  for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await pausedResult.evaluate(element=>element.scrollIntoView({block:'nearest'}));await expect(pausedResult).toBeInViewport();await capture('paused',width)}
+  const after=await context();expect(after.sessionId).toBe(sessionId);expect(after.turns).toBe(before.turns)
   await composer.fill('ResearchPermissionTurn1 Continue the release review after native Pause.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).turns).toBeGreaterThan(after.turns)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   expect((await context()).native.state.status).toBe('live');expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  expect(await alive()).toBe(false);expect(await exists()).toBe(false)
+  await expect.poll(async()=>{
+    const rows=await journal(),index=rows.findIndex(row=>row.type==='user'&&row.message?.content==='ResearchPermissionTurn1 Continue the release review after native Pause.')
+    return index>=0&&rows.slice(index+1).some(row=>row.type==='assistant'&&Array.isArray(row.message?.content)&&row.message.content.some((block:any)=>block.type==='text'&&block.text==='Fixture completed.'))
+  }).toBe(true)
+  expect(await alive()).toBe(true);expect(await exists()).toBe(false)
   const continued=await context()
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+  await expect.poll(alive,{timeout:5000}).toBe(false);const childRetiredAt=Date.now()
+  await writeFile(join(workspace!,'native-bash-release'),'released after explicit owner Stop');expect(await exists()).toBe(false)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue this saved review after cancelling active execution.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(await alive()).toBe(false);expect(await exists()).toBe(false);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-active-tool-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-active-tool-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeActiveToolPause:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
