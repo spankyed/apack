@@ -8,7 +8,7 @@
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
-  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="native-inline-text" :class="textClasses" :style="[textPaint, textLayout.layout.value]" :data-native-text-wrap="inlineParent ? undefined : node.style?.wrap" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin"><span v-if="displayedText.text" class="native-text-run" :style="textRunPaint">{{ displayedText.text }}</span><NativeUiNode v-for="(child, index) in displayedText.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
+  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="native-inline-text" :class="textClasses" :style="[textPaint, textLayout.layout.value]" :data-native-text-wrap="inlineParent ? undefined : node.style?.wrap" :dir="node.style?.dir ?? (inlineParent ? undefined : 'auto')" :data-native-plugin="node.plugin"><span v-if="displayedText.text" class="native-text-run" :style="textRunPaint">{{ displayedText.text }}</span><NativeUiNode v-for="(child, index) in displayedText.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :style="{ color: claudeUiColor(node.color) }" :class="node.href ? 'underline focus-visible:outline focus-visible:outline-current' : undefined" @click.prevent="node.href && openLink(node.href)" @auxclick.middle.prevent="node.href && openLink(node.href)">
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </component>
@@ -129,6 +129,8 @@ const boxStyle = computed<CSSProperties>(() => {
   return { ...result, ...paint }
 })
 const textPaint = computed<CSSProperties>(() => ({ ...claudeUiTextPaint(logicalPaint.value),
+  // Default direction belongs to each paragraph; plain nested runs share it.
+  unicodeBidi: inlineParent.value ? undefined : textStyle.value.dir === undefined ? 'plaintext' : 'isolate',
   ...(textStyle.value.italic !== undefined ? { fontStyle: textStyle.value.italic ? 'italic' : 'normal' } : {}),
   ...(overrides.value?.text?.bold !== undefined ? { fontWeight: overrides.value.text.bold ? 600 : 400 }
     : textStyle.value.bold === false && !textStyle.value.weight ? { fontWeight: 400 } : {}),

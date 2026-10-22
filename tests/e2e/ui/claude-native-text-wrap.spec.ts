@@ -13,6 +13,7 @@ test('preserves declared native Text wrapping at actual width and through resize
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
+  const textDirection = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).textDirection === true
   const textMeasurement = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).textMeasurement === true
   const restingHover = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).restingHover === true
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -94,7 +95,51 @@ test('preserves declared native Text wrapping at actual width and through resize
     expect(image.size).toEqual({width,height});await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'))
   }
   const evidence: unknown[] = []
-  if (textMeasurement) {
+  if (textDirection) {
+    const inputs: string[] = JSON.parse(await readFile(join(workspace!, 'native-text-direction-inputs.json'), 'utf8'))
+    expect(inputs).toHaveLength(2)
+    const samples: unknown[] = []
+    for (const [width, height] of [[1100, 900], [680, 600]]) {
+      await appPage.setViewportSize({ width, height })
+      await expect(row('wrap')).toHaveCount(6)
+      for (const [index, text] of inputs.entries()) {
+        for (const [directionIndex, direction] of ['auto', 'rtl', 'ltr'].entries()) {
+          const target = row('wrap').nth(index * 3 + directionIndex)
+          await expect(target).toHaveText(text)
+          const geometry = await target.evaluate(element => {
+            const bounds = element.getBoundingClientRect(), leaves: { node: Text; start: number; end: number }[] = []
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+            let node: Node | null, offset = 0
+            while ((node = walker.nextNode())) { const text = node as Text; leaves.push({ node: text, start: offset, end: offset + text.length }); offset += text.length }
+            let start = 0
+            const lines = element.textContent!.split('\n').map(line => {
+              const end = start + line.length, first = leaves.find(leaf => leaf.end > start)!, last = leaves.find(leaf => leaf.end >= end)!
+              const range = document.createRange(); range.setStart(first.node, start - first.start); range.setEnd(last.node, end - last.start)
+              const rect = range.getBoundingClientRect(); start = end + 1
+              return { text: line, left: rect.left - bounds.left, right: rect.right - bounds.left }
+            })
+            return { direction: element.getAttribute('dir'), unicodeBidi: getComputedStyle(element).unicodeBidi, width: bounds.width, lines, nestedDirections: [...element.querySelectorAll('.native-inline-text')].map(node => node.getAttribute('dir')) }
+          })
+          expect(geometry.direction).toBe(direction)
+          expect(geometry.unicodeBidi).toBe(direction === 'auto' ? 'plaintext' : 'isolate')
+          expect(geometry.nestedDirections).toEqual([null, null])
+          expect(geometry.width).toBeGreaterThan(0)
+          for (const line of geometry.lines) {
+            const expectedDirection = direction === 'auto' ? (/^[א-ת]/u.test(line.text) ? 'rtl' : 'ltr') : direction
+            expect(Math.abs(expectedDirection === 'rtl' ? line.right - geometry.width : line.left)).toBeLessThanOrEqual(1)
+          }
+          await expect(composer).toHaveText('Review the release summary before merging.')
+          expect((await context()).native.state.nativePid).toBe(boundNativePid)
+          expect((await context()).turns).toBe(1)
+          samples.push({ ...geometry, text, width, height, draftRetained: true })
+        }
+      }
+      await expect(composer).toBeInViewport()
+      await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
+      await capturePage(`apack-native-text-direction-${width}-${height}.png`, width, height)
+    }
+    await writeFile(join(workspace!, 'native-text-direction-app.json'), JSON.stringify({ samples, sessionId, boundNativePid }))
+  } else if (textMeasurement) {
     const inputs: { text: string; width: number }[] = JSON.parse(await readFile(join(workspace!, 'native-text-measurement-inputs.json'), 'utf8'))
     expect(inputs).toHaveLength(4)
     const samples: unknown[] = []
@@ -312,5 +357,5 @@ test('preserves declared native Text wrapping at actual width and through resize
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000, message: 'Original same-session initialize and response complete' }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-text-wrap-app.json'), JSON.stringify({ evidence, sessionId, boundNativePid }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover && !textMeasurement, nativeTextMeasurement: textMeasurement, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover && !textMeasurement && !textDirection, nativeTextDirection: textDirection, nativeTextMeasurement: textMeasurement, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })

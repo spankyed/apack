@@ -6,7 +6,7 @@ import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/nativ
 import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
 import { createClaudeHoverSurface, provideClaudeHoverGroups } from '#features/threads/fe/chat/native-ui-hover.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
-import type { ClaudeUiMountState } from '#generated/types.ts'
+import type { ClaudeUiMountState, ClaudeUiNode } from '#generated/types.ts'
 
 let resizeObservers: (() => void)[]
 let observedElements: Element[]
@@ -756,6 +756,26 @@ it('reveals the focused field label on viewport resize without moving focus from
   height = 100; resizeObservers.forEach(callback => callback())
   expect(site.scrollTop).toBe(140)
   expect(document.activeElement).toBe(draft)
+})
+
+it('lets default text paragraphs choose their direction while plain nested runs share the paragraph', async () => {
+  const tree: Extract<ClaudeUiNode, { kind: 'text' }> = { kind: 'text', text: '', children: [
+    { kind: 'text', text: 'אבגדה', style: { bold: true } },
+    { kind: 'text', text: '\nABC' },
+    { kind: 'text', text: 'Explicit run', style: { dir: 'ltr' } },
+  ] }
+  const f = await mount({ nativeUi: { status: 'live', tree } })
+  const outer = f.root.querySelector<HTMLElement>('.native-inline-text')!
+  expect(outer.dir).toBe('auto')
+  expect(outer.style.unicodeBidi).toBe('plaintext')
+  const runs = outer.querySelectorAll<HTMLElement>('.native-inline-text')
+  expect([...runs].map(run => run.getAttribute('dir'))).toEqual([null, null, 'ltr'])
+  for (const dir of ['rtl', 'ltr'] as const) {
+    f.state.nativeUi = { status: 'live', tree: { ...tree, style: { dir } } }
+    await nextTick()
+    expect(outer.dir).toBe(dir)
+    expect(outer.style.unicodeBidi).toBe('isolate')
+  }
 })
 
 it('truncates the original styled inline tree at measured width, redraws on resize and retires its measurement', async () => {
