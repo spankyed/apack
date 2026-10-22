@@ -140,5 +140,5 @@ test('pauses a pending native model response and rejects late output while retai
   expect(await journal()).not.toContain('STALE_RELEASE_REVIEW_MUST_NOT_APPEAR')
   expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-held-model-pause-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,ownerRetained:true,lateOutputRejected:true,streamingStarted:streaming,partialVisible:streaming,beforeTurns:before.turns,continuedTurns:continued.turns},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHeldModelPause:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHeldModelPause:true,nativeStreamingModelPause:streaming,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
