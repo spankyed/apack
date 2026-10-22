@@ -120,7 +120,7 @@ test('collects native MCP form and URL input with retained drafts and interrupti
       for (const [width, height] of [[1100, 900], [680, 600]]) {
         await appPage.setViewportSize({ width, height })
         const button = pending.mode === 'form' ? form.getByRole('button', { name: 'Submit', exact: true }) : appPage.getByRole('button', { name: 'Completed', exact: true })
-        await button.scrollIntoViewIfNeeded(); await expect(button).toBeInViewport()
+        await button.scrollIntoViewIfNeeded(); await expect(button).toBeInViewport({ ratio: 1 })
         expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
         const capture = async (suffix: string) => {
           const name = 'mcp-input-' + pending.mode + '-' + width + suffix + '.png'
@@ -138,6 +138,9 @@ test('collects native MCP form and URL input with retained drafts and interrupti
           await form.getByLabel('Release title').scrollIntoViewIfNeeded()
           await capture('-fields')
           await button.scrollIntoViewIfNeeded()
+          for (const name of ['Submit', 'Decline', 'Cancel']) {
+            await expect(form.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 })
+          }
         }
         await capture('')
       }

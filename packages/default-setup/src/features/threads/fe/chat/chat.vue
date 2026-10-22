@@ -93,8 +93,8 @@
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>
-            <div v-if="currentThread?.context?.claudeCode && !isNearBottom && allMessages.length > 0" aria-label="Conversation navigation" class="relative h-10 shrink-0">
-              <ScrollToBottomFob :visible="true" aria-label="Scroll to latest message" @click="scrollToBottom('smooth')" />
+            <div v-if="currentThread?.context?.claudeCode && (!isNearBottom || currentThread.context.claudeCode.pendingElicitation) && allMessages.length > 0" aria-label="Conversation navigation" class="relative h-10 shrink-0">
+              <ScrollToBottomFob :visible="!isNearBottom" aria-label="Scroll to latest message" @click="scrollToBottom('smooth')" />
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
