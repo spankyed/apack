@@ -112,7 +112,7 @@
                     v-for="btn in leftButtons"
                     :key="btn.action"
                     @select="handleButtonClick(btn.action)"
-                    :disabled="btn.action === 'native-settings' && submitting"
+                    :disabled="(btn.action === 'native-settings' || btn.action === 'native-tasks') && submitting"
                     class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
                     :class="btn.class"
                   >
@@ -131,7 +131,7 @@
                 class="hidden @lg:block p-2 transition-colors text-neutral-500"
                 :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
                 :aria-label="btn.label"
-                :disabled="disabled || (btn.action === 'native-settings' && submitting)"
+                :disabled="disabled || ((btn.action === 'native-settings' || btn.action === 'native-tasks') && submitting)"
                 :title="btn.label"
                 @click="handleButtonClick(btn.action)"
               >
@@ -216,7 +216,7 @@
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, X } from 'lucide-vue-next'
+import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import NativePanePanel from './NativePanePanel.vue'
@@ -734,7 +734,10 @@ const leftButtons = computed<ActionButton[]>(() => {
       action: 'quick-message'
     },
   ]
-  if (props.nativeSubmit && props.nativePrompt) buttons.push({ icon: Settings2, label: 'Claude settings', action: 'native-settings' })
+  if (props.nativeSubmit && props.nativePrompt) buttons.push(
+    { icon: Settings2, label: 'Claude settings', action: 'native-settings' },
+    { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
+  )
   // Note: In expanded view, 'quick-message' is rendered via QuickPromptsPopup instead
   if (speechSupported.value) {
     buttons.push({
@@ -760,7 +763,8 @@ watch(() => props.currentThread?.id, () => {
 })
 
 const handleButtonClick = (action: string) => {
-  if (action === 'native-settings') { void openNativeSettings(); return }
+  if (action === 'native-settings') { void openNativePanel('/config'); return }
+  if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (props.disabled) return
   if (action === 'attach-file') {
     openFilePicker()
@@ -837,7 +841,8 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   return refs
 }
 
-async function openNativeSettings() {
+async function openNativePanel(command: '/config' | '/tasks') {
+  const label = command === '/tasks' ? 'task manager' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision
@@ -845,10 +850,10 @@ async function openNativeSettings() {
   try {
     if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge
       || epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled) return
-    const result = await submit('/config', {})
-    if (result && 'review' in result) throw new Error('Claude requested input review before opening settings. Use /config to review it.')
+    const result = await submit(command, {})
+    if (result && 'review' in result) throw new Error(`Claude requested input review before opening ${label}. Use ${command} to review it.`)
   } catch (error) {
-    if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Claude settings could not be opened'
+    if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : `Claude ${label} could not be opened`
   } finally { submitting.value = false }
 }
 

@@ -345,7 +345,7 @@ it.each(['confirm', 'cancel'] as const)('clears only a confirmed unchanged nativ
 })
 
 
-it('opens original Claude settings without sending or clearing the draft, selection or pending attachments',async()=>{
+it.each([{label:'Claude settings',command:'/config'},{label:'Claude tasks',command:'/tasks'}])('opens original $label without clearing draft, selection or pending attachments',async({label,command})=>{
   const f=await nativeMount(),upload=vi.spyOn(window.electronAPI!.media,'upload')
   let finish!:()=>void
   f.state.nativeSubmit=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve}))
@@ -353,18 +353,18 @@ it('opens original Claude settings without sending or clearing the draft, select
   editor.commands.setTextSelection({from:2,to:4});await nextTick()
   const request=f.prompt.mock.lastCall![0];f.state.nativePrompt!.reply={revision:request.revision,status:'applied',frame:{text:request.text,cursor:request.cursor}};await nextTick()
   const doc=editor.state.doc,selection=editor.state.selection
-  const button=f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!;button.click();button.click()
-  await vi.waitFor(()=>expect(f.state.nativeSubmit).toHaveBeenCalledExactlyOnceWith('/config',{}))
+  const button=f.root.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!;button.click();button.click()
+  await vi.waitFor(()=>expect(f.state.nativeSubmit).toHaveBeenCalledExactlyOnceWith(command,{}))
   finish();await vi.waitFor(()=>expect(button.disabled).toBe(false))
   expect(editor.state.doc).toBe(doc);expect(editor.state.selection.eq(selection)).toBe(true)
   expect(attachments.pendingImages.value.map(value=>value.name)).toEqual(['review.png']);expect(attachments.pendingFiles.value.map(value=>value.name)).toEqual(['review.txt'])
   expect(upload).not.toHaveBeenCalled();expect(f.send).not.toHaveBeenCalled();expect(localStorage.getItem('chat-sent-history')).toBeNull()
 })
-it('retains the settings draft on native refusal and retires a waiting action when its attachment changes',async()=>{
+it.each(['Claude settings','Claude tasks'])('retains draft on %s refusal and retires the action on attachment change',async(label)=>{
   const f=await nativeMount();f.state.nativeSubmit=vi.fn(async()=>{throw new Error('Native settings refused')});await nextTick()
-  f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click()
+  f.root.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!.click()
   await vi.waitFor(()=>expect(f.root.textContent).toContain('Native settings refused'));expect(editor.state.doc.textContent).toBe('first')
   f.state.nativeSubmit=vi.fn(async()=>{});editor.commands.insertContent(' newer');await nextTick()
-  f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click();f.state.nativePrompt={mountId:'replacement-native-view'}
+  f.root.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!.click();f.state.nativePrompt={mountId:'replacement-native-view'}
   await nextTick();await nextTick();expect(f.state.nativeSubmit).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toBe('first newer');expect(f.send).not.toHaveBeenCalled()
 })
