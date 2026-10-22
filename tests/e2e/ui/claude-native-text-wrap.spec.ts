@@ -13,6 +13,7 @@ test('preserves declared native Text wrapping at actual width and through resize
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
+  const textMeasurement = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).textMeasurement === true
   const restingHover = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).restingHover === true
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -93,7 +94,64 @@ test('preserves declared native Text wrapping at actual width and through resize
     expect(image.size).toEqual({width,height});await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'))
   }
   const evidence: unknown[] = []
-  if (!restingHover) {
+  if (textMeasurement) {
+    const inputs: { text: string; width: number }[] = JSON.parse(await readFile(join(workspace!, 'native-text-measurement-inputs.json'), 'utf8'))
+    expect(inputs).toHaveLength(4)
+    const samples: unknown[] = []
+    for (const [width, height] of [[1100, 900], [680, 600]]) {
+      await appPage.setViewportSize({ width, height })
+      for (const mode of ['truncate-end', 'truncate-start', 'middle']) {
+        await expect(row(mode)).toHaveCount(inputs.length)
+        for (const [index, source] of inputs.entries()) {
+          const target = row(mode).nth(index)
+          // Exhaustively enumerate original logical boundaries in the actual font.
+          // This is independent of the product's binary search and hidden measurement tree.
+          const inspect = () => target.evaluate((element, { text, mode }) => {
+            const clone = element.cloneNode(false) as HTMLElement
+            clone.textContent = text
+            Object.assign(clone.style, { position: 'fixed', left: '-100000px', width: 'max-content', maxWidth: 'none', visibility: 'hidden' })
+            element.parentElement!.append(clone)
+            try {
+              const edges = [0, ...Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.index + part.segment.length)]
+              const rangeWidth = (a: number, b: number) => {
+                if (a === b) return 0
+                const range = document.createRange(); range.setStart(clone.firstChild!, a); range.setEnd(clone.firstChild!, b)
+                return [...range.getClientRects()].reduce((sum, rect) => sum + rect.width, 0)
+              }
+              const natural = clone.getBoundingClientRect().width, available = element.getBoundingClientRect().width
+              const ellipsis = document.createElement('span'); ellipsis.textContent = '…'; clone.append(ellipsis)
+              const ellipsisWidth = ellipsis.getBoundingClientRect().width; ellipsis.remove()
+              const prefix = (budget: number) => budget <= 0 ? 0 : edges.filter(end => rangeWidth(0, end) <= budget).at(-1)!
+              const suffix = (budget: number) => budget <= 0 ? text.length : edges.find(start => rangeWidth(start, text.length) <= budget)!
+              let expected = text
+              if (natural > available) {
+                if (available < ellipsisWidth) expected = ''
+                else if (available === ellipsisWidth) expected = '…'
+                else if (mode === 'truncate-start') expected = '…' + text.slice(suffix(available - ellipsisWidth))
+                else if (mode === 'middle') {
+                  const first = prefix(available / 2), tail = suffix(Math.max(0, available - ellipsisWidth - rangeWidth(0, first)))
+                  expected = text.slice(0, prefix(Math.max(0, available - ellipsisWidth - rangeWidth(tail, text.length)))) + '…' + text.slice(tail)
+                } else expected = text.slice(0, prefix(available - ellipsisWidth)) + '…'
+              }
+              return { actual: element.textContent, expected, natural, available, text, mode }
+            } finally { clone.remove() }
+          }, { text: source.text, mode })
+          await expect.poll(async () => { const result = await inspect(); return result.actual === result.expected }).toBe(true)
+          const result = await inspect()
+          expect(result.available).toBeGreaterThan(0)
+          if (index === 1) expect(result.actual).toBe(source.text)
+          await expect(composer).toHaveText('Review the release summary before merging.')
+          expect((await context()).native.state.nativePid).toBe(boundNativePid)
+          expect((await context()).turns).toBe(1)
+          samples.push({ ...result, width, height, draftRetained: true })
+        }
+      }
+      await expect(composer).toBeInViewport()
+      await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
+      await capturePage(`apack-native-text-measurement-${width}-${height}.png`, width, height)
+    }
+    await writeFile(join(workspace!, 'native-text-measurement-app.json'), JSON.stringify({ samples, sessionId, boundNativePid }))
+  } else if (!restingHover) {
   for (const [width, height] of [[680, 900], [1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
     await expect(row('wrap')).toHaveText(full)
@@ -254,5 +312,5 @@ test('preserves declared native Text wrapping at actual width and through resize
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000, message: 'Original same-session initialize and response complete' }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-text-wrap-app.json'), JSON.stringify({ evidence, sessionId, boundNativePid }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover && !textMeasurement, nativeTextMeasurement: textMeasurement, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
