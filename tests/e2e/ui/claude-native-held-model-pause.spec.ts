@@ -108,6 +108,19 @@ test('pauses a pending native model response and rejects late output while retai
     expect(captured.size).toEqual(size);const file='held-model-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(captured.png,'base64'));captures.push({file,...size})
   }
 
+  if(streaming){
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      const preview=appPage.locator('[data-native-stream-preview]'),latest=appPage.getByRole('button',{name:'Scroll to latest message',exact:true})
+      await expect(preview).toBeVisible()
+      const textBox=await preview.boundingBox();expect(textBox).toBeTruthy()
+      if(await latest.isVisible()){
+        const buttonBox=(await latest.boundingBox())!;expect(buttonBox.y).toBeGreaterThanOrEqual(textBox!.y+textBox!.height)
+        await latest.click();await expect(latest).toBeHidden()
+      }
+      await expect(preview).toBeInViewport();await expect(composer).toHaveText(draft)
+    }
+  }
   await capture('pending',680)
   const before=await context()
   await card.getByTitle('Pause agent work',{exact:true}).click()
