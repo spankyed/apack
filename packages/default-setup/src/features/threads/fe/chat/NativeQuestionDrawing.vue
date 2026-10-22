@@ -12,11 +12,11 @@ import type { ClaudeUiQuestionFrame, ClaudeUiFieldEvent } from '#features/code/b
 import type { ClaudeQuestionAnswer } from '#features/code/common/native-question.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import NativeQuestionPanel from './NativeQuestionPanel.vue'
-import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
+import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 defineProps<{ frame?: ClaudeUiQuestionFrame; disabled: boolean; error?: string }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token?: string]; respond: [answer: ClaudeQuestionAnswer]; pause: [] }>()
-const hover = createClaudeHoverSurface(); provide(claudeHoverSurface, hover)
+const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
 const root = ref<HTMLElement | null>(null)
 function key(event: KeyboardEvent) { if (!event.isComposing) pressClaudeUiHotkey(event, root.value) }
 onBeforeUnmount(() => hover.dispose())

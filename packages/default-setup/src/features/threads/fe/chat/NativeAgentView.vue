@@ -47,6 +47,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { provideClaudeHoverGroups } from './native-ui-hover.ts'
 import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
@@ -93,6 +94,8 @@ const selectedOwner = computed(() => {
   const owner = terminal.value?.state, selected = owner?.view
   return owner?.status === 'live' && owner.ownerId === props.target.ownerId && owner.sessionId === props.target.sessionId && selected?.kind === 'agent' && selected.taskId === props.target.taskId && selected.revision === props.target.revision ? owner : undefined
 })
+provideClaudeHoverGroups(() => props.active && selectedOwner.value && snapshot.value && ['live', 'rendering'].includes(snapshot.value.state.status) && snapshot.value.attachmentId
+  ? JSON.stringify([props.threadId, uiMount.value, snapshot.value.attachmentId, props.target.ownerId, props.target.sessionId, props.target.taskId, props.target.revision]) : undefined)
 const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task.id === props.target.taskId))
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
 const dismissedOutput = ref<string>()

@@ -123,7 +123,7 @@ test('preserves declared native Text wrapping at actual width and through resize
       return new Response('<!doctype html><title>Release notes</title><h1>Release notes</h1><p>Review the migration guidance.</p>', { headers: { 'content-type': 'text/html', 'cache-control': 'no-store' } })
     })
   })
-  const styleResets: unknown[] = []
+  const styleResets: unknown[] = [], crossSiteGroups: unknown[] = []
   const styledRun = (text: string) => card.locator('.native-text-run').filter({ hasText: new RegExp('^' + text + '$') })
   const readStyle = (text: string) => styledRun(text).evaluate(element => {
     const style = getComputedStyle(element)
@@ -148,8 +148,29 @@ test('preserves declared native Text wrapping at actual width and through resize
     await capturePage(`apack-native-style-reset-${width}-${height}.png`, width, height)
     await composer.hover()
     await expect.poll(() => readStyle('Review detail').then(style => style.opacity)).toBe('0.6')
+    const hint = card.locator('[data-native-placement="PromptHint"] .native-inline-text').filter({ hasText: /^Release review ready$/ })
+    await expect(hint).toBeVisible()
+    const trigger = styledRun('Review detail trigger')
+    const color = (element: import('@playwright/test').Locator) => element.evaluate(node => getComputedStyle(node).color)
+    const resting = await color(hint)
+    await trigger.hover()
+    await expect.poll(() => color(hint)).not.toBe(resting)
+    const active = await color(hint)
+    expect(active).toBe(await color(trigger))
+    await composer.hover()
+    await expect.poll(() => color(hint)).toBe(resting)
+    await hint.hover()
+    await expect.poll(() => color(trigger)).toBe(active)
+    await expect(composer).toHaveText('Review the release summary before merging.')
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    expect((await context()).turns).toBe(1)
+    crossSiteGroups.push({ width, height, resting, active, bothDirections: true, draftRetained: true })
+    await capturePage(`apack-native-cross-site-hover-${width}-${height}.png`, width, height)
+    await composer.hover()
+    await expect.poll(() => color(hint)).toBe(resting)
+
   }
-  await writeFile(join(workspace!, 'native-text-style-resets.json'), JSON.stringify({ styleResets, sessionId, boundNativePid }))
+  await writeFile(join(workspace!, 'native-text-style-resets.json'), JSON.stringify({ styleResets, crossSiteGroups, sessionId, boundNativePid }))
   const linkActivations: unknown[] = []
   try {
   for (const [width, height] of [[1100, 900], [680, 600]]) {

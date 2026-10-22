@@ -33,7 +33,7 @@ import { X, RotateCcw } from 'lucide-vue-next'
 import type { ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiFieldEvent } from '#generated/types.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
-import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
+import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 const props = defineProps<{ panes: ClaudeUiPanePresentation; focus?: ClaudeUiFocusReply; grantFocus?: string | null; preferredRows?: number }>()
 const emit = defineEmits<{ resize: [rows: number | undefined]; operate: [event: ClaudeUiPaneEvent]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; 'focus-report': [event: ClaudeUiFocusEvent]; 'return-focus': []; scroll: [event: import('#generated/types.ts').ClaudeUiScrollEvent] }>()
@@ -70,7 +70,7 @@ function resizeKey(event: KeyboardEvent) {
 const site = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
-const hover = createClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
+const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
 let revision = 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)

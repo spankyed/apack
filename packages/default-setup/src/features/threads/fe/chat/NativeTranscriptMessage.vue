@@ -18,11 +18,11 @@ import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import { claudeTranscriptLayout } from './native-transcript-layout.ts'
-import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
+import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 const props = defineProps<{ frame: ClaudeUiTranscriptFrame }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
-const hover = createClaudeHoverSurface(); provide(claudeHoverSurface, hover)
+const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
 const site = ref<HTMLElement | null>(null), composing = ref(false)
 const reportLayout = inject(claudeTranscriptLayout, undefined)
 const layoutCell = ref<HTMLElement | null>(null)

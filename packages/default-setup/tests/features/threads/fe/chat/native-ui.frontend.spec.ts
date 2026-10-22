@@ -1,9 +1,10 @@
 import { onTestFinished } from 'vitest'
 import * as sdkFe from '@apackdev/sdk/fe'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
-import { createApp, h, reactive, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, reactive, ref, nextTick, type App } from 'vue'
 import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
+import { provideClaudeHoverGroups } from '#features/threads/fe/chat/native-ui-hover.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
@@ -406,6 +407,53 @@ it('resets nested native text styles per run, including explicit false hover val
   expect(reset.parentElement!.style.fontWeight).toBe('400')
   expect(f.submit).not.toHaveBeenCalled()
   expect(f.press).not.toHaveBeenCalled()
+})
+
+
+it('shares named groups across placement roots only within the current attachment and view', async () => {
+  const owner = ref<string | undefined>('attachment'), firstVisible = ref(true)
+  const group = JSON.stringify(['fixture', 'review']), otherPlugin = JSON.stringify(['other-plugin', 'review'])
+  const drawing = (name: string, scoped: string = group): ClaudeUiMountState => ({ status: 'live', tree: { kind: 'box', boxKey: name, children: [
+    { kind: 'text', text: name, hover: { group: scoped, text: { color: 'red' } } },
+    { kind: 'text', text: name + ' local', hover: { text: { italic: true } } },
+  ] } })
+  const site = (name: string, scoped?: string) => h(StatusLine, { nativeUi: drawing(name, scoped) })
+  // Equal attachment strings in another provider still represent a separate window/view.
+  const Foreign = defineComponent({ setup() { provideClaudeHoverGroups(() => 'attachment'); return () => h('div', [site('Foreign')]) } })
+  const SelectedAgent = defineComponent({ setup() { provideClaudeHoverGroups(() => 'attachment'); return () => h('div', [site('Agent')]) } })
+  const Main = defineComponent({ setup() {
+    provideClaudeHoverGroups(() => owner.value)
+    return () => h('div', [firstVisible.value && site('Trigger'), site('Peer'), site('Other plugin', otherPlugin), h(SelectedAgent)])
+  } })
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h('div', [h(Main), h(Foreign), h('textarea')]) }); app.mount(root)
+  const expand = async () => { for (const button of root.querySelectorAll<HTMLButtonElement>('button[aria-label="Session tools"][aria-expanded="false"]')) button.click(); await nextTick() }
+  await expand()
+  const text = (name: string) => [...root.querySelectorAll<HTMLElement>('.native-inline-text')].find(element => element.textContent === name)!
+  const enter = async (name: string) => { text(name).dispatchEvent(new MouseEvent('pointerover', { bubbles: true })); await nextTick() }
+  const leave = async (name: string) => { text(name).closest<HTMLElement>('.native-extension-surface')!.dispatchEvent(new MouseEvent('pointerleave')); await nextTick() }
+  const draft = root.querySelector('textarea')!; draft.value = 'Keep the independent draft.'; draft.focus()
+  await enter('Trigger')
+  expect(text('Peer').style.color).toBe('red')
+  expect(text('Other plugin').style.color).toBe('')
+  expect(text('Agent').style.color).toBe('')
+  expect(text('Foreign').style.color).toBe('')
+  expect(text('Trigger local').classList.contains('italic')).toBe(true)
+  expect(text('Peer local').classList.contains('italic')).toBe(false)
+  expect(document.activeElement).toBe(draft)
+  owner.value = 'replacement'; await nextTick()
+  expect(text('Peer').style.color).toBe('')
+  await enter('Trigger'); expect(text('Peer').style.color).toBe('red')
+  firstVisible.value = false; await nextTick(); expect(text('Peer').style.color).toBe('')
+  firstVisible.value = true; await nextTick(); await expand()
+  expect(text('Peer').style.color).toBe('')
+  await enter('Trigger'); expect(text('Peer').style.color).toBe('red')
+  await leave('Trigger'); expect(text('Peer').style.color).toBe('')
+  await enter('Agent'); expect(text('Peer').style.color).toBe(''); await leave('Agent')
+  await enter('Foreign'); expect(text('Peer').style.color).toBe(''); await leave('Foreign')
+  owner.value = undefined; await nextTick()
+  await enter('Trigger'); expect(text('Peer').style.color).toBe('')
+  expect(draft.value).toBe('Keep the independent draft.')
 })
 
 

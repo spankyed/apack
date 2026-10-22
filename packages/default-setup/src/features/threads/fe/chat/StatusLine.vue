@@ -26,8 +26,8 @@ import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
-import { createClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
-const hover = createClaudeHoverSurface()
+import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
+const hover = useClaudeHoverSurface()
 provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
 const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()

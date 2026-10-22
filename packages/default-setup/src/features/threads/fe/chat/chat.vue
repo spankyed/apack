@@ -245,6 +245,7 @@ import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
 import type { ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
+import { provideClaudeHoverGroups } from './native-ui-hover.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import ChatInput from './input.vue'
@@ -491,6 +492,12 @@ function saveAgentDraftSnapshot(target: ClaudeNativeAgentUiTarget, snapshot: Cla
   if (current?.text === snapshot.text) agentDrafts.value[key] = { ...current, snapshot }
 }
 const focusedAgent = ref<{ target: ClaudeNativeAgentUiTarget; name: string; statusText?: string }>()
+provideClaudeHoverGroups(() => {
+  const mount = nativeUiMount.value, view = mount && nativeUiViews.value[mount.mountId]
+  if (!mount || mount.threadId !== currentThread.value?.id || !view || !['live', 'rendering'].includes(view.state.status) || !view.attachmentId || nativeTerminalActive.value || focusedAgent.value || agentSelection.value) return undefined
+  const owner = nativeComposerOwner.value
+  return JSON.stringify([mount.threadId, mount.mountId, view.attachmentId, owner?.ownerId, owner?.sessionId, owner?.view?.revision])
+})
 watch([taskView, agentReturning, agentSelection], ([lease, returning, selecting]) => {
   if (selecting) return
   const owner = lease?.[1].state, selected = owner?.view
