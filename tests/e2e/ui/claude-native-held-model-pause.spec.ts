@@ -86,7 +86,16 @@ test('pauses a pending native model response and rejects late output while retai
   const marker=async(name:string)=>JSON.parse(await readFile(join(workspace!,'native-held-model-'+name+'.json'),'utf8').catch(()=>'{}'))
   await expect.poll(async()=>(await marker('ready')).ready).toBe(true)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(true)
-  if(streaming)await expect(appPage.getByText('I am reviewing the migration guidance before continuing.',{exact:true})).toBeVisible()
+  if(streaming){
+    await expect.poll(async()=>{
+      const current=await context(),chunks=current.native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
+      if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
+      const buffer=terminalScreen!.buffer.active,text=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+      await writeFile(join(workspace!,'native-stream-preview-source.json'),JSON.stringify({text,sequence:lastSequence}))
+      return text.includes('I am reviewing the migration guidance before continuing.')
+    }).toBe(true)
+    await expect(appPage.getByText('I am reviewing the migration guidance before continuing.',{exact:false})).toBeVisible()
+  }
   const draft='Keep my migration notes while pausing this review.'
   await composer.fill(draft)
   const nativeWindow=await electronApp.browserWindow(appPage),captures:any[]=[]

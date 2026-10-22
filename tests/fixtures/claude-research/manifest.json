@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "7e722841f59ba559b65744f4dd9697edc06522cf",
+  "researchCommit": "da6d191a932bda2506c423b68de14d7f2019ad18",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -247,7 +247,7 @@
     "src/protocol/synthetic-mcp-health-server.mjs": "f99aff09240efb995e436a7bdda8f8b7fdbd63084460a80d7712b62fa837cc6e",
     "src/protocol/synthetic-mcp-resource-server.mjs": "c5a1b0162fec7b3a43c0c0cbca5d76e8c7067a9fcac850691271aff2a2089e67",
     "src/protocol/synthetic-mcp-server.mjs": "53a9ecdb3677535f0455769f8895bb015dac0c05c7c5f84d9cce39022cef511a",
-    "src/protocol/synthetic-model.mjs": "2e6fb3e2378e86b5e540c74b6b200db45f7ddf587bec00269361f1ef0fc4c288",
+    "src/protocol/synthetic-model.mjs": "a1587564c3cf360124803e9e8e20dcbf6cb8f43911654d5abba9d026344d2ebb",
     "src/protocol/synthetic-multi-agent-model.mjs": "e2b34795b415328858eca88c1f0ec0766bfc51ee9a3f99627725254fb73848da",
     "src/protocol/synthetic-skill-once-model.mjs": "4f13fdccf16e1fce9d5464414f1d740a683c9b1bada18aab513bb3fe5329c8cc",
     "src/protocol/synthetic-tool-probe.mjs": "3ca9f33f17cdb189a4e1f1fea77414bc8380500a4521e499c9974e27d9a0b820",
@@ -259,5 +259,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "d71cb673f425fc2e7a70952e85c9abde97377775c54df00099ffa05b5a538c59"
+  "archiveSha256": "b33514bd1703d45e10f2bfde5dfcced048fe359d21f84adeb5b25ff54b9e9eda"
 }
