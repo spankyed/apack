@@ -201,7 +201,7 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
   async function choose(target:string){
     await expect.poll(highlighted).not.toBe('')
     for(let count=0;count<20&&await highlighted()!==target;count++){
-      const before=await highlighted();await keyboard.press('ArrowDown');await expect.poll(highlighted).not.toBe(before)
+      const before=await highlighted();await keyboard.press(target==='Dark mode'?'ArrowUp':'ArrowDown');await expect.poll(highlighted).not.toBe(before)
     }
     expect(await highlighted()).toBe(target)
   }
