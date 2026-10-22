@@ -1,6 +1,31 @@
 {
   "fresh": {
     "rows": {
+      "Action:CC: Answer MCP Elicitation": {
+        "category": "claude-code",
+        "description": "Answer the current native MCP form or URL request.",
+        "entityType": "Action",
+        "input": {
+          "threadId": {
+            "type": "string",
+            "required": true
+          },
+          "messageId": {
+            "type": "string",
+            "required": true
+          },
+          "requestId": {
+            "type": "string",
+            "required": true
+          },
+          "response": {
+            "type": "object",
+            "required": true
+          }
+        },
+        "label": "CC: Answer MCP Elicitation",
+        "shortCode": "ACT-1"
+      },
       "Action:CC: Answer Question": {
         "category": "claude-code",
         "description": "Sends AskUserQuestion answers to the CLI and resumes streaming.",
@@ -28,7 +53,7 @@
           }
         },
         "label": "CC: Answer Question",
-        "shortCode": "ACT-1"
+        "shortCode": "ACT-2"
       },
       "Action:CC: Approve Plan Clear Context": {
         "category": "claude-code",
@@ -52,7 +77,7 @@
           }
         },
         "label": "CC: Approve Plan Clear Context",
-        "shortCode": "ACT-2"
+        "shortCode": "ACT-3"
       },
       "Action:CC: Approve Tool": {
         "category": "claude-code",
@@ -86,7 +111,7 @@
           }
         },
         "label": "CC: Approve Tool",
-        "shortCode": "ACT-3"
+        "shortCode": "ACT-4"
       },
       "Action:CC: Commit Message": {
         "category": "claude-code",
@@ -110,7 +135,7 @@
           }
         },
         "label": "CC: Commit Message",
-        "shortCode": "ACT-15"
+        "shortCode": "ACT-16"
       },
       "Action:CC: Compact": {
         "category": "claude-code",
@@ -135,7 +160,7 @@
           }
         },
         "label": "CC: Compact",
-        "shortCode": "ACT-6"
+        "shortCode": "ACT-7"
       },
       "Action:CC: Context": {
         "category": "claude-code",
@@ -160,7 +185,7 @@
           }
         },
         "label": "CC: Context",
-        "shortCode": "ACT-7"
+        "shortCode": "ACT-8"
       },
       "Action:CC: DB Query": {
         "category": "claude-code",
@@ -174,7 +199,7 @@
           }
         },
         "label": "CC: DB Query",
-        "shortCode": "ACT-16"
+        "shortCode": "ACT-17"
       },
       "Action:CC: DB Transaction": {
         "category": "claude-code",
@@ -188,7 +213,7 @@
           }
         },
         "label": "CC: DB Transaction",
-        "shortCode": "ACT-17"
+        "shortCode": "ACT-18"
       },
       "Action:CC: Deny Tool": {
         "category": "claude-code",
@@ -212,7 +237,7 @@
           }
         },
         "label": "CC: Deny Tool",
-        "shortCode": "ACT-18"
+        "shortCode": "ACT-19"
       },
       "Action:CC: Dir Ops": {
         "category": "claude-code",
@@ -237,7 +262,7 @@
           }
         },
         "label": "CC: Dir Ops",
-        "shortCode": "ACT-8"
+        "shortCode": "ACT-9"
       },
       "Action:CC: Fork": {
         "category": "claude-code",
@@ -262,7 +287,7 @@
           }
         },
         "label": "CC: Fork",
-        "shortCode": "ACT-9"
+        "shortCode": "ACT-10"
       },
       "Action:CC: Goal": {
         "category": "claude-code",
@@ -287,7 +312,7 @@
           }
         },
         "label": "CC: Goal",
-        "shortCode": "ACT-10"
+        "shortCode": "ACT-11"
       },
       "Action:CC: Handle Directory Select": {
         "category": "claude-code",
@@ -311,7 +336,7 @@
           }
         },
         "label": "CC: Handle Directory Select",
-        "shortCode": "ACT-19"
+        "shortCode": "ACT-20"
       },
       "Action:CC: Handle Fork": {
         "category": "claude-code",
@@ -335,7 +360,7 @@
           }
         },
         "label": "CC: Handle Fork",
-        "shortCode": "ACT-20"
+        "shortCode": "ACT-21"
       },
       "Action:CC: Handle Revert": {
         "category": "claude-code",
@@ -354,7 +379,7 @@
           }
         },
         "label": "CC: Handle Revert",
-        "shortCode": "ACT-21"
+        "shortCode": "ACT-22"
       },
       "Action:CC: Handle Rewind": {
         "category": "claude-code",
@@ -378,7 +403,7 @@
           }
         },
         "label": "CC: Handle Rewind",
-        "shortCode": "ACT-22"
+        "shortCode": "ACT-23"
       },
       "Action:CC: Handle Summarize": {
         "category": "claude-code",
@@ -397,7 +422,7 @@
           }
         },
         "label": "CC: Handle Summarize",
-        "shortCode": "ACT-23"
+        "shortCode": "ACT-24"
       },
       "Action:CC: Pause Turn": {
         "category": "claude-code",
@@ -411,7 +436,7 @@
           }
         },
         "label": "CC: Pause Turn",
-        "shortCode": "ACT-26"
+        "shortCode": "ACT-27"
       },
       "Action:CC: Plan": {
         "category": "claude-code",
@@ -436,7 +461,7 @@
           }
         },
         "label": "CC: Plan",
-        "shortCode": "ACT-11"
+        "shortCode": "ACT-12"
       },
       "Action:CC: Recap": {
         "category": "claude-code",
@@ -457,7 +482,7 @@
           }
         },
         "label": "CC: Recap",
-        "shortCode": "ACT-12"
+        "shortCode": "ACT-13"
       },
       "Action:CC: Reconcile State": {
         "category": "claude-code",
@@ -465,7 +490,7 @@
         "entityType": "Action",
         "input": {},
         "label": "CC: Reconcile State",
-        "shortCode": "ACT-27"
+        "shortCode": "ACT-28"
       },
       "Action:CC: Route Response": {
         "category": "claude-code",
@@ -489,7 +514,7 @@
           }
         },
         "label": "CC: Route Response",
-        "shortCode": "ACT-29"
+        "shortCode": "ACT-30"
       },
       "Action:CC: Run Command": {
         "category": "claude-code",
@@ -518,7 +543,7 @@
           }
         },
         "label": "CC: Run Command",
-        "shortCode": "ACT-5"
+        "shortCode": "ACT-6"
       },
       "Action:CC: Session Ops": {
         "category": "claude-code",
@@ -547,7 +572,7 @@
           }
         },
         "label": "CC: Session Ops",
-        "shortCode": "ACT-13"
+        "shortCode": "ACT-14"
       },
       "Action:CC: Stream Paused": {
         "category": "claude-code",
@@ -566,7 +591,7 @@
           }
         },
         "label": "CC: Stream Paused",
-        "shortCode": "ACT-30"
+        "shortCode": "ACT-31"
       },
       "Action:CC: Stream Started": {
         "category": "claude-code",
@@ -595,7 +620,7 @@
           }
         },
         "label": "CC: Stream Started",
-        "shortCode": "ACT-31"
+        "shortCode": "ACT-32"
       },
       "Action:CC: Turn Completed": {
         "category": "claude-code",
@@ -654,7 +679,7 @@
           }
         },
         "label": "CC: Turn Completed",
-        "shortCode": "ACT-32"
+        "shortCode": "ACT-33"
       },
       "Action:CC: Unqueue Message": {
         "category": "claude-code",
@@ -673,7 +698,7 @@
           }
         },
         "label": "CC: Unqueue Message",
-        "shortCode": "ACT-33"
+        "shortCode": "ACT-34"
       },
       "Action:CC: Update Permission Mode": {
         "category": "claude-code",
@@ -692,7 +717,7 @@
           }
         },
         "label": "CC: Update Permission Mode",
-        "shortCode": "ACT-34"
+        "shortCode": "ACT-35"
       },
       "Action:CC: Update Worktree": {
         "category": "claude-code",
@@ -711,7 +736,7 @@
           }
         },
         "label": "CC: Update Worktree",
-        "shortCode": "ACT-35"
+        "shortCode": "ACT-36"
       },
       "Action:CDX: Approve Tool": {
         "category": "codex",
@@ -736,7 +761,7 @@
           }
         },
         "label": "CDX: Approve Tool",
-        "shortCode": "ACT-36"
+        "shortCode": "ACT-37"
       },
       "Action:CDX: Commit Message": {
         "category": "codex",
@@ -760,7 +785,7 @@
           }
         },
         "label": "CDX: Commit Message",
-        "shortCode": "ACT-42"
+        "shortCode": "ACT-43"
       },
       "Action:CDX: Compact": {
         "category": "codex",
@@ -785,7 +810,7 @@
           }
         },
         "label": "CDX: Compact",
-        "shortCode": "ACT-38"
+        "shortCode": "ACT-39"
       },
       "Action:CDX: DB Query": {
         "category": "codex",
@@ -799,7 +824,7 @@
           }
         },
         "label": "CDX: DB Query",
-        "shortCode": "ACT-43"
+        "shortCode": "ACT-44"
       },
       "Action:CDX: DB Transaction": {
         "category": "codex",
@@ -813,7 +838,7 @@
           }
         },
         "label": "CDX: DB Transaction",
-        "shortCode": "ACT-44"
+        "shortCode": "ACT-45"
       },
       "Action:CDX: Deny Tool": {
         "category": "codex",
@@ -826,7 +851,7 @@
           }
         },
         "label": "CDX: Deny Tool",
-        "shortCode": "ACT-45"
+        "shortCode": "ACT-46"
       },
       "Action:CDX: Fork": {
         "category": "codex",
@@ -851,7 +876,7 @@
           }
         },
         "label": "CDX: Fork",
-        "shortCode": "ACT-39"
+        "shortCode": "ACT-40"
       },
       "Action:CDX: Goal Continue": {
         "category": "codex",
@@ -864,7 +889,7 @@
           }
         },
         "label": "CDX: Goal Continue",
-        "shortCode": "ACT-46"
+        "shortCode": "ACT-47"
       },
       "Action:CDX: Handle Directory Select": {
         "category": "codex",
@@ -885,7 +910,7 @@
           }
         },
         "label": "CDX: Handle Directory Select",
-        "shortCode": "ACT-47"
+        "shortCode": "ACT-48"
       },
       "Action:CDX: Handle Fork": {
         "category": "codex",
@@ -910,7 +935,7 @@
           }
         },
         "label": "CDX: Handle Fork",
-        "shortCode": "ACT-48"
+        "shortCode": "ACT-49"
       },
       "Action:CDX: Handle Revert": {
         "category": "codex",
@@ -931,7 +956,7 @@
           }
         },
         "label": "CDX: Handle Revert",
-        "shortCode": "ACT-49"
+        "shortCode": "ACT-50"
       },
       "Action:CDX: Handle Rewind Unsupported": {
         "category": "codex",
@@ -952,7 +977,7 @@
           }
         },
         "label": "CDX: Handle Rewind Unsupported",
-        "shortCode": "ACT-50"
+        "shortCode": "ACT-51"
       },
       "Action:CDX: Handle Summarize": {
         "category": "codex",
@@ -973,7 +998,7 @@
           }
         },
         "label": "CDX: Handle Summarize",
-        "shortCode": "ACT-51"
+        "shortCode": "ACT-52"
       },
       "Action:CDX: Pause Turn": {
         "category": "codex",
@@ -986,7 +1011,7 @@
           }
         },
         "label": "CDX: Pause Turn",
-        "shortCode": "ACT-52"
+        "shortCode": "ACT-53"
       },
       "Action:CDX: Reconcile State": {
         "category": "codex",
@@ -994,7 +1019,7 @@
         "entityType": "Action",
         "input": {},
         "label": "CDX: Reconcile State",
-        "shortCode": "ACT-53"
+        "shortCode": "ACT-54"
       },
       "Action:CDX: Refine Plan": {
         "category": "codex",
@@ -1011,7 +1036,7 @@
           }
         },
         "label": "CDX: Refine Plan",
-        "shortCode": "ACT-54"
+        "shortCode": "ACT-55"
       },
       "Action:CDX: Route Response": {
         "category": "codex",
@@ -1032,7 +1057,7 @@
           }
         },
         "label": "CDX: Route Response",
-        "shortCode": "ACT-55"
+        "shortCode": "ACT-56"
       },
       "Action:CDX: Run Command": {
         "category": "codex",
@@ -1061,7 +1086,7 @@
           }
         },
         "label": "CDX: Run Command",
-        "shortCode": "ACT-37"
+        "shortCode": "ACT-38"
       },
       "Action:CDX: Session Ops": {
         "category": "codex",
@@ -1095,7 +1120,7 @@
           }
         },
         "label": "CDX: Session Ops",
-        "shortCode": "ACT-40"
+        "shortCode": "ACT-41"
       },
       "Action:CDX: Start Server": {
         "category": "codex",
@@ -1103,7 +1128,7 @@
         "entityType": "Action",
         "input": {},
         "label": "CDX: Start Server",
-        "shortCode": "ACT-56"
+        "shortCode": "ACT-57"
       },
       "Action:CDX: Stream Paused": {
         "category": "codex",
@@ -1116,7 +1141,7 @@
           }
         },
         "label": "CDX: Stream Paused",
-        "shortCode": "ACT-57"
+        "shortCode": "ACT-58"
       },
       "Action:CDX: Turn Completed": {
         "category": "codex",
@@ -1149,7 +1174,7 @@
           }
         },
         "label": "CDX: Turn Completed",
-        "shortCode": "ACT-58"
+        "shortCode": "ACT-59"
       },
       "Action:CDX: Unqueue Message": {
         "category": "codex",
@@ -1166,7 +1191,7 @@
           }
         },
         "label": "CDX: Unqueue Message",
-        "shortCode": "ACT-59"
+        "shortCode": "ACT-60"
       },
       "Action:CDX: Update Session Settings": {
         "category": "codex",
@@ -1200,7 +1225,7 @@
           }
         },
         "label": "CDX: Update Session Settings",
-        "shortCode": "ACT-60"
+        "shortCode": "ACT-61"
       },
       "Action:Check Onboarding": {
         "category": "onboarding",
@@ -1208,7 +1233,7 @@
         "entityType": "Action",
         "input": {},
         "label": "Check Onboarding",
-        "shortCode": "ACT-63"
+        "shortCode": "ACT-64"
       },
       "Action:Claude Code Auth Status": {
         "category": "claude-code",
@@ -1216,7 +1241,7 @@
         "entityType": "Action",
         "input": {},
         "label": "Claude Code Auth Status",
-        "shortCode": "ACT-4"
+        "shortCode": "ACT-5"
       },
       "Action:Claude Code Chat": {
         "category": "claude-code",
@@ -1270,7 +1295,7 @@
           }
         },
         "label": "Claude Code Chat",
-        "shortCode": "ACT-14"
+        "shortCode": "ACT-15"
       },
       "Action:Claude Code List Sessions": {
         "category": "claude-code",
@@ -1294,7 +1319,7 @@
           }
         },
         "label": "Claude Code List Sessions",
-        "shortCode": "ACT-24"
+        "shortCode": "ACT-25"
       },
       "Action:Claude Code One-Shot": {
         "category": "claude-code",
@@ -1333,7 +1358,7 @@
           }
         },
         "label": "Claude Code One-Shot",
-        "shortCode": "ACT-25"
+        "shortCode": "ACT-26"
       },
       "Action:Claude Code Reset Session": {
         "category": "claude-code",
@@ -1347,7 +1372,7 @@
           }
         },
         "label": "Claude Code Reset Session",
-        "shortCode": "ACT-28"
+        "shortCode": "ACT-29"
       },
       "Action:Codex Chat": {
         "category": "codex",
@@ -1383,7 +1408,7 @@
           }
         },
         "label": "Codex Chat",
-        "shortCode": "ACT-41"
+        "shortCode": "ACT-42"
       },
       "Action:Handle Choose Mode Step": {
         "category": "onboarding",
@@ -1400,7 +1425,7 @@
           }
         },
         "label": "Handle Choose Mode Step",
-        "shortCode": "ACT-68"
+        "shortCode": "ACT-69"
       },
       "Action:Handle Import Threads Step": {
         "category": "onboarding",
@@ -1417,7 +1442,7 @@
           }
         },
         "label": "Handle Import Threads Step",
-        "shortCode": "ACT-67"
+        "shortCode": "ACT-68"
       },
       "Action:Handle Onboarding Response": {
         "category": "onboarding",
@@ -1441,7 +1466,7 @@
           }
         },
         "label": "Handle Onboarding Response",
-        "shortCode": "ACT-64"
+        "shortCode": "ACT-65"
       },
       "Action:Handle Pick Thread Step": {
         "category": "onboarding",
@@ -1458,7 +1483,7 @@
           }
         },
         "label": "Handle Pick Thread Step",
-        "shortCode": "ACT-69"
+        "shortCode": "ACT-70"
       },
       "Action:Handle Projects Step": {
         "category": "onboarding",
@@ -1475,7 +1500,7 @@
           }
         },
         "label": "Handle Projects Step",
-        "shortCode": "ACT-70"
+        "shortCode": "ACT-71"
       },
       "Action:Handle Welcome Step": {
         "category": "onboarding",
@@ -1492,7 +1517,7 @@
           }
         },
         "label": "Handle Welcome Step",
-        "shortCode": "ACT-71"
+        "shortCode": "ACT-72"
       },
       "Action:Ignore Onboarding Message": {
         "category": "onboarding",
@@ -1511,7 +1536,7 @@
           }
         },
         "label": "Ignore Onboarding Message",
-        "shortCode": "ACT-65"
+        "shortCode": "ACT-66"
       },
       "Action:Init Onboarding": {
         "category": "onboarding",
@@ -1519,7 +1544,7 @@
         "entityType": "Action",
         "input": {},
         "label": "Init Onboarding",
-        "shortCode": "ACT-66"
+        "shortCode": "ACT-67"
       },
       "Action:PR to Markdown": {
         "category": "commands",
@@ -1543,7 +1568,7 @@
           }
         },
         "label": "PR to Markdown",
-        "shortCode": "ACT-62"
+        "shortCode": "ACT-63"
       },
       "Action:Set Instructions": {
         "category": "commands",
@@ -1562,7 +1587,7 @@
           }
         },
         "label": "Set Instructions",
-        "shortCode": "ACT-61"
+        "shortCode": "ACT-62"
       },
       "Collection:internal": {
         "contentHash": "f6e45bbf1184b243",
@@ -1897,7 +1922,7 @@
     "media": [],
     "counts": {
       "actions": {
-        "created": 71,
+        "created": 72,
         "updated": 0,
         "skipped": 0
       },
