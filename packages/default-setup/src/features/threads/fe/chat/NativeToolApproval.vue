@@ -29,12 +29,14 @@
         <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
       </template>
       <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
-      <section v-if="review" class="change-review" aria-label="Proposed file change" data-testid="native-file-review">
+      <section v-if="review" class="change-review" :aria-label="review.notebook ? 'Proposed notebook change' : 'Proposed file change'" data-testid="native-file-review">
+        <p v-if="review.notebook" data-testid="native-notebook-operation" class="change-label">{{ review.notebook.editMode === 'delete' ? 'Delete cell' : review.notebook.editMode === 'insert' ? 'Insert cell' : 'Replace cell' }}<template v-if="review.notebook.cellId"> · {{ review.notebook.editMode === 'insert' ? 'After cell' : 'Cell' }} {{ review.notebook.cellId }}</template><template v-else-if="review.notebook.editMode === 'insert'"> · At notebook start</template><template v-if="review.notebook.cellType"> · {{ review.notebook.cellType }}</template></p>
         <p v-if="review.withheld" role="note">{{ review.notice || 'Claude withheld the proposed change; it cannot be reviewed here.' }}</p>
         <template v-else>
           <p v-if="review.notice" role="note">{{ review.notice }}</p>
           <template v-if="review.before !== undefined"><p class="change-label">Before</p><code data-testid="native-file-before" class="before">{{ review.before }}</code></template>
-          <p class="change-label">{{ review.before === undefined ? 'New file' : 'After' }}</p><code data-testid="native-file-after" class="after">{{ review.after }}</code>
+          <p v-if="review.notebook?.editMode === 'delete'" role="note">This cell will be removed.</p>
+          <template v-else><p class="change-label">{{ review.before === undefined ? review.notebook ? 'New cell' : 'New file' : 'After' }}</p><code data-testid="native-file-after" class="after">{{ review.after }}</code></template>
           <p v-if="review.replaceAll" role="note">Replace all matching occurrences</p>
         </template>
       </section>
@@ -75,7 +77,7 @@ import type { ClaudeWorkflowApproval } from '#features/code/common/native-workfl
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = defineProps<{ workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'Workflow'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
+const props = defineProps<{ workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: 'Read' | 'Bash' | 'Write' | 'Edit' | 'NotebookEdit' | 'Workflow'; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>()
 const emit = defineEmits<{ respond: [response: { approved: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)

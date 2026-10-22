@@ -5,6 +5,7 @@ export const ClaudeFileApprovalReviewSchema = z.object({
   withheld: z.boolean(), notice: z.string().max(16000).optional(),
   before: z.string().max(200000).optional(), after: z.string().max(200000).optional(),
   replaceAll: z.boolean().optional(),
+  notebook: z.object({ editMode: z.enum(['replace', 'insert', 'delete']), cellId: z.string().max(16000).optional(), cellType: z.enum(['code', 'markdown']).optional() }).optional(),
 }).refine(value => !value.withheld || value.before === undefined && value.after === undefined, 'Withheld native content must not be presented')
 export type ClaudeFileApprovalReview = z.infer<typeof ClaudeFileApprovalReviewSchema>
 

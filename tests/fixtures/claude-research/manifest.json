@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "3ca9062f9b105db1e6565746bd11bf3b0ccaec49",
+  "researchCommit": "9d4436b9f8a4284a6d608a82879cdca1adc1765c",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -87,7 +87,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "fa48bdc054844adad7059587a14984128bf6cb486ef60fa8e26d09af199145e1",
+    "src/integration/apack-terminal-owner-app.mjs": "e522de53a66e5f41da04839c024f83f3e6e8e224be46321c4dce7b0b296293d6",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -124,7 +124,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "6f70405c834b23f6057ee1eae70fac9e45a1771e1f0768e3273e7f07d352397e",
+    "src/integration/run-apack-controls.mjs": "d5eedd9efba42bf25755201216661bb220f4012536776b90be8d5ee771c3639d",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -184,6 +184,7 @@
     "src/protocol/native-managed-files.mjs": "98ece77fe5a7ac98330991e4d9647c8d3761d26833aa52ca10fe912ef5b170ab",
     "src/protocol/native-managed-media-fixture.mjs": "765e83b1996ef41b2da56f3f2c934fe5394eff125c4f06bc39b63deb81363be2",
     "src/protocol/native-module-access.mjs": "1550dd126a3dd1b7130103729aa48d21ea3dc5efcda34d9480b717c98508bc5b",
+    "src/protocol/native-notebook-edit-fixture.mjs": "cd75b4410e240d8b4b7c74d982de8a0c5bf7419eb5ae4b5eebe37c4e338ba44b",
     "src/protocol/native-os-policy-files.mjs": "33e5d045d93f0270574828d94afe93c11c6dec7028c9e423f6b38733828d889e",
     "src/protocol/native-policy-held-client-fixture.mjs": "21d389ae3543b70ee8a88108182c18128d8b5e19bcbd7f356af6d4f472102ff0",
     "src/protocol/native-print-client-fixture.mjs": "36b62f98a3ecb472f49510339b05c5906c3f80b2b1881258a514736ebbc07406",
@@ -246,7 +247,7 @@
     "src/protocol/synthetic-mcp-health-server.mjs": "f99aff09240efb995e436a7bdda8f8b7fdbd63084460a80d7712b62fa837cc6e",
     "src/protocol/synthetic-mcp-resource-server.mjs": "c5a1b0162fec7b3a43c0c0cbca5d76e8c7067a9fcac850691271aff2a2089e67",
     "src/protocol/synthetic-mcp-server.mjs": "53a9ecdb3677535f0455769f8895bb015dac0c05c7c5f84d9cce39022cef511a",
-    "src/protocol/synthetic-model.mjs": "a47b66ae870b05b304ffb2d05ebb8daab2f3a2c93e9552b4ad5f19f98013eee2",
+    "src/protocol/synthetic-model.mjs": "990b8e1022a0872f8aea55ae1d50a951b88650942364d55502d6bc67a768bb5f",
     "src/protocol/synthetic-multi-agent-model.mjs": "e2b34795b415328858eca88c1f0ec0766bfc51ee9a3f99627725254fb73848da",
     "src/protocol/synthetic-skill-once-model.mjs": "4f13fdccf16e1fce9d5464414f1d740a683c9b1bada18aab513bb3fe5329c8cc",
     "src/protocol/synthetic-tool-probe.mjs": "3ca9f33f17cdb189a4e1f1fea77414bc8380500a4521e499c9974e27d9a0b820",
@@ -258,5 +259,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "bf57432bf342546c55c46632ba21672ee7586ed33a73e8548fdbbed206604904"
+  "archiveSha256": "1e1ab0d0afa1217a61ac5a3df7d50991dc2d923fbecbd8f13f4fbc71a14ee95e"
 }

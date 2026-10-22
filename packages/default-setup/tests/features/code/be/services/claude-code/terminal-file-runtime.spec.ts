@@ -46,3 +46,17 @@ it('rejects feedback if the original dialog is replaced while its mode is being 
   await expect(f.api.answerNativeFileChoice(f.n, f.d, { decision: 'deny', choice: 'no', choiceToken: shown.token, feedback: 'No' })).rejects.toThrow('expired')
   expect(f.calls).toEqual([])
 })
+
+it.each(['replace', 'insert', 'delete'] as const)('preserves the original NotebookEdit %s cell preview without reading or changing the notebook', mode => {
+  const api = vm.runInNewContext(claudeTerminalFileRuntime + ';({nativeNotebookReview})')
+  const input = { notebook_path: '/fixture/review.ipynb', cell_id: 'analysis', cell_type: 'code', edit_mode: mode, new_source: 'Input remains native-owned' }
+  const content = { kind: 'notebook-edit-diff', oldCellSource: mode === 'insert' ? undefined : 'print("before")', newSource: '<native cell source>' }
+  const review = api.nativeNotebookReview({ input, content })
+  expect(review).toEqual({ withheld: false, notebook: { editMode: mode, cellId: 'analysis', cellType: 'code' }, ...(mode === 'insert' ? {} : { before: 'print("before")' }), ...(mode === 'delete' ? {} : { after: '<native cell source>' }) })
+  expect(input.new_source).toBe('Input remains native-owned')
+})
+it('preserves original notebook withholding and defaults the native replacement mode', () => {
+  const api = vm.runInNewContext(claudeTerminalFileRuntime + ';({nativeNotebookReview})')
+  const review = api.nativeNotebookReview({ input: { notebook_path: '/fixture/review.ipynb' }, contentWithheld: true, content: { kind: 'no-changes', message: 'Current cell cannot be reviewed', oldCellSource: 'must stay hidden', newSource: 'must stay hidden' } })
+  expect(review).toEqual({ withheld: true, notebook: { editMode: 'replace' }, notice: 'Current cell cannot be reviewed' })
+})

@@ -8,7 +8,7 @@ import { z } from 'zod'
 /** A one-time file decision; native retains policy, input and dialog lifecycle ownership. */
 export const ClaudeNativeFileDialogSchema = z.object({
   id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid(),
-  requestId: z.string().min(1).max(256), toolName: z.enum(['Read', 'Write', 'Edit']),
+  requestId: z.string().min(1).max(256), toolName: z.enum(['Read', 'Write', 'Edit', 'NotebookEdit']),
   review: ClaudeFileApprovalReviewSchema.optional(), approval: ClaudeFileApprovalPresentationSchema.optional(),
   title: z.string().max(1000), question: z.string().max(4000),
   reason: z.string().max(16000).optional(),

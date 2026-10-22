@@ -1,5 +1,11 @@
 /** Original mounted file choices and feedback; permission updates remain native-owned. */
-export const claudeTerminalFileRuntime = String.raw`function nativeFileControl(n,d){
+export const claudeTerminalFileRuntime = String.raw`function nativeNotebookReview(p){
+ const content=p.content,withheld=p.contentWithheld===true||content?.kind==='no-changes',input=p.input;
+ const notebook={editMode:input.edit_mode??'replace',...(typeof input.cell_id==='string'?{cellId:input.cell_id}:{}),...(typeof input.cell_type==='string'?{cellType:input.cell_type}:{})};
+ const notice=typeof content?.message==='string'?content.message:typeof content?.notice==='string'?content.notice:undefined;
+ return {withheld,notebook,...(notice?{notice}:{}),...(!withheld?{...(typeof content.oldCellSource==='string'?{before:content.oldCellSource}:{}),...(notebook.editMode!=='delete'?{after:content.newSource}:{})}:{})};
+}
+function nativeFileControl(n,d){
  const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native file traversal exceeded bound');seen.add(fiber);

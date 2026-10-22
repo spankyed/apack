@@ -147,7 +147,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           if (dialog && dialog.sessionId === owner.state.sessionId) {
             const isWorkflow = dialog.toolName === 'Workflow'
             const isPlan = dialog.toolName === 'EnterPlanMode' || dialog.toolName === 'ExitPlanMode'
-            const isFile = dialog.toolName === 'Read' || dialog.toolName === 'Write' || dialog.toolName === 'Edit'
+            const isFile = dialog.toolName === 'Read' || dialog.toolName === 'Write' || dialog.toolName === 'Edit' || dialog.toolName === 'NotebookEdit'
             const isToolApproval = dialog.toolName !== 'AskUserQuestion'
             const question = isWorkflow ? 'Run this dynamic workflow?' : isPlan ? dialog.toolName === 'EnterPlanMode' ? 'Enter plan mode?' : 'Review this plan before continuing' : isToolApproval ? isFile ? dialog.question : 'Run this shell command?' : undefined
             const input = isToolApproval ? dialog.input : dialog.shownInput
@@ -175,7 +175,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           repository.threadCommands.update(threadId, { context })
           broadcastToPlugin('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
         }
-        if (sameDialog && dialog && ['Read', 'Write', 'Edit'].includes(dialog.toolName) && nativeControl && priorControl && 'approval' in dialog && object(nativeControl.file)?.token !== dialog.approval?.token) {
+        if (sameDialog && dialog && ['Read', 'Write', 'Edit', 'NotebookEdit'].includes(dialog.toolName) && nativeControl && priorControl && 'approval' in dialog && object(nativeControl.file)?.token !== dialog.approval?.token) {
           const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
             pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, file: dialog.approval } } } }
           repository.threadCommands.update(threadId, { context })

@@ -1400,8 +1400,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    cwd: string;
     revision: string;
+    cwd: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1417,8 +1417,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    cwd: string;
     revision: string;
+    cwd: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1453,37 +1453,70 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: z.ZodString;
     sessionId: z.ZodString;
     requestId: z.ZodString;
-    toolName: z.ZodEnum<["Read", "Write", "Edit"]>;
+    toolName: z.ZodEnum<["Read", "Write", "Edit", "NotebookEdit"]>;
     review: z.ZodOptional<z.ZodEffects<z.ZodObject<{
         withheld: z.ZodBoolean;
         notice: z.ZodOptional<z.ZodString>;
         before: z.ZodOptional<z.ZodString>;
         after: z.ZodOptional<z.ZodString>;
         replaceAll: z.ZodOptional<z.ZodBoolean>;
+        notebook: z.ZodOptional<z.ZodObject<{
+            editMode: z.ZodEnum<["replace", "insert", "delete"]>;
+            cellId: z.ZodOptional<z.ZodString>;
+            cellType: z.ZodOptional<z.ZodEnum<["code", "markdown"]>>;
+        }, "strip", z.ZodTypeAny, {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        }, {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        }>>;
     }, "strip", z.ZodTypeAny, {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     }, {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     }>, {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     }, {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     }>>;
     approval: z.ZodOptional<z.ZodObject<{
         token: z.ZodString;
@@ -1535,13 +1568,18 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     sessionId: string;
     question: string;
     requestId: string;
-    toolName: "Edit" | "Read" | "Write";
+    toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     } | undefined;
     approval?: {
         ready: boolean;
@@ -1562,13 +1600,18 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     sessionId: string;
     question: string;
     requestId: string;
-    toolName: "Edit" | "Read" | "Write";
+    toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
         withheld: boolean;
         replaceAll?: boolean | undefined;
         notice?: string | undefined;
         before?: string | undefined;
         after?: string | undefined;
+        notebook?: {
+            editMode: "delete" | "insert" | "replace";
+            cellId?: string | undefined;
+            cellType?: "code" | "markdown" | undefined;
+        } | undefined;
     } | undefined;
     approval?: {
         ready: boolean;

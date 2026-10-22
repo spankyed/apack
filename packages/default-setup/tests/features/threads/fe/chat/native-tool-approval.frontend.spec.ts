@@ -142,3 +142,22 @@ it('retains native editor access for a withheld Workflow without exposing or app
     expect(button.disabled).toBe(false); button.click(); expect(edit).toHaveBeenCalledOnce(); expect(respond).not.toHaveBeenCalled(); expect(root.querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true)
   } finally { app.unmount(); root.remove() }
 })
+
+it.each(['replace', 'insert', 'delete'] as const)('shows NotebookEdit %s cell semantics and escapes native cell content', mode => {
+  const root = document.createElement('div'); document.body.append(root)
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'NotebookEdit', title: 'Edit notebook', question: 'Allow this cell change?', filePath: '/fixture/review.ipynb', disabled: false, review: { withheld: false, notebook: { editMode: mode, cellId: 'analysis', cellType: 'code' }, ...(mode === 'insert' ? {} : { before: '<script>before</script>' }), ...(mode === 'delete' ? {} : { after: '<img>after' }) } }) }); app.mount(root)
+  try {
+    expect(root.querySelector('script,img')).toBeNull()
+    expect(root.querySelector('[data-testid="native-notebook-operation"]')?.textContent).toContain({ replace: 'Replace cell', insert: 'Insert cell', delete: 'Delete cell' }[mode])
+    expect(root.textContent).toContain('analysis'); expect(root.textContent).toContain('/fixture/review.ipynb')
+    if (mode === 'delete') { expect(root.querySelector('[data-testid="native-file-after"]')).toBeNull(); expect(root.textContent).toContain('This cell will be removed.') }
+    else expect(root.querySelector('[data-testid="native-file-after"]')?.textContent).toBe('<img>after')
+    if (mode === 'insert') { expect(root.querySelector('[data-testid="native-file-before"]')).toBeNull(); expect(root.textContent).toContain('New cell'); expect(root.textContent).not.toContain('New file') }
+  } finally { app.unmount(); root.remove() }
+})
+it('does not manufacture a cell diff when the original notebook preview is withheld', () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'NotebookEdit', title: 'Edit notebook', question: 'Allow?', filePath: '/fixture/review.ipynb', disabled: false, review: { withheld: true, notice: 'Notebook is too large to preview', notebook: { editMode: 'delete', cellId: 'analysis' } } }) }); app.mount(root)
+  try { expect(root.textContent).toContain('Notebook is too large to preview'); expect(root.querySelector('[data-testid="native-file-before"],[data-testid="native-file-after"]')).toBeNull(); expect(root.textContent).not.toContain('This cell will be removed.') }
+  finally { app.unmount(); root.remove() }
+})
