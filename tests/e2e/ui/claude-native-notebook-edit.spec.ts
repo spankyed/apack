@@ -108,6 +108,7 @@ test('reviews original notebook cells and preserves denied content and the every
     previews.push({mode:stage.mode,review:native})
     for(const width of [1100,680]){
       const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
+      if(width===680){const review=stage.mode==='delete'?approval.getByText('This cell will be removed.',{exact:true}):approval.getByTestId('native-file-after');await review.evaluate(element=>element.scrollIntoView({block:'nearest'}));await expect(review).toBeInViewport()}
       await expect(approval.getByRole('button',{name:'Deny',exact:true})).toBeInViewport()
       await expect(approval.getByRole('button',{name:/^(Allow once|Continue)$/})).toBeInViewport()
       expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
@@ -131,6 +132,13 @@ test('reviews original notebook cells and preserves denied content and the every
   await expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='assistant'&&row.text==='Notebook updated; original migration notes retained.')).toBe(true)
   const final=await notebook();expect(source(final.cells.find((cell:any)=>cell.id==='notes'))).toBe('# Original notes\nKeep the migration checklist.')
   const after=await context();expect(after.turns).toBe(before.turns+1);expect(after.native.state.nativePid).toBe(boundNativePid)
+  const formats:any[]=[]
+  for(const kind of ['replace','insert']){
+    const id='native_notebook_'+kind,block=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="'+id+'"]'),formatted=block.locator('[data-native-tool-result="'+id+'"] [data-native-tool-format]')
+    if(!await formatted.isVisible()){const toggle=block.locator('button[aria-expanded]').first();if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()}
+    await expect(formatted).toBeVisible();formats.push({id,text:await formatted.innerText()})
+    const diff=appPage.getByRole('button',{name:'Close Diff',exact:true});if(await diff.isVisible()){await diff.click();await expect(diff).toHaveCount(0)}
+  }
   await expect(composer).toBeVisible();await expect(composer).toHaveText(draft)
   for(const width of [1100,680]){
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
@@ -145,6 +153,6 @@ test('reviews original notebook cells and preserves denied content and the every
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue the saved release review after editing the notebook.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-notebook-edit-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,previews,originalDocument,originalSelection,retainedDraft:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-notebook-edit-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,previews,formats,originalDocument,originalSelection,retainedDraft:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeNotebookEdit:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
