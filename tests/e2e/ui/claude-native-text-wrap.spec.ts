@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -99,9 +99,11 @@ test('preserves declared native Text wrapping at actual width and through resize
       await expect(row(mode)).toContainText('…')
       await expect.poll(async () => row(mode).evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     }
-    expect(await row('end').textContent()).toBe(await row('truncate').textContent())
-    expect(await row('end').textContent()).toBe(await row('truncate-end').textContent())
-    expect(await row('middle').textContent()).toBe(await row('truncate-middle').textContent())
+    await writeFile(join(workspace!, 'native-text-layout-resize.json'), JSON.stringify(await Promise.all(modes.map(mode => row(mode).evaluate((element, mode) => ({ mode, width: element.getBoundingClientRect().width, text: element.textContent }), mode)))))
+    // ResizeObserver and original-font measurement settle independently for each row.
+    await expect.poll(async () => (await row('end').textContent()) === (await row('truncate').textContent())).toBe(true)
+    await expect.poll(async () => (await row('end').textContent()) === (await row('truncate-end').textContent())).toBe(true)
+    await expect.poll(async () => (await row('middle').textContent()) === (await row('truncate-middle').textContent())).toBe(true)
     expect(await row('end').textContent()).toMatch(/^Release notes: .*…$/)
     expect(await row('truncate-start').textContent()).toMatch(/^….*release-summary.md$/)
     expect(await row('middle').textContent()).toMatch(/^Release notes: .*….*release-summary.md$/)
