@@ -97,9 +97,10 @@ test('preserves Agent drafts through command scrolling, Stats dates and original
   async function capture(label:string, widths=[1100,680]){
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     for(const width of widths){
+      const changedWidth=appPage.viewportSize()?.width!==width
       const height=width===680?600:900, previousSize=await resize(), previousSequence=(await context()).native.output.at(-1)?.sequence??0
       await appPage.setViewportSize({width,height})
-      if(await panel.isVisible()){
+      if(await panel.isVisible()&&changedWidth){
         await expect.poll(async()=>(await resize())?.cols).not.toBe(previousSize?.cols)
         await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(previousSequence)
         await screen()
