@@ -28,6 +28,26 @@ class ReplayBoundary(unittest.TestCase):
                 archive.addfile(member, io.BytesIO(data))
         return bundle, {'archiveSha256': ci.digest(bundle), 'files': {name: hashlib.sha256(data).hexdigest()}}
 
+    def test_supplied_native_archive_is_verified_without_network(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(ci, 'urlopen') as fetch:
+            root = Path(directory)
+            source = root / 'existing.tgz'
+            source.write_bytes(b'pinned native archive')
+            target = {'tarballSha256': ci.digest(source)}
+            ci.prepare_native_package(target, root / 'native.tgz', source)
+            self.assertEqual((root / 'native.tgz').read_bytes(), source.read_bytes())
+            fetch.assert_not_called()
+
+    def test_corrupt_supplied_native_archive_refuses_before_copy_or_network(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(ci, 'urlopen') as fetch:
+            root = Path(directory)
+            source = root / 'existing.tgz'
+            source.write_bytes(b'corrupt')
+            with self.assertRaisesRegex(ValueError, 'Supplied native package integrity changed'):
+                ci.prepare_native_package({'tarballSha256': '0' * 64}, root / 'native.tgz', source)
+            self.assertFalse((root / 'native.tgz').exists())
+            fetch.assert_not_called()
+
     def test_exact_authored_file_extraction(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -91,6 +91,19 @@ def validate_host(linux_container=False):
     return 'darwin-arm64'
 
 
+def prepare_native_package(target, package, supplied_archive=None):
+    if supplied_archive is not None:
+        source = Path(supplied_archive).resolve(strict=True)
+        if not source.is_file() or digest(source) != target['tarballSha256']:
+            raise ValueError('Supplied native package integrity changed')
+        shutil.copyfile(source, package)
+    else:
+        with urlopen(target['url'], timeout=60) as response, package.open('wb') as output:
+            shutil.copyfileobj(response, output)
+    if digest(package) != target['tarballSha256']:
+        raise ValueError('Official native package integrity changed')
+
+
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
     if linux_container and case not in ['streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
@@ -114,10 +127,8 @@ def run(case, linux_container=False):
     if target['version'] != '2.1.302' or target['platform'] != target_platform:
         raise ValueError('Explicit pinned-target review required')
     package = root / 'native.tgz'
-    with urlopen(target['url'], timeout=60) as response, package.open('wb') as output:
-        shutil.copyfileobj(response, output)
-    if digest(package) != target['tarballSha256']:
-        raise ValueError('Official native package integrity changed')
+    supplied_archive = os.environ.get('APACK_CLAUDE_RESEARCH_NATIVE_ARCHIVE')
+    prepare_native_package(target, package, supplied_archive)
     binary = root / 'claude'
     with tarfile.open(package, 'r:gz') as archive:
         member = archive.getmember('package/claude')
@@ -150,7 +161,7 @@ const result=await probeNativeActionKeys(binary,root+'/workspaces',root+'/output
 console.log(JSON.stringify(result,null,2));
 if(result.status!=='complete')process.exitCode=1;
 """.replace('__scenario__', json.dumps('contexts' if case == 'native-action-contexts' else 'baseline'))
-    (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target}, indent=2) + '\n')
+    (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target, 'suppliedNativeArchive': str(Path(supplied_archive).resolve()) if supplied_archive else None}, indent=2) + '\n')
     subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=240 if case in ['action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
