@@ -106,6 +106,30 @@ test('completes an everyday native review across Agent, approval, question and i
   }
   const send = card.getByRole('button', { name: 'Send', exact: true })
   const mainDraft = 'Keep the release checklist wording unchanged.'
+  const commandScreens: { stage: string; width: number; height: number; file: string }[] = []
+  const beforeCommands = await context()
+  for (const [width, height] of [[1100, 900], [680, 600]] as const) {
+    await appPage.setViewportSize({ width, height })
+    await composer.fill(''); await composer.fill('/cc-')
+    const popup = appPage.locator('.command-suggestion-popup')
+    await expect(popup).toBeVisible()
+    for (const name of ['cc-plan', 'cc-models', 'cc-reset']) await expect(popup.getByText('/' + name, { exact: true })).toHaveCount(1)
+    const selected = popup.locator('.command-suggestion-item.is-selected')
+    await expect(selected).toHaveCount(1)
+    const first = await selected.innerText()
+    await composer.press('ArrowDown'); await expect(selected).not.toHaveText(first)
+    const file = `apack-command-picker-${width}-${height}.png`
+    await capturePage(file, width, height)
+    const bounds = await popup.boundingBox(); expect(bounds).not.toBeNull()
+    expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.y).toBeGreaterThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(height + 1)
+    await expect(selected).toBeInViewport({ ratio: 1 })
+    await composer.press('Escape'); await expect(popup).toBeHidden(); await expect(composer).toHaveText('/cc-')
+    commandScreens.push({ stage: 'main', width, height, file })
+  }
+  expect((await context()).turns).toBe(beforeCommands.turns)
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, boundNativePid }))
   await appPage.setViewportSize({ width: 1100, height: 900 })
   await composer.fill('Review the release notes with a worker.')
   await send.click()
@@ -120,6 +144,18 @@ test('completes an everyday native review across Agent, approval, question and i
   const agentForm = focused.getByRole('form', { name: 'Agent message', exact: true })
   const agentEditor = agentForm.locator('[contenteditable="true"]')
   const agentDraft = 'Please also note the migration steps.'
+  for (const [width, height] of [[1100, 900], [680, 600]] as const) {
+    await appPage.setViewportSize({ width, height })
+    await agentEditor.fill('/cc-model haiku')
+    await expect(agentEditor).toHaveText('/cc-model haiku')
+    await expect(appPage.locator('.command-suggestion-popup:visible')).toHaveCount(0)
+    await expect(agentEditor.locator('.command-segment')).toHaveCount(0)
+    await expect(agentForm.getByRole('button', { name: 'Send to Agent', exact: true })).toBeInViewport({ ratio: 1 })
+    const file = `apack-agent-command-owner-${width}-${height}.png`
+    await capturePage(file, width, height)
+    commandScreens.push({ stage: 'agent', width, height, file })
+  }
+  await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, agentAppCommandsHeld: true, boundNativePid }))
   await agentEditor.fill(agentDraft)
   await capture('agent', agentEditor, [agentForm.getByRole('button', { name: 'Send to Agent', exact: true }), focused.getByRole('button', { name: 'Back to conversation', exact: true })], focused.getByRole('region', { name: 'Agent transcript', exact: true }))
   await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click()

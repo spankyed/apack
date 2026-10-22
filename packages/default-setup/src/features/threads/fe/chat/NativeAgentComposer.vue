@@ -31,7 +31,8 @@ import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import type { Editor } from '@tiptap/core'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft, normalizeClaudeAgentDraftText, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
-import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
+import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
+import { holdEditorCommandSuggestions } from '@apackdev/sdk/fe'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
 const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void>; openSettings?: () => Promise<void> }>()
@@ -45,7 +46,9 @@ let committedState: Editor['state'] | undefined
 watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmentId], ([editor, mountId], _old, cleanup) => {
   bridge?.dispose(); bridge = undefined; offers.value = []
   if (!editor) return
-  nativePromptEditors.add(editor); cleanup(() => nativePromptEditors.delete(editor))
+  nativePromptEditors.add(editor)
+  const releaseCommands = holdEditorCommandSuggestions(editor)
+  cleanup(() => { nativePromptEditors.delete(editor); releaseCommands() })
   if (adoptedEditor !== editor) {
     const saved = props.draftSnapshot, initialDocument = editor.state.doc
     const adopt = () => { adoptedEditor = editor; if (saved) restoreClaudeAgentDraft(editor, saved, props.draft, initialDocument); committedState = editor.state }
@@ -99,7 +102,7 @@ watch([() => editorRef.value?.editor, () => props.mountId, () => props.attachmen
     initialRevision: props.completionRevision, request: value => emit('complete', value), update: (rows, id) => {
       offers.value = id ? rows.map(row => ({ ...row, offerId: id })) : []
       const owner = bridge
-      setClaudeCompletionOffer(editor, id && rows.length ? { id, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, id) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
+      setEditorCompletionOffer(editor, id && rows.length ? { id, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, id) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
     },
   }, { canSuggest: () => !props.disabled && !submitting.value && document.hasFocus() })
 }, { flush: 'post' })

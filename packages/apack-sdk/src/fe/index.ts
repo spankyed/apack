@@ -66,3 +66,5 @@ export { getStepDeclarations, getStepDeclaration, getStepBinding, onStepsChanged
 export type { ArtifactFrontendBinding, BlockFrontendBinding } from './viewer-bindings.ts';
 export { getArtifactDeclarations, getArtifactDeclaration, getArtifactBinding, useArtifactDeclarations } from './artifact-reader.ts';
 export { getBlockDeclarations, getBlockDeclaration, getBlockBinding, useBlockDeclarations } from './block-reader.ts';
+
+export { getEditorCompletionOffer, setEditorCompletionOffer, getEditorCommandSuggestionsEnabled, holdEditorCommandSuggestions, type EditorCompletionRow, type EditorCompletionOffer } from './editor-completions.ts'
