@@ -117,14 +117,22 @@ test('retains composing through original Config search and model callback', asyn
   await keyboard.press('Escape')
   await expect.poll(screen).not.toContain('no-such-setting-claude-parity')
   await keyboard.pressSequentially('Model')
-  await expect.poll(screen).toContain('Model')
-  await keyboard.press('ArrowDown');await keyboard.press('Enter')
+  await expect.poll(screen).toMatch(/⌕ Model\s+│/)
+  async function chooseModelRow(){
+    if(!/❯ Model\s/.test(await screen())){
+      await keyboard.press('ArrowDown')
+      await expect.poll(screen).toMatch(/❯ (?:Switch models|Model\s)/)
+      if(!/❯ Model\s/.test(await screen()))await keyboard.press('ArrowDown')
+    }
+    await expect.poll(screen).toMatch(/❯ Model\s/);await keyboard.press('Enter')
+  }
+  await chooseModelRow()
   await expect.poll(screen).toMatch(/Select model/)
   await keyboard.press('Escape')
   await expect.poll(screen).toContain('Search settings')
   const userSettings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8').catch(()=>'{}'))
   const initialSettings=await userSettings()
-  await keyboard.press('ArrowDown');await keyboard.press('Enter')
+  await chooseModelRow()
   await expect.poll(screen).toMatch(/Select model/)
   await capture('model-picker')
   await keyboard.pressSequentially('sonnet');await expect.poll(screen).toMatch(/sonnet/i)
