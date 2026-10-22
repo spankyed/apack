@@ -125,12 +125,12 @@ it('restores persisted structured input without any in-memory owner and clears i
   const owner = crypto.randomUUID(), original = create(rich)
   await new Promise(resolve => original.on('create', resolve)); original.commands.setTextSelection({from:2,to:5})
   const snapshot = captureClaudeAgentDraft(original)!, key = claudeWindowStorageKey('parent-draft', owner)!
-  localStorage.setItem(key,JSON.stringify(snapshot))
+  localStorage.setItem(`default-setup/threads:${key}`,JSON.stringify(snapshot))
   const restored = create(''), detach = bindClaudeWindowDraft(restored,owner)
   await new Promise(resolve => restored.on('create',resolve))
   expect(restored.getJSON()).toEqual(snapshot.doc); expect(restored.state.selection.toJSON()).toEqual(snapshot.selection)
-  expect(claudeWindowStorageKey('parent-draft', owner,'?popout=plugin&pluginId=default-setup/threads')).not.toBe(key)
-  restored.commands.clearContent(); detach(); expect(localStorage.getItem(key)).toBeNull()
+  expect(claudeWindowStorageKey('parent-draft', owner,'?popout=surface&surfaceId=default-setup/threads')).not.toBe(key)
+  restored.commands.clearContent(); detach(); expect(localStorage.getItem(`default-setup/threads:${key}`)).toBeNull()
 })
 
 it('restores exact literal source and its hidden-syntax caret only during untouched editor initialization', () => {

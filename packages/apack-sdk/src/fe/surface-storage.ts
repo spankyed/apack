@@ -43,3 +43,8 @@ export function useSurfaceStorage(): SurfaceStorage {
   const surface = useSurface<{ id: FeatureRef }>();
   return surfaceStorage(surface.id);
 }
+
+/** One surface's state for this renderer session, retained through reloads. */
+export function surfaceSessionStorage(ref: FeatureRef): SurfaceStorage {
+  return surfaceStorage(ref, sessionStorage);
+}

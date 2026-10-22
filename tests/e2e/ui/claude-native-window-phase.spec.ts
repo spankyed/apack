@@ -84,8 +84,8 @@ test('keeps independent staged Plan and Edit across simultaneous app windows and
   expect(originalMode).toBe('acceptEdits')
   const planText='Plan the release review from the main window.',editText='Continue the release review in Edit from the popout.',mainFollowText='Review remaining release notes from the main window.'
   const snapshot=(page:typeof appPage)=>page.evaluate(()=>{
-    const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context,q=new URLSearchParams(location.search),scope=q.get('popout')==='plugin'?['plugin',q.get('pluginId')]:['main'];
-    const key='apack.claude-composer-phase:'+JSON.stringify([scope,c.currentThread?.id]);
+    const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context,q=new URLSearchParams(location.search),scope=q.get('popout')==='surface'?['surface',q.get('surfaceId')]:['main'];
+    const key='default-setup/threads:claude-composer-phase:'+JSON.stringify([scope,c.currentThread?.id]);
     return {phase:c.phase,mode:c.mode,stage:JSON.parse(localStorage.getItem(key)??'null'),native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id),claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,threadId:c.currentThread?.id} as any;
   })
   const humanRows=async()=>{const c=await context();return c.messages.filter((row:any)=>row.sender==='user').map((row:any)=>({id:row.id,text:row.text,uuid:row.context?.cliUuid}))}

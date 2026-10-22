@@ -97,7 +97,7 @@ test('round trips native source fills with line breaks and explicit context with
   }
   const reloads:any[]=[]
   const reloadDraft=async(text:string,linked:boolean)=>{
-    const stored=()=>appPage.evaluate(expected=>Object.entries(localStorage).filter(([key])=>key.startsWith('apack.claude-parent-draft:')).map(([key,value])=>({key,value:JSON.parse(value)})).find(row=>row.value.text===expected),text)
+    const stored=()=>appPage.evaluate(expected=>Object.entries(localStorage).filter(([key])=>key.startsWith('default-setup/threads:claude-parent-draft:')).map(([key,value])=>({key,value:JSON.parse(value)})).find(row=>row.value.text===expected),text)
     await expect.poll(stored).toBeTruthy()
     const before=(await stored())!
     expect(before.value.doc.content[0].type).toBe('claudePromptSource')

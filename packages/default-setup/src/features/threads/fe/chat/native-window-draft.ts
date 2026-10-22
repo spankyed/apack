@@ -1,3 +1,5 @@
+import { surfaceStorage } from '@apackdev/sdk/fe'
+import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { Editor } from '@tiptap/core'
 import { captureClaudeAgentDraft, restoreClaudeAgentDraft, type ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
@@ -14,7 +16,7 @@ export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void
   const storageKey = claudeWindowStorageKey('parent-draft', owner)
   let saved = drafts.parent.get(owner)
   if (!saved && storageKey) {
-    try { const raw = globalThis.localStorage?.getItem(storageKey); if (raw) saved = JSON.parse(raw) as ClaudeAgentDraftSnapshot } catch { /* Storage availability never gates editing. */ }
+    try { const raw = surfaceStorage(featureRef('threads')).get(storageKey); if (raw) saved = JSON.parse(raw) as ClaudeAgentDraftSnapshot } catch { /* Storage availability never gates editing. */ }
   }
   let ready = false
   const save = () => {
@@ -23,8 +25,8 @@ export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void
     if (!snapshot) return
     drafts.parent.set(owner, snapshot)
     if (storageKey) try {
-      if (editor.isEmpty) globalThis.localStorage?.removeItem(storageKey)
-      else globalThis.localStorage?.setItem(storageKey, JSON.stringify(snapshot))
+      if (editor.isEmpty) surfaceStorage(featureRef('threads')).remove(storageKey)
+      else surfaceStorage(featureRef('threads')).set(storageKey, JSON.stringify(snapshot))
     } catch { /* Keep the current window draft when storage is unavailable or full. */ }
   }
   const adopt = () => {

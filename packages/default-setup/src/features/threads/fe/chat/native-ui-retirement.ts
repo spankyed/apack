@@ -1,3 +1,5 @@
+import { surfaceSessionStorage } from '@apackdev/sdk/fe'
+import { ref as featureRef } from '#generated/ref.ts'
 /** Cleanup must outlive a replaced pack actor, but never the renderer window. */
 export type ClaudeUiRetirement = { threadId: string; mountId: string; resumeKey: string }
 const key = Symbol.for('apack.default-setup.claude-ui-retirements')
@@ -20,13 +22,13 @@ export function takeClaudeUiRetirements(): ClaudeUiRetirement[] {
 
 // sessionStorage belongs to this renderer window. On reload, retire its old server-issued
 // credentials before mounting fresh views; never restore drawings or callback authority.
-const storageKey = 'apack.claude-ui-leases'
+const storageKey = 'claude-ui-leases'
 const leaseKey = Symbol.for('apack.default-setup.claude-ui-reload-leases')
 type ReloadLeases = { previous: ClaudeUiRetirement[]; active: Map<string, ClaudeUiRetirement> }
 const leaseScope = globalThis as unknown as Record<symbol, ReloadLeases | undefined>
 function previousLeases(): ClaudeUiRetirement[] {
   try {
-    const value: unknown = JSON.parse(globalThis.sessionStorage?.getItem(storageKey) ?? '[]')
+    const value: unknown = JSON.parse(surfaceSessionStorage(featureRef('threads')).get(storageKey) ?? '[]')
     return Array.isArray(value) ? value.slice(0, 128).filter((item): item is ClaudeUiRetirement =>
       !!item && typeof item === 'object' && typeof item.threadId === 'string' && item.threadId.length <= 256 &&
       typeof item.mountId === 'string' && /^[0-9a-f-]{36}$/i.test(item.mountId) &&
@@ -37,8 +39,8 @@ const reloadLeases = leaseScope[leaseKey] ??= { previous: previousLeases(), acti
 function saveLeases(): void {
   try {
     const leases = [...reloadLeases.active.values()]
-    if (leases.length) globalThis.sessionStorage?.setItem(storageKey, JSON.stringify(leases))
-    else globalThis.sessionStorage?.removeItem(storageKey)
+    if (leases.length) surfaceSessionStorage(featureRef('threads')).set(storageKey, JSON.stringify(leases))
+    else surfaceSessionStorage(featureRef('threads')).remove(storageKey)
   } catch { /* Storage refusal must not prevent current-window cleanup. */ }
 }
 export function rememberClaudeUiLease(lease: ClaudeUiRetirement): void {

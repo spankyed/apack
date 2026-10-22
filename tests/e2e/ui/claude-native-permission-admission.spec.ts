@@ -86,7 +86,7 @@ test('admits an explicitly selected bypass launch and restores it after native P
   const humans=async()=>(await context()).messages.filter((row:any)=>row.sender==='user'||row.sender==='person').map((row:any)=>({id:row.id,text:row.text,uuid:row.context?.cliUuid}))
   const historyBefore=await humans()
   await composer.fill(planText);await pick('Plan')
-  const staged=await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)
+  const staged=await appPage.evaluate(threadId=>localStorage.getItem('default-setup/threads:claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)
   expect(JSON.parse(staged!).phase).toBe('Plan')
   const stop=async()=>{
     await section.getByRole('button',{name:'Use native interface',exact:true}).click()
@@ -145,7 +145,7 @@ test('admits an explicitly selected bypass launch and restores it after native P
   await expect(appPage.getByRole('button',{name:'Bypass',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(appPage.getByRole('alert')).toHaveCount(0)
   expect(await humans()).toEqual(historyBefore);await expect(composer).toHaveText(planText)
-  expect(await appPage.evaluate(threadId=>localStorage.getItem('apack.claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)).toBe(staged)
+  expect(await appPage.evaluate(threadId=>localStorage.getItem('default-setup/threads:claude-composer-phase:'+JSON.stringify([['main'],threadId])),threadId)).toBe(staged)
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900});await appPage.keyboard.press('Escape')
     const trigger=appPage.getByRole('button',{name:/^Permissions:/});await trigger.scrollIntoViewIfNeeded();await trigger.click()

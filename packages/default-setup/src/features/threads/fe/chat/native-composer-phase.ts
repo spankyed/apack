@@ -1,3 +1,5 @@
+import { surfaceStorage } from '@apackdev/sdk/fe'
+import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 
 export interface ClaudeComposerPhaseStage { phase: 'Plan' | 'Edit'; revision: string }
@@ -12,7 +14,7 @@ export function readClaudeComposerPhase(threadId: string): ClaudeComposerPhaseSt
   const current = stages.get(key)
   if (current) return current
   try {
-    const raw = globalThis.localStorage?.getItem(key)
+    const raw = surfaceStorage(featureRef('threads')).get(key)
     if (!raw) return
     const saved = JSON.parse(raw)
     if ((saved?.phase === 'Plan' || saved?.phase === 'Edit') && typeof saved.revision === 'string' && saved.revision) {
@@ -26,11 +28,11 @@ export function stageClaudeComposerPhase(threadId: string, phase: 'Plan' | 'Edit
   if (!key) return
   const stage = { phase, revision: globalThis.crypto.randomUUID() }
   stages.set(key, stage)
-  try { globalThis.localStorage?.setItem(key, JSON.stringify(stage)) } catch { /* Retain the window-local stage. */ }
+  try { surfaceStorage(featureRef('threads')).set(key, JSON.stringify(stage)) } catch { /* Retain the window-local stage. */ }
 }
 export function commitClaudeComposerPhase(threadId: string, revision: string): void {
   const key = claudeWindowStorageKey('composer-phase', threadId)
   if (!key || readClaudeComposerPhase(threadId)?.revision !== revision) return
   stages.delete(key)
-  try { globalThis.localStorage?.removeItem(key) } catch { /* Current window remains usable. */ }
+  try { surfaceStorage(featureRef('threads')).remove(key) } catch { /* Current window remains usable. */ }
 }

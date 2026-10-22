@@ -861,6 +861,9 @@ required: true;
 }>> & Readonly<{}>, {}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public
+export function surfaceSessionStorage(ref: FeatureRef): SurfaceStorage;
+
+// @public
 export type SurfaceStateOf<C> = C extends {
     state: infer State;
 } ? State : never;

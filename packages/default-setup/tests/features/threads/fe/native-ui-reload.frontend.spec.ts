@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const lease = { threadId: 'thread-one', mountId: '11111111-1111-4111-8111-111111111111', resumeKey: '22222222-2222-4222-8222-222222222222' }
-const storageKey = 'apack.claude-ui-leases'
+const storageKey = 'default-setup/threads:claude-ui-leases'
 const resetRenderer = () => {
   const scope = globalThis as unknown as Record<symbol, unknown>
   delete scope[Symbol.for('apack.default-setup.claude-ui-reload-leases')]
@@ -12,6 +12,7 @@ afterEach(() => { sessionStorage.clear(); resetRenderer() })
 const load = () => import('#features/threads/fe/chat/native-ui-retirement.ts')
 
 it('retires a prior renderer lease once without retiring the current live view', async () => {
+  sessionStorage.setItem('other/surface:claude-ui-leases', 'foreign lease')
   let api = await load()
   api.rememberClaudeUiLease(lease)
   expect(api.takeClaudeUiRetirements()).toEqual([])
@@ -23,6 +24,8 @@ it('retires a prior renderer lease once without retiring the current live view',
   api.rememberClaudeUiLease(fresh)
   expect(api.takeClaudeUiRetirements()).toEqual([])
   expect(JSON.parse(sessionStorage.getItem(storageKey)!)).toEqual([fresh])
+  expect(localStorage.getItem(storageKey)).toBeNull()
+  expect(sessionStorage.getItem('other/surface:claude-ui-leases')).toBe('foreign lease')
 })
 
 it('forgets a normally retired view without withdrawing a foreign thread lease', async () => {

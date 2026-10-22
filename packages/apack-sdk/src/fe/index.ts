@@ -11,7 +11,7 @@ export type { _HostBridge } from './electron-api.ts';
 export type { SpeechEvent } from './speech-event.ts';
 export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceStateOf, RouteComponents } from './surface.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
-export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
+export { surfaceStorage, surfaceSessionStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
 export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
 export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } from './surface-state.ts'
