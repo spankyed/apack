@@ -1,3 +1,4 @@
+import { ClaudeMcpElicitationAnswerSchema, type ClaudeMcpElicitationAnswer } from '#features/code/common/mcp-elicitation.ts'
 import { prepareClaudePrintClients } from './print-client-bridge.ts'
 import { ClaudeModelCatalogSchema, type ClaudeModelCatalog } from './host-controls.ts'
 import { randomUUID } from 'node:crypto'
@@ -97,6 +98,8 @@ export interface QueryHandle {
    * tool-activity row having never run. That happened once and took a while to find.
    */
   respond(requestId: string, response: { behavior: 'allow' | 'deny'; message?: string; updatedInput?: unknown }): void
+  /** Send an MCP form/URL answer through its distinct correlated native response channel. */
+  respondElicitation(requestId: string, response: ClaudeMcpElicitationAnswer): void
   /** Cancel an unsupported generic dialog through its native response channel. */
   cancelUserDialog(requestId: string): void
   /** Cancel the current turn and await its native acknowledgement; optionally cancel queued inputs. */
@@ -287,6 +290,13 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
         type: 'control_response',
         response: { subtype: 'success', request_id: requestId, response },
       })) throw new ClaudeProtocolError('could not send control response: stdin is closed')
+    },
+
+    respondElicitation(requestId, response): void {
+      const id = z.string().min(1).parse(requestId)
+      const answer = ClaudeMcpElicitationAnswerSchema.parse(response)
+      if (!stream.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: answer } }))
+        throw new ClaudeProtocolError('could not send elicitation response: stdin is closed')
     },
 
     cancelUserDialog(requestId): void {

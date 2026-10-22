@@ -1145,3 +1145,20 @@ it('correlates empty native model acknowledgements and preserves custom names an
   expect(mock.writes).toHaveLength(3)
   await handle.close()
 })
+
+it('sends typed MCP answers independently of permission and generic-dialog outcomes', async () => {
+  const mock = makeMockStream(); vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+  const handle = await query({ surfaceControlRequests: true })
+  for (const answer of [{ action: 'accept' as const, content: { choice: 'Alpha', enabled: false, count: 0, tags: ['one'] } }, { action: 'accept' as const }, { action: 'decline' as const }, { action: 'cancel' as const }]) {
+    handle.respondElicitation('native-elicitation', answer)
+    expect(mock.writes.at(-1)).toEqual({ type: 'control_response', response: { subtype: 'success', request_id: 'native-elicitation', response: answer } })
+  }
+  const before = mock.writes.length
+  expect(() => handle.respondElicitation('', { action: 'cancel' })).toThrow()
+  expect(() => handle.respondElicitation('native-elicitation', { action: 'decline', content: { choice: 'Alpha' } })).toThrow('Only accepted')
+  expect(() => handle.respondElicitation('native-elicitation', { action: 'accept', content: { count: Infinity } })).toThrow()
+  expect(mock.writes).toHaveLength(before)
+  vi.spyOn(mock.handle, 'write').mockReturnValue(false)
+  expect(() => handle.respondElicitation('native-elicitation', { action: 'cancel' })).toThrow('stdin is closed')
+  await handle.close()
+})
