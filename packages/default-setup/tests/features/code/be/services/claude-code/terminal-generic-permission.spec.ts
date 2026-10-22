@@ -28,7 +28,9 @@ function fixture(card = false) {
   cache[90] = 'Original native card rows'
   const root = card ? cache[107] : cache[154]
   const fiber = { type: ozr, memoizedProps: { payload, wouldTakeAnswer: () => ready }, updateQueue: { memoCache: { data: [cache] } }, child: { type: root.type, memoizedProps: root.props, child: { type: qJ, memoizedProps: control } } }
-  const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
+  const session = { id: 'original-session' }, render = vi.fn(async (_tree: unknown, _options: unknown) => 'Original rendered parameter table')
+  function AppStateProvider() {} function ThemeProvider() {}
+  const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (text: string) => createHash('sha256').update(text).digest('hex')
   const fingerprints = new Map([
     ['063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73', hash(ozr.toString())],
@@ -38,9 +40,10 @@ function fixture(card = false) {
     process: { stdout: undefined }, createHash, stripVTControlCharacters, composerFunctionHashes: new WeakMap(), setTimeout,
     nativeFunctionName: (name: string) => name,
     nativeFunctionHash: (key: string) => { const value = fingerprints.get(key); if (!value) throw Error('Unreviewed native producer fingerprint'); return value },
+    nativeThemeProvider: () => ({ type: ThemeProvider, value: { resolvedTheme: {} } }),
     nativeDialog: () => current,
   })
-  return { n, runtime, dialog, cache, fiber, options, select, open, setReady(value: boolean) { ready = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, select, open, setReady(value: boolean) { ready = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 const response = (f: ReturnType<typeof fixture>, token: string, choice = 'yes', decision = 'allow', feedback?: string) => ({ toolName: f.dialog.payload.toolName, choiceToken: token, choice, decision, ...(feedback === undefined ? {} : { feedback }) })
 
@@ -98,4 +101,12 @@ it('honors native readiness/refusal and rejects feedback on standing choices', a
   f.refuse()
   await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token, 'no', 'deny', 'Keep the release notes private.'))).rejects.toThrow('refused')
   expect(f.open).toHaveLength(1)
+})
+
+it('renders native parameter elements inside the original session app-state and theme providers', async () => {
+  const f = fixture(), node = { type: 'OriginalParameterTable', props: { original: true } }
+  f.cache[129] = node
+  const shown = await f.runtime.choices(f.n, f.dialog)
+  expect(shown.details).toContainEqual({ label: 'Parameters', value: 'Original rendered parameter table' })
+  expect(f.render).toHaveBeenCalledExactlyOnceWith({ type: f.AppStateProvider, props: { session: f.session, keybindings: false, children: { type: f.ThemeProvider, props: { value: { resolvedTheme: {} }, children: node } } } }, { columns: 100 })
 })

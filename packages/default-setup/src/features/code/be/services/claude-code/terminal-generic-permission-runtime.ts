@@ -29,7 +29,8 @@ async function nativeGenericPermissionText(n,node){
  if(node===undefined||node===null||node===false)return '';
  let value=node;if(typeof value!=='string'){
   const theme=nativeThemeProvider(n);
-  value=await n.staticRender.$bn(n.jsx.e(theme.type,{value:theme.value,children:node}),{columns:100});
+  const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,children:n.jsx.e(theme.type,{value:theme.value,children:node})});
+  value=await n.staticRender.$bn(tree,{columns:100});
  }
  if(typeof value!=='string')throw Error('Invalid original generic permission preview');
  value=stripVTControlCharacters(value).trim();if(value.length>200000)throw Error('Native generic permission preview exceeded bound');return value;
