@@ -13,12 +13,12 @@
           <fieldset v-if="field.type === 'array'" :id="ids(field.name)" :aria-label="field.title" :disabled="finishing">
             <label v-for="option in field.options" :key="option.value" class="option"><input type="checkbox" :checked="selected(field, option.value)" @change="toggle(field, option.value)" />{{ option.label }}</label>
           </fieldset>
-          <select v-else-if="field.type === 'boolean' || field.options" :id="ids(field.name)" :disabled="finishing" :value="value(field) === undefined ? '' : String(value(field))" @change="choose(field, ($event.target as HTMLSelectElement).value)">
+          <select v-else-if="field.type === 'boolean' || field.options" :id="ids(field.name)" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :value="value(field) === undefined ? '' : String(value(field))" @change="choose(field, ($event.target as HTMLSelectElement).value)">
             <option value="">Select…</option>
             <template v-if="field.type === 'boolean'"><option value="true">Yes</option><option value="false">No</option></template>
             <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
-          <input v-else :id="ids(field.name)" type="text" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @input="edit(field.name, ($event.target as HTMLInputElement).value)" />
+          <input v-else :id="ids(field.name)" type="text" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @input="edit(field.name, ($event.target as HTMLInputElement).value)" />
           <p v-if="form.errors[field.name]" role="alert" class="error">{{ form.errors[field.name] }}</p>
           <p v-if="form.resolvingFields.includes(field.name)" role="status" class="description">Checking date…</p>
         </div>

@@ -1,6 +1,7 @@
 /**
  * Pause active native work through its original turn handle; print sessions and
- * pending-dialog cancellation retain their process-stop lifecycle.
+ * tool-approval cancellation retain their process-stop lifecycle. Native MCP forms
+ * belong to the active native turn.
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
@@ -27,7 +28,7 @@ export async function action(
   // Busy metadata can lag submission; an explicit Pause targets the owning native process.
   const prior = getClaudeState(services, threadId);
   const native = services.cli.claudeCode.getNativeTerminal(threadId);
-  if (native && !prior?.pendingControlRequest && !prior?.pendingElicitation) {
+  if (native && (!prior?.pendingControlRequest || native.state.mcpForm) && !prior?.pendingElicitation) {
     const sessionId = native.state.sessionId;
     const current = await native.uiTransport.request({ subtype: 'apack_turn_state', session_id: sessionId }) as { turn: { id: string; cancelled: boolean } | null };
     if (services.cli.claudeCode.getNativeTerminal(threadId) !== native) return { success: false, reason: 'native owner changed' };
