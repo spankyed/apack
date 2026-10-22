@@ -12,6 +12,7 @@ import tempfile
 from urllib.request import urlopen
 
 CASES = {
+    'config-layout-app': {'CLAUDE_RESEARCH_CONFIG_LAYOUT': '1'},
     'config-model-app': {'CLAUDE_RESEARCH_CONFIG_MODEL': '1'},
     'native-action-keys': {},
     'native-action-contexts': {},
@@ -80,7 +81,7 @@ def validate_host(linux_container=False):
 
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
-    if linux_container and case not in ['config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
+    if linux_container and case not in ['config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
         raise ValueError('Linux container adoption covers reviewed pane, held-policy, prompt-timeout, tool-width Agent IME lifetime and Agent caret profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')

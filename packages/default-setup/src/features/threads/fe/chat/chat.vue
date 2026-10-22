@@ -1,6 +1,6 @@
 <template>
   <!-- History scrolls inside the assigned pane; only its authored minimum affects the shell split. -->
-  <div class="flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { minHeight: nativeToolsExpanded || focusedAgent ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))' : 'min(36rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 15rem)))' } : {}) }">
+  <div class="native-chat-shell flex flex-col h-full" :style="{ contain: 'size', ...(currentMode === 'Claude Code' || currentThread?.context?.claudeCode ? { '--native-chat-min-height': nativeToolsExpanded || focusedAgent ? 'min(42rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 11rem)))' : 'min(36rem, max(min(28rem, calc(100vh - 3rem)), calc(100vh - 15rem)))' } : {}) }">
     <!-- Main content: optional inline dashboard + chat -->
     <div class="flex flex-grow overflow-hidden min-h-0" ref="chatContainerRef">
       <!-- Thread Sidebar (left, hidden during onboarding) -->
@@ -970,6 +970,11 @@ watch(messagesContent, (el, _, onCleanup) => {
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
 </script>
+
+<style scoped>
+.native-chat-shell { min-height: var(--native-chat-min-height, auto); }
+.native-chat-shell:has([data-native-command-panel]) { min-height: calc(100vh - 3rem); }
+</style>
 
 <style lang="scss" module>
 .messagesWrapper {

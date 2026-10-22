@@ -1,5 +1,5 @@
 <template>
-  <section role="dialog" :aria-label="`Native /${name} panel`" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown.stop>
+  <section data-native-command-panel role="dialog" :aria-label="`Native /${name} panel`" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown.stop>
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
       <span class="text-xs text-neutral-300">/{{ name }} <span class="ml-2 text-neutral-500">Claude Code</span></span>
       <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5" @keydown.tab.prevent="terminal?.focus()" @click="emit('close')" @keydown.esc.prevent="emit('input', '\x1b')">Close panel</button>
