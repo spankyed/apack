@@ -50,6 +50,8 @@ export function claudeUiBoxPaint(paint: ClaudeUiBoxPaint | undefined): CSSProper
   return result
 }
 
+export type ClaudeTextRunStyle = Pick<ClaudeUiTextStyle, 'underline' | 'strikethrough' | 'dimColor'>
+export const claudeTextRunStyle: InjectionKey<ComputedRef<ClaudeTextRunStyle>> = Symbol('claude-text-run-style')
 export type ClaudeTextPaint = Pick<ClaudeUiTextStyle, 'color' | 'backgroundColor' | 'inverse'>
 export const claudeTextPaint: InjectionKey<ComputedRef<ClaudeTextPaint>> = Symbol('claude-text-paint')
 export function claudeUiTextPaint(paint: ClaudeTextPaint): CSSProperties {

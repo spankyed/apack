@@ -294,6 +294,7 @@ it('renders inline Button content as one named action and focuses only on site e
   expect(button.querySelector('.font-semibold')?.textContent).toBe('changes')
   expect(button.classList.contains('bg-blue-400/[0.12]')).toBe(true)
   expect(button.classList.contains('opacity-60')).toBe(true)
+  expect([...button.querySelectorAll<HTMLElement>('.native-text-run')].every(run => run.style.opacity === '1')).toBe(true)
   f.root.querySelector<HTMLElement>('[tabindex="0"]')!.focus()
   expect(document.activeElement).toBe(button)
   button.querySelector('span')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -321,7 +322,7 @@ it('paints native Box and nested Text without applying border dimming to descend
   const outer = box.querySelector<HTMLElement>('span')!
   expect(outer.style.color).toBe('rgb(74, 222, 128)')
   expect(outer.style.backgroundColor).toBe('rgb(1, 2, 3)')
-  expect(outer.querySelector<HTMLElement>('span')!.style.color).toBe('rebeccapurple')
+  expect(outer.querySelector<HTMLElement>('.native-inline-text')!.style.color).toBe('rebeccapurple')
 })
 
 it('accepts browser colors while refusing strings that try to introduce CSS rules or resources', async () => {
@@ -371,6 +372,42 @@ it('applies plugin-scoped groups and keyed Box reveals locally without pressing 
   f.state.nativeUi = { status: 'error', message: 'fixture detached' }; await nextTick()
   expect(f.root.querySelectorAll('.native-box')).toHaveLength(0)
 })
+
+it('resets nested native text styles per run, including explicit false hover values', async () => {
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'box', boxKey: 'review', children: [
+    { kind: 'text', text: 'Parent ', style: { bold: true, italic: true, underline: true, strikethrough: true, dimColor: true }, children: [
+      { kind: 'text', text: 'Plain', style: { bold: false, italic: false, underline: false, strikethrough: false, dimColor: false } },
+      { kind: 'text', text: 'Inherited' },
+      { kind: 'text', text: 'Hover reset', hover: { text: { bold: false, italic: false, underline: false, strikethrough: false, dimColor: false } } },
+    ] },
+  ] } } })
+  const run = (text: string) => [...f.root.querySelectorAll<HTMLElement>('.native-text-run')].find(element => element.textContent === text)!
+  const parent = run('Parent '), plain = run('Plain'), inherited = run('Inherited'), reset = run('Hover reset')
+  expect(parent.style.textDecorationLine).toBe('underline line-through')
+  expect(parent.style.opacity).toBe('0.6')
+  expect(plain.style.textDecorationLine).toBe('none')
+  expect(plain.style.opacity).toBe('1')
+  expect(plain.parentElement!.style.fontStyle).toBe('normal')
+  expect(plain.parentElement!.style.fontWeight).toBe('400')
+  expect(inherited.style.textDecorationLine).toBe('underline line-through')
+  expect(inherited.style.opacity).toBe('0.6')
+  expect(reset.style.textDecorationLine).toBe('underline line-through')
+  // No ancestor decoration or composited opacity can defeat the plain run's explicit reset.
+  for (let node = plain.parentElement; node && node !== f.root; node = node.parentElement) {
+    expect(node.style.textDecorationLine).toBe('')
+    expect(node.classList.contains('underline')).toBe(false)
+    expect(node.classList.contains('line-through')).toBe(false)
+    expect(node.classList.contains('opacity-60')).toBe(false)
+  }
+  parent.dispatchEvent(new MouseEvent('pointerover', { bubbles: true })); await nextTick()
+  expect(reset.style.textDecorationLine).toBe('none')
+  expect(reset.style.opacity).toBe('1')
+  expect(reset.parentElement!.style.fontStyle).toBe('normal')
+  expect(reset.parentElement!.style.fontWeight).toBe('400')
+  expect(f.submit).not.toHaveBeenCalled()
+  expect(f.press).not.toHaveBeenCalled()
+})
+
 
 it('limits duplicate sibling Box keys to the first scope and restores nested inverse colors', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'box', children: [

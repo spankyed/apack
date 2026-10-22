@@ -121,6 +121,33 @@ test('preserves declared native Text wrapping at actual width and through resize
       return new Response('<!doctype html><title>Release notes</title><h1>Release notes</h1><p>Review the migration guidance.</p>', { headers: { 'content-type': 'text/html', 'cache-control': 'no-store' } })
     })
   })
+  const styleResets: unknown[] = []
+  const styledRun = (text: string) => card.locator('.native-text-run').filter({ hasText: new RegExp('^' + text + '$') })
+  const readStyle = (text: string) => styledRun(text).evaluate(element => {
+    const style = getComputedStyle(element)
+    const ancestors: { opacity: string; decoration: string }[] = []
+    for (let parent = element.parentElement; parent && !parent.classList.contains('native-extension-surface'); parent = parent.parentElement) {
+      const paint = getComputedStyle(parent); ancestors.push({ opacity: paint.opacity, decoration: paint.textDecorationLine })
+    }
+    return { weight: style.fontWeight, italic: style.fontStyle, decoration: style.textDecorationLine, opacity: style.opacity, ancestors }
+  })
+  for (const [width, height] of [[1100, 900], [680, 600]]) {
+    await appPage.setViewportSize({ width, height })
+    await composer.hover()
+    const parent = await readStyle('Checks pending '), plain = await readStyle('Release ready'), inherited = await readStyle('Inherited review')
+    expect(parent).toMatchObject({ weight: '600', italic: 'italic', decoration: 'underline line-through', opacity: '0.6' })
+    expect(plain).toMatchObject({ weight: '400', italic: 'normal', decoration: 'none', opacity: '1' })
+    expect(plain.ancestors.every(style => style.opacity === '1' && style.decoration === 'none')).toBe(true)
+    expect(inherited).toMatchObject({ weight: '600', italic: 'italic', decoration: 'underline line-through', opacity: '0.6' })
+    await styledRun('Review detail trigger').hover()
+    await expect.poll(() => readStyle('Review detail').then(style => ({ weight: style.weight, italic: style.italic, decoration: style.decoration, opacity: style.opacity }))).toEqual({ weight: '400', italic: 'normal', decoration: 'none', opacity: '1' })
+    await expect(composer).toHaveText('Review the release summary before merging.')
+    styleResets.push({ width, height, parent, plain, inherited, hovered: await readStyle('Review detail') })
+    await capturePage(`apack-native-style-reset-${width}-${height}.png`, width, height)
+    await composer.hover()
+    await expect.poll(() => readStyle('Review detail').then(style => style.opacity)).toBe('0.6')
+  }
+  await writeFile(join(workspace!, 'native-text-style-resets.json'), JSON.stringify({ styleResets, sessionId, boundNativePid }))
   const linkActivations: unknown[] = []
   try {
   for (const [width, height] of [[1100, 900], [680, 600]]) {

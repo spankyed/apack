@@ -8,7 +8,7 @@
   <NativeUiSvg v-else-if="node.kind === 'svg'" :node="node" />
   <NativeUiDocument v-else-if="node.kind === 'markdown' || node.kind === 'code'" :node="node" @press="(actionId, href) => emit('press', actionId, href)" />
   <NativeUiField v-else-if="node.kind === 'input' || node.kind === 'select'" :key="node.actionId" :node="node" @field="emit('field', $event)" />
-  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="native-inline-text" :class="textClasses" :style="[textPaint, textLayout.layout.value]" :data-native-text-wrap="inlineParent ? undefined : node.style?.wrap" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin">{{ displayedText.text }}<NativeUiNode v-for="(child, index) in displayedText.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
+  <span v-else-if="node.kind === 'text'" :ref="hoverElement" class="native-inline-text" :class="textClasses" :style="[textPaint, textLayout.layout.value]" :data-native-text-wrap="inlineParent ? undefined : node.style?.wrap" :dir="node.style?.dir ?? 'auto'" :data-native-plugin="node.plugin"><span v-if="displayedText.text" class="native-text-run" :style="textRunPaint">{{ displayedText.text }}</span><NativeUiNode v-for="(child, index) in displayedText.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode></span>
   <component :is="node.href ? 'a' : 'span'" v-else-if="node.kind === 'link'" :href="node.href" :data-native-plugin="node.plugin" :style="{ color: claudeUiColor(node.color) }" :class="node.href ? 'underline focus-visible:outline focus-visible:outline-current' : undefined" @click.prevent="node.href && openLink(node.href)" @auxclick.middle.prevent="node.href && openLink(node.href)">
     <NativeUiNode v-for="(child, index) in node.children" :key="index" :node="child" :scope-enabled="childScopeEnabled(index)" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" ><template #engine><slot name="engine" /></template></NativeUiNode>
   </component>
@@ -35,7 +35,7 @@ import NativeUiClient from './NativeUiClient.vue'
 import NativeUiSvg from './NativeUiSvg.vue'
 import NativeUiRaster from './NativeUiRaster.vue'
 import NativeUiImage from './NativeUiImage.vue'
-import { claudeUiBoxPaint, claudeUiColor, claudeUiTextPaint, claudeTextPaint, type ClaudeTextPaint } from './native-ui-paint.ts'
+import { claudeUiBoxPaint, claudeUiColor, claudeUiTextPaint, claudeTextPaint, claudeTextRunStyle, type ClaudeTextRunStyle, type ClaudeTextPaint } from './native-ui-paint.ts'
 import { claudeHoverSurface, claudeHoverBox } from './native-ui-hover.ts'
 import NativeUiDocument from './NativeUiDocument.vue'
 import NativeUiField from './NativeUiField.vue'
@@ -46,6 +46,7 @@ const props = withDefaults(defineProps<{ node: ClaudeUiNode; scopeEnabled?: bool
 const surface = inject(claudeHoverSurface, undefined)
 const parentBox = inject(claudeHoverBox, computed(() => false))
 const inheritedPaint = inject(claudeTextPaint, computed<ClaudeTextPaint>(() => ({})))
+const inheritedRunStyle = inject(claudeTextRunStyle, computed<ClaudeTextRunStyle>(() => ({})))
 const inlineParent = inject(claudeInlineTextParent, computed(() => false))
 provide(claudeInlineTextParent, computed(() => inlineParent.value || props.node.kind === 'text'))
 const underPointer = ref(false)
@@ -85,6 +86,18 @@ const logicalPaint = computed<ClaudeTextPaint>(() => {
   return next
 })
 provide(claudeTextPaint, logicalPaint)
+// Decorations and opacity belong to text runs: an ancestor CSS decoration/opacity cannot be reset by a child.
+const runStyle = computed<ClaudeTextRunStyle>(() => {
+  const next: ClaudeTextRunStyle = props.node.kind === 'button' ? {} : { ...inheritedRunStyle.value }
+  const style = props.node.kind === 'text' ? textStyle.value : {}
+  for (const name of ['underline', 'strikethrough', 'dimColor'] as const) if (style[name] !== undefined) next[name] = style[name]
+  return next
+})
+provide(claudeTextRunStyle, runStyle)
+const textRunPaint = computed<CSSProperties>(() => ({
+  textDecorationLine: [runStyle.value.underline && 'underline', runStyle.value.strikethrough && 'line-through'].filter(Boolean).join(' ') || 'none',
+  opacity: runStyle.value.dimColor ? 0.6 : 1,
+}))
 const buttonPaint = computed<CSSProperties>(() => ({ ...claudeUiTextPaint(props.node.kind === 'button' ? logicalPaint.value : {}),
   ...(overrides.value?.text?.bold !== undefined ? { fontWeight: overrides.value.text.bold ? 600 : 400 } : {}),
   ...(overrides.value?.text?.italic !== undefined ? { fontStyle: overrides.value.text.italic ? 'italic' : 'normal' } : {}),
@@ -115,14 +128,18 @@ const boxStyle = computed<CSSProperties>(() => {
   }
   return { ...result, ...paint }
 })
-const textPaint = computed<CSSProperties>(() => ({ ...claudeUiTextPaint(logicalPaint.value), ...(overrides.value?.text?.bold !== undefined ? { fontWeight: overrides.value.text.bold ? 600 : 400 } : {}) }))
+const textPaint = computed<CSSProperties>(() => ({ ...claudeUiTextPaint(logicalPaint.value),
+  ...(textStyle.value.italic !== undefined ? { fontStyle: textStyle.value.italic ? 'italic' : 'normal' } : {}),
+  ...(overrides.value?.text?.bold !== undefined ? { fontWeight: overrides.value.text.bold ? 600 : 400 }
+    : textStyle.value.bold === false && !textStyle.value.weight ? { fontWeight: 400 } : {}),
+}))
 const textLayout = useClaudeTextLayout(() => props.node, inlineParent, () => textPaint.value)
 const displayedText = computed(() => textLayout.display.value.kind === 'text' ? textLayout.display.value : { text: '', children: [] })
 const textClasses = computed(() => {
   if (props.node.kind !== 'text') return []
   const style = textStyle.value
   return [style.size && textSizes[style.size], style.weight ? textWeights[style.weight] : style.bold ? 'font-semibold' : undefined,
-    { italic: style.italic, underline: style.underline, 'line-through': style.strikethrough, 'font-mono': style.mono, 'tabular-nums': style.tabular, 'opacity-60': style.dimColor }]
+    { italic: style.italic, 'font-mono': style.mono, 'tabular-nums': style.tabular }]
 })
 const emit = defineEmits<{ press: [actionId: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
 </script>
