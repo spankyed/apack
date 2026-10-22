@@ -2,6 +2,7 @@ import { PermissionModeSchema, type PermissionMode } from './types.ts'
 export interface ClaudeNativeSessionMetadata {
   cwd: string
   model: string
+  modelSelection?: string
   turns: number
   startedAt: number
   totalCostUsd?: number
@@ -21,9 +22,10 @@ const object = (value: unknown): Record<string, unknown> | undefined => value !=
 export function parseClaudeTerminalMetadata(value: unknown): ClaudeNativeSessionMetadata | undefined {
   const entry = object(value)
   if (!entry || typeof entry.cwd !== 'string' || !entry.cwd || entry.cwd.length > 16384 || typeof entry.model !== 'string' || entry.model.length > 256
+        || (entry.modelSelection !== undefined && (typeof entry.modelSelection !== 'string' || !entry.modelSelection || entry.modelSelection.length > 256))
         || !Number.isSafeInteger(entry.turns) || (entry.turns as number) < 0 || typeof entry.startedAt !== 'number' || !Number.isFinite(entry.startedAt) || entry.startedAt < 0
         || (entry.totalCostUsd !== undefined && (typeof entry.totalCostUsd !== 'number' || !Number.isFinite(entry.totalCostUsd) || entry.totalCostUsd < 0))) return
-  return { cwd: entry.cwd, model: entry.model, turns: entry.turns as number, startedAt: entry.startedAt, ...(entry.totalCostUsd !== undefined ? { totalCostUsd: entry.totalCostUsd as number } : {}), ...(PermissionModeSchema.safeParse(entry.permissionMode).success ? { permissionMode: entry.permissionMode as PermissionMode } : {}), ...(entry.permissionMode === 'plan' && entry.prePlanMode !== 'plan' && PermissionModeSchema.safeParse(entry.prePlanMode).success ? { prePlanMode: entry.prePlanMode as PermissionMode } : {}) }
+  return { cwd: entry.cwd, model: entry.model, ...(typeof entry.modelSelection === 'string' ? { modelSelection: entry.modelSelection } : {}), turns: entry.turns as number, startedAt: entry.startedAt, ...(entry.totalCostUsd !== undefined ? { totalCostUsd: entry.totalCostUsd as number } : {}), ...(PermissionModeSchema.safeParse(entry.permissionMode).success ? { permissionMode: entry.permissionMode as PermissionMode } : {}), ...(entry.permissionMode === 'plan' && entry.prePlanMode !== 'plan' && PermissionModeSchema.safeParse(entry.prePlanMode).success ? { prePlanMode: entry.prePlanMode as PermissionMode } : {}) }
 }
 /** Native append ids are durable row identities, not turn ids or app message ids. */
 export function createClaudeTerminalSession(sessionId: string) {

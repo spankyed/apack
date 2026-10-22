@@ -171,7 +171,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     let changingView = false, preparingParent = false, planRestorationChecked = false
     return {
       get state() { return { notice: closed ? undefined : notice, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
-      get modelSelection() { return modelSelection },
+      get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
@@ -328,6 +328,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing model')
           if (typeof result?.selection !== 'string' || !result.selection) throw new Error('Native model selection was not acknowledged')
           modelSelection = result.selection
+          // Carry the acknowledged original selection until the next authoritative native snapshot.
+          if (bridge.session.metadata) bridge.session.update({ ...bridge.session.metadata, modelSelection })
           return modelSelection
         } finally { changingModel = false; changed() }
       },

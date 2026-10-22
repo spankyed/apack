@@ -3,15 +3,15 @@ import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-c
 
 const f = vi.hoisted(() => {
   vi.resetModules()
-  return { spawn: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }
+  return { metadata: {permissionMode:'default',modelSelection:undefined as string|undefined}, spawn: vi.fn(), request: vi.fn(), submit: vi.fn(), update: vi.fn(), projection: { sessionId:'11111111-1111-1111-1111-111111111111', tasks: [] } }
 })
 vi.mock('node-pty', () => ({spawn:f.spawn}))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({createClaudeTerminalBridge: async () => ({
   pluginRoot:'/private/fixture-plugin', bunOptions:'fixture-preload', close:async()=>{}, ready:true,
-  projection:f.projection, session:{metadata:{permissionMode:'default'},update:f.update},
+  projection:f.projection, session:{metadata:f.metadata,update:f.update},
   uiTransport:{request:f.request}, submit:f.submit,
 })}))
-async function fixture(options: {permissionMode?: 'plan';prePlanMode?: 'acceptEdits'} = {}) {
+async function fixture(options: {model?: string;permissionMode?: 'plan';prePlanMode?: 'acceptEdits'} = {}) {
   let exit!: (event:{exitCode:number})=>void
   f.spawn.mockImplementation(() => ({pid:0,onData(){},onExit(callback:typeof exit){exit=callback},kill(){exit({exitCode:0})}}))
   const prepared = await prepareClaudeNativeTerminal({sessionId:f.projection.sessionId,cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},...options})
@@ -19,6 +19,7 @@ async function fixture(options: {permissionMode?: 'plan';prePlanMode?: 'acceptEd
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  f.metadata.modelSelection=undefined;f.update.mockReset()
   f.projection.sessionId='11111111-1111-1111-1111-111111111111'
   f.request.mockReset(); f.submit.mockReset()
 })
@@ -84,5 +85,19 @@ it('checks saved Plan restoration through the existing session-bound owner snaps
   expect(order).toEqual(['apack_owner_snapshot','apack_parent_prompt_state','apack_set_composer_phase','human'])
   order.length=0;await owner.submit('Continue',undefined,'Edit')
   expect(order).toEqual(['apack_parent_prompt_state','apack_set_composer_phase','human'])
+ }finally{await prepared.dispose()}
+})
+
+it('carries original Config selections and default reset into continuation without retaining the launch override', async()=>{
+ const {prepared,owner}=await fixture({model:'opus'})
+ try{
+  expect(owner.modelSelection).toBe('opus')
+  f.metadata.modelSelection='sonnet';expect(owner.modelSelection).toBe('sonnet')
+  f.metadata.modelSelection='default';expect(owner.modelSelection).toBe('default')
+  f.request.mockResolvedValue({selection:'haiku'})
+  f.update.mockImplementation(value=>Object.assign(f.metadata,value))
+  await expect(owner.setModel('haiku')).resolves.toBe('haiku')
+  expect(owner.modelSelection).toBe('haiku')
+  f.metadata.modelSelection='sonnet';expect(owner.modelSelection).toBe('sonnet')
  }finally{await prepared.dispose()}
 })
