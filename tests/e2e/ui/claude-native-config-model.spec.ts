@@ -115,6 +115,7 @@ test('retains composing through original Config search and model callback', asyn
   await keyboard.pressSequentially('no-such-setting-claude-parity')
   await expect.poll(screen).toContain('no-such-setting-claude-parity')
   await keyboard.press('Escape')
+  await expect.poll(screen).not.toContain('no-such-setting-claude-parity')
   await keyboard.pressSequentially('Model')
   await expect.poll(screen).toContain('Model')
   await keyboard.press('ArrowDown');await keyboard.press('Enter')
