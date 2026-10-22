@@ -115,7 +115,8 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
       await expect(panel.locator('.xterm-rows')).toContainText('opened.')
       await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*go back/i)
       await expect(panel.locator('.xterm-rows > div').filter({hasText:'opened.'})).toBeInViewport()
-      await expect(panel.locator('.xterm-rows > div').filter({hasText:/Esc.*go back/i})).toBeInViewport()
+      await expect(panel.locator('.xterm-rows > div').filter({hasText:'Esc'})).toBeInViewport()
+      await expect(panel.locator('.xterm-rows > div').filter({hasText:'to go back.'})).toBeInViewport()
     }
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
