@@ -27,7 +27,8 @@ test('preserves declared native Text wrapping at actual width and through resize
   await card.locator('[contenteditable="true"]').fill('Review the release notes for this project.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
+  // Initialization owns 10s in host-controls; reserve the usual 5s response observation after it.
+  await expect.poll(async () => (await context()).turns, { timeout: 15000, message: 'Original native initialization and seed response complete before link checks' }).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
