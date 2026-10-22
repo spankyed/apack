@@ -255,7 +255,7 @@ it.each(['WebFetch', 'Skill'] as const)('refreshes %s native readiness and scope
 
 it('refreshes original generic previews in place and retires the message when its native dialog closes', async () => {
   let release!: () => Promise<void>
-  const presentation = { title: 'Tool use', details: [{ label: 'Parameters', value: 'Original withheld parameter' }], ready: false, token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true }], choiceDescriptions: {} }
+  const presentation = { title: 'Tool use', details: [{ label: 'Parameters', value: 'Original withheld parameter' }], ready: false, token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true }], canCancel: true, defaultFocusValue: 'yes', choiceDescriptions: {} }
   const dialog = { id: 'generic-dialog', revision: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sessionId, requestId: 'tool-use', toolName: 'mcp__research__echo', input: {}, presentation }
   const getGenericToolPermissionDialogs = vi.fn(async () => [dialog])
   const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks: [] }, busy: true,

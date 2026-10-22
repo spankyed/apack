@@ -113,6 +113,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
       await capture('native-generic-permission-failure.png', 1100, 900)
       throw error
     }
+    await expect(approval.locator('button.approve')).toBeFocused()
     let original = (await context()).claude.pendingControlRequest
     expect(original.toolName).toBe(step.tool)
     expect(original.nativeTerminal.genericTool.ready).toBe(true)
@@ -169,7 +170,10 @@ test('preserves original generic MCP approval choices, withheld previews and the
         await capture('native-generic-permission-' + phase + '-' + width + '-preview.png', width, height)
       }
     }
-    if (step.decision === 'cancel') await approval.getByRole('button', { name: 'Cancel', exact: true }).click()
+    if (step.decision === 'cancel') {
+      await approval.locator('button.deny').focus()
+      await approval.locator('button.deny').press('Escape')
+    }
     else await approval.locator(['deny', 'withheld-deny'].includes(step.decision) ? 'button.deny' : 'button.approve').click()
     await expect(approval).toBeHidden({ timeout: 10000 })
     try {
@@ -185,14 +189,21 @@ test('preserves original generic MCP approval choices, withheld previews and the
   }
   await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), '0')
   await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, sessionId, boundNativePid, retainedDraft: true }))
-  // The final Cancel owns shutdown. Wait for its publication instead of reopening a lagging view.
+  // Native Escape cancels the request through its original callback, retaining the owner.
   expect(cases.at(-1)?.decision).toBe('cancel')
-  try {
-    await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
-  } catch (error) {
-    await writeFile(join(workspace!, 'native-generic-permission-retirement-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }, null, 2))
-    throw error
-  }
+  expect((await context()).native.state.status).toBe('live')
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  const turnsBeforeRecovery = (await context()).turns
+  await composer.fill('Continue after cancelling that tool request.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(async () => (await context()).native.state.busy, { timeout: 15000 }).toBe(false)
+  await expect.poll(async () => (await context()).turns, { timeout: 15000 }).toBeGreaterThan(turnsBeforeRecovery)
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  expect((await context()).sessionId).toBe(sessionId)
+  await writeFile(join(workspace!, 'native-generic-permission-cancel-recovery.json'), JSON.stringify({ originalEscapeCallback: true, ownerPreserved: true, nativePid: boundNativePid, sessionId }))
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+  await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
   if (await section.getByRole('button', { name: 'Back to conversation', exact: true }).isVisible()) await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await composer.fill('Continue reviewing the same release session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()

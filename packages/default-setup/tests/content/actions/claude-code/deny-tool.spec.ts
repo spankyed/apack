@@ -124,7 +124,7 @@ it.each(['WebFetch', 'Skill'] as const)('dispatches only the original %s choice 
 it.each(['mcp__research__echo', 'Bash'])('keeps original generic %s decisions out of specialized and print routes', async toolName => {
   const { id } = setup('current')
   const answerGenericToolPermissionDialog = vi.fn(async () => {}), answerBashDialog = vi.fn(), respond = vi.fn()
-  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], choiceDescriptions: {} } }
+  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], canCancel: true, defaultFocusValue: 'yes', choiceDescriptions: {} } }
   repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName, nativeTerminal: native } } } })
   mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: native, answerGenericToolPermissionDialog, answerBashDialog }), getHandle: () => ({ respond }) } as never })
   const response = { choice: 'no', choiceToken: 'original-token', reason: '  Preserve native feedback.  ' }
@@ -132,4 +132,15 @@ it.each(['mcp__research__echo', 'Bash'])('keeps original generic %s decisions ou
   expect(answerGenericToolPermissionDialog).toHaveBeenCalledExactlyOnceWith({ decision: 'deny', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.reason })
   expect(answerBashDialog).not.toHaveBeenCalled(); expect(respond).not.toHaveBeenCalled()
   expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined()
+})
+
+it('routes generic cancellation to the original native callback without killing its owner', async () => {
+  const { id } = setup('current')
+  const answerGenericToolPermissionDialog = vi.fn(async () => {}), stopNativeTerminal = vi.fn(), kill = vi.fn()
+  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], canCancel: true, choiceDescriptions: {} } }
+  repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName: 'mcp__research__echo', nativeTerminal: native } } } })
+  mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: native, answerGenericToolPermissionDialog }), stopNativeTerminal, getHandle: () => ({ kill }) } as never })
+  await expect(action({ threadId: id, requestId: 'current', response: { cancelled: true, choiceToken: native.genericTool.token } }, services)).resolves.toEqual({ success: true })
+  expect(answerGenericToolPermissionDialog).toHaveBeenCalledExactlyOnceWith({ decision: 'cancel', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: 'mcp__research__echo', choice: '', choiceToken: native.genericTool.token, feedback: undefined })
+  expect(stopNativeTerminal).not.toHaveBeenCalled(); expect(kill).not.toHaveBeenCalled()
 })

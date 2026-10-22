@@ -137,5 +137,5 @@ export const ClaudeNativeGenericToolPermissionDialogsSchema = z.array(ClaudeNati
 export type ClaudeNativeGenericToolPermissionDialog = z.infer<typeof ClaudeNativeGenericToolPermissionDialogSchema>
 export interface ClaudeNativeGenericToolPermissionDialogResponse {
   id: string; revision: string; sessionId: string; toolName: string;
-  choice: string; choiceToken: string; decision: 'allow' | 'deny'; feedback?: string
+  choice: string; choiceToken: string; decision: 'allow' | 'deny' | 'cancel'; feedback?: string
 }

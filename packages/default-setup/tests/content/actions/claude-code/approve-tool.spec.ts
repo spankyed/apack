@@ -134,7 +134,7 @@ it.each(['WebFetch', 'Skill'] as const)('dispatches only the original %s choice 
 it.each(['mcp__research__echo', 'Bash'])('keeps original generic %s decisions out of specialized and print routes', async toolName => {
   const { id } = setup('current')
   const answerGenericToolPermissionDialog = vi.fn(async () => {}), answerBashDialog = vi.fn(), respond = vi.fn()
-  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], choiceDescriptions: {} } }
+  const native = { ownerId: 'native-owner', sessionId: 'native-session', dialogId: 'native-dialog', revision: 'native-revision', genericTool: { title: 'Tool use', ready: true, token: 'a'.repeat(64), details: [], choices: [], canCancel: true, defaultFocusValue: 'yes', choiceDescriptions: {} } }
   repository.threadCommands.update(id, { context: { claudeCode: { pendingControlRequest: { requestId: 'current', approvalMessageId: 'approval', toolName, nativeTerminal: native } } } })
   mockService<Services, 'cli'>('cli', { claudeCode: { getNativeTerminal: () => ({ state: native, answerGenericToolPermissionDialog, answerBashDialog }), getHandle: () => ({ respond }) } as never })
   const response = { choice: 'yes', choiceToken: 'original-token', reason: '  Preserve native feedback.  ' }

@@ -18,7 +18,8 @@ function fixture(card = false) {
     { value: 'yes-enable-auto-mode', label: 'Original auto mode', description: 'Original native mode explanation' },
     { value: 'no', label: 'No', feedbackConfig: { type: 'reject' } },
   ]
-  const control = { options, onSelect: select }, cache = new Array(155)
+  const cancel = vi.fn(() => { if (refuse) return false; open.splice(0); return true })
+  const control: { options: typeof options; onSelect: typeof select; onCancel?: typeof cancel; defaultFocusValue?: string } = { options, onSelect: select, onCancel: cancel }, cache = new Array(155)
   cache[65] = 'Original full description\nwith a second line'
   cache[123] = 'echo Tool: (MCP)'
   cache[129] = 'message: "Release notes"'
@@ -43,7 +44,7 @@ function fixture(card = false) {
     nativeThemeProvider: () => ({ type: ThemeProvider, value: { resolvedTheme: {} } }),
     nativeDialog: () => current,
   })
-  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, select, open, setReady(value: boolean) { ready = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, control, select, cancel, open, setReady(value: boolean) { ready = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 const response = (f: ReturnType<typeof fixture>, token: string, choice = 'yes', decision = 'allow', feedback?: string) => ({ toolName: f.dialog.payload.toolName, choiceToken: token, choice, decision, ...(feedback === undefined ? {} : { feedback }) })
 
@@ -109,4 +110,46 @@ it('renders native parameter elements inside the original session app-state and 
   const shown = await f.runtime.choices(f.n, f.dialog)
   expect(shown.details).toContainEqual({ label: 'Parameters', value: 'Original rendered parameter table' })
   expect(f.render).toHaveBeenCalledExactlyOnceWith({ type: f.AppStateProvider, props: { session: f.session, keybindings: false, children: { type: f.ThemeProvider, props: { value: { resolvedTheme: {} }, children: node } } } }, { columns: 100 })
+})
+
+it('retains native default focus and invalidates presentations when focus or cancellation changes', async () => {
+  const f = fixture(), initial = await f.runtime.choices(f.n, f.dialog)
+  expect(initial.defaultFocusValue).toBe('yes')
+  expect(initial.canCancel).toBe(true)
+  f.control.defaultFocusValue = 'no'
+  const denied = await f.runtime.choices(f.n, f.dialog)
+  expect(denied.defaultFocusValue).toBe('no')
+  expect(denied.token).not.toBe(initial.token)
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, initial.token))).rejects.toThrow('changed')
+  f.control.defaultFocusValue = 'absent'
+  expect((await f.runtime.choices(f.n, f.dialog)).defaultFocusValue).toBe('yes')
+  delete f.control.onCancel
+  expect((await f.runtime.choices(f.n, f.dialog)).canCancel).toBe(false)
+})
+it('cancels through the original callback without selecting a permission outcome', async () => {
+  const f = fixture(), shown = await f.runtime.choices(f.n, f.dialog)
+  await f.runtime.answer(f.n, f.dialog, response(f, shown.token, '', 'cancel'))
+  expect(f.cancel).toHaveBeenCalledExactlyOnceWith()
+  expect(f.select).not.toHaveBeenCalled()
+  expect(f.open).toHaveLength(0)
+})
+it('refuses stale, foreign, unsupported and malformed cancellations', async () => {
+  const f = fixture(), shown = await f.runtime.choices(f.n, f.dialog)
+  for (const request of [response(f, shown.token, 'yes', 'cancel'), response(f, shown.token, '', 'cancel', 'feedback'), { ...response(f, shown.token, '', 'cancel'), toolName: 'foreign' }]) {
+    await expect(f.runtime.answer(f.n, f.dialog, request)).rejects.toThrow('Invalid')
+  }
+  f.replace()
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token, '', 'cancel'))).rejects.toThrow('expired')
+  expect(f.cancel).not.toHaveBeenCalled()
+  expect(f.select).not.toHaveBeenCalled()
+  const missing = fixture(); delete missing.control.onCancel
+  const unavailable = await missing.runtime.choices(missing.n, missing.dialog)
+  await expect(missing.runtime.answer(missing.n, missing.dialog, response(missing, unavailable.token, '', 'cancel'))).rejects.toThrow('Invalid')
+})
+it('preserves original cancellation refusal', async () => {
+  const f = fixture(), shown = await f.runtime.choices(f.n, f.dialog)
+  f.refuse()
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token, '', 'cancel'))).rejects.toThrow('refused')
+  expect(f.open).toHaveLength(1)
+  expect(f.select).not.toHaveBeenCalled()
 })

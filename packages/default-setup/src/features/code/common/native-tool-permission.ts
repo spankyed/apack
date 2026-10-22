@@ -8,6 +8,8 @@ export const ClaudeToolPermissionApprovalSchema = ClaudeFileApprovalPresentation
 })
 /** Exact original generic permission_prompt, including native choice explanations. */
 export const ClaudeGenericToolPermissionApprovalSchema = ClaudeToolPermissionApprovalSchema.extend({
+  defaultFocusValue: z.string().max(128).optional(),
+  canCancel: z.boolean(),
   choiceDescriptions: z.record(z.string().max(128), z.string().max(4000)).refine(value => Object.keys(value).length <= 16),
 })
 export type ClaudeGenericToolPermissionApproval = z.infer<typeof ClaudeGenericToolPermissionApprovalSchema>

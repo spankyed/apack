@@ -22,7 +22,7 @@ export async function action(params: Record<string, unknown>, services: Services
   const pending = getClaudeState(services, threadId)?.pendingControlRequest;
   if (pending?.requestId !== requestId) return { success: false, reason: 'denial is no longer pending' };
   const response = params.response as { cancelled?: unknown; reason?: unknown; choice?: unknown; choiceToken?: unknown } | undefined;
-  if (response?.cancelled === true) {
+  if (response?.cancelled === true && !pending.nativeTerminal?.genericTool) {
     killTurn(services, threadId);
     updateChatState(services, threadId as EntityId, 'idle');
     return { success: true };
@@ -35,7 +35,7 @@ export async function action(params: Record<string, unknown>, services: Services
       return { success: false, reason: 'Native approval expired' };
     }
     try {
-      if (native.genericTool) await owner.answerGenericToolPermissionDialog({ decision: 'deny', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: pending.toolName, choice: typeof response?.choice === 'string' ? response.choice : '', choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : '', feedback: typeof response?.reason === 'string' ? response.reason : undefined });
+      if (native.genericTool) await owner.answerGenericToolPermissionDialog({ decision: response?.cancelled === true ? 'cancel' : 'deny', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: pending.toolName, choice: typeof response?.choice === 'string' ? response.choice : '', choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : '', feedback: typeof response?.reason === 'string' ? response.reason : undefined });
       else if (pending.toolName === 'EnterPlanMode' || pending.toolName === 'ExitPlanMode') await owner.answerPlanDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, choice: 'no', feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined,  });
       else if (pending.toolName === 'Workflow' && native.workflow) await owner.answerWorkflowDialog({ id: native.dialogId, revision: native.revision, sessionId: native.sessionId, decision: 'deny', choice: typeof response?.choice === 'string' ? response.choice : undefined, choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : native.workflow.token, feedback: typeof response?.reason === 'string' ? response.reason.trim() : undefined });
       else if (pending.toolName === 'WebFetch' || pending.toolName === 'Skill') await owner.answerToolPermissionDialog({ decision: 'deny', id: native.dialogId, revision: native.revision, sessionId: native.sessionId, toolName: pending.toolName, choice: typeof response?.choice === 'string' ? response.choice : '', choiceToken: typeof response?.choiceToken === 'string' ? response.choiceToken : '', feedback: typeof response?.reason === 'string' ? response.reason : undefined });

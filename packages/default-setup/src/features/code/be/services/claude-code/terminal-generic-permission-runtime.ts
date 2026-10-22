@@ -65,20 +65,23 @@ async function nativeGenericPermissionChoices(n,d){
  if(new Set(choices.map(choice=>choice.value)).size!==choices.length)throw Error('Ambiguous native generic permission choices');
  const preview=await nativeGenericPermissionPreview(n,d,source),current=nativeGenericPermissionControl(n,d);
  if(current?.control!==source?.control||current?.fiber!==source?.fiber)throw Error('Native generic permission changed while formatting');
- const ready=current?.ready===true&&preview!==undefined,token=createHash('sha256').update(JSON.stringify([d.revision,ready,choices,choiceDescriptions,preview])).digest('hex');
- return {source:current,ready,choices,choiceDescriptions,token,title:preview?.title??'Tool permission',details:preview?.details??[]};
+ const defaultFocusValue=choices.some(choice=>choice.value===current?.control.defaultFocusValue)?current.control.defaultFocusValue:choices[0]?.value;
+ const canCancel=typeof current?.control.onCancel==='function';
+ const ready=current?.ready===true&&preview!==undefined,token=createHash('sha256').update(JSON.stringify([d.revision,ready,choices,choiceDescriptions,preview,defaultFocusValue,canCancel])).digest('hex');
+ return {source:current,ready,choices,choiceDescriptions,defaultFocusValue,canCancel,token,title:preview?.title??'Tool permission',details:preview?.details??[]};
 }
 async function answerNativeGenericPermissionChoice(n,d,request){
  const shown=await nativeGenericPermissionChoices(n,d);
  if(!shown.ready||request.choiceToken!==shown.token)throw Error('Native generic permission choices changed or are not ready');
  const choice=shown.choices.find(value=>value.value===request.choice);
- if(!choice||request.decision!==choice.decision||request.toolName!==d.payload.toolName)throw Error('Invalid native generic permission choice');
- if(request.feedback!==undefined&&(!choice.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported native generic permission feedback');
+ const cancelling=request.decision==='cancel';
+ if(request.toolName!==d.payload.toolName||(cancelling?(!shown.canCancel||request.choice!==''||request.feedback!==undefined):(!choice||request.decision!==choice.decision)))throw Error('Invalid native generic permission choice');
+ if(request.feedback!==undefined&&(!choice?.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported native generic permission feedback');
  const current=nativeDialog(n,'permission_prompt');
  if(current.item!==d.item||current.payload!==d.payload||current.revision!==d.revision||current.sessionId!==d.sessionId)throw Error('Native generic permission expired');
  const source=nativeGenericPermissionControl(n,current);
  if(!source?.ready||source.control!==shown.source.control)throw Error('Native generic permission controls changed');
- const accepted=await source.control.onSelect(choice.value,request.feedback);
+ const accepted=cancelling?await source.control.onCancel():await source.control.onSelect(choice.value,request.feedback);
  if(accepted===false)throw Error('Original native generic permission refused the answer');
  const deadline=Date.now()+1000;
  while(Date.now()<deadline){if(!d.store.getState().open.some(item=>item.id===d.item.id))return;await new Promise(resolve=>setTimeout(resolve,10));}

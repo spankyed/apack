@@ -230,3 +230,26 @@ it('shows only native generic choices and explanations, then withdraws a changed
     expect(root.querySelector('select')).toBeNull()
   } finally { app.unmount(); root.remove() }
 })
+
+it.each(['yes', 'no'])('honors native initial %s focus without changing the allow choice or refocusing after interaction', async defaultFocusValue => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = reactive({ title: 'Tool use', details: [], ready: false, token: 'a'.repeat(64), choices: [{ value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: false }, { value: 'no', label: 'No', decision: 'deny' as const, feedback: false }] })
+  const respond = vi.fn(), pause = vi.fn()
+  const app = createApp({ render: () => h(NativeToolApproval, { toolName: 'mcp__research__echo', title: tool.title, question: 'Proceed?', disabled: false, tool, defaultFocusValue, canCancel: true, onRespond: respond, onPause: pause }) }); app.mount(root)
+  try {
+    tool.ready = true; await nextTick(); await nextTick()
+    expect(document.activeElement).toBe(root.querySelector(defaultFocusValue === 'no' ? '.deny' : '.approve'))
+    expect((root.querySelector('.approve') as HTMLButtonElement).disabled).toBe(false)
+    const details = root.querySelector<HTMLElement>('.details')!
+    details.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); details.focus()
+    tool.ready = false; await nextTick(); tool.ready = true; await nextTick(); await nextTick()
+    expect(document.activeElement).toBe(details)
+    details.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, isComposing: true }))
+    expect(respond).not.toHaveBeenCalled()
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }); handled.preventDefault(); details.dispatchEvent(handled)
+    expect(respond).not.toHaveBeenCalled()
+    details.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(respond).toHaveBeenCalledExactlyOnceWith({ approved: false, cancelled: true, choice: '', choiceToken: tool.token })
+    expect(pause).not.toHaveBeenCalled()
+  } finally { app.unmount(); root.remove() }
+})
