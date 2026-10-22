@@ -86,7 +86,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
   const cases: { tool: string; input: Record<string, unknown>; prompt: string; decision: string }[] = JSON.parse(await readFile(join(workspace!, 'native-generic-permission-steps.json'), 'utf8'))
   expect(cases).toHaveLength(5)
   const draft = 'Keep my release-review notes while checking the migration permissions.'
-  const steps: unknown[] = [], captures: string[] = [], nativeWindow = await electronApp.browserWindow(appPage)
+  const steps: unknown[] = [], captures: string[] = [], previewGeometry: unknown[] = [], nativeWindow = await electronApp.browserWindow(appPage)
   async function capture(name: string, width: number, height: number) {
     await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -142,7 +142,32 @@ test('preserves original generic MCP approval choices, withheld previews and the
       expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(document)
       expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(selection)
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
-      if ([1, 4].includes(phase)) await capture('native-generic-permission-' + phase + '-' + width + '.png', width, height)
+      if ([1, 4].includes(phase)) {
+        await approval.getByLabel('Feedback for Claude', { exact: true }).focus()
+        await capture('native-generic-permission-' + phase + '-' + width + '.png', width, height)
+        const needle = phase === 1 ? 'Review the migration notes.' : 'cannot be shown'
+        const geometry = await approval.locator('.details').evaluate((element, text) => {
+          const details = element as HTMLElement
+          details.focus({ preventScroll: true })
+          const walker = document.createTreeWalker(details.querySelector('.tool-details')!, NodeFilter.SHOW_TEXT)
+          let node: Node | null, range: Range | undefined
+          while ((node = walker.nextNode())) {
+            const at = (node.textContent ?? '').indexOf(text)
+            if (at >= 0) { range = document.createRange(); range.setStart(node, at); range.setEnd(node, at + text.length); break }
+          }
+          if (!range) throw Error('Original native preview text is not rendered: ' + text)
+          const region = details.getBoundingClientRect(), before = range.getBoundingClientRect()
+          if (before.top < region.top + 8 || before.bottom > region.bottom - 8) details.scrollTop += before.top - region.top - 8
+          const target = range.getBoundingClientRect()
+          return { region: { top: region.top, bottom: region.bottom, left: region.left, right: region.right }, target: { top: target.top, bottom: target.bottom, left: target.left, right: target.right }, scrollTop: details.scrollTop }
+        }, needle)
+        expect(geometry.target.top).toBeGreaterThanOrEqual(geometry.region.top)
+        expect(geometry.target.bottom).toBeLessThanOrEqual(geometry.region.bottom)
+        expect(geometry.target.left).toBeGreaterThanOrEqual(geometry.region.left)
+        expect(geometry.target.right).toBeLessThanOrEqual(geometry.region.right)
+        previewGeometry.push({ phase, viewport: { width, height }, needle, ...geometry })
+        await capture('native-generic-permission-' + phase + '-' + width + '-preview.png', width, height)
+      }
     }
     if (step.decision === 'cancel') await approval.getByRole('button', { name: 'Cancel', exact: true }).click()
     else await approval.locator(['deny', 'withheld-deny'].includes(step.decision) ? 'button.deny' : 'button.approve').click()
@@ -159,7 +184,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
     steps.push({ phase, tool: step.tool, decision: step.decision, preview: original.nativeTerminal.genericTool, retainedDraft: true })
   }
   await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), '0')
-  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, sessionId, boundNativePid, retainedDraft: true }))
+  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, sessionId, boundNativePid, retainedDraft: true }))
   // Cancel already stops an approval-waiting native owner; do not start a replacement just to stop it.
   if ((await context()).native.state.status === 'live') {
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
