@@ -152,8 +152,11 @@ test('preserves original WebFetch and Skill approval choices and the everyday dr
   }
   await writeFile(join(workspace!, 'native-tool-permission-phase.txt'), '0')
   await writeFile(join(workspace!, 'native-tool-permission-app.json'), JSON.stringify({ steps, captures, sessionId, boundNativePid, retainedDraft: true }))
-  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+  // Cancel already stops an approval-waiting native owner; do not start a replacement just to stop it.
+  if ((await context()).native.state.status === 'live') {
+    await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+    await section.getByRole('button', { name: 'Stop session', exact: true }).click()
+  }
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
   if (await section.getByRole('button', { name: 'Back to conversation', exact: true }).isVisible()) await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await composer.fill('Continue reviewing the same release session.')
