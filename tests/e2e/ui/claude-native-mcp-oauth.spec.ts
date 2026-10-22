@@ -104,6 +104,12 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
   async function capture(stage:string,width:number,expected:RegExp){
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
     await expect(panel.locator('.xterm-rows')).toContainText(expected)
+    if(stage==='stale-refused'&&width===680){
+      await keyboard.press('PageDown')
+      await expect.poll(screen).toContain('opened.')
+      await expect(panel.locator('.xterm-rows')).toContainText('opened.')
+      await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*go back/i)
+    }
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
     const paint=await panel.locator('.xterm-rows').innerText(),native=await screen()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
@@ -133,8 +139,7 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
   await expect.poll(async()=>(await events()).filter(row=>row.kind==='token'&&row.pkceVerified).length,{timeout:15000}).toBe(1)
   await expect.poll(async()=>(await events()).some(row=>row.kind==='rpc'&&row.method==='tools/list'&&row.authorized),{timeout:15000}).toBe(true)
   // Original successful authentication may close its local-JSX command. Reopen through the same app action.
-  if(await panel.isVisible())await panel.getByRole('button',{name:'Close panel',exact:true}).click()
-  await expect(panel).toBeHidden();await expect(composer).toHaveText(draft)
+  await expect(panel).toBeHidden({timeout:15000});await expect(composer).toHaveText(draft)
   await openPanel();await keyboard.press('Enter');await expect.poll(screen).toContain('Research MCP Server');await expect.poll(screen).toMatch(/connected/i)
   for(const width of [1100,680])await capture('connected',width,/connected/i)
   await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
@@ -146,6 +151,6 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue this saved review after signing in to the project tools.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-mcp-oauth-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,originalDocument,originalSelection,originalStateRefusal:true,cancelledBeforeToken:true,authenticated:true,noPhantomTurn:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-mcp-oauth-proof.json'),JSON.stringify({sessionId,boundNativePid,draft,captures,originalDocument,originalSelection,originalStateRefusal:true,firstState:new URL(first).searchParams.get('state'),secondState:new URL(second).searchParams.get('state'),cancelledBeforeToken:true,authenticated:true,noPhantomTurn:true,beforeTurns:before.turns,afterTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeMcpOAuth:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
