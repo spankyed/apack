@@ -150,6 +150,13 @@ test('completes an everyday native review across Agent, approval, question and i
     await expect(agentEditor).toHaveText('/cc-model haiku')
     await expect(appPage.locator('.command-suggestion-popup:visible')).toHaveCount(0)
     await expect(agentEditor.locator('.command-segment')).toHaveCount(0)
+    const appMatching = await agentEditor.evaluate(element => {
+      const editor = (element as unknown as { editor: { state: { plugins: { key: string; getState(state: unknown): { active: boolean; selectedCommand?: unknown } }[] } } }).editor
+      const matcher = editor.state.plugins.find(plugin => plugin.key.startsWith('commandSuggestion$'))
+      if (!matcher) throw new Error('Shared command matcher is missing from Agent editor')
+      return matcher.getState(editor.state)
+    })
+    expect(appMatching.active).toBe(false); expect(appMatching.selectedCommand).toBeNull()
     await expect(agentForm.getByRole('button', { name: 'Send to Agent', exact: true })).toBeInViewport({ ratio: 1 })
     const file = `apack-agent-command-owner-${width}-${height}.png`
     await capturePage(file, width, height)
