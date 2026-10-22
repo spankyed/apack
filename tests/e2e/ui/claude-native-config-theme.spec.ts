@@ -189,11 +189,6 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
     retained.push({draft,document:originalDocument,selection:originalSelection,view:(await context()).native.state.view})
   }
   const keyboard=panel.locator('textarea.xterm-helper-textarea')
-  async function focusTabs(){
-    const sequence=(await context()).native.output.at(-1)?.sequence??0
-    await keyboard.press('ArrowUp')
-    await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(sequence)
-  }
   const themeReceipts:any[]=[]
   const settings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
   const highlighted=async()=>(await screen()).split('\n').flatMap(line=>{const match=line.match(/❯\s+(.+)/);return match?[match[1].trim().replace(/^✔\s*/,'')]:[]}).at(-1)??''
@@ -215,20 +210,20 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
   await picker();await choose('Light mode')
   expect((await settings()).theme).toBe(savedTheme)
   await capture('theme-preview',[1100,680])
-  await keyboard.press('Escape');await expect.poll(screen).toContain('Search settings')
+  await keyboard.press('Escape');await expect.poll(screen).toMatch(/❯ Theme\s+Dark mode/)
   expect((await settings()).theme).toBe(savedTheme)
   themeReceipts.push({stage:'cancel',theme:(await settings()).theme})
   await close()
   await picker();await choose('Light mode');await keyboard.press('Enter')
   await expect.poll(async()=>(await settings()).theme).toBe('light')
-  await expect.poll(screen).toContain('Search settings')
+  await expect.poll(screen).toMatch(/❯ Theme\s+Light mode/)
   themeReceipts.push({stage:'commit',theme:(await settings()).theme})
   await capture('theme-committed',[1100,680]);await close()
   await picker();expect(await highlighted()).toBe('Light mode')
   themeReceipts.push({stage:'reopen',theme:(await settings()).theme,highlighted:await highlighted()})
   await choose('Dark mode');await keyboard.press('Enter')
   await expect.poll(async()=>(await settings()).theme).toBe(savedTheme)
-  await expect.poll(screen).toContain('Search settings')
+  await expect.poll(screen).toMatch(/❯ Theme\s+Dark mode/)
   themeReceipts.push({stage:'restore',theme:(await settings()).theme})
   await close()
   expect(await focused.locator('[data-native-agent-message]').count()).toBe(workerMessageCount)
