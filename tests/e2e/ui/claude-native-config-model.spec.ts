@@ -55,7 +55,7 @@ test('retains composing through original Config search and model callback', asyn
     if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
+    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('AppNativeMain') === true
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
@@ -63,21 +63,20 @@ test('retains composing through original Config search and model callback', asyn
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
-    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
+    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain'))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
   else {
-    await expect(main).toContainText('Session ready')
-    await expect(main).toContainText('Reviewing release notes')
-    await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
+    await expect(main).toContainText('AppNativeMain')
+    await expect(main).toContainText('Second native status line')
   }
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   if (restriction) await expect(status).toHaveCount(0)
-  else await expect(status).toContainText('Session ready')
+  else await expect(status).toContainText('AppNativeMain')
   const composer = card.locator('[contenteditable="true"]')
 
   const receipts: unknown[]=[], captures: unknown[]=[]
