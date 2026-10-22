@@ -131,7 +131,7 @@ test('preserves declared native Text wrapping at actual width and through resize
           await expect(composer).toHaveText('Review the release summary before merging.')
           expect((await context()).native.state.nativePid).toBe(boundNativePid)
           expect((await context()).turns).toBe(1)
-          samples.push({ ...geometry, text, width, height, draftRetained: true })
+          samples.push({ ...geometry, text, textWidth: geometry.width, width, height, draftRetained: true })
         }
       }
       await expect(composer).toBeInViewport()
