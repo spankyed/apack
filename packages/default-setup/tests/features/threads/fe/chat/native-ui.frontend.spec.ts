@@ -1,4 +1,5 @@
 import { onTestFinished } from 'vitest'
+import * as sdkFe from '@apackdev/sdk/fe'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { createApp, h, reactive, nextTick, type App } from 'vue'
 import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
@@ -184,6 +185,30 @@ it('renders nested text and links inline without hiding a text-only nested surfa
   expect(strip.querySelector('[dir="rtl"]')?.classList.contains('font-normal')).toBe(true)
   expect(strip.querySelector('[dir="rtl"]')?.classList.contains('font-semibold')).toBe(false)
   expect(strip.querySelector('.italic.font-mono')?.textContent).toBe('Hello ')
+  expect(f.press).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+
+it('routes native Link primary, modified and middle activation through the surface opener without submitting chat', async () => {
+  const open = vi.spyOn(sdkFe, 'openLink').mockImplementation(() => {})
+  onTestFinished(() => open.mockRestore())
+  const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'link', href: 'https://example.test/releases', children: [{ kind: 'text', text: 'Release notes' }] } } })
+  const draft = f.root.querySelector('textarea')!; draft.value = 'Keep this unsent release review.'
+  const link = f.root.querySelector('a')!
+  for (const options of [{}, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...options })
+    link.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+  }
+  const middle = new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true })
+  link.dispatchEvent(middle)
+  expect(middle.defaultPrevented).toBe(true)
+  expect(open).toHaveBeenCalledTimes(5)
+  expect(open.mock.calls.every(([href]) => href === 'https://example.test/releases')).toBe(true)
+  link.dispatchEvent(new MouseEvent('auxclick', { button: 2, bubbles: true, cancelable: true }))
+  expect(open).toHaveBeenCalledTimes(5)
+  expect(draft.value).toBe('Keep this unsent release review.')
   expect(f.press).not.toHaveBeenCalled()
   expect(f.submit).not.toHaveBeenCalled()
 })

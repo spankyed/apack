@@ -98,6 +98,33 @@ test('preserves declared native Text wrapping at actual width and through resize
     evidence.push(await row('middle').evaluate(element => ({ width: element.clientWidth, text: element.textContent, link: element.querySelector('a')?.textContent })))
     await appPage.screenshot({ path: testInfo.outputPath('apack-native-text-wrap-' + width + '-' + height + '.png') })
   }
+  const linkActivations: unknown[] = []
+  for (const [width, height] of [[1100, 900], [680, 600]]) {
+    await appPage.setViewportSize({ width, height })
+    for (const activation of ['primary', 'modified', 'middle'] as const) {
+      const tabCount = () => appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/browser')?.getSnapshot().context.tabs.filter((tab: any) => tab.url === 'https://example.test/releases').length ?? 0)
+      const before = await tabCount()
+      const link = row('wrap').locator('a')
+      await link.click(activation === 'middle' ? { button: 'middle' } : activation === 'modified' ? { modifiers: ['Control'] } : {})
+      await app.waitForSurface('default-setup/browser')
+      await expect.poll(tabCount).toBe(before + 1)
+      await app.navigate('default-setup/threads')
+      await expect(composer).toHaveText('Review the release summary before merging.')
+      expect((await context()).turns).toBe(1)
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      linkActivations.push({ width, height, activation, openedTabs: before + 1, draftRetained: true })
+    }
+    const file = testInfo.outputPath(`apack-native-links-${width}-${height}.png`)
+    await appPage.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))) })
+    const nativeWindow = await electronApp.browserWindow(appPage)
+    let captureTimer: ReturnType<typeof setTimeout> | undefined
+    const png = await Promise.race([
+      nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height }),
+      new Promise<never>((_resolve, reject) => { captureTimer = setTimeout(() => reject(Error('Owned Electron capture exceeded 30000ms')), 30000) }),
+    ]).finally(() => { if (captureTimer) clearTimeout(captureTimer) })
+    await writeFile(file, Buffer.from(png, 'base64'))
+  }
+  await writeFile(join(workspace!, 'native-link-activations.json'), JSON.stringify({ linkActivations, sessionId, boundNativePid }))
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
