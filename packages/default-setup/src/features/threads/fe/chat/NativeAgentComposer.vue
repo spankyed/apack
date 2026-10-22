@@ -11,7 +11,10 @@
     </div>
     </div>
     <div class="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
-      <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
+      <div class="flex min-w-0 items-center gap-2">
+        <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
+        <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
+      </div>
       <button type="submit" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" :disabled="disabled || submitting || !draft.trim()">{{ submitting ? 'Sending…' : 'Send to Agent' }}</button>
     </div>
   </form>
@@ -19,6 +22,7 @@
 <script setup lang="ts">
 import type { ClaudeNativeAgentInputReview } from '#features/code/common/native-terminal.ts'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { Settings2 } from 'lucide-vue-next'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
@@ -30,7 +34,7 @@ import { captureClaudeAgentDraft, restoreClaudeAgentDraft, normalizeClaudeAgentD
 import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
 import { nativePromptEditors } from '#extensions/tiptap/native-prompt-scope.ts'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply, ClaudePromptCompletionRow, ClaudeUiFieldEvent, ClaudeUiMountState, ClaudeUiFocusReply, ClaudeUiFocusEvent, ClaudeUiScrollEvent } from '#generated/types.ts'
-const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> }>()
+const props = defineProps<{ draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; mountId?: string; attachmentId?: string; promptRevision?: number; prompt?: ClaudePromptReply; hostRequest?: ClaudePromptHostRequest; completions?: ClaudePromptCompletionReply; completionRevision?: number; ui?: ClaudeUiMountState; focus?: ClaudeUiFocusReply; statusText?: string; send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void>; openSettings?: () => Promise<void> }>()
 const emit = defineEmits<{ leave: []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]; pending: [value: boolean]; edit: [value: ClaudePromptEdit]; complete: [value: ClaudePromptCompletionRequest]; host: [value: ClaudePromptHostResponse]; press: [id: string, href?: string]; field: [value: ClaudeUiFieldEvent]; scroll: [value: ClaudeUiScrollEvent]; 'focus-report': [value: ClaudeUiFocusEvent] }>()
 const toolsExpanded = ref(false)
 const editorRef = ref<InstanceType<typeof TiptapEditor>>(), problem = ref<string>(), nativeProblem = ref<string>(), submitting = ref(false)
@@ -132,6 +136,17 @@ function leaveEditor(event: KeyboardEvent) {
   event.preventDefault(); event.stopPropagation()
   if (offers.value.length) bridge?.dismissCompletions()
   else if (!submitting.value) emit('leave')
+}
+async function openNativeSettings() {
+  const active = bridge, open = props.openSettings
+  if (props.disabled || submitting.value || !active || !open) return
+  const revision = active.revision
+  submitting.value = true; emit('pending', true); problem.value = undefined
+  try {
+    if (!await active.settle() || active.revision !== revision || bridge !== active || props.disabled || !alive) throw Error('Agent input changed. Open settings again.')
+    await open()
+  } catch (error) { if (alive && bridge === active) problem.value = error instanceof Error ? error.message : 'Claude settings could not be opened' }
+  finally { submitting.value = false; emit('pending', false) }
 }
 async function submit() {
   if (props.disabled || submitting.value || !bridge) return

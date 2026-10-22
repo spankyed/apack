@@ -22,11 +22,11 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
 vi.mock('#features/threads/fe/chat/StatusLine.vue', () => ({ default: { render: () => null } }))
 beforeEach(() => { resetSelectionOnCreate = false; preserveEmptyMarker = false; startFeTestRuntime() })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime() })
-async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot) {
+async function mount(send: (text: string) => Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> = async () => {}, connected = false, draftSnapshot?: ClaudeAgentDraftSnapshot, openSettings?: () => Promise<void>) {
   const leave = vi.fn(), draft = vi.fn(), saved = vi.fn(), root = document.createElement('div'); document.body.append(root)
   const state = reactive({ draft: 'Unsent Agent draft', attachmentId: 'native-one', promptRevision: 0, prompt: undefined as ClaudePromptReply | undefined })
   const edit = vi.fn((value: ClaudePromptEdit) => { state.promptRevision = value.revision; state.prompt = { revision: value.revision, status: 'applied', frame: { text: value.text, cursor: value.cursor } } })
-  app = createApp({ render: () => h(NativeAgentComposer, { draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
+  app = createApp({ render: () => h(NativeAgentComposer, { draft: state.draft, draftSnapshot, 'onDraft-snapshot': saved, disabled: false, send, openSettings, mountId: connected ? 'agent-ui' : undefined, attachmentId: state.attachmentId, promptRevision: state.promptRevision, prompt: state.prompt, onEdit: edit, onLeave: leave, onDraft: (text: string) => { draft(text); state.draft = text } }) }); app.mount(root); await nextTick(); await nextTick()
   return { leave, draft, saved, root, state, edit }
 }
 it('owns Escape before the generic editor keymap and preserves the unsent draft', async () => {
@@ -172,4 +172,28 @@ it('allows a pointer focus to choose a new caret instead of restoring the prior 
   await nextTick()
   expect(editor.state.selection.head).toBe(2)
   expect(editor.state.storedMarks).toBeNull()
+})
+
+it('opens Settings once without sending or replacing the Agent document and selection',async()=>{
+ let finish!:()=>void
+ const settings=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve})),send=vi.fn(async()=>{})
+ const f=await mount(send,true,undefined,settings)
+ editor.commands.setTextSelection({from:2,to:7});await nextTick()
+ const doc=editor.state.doc,selection=editor.state.selection.toJSON()
+ const button=f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!
+ button.click();button.click()
+ await vi.waitFor(()=>expect(settings).toHaveBeenCalledOnce());finish();await nextTick();await nextTick()
+ expect(send).not.toHaveBeenCalled();expect(editor.state.doc).toBe(doc);expect(editor.state.selection.toJSON()).toEqual(selection)
+ expect(f.draft).not.toHaveBeenCalledWith('')
+})
+it('keeps the Agent draft on Settings refusal and retires an invocation across native reattachment',async()=>{
+ const settings=vi.fn(async()=>{throw Error('Original Settings refusal')})
+ const f=await mount(async()=>{},true,undefined,settings)
+ f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click()
+ await vi.waitFor(()=>expect(f.root.textContent).toContain('Original Settings refusal'))
+ expect(editor.state.doc.textContent).toBe('Unsent Agent draft')
+ settings.mockClear();editor.commands.insertContent(' newer');await nextTick()
+ f.root.querySelector<HTMLButtonElement>('[aria-label="Claude settings"]')!.click();f.state.attachmentId='replacement'
+ await nextTick();await nextTick()
+ expect(settings).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toContain('newer')
 })

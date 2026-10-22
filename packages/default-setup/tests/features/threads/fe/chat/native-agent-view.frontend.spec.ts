@@ -8,22 +8,22 @@ vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativ
 vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))
-vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<input aria-label="Agent draft" :disabled="disabled" />' } }))
+vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus', 'openSettings'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<div><input aria-label="Agent draft" :disabled="disabled" /><button @click="openSettings">Claude settings</button></div>' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { template: '<div />' } }))
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); send.mockClear(); context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
 afterEach(() => { app?.unmount(); vi.unstubAllGlobals(); document.body.replaceChildren() })
-async function mount() {
+async function mount(draft = 'Keep this draft') {
   const root = document.createElement('div'); document.body.append(root)
-  const pending = vi.fn(), returned = vi.fn()
-  app = createApp({ render: () => h(NativeAgentView, { threadId: 'thread', target: { ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 3 }, name: 'Worker', draft: 'Keep this draft', active: true, onPending: pending, onReturned: returned }) }); app.mount(root)
+  const pending = vi.fn(), returned = vi.fn(), draftChange = vi.fn()
+  app = createApp({ render: () => h(NativeAgentView, { threadId: 'thread', target: { ownerId: 'owner', sessionId: 'session', taskId: 'agent', revision: 3 }, name: 'Worker', draft, onDraft: draftChange, active: true, onPending: pending, onReturned: returned }) }); app.mount(root)
   const requests = send.mock.calls.map(([value]) => value), ui = requests.find(value => value.type === 'CLAUDE_UI_MOUNT').mountId, terminal = requests.find(value => value.type === 'CLAUDE_TERMINAL_MOUNT').mountId
   const owner: ClaudeNativeTerminalState = { ownerId: 'owner', sessionId: 'session', cwd: '/private/tmp', status: 'live', busy: true, view: { kind: 'agent', revision: 3, registryId: 'registry-agent', taskId: 'agent' }, tasks: [{ id: 'agent', name: 'Worker', status: 'running' }] }
   context.nativeTerminalViews[terminal] = { state: owner, opening: false, output: [] }
   context.nativeUiViews[ui] = { state: { agent: { taskId: 'agent', name: 'Worker', status: 'running', canInput: true, canMessage: false, messages: [], truncated: false, metadata: { prompt: 'Original prompt', promptTruncated: false, model: 'native-model', effort: 'high', elapsedMs: 1234, tokenCount: 42, toolUseCount: 2, errorTruncated: false } } } }
   await nextTick()
   const button = (text: string) => [...root.querySelectorAll('button')].find(element => element.textContent === text)!
-  return { root, ui, terminal, owner, pending, returned, button }
+  return { root, ui, terminal, owner, pending, returned, draftChange, button }
 }
 it('stops only the selected worker, rejects unrelated acknowledgments and retains parent navigation', async () => {
   const f = await mount(); f.button('Stop Agent').click(); await nextTick()
@@ -107,4 +107,19 @@ it('keeps the complete attributed report in the transcript outside collapsed met
   expect(reports[0].textContent).toContain('Check the migration example before publishing.')
   expect(reports[0].querySelector('[role="alert"]')?.textContent).toBe('Original classifier warning')
   expect(f.button('Back to conversation').disabled).toBe(false)
+})
+
+it('preserves even a /config draft when Settings opens, with Agent identity in the compact panel header',async()=>{
+ const f=await mount('/config');f.button('Claude settings').click();await nextTick()
+ const request=send.mock.calls.map(([value])=>value).find(value=>value.type==='CLAUDE_UI_AGENT_INPUT')
+ expect(request.text).toBe('/config')
+ context.nativeUiViews[f.ui].state.agentInput={revision:request.revision,status:'panel',panel:{id:'12345678-1234-1234-1234-123456789abc',commandName:'config'}}
+ await nextTick();await nextTick()
+ expect(f.draftChange).not.toHaveBeenCalled()
+ expect(f.root.querySelector('[role="dialog"]')?.textContent).toContain('Agent · Worker')
+ expect(f.root.querySelector<HTMLElement>('.native-agent-view > header')?.style.display).toBe('none')
+ context.nativeUiViews[f.ui].state.agentInput={revision:request.revision,status:'panel_done'}
+ await nextTick();await nextTick()
+ expect(f.root.querySelector<HTMLElement>('.native-agent-view > header')?.style.display).not.toBe('none')
+ expect(f.draftChange).not.toHaveBeenCalled()
 })

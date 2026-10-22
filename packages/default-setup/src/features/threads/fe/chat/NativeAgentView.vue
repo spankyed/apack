@@ -1,15 +1,15 @@
 <template>
   <section ref="selectionRoot" v-show="active" aria-label="Focused Agent conversation" class="native-agent-view flex min-h-0 min-w-0 flex-1 flex-col" @keydown.esc="escape" @keydown.capture="nativeActionKey($event, selectionRoot)" @focusout="nativeActionKey.leave($event, selectionRoot)">
-    <header class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
+    <header v-show="!panelActive" class="mx-4 mb-2 flex shrink-0 items-start justify-between gap-3 border-b border-white/10 pb-3 pt-2">
       <div class="min-w-0"><p class="native-agent-eyebrow mb-1 text-[10px] uppercase tracking-widest text-neutral-500">Agent conversation</p><h2 class="truncate text-sm font-medium text-neutral-200">{{ name }}</h2><p class="mt-1 text-[11px] text-neutral-500">{{ state?.agent?.status === 'killed' ? 'Stopped' : state?.agent?.status ?? 'Connecting' }}<template v-if="state?.agent?.metadata?.model"> · {{ state.agent.metadata.model }}</template></p></div>
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
       <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner || selectedTask?.status !== 'running'" @click="stopAgent">{{ stopping ? 'Stopping…' : 'Stop Agent' }}</button>
       <button type="button" class="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending || returning || stopping || commandActive || !selectedOwner" @click="returnToParent">{{ returning ? 'Returning…' : 'Back to conversation' }}</button>
       </div>
     </header>
-    <details v-if="state?.agent?.metadata" class="mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
+    <details v-show="!panelActive" v-if="state?.agent?.metadata" class="mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
-    <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
+    <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
     <div v-show="!panelActive && !outputActive" class="relative min-h-16 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
@@ -42,7 +42,7 @@
         <button type="button" :disabled="commandSending" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-40" @click="decideCommand('confirm')">{{ state.agentInput.command.confirmLabel }}</button>
       </div>
     </section>
-    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send"
+    <NativeAgentComposer v-show="!panelActive" ref="agentComposer" :draft="draft" :draft-snapshot="draftSnapshot" :disabled="!active || !selectedOwner || returning || stopping || commandActive || !state?.agent?.canInput || state.status === 'disconnected' || state.status === 'connecting'" :mount-id="uiMount" :attachment-id="snapshot?.attachmentId" :prompt-revision="snapshot?.promptRevision" :prompt="snapshot?.prompt" :host-request="snapshot?.promptHostRequest" :completion-revision="snapshot?.completionRevision" :completions="snapshot?.completions" :ui="state" :focus="snapshot?.focus" :status-text="statusText" :send="send" :open-settings="openSettings"
       @draft-snapshot="value => emit('draft-snapshot', target, value)" @leave="returnToParent" @draft="emit('draft', target, $event)" @pending="setPending" @edit="edit" @complete="complete" @host="host" @press="press" @field="field" @scroll="scroll" @focus-report="focus" />
   </section>
 </template>
@@ -104,7 +104,7 @@ let commandFocusOwned = false
 let commandDraft: { revision: number; text: string } | undefined
 const pending = ref(false), returning = ref(false), stopping = ref(false), problem = ref<string>()
 let heartbeat: ReturnType<typeof setInterval> | undefined, revision = 0, returnRevision = 0, stopRevision = 0
-let submission: { revision: number; text: string; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview | { commandPending: true }): void; reject(error: Error): void } | undefined
+let submission: { revision: number; text: string; preserveDraft: boolean; scrollIntent: number; resolve(review?: ClaudeNativeAgentInputReview | { commandPending: true }): void; reject(error: Error): void } | undefined
 const nativeActionKey = createClaudeActionKeyHandler(() => ({
   scope: props.active && uiMount.value && snapshot.value?.attachmentId ? `${uiMount.value}:${snapshot.value.attachmentId}` : undefined,
   keys: state.value?.actionKeys, result: snapshot.value?.actionKeyResult,
@@ -125,11 +125,15 @@ function detach() {
 }
 watch(() => props.active, active => { detach(); if (active) { uiMount.value = crypto.randomUUID(); renew(); heartbeat = setInterval(renew, 10000) } }, { immediate: true })
 function setPending(value: boolean) { pending.value = value; emit('pending', value || returning.value || stopping.value || commandActive.value) }
-function send(text: string): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
+function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<ClaudeNativeAgentInputReview | { commandPending: true } | void> {
   if (!uiMount.value || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
   problem.value = undefined
   const request = ++revision
-  return new Promise((resolve, reject) => { submission = { revision: request, text, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
+  return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
+}
+async function openSettings() {
+  const result = await send('/config', { preserveDraft: true })
+  if (result && 'text' in result) throw Error('Claude requested input review before opening settings. Use /config to review it.')
 }
 watch(() => state.value?.agentInput, value => {
   if (value?.status === 'command_done' || value?.status === 'error') {
@@ -146,10 +150,10 @@ watch(() => state.value?.agentInput, value => {
   }
   if (!submission || value?.revision !== submission.revision || value.status === 'pending') return
   const request = submission; submission = undefined
-  if (value.status === 'done' && value.receipt) { if (props.draft === request.text) emit('draft', props.target, ''); transcriptScroll.latest(request.scrollIntent); request.resolve() }
-  else if (value.status === 'panel' && value.panel) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
-  else if (value.status === 'command_output' && value.output) { if (props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
-  else if (value.status === 'confirmation' && value.command) { commandDraft = { revision: request.revision, text: request.text }; request.resolve({ commandPending: true }); void nextTick(() => cancelCommand.value?.focus({ preventScroll: true })) }
+  if (value.status === 'done' && value.receipt) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); transcriptScroll.latest(request.scrollIntent); request.resolve() }
+  else if (value.status === 'panel' && value.panel) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
+  else if (value.status === 'command_output' && value.output) { if (!request.preserveDraft && props.draft === request.text) emit('draft', props.target, ''); request.resolve() }
+  else if (value.status === 'confirmation' && value.command) { if (!request.preserveDraft) commandDraft = { revision: request.revision, text: request.text }; request.resolve({ commandPending: true }); void nextTick(() => cancelCommand.value?.focus({ preventScroll: true })) }
   else if (value.status === 'review' && value.review) request.resolve(value.review)
   else if (value.status === 'blocked') request.resolve({ commandPending: true })
   else request.reject(Error(value.problem ?? 'Agent input was refused'))
