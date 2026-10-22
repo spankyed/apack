@@ -345,7 +345,7 @@ it.each(['confirm', 'cancel'] as const)('clears only a confirmed unchanged nativ
 })
 
 
-it.each([{label:'Claude settings',command:'/config'},{label:'Claude tasks',command:'/tasks'}])('opens original $label without clearing draft, selection or pending attachments',async({label,command})=>{
+it.each([{label:'Claude settings',command:'/config'},{label:'Claude tasks',command:'/tasks'},{label:'Claude MCP servers',command:'/mcp'}])('opens original $label without clearing draft, selection or pending attachments',async({label,command})=>{
   const f=await nativeMount(),upload=vi.spyOn(window.electronAPI!.media,'upload')
   let finish!:()=>void
   f.state.nativeSubmit=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve}))
@@ -360,7 +360,7 @@ it.each([{label:'Claude settings',command:'/config'},{label:'Claude tasks',comma
   expect(attachments.pendingImages.value.map(value=>value.name)).toEqual(['review.png']);expect(attachments.pendingFiles.value.map(value=>value.name)).toEqual(['review.txt'])
   expect(upload).not.toHaveBeenCalled();expect(f.send).not.toHaveBeenCalled();expect(localStorage.getItem('chat-sent-history')).toBeNull()
 })
-it.each(['Claude settings','Claude tasks'])('retains draft on %s refusal and retires the action on attachment change',async(label)=>{
+it.each(['Claude settings','Claude tasks','Claude MCP servers'])('retains draft on %s refusal and retires the action on attachment change',async(label)=>{
   const f=await nativeMount();f.state.nativeSubmit=vi.fn(async()=>{throw new Error('Native settings refused')});await nextTick()
   f.root.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!.click()
   await vi.waitFor(()=>expect(f.root.textContent).toContain('Native settings refused'));expect(editor.state.doc.textContent).toBe('first')
