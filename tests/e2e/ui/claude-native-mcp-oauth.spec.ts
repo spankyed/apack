@@ -102,19 +102,28 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
     await expect(panel).toBeVisible();await expect.poll(screen).toContain('research')
   }
   async function capture(stage:string,width:number,expected:RegExp){
-    const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
+    const size={width,height:width===680?600:900},previous=await resize(),previousViewport=appPage.viewportSize()
+    await appPage.setViewportSize(size)
+    if(previousViewport?.width!==size.width||previousViewport?.height!==size.height){
+      await expect.poll(async()=>{const fitted=await resize();return fitted&&previous&&(fitted.cols!==previous.cols||fitted.rows!==previous.rows)}).toBe(true)
+    }
+    await expect.poll(async()=>{const fitted=await resize();return fitted?.rows===(await panel.locator('.xterm-rows > div').count())}).toBe(true)
     await expect(panel.locator('.xterm-rows')).toContainText(expected)
     if(stage==='stale-refused'&&width===680){
       await keyboard.press('PageDown')
       await expect.poll(screen).toContain('opened.')
       await expect(panel.locator('.xterm-rows')).toContainText('opened.')
       await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*go back/i)
+      await expect(panel.locator('.xterm-rows > div').filter({hasText:'opened.'})).toBeInViewport()
+      await expect(panel.locator('.xterm-rows > div').filter({hasText:/Esc.*go back/i})).toBeInViewport()
     }
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
-    const paint=await panel.locator('.xterm-rows').innerText(),native=await screen()
-    await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    await expect(panel.locator('.xterm-rows')).toContainText(expected)
+    if(stage==='stale-refused')await expect(panel.locator('.xterm-rows > div').filter({hasText:'opened.'})).toBeInViewport()
+    const paint=await panel.locator('.xterm-rows').innerText(),native=await screen(),grid=await resize()
     const result=await nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size)
-    expect(result.size).toEqual(size);const file='native-mcp-oauth-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(result.png,'base64'));captures.push({file,stage,...size,paint,native})
+    expect(result.size).toEqual(size);const file='native-mcp-oauth-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(result.png,'base64'));captures.push({file,stage,...size,grid,paint,native})
   }
   await appPage.setViewportSize({width:1100,height:900});await openPanel()
   const keyboard=panel.locator('textarea.xterm-helper-textarea')
