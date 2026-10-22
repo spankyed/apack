@@ -2,9 +2,9 @@
 # Invoked inside the existing per-worktree Linux runner, never on the Mac.
 set -euo pipefail
 [[ "$(uname -s)" == Linux && -f /.dockerenv ]] || { echo 'Use npm run test:linux for this fixture' >&2; exit 2; }
-if ! command -v xvfb-run >/dev/null; then
+if ! command -v xvfb-run >/dev/null || ! command -v xclip >/dev/null; then
   apt-get update -qq
-  apt-get install -y --no-install-recommends xvfb xauth python3 procps fonts-dejavu-core
+  apt-get install -y --no-install-recommends xvfb xauth xclip python3 procps fonts-dejavu-core
 fi
 export APACK_CHAIN_CORES=2
 npm run build:runtime -- --cores 2
