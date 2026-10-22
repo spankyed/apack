@@ -112,7 +112,17 @@ test('preserves declared native Text wrapping at actual width and through resize
     evidence.push(await row('middle').evaluate(element => ({ width: element.clientWidth, text: element.textContent, link: element.querySelector('a')?.textContent })))
     await capturePage('apack-native-text-wrap-' + width + '-' + height + '.png', width, height)
   }
+  // Keep the original admitted href and real browser navigation, with an owned deterministic page.
+  await electronApp.evaluate(({ session }) => {
+    ;(globalThis as any).__nativeLinkRequests = []
+    session.fromPartition('persist:browser').protocol.handle('https', request => {
+      if (request.url !== 'https://example.test/releases') return new Response('Unowned fixture target', { status: 404 })
+      ;(globalThis as any).__nativeLinkRequests.push(request.url)
+      return new Response('<!doctype html><title>Release notes</title><h1>Release notes</h1><p>Review the migration guidance.</p>', { headers: { 'content-type': 'text/html', 'cache-control': 'no-store' } })
+    })
+  })
   const linkActivations: unknown[] = []
+  try {
   for (const [width, height] of [[1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
     for (const activation of ['primary', 'modified', 'middle'] as const) {
@@ -130,7 +140,13 @@ test('preserves declared native Text wrapping at actual width and through resize
     }
     await capturePage(`apack-native-links-${width}-${height}.png`, width, height)
   }
-  await writeFile(join(workspace!, 'native-link-activations.json'), JSON.stringify({ linkActivations, sessionId, boundNativePid }))
+  const requests = await electronApp.evaluate(() => (globalThis as any).__nativeLinkRequests as string[])
+  expect(requests).toHaveLength(6)
+  expect(requests.every(url => url === 'https://example.test/releases')).toBe(true)
+  await writeFile(join(workspace!, 'native-link-activations.json'), JSON.stringify({ linkActivations, requests, sessionId, boundNativePid }))
+  } finally {
+    await electronApp.evaluate(({ session }) => { session.fromPartition('persist:browser').protocol.unhandle('https'); delete (globalThis as any).__nativeLinkRequests })
+  }
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
