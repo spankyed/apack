@@ -36,8 +36,14 @@ test('preserves declared native Text wrapping at actual width and through resize
   const input = section.locator('textarea.xterm-helper-textarea')
   // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
+    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1)
+    const cols=row?.match(/columns:\s*(\d+)/)?.[1],rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0
@@ -78,6 +84,13 @@ test('preserves declared native Text wrapping at actual width and through resize
   const full = 'Release notes: /workspace/projects/desktop/integrations/claude-code/research/release-candidates/2026/october/verified/release-summary.md'
   const modes = ['wrap', 'end', 'middle', 'truncate', 'truncate-start', 'truncate-middle', 'truncate-end']
   const row = (mode: string) => card.locator('[data-native-text-wrap="' + mode + '"]')
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capturePage(file:string,width:number,height:number){
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    let timer:ReturnType<typeof setTimeout>|undefined
+    const image=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height}),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(timer)clearTimeout(timer)})
+    expect(image.size).toEqual({width,height});await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'))
+  }
   const evidence: unknown[] = []
   for (const [width, height] of [[680, 900], [1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
@@ -97,7 +110,7 @@ test('preserves declared native Text wrapping at actual width and through resize
     await expect(composer).toHaveText('Review the release summary before merging.')
     await expect(composer).toBeInViewport(); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
     evidence.push(await row('middle').evaluate(element => ({ width: element.clientWidth, text: element.textContent, link: element.querySelector('a')?.textContent })))
-    await appPage.screenshot({ path: testInfo.outputPath('apack-native-text-wrap-' + width + '-' + height + '.png') })
+    await capturePage('apack-native-text-wrap-' + width + '-' + height + '.png', width, height)
   }
   const linkActivations: unknown[] = []
   for (const [width, height] of [[1100, 900], [680, 600]]) {
@@ -115,15 +128,7 @@ test('preserves declared native Text wrapping at actual width and through resize
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
       linkActivations.push({ width, height, activation, openedTabs: before + 1, draftRetained: true })
     }
-    const file = testInfo.outputPath(`apack-native-links-${width}-${height}.png`)
-    await appPage.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))) })
-    const nativeWindow = await electronApp.browserWindow(appPage)
-    let captureTimer: ReturnType<typeof setTimeout> | undefined
-    const png = await Promise.race([
-      nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height }),
-      new Promise<never>((_resolve, reject) => { captureTimer = setTimeout(() => reject(Error('Owned Electron capture exceeded 30000ms')), 30000) }),
-    ]).finally(() => { if (captureTimer) clearTimeout(captureTimer) })
-    await writeFile(file, Buffer.from(png, 'base64'))
+    await capturePage(`apack-native-links-${width}-${height}.png`, width, height)
   }
   await writeFile(join(workspace!, 'native-link-activations.json'), JSON.stringify({ linkActivations, sessionId, boundNativePid }))
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
