@@ -7,16 +7,17 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, provide, onBeforeUnmount } from 'vue'
+import { ref, provide, watch, onBeforeUnmount } from 'vue'
 import type { ClaudeUiQuestionFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import type { ClaudeQuestionAnswer } from '#features/code/common/native-question.ts'
 import NativeUiNode from './NativeUiNode.vue'
 import NativeQuestionPanel from './NativeQuestionPanel.vue'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
-defineProps<{ frame?: ClaudeUiQuestionFrame; disabled: boolean; error?: string }>()
+const props = defineProps<{ frame?: ClaudeUiQuestionFrame; disabled: boolean; error?: string }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; started: [token?: string]; respond: [answer: ClaudeQuestionAnswer]; pause: [] }>()
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
+watch(() => props.frame?.body, () => hover.invalidate(), { flush: 'post' })
 const root = ref<HTMLElement | null>(null)
 function key(event: KeyboardEvent) { if (!event.isComposing) pressClaudeUiHotkey(event, root.value) }
 onBeforeUnmount(() => hover.dispose())

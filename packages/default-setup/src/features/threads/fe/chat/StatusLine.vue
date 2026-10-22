@@ -31,6 +31,7 @@ const hover = useClaudeHoverSurface()
 provide(claudeHoverSurface, hover)
 onBeforeUnmount(() => hover.dispose())
 const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()
+watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
 const toolsOpen = ref(false)
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
 const displayPath = computed(() => {

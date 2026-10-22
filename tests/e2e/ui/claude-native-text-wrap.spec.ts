@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -13,6 +13,7 @@ test('preserves declared native Text wrapping at actual width and through resize
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
+  const restingHover = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).restingHover === true
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -92,6 +93,7 @@ test('preserves declared native Text wrapping at actual width and through resize
     expect(image.size).toEqual({width,height});await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'))
   }
   const evidence: unknown[] = []
+  if (!restingHover) {
   for (const [width, height] of [[680, 900], [1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
     await expect(row('wrap')).toHaveText(full)
@@ -197,6 +199,51 @@ test('preserves declared native Text wrapping at actual width and through resize
   } finally {
     await electronApp.evaluate(({ session }) => { session.fromPartition('persist:browser').protocol.unhandle('https'); delete (globalThis as any).__nativeLinkRequests })
   }
+  } else {
+    const samples: { phase: number; width: number; height: number; active: boolean; pointerMoves: number; color: string }[] = []
+    const trigger = card.locator('.native-inline-text').filter({ hasText: /^Review detail trigger$/ })
+    const hint = card.locator('[data-native-placement="PromptHint"] .native-inline-text').filter({ hasText: /^Release review ready$/ })
+    let phase = 0
+    for (const [width, height] of [[1100, 900], [680, 600]]) {
+      await appPage.setViewportSize({ width, height })
+      await composer.hover()
+      await expect(hint).toBeVisible()
+      const resting = await hint.evaluate(node => getComputedStyle(node).color)
+      await trigger.hover()
+      await expect.poll(() => hint.evaluate(node => getComputedStyle(node).color)).not.toBe(resting)
+      const active = await hint.evaluate(node => getComputedStyle(node).color)
+      const point = await trigger.boundingBox(); expect(point).not.toBeNull()
+      await appPage.evaluate(() => {
+        const state = window as any
+        state.__restingHoverMoves = 0
+        state.__restingHoverMove = () => { state.__restingHoverMoves++ }
+        window.addEventListener('pointermove', state.__restingHoverMove)
+      })
+      try {
+        for (let redraw = 0; redraw < 12; redraw++) {
+          phase++
+          const requestPath = join(workspace!, 'native-resting-hover-request.txt')
+          await writeFile(requestPath + '.next', String(phase))
+          await rename(requestPath + '.next', requestPath)
+          await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-resting-hover-drawn.json'), 'utf8')).phase).toBe(phase)
+          await expect(card.locator('.native-text-run').filter({ hasText: new RegExp('^Review update ' + phase + '$') })).toBeVisible()
+          await expect.poll(() => hint.evaluate(node => getComputedStyle(node).color)).toBe(phase % 2 ? resting : active)
+          const pointerMoves = await appPage.evaluate(() => (window as any).__restingHoverMoves as number)
+          expect(pointerMoves).toBe(0)
+          await expect(composer).toHaveText('Review the release summary before merging.')
+          expect((await context()).native.state.nativePid).toBe(boundNativePid)
+          expect((await context()).turns).toBe(1)
+          samples.push({ phase, width, height, active: phase % 2 === 0, pointerMoves, color: await hint.evaluate(node => getComputedStyle(node).color) })
+        }
+        await capturePage(`apack-native-resting-hover-${width}-${height}.png`, width, height)
+      } finally {
+        await appPage.evaluate(() => { const state = window as any; window.removeEventListener('pointermove', state.__restingHoverMove); delete state.__restingHoverMove; delete state.__restingHoverMoves })
+      }
+      await composer.hover()
+      await expect.poll(() => hint.evaluate(node => getComputedStyle(node).color)).toBe(resting)
+    }
+    await writeFile(join(workspace!, 'native-resting-hover-app.json'), JSON.stringify({ samples, sessionId, boundNativePid }))
+  }
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
@@ -206,5 +253,5 @@ test('preserves declared native Text wrapping at actual width and through resize
   await expect.poll(async () => (await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-text-wrap-app.json'), JSON.stringify({ evidence, sessionId, boundNativePid }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeTextWrap: !restingHover, nativeRestingHover: restingHover, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })

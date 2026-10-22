@@ -23,6 +23,7 @@ import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 const props = defineProps<{ frame: ClaudeUiTranscriptFrame }>()
 const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent] }>()
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover)
+watch(() => props.frame.body, () => hover.invalidate(), { flush: 'post' })
 const site = ref<HTMLElement | null>(null), composing = ref(false)
 const reportLayout = inject(claudeTranscriptLayout, undefined)
 const layoutCell = ref<HTMLElement | null>(null)

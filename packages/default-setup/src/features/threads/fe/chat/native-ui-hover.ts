@@ -7,6 +7,7 @@ export interface ClaudeHoverSurface {
   point: (event: PointerEvent) => void
   leave: (event: PointerEvent) => void
   refresh: () => void
+  invalidate: () => void
   dispose: () => void
 }
 export const claudeHoverSurface: InjectionKey<ClaudeHoverSurface> = Symbol('claude-hover-surface')
@@ -83,6 +84,8 @@ export function createClaudeHoverSurface(shared?: Readonly<Ref<ClaudeHoverGroups
       else clearPointer()
     },
     refresh,
+    // A native drawing starts a new bounded settling batch; hover paint updates only refresh it.
+    invalidate() { if (!disposed) { remaining = 8; refresh() } },
     dispose() { disposed = true; stopSharing?.(); clearPointer(); members.clear() },
   }
 }

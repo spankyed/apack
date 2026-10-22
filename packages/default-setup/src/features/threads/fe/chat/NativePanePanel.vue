@@ -71,6 +71,7 @@ const site = ref<HTMLElement | null>(null)
 const scroll = useClaudeSiteScroll({ element: site, cellWidth: () => (measure.value?.getBoundingClientRect().width ?? 0) / 10, state: () => props.panes.scroll, paneId: () => shown.value ?? undefined, emit: event => emit('scroll', event) })
 const panel = ref<HTMLElement | null>(null), measure = ref<HTMLElement | null>(null)
 const hover = useClaudeHoverSurface(); provide(claudeHoverSurface, hover); onBeforeUnmount(() => hover.dispose())
+watch(() => props.panes.body, () => hover.invalidate(), { flush: 'post' })
 let revision = 0, applying = false, held = false, autoEntering = false
 let consumedGrant: string | null = null
 const composing = ref(false)

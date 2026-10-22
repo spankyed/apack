@@ -1,10 +1,10 @@
 import { onTestFinished } from 'vitest'
 import * as sdkFe from '@apackdev/sdk/fe'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
-import { createApp, defineComponent, h, reactive, ref, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, reactive, ref, computed, nextTick, type App } from 'vue'
 import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
-import { provideClaudeHoverGroups } from '#features/threads/fe/chat/native-ui-hover.ts'
+import { createClaudeHoverSurface, provideClaudeHoverGroups } from '#features/threads/fe/chat/native-ui-hover.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState } from '#generated/types.ts'
 
@@ -454,6 +454,47 @@ it('shares named groups across placement roots only within the current attachmen
   owner.value = undefined; await nextTick()
   await enter('Trigger'); expect(text('Peer').style.color).toBe('')
   expect(draft.value).toBe('Keep the independent draft.')
+})
+
+
+it('settles a resting pointer for each new drawing without an unbounded paint loop or stale frame', () => {
+  const previous = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+  onTestFinished(() => { if (previous) Object.defineProperty(document, 'elementFromPoint', previous); else delete (document as unknown as { elementFromPoint?: unknown }).elementFromPoint })
+  const first = document.createElement('span'), second = document.createElement('span')
+  document.body.append(first, second)
+  let hit: Element = first, sequence = 0
+  const frames = new Map<number, FrameRequestCallback>()
+  Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => hit })
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { const id = ++sequence; frames.set(id, callback); return id })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => { frames.delete(id) })
+  const tick = () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(0)) }
+  const surface = createClaudeHoverSurface(), firstHot = ref(false), secondHot = ref(false)
+  const group = computed(() => 'original-plugin-review')
+  surface.register({ element: first, underPointer: firstHot, group })
+  surface.register({ element: second, underPointer: secondHot, group })
+  surface.point({ target: first, clientX: 10, clientY: 10 } as unknown as PointerEvent)
+  for (let frame = 0; frame < 8; frame++) { tick(); surface.refresh() }
+  expect(frames.size).toBe(0)
+  expect(firstHot.value).toBe(true)
+  for (let drawing = 0; drawing < 12; drawing++) {
+    hit = drawing % 2 ? document.body : second
+    surface.invalidate(); surface.invalidate()
+    expect(frames.size).toBe(1)
+    tick()
+    expect(firstHot.value).toBe(false)
+    expect(secondHot.value).toBe(drawing % 2 === 0)
+    expect(surface.groups.value.has(group.value)).toBe(drawing % 2 === 0)
+    for (let frame = 0; frame < 8; frame++) { surface.refresh(); tick() }
+    surface.refresh(); expect(frames.size).toBe(0)
+  }
+  surface.invalidate()
+  const stale = [...frames.values()][0]!
+  surface.dispose()
+  expect(frames.size).toBe(0)
+  hit = first; stale(0)
+  expect(firstHot.value).toBe(false); expect(secondHot.value).toBe(false)
+  expect(surface.groups.value.size).toBe(0)
+  surface.invalidate(); expect(frames.size).toBe(0)
 })
 
 
