@@ -198,7 +198,7 @@ export function createClaudeTranscriptMessageHost(options: {
       }
 
     },
-    dispose() { if (disposal) return disposal; disposed = true; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled([...releases]).then(() => {}); return disposal },
+    dispose() { if (disposal) return disposal; disposed = true; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled(releases).then(() => {}); return disposal },
     layout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) {
       if (!['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(event.component)
         || !Number.isSafeInteger(event.columns) || event.columns < 20 || event.columns > 240) return
@@ -216,6 +216,7 @@ export function createClaudeTranscriptMessageHost(options: {
       if (!entry || !valid(entry) || entry.pressing) return { handled: false }
       const action = entry.drawing!.actions.get(id)!, link = entry.drawing!.links.has(id)
       if (link) {
+        // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
         if (!href || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return { handled: false }
         try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return { handled: false } } catch { return { handled: false } }
       } else if (href !== undefined) return { handled: false }

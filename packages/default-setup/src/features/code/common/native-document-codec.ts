@@ -2,6 +2,7 @@
 export function encodeClaudeDocument(text: string): { body: string; codes: string[] } {
   const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'
   const codes: string[] = [], indices = new Map<string, number>()
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   const pattern = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g
   let body = '', cursor = 0
   for (const match of text.matchAll(pattern)) {
@@ -20,6 +21,7 @@ export function decodeClaudeDocument(value: unknown): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Invalid native document encoding')
   const { body, codes } = value as { body?: unknown; codes?: unknown }
   if (typeof body !== 'string' || body.length > 262144 || !Array.isArray(codes) || codes.length > 256
+    // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
     || !codes.every(code => typeof code === 'string' && code.length <= 4096 && /^(?:\x1b\[[0-9;]*m|\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\))$/.test(code))) throw Error('Invalid native document style dictionary')
   const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'
   let result = '', cursor = 0

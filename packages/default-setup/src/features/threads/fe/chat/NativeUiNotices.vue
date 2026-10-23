@@ -28,6 +28,8 @@ function hold(id: string, source: string, value: boolean) {
 }
 function leaveFocus(event: FocusEvent, id: string) { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) hold(id, 'focus', false) }
 function release(id: string) { if (held.delete(id)) emit('operate', { kind: 'hold', id, isHeld: false }) }
+// eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
 watch(visibleToasts, values => { const ids = new Set(values.map(toast => toast.id)); for (const id of [...held.keys()]) if (!ids.has(id)) release(id) })
+// eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
 onBeforeUnmount(() => { for (const id of [...held.keys()]) release(id) })
 </script>

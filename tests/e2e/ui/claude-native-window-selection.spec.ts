@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -12,7 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('routes original selection and clipboard across independent app windows', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -101,7 +101,7 @@ test('routes original selection and clipboard across independent app windows', a
   await expand(card);await expand(second)
   const reads=async()=>JSON.parse(await readFile(join(workspace!,'native-window-selection-receipts.json'),'utf8').catch(()=>'[]'))
   const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-window-copy-receipts.json'),'utf8').catch(()=>'[]'))
-  async function selectText(locator:ReturnType<typeof appPage.locator>,text:string){await locator.scrollIntoViewIfNeeded();await locator.evaluate((root,text)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf(text)??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+text.length);const selection=document.getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Selected visible text not found')},text)}
+  async function selectText(locator:ReturnType<typeof appPage.locator>,text:string){await locator.scrollIntoViewIfNeeded();await locator.evaluate((root,text)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while((node=walker.nextNode())!==null){const at=node.textContent?.indexOf(text)??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+text.length);const selection=document.getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Selected visible text not found')},text)}
   const readButton=(target:typeof card)=>target.getByRole('button',{name:'Review window selection',exact:true})
   const focusWindow=async(page:typeof appPage)=>{const window=await electronApp.browserWindow(page);await window.evaluate(window=>{window.show();window.focus()});await expect.poll(()=>page.evaluate(()=>document.hasFocus())).toBe(true)}
   await focusWindow(appPage)

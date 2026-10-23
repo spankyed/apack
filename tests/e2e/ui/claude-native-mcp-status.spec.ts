@@ -1,11 +1,11 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('reads MCP connection status through the existing native and print owners', async ({ app, appPage, electronApp }, testInfo) => {
+test('reads MCP connection status through the existing native and print owners', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
@@ -73,7 +73,7 @@ test('reads MCP connection status through the existing native and print owners',
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
   }
-  const sourceThreadId = (await context()).threadId
+  const _sourceThreadId = (await context()).threadId
   await composer.fill('NativeForkCheckpointAlpha: remember this source-only marker.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.some((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.') }).toBe(true)

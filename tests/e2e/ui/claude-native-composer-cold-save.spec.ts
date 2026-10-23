@@ -10,10 +10,10 @@ delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('saves staged phase, draft and directories before complete app shutdown', async ({ app, appPage, electronApp }, testInfo) => {
+test('saves staged phase, draft and directories before complete app shutdown', async ({ app, appPage, electronApp }, _testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -34,7 +34,7 @@ test('saves staged phase, draft and directories before complete app shutdown', a
   const directoryFixture=JSON.parse(await readFile(join(workspace!,'reference-fixture.json'),'utf8'))
   const firstDirectory=directoryFixture.file.slice(0,directoryFixture.file.lastIndexOf('/')),secondDirectory=directoryFixture.secondFile.slice(0,directoryFixture.secondFile.lastIndexOf('/'))
   const stageDirectory=async(directory:string)=>{
-    await appPage.evaluate(({threadId,directory})=>(window as any).applicationState.system.get('default-setup/threads').send({type:'SEND_COMMAND',command:'cc-add-dir',text:JSON.stringify(directory)}),{threadId:(await context()).threadId,directory})
+    await appPage.evaluate(({threadId: _threadId,directory})=>(window as any).applicationState.system.get('default-setup/threads').send({type:'SEND_COMMAND',command:'cc-add-dir',text:JSON.stringify(directory)}),{threadId:(await context()).threadId,directory})
     await expect.poll(async()=>(await context()).claude.additionalDirs).toContain(directory)
   }
   await stageDirectory(firstDirectory)

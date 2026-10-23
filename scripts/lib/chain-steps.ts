@@ -456,6 +456,7 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  * Build output is not in here, because a guard's subject is source. `typecheck` adds its own.
  */
 const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/packs', 'tests/scripts',
+  'tests/fixtures/claude-research/linux-electron-launch.mjs',
   'tests/tsconfig.json', 'playwright.config.ts', 'types', 'electron-builder.mjs', 'build/build-metadata.ts', 'package.json',
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
@@ -571,7 +572,8 @@ const PACK_SOURCES = ['packages/default-setup/src', 'packages/default-setup/apac
 
 /**
  * What a step reads to derive something from the pack's sources, which `build:default-setup` and `facade:check` both do:
- * those sources, the tsconfig the declaration bundler compiles them with, the committed facade report, and
+ * those sources, the test roots included by that tsconfig and captured during compiler startup,
+ * the tsconfig itself, the committed facade report, and
  * the `@apackdev/cli` bundle that does the deriving.
  *
  * Named once because the two lists are identical and nothing would notice them drifting apart — the failure
@@ -579,7 +581,7 @@ const PACK_SOURCES = ['packages/default-setup/src', 'packages/default-setup/apac
  * *write*, not in what they read: `build:default-setup` declares `PACK_OUTPUTS`, and the check declares nothing.
  */
 const PACK_DERIVED_READS = [...ROOT, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
-  'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
+  'packages/default-setup/tests', 'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
 
 /**
  * What building the fixture packs writes, derived from the fixtures themselves. These sit *inside*
@@ -915,7 +917,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // Build the built-in pack before build:runtime reads its outputs.
   // Includes cold compiler capture, codegen, all bundles and final source/input verification.
   { name: 'build:default-setup', timeout: 'suite', outputs: PACK_OUTPUTS,
-    // Its sources and its manifest, not its tests: `apack pack build` never reads those
+    // Compiler startup captures every root in the pack tsconfig, including its tests.
     //
     // The CLI's sources reach here through `PACKAGE_BUILD_OUTPUTS`, since an edit to them makes the
     // `@apackdev/cli` build unit stale and `packages:ensure` rewrites the bundle this declares — and what the

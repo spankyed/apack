@@ -92,7 +92,7 @@ it.each([true, false])('joins native task status only to its structured Agent re
     beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
-  const entries = () => (fake.messages[0]?.blocks as { props: { entries: { nativeAgent?: unknown }[] } }[])[0].props.entries
+  const entries = () => (fake.messages[0]!.blocks as { props: { entries: { nativeAgent?: unknown }[] } }[])[0].props.entries
   try {
     await vi.waitFor(() => expect(fake.messages).toHaveLength(1))
     expect(entries()[0].nativeAgent).toEqual(matching ? { ...tasks[0], ownerId: 'owner', sessionId } : undefined)
@@ -168,10 +168,11 @@ it('refreshes native file readiness and permission scope without replacing the p
 
 it('publishes targeted Plan/Edit transitions from observed native mode without an approval callback', async () => {
   let release!: () => Promise<void>
+  const readJournal = vi.fn(async () => ({ entries: [], pending: false, problems: [] }))
   const metadata = { cwd: '/workspace', model: 'fixture', turns: 1, startedAt: 100, permissionMode: 'default' }
   const owner = { state: { ownerId: 'owner', sessionId, status: 'live', tasks: [], session: metadata }, busy: false,
     refreshMcpInput: vi.fn(async () => {}), operateMcpUrl: vi.fn(async () => {}), operateMcpForm: vi.fn(async () => {}), cancelMcpInput: vi.fn(async () => {}), refreshNotice: vi.fn(async () => {}), answerNotice: vi.fn(async () => {}), getWorkflowDialogs: vi.fn(async () => []), answerWorkflowDialog: vi.fn(async () => {}), getGenericToolPermissionDialogs: vi.fn(async () => []), answerGenericToolPermissionDialog: vi.fn(async () => {}), getToolPermissionDialogs: vi.fn(async () => []), answerToolPermissionDialog: vi.fn(async () => {}), getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [],
-    readJournal: async () => ({ entries: [], pending: false, problems: [] }), beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
+    readJournal, beforeRelease(listener: () => Promise<void>) { release = listener } } as unknown as ClaudeNativeTerminalOwner
   const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
   syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
   try {
@@ -179,7 +180,8 @@ it('publishes targeted Plan/Edit transitions from observed native mode without a
     metadata.permissionMode = 'plan'
     await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', source: 'native', threadId: 'thread', phase: 'Plan' }))
     const before = fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE').length
-    await new Promise(resolve => setTimeout(resolve, 280))
+    const polls = readJournal.mock.calls.length
+    await vi.waitFor(() => expect(readJournal.mock.calls.length).toBeGreaterThan(polls + 1))
     expect(fake.broadcast.mock.calls.filter(([, event]) => event.type === 'SET_PHASE')).toHaveLength(before)
     metadata.permissionMode = 'acceptEdits'
     await vi.waitFor(() => expect(fake.broadcast).toHaveBeenCalledWith('threads', { type: 'SET_PHASE', source: 'native', threadId: 'thread', phase: 'Edit' }))

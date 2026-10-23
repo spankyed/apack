@@ -1,16 +1,16 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('reviews original native image PDF and notebook results', async ({ app, appPage, electronApp }, testInfo) => {
+test('reviews original native image PDF and notebook results', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
-  const clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
-  const lifetime = async (): Promise<any> => {
+  const _clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
+  const _lifetime = async (): Promise<any> => {
     try { return JSON.parse(await readFile(join(workspace!, 'native-client-lifetime.json'), 'utf8')) }
     catch (error: any) { if (error instanceof SyntaxError || error.code === 'ENOENT') return {}; throw error }
   }

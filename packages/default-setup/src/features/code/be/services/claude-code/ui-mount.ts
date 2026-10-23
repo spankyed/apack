@@ -439,6 +439,7 @@ export function mountClaudeUi(options: {
       if (!action) return { handled: false }
       const isLink = drawing?.links.has(actionId)
       if (isLink) {
+        // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
         if (!href || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return { handled: false }
         try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return { handled: false } } catch { return { handled: false } }
         const allowed = drawing?.links.get(actionId)

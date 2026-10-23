@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -9,10 +9,10 @@ delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('preserves original disabled directory-resource eligibility', async ({ app, appPage, electronApp }, testInfo) => {
+test('preserves original disabled directory-resource eligibility', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -89,7 +89,7 @@ test('preserves original disabled directory-resource eligibility', async ({ app,
     const result=appPage.locator('[data-native-tool-result="resource-directory"]')
     await expect(result).toContainText(entry.details.output)
     const draft='Keep the release-review draft after checking directory availability.';await composer.fill(draft)
-    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await result.evaluate(el=>el.scrollIntoView({block:'center'}));const bounds=await result.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;while(node=walker.nextNode())if(node.textContent?.includes('Directory listing is not enabled')){const range=document.createRange();range.selectNodeContents(node);const b=range.getBoundingClientRect(),clip=document.querySelector('[data-testid="chat-transcript"]')!.getBoundingClientRect();return {top:b.top,bottom:b.bottom,clipTop:clip.top,clipBottom:clip.bottom}}throw Error('Native gate result text missing')});expect(bounds.top).toBeGreaterThanOrEqual(bounds.clipTop);expect(bounds.bottom).toBeLessThanOrEqual(bounds.clipBottom-24);await writeFile(join(workspace!,'native-mcp-directory-visibility-'+width+'.json'),JSON.stringify(bounds));await appPage.screenshot({path:testInfo.outputPath('native-mcp-directory-gate-'+width+'.png')});await composer.scrollIntoViewIfNeeded();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()}
+    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await result.evaluate(el=>el.scrollIntoView({block:'center'}));const bounds=await result.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;while((node=walker.nextNode())!==null)if(node.textContent?.includes('Directory listing is not enabled')){const range=document.createRange();range.selectNodeContents(node);const b=range.getBoundingClientRect(),clip=document.querySelector('[data-testid="chat-transcript"]')!.getBoundingClientRect();return {top:b.top,bottom:b.bottom,clipTop:clip.top,clipBottom:clip.bottom}}throw Error('Native gate result text missing')});expect(bounds.top).toBeGreaterThanOrEqual(bounds.clipTop);expect(bounds.bottom).toBeLessThanOrEqual(bounds.clipBottom-24);await writeFile(join(workspace!,'native-mcp-directory-visibility-'+width+'.json'),JSON.stringify(bounds));await appPage.screenshot({path:testInfo.outputPath('native-mcp-directory-gate-'+width+'.png')});await composer.scrollIntoViewIfNeeded();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()}
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
     await composer.fill('Continue the same session after checking native resource eligibility.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])

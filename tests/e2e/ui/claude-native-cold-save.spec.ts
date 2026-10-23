@@ -1,7 +1,7 @@
 import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
@@ -56,10 +56,10 @@ test('saves native launch, history and draft before a complete app shutdown', as
   await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
   await appPage.locator('.cursor-row-resize').click({button:'right'})
   const composer=card.locator('[contenteditable="true"]')
-  const expected=JSON.parse(await readFile(join(workspace!,'large-document-fixture.json'),'utf8'));
+  const _expected=JSON.parse(await readFile(join(workspace!,'large-document-fixture.json'),'utf8'));
   const draft='Keep the release checklist draft while I inspect the migration registry.';
   const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
-  async function document(kind:string){return appPage.evaluate(kind=>{
+  async function _document(kind:string){return appPage.evaluate(kind=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const pending=Object.values(state.nativeUiViews).map((view:any)=>view.state);let count=0;
     while(pending.length&&++count<20000){const value:any=pending.pop();if(!value||typeof value!=='object')continue;if(value.kind===kind)return {kind:value.kind,source:value.source??value.text,nativeAnsi:value.nativeAnsi,formattingFallback:value.formattingFallback};pending.push(...Object.values(value).filter(value=>value&&typeof value==='object'));}return null;

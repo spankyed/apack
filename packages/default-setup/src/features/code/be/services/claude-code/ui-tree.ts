@@ -28,6 +28,7 @@ const record = (value: unknown): value is Record<string, unknown> =>
 function documentColor(props: Record<string, unknown>): { color?: string } {
   if (props._apackDocumentTheme === undefined) return {}
   const theme = props._apackDocumentTheme
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   if (!record(theme) || typeof theme.text !== 'string' || !theme.text.length || theme.text.length > 128 || /[\u0000-\u001f\u007f]/.test(theme.text)) throw new ClaudeProtocolError('native document theme is invalid')
   return { color: theme.text }
 }
@@ -166,6 +167,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
         paint.borderDimColor = props.borderDimColor
       }
       const hover = readClaudeUiHover(value, props)
+      // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
       const boxKey = props.key === undefined ? undefined : typeof props.key === 'string' && props.key.length > 0 && props.key.length <= 10000 && !/[\u0000-\u001f\u007f]/.test(props.key) ? props.key : false
       const scrollId = plugin && plugin.length <= 256 && typeof boxKey === 'string' && boxKey.length <= 256 ? randomUUID() : undefined
       if (scrollId) scrollBoxes.set(scrollId, { plugin: plugin!, key: boxKey as string })
@@ -175,6 +177,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
       if (!record(value.props) || typeof value.props.href !== 'string' || (value.props.label !== undefined && typeof value.props.label !== 'string')) throw new ClaudeProtocolError('native Link props are invalid')
       const raw = value.props.href
       let href: string | undefined
+      // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
       if (raw.length <= 2048 && !/[\u0000-\u0020\u007f]/.test(raw)) {
         try {
           const url = new URL(raw)
@@ -189,6 +192,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
     }
     if (value.type === 'Svg') {
       const props = value.props
+      // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
       if (!record(props) || typeof props.source !== 'string' || !props.source.length || props.source.length > 131072 || typeof props.alt !== 'string' || /[\u0000-\u001f\u007f]/.test(props.alt) || value.children !== undefined) throw new ClaudeProtocolError('native Svg props are invalid')
       for (const name of ['width', 'height'] as const) {
         const dimension = props[name]

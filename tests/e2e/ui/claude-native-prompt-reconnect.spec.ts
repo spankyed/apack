@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile, rename } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -11,7 +11,7 @@ test.afterEach(async ({ appPage }, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('apack-native-prompt-reconnect-failure.png') }).catch(() => {})
   terminalScreen?.dispose(); terminalScreen = undefined
 })
-test('retains newer parent and Agent drafts when original replies cross API reconnect', async ({ app, appPage, electronApp }, testInfo) => {
+test('retains newer parent and Agent drafts when original replies cross API reconnect', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(125000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false

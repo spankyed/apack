@@ -40,6 +40,7 @@ const modifiedClick = ref(false)
 const documentPaint = computed(() => ({ color: claudeUiColor(props.node.color) }))
 const nativeSpans = computed(() => props.node.nativeAnsi === undefined ? [] : props.node.kind === 'markdown' ? parseClaudeDocument(props.node.nativeAnsi) : parseClaudeStatus(props.node.nativeAnsi))
 function openMarkdownLink(href: string) {
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   if (props.node.kind !== 'markdown' || href.length > 2048 || /[\u0000-\u0020\u007f]/.test(href)) return
   try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return } catch { return }
   if (!modifiedClick.value && props.node.actionId && (!props.node.pressableLinks || props.node.pressableLinks.includes(href))) emit('press', props.node.actionId, href)

@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -11,7 +11,7 @@ else if (['default', 'no-color'].includes(process.env.CLAUDE_RESEARCH_TERMINAL_C
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('honors explicit native color and hyperlink capabilities in the composer', async ({ app, appPage, electronApp }, testInfo) => {
+test('honors explicit native color and hyperlink capabilities in the composer', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
@@ -90,6 +90,7 @@ test('honors explicit native color and hyperlink capabilities in the composer', 
   await writeFile(join(workspace!, 'native-capabilities-render.json'), JSON.stringify({ capabilityProfile, original }))
   expect(original.nativeAnsi.includes('\x1b]8;')).toBe(!disabled)
   // Native terminal rendering may retain emphasis when color is disabled; inspect paint codes separately.
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   const paint = Array.from(original.nativeAnsi.matchAll(/\x1b\[([0-9;]*)m/g) as Iterable<RegExpMatchArray>).some(match => match[1].split(';').map(Number).some(code => code >= 30 && code <= 38 || code >= 40 && code <= 48 || code >= 90 && code <= 97 || code >= 100 && code <= 107))
   expect(paint).toBe(!colorDisabled)
   expect(await markdown.textContent()).toBe(stripVTControlCharacters(original.nativeAnsi))

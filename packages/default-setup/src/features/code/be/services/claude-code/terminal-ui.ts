@@ -25,6 +25,7 @@ export function createClaudeTerminalUiTransport(options: {
       return () => { if (hosts.get(id) === host) promptHosts.detach(id) }
     },
     answers(id) { const host = hosts.get(id); return host && host.available?.() !== false ? ['ui_prompt_read', 'ui_prompt_fill', ...(host.suggest ? ['ui_prompt_suggest'] : []), ...(host.copy ? ['ui_copy'] : []), ...(host.selection ? ['ui_read_selection'] : [])] : [] },
+    // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     detach(id) { hosts.delete(id); for (const pending of [...hostRequests.values()]) if (pending.clientId === id) pending.cancel() },
   }
   const transport: ClaudeTerminalUiTransport = {
@@ -97,6 +98,7 @@ export function createClaudeTerminalUiTransport(options: {
     },
     cancelHost(id: string) { hostRequests.get(id)?.cancel() },
     receive(event: Record<string, unknown>) { if (!closed) for (const listener of listeners) { try { listener(event) } catch { /* isolate mounted views */ } } },
+    // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     close() { closed = true; hosts.clear(); for (const pending of [...hostRequests.values()]) pending.cancel(); listeners.clear(); for (const request of pending) request.destroy(new Error('Native UI owner closed')); pending.clear() },
   }
 }

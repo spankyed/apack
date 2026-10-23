@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -12,7 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('reads native Agent selections and copies excerpts without crossing parent drafts', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -95,7 +95,7 @@ test('reads native Agent selections and copies excerpts without crossing parent 
   const reads=async()=>JSON.parse(await readFile(join(workspace!,'native-agent-selection-receipts.json'),'utf8').catch(()=>'[]'))
   const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-agent-copy-receipts.json'),'utf8').catch(()=>'[]'))
   async function review(container:typeof card){const tools=container.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click();return container.getByRole('button',{name:'Review selected excerpt',exact:true})}
-  async function selectText(target:typeof composer,text:string){await target.evaluate((root,text)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf(text)??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+text.length);const selected=document.getSelection()!;selected.removeAllRanges();selected.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Selected visible text not found')},text)}
+  async function selectText(target:typeof composer,text:string){await target.evaluate((root,text)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while((node=walker.nextNode())!==null){const at=node.textContent?.indexOf(text)??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+text.length);const selected=document.getSelection()!;selected.removeAllRanges();selected.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Selected visible text not found')},text)}
   const agentState=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(c.nativeUiViews).map((view:any)=>view.state?.agent).find((agent:any)=>agent?.messages?.length)})
   await expect.poll(async()=>(await agentState())?.messages.some((message:any)=>message.role==='assistant'&&message.text)).toBe(true)
   const message=(await agentState()).messages.filter((message:any)=>message.role==='assistant'&&message.text).at(-1),selectedTranscript=message.text.trim().split('\n')[0]
@@ -126,7 +126,7 @@ test('reads native Agent selections and copies excerpts without crossing parent 
   const tail=await agentComposer.evaluate(root=>{
     const editor=root.closest('.native-agent-editor')!,body=editor.parentElement!.parentElement!
     editor.scrollTop=editor.scrollHeight;body.scrollTop=body.scrollHeight
-    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null,last:Node|null=null;while(node=walker.nextNode())if(node.textContent?.includes('Release review item 12:'))last=node
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null,last:Node|null=null;while((node=walker.nextNode())!==null)if(node.textContent?.includes('Release review item 12:'))last=node
     if(!last)throw Error('Final draft line missing')
     const range=document.createRange();range.selectNodeContents(last);const bounds=range.getBoundingClientRect(),viewport=body.getBoundingClientRect(),inner=editor.getBoundingClientRect()
     return {top:bounds.top,bottom:bounds.bottom,visibleTop:Math.max(viewport.top,inner.top),visibleBottom:Math.min(viewport.bottom,inner.bottom),text:last.textContent}

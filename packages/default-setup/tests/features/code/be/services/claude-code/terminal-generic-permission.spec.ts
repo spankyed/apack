@@ -19,6 +19,7 @@ function fixture(card = false) {
     { value: 'no', label: 'No', feedbackConfig: { type: 'reject' } },
   ]
   const cancel = vi.fn(() => { if (refuse) return false; open.splice(0); return true })
+  // eslint-disable-next-line unicorn/no-new-array -- Sparse slots model the original native memo cache.
   const control: { options: typeof options; onSelect: typeof select; onCancel?: typeof cancel; defaultFocusValue?: string } = { options, onSelect: select, onCancel: cancel }, cache = new Array(155)
   cache[65] = 'Original full description\nwith a second line'
   cache[123] = 'echo Tool: (MCP)'

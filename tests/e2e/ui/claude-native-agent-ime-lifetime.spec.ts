@@ -6,7 +6,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async({appPage},info) => { if(info.status!==info.expectedStatus)await appPage.screenshot({caret:'initial',path:info.outputPath('agent-ime-lifetime-failure.png')}).catch(()=>{}) })
-test('keeps committed Agent input when native return interrupts genuine Chromium preedit', async ({ app, appPage, electronApp }, testInfo) => {
+test('keeps committed Agent input when native return interrupts genuine Chromium preedit', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false

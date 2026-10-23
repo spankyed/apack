@@ -355,6 +355,7 @@ export class KittyGraphics {
 
   /** Remove the placements matching `predicate`, leaving the image data alone. */
   private dropPlacements(predicate: (p: Placement) => boolean): void {
+    // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     for (const [key, p] of [...this.placements]) {
       if (!predicate(p)) continue;
       this.detach(p);
@@ -1181,6 +1182,7 @@ export class KittyGraphics {
       case 'i':
       case 'n': {
         const id = this.resolveImageId(cmd, false);
+        // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
         for (const [k, p] of [...this.placements]) {
           if (p.imageId !== id) continue;
           this.detach(p);
@@ -1363,6 +1365,7 @@ export class KittyGraphics {
    */
   private onMarkerDisposed(marker: IMarker): void {
     if (this.disposed) return;
+    // eslint-disable-next-line unicorn/no-useless-spread -- Snapshot before callbacks can mutate this live collection.
     for (const [key, p] of [...this.placements]) {
       if (p.marker !== marker) continue;
       this.detach(p);

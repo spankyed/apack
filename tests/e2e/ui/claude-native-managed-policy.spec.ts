@@ -1,11 +1,11 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('keeps native status, submissions and history available under managed-only hooks', async ({ app, appPage, electronApp }, testInfo) => {
+test('keeps native status, submissions and history available under managed-only hooks', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const { restriction, transition } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))

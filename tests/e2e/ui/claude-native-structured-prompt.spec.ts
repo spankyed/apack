@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -97,7 +97,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
     const assistant=appPage.locator('[data-native-selection-row]').filter({hasText:'Fixture completed.'}).first()
     await expect(assistant).toBeVisible()
     const requestId=await assistant.getAttribute('data-native-selection-row')
-    await assistant.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf('Fixture completed.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+7);const selection=document.getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Native assistant text not found')})
+    await assistant.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;while((node=walker.nextNode())!==null){const at=node.textContent?.indexOf('Fixture completed.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+7);const selection=document.getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return}}throw Error('Native assistant text not found')})
     await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(1)
     expect((await selectedReceipts())[0]).toEqual({selected:true,value:{text:'Fixture',requestId}})
     await expect(composer).toHaveText('Review the pending release notes.')
@@ -113,7 +113,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
       if((await sessionTools.getAttribute('aria-expanded')==='true')!==expanded)await sessionTools.click()
       await composer.fill('Review the pending release notes.');await composer.focus()
       await user.scrollIntoViewIfNeeded()
-      const point=await user.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while(node=walker.nextNode()){const at=node.textContent?.indexOf('Review the release notes for this project.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+6);const b=range.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2}}}throw Error('Visible user text not found')})
+      const point=await user.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while((node=walker.nextNode())!==null){const at=node.textContent?.indexOf('Review the release notes for this project.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+6);const b=range.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2}}}throw Error('Visible user text not found')})
       await writeFile(join(workspace!,'native-user-pointer-target-'+width+'.json'),JSON.stringify(await appPage.evaluate(point=>{const el=document.elementFromPoint(point.x,point.y);return {point,hit:el?.outerHTML.slice(0,1500),focus:document.activeElement?.outerHTML.slice(0,500),ancestors:el?[el,...Array.from((function*(node){while(node.parentElement){node=node.parentElement;yield node}})(el))].slice(0,12).map(node=>({tag:node.tagName,class:node.className,select:getComputedStyle(node).userSelect})):[]}},point),null,2))
       await appPage.mouse.dblclick(point.x,point.y)
       await appPage.screenshot({path:testInfo.outputPath('native-user-pointer-diagnostic-'+width+'.png')})

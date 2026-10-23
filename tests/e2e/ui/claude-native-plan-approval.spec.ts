@@ -1,11 +1,11 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('reviews native plans and preserves original mode, context and session choices', async ({ app, appPage, electronApp }, testInfo) => {
+test('reviews native plans and preserves original mode, context and session choices', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
@@ -130,7 +130,7 @@ test('reviews native plans and preserves original mode, context and session choi
   const finalSessionId = (await context()).sessionId
   const journals: Record<string, any[]> = {}
   for (const bucket of await readdir(join(workspace!, '.claude/projects'))) {
-    for (const id of [...new Set([sessionId, finalSessionId])]) {
+    for (const id of new Set([sessionId, finalSessionId])) {
       try { journals[id] = (await readFile(join(workspace!, '.claude/projects', bucket, id + '.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)) } catch (error: any) { if (error.code !== 'ENOENT') throw error }
     }
   }

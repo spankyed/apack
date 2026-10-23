@@ -34,7 +34,7 @@ vi.mock('#features/threads/fe/chat/FileBlock.vue', () => ({ default: { render: (
 vi.mock('#features/threads/fe/chat/ImageThumbnail.vue', () => ({ default: { render: () => null } }))
 
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime({ application: { getSnapshot: surface.getSnapshot, system: { get: () => surface }, subscribe: () => ({ unsubscribe() {} }) } as never }); localStorage.clear() })
-afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
+afterEach(() => { vi.useRealTimers(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
   const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
@@ -71,7 +71,7 @@ it.each(['thread', 'mode', 'phase'] as const)('retires an upload after %s owners
   else if (owner === 'mode') f.state.currentMode = 'Other mode'
   else f.state.currentPhase = 'review'
   await nextTick()
-  editor.commands.setContent('another thread draft'); finish('/media/old.png'); await new Promise(resolve => setTimeout(resolve, 10))
+  editor.commands.setContent('another thread draft'); finish('/media/old.png'); await new Promise<void>(resolve => setImmediate(resolve))
   expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
   expect(editor.state.doc.textContent).toBe('another thread draft')
   expect(attachments.pendingImages.value).toHaveLength(1)
@@ -94,7 +94,7 @@ it('retires an in-flight send when the composer unmounts', async () => {
   const f = mount(() => new Promise<string>(resolve => { finish = resolve }))
   attachments.pendingImages.value = [image('old.png')]; f.submit()
   app!.unmount(); app = undefined
-  finish('/media/old.png'); await new Promise(resolve => setTimeout(resolve, 10))
+  finish('/media/old.png'); await new Promise<void>(resolve => setImmediate(resolve))
   expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
 })
 
@@ -168,8 +168,8 @@ it('keeps native row navigation inside its group and drops stale clicks after ty
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'one' }, { text: 'two' }] } }
   await nextTick()
   const group = f.root.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
-  // The capture listener must see a later event than Vue's newly attached row listener.
-  await new Promise(resolve => setTimeout(resolve, 1))
+  // Put the event after Vue's listener-attachment timestamp without waiting on wall time.
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + 1)
   buttons[0]!.focus(); buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
   expect(document.activeElement).toBe(buttons[1])
   editor.commands.insertContent('x'); await nextTick()
@@ -184,8 +184,8 @@ it('dismisses native offers on Escape and leaves Shift+Tab to normal focus trave
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native' }] } }
   await nextTick()
   const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
-  // Advance one event-loop turn past Vue's listener-attachment timestamp guard.
-  await new Promise(resolve => setTimeout(resolve, 1))
+  // Put the event after Vue's listener-attachment timestamp without waiting on wall time.
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + 1)
   const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
   row.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false)
   row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()

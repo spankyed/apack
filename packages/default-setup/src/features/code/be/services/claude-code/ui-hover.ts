@@ -13,6 +13,7 @@ export function readClaudeUiHover(node: Record<string, unknown>, props: Record<s
   const bad = () => { throw new ClaudeProtocolError('native UI hover is invalid') }
   if (hover.scope !== undefined) {
     const stamp = node.type === 'Button' ? node.press : node.group
+    // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
     if (typeof hover.scope !== 'string' || !hover.scope.length || hover.scope.length > 64 || /[\u0000-\u001f\u007f]/.test(hover.scope)
       || !record(stamp) || typeof stamp.plugin !== 'string' || !stamp.plugin) bad()
     result.group = JSON.stringify([(stamp as Record<string, unknown>).plugin, hover.scope])

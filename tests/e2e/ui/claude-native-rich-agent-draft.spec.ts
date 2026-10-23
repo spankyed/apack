@@ -10,7 +10,7 @@ const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'
 const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp }, testInfo) => {
+test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false

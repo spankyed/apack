@@ -20,6 +20,7 @@ function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
   let href: string | undefined
   let style: Record<string, string> = {}, foreground: string | undefined, background: string | undefined, inverse = false
   function append(value: string) {
+    // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
     const clean = value.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
     if (!clean) return
     const paint = { ...style }
@@ -27,18 +28,21 @@ function parseNativeText(text: string, links: boolean): ClaudeStatusSpan[] {
     if (background || inverse) paint.backgroundColor = inverse ? foreground ?? '#d4d4d4' : background!
     spans.push({ text: clean, style: paint, ...(href ? { href } : {}) })
   }
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   const controls = /\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b\][\s\S]*$|\x1b\[[0-?]*[ -/]*[@-~]|\x1b./g
   let cursor = 0
   for (const match of text.matchAll(controls)) {
     append(text.slice(cursor, match.index)); cursor = match.index! + match[0].length
     if (links && match[0].startsWith('\x1b]8;')) {
       href = undefined
+      // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
       const link = /^\x1b\]8;[^;]*;([^\x00-\x20\x7f]*)(?:\x07|\x1b\\)$/.exec(match[0])?.[1]
       if (link && link.length <= 2048) {
         try { if (['https:', 'http:', 'file:'].includes(new URL(link).protocol)) href = link } catch { /* invalid URL stays plain text */ }
       }
       continue
     }
+    // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
     if (!/^\x1b\[[0-9;]*m$/.test(match[0])) continue
     const codes = match[0].slice(2, -1).split(';').map(value => Number(value || 0))
     for (let i = 0; i < codes.length; i++) {

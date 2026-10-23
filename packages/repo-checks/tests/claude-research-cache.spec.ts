@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import * as path from 'node:path';
+import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { expect, it } from 'vitest';
 
 it('bounds replay storage and refuses concurrent, foreign and symlinked deletion', () => {
-  const script = fileURLToPath(new URL('../../../scripts/claude-research-ci.py', import.meta.url));
+  const script = path.join(REPO_ROOT, 'scripts', 'claude-research-ci.py');
   const output = execFileSync('python3', ['-B', '-c', String.raw`
 import importlib.util, os, tempfile, sys
 from pathlib import Path

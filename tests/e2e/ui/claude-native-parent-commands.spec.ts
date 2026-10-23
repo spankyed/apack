@@ -146,6 +146,7 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   const commandHistory = () => appPage.evaluate(() => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return (c.currentThread?.messages ?? []).filter((m: any) => m.context?.claudeNativeCommand).map((m: any) => ({ sender: m.sender, text: m.text, uuid: m.context.cliUuid, command: m.context.claudeNativeCommand, human: m.context.claudeNativeUserMessage })) })
   await expect.poll(async () => (await commandHistory()).find((m: any) => m.uuid === compact.messageId)).toMatchObject({ sender: 'user', text: '/compact', command: { kind: 'invocation' } })
   await expect.poll(async () => (await commandHistory()).some((m: any) => m.sender === 'assistant' && m.command.kind === 'output' && m.text.startsWith('Compacted'))).toBe(true)
+  // eslint-disable-next-line no-control-regex -- Match or reject native terminal control sequences explicitly.
   expect((await commandHistory()).every((m: any) => !m.human && !/<(?:command-name|command-message|command-args|local-command-stdout)>|\u001b/.test(m.text))).toBe(true)
   await expect(appPage.locator('[data-testid="chat-transcript"]')).not.toContainText('<command-name>')
   await expect(appPage.locator('[data-testid="chat-transcript"]')).not.toContainText('<local-command-stdout>')

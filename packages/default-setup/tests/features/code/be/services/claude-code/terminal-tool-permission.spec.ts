@@ -15,8 +15,9 @@ function fixture(skill = false) {
   const control = skill ? { options, onSelect: decide } : { options, onChange: decide }
   function VCe() {} function WCe() {} function Xe() {}
   const producer = skill ? WCe : VCe
+  // eslint-disable-next-line unicorn/no-new-array -- Sparse slots model the original native memo cache.
   const cache = new Array(skill ? 48 : 53)
-  cache[cache.length - 1] = { props: { title: skill ? 'Use skill \"release-review\"?' : 'Fetch' } }
+  cache[cache.length - 1] = { props: { title: skill ? 'Use skill "release-review"?' : 'Fetch' } }
   if (skill) { cache[28] = { display: 'release-review' }; cache[6] = { text: 'Review release notes' } }
   else { cache[3] = { kind: 'full', text: 'https://example.test/notes' }; cache[5] = { text: 'Summarize the notes' } }
   const fiber = { updateQueue: { memoCache: { data: [cache] } }, type: producer, memoizedProps: { payload, wouldTakeAnswer: () => ready }, child: { type: Xe, memoizedProps: control } }
