@@ -134,6 +134,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
         if (step.scenario === 'modern-confirm') await capturePhase('prompt')
         await panel.getByRole('button', { name: 'Open in browser', exact: true }).click()
         await expect(panel.getByRole('button', { name: 'Open again', exact: true })).toBeEnabled()
+        await expect.poll(() => readFile(join(workspace!, 'native-mcp-url-browser.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(row => row.phase === step.phase).length)).toBe(1)
         expect((await frame())?.phase).toBe('prompt'); expect((await frame())?.id).toBe(original.id)
         if (step.scenario === 'modern-confirm') {
           await panel.getByRole('button', { name: 'Open again', exact: true }).click()
