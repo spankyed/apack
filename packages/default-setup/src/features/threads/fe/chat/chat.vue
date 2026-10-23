@@ -42,6 +42,7 @@
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
+          <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
           <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
@@ -242,6 +243,7 @@ import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
 import NativeMcpForm from './NativeMcpForm.vue'
+import NativeMcpUrl from './NativeMcpUrl.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
@@ -310,6 +312,12 @@ function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts
   if (!mount || !owner || !form) return
   actor.send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
     request: { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, action } })
+}
+function operateMcpUrl(action: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlOperation) {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value, url = owner?.mcpUrl
+  if (!mount || !owner || !url) return
+  actor.send({ type: 'CLAUDE_TERMINAL_MCP_URL', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+    request: { id: url.id, revision: url.revision, sessionId: url.sessionId, token: url.token, action } })
 }
 const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
 const pageSelection = provideClaudeUiSelection(() => composerAreaRef.value)
@@ -997,7 +1005,8 @@ watch(messagesContent, (el, _, onCleanup) => {
 <style scoped>
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
 .native-chat-shell:has([data-native-command-panel]),
-.native-chat-shell:has([data-testid="native-mcp-form"]) { min-height: calc(100vh - 3rem); }
+.native-chat-shell:has([data-testid="native-mcp-form"]),
+.native-chat-shell:has([data-testid="native-mcp-url"]) { min-height: calc(100vh - 3rem); }
 </style>
 
 <style lang="scss" module>

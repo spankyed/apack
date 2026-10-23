@@ -1,16 +1,18 @@
 /** Borrow only the original mounted form's field and keyboard callbacks; native retains validation. */
 export const claudeTerminalMcpFormRuntime = String.raw`
-function nativeMcpFormDialog(n){
+function nativeMcpDialog(n,mode='form'){
  const binding=originalContext??n.runtime.ey();if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native MCP form is not ready');
  const sessionId=JSON.parse(readFileSync(configUrl,'utf8')).sessionId;
  if(String(n.questionOptions.q())!==sessionId)throw Error('Native MCP form session changed');
  const store=binding.toolContext(new AbortController()).dialogStore,open=store.getState().open,item=open.length===1?open[0]:undefined,payload=item?.payload;
- if(item?.kind!=='mcp_elicitation'||payload?.params?.mode==='url'){dialogRevisions.delete('mcp_elicitation');return {store,sessionId};}
- if(typeof payload?.serverName!=='string'||typeof payload.params?.message!=='string'||!payload.params.requestedSchema||typeof payload.params.requestedSchema!=='object')throw Error('Invalid original MCP form payload');
+ const revisionKey=mode==='url'?'mcp_url_input':'mcp_elicitation';
+ const matches=mode==='url'?['mcp_elicitation','mcp_url_elicitation','mcp_elicitation_waiting'].includes(item?.kind)&&payload?.params?.mode==='url':item?.kind==='mcp_elicitation'&&payload?.params?.mode!=='url';
+ if(!matches){dialogRevisions.delete(revisionKey);return {store,sessionId};}
+ if(typeof payload?.serverName!=='string'||typeof payload.params?.message!=='string'||(mode==='url'?typeof payload.params.url!=='string':!payload.params.requestedSchema||typeof payload.params.requestedSchema!=='object'))throw Error('Invalid original MCP form payload');
  const fingerprint=JSON.stringify(payload);if(fingerprint.length>131072)throw Error('Native MCP form payload exceeded bound');
- let revision=dialogRevisions.get('mcp_elicitation');
+ let revision=dialogRevisions.get(revisionKey);
  if(revision?.item!==item||revision.payload!==payload||revision.fingerprint!==fingerprint||revision.sessionId!==sessionId)revision={item,payload,sessionId,fingerprint,revision:randomUUID()};
- dialogRevisions.set('mcp_elicitation',revision);return {store,...revision};
+ dialogRevisions.set(revisionKey,revision);return {store,...revision};
 }
 function mcpFunctionHash(fn){let hash=composerFunctionHashes.get(fn);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fn)).digest('hex');composerFunctionHashes.set(fn,hash);}return hash;}
 function nativeMcpFormSource(n,d){
@@ -48,10 +50,10 @@ function nativeMcpFormPresentation(n,d){
  return {...facts,token:createHash('sha256').update(encoded).digest('hex')};
 }
 async function operateNativeMcpForm(n,request,signal){
- signal.throwIfAborted();const d=nativeMcpFormDialog(n),shown=nativeMcpFormPresentation(n,d),cancelling=request.action?.operation==='cancel';
+ signal.throwIfAborted();const d=nativeMcpDialog(n),shown=nativeMcpFormPresentation(n,d),cancelling=request.action?.operation==='cancel';
  // Cancellation addresses the original dialog, independent of asynchronous field validation.
  if(!shown||!shown.ready||request.id!==shown.id||request.revision!==shown.revision||request.session_id!==shown.sessionId||!cancelling&&request.token!==shown.token)throw Error('Native MCP form changed or is not ready');
- const current=()=>{signal.throwIfAborted();const dialog=nativeMcpFormDialog(n);if(dialog.item!==d.item||dialog.payload!==d.payload||dialog.revision!==d.revision)throw Error('Native MCP form expired');const source=nativeMcpFormSource(n,dialog);if(!source?.ready)throw Error('Native MCP form controls are not ready');return source;};
+ const current=()=>{signal.throwIfAborted();const dialog=nativeMcpDialog(n);if(dialog.item!==d.item||dialog.payload!==d.payload||dialog.revision!==d.revision)throw Error('Native MCP form expired');const source=nativeMcpFormSource(n,dialog);if(!source?.ready)throw Error('Native MCP form controls are not ready');return source;};
  const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
  const key=async value=>{current().key({key:value,ctrl:false,meta:false,shift:false,preventDefault(){}});await settle();};
  const focus=async index=>{for(let step=0;step<shown.propertyOrder.length+3;step++){const f=current().fields,at=f.currentFieldIndex??(f.focusedButton==='accept'?f.schemaFields.length:f.focusedButton==='decline'?f.schemaFields.length+1:0);if(at===index)return;await key('down');}throw Error('Original MCP field navigation did not settle');};
@@ -86,6 +88,6 @@ async function operateNativeMcpForm(n,request,signal){
    current().fields.handleTextInputChange(String(value));await settle();
   }
  }else{await focus(shown.propertyOrder.length+(action.operation==='decline'?1:0));const grace=n.mcpInputTiming.AM;if(!Number.isSafeInteger(grace)||grace<0||grace>1000)throw Error('Original MCP input timing changed');await new Promise(resolve=>setTimeout(resolve,grace));await key('return');}
- await settle();signal.throwIfAborted();const after=nativeMcpFormDialog(n);return {settled:after.item!==d.item,form:after.item===d.item?nativeMcpFormPresentation(n,after):undefined};
+ await settle();signal.throwIfAborted();const after=nativeMcpDialog(n);return {settled:after.item!==d.item,form:after.item===d.item?nativeMcpFormPresentation(n,after):undefined};
 }
 `

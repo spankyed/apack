@@ -10,7 +10,7 @@ async function fixture() {
   f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
   const prepared = await prepareClaudeNativeTerminal({ sessionId: f.projection.sessionId, cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: { effective: {}, sources: [] } }), owner = await prepared.start()
   const form = { id: 'original', revision: randomUUID(), sessionId: f.projection.sessionId, token: 'a'.repeat(64), ready: true, serverName: 'Research', message: 'Review', schema: { type: 'object', properties: {} }, propertyOrder: [], values: { enabled: false, count: 0 }, errors: {}, resolvingFields: [], focusedButton: 'accept', textInputValue: '' }
-  f.request.mockResolvedValueOnce({ form }); await owner.refreshMcpForm()
+  f.request.mockResolvedValueOnce({ form }); await owner.refreshMcpInput()
   const request = { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, action: { operation: 'cancel' as const } }
   return { prepared, owner, form, request }
 }
@@ -18,7 +18,7 @@ it('ignores an older refresh completed after a newer original field operation', 
   const { prepared, owner, form, request } = await fixture()
   try {
     let resolve!: (value: unknown) => void; f.request.mockImplementationOnce(() => new Promise(done => { resolve = done }))
-    const old = owner.refreshMcpForm(), next = { ...form, token: 'b'.repeat(64) }
+    const old = owner.refreshMcpInput(), next = { ...form, token: 'b'.repeat(64) }
     f.request.mockResolvedValueOnce({ settled: false, form: next }); await owner.operateMcpForm(request)
     resolve({ form }); await old; expect(owner.state.mcpForm?.token).toBe(next.token)
   } finally { await prepared.dispose() }
@@ -34,7 +34,7 @@ it('requires matching explicit native acknowledgement and refuses concurrent or 
 })
 it('withdraws an old form when refreshing its original renderer fails', async () => {
   const { prepared, owner } = await fixture()
-  try { f.request.mockRejectedValueOnce(Error('Original renderer changed')); await expect(owner.refreshMcpForm()).rejects.toThrow('changed'); expect(owner.state.mcpForm).toBeUndefined() }
+  try { f.request.mockRejectedValueOnce(Error('Original renderer changed')); await expect(owner.refreshMcpInput()).rejects.toThrow('changed'); expect(owner.state.mcpForm).toBeUndefined() }
   finally { await prepared.dispose() }
 })
 it('does not restore form state from an operation completed after owner exit', async () => {
@@ -49,7 +49,7 @@ it('retires only the captured MCP request after an already admitted field operat
   try {
     let finish!: (value: unknown) => void; f.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
     const edit = owner.operateMcpForm({ ...request, action: { operation: 'edit', field: 'title', value: 'updated' } })
-    const retire = owner.cancelMcpForm(form)
+    const retire = owner.cancelMcpInput(form)
     await expect(owner.operateMcpForm(request)).rejects.toThrow('busy')
     const next = { ...form, token: 'b'.repeat(64) }; f.request.mockResolvedValueOnce({ form: next }).mockResolvedValueOnce({ settled: true })
     finish({ settled: false, form: next }); await edit; await retire
@@ -61,7 +61,7 @@ it.each(['removed', 'replaced'] as const)('preserves a %s MCP request during cap
   const { prepared, owner, form } = await fixture()
   try {
     f.request.mockResolvedValueOnce({ form: condition === 'removed' ? undefined : { ...form, id: 'replacement', revision: randomUUID() } })
-    await owner.cancelMcpForm(form)
+    await owner.cancelMcpInput(form)
     expect(f.request.mock.calls.filter(([request]) => request.subtype === 'apack_operate_mcp_form')).toHaveLength(0)
     expect(owner.state.mcpForm?.id).toBe(condition === 'removed' ? undefined : 'replacement')
   } finally { await prepared.dispose() }
@@ -71,8 +71,34 @@ it('does not restore a retired form from a refresh begun before captured-request
   const { prepared, owner, form } = await fixture()
   try {
     let resolve!: (value: unknown) => void; f.request.mockImplementationOnce(() => new Promise(done => { resolve = done }))
-    const old = owner.refreshMcpForm(); f.request.mockResolvedValueOnce({})
-    await owner.cancelMcpForm(form); resolve({ form }); await old
+    const old = owner.refreshMcpInput(); f.request.mockResolvedValueOnce({})
+    await owner.cancelMcpInput(form); resolve({ form }); await old
     expect(owner.state.mcpForm).toBeUndefined()
+  } finally { await prepared.dispose() }
+})
+
+function originalUrl(form: Awaited<ReturnType<typeof fixture>>['form']) {
+  return { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, ready: true, kind: 'mcp_elicitation', serverName: 'research', message: 'Review', url: 'https://example.invalid/review', title: 'Original URL input', phase: 'prompt', userConfirmsCompletion: false, choices: [{ operation: 'accept', label: 'Accept', selected: true }], warnings: [] }
+}
+it('projects original URL phase acknowledgements and retires the addressed URL through its own native channel', async () => {
+  const { prepared, owner, form, request } = await fixture()
+  try {
+    const url = originalUrl(form); f.request.mockResolvedValueOnce({ url }); await owner.refreshMcpInput()
+    expect(owner.state.mcpForm).toBeUndefined(); expect(owner.state.mcpUrl?.phase).toBe('prompt')
+    await expect(owner.operateMcpForm(request)).rejects.toThrow('changed')
+    f.request.mockResolvedValueOnce({ settled: false, url: { ...url, phase: 'waiting', token: 'b'.repeat(64) } })
+    await owner.operateMcpUrl({ ...request, action: { operation: 'accept' } }); expect(owner.state.mcpUrl?.phase).toBe('waiting')
+    const waiting = owner.state.mcpUrl!; f.request.mockResolvedValueOnce({ url: waiting }).mockResolvedValueOnce({ settled: true })
+    await owner.cancelMcpInput(waiting)
+    expect(f.request.mock.calls.at(-1)![0]).toMatchObject({ subtype: 'apack_operate_mcp_url', id: waiting.id, token: waiting.token, action: { operation: 'cancel' } })
+    expect(owner.state.mcpUrl).toBeUndefined()
+  } finally { await prepared.dispose() }
+})
+it('withdraws ambiguous simultaneous form/URL snapshots instead of exposing competing input owners', async () => {
+  const { prepared, owner, form } = await fixture()
+  try {
+    f.request.mockResolvedValueOnce({ form, url: originalUrl(form) })
+    await expect(owner.refreshMcpInput()).rejects.toThrow('ambiguous')
+    expect(owner.state.mcpForm).toBeUndefined(); expect(owner.state.mcpUrl).toBeUndefined()
   } finally { await prepared.dispose() }
 })

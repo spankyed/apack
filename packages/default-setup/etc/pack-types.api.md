@@ -1458,8 +1458,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1475,8 +1475,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1917,10 +1917,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     focusedButton: z.ZodNullable<z.ZodEnum<["accept", "decline"]>>;
     textInputValue: z.ZodString;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1933,10 +1933,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: string;
     currentFieldIndex?: number | undefined;
 }, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1948,6 +1948,93 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     focusedButton: "accept" | "decline" | null;
     textInputValue: string;
     currentFieldIndex?: number | undefined;
+}>;
+
+type ClaudeNativeMcpUrl = z.infer<typeof ClaudeNativeMcpUrlSchema>;
+
+type ClaudeNativeMcpUrlOperation = z.infer<typeof ClaudeNativeMcpUrlOperationSchema>;
+
+declare const ClaudeNativeMcpUrlOperationSchema: z.ZodObject<{
+    operation: z.ZodEnum<["open", "accept", "decline", "continue", "cancel"]>;
+}, "strict", z.ZodTypeAny, {
+    operation: "accept" | "cancel" | "continue" | "decline" | "open";
+}, {
+    operation: "accept" | "cancel" | "continue" | "decline" | "open";
+}>;
+
+interface ClaudeNativeMcpUrlRequest {
+    id: string;
+    revision: string;
+    sessionId: string;
+    token: string;
+    action: ClaudeNativeMcpUrlOperation;
+}
+
+declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+    token: z.ZodString;
+    ready: z.ZodBoolean;
+    kind: z.ZodEnum<["mcp_elicitation", "mcp_url_elicitation", "mcp_elicitation_waiting"]>;
+    serverName: z.ZodString;
+    message: z.ZodString;
+    url: z.ZodString;
+    title: z.ZodString;
+    phase: z.ZodEnum<["prompt", "waiting"]>;
+    userConfirmsCompletion: z.ZodBoolean;
+    choices: z.ZodArray<z.ZodObject<{
+        operation: z.ZodEnum<["open", "accept", "decline", "continue", "cancel"]>;
+        label: z.ZodString;
+        selected: z.ZodBoolean;
+    }, "strip", z.ZodTypeAny, {
+        label: string;
+        operation: "accept" | "cancel" | "continue" | "decline" | "open";
+        selected: boolean;
+    }, {
+        label: string;
+        operation: "accept" | "cancel" | "continue" | "decline" | "open";
+        selected: boolean;
+    }>, "many">;
+    warnings: z.ZodArray<z.ZodString, "many">;
+}, "strip", z.ZodTypeAny, {
+    ready: boolean;
+    revision: string;
+    message: string;
+    id: string;
+    kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
+    sessionId: string;
+    token: string;
+    serverName: string;
+    url: string;
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
+    choices: {
+        label: string;
+        operation: "accept" | "cancel" | "continue" | "decline" | "open";
+        selected: boolean;
+    }[];
+    warnings: string[];
+}, {
+    ready: boolean;
+    revision: string;
+    message: string;
+    id: string;
+    kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
+    sessionId: string;
+    token: string;
+    serverName: string;
+    url: string;
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
+    choices: {
+        label: string;
+        operation: "accept" | "cancel" | "continue" | "decline" | "open";
+        selected: boolean;
+    }[];
+    warnings: string[];
 }>;
 
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
@@ -2853,9 +2940,10 @@ interface ClaudeNativeTerminalOwner {
         sequence: number;
         text: string;
     }[];
-    refreshMcpForm(): Promise<void>;
+    refreshMcpInput(): Promise<void>;
     operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
-    cancelMcpForm(expected: Pick<ClaudeNativeMcpForm, 'id' | 'revision' | 'sessionId'>): Promise<void>;
+    operateMcpUrl(request: ClaudeNativeMcpUrlRequest): Promise<void>;
+    cancelMcpInput(expected: Pick<ClaudeNativeMcpForm, 'id' | 'revision' | 'sessionId'>): Promise<void>;
     refreshNotice(): Promise<void>;
     answerNotice(response: ClaudeNativeNoticeResponse): Promise<void>;
     readJournal(): Promise<ClaudeNativeJournalBatch>;
@@ -2931,6 +3019,7 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    mcpUrl?: ClaudeNativeMcpUrl;
     mcpForm?: ClaudeNativeMcpForm;
     notice?: ClaudeNativeNotice;
     /** Original native selected view, independent of the app thread. Undefined until observed. */
@@ -3755,6 +3844,11 @@ type ClaudeTerminalViewRequest = {
     type: 'CLAUDE_TERMINAL_NOTICE';
     ownerId: string;
     notice: ClaudeNativeNoticeResponse;
+} | {
+    type: 'CLAUDE_TERMINAL_MCP_URL';
+    ownerId: string;
+    sequence: number;
+    request: ClaudeNativeMcpUrlRequest;
 } | {
     type: 'CLAUDE_TERMINAL_MCP_FORM';
     ownerId: string;

@@ -1,3 +1,4 @@
+import { claudeTerminalMcpUrlRuntime } from './terminal-mcp-url-runtime.ts'
 import { claudeTerminalMcpFormRuntime } from './terminal-mcp-form-runtime.ts'
 import { claudeTerminalGenericPermissionRuntime } from './terminal-generic-permission-runtime.ts'
 import { claudeTerminalToolPermissionRuntime } from './terminal-tool-permission-runtime.ts'
@@ -490,6 +491,7 @@ function drainCompletion(n,clientId,state){
 const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
 let mcpControlActive=false;
 ${claudeTerminalMcpFormRuntime}
+${claudeTerminalMcpUrlRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
@@ -769,8 +771,9 @@ async function control(request,abort){
   else{const result=request.decision==='allow'?{behavior:'allow',updatedInput:d.payload.input}:{behavior:'deny',...(request.feedback?{feedback:request.feedback}:{})};d.store.answer(d.item.id,result);}
   dialogRevisions.delete('permission_bash');return {answered:true};
  }
- if(request.subtype==='apack_mcp_form'){const d=nativeMcpFormDialog(n);return {form:nativeMcpFormPresentation(n,d)};}
+ if(request.subtype==='apack_mcp_input'){const form=nativeMcpDialog(n),url=nativeMcpDialog(n,'url');return {form:nativeMcpFormPresentation(n,form),url:nativeMcpUrlPresentation(n,url)};}
  if(request.subtype==='apack_operate_mcp_form')return operateNativeMcpForm(n,request,abort.signal);
+ if(request.subtype==='apack_operate_mcp_url')return operateNativeMcpUrl(n,request,abort.signal);
  if(request.subtype==='apack_generic_tool_permission_dialogs'){
   const d=nativeDialog(n,'permission_prompt');if(!d.item)return {dialogs:[]};
   const shown=await nativeGenericPermissionChoices(n,d),{source,...presentation}=shown;

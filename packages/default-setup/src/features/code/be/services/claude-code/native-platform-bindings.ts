@@ -458,6 +458,9 @@ export const claudeNativeLinuxBindings: {
   },
   "functionNames": {
     "ZCo": "m_o",
+    "e_o": "p_o",
+    "t_o": "f_o",
+    "tke": "ske",
     "tet": "iet",
     "Fet": "Wet",
     "nvt": "Vvt",
@@ -483,6 +486,10 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "72bb984b5b6cf53a450e67dd52de7baf2f73defd50f4d9072e90c0699bd692cc": "4a9772762e4f092736d8e6aa40ff695d8ed5bf00d78b0a96a928d2f482c2c500",
+    "77f448ae7516bdbfe0eb0551bad38f50cc372347ef95beaf2a87b9d6a8fdcdcc": "cd3282ce3b6ea6f668a46425945662b457d59fabb507853e1f975feee2d0c9d0",
+    "72edfab66d939fee12559ff708e9fa21a67c9cceb84a7937b7c1b0d994c7a747": "4dc2845fd34894d5f3ae8f56dace344a119435b62480bba93ad735616e231663",
+    "552e78fe6f71f1e00ff8623b17c2a438cad341a521d8612d80f291b28ac62c2d": "599be1da0f2304e9502c340cbcd0b5ec2f9c3ba0ca2ee418d068ba34c807878a",
     "275d086d7b1ac78d0b4b1939853b2a4fe61e3bc9062ab8c6e7fb281589c3c2db": "19dfe0b34faf911b552505295edf61552342b1693db35368422ec24188057bb2",
     "ba2a4f9045e565e0ac28db116418d4758517b2a2007cc6ae64a40ec73fc4277d": "f9ab5cf602703c4ea7dd602d9e75579c8e06cded225d9e27ee9259920c2d4a23",
     "c09e34983d996a1a05efed050f5a2f796a68dc838f95090729f83ee627eabb16": "de1c22efcb2efc173ef34470a1588e3d3c79b4abf68ae8e545e733834558e0cb",

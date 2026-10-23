@@ -127,7 +127,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           lastTaskSnapshot = taskSnapshot
           for (const entry of agentRows.values()) upsert(entry)
         }
-        await owner.refreshMcpForm()
+        await owner.refreshMcpInput()
         await owner.refreshNotice()
         const genericPermissions = await owner.getGenericToolPermissionDialogs()
         const toolPermissions = await owner.getToolPermissionDialogs()
