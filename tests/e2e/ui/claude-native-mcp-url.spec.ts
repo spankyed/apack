@@ -92,13 +92,14 @@ test('uses original terminal URL decisions, waiting and completion with cancella
 
 
 
+  const modern = process.env.CLAUDE_RESEARCH_MCP_MODERN === '1'
   const retry = process.env.CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY === '1'
   const draft = 'Keep my release notes while I confirm browser input.'
   const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
   const nativeWindow = await electronApp.browserWindow(appPage)
   const panel = appPage.getByTestId('native-mcp-url')
   const frame = async () => (await context()).native?.state?.mcpUrl
-  async function capturePhase(phase: 'prompt' | 'waiting') {
+  async function capturePhase(phase: 'prompt' | 'waiting' | 'opened') {
     for (const [width, height] of [[1100, 900], [680, 600]]) {
       await appPage.setViewportSize({ width, height })
       for (const control of [panel.locator('h3'), panel.locator('code'), ...await panel.getByRole('button').all(), card.getByRole('button', { name: 'Send', exact: true })]) await expect(control).toBeInViewport({ ratio: 1 })
@@ -109,7 +110,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await expect(composer).toHaveText(draft)
     }
   }
-  const cases = (retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (retry ? 14 : 8), scenario }))
+  const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
     await appPage.setViewportSize({ width: 1100, height: 900 })
     await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), String(step.phase))
@@ -122,9 +123,28 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     await writeFile(join(workspace!, 'mcp-elicitation-model-release-' + step.phase), 'Draft retained before original MCP URL request')
     const approval = appPage.getByTestId('native-mcp__research__echo-approval')
     await expect(approval).toBeVisible({ timeout: 20000 }); await expect(approval.locator('button.approve')).toBeEnabled(); await approval.locator('button.approve').click(); await expect(approval).toBeHidden()
-    await expect(panel).toBeVisible({ timeout: 15000 }); await expect(panel.getByRole('button', { name: 'Accept', exact: true })).toBeEnabled()
-    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(false); await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
-    if (retry) {
+    await expect(panel).toBeVisible({ timeout: 15000 }); await expect(panel.getByRole('button', { name: modern ? "I'm done, continue" : 'Accept', exact: true })).toBeEnabled()
+    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
+    if (modern) {
+      expect(original.kind).toBe('mcp_elicitation')
+      if (step.scenario === 'modern-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
+      else if (step.scenario === 'modern-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      else if (step.scenario === 'modern-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
+      else {
+        if (step.scenario === 'modern-confirm') await capturePhase('prompt')
+        await panel.getByRole('button', { name: 'Open in browser', exact: true }).click()
+        await expect(panel.getByRole('button', { name: 'Open again', exact: true })).toBeEnabled()
+        expect((await frame())?.phase).toBe('prompt'); expect((await frame())?.id).toBe(original.id)
+        if (step.scenario === 'modern-confirm') {
+          await panel.getByRole('button', { name: 'Open again', exact: true }).click()
+          await expect.poll(() => readFile(join(workspace!, 'native-mcp-url-browser.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(row => row.phase === step.phase).length)).toBe(2)
+          const receipts = (await readFile(join(workspace!, 'mcp-elicitation-receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === step.phase)
+          expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
+          await expect(panel.getByRole('button', { name: "I'm done, continue", exact: true })).toBeEnabled(); await capturePhase('opened')
+          await panel.getByRole('button', { name: "I'm done, continue", exact: true }).click()
+        } else await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      }
+    } else if (retry) {
       expect(original.kind).toBe('mcp_url_elicitation')
       if (step.scenario === 'url-retry-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
       else if (step.scenario === 'url-retry-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -183,6 +203,6 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, originalRetry: retry, wrongCompletionIgnored: !retry, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpUrlApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
