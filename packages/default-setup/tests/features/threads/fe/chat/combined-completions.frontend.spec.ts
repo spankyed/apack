@@ -3,14 +3,14 @@ import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import { Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { Plugin } from '@tiptap/pm/state'
-import CommandPopup from '#extensions/tiptap/CommandSuggestionPopup.vue'
+import CommandPopup from '@apackdev/ui/components/tiptap/CommandSuggestionPopup'
 import ReferencePopup from '#extensions/tiptap/ReferenceSuggestionPopup.vue'
-import { commandSuggestionPluginKey } from '#extensions/tiptap/command-suggestion-plugin.ts'
-import { referenceSuggestionPluginKey } from '#extensions/tiptap/reference-plugin-key.ts'
-import { setClaudeCompletionOffer } from '#extensions/tiptap/claude-completions.ts'
+import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
+import { referenceSuggestionKey } from '#extensions/tiptap/reference-suggestion.ts'
+import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
 
 const fixture = vi.hoisted(() => ({ empty: false }))
-vi.mock('#extensions/tiptap/useCommandItems.ts', async () => {
+vi.mock('@apackdev/ui/components/tiptap/composables/useCommandItems', async () => {
   const { ref } = await import('vue')
   return { useCommandItems: () => ({ commands: ref(fixture.empty ? [] : [{ name: 'host-command', description: 'Host' }]) }) }
 })
@@ -27,7 +27,7 @@ function mount(kind: 'command' | 'reference') {
   if (kind === 'command') editor.registerPlugin(new Plugin({ key: commandSuggestionPluginKey, state: { init: () => ({ active: true, query: 'h', selectedCommand: null, previousCommand: null }), apply: (_tr, state) => state } }))
   else editor.registerPlugin(new Plugin({ key: referenceSuggestionPluginKey, state: { init: () => ({ active: true, query: 'n', triggerPos: 1, level: 'category' as const, selectedCategory: null, categoryQuery: '' }), apply: (_tr, state) => state } }))
   const select = vi.fn(() => true), dismiss = vi.fn()
-  setClaudeCompletionOffer(editor, { id: 'offer-one', rows: [{ text: 'native-result', label: 'Native row', select }], dismiss })
+  setEditorCompletionOffer(editor, { id: 'offer-one', rows: [{ text: 'native-result', label: 'Native row', select }], dismiss })
   const root = document.createElement('div'); document.body.append(root, editor.view.dom)
   app = createApp({ render: () => h(kind === 'command' ? CommandPopup : ReferencePopup, { editor }) }); app.mount(root)
   return { select, dismiss }

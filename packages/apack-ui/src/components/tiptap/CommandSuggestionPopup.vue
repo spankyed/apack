@@ -16,7 +16,7 @@
       >
         <span class="command-suggestion-name">/{{ cmd.name }}</span>
       </div>
-      <ClaudeCompletionRows :offer="nativeOffer" :selected-index="selectedIndex - filteredCommands.length" @hover="selectedIndex = filteredCommands.length + $event" />
+      <CompletionRows :offer="nativeOffer" :selected-index="selectedIndex - filteredCommands.length" @hover="selectedIndex = filteredCommands.length + $event" />
       <div v-if="filteredCommands.length === 0" class="command-suggestion-empty">
         No matching commands
       </div>
@@ -25,8 +25,8 @@
 </template>
 
 <script setup lang="ts">
-import ClaudeCompletionRows from './ClaudeCompletionRows.vue'
-import { getClaudeCompletionOffer } from './claude-completions.ts'
+import CompletionRows from './CompletionRows.vue'
+import { getEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { commandSuggestionKey, COMMAND_TRIGGER_POS } from './extensions/command-suggestion.ts'
@@ -37,7 +37,7 @@ const props = defineProps<{
   editor: Editor
 }>()
 
-const nativeOffer = computed(() => getClaudeCompletionOffer(props.editor).value)
+const nativeOffer = computed(() => getEditorCompletionOffer(props.editor).value)
 const selectedIndex = ref(-1)
 const popupEl = ref<HTMLElement | null>(null)
 const popupStyle = ref<Record<string, string>>({ bottom: '0px', left: '0px' })

@@ -8,7 +8,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import type { ClaudeCompletionOffer } from './claude-completions.ts'
-defineProps<{ offer?: ClaudeCompletionOffer; selectedIndex?: number }>()
+import type { EditorCompletionOffer } from '@apackdev/sdk/fe'
+defineProps<{ offer?: EditorCompletionOffer; selectedIndex?: number }>()
 const emit = defineEmits<{ hover: [index: number] }>()
 </script>

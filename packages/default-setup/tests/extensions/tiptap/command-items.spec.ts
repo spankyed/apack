@@ -30,7 +30,7 @@ it('lists every command in a window whose only surface is Logs', async () => {
   const query = ref('');
   const { commands } = scope.run(() => useCommandItems(query))!;
 
-  expect(commands.value.map((command) => command.name)).toEqual(expect.arrayContaining(['pr2md', 'cc-resume', 'cdx-goal']));
+  expect(commands.value.map((command) => command.name)).toEqual(expect.arrayContaining(['pr2md', 'cc-resume', 'cc-plan', 'cc-models', 'cc-reset', 'cdx-goal']));
 
   // And it filters, which is the only other thing the popup asks of it
   query.value = 'pr2';

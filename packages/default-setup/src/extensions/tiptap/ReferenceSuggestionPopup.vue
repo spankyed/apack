@@ -49,14 +49,14 @@
           No matching items
         </div>
       </template>
-      <ClaudeCompletionRows :offer="nativeOffer" :selected-index="selectedIndex - hostRowCount" @hover="selectedIndex = hostRowCount + $event" />
+      <CompletionRows :offer="nativeOffer" :selected-index="selectedIndex - hostRowCount" @hover="selectedIndex = hostRowCount + $event" />
     </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import ClaudeCompletionRows from './ClaudeCompletionRows.vue'
-import { getClaudeCompletionOffer } from './claude-completions.ts'
+import CompletionRows from '@apackdev/ui/components/tiptap/CompletionRows'
+import { getEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { referenceSuggestionKey, type ReferenceSuggestionState } from './reference-suggestion.ts'
@@ -68,7 +68,7 @@ const props = defineProps<{
   variant?: 'full' | 'chat'
 }>()
 
-const nativeOffer = computed(() => getClaudeCompletionOffer(props.editor).value)
+const nativeOffer = computed(() => getEditorCompletionOffer(props.editor).value)
 const hostRowCount = computed(() => level.value === 'category' ? filteredCategories.value.length : items.value.length)
 const selectedIndex = ref(-1)
 const popupEl = ref<HTMLElement | null>(null)
