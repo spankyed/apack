@@ -5,7 +5,7 @@ function fixture() {
   function ZCo() {} function tet() {} function Fet() {} function Panel() {} function Box() {}
   const sessionId = randomUUID(), payload = { serverName: 'research', params: { mode: 'form', message: 'Review release details', requestedSchema: { type: 'object' } } }
   let item = { id: 'original', kind: 'mcp_elicitation', payload }, open = [item], ready = true
-  const fields = { schemaFields: [{ name: 'title', schema: { type: 'string' } }, { name: 'enabled', schema: { type: 'boolean' } }, { name: 'audience', schema: { type: 'string', enum: ['internal', 'public'] } }], formValues: { title: 'Original', enabled: false, audience: 'internal' } as Record<string, unknown>, validationErrors: {} as Record<string, string>, resolvingFields: new Set<string>(), currentFieldIndex: 0 as number | undefined, focusedButton: null as string | null, expandedAccordion: undefined as string | undefined, accordionOptionIndex: 0, textInputValue: 'Original', handleTextInputChange: vi.fn((value: string) => { fields.textInputValue = value; fields.formValues[fields.schemaFields[fields.currentFieldIndex!].name] = value }) }
+  const fields = { schemaFields: [{ name: 'title', schema: { type: 'string' } }, { name: 'enabled', schema: { type: 'boolean' } }, { name: 'audience', schema: { type: 'string', enum: ['internal', 'public'] } }], formValues: { title: 'Original', enabled: false, audience: 'internal' } as Record<string, unknown>, validationErrors: {} as Record<string, string>, resolvingFields: new Set<string>(), currentFieldIndex: 0 as number | undefined, focusedButton: null as string | null, expandedAccordion: undefined as string | undefined, accordionOptionIndex: 0, textInputValue: 'Original', textInputCursorOffset: 8, setTextInputCursorOffset: vi.fn((offset: number) => { fields.textInputCursorOffset = offset }), handleTextInputChange: vi.fn((value: string) => { fields.textInputValue = value; fields.formValues[fields.schemaFields[fields.currentFieldIndex!].name] = value }) }
   const cancel = vi.fn(() => { open = []; return true })
   const key = vi.fn((event: { key: string }) => {
     const at = fields.currentFieldIndex ?? (fields.focusedButton === 'accept' ? 3 : 4)
@@ -66,4 +66,27 @@ it('cancels the same original request across asynchronous field-state changes bu
   const f = fixture(), token = f.show().token; f.fields.validationErrors.date = 'Original async validation changed'
   await expect(f.operate({ operation: 'cancel' }, { token })).resolves.toMatchObject({ settled: true }); expect(f.cancel).toHaveBeenCalledOnce()
   const g = fixture(); await expect(g.operate({ operation: 'cancel' }, { revision: randomUUID() })).rejects.toThrow('changed'); expect(g.cancel).not.toHaveBeenCalled()
+})
+
+it('forwards a bounded UTF-16 cursor to the original setter after its text callback', async () => {
+  const f = fixture()
+  const result = await f.operate({ operation: 'edit', field: 'title', value: 'A😀B', cursorOffset: 3 })
+  expect(f.fields.setTextInputCursorOffset).toHaveBeenCalledWith(3)
+  expect(f.fields.handleTextInputChange.mock.invocationCallOrder[0]).toBeLessThan(f.fields.setTextInputCursorOffset.mock.invocationCallOrder[0])
+  expect(result.form.textInputCursorOffset).toBe(3)
+})
+it.each([-1, 1.5, 5])('rejects invalid cursor %s before changing original text', async cursorOffset => {
+  const f = fixture()
+  await expect(f.operate({ operation: 'edit', field: 'title', value: 'A😀B', cursorOffset })).rejects.toThrow('cursor offset')
+  expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
+  expect(f.fields.setTextInputCursorOffset).not.toHaveBeenCalled()
+})
+
+it('moves only the active original cursor without revalidating its text, and refuses a foreign field', async () => {
+  const f = fixture()
+  await f.operate({ operation: 'cursor', field: 'title', cursorOffset: 2 })
+  expect(f.fields.setTextInputCursorOffset).toHaveBeenCalledWith(2)
+  expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
+  await expect(f.operate({ operation: 'cursor', field: 'enabled', cursorOffset: 0 })).rejects.toThrow('cursor field changed')
+  expect(f.key).not.toHaveBeenCalled()
 })

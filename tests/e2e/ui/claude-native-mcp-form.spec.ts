@@ -93,14 +93,14 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
 
 
   const draft = 'Keep my migration notes while I confirm reviewer details.'
-  const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
+  const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = [], cursorCaptures: string[] = [], cursorReturns: unknown[] = []
   const nativeWindow = await electronApp.browserWindow(appPage)
   const panel = appPage.getByTestId('native-mcp-form')
   const frame = async () => (await context()).native.state.mcpForm
-  async function capture(name: string, width: number, height: number) {
+  async function capture(name: string, width: number, height: number, cursor = false) {
     await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
     const captured = await nativeWindow.evaluate(async (window, size) => { const image = await window.webContents.capturePage({ x: 0, y: 0, ...size }); return { size: image.getSize(), png: image.toPNG().toString('base64') } }, { width, height })
-    expect(captured.size).toEqual({ width, height }); await writeFile(testInfo.outputPath(name), Buffer.from(captured.png, 'base64')); captures.push(name)
+    expect(captured.size).toEqual({ width, height }); await writeFile(testInfo.outputPath(name), Buffer.from(captured.png, 'base64')); (cursor ? cursorCaptures : captures).push(name)
   }
   const cases = [{ phase: 1, scenario: 'form-accept' }, { phase: 2, scenario: 'form-decline' }, { phase: 3, scenario: 'form-cancel' }, { phase: 7, scenario: 'form-interrupt' }]
   for (const step of cases) {
@@ -120,6 +120,33 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
     catch (error) { await writeFile(join(workspace!, 'native-mcp-form-failure.json'), JSON.stringify({ step, context: await context(), text: await appPage.locator('body').innerText() }, null, 2)); await capture('native-mcp-form-failure.png', 1100, 900); throw error }
     const original = await frame(); expect(original.serverName).toBe('research'); expect(original.values.enabled).toBe(false); expect(original.values.count).toBe(0)
     if (step.scenario === 'form-accept') {
+      for (const [width, height] of [[1100, 900], [680, 600]]) {
+        await appPage.setViewportSize({ width, height })
+        const title = panel.getByLabel('Release title', { exact: true })
+        await title.fill('A😀BC')
+        await expect.poll(async () => (await frame())?.textInputValue).toBe('A😀BC')
+        await title.evaluate(element => { const input = element as HTMLInputElement; input.setSelectionRange(3, 3); input.dispatchEvent(new Event('select', { bubbles: true })) })
+        await expect.poll(async () => (await frame())?.textInputCursorOffset).toBe(3)
+        await title.press('x')
+        await expect.poll(async () => (await frame())?.textInputValue).toBe('A😀xBC')
+        await expect.poll(async () => (await frame())?.textInputCursorOffset).toBe(4)
+        await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
+        await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+        await expect(panel).toBeHidden()
+        await input.press('ArrowLeft'); await input.press('y')
+        await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+        await expect(panel).toBeVisible()
+        await expect(title).toHaveValue('A😀yxBC')
+        await expect.poll(async () => (await frame())?.textInputCursorOffset).toBe(4)
+        await expect.poll(() => title.evaluate(element => { const input = element as HTMLInputElement; return [input.selectionStart, input.selectionEnd] })).toEqual([4, 4])
+        expect((await frame()).id).toBe(original.id); expect((await frame()).revision).toBe(original.revision)
+        expect((await context()).native.state.nativePid).toBe(boundNativePid)
+        await expect(composer).toHaveText(draft)
+        expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
+        await title.scrollIntoViewIfNeeded()
+        await capture('native-mcp-form-' + width + '-cursor-return.png', width, height, true)
+        cursorReturns.push({ width, height, id: original.id, revision: original.revision, nativePid: boundNativePid, value: (await frame()).textInputValue, cursorOffset: (await frame()).textInputCursorOffset, retainedDraft: true, retainedSelection: true })
+      }
       await panel.getByLabel('Release title', { exact: true }).fill('')
       await expect.poll(async () => (await frame())?.values.title).toBe('')
       await panel.getByLabel('Release title', { exact: true }).press('Backspace')
@@ -185,6 +212,6 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-form-app-proof.json'), JSON.stringify({ steps, captures, geometry, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-form-app-proof.json'), JSON.stringify({ steps, captures, geometry, cursorCaptures, cursorReturns, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpFormApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })

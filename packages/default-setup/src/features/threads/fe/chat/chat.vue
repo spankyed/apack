@@ -29,7 +29,7 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
@@ -43,7 +43,7 @@
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
-          <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" />
+          <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
           <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
             <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
@@ -286,6 +286,7 @@ const shell = useShell()
 const agentSelection = ref<{ threadId: string; mountId: string; ownerId: string; sessionId: string; taskId: string; revision: number }>()
 const nativeSession = ref<InstanceType<typeof ClaudeNativeSession>>()
 const nativeTerminalActive = ref(false)
+const mcpFormPending = ref(false)
 const nativeToolsExpanded = ref(false)
 watch(nativeTerminalActive, (active, previous) => {
   if (previous && !active) void nextTick(() => forceScrollToBottom())

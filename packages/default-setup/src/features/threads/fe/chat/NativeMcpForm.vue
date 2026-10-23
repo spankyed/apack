@@ -18,7 +18,7 @@
             <template v-if="field.type === 'boolean'"><option value="true">Yes</option><option value="false">No</option></template>
             <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
-          <input v-else :id="ids(field.name)" type="text" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @input="input(field.name, $event)" @compositionstart="composingField = field.name" @compositionend="compositionEnd(field.name, $event)" @keydown.backspace="unsetEmpty(field.name, $event)" />
+          <input v-else :ref="element => rememberInput(field.name, element)" :id="ids(field.name)" type="text" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @input="input(field.name, $event)" @select="cursor(field.name, $event)" @compositionstart="composingField = field.name" @compositionend="compositionEnd(field.name, $event)" @keydown.backspace="unsetEmpty(field.name, $event)" />
           <p v-if="form.errors[field.name]" role="alert" class="error">{{ form.errors[field.name] }}</p>
           <p v-if="form.resolvingFields.includes(field.name)" role="status" class="description">Checking date…</p>
         </div>
@@ -33,42 +33,71 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, onUnmounted, ref, useId, watch } from 'vue'
 import type { ClaudeNativeMcpForm, ClaudeNativeMcpFormOperation } from '#features/code/common/native-mcp-form.ts'
 import { parseMcpElicitationForm, type ClaudeMcpFormField, type ClaudeMcpFormValue } from '#features/code/common/mcp-elicitation-form.ts'
 const props = defineProps<{ form: ClaudeNativeMcpForm; operation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string } }>()
-const emit = defineEmits<{ operate: [operation: ClaudeNativeMcpFormOperation] }>()
+const emit = defineEmits<{ operate: [operation: ClaudeNativeMcpFormOperation]; pending: [pending: boolean] }>()
 const baseId = useId(), ids = (name: string) => baseId + '-' + props.form.propertyOrder.indexOf(name)
 const parsed = computed(() => { try { return { fields: parseMcpElicitationForm(props.form.schema, props.form.propertyOrder).fields } } catch { return { fields: [], problem: 'This form cannot be displayed here.' } } })
 const fields = computed(() => parsed.value.fields), schemaProblem = computed(() => parsed.value.problem)
 const drafts = ref<Record<string, ClaudeMcpFormValue | null>>({}), finishing = ref(false), cancelling = ref(false), composingField = ref<string>()
 let inFlight: ClaudeNativeMcpFormOperation | undefined, baseline = 0
 const queue: ClaudeNativeMcpFormOperation[] = []
+const textInputs = new Map<string, HTMLInputElement>()
+function rememberInput(field: string, element: unknown) {
+  if (!(element instanceof HTMLInputElement)) { textInputs.delete(field); return }
+  textInputs.set(field, element)
+  restoreNativeCursor()
+}
+function restoreNativeCursor() {
+  const field = props.form.propertyOrder[props.form.currentFieldIndex ?? -1], input = textInputs.get(field)
+  const offset = props.form.textInputCursorOffset
+  // An active browser range belongs to the user; background native refresh must not collapse it.
+  if (!input || document.activeElement === input || offset === undefined || composingField.value || inFlight || queue.length) return
+  if (offset <= input.value.length) input.setSelectionRange(offset, offset)
+}
+watch(() => [props.form.token, props.form.textInputCursorOffset] as const, restoreNativeCursor, { flush: 'post' })
 function value(field: ClaudeMcpFormField): ClaudeMcpFormValue | undefined {
   if (Object.hasOwn(drafts.value, field.name)) return drafts.value[field.name] ?? undefined
   if (!field.options && ['string', 'number', 'integer'].includes(field.type) && props.form.currentFieldIndex === props.form.propertyOrder.indexOf(field.name)) return props.form.textInputValue
   return props.form.values[field.name]
 }
+function reportPending() { emit('pending', !!inFlight || queue.length > 0 || composingField.value !== undefined) }
+watch(composingField, reportPending, { flush: 'sync' })
+onUnmounted(() => { queue.splice(0); emit('pending', false) })
 function drain() {
+  reportPending()
   if (inFlight || !queue.length || !props.form.ready || props.operation?.status === 'pending') return
-  inFlight = queue.shift()!; baseline = props.operation?.sequence ?? 0; emit('operate', inFlight)
+  inFlight = queue.shift()!; baseline = props.operation?.sequence ?? 0; reportPending(); emit('operate', inFlight)
 }
 function enqueue(action: ClaudeNativeMcpFormOperation) {
   const last = queue.at(-1)
-  if (action.operation === 'edit' && last?.operation === 'edit' && last.field === action.field) queue[queue.length - 1] = action
+  if (action.operation === 'cursor' && last?.operation === 'edit' && last.field === action.field && typeof last.value === 'string') queue[queue.length - 1] = { ...last, cursorOffset: action.cursorOffset }
+  else if (action.operation === 'cursor' && last?.operation === 'cursor' && last.field === action.field) queue[queue.length - 1] = action
+  else if (action.operation === 'edit' && last?.operation === 'edit' && last.field === action.field) queue[queue.length - 1] = action
   else queue.push(action)
   drain()
 }
-function edit(field: string, value: ClaudeMcpFormValue | null) {
-  drafts.value = { ...drafts.value, [field]: value }; enqueue({ operation: 'edit', field, value })
+function edit(field: string, value: ClaudeMcpFormValue | null, cursorOffset?: number) {
+  drafts.value = { ...drafts.value, [field]: value }; enqueue({ operation: 'edit', field, value, ...(cursorOffset === undefined ? {} : { cursorOffset }) })
 }
 function input(field: string, event: Event) {
   const value = (event.target as HTMLInputElement).value
   if (composingField.value === field || (event as InputEvent).isComposing) { drafts.value = { ...drafts.value, [field]: value }; return }
   if (Object.hasOwn(drafts.value, field) && drafts.value[field] === value) return
-  edit(field, value)
+  edit(field, value, (event.target as HTMLInputElement).selectionEnd ?? undefined)
 }
-function compositionEnd(field: string, event: CompositionEvent) { composingField.value = undefined; edit(field, (event.target as HTMLInputElement).value) }
+function cursor(field: string, event: Event) {
+  const input = event.target as HTMLInputElement, offset = input.selectionEnd
+  if (offset === null || input.selectionStart !== offset || composingField.value || finishing.value) return
+  if (props.form.currentFieldIndex !== props.form.propertyOrder.indexOf(field) && ![inFlight, ...queue].some(action => action?.operation === 'edit' && action.field === field)) return
+  const latest = [...queue].reverse().find(action => (action.operation === 'edit' || action.operation === 'cursor') && action.field === field) ?? inFlight
+  if (latest && (latest.operation === 'edit' || latest.operation === 'cursor') && latest.field === field && latest.cursorOffset === offset) return
+  if (!latest && props.form.currentFieldIndex === props.form.propertyOrder.indexOf(field) && props.form.textInputCursorOffset === offset) return
+  enqueue({ operation: 'cursor', field, cursorOffset: offset })
+}
+function compositionEnd(field: string, event: CompositionEvent) { composingField.value = undefined; edit(field, (event.target as HTMLInputElement).value, (event.target as HTMLInputElement).selectionEnd ?? undefined) }
 function unsetEmpty(field: string, event: KeyboardEvent) {
   if (!event.isComposing && composingField.value !== field && (event.target as HTMLInputElement).value === '') { event.preventDefault(); edit(field, null) }
 }
@@ -82,7 +111,7 @@ watch(() => [props.operation?.sequence, props.operation?.status, props.form.toke
     if (props.operation?.status === 'error') { queue.splice(0); finishing.value = false; cancelling.value = false; drafts.value = {} }
     else {
       if (prior.operation === 'edit' && composingField.value !== prior.field && !queue.some(action => action.operation === 'edit' && action.field === prior.field)) { const next = { ...drafts.value }; delete next[prior.field]; drafts.value = next }
-      if (prior.operation !== 'edit') { finishing.value = false; cancelling.value = false }
+      if (prior.operation !== 'edit' && prior.operation !== 'cursor') { finishing.value = false; cancelling.value = false }
     }
   }
   drain()
