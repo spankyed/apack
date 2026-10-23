@@ -92,6 +92,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
 
 
 
+  const retry = process.env.CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY === '1'
   const draft = 'Keep my release notes while I confirm browser input.'
   const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
   const nativeWindow = await electronApp.browserWindow(appPage)
@@ -108,7 +109,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await expect(composer).toHaveText(draft)
     }
   }
-  const cases = ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause'].map((scenario, index) => ({ phase: index + 8, scenario }))
+  const cases = (retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (retry ? 14 : 8), scenario }))
   for (const step of cases) {
     await appPage.setViewportSize({ width: 1100, height: 900 })
     await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), String(step.phase))
@@ -123,7 +124,21 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     await expect(approval).toBeVisible({ timeout: 20000 }); await expect(approval.locator('button.approve')).toBeEnabled(); await approval.locator('button.approve').click(); await expect(approval).toBeHidden()
     await expect(panel).toBeVisible({ timeout: 15000 }); await expect(panel.getByRole('button', { name: 'Accept', exact: true })).toBeEnabled()
     const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(false); await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
-    if (step.scenario === 'url-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
+    if (retry) {
+      expect(original.kind).toBe('mcp_url_elicitation')
+      if (step.scenario === 'url-retry-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
+      else if (step.scenario === 'url-retry-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      else if (step.scenario === 'url-retry-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
+      else {
+        if (step.scenario === 'url-retry') await capturePhase('prompt')
+        await panel.getByRole('button', { name: 'Accept', exact: true }).click()
+        await expect.poll(async () => (await frame())?.phase).toBe('waiting')
+        expect((await frame())?.id).toBe(original.id); expect((await frame())?.kind).toBe('mcp_url_elicitation')
+        await expect(panel.getByRole('button', { name: 'Retry now', exact: true })).toBeEnabled()
+        if (step.scenario === 'url-retry') { await capturePhase('waiting'); await panel.getByRole('button', { name: 'Retry now', exact: true }).click() }
+        else await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      }
+    } else if (step.scenario === 'url-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
     else if (step.scenario === 'url-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
     else if (step.scenario === 'url-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
     else {
@@ -150,7 +165,8 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     await expect(panel).toBeHidden({ timeout: 15000 }); await expect.poll(async () => (await context()).native?.state?.busy, { timeout: 15000 }).toBe(false)
     expect((await context()).native.state.nativePid).toBe(boundNativePid); expect((await context()).native.state.status).toBe('live')
     await expect(composer).toHaveText(draft); expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
-    steps.push({ ...step, id: original.id, revision: original.revision, retainedDraft: true, nativePid: boundNativePid })
+    if (step.scenario.endsWith('-pause')) expect((await context()).native.state.lastTurn?.reason).toBe('aborted')
+    steps.push({ ...step, nativeInterrupted: step.scenario.endsWith('-pause') ? (await context()).native.state.lastTurn?.reason === 'aborted' : undefined, id: original.id, revision: original.revision, retainedDraft: true, nativePid: boundNativePid })
   }
   await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), '0')
   const turnsBeforeRecovery = (await context()).turns
@@ -167,6 +183,6 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, wrongCompletionIgnored: true, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, originalRetry: retry, wrongCompletionIgnored: !retry, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpUrlApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
