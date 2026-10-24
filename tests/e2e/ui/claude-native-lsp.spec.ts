@@ -186,7 +186,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       await expect(diagnostic).not.toContainText('OwnedStaleDiagnostic')
       for(const width of [1100,680]){
         const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
-        await diagnostic.scrollIntoViewIfNeeded();await expect(diagnostic.locator('[data-native-diagnostic-detail]')).toBeInViewport();await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
+        await diagnostic.locator('[data-native-diagnostic-detail]').evaluate(element=>element.scrollIntoView({block:'end'}));await expect(diagnostic.locator('[data-native-diagnostic-detail]')).toBeInViewport({ratio:1});await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
         const capture=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
         const name='native-lsp-diagnostic-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(capture,'base64'));captures.push(name)
       }
