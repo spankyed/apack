@@ -446,9 +446,9 @@ describe('apack db exec', () => {
 
   it('fails when a write cannot be stored, keeping none of it', async () => {
     const dir = await appDataDir();
-    // A value LMDB can't store: the write is refused where it is made, and the transaction with it
-    const { error } = await run(['exec', "write('Note-a').set('title', 'Written').set('count', 1n)", '--data-dir', dir]);
-    expect(error?.message).toMatch(/^Transaction failed: .*BigInt[\s\S]*Nothing it wrote was kept/);
+    // A value MessagePack can't encode, an integer past 64 bits: the write is refused where it is made, and the transaction with it
+    const { error } = await run(['exec', "write('Note-a').set('title', 'Written').set('count', 2n ** 70n)", '--data-dir', dir]);
+    expect(error?.message).toMatch(/^Transaction failed: .*too large[\s\S]*Nothing it wrote was kept/);
     const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
     expect(out).toBe('Alpha');
   });

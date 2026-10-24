@@ -114,7 +114,9 @@ with values frozen — any code that changed a read's value fails there and is f
 Done, 2026-10-24. `deepFreeze` (`utils.ts`) in `place`, the one memory write every attribute change, undo and
 hydration goes through, and in a relation's row; a frozen object is skipped with what it holds, so a value is walked
 once. Frozen always, not only in development: freezing measured within noise. The ears, SDK, host and API suites and
-the pack pool pass with values frozen — no code changed a stored value. Readings (loaded machine): 1,000 creates
+the pack pool pass with values frozen. One path they don't reach did change one: onboarding's steps edited the state
+they read and stored it after, which the external fixture's onboarding E2E caught once frozen; `getOnboardingState`
+now hands a step a copy. Readings (loaded machine): 1,000 creates
 6.7 ms, bulk load 126 ms; the converted production copy hydrates in 0.97–1.24 s to 309.5 MB of heap (22.8k entities
 now that relations are not, 45.8k relations, 178.5k attributes).
 

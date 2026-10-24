@@ -8,9 +8,14 @@ export interface OnboardingState {
   data: { cliFound?: boolean; authenticated?: boolean; codexFound?: boolean; ccSessionCount?: number; codexSessionCount?: number; chosenMode?: string };
 }
 
+/**
+ * The thread's onboarding state, as a copy a step changes and then stores with `persistOnboardingState`: what a read
+ * returns is the stored value itself, which is frozen
+ */
 export function getOnboardingState(services: Services, threadId: EntityId): OnboardingState | null {
   const thread = services.repository.threadQueries.byId(threadId) as any;
-  return thread?.context?.onboarding ?? null;
+  const state: OnboardingState | undefined = thread?.context?.onboarding;
+  return state ? { ...state, data: { ...state.data } } : null;
 }
 
 export function persistOnboardingState(services: Services, threadId: EntityId, state: OnboardingState) {
