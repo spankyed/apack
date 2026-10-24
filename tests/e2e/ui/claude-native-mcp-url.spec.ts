@@ -126,7 +126,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     try {
       const page = browser.contexts()[0].pages().find(page => page.url() === descriptor.url)!
       expect(page).toBeTruthy(); await page.setViewportSize({ width, height }); await page.bringToFront()
-      await expect(page).toHaveURL(browserOrigin + '/release-review?phase=' + phase)
+      await expect(page).toHaveURL(browserOrigin + '/release-review?phase=' + phase + (modern ? '&title=release%20notes' : ''))
       await expect(page.getByRole('heading', { name: 'Release review', exact: true })).toBeVisible()
       await expect(panel).toBeVisible(); expect((await frame()).id).toBe(original.id)
       if (complete) {
@@ -166,7 +166,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     const approval = appPage.getByTestId('native-mcp__research__echo-approval')
     await expect(approval).toBeVisible({ timeout: 20000 }); await expect(approval.locator('button.approve')).toBeEnabled(); await approval.locator('button.approve').click(); await expect(approval).toBeHidden()
     await expect(panel).toBeVisible({ timeout: 15000 }); await expect(panel.getByRole('button', { name: modern ? "I'm done, continue" : 'Accept', exact: true })).toBeEnabled()
-    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); await expect(panel.locator('code')).toHaveText(realBrowser ? browserOrigin + '/release-review?phase=' + step.phase : 'https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
+    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); await expect(panel.locator('code')).toHaveText(realBrowser ? browserOrigin + '/release-review?phase=' + step.phase + (modern ? '&title=release%20notes' : '') : 'https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
     if (modern) {
       expect(original.kind).toBe('mcp_elicitation')
       if (step.scenario === 'modern-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()

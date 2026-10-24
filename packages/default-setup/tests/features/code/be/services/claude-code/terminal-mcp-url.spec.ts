@@ -5,6 +5,7 @@ import { claudeTerminalMcpUrlRuntime } from '#features/code/be/services/claude-c
 function fixture(manual = false) {
   function ZCo() {} function e_o() {} function t_o() {} function tke() {} function Panel() {} function Box() {}
   const sessionId = randomUUID(), payload = { serverName: 'research', params: { mode: 'url', message: 'Review', url: 'https://example.invalid/review' } }
+  let displayUrl: unknown = payload.params.url
   let item = { id: 'original', kind: 'mcp_elicitation', payload }, open = [item], ready = true, phase = 'prompt', selected = manual ? 'open' : 'accept', refused = false, opens = 0
   const url = { type: tke, memoizedProps: { userConfirmsCompletion: manual, waitingState: { actionLabel: 'Skip confirmation' } }, child: {} as any }
   const root = { type: ZCo, memoizedProps: { payload, wouldTakeAnswer: () => ready }, child: url }
@@ -13,7 +14,7 @@ function fixture(manual = false) {
     const choices = phase === 'waiting' ? [['open', ' Reopen URL '], ['continue', ' Skip confirmation']] : manual ? [['open', ' Open in browser '], ['accept', " I'm done, continue "], ['decline', ' Decline']] : [['accept', ' Accept  '], ['decline', ' Decline']]
     const labels = choices.map(([operation, label]) => ({ type: 'text', memoizedProps: { children: label, bold: selected === operation, color: operation === 'decline' ? 'error' : 'success' } }))
     for (let i = 0; i < labels.length - 1; i++) (labels[i] as any).sibling = labels[i + 1]
-    url.child = { type: Panel, memoizedProps: { title: phase === 'waiting' ? 'MCP server “research” — waiting for completion' : 'MCP server “research” wants to open a URL', onCancel: cancel }, child: { type: Box, memoizedProps: { onKeyDown: key }, child: labels[0] } }
+    url.child = { type: Panel, memoizedProps: { title: phase === 'waiting' ? 'MCP server “research” — waiting for completion' : 'MCP server “research” wants to open a URL', onCancel: cancel }, child: { type: Box, memoizedProps: { onKeyDown: key, children: [{ props: { children: displayUrl } }, {}] }, child: labels[0] } }
   }
   const key = vi.fn((event: { key: string }) => {
     const choices = phase === 'waiting' ? ['open', 'continue'] : manual ? ['open', 'accept', 'decline'] : ['accept', 'decline']
@@ -31,7 +32,7 @@ function fixture(manual = false) {
   const api = runInNewContext(claudeTerminalMcpFormRuntime + claudeTerminalMcpUrlRuntime + '\n({dialog:nativeMcpDialog,presentation:nativeMcpUrlPresentation,operate:operateNativeMcpUrl})', { AbortController, originalContext: undefined, readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'config', dialogRevisions: new Map(), createHash, randomUUID, composerFunctionHashes: cache, nativeFunctionName: (name: string) => name, process: { stdout: 'stdout' }, setTimeout })
   const show = () => api.presentation(n, api.dialog(n, 'url'))
   const operate = (operation: string, overrides = {}) => { const view = show(); return api.operate(n, { id: view.id, revision: view.revision, session_id: sessionId, token: view.token, action: { operation }, ...overrides }, new AbortController().signal) }
-  return { show, operate, key, cancel, root, cache, tke, get opens() { return opens }, refuse() { refused = true }, setReady(value: boolean) { ready = value }, replace() { item = { ...item }; open = [item] }, waiting() { phase = 'waiting'; selected = 'open'; item.kind = 'mcp_elicitation_waiting'; root.type = e_o; paint() } }
+  return { setDisplay(value: unknown) { displayUrl = value; paint() }, show, operate, key, cancel, root, cache, tke, get opens() { return opens }, refuse() { refused = true }, setReady(value: boolean) { ready = value }, replace() { item = { ...item }; open = [item] }, waiting() { phase = 'waiting'; selected = 'open'; item.kind = 'mcp_elicitation_waiting'; root.type = e_o; paint() } }
 }
 it('preserves original accept/open/waiting distinctions instead of manufacturing a completed answer', async () => {
   const f = fixture(); const prompt = f.show(); expect(prompt.phase).toBe('prompt'); expect(prompt.choices.map((row: any) => row.operation)).toEqual(['accept', 'decline'])
@@ -59,4 +60,21 @@ it('uses the separately mounted waiting wrapper and preserves its original cance
 it('refuses unready or changed original renderers before any native action', async () => {
   const f = fixture(); f.setReady(false); await expect(f.operate('cancel')).rejects.toThrow('not ready'); f.setReady(true)
   f.cache.set(f.tke, 'changed'); expect(() => f.show()).toThrow('renderer changed'); expect(f.cancel).not.toHaveBeenCalled(); expect(f.opens).toBe(0)
+})
+
+it('shows the original browser-ready URL element rather than the raw server value', () => {
+  const f = fixture()
+  f.setDisplay([{ props: { children: 'https://' } }, { props: { children: 'xn--bcher-kva.example' } }, '/a%20b'])
+  expect(f.show().url).toBe('https://xn--bcher-kva.example/a%20b')
+  f.setDisplay('[URL withheld by original renderer]')
+  expect(f.show().url).toBe('[URL withheld by original renderer]')
+})
+it('refuses missing, changed, cyclic or oversized original URL display instead of falling back to raw input', () => {
+  const f = fixture()
+  for (const value of ['', {}, 'x'.repeat(65537)]) {
+    f.setDisplay(value); expect(() => f.show()).toThrow(/original MCP URL text/i)
+  }
+  const cycle: unknown[] = []; cycle.push(cycle); f.setDisplay(cycle)
+  expect(() => f.show()).toThrow('original MCP URL text')
+  expect(f.opens).toBe(0)
 })

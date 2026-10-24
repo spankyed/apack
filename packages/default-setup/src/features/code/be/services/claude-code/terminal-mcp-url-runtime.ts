@@ -14,17 +14,24 @@ function nativeMcpUrlSource(n,d){
   if(fiber.sibling)children.push(fiber.sibling);if(fiber.child)children.push(fiber.child);
  }
  if(renderers.length!==1)return;
- const renderer=renderers[0],nodes=[renderer.child],controlled=new Set(),keys=new Set(),panels=[],text=[];
+ const renderer=renderers[0],nodes=[renderer.child],controlled=new Set(),keys=new Set(),panels=[],text=[],urlRegions=new Set();
  while(nodes.length){const fiber=nodes.pop();if(!fiber||controlled.has(fiber))continue;if(controlled.size>=2048)throw Error('Native MCP URL controls exceeded bound');controlled.add(fiber);const p=fiber.memoizedProps;
   if(p&&typeof p==='object'){
-   if(typeof p.onKeyDown==='function'&&mcpFunctionHash(p.onKeyDown)==='552e78fe6f71f1e00ff8623b17c2a438cad341a521d8612d80f291b28ac62c2d')keys.add(p.onKeyDown);
+   if(typeof p.onKeyDown==='function'&&mcpFunctionHash(p.onKeyDown)==='552e78fe6f71f1e00ff8623b17c2a438cad341a521d8612d80f291b28ac62c2d'){keys.add(p.onKeyDown);if(Array.isArray(p.children)&&p.children[0]?.props)urlRegions.add(p.children[0]);}
    if(typeof p.title==='string'&&typeof p.onCancel==='function')panels.push({title:p.title,cancel:p.onCancel});
    if(typeof p.children==='string'&&p.children.length<=8000&&typeof p.bold==='boolean'&&(p.color===undefined||p.color==='success'||p.color==='error'))text.push({label:p.children.trim(),selected:p.bold});
    if(typeof p.children==='string'&&(p.children.startsWith('This URL cannot ')||p.children.startsWith('This URL’s ')||p.children.startsWith('This URL extends ')))text.push({warning:p.children});
   }
   if(fiber.sibling)nodes.push(fiber.sibling);if(fiber.child)nodes.push(fiber.child);
  }
- if(keys.size!==1||panels.length!==1)return;
+ if(keys.size!==1||panels.length!==1||urlRegions.size!==1)return;
+ // Read the original URL element, which includes browser normalization and withheld/truncated text.
+ const urlNodes=[[...urlRegions][0]],urlSeen=new Set();let displayUrl='';
+ while(urlNodes.length){const value=urlNodes.pop();if(typeof value==='string'){displayUrl+=value;if(displayUrl.length>65536)throw Error('Original MCP URL text exceeded bound');continue;}if(value==null||typeof value==='boolean')continue;
+  if(typeof value!=='object'||urlSeen.has(value))throw Error('Invalid original MCP URL text');if(urlSeen.size>=2048)throw Error('Original MCP URL text traversal exceeded bound');urlSeen.add(value);
+  if(Array.isArray(value)){for(let i=value.length-1;i>=0;i--)urlNodes.push(value[i]);}else if(value.props&&Object.hasOwn(value.props,'children'))urlNodes.push(value.props.children);else throw Error('Original MCP URL text changed');
+ }
+ if(!displayUrl)throw Error('Original MCP URL text is unavailable');
  const panel=panels[0],phase=panel.title.endsWith(' — waiting for completion')?'waiting':panel.title.endsWith(' wants to open a URL')?'prompt':undefined;if(!phase)throw Error('Original MCP URL phase changed');
  const actionLabel=renderer.memoizedProps.waitingState?.actionLabel??'Continue without waiting',choices=[];
  for(const row of text){if(!row.label)continue;let operation;
@@ -33,11 +40,11 @@ function nativeMcpUrlSource(n,d){
   if(operation){const prior=choices.find(choice=>choice.operation===operation);if(prior){if(prior.label!==row.label||prior.selected!==row.selected)throw Error('Ambiguous original MCP URL choice');}else choices.push({operation,label:row.label,selected:row.selected});}
  }
  if(choices.length>3||choices.filter(choice=>choice.selected).length!==1)throw Error('Original MCP URL choices are not ready');
- return {key:[...keys][0],cancel:panel.cancel,ready:typeof wrapper.memoizedProps.wouldTakeAnswer==='function'&&wrapper.memoizedProps.wouldTakeAnswer()===true,title:panel.title,phase,userConfirmsCompletion:renderer.memoizedProps.userConfirmsCompletion===true,choices,warnings:[...new Set(text.flatMap(row=>row.warning?[row.warning]:[]))]};
+ return {key:[...keys][0],cancel:panel.cancel,ready:typeof wrapper.memoizedProps.wouldTakeAnswer==='function'&&wrapper.memoizedProps.wouldTakeAnswer()===true,title:panel.title,phase,displayUrl,userConfirmsCompletion:renderer.memoizedProps.userConfirmsCompletion===true,choices,warnings:[...new Set(text.flatMap(row=>row.warning?[row.warning]:[]))]};
 }
 function nativeMcpUrlPresentation(n,d){
  if(!d.item)return;const source=nativeMcpUrlSource(n,d);if(!source)return;
- const facts={id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:d.item.kind,ready:source.ready,serverName:d.payload.serverName,message:d.payload.params.message,url:d.payload.params.url,title:source.title,phase:source.phase,userConfirmsCompletion:source.userConfirmsCompletion,choices:source.choices,warnings:source.warnings};
+ const facts={id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:d.item.kind,ready:source.ready,serverName:d.payload.serverName,message:d.payload.params.message,url:source.displayUrl,title:source.title,phase:source.phase,userConfirmsCompletion:source.userConfirmsCompletion,choices:source.choices,warnings:source.warnings};
  const encoded=JSON.stringify(facts);if(encoded.length>196608)throw Error('Native MCP URL presentation exceeded bound');return {...facts,token:createHash('sha256').update(encoded).digest('hex')};
 }
 async function operateNativeMcpUrl(n,request,signal){
