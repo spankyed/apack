@@ -6,6 +6,10 @@ if ! command -v xvfb-run >/dev/null || ! command -v xclip >/dev/null; then
   apt-get update -qq
   apt-get install -y --no-install-recommends xvfb xauth xclip python3 procps fonts-dejavu-core
 fi
+if [[ "${1:-}" == pdf-pages-app ]] && ! command -v pdftoppm >/dev/null; then
+  apt-get update -qq
+  apt-get install -y --no-install-recommends poppler-utils
+fi
 export APACK_CHAIN_CORES=2
 # test:linux already prepares the published packages and platform-specific default pack.
 npm run build:runtime -- --cores 2
