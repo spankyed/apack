@@ -152,7 +152,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
     browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: modern ? true : undefined, retryDeferred: retry ? true : undefined, waitingPreservedUntilCompletion: !modern && !retry ? true : undefined, browserOpenOnReturn: true })
   }
-  const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
+  const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause', 'modern-withheld', 'modern-viewport'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
     await appPage.setViewportSize({ width: 1100, height: 900 })
     await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), String(step.phase))
@@ -166,15 +166,19 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     const approval = appPage.getByTestId('native-mcp__research__echo-approval')
     await expect(approval).toBeVisible({ timeout: 20000 }); await expect(approval.locator('button.approve')).toBeEnabled(); await approval.locator('button.approve').click(); await expect(approval).toBeHidden()
     await expect(panel).toBeVisible({ timeout: 15000 })
-    const refusal = modern && [20, 21].includes(step.phase)
+    const refusal = modern && [20, 21, 24].includes(step.phase)
+    const viewportReview = modern && step.phase === 25
     if (!refusal) await expect(panel.getByRole('button', { name: modern ? "I'm done, continue" : 'Accept', exact: true })).toBeEnabled()
     const refusalCaptures: string[] = []
-    if (refusal) {
-      await expect(panel.getByRole('button', { name: 'Open in browser', exact: true })).toHaveCount(0)
-      await expect(panel.getByRole('button', { name: "I'm done, continue", exact: true })).toHaveCount(0)
-      await expect(panel.locator('.warning')).toContainText(step.phase === 20 ? 'cannot be shown exactly' : 'too long')
-      if (step.phase === 20) await expect(panel.locator('code')).not.toContainText('\u202e')
-      else await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review?label=' + 'r'.repeat(9000))
+    if (refusal || viewportReview) {
+      if (refusal) {
+        await expect(panel.getByRole('button', { name: 'Open in browser', exact: true })).toHaveCount(0)
+        await expect(panel.getByRole('button', { name: "I'm done, continue", exact: true })).toHaveCount(0)
+      }
+      await expect(panel.locator('.warning')).toContainText(viewportReview ? 'extends past this screen' : step.phase === 21 ? 'too long' : 'cannot be shown exactly')
+      if (step.phase === 24) await expect(panel.locator('code')).toHaveText('(value cannot be shown in full — approval withheld; one-time options only)')
+      else if (step.phase === 20) await expect(panel.locator('code')).not.toContainText('\u202e')
+      else await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review?label=' + 'r'.repeat(viewportReview ? 1800 : 9000))
       for (const [width, height] of [[1100, 900], [680, 600]]) {
         await appPage.setViewportSize({ width, height })
         await panel.locator('.warning').scrollIntoViewIfNeeded()
@@ -185,11 +189,11 @@ test('uses original terminal URL decisions, waiting and completion with cancella
         await writeFile(testInfo.outputPath(name), Buffer.from(png, 'base64')); refusalCaptures.push(name)
       }
     }
-    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); if (!refusal) await expect(panel.locator('code')).toHaveText(realBrowser ? browserOrigin + '/release-review?phase=' + step.phase + (modern ? '&title=release%20notes' : '') : 'https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
+    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); if (!refusal && !viewportReview) await expect(panel.locator('code')).toHaveText(realBrowser ? browserOrigin + '/release-review?phase=' + step.phase + (modern ? '&title=release%20notes' : '') : 'https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
     if (modern) {
       expect(original.kind).toBe('mcp_elicitation')
       if (step.scenario === 'modern-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
-      else if (step.scenario === 'modern-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      else if (['modern-cancel', 'modern-withheld', 'modern-viewport'].includes(step.scenario)) await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
       else if (step.scenario === 'modern-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
       else {
         if (step.scenario === 'modern-confirm') await capturePhase('prompt')
@@ -266,7 +270,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     expect((await context()).native.state.nativePid).toBe(boundNativePid); expect((await context()).native.state.status).toBe('live')
     await expect(composer).toHaveText(draft); expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
     if (step.scenario.endsWith('-pause')) expect((await context()).native.state.lastTurn?.reason).toBe('aborted')
-    steps.push({ ...step, ...(refusal ? { openingRefused: true, warningReviewed: true, refusalCaptures } : {}), nativeInterrupted: step.scenario.endsWith('-pause') ? (await context()).native.state.lastTurn?.reason === 'aborted' : undefined, id: original.id, revision: original.revision, retainedDraft: true, nativePid: boundNativePid })
+    steps.push({ ...step, ...(refusal || viewportReview ? { openingRefused: refusal, warningReviewed: true, refusalCaptures } : {}), nativeInterrupted: step.scenario.endsWith('-pause') ? (await context()).native.state.lastTurn?.reason === 'aborted' : undefined, id: original.id, revision: original.revision, retainedDraft: true, nativePid: boundNativePid })
   }
   await writeFile(join(workspace!, 'mcp-elicitation-phase.txt'), '0')
   const turnsBeforeRecovery = (await context()).turns
