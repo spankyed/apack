@@ -13,6 +13,7 @@ import tarfile
 from urllib.request import urlopen
 
 CASES = {
+    'imported-image-app': {'CLAUDE_RESEARCH_IMPORT_IMAGE': '1'},
     'onboarding-import-app': {},
     'direct-resume-app': {},
     'async-agent-app': {'CLAUDE_RESEARCH_PENDING_DURATION': '1'},
@@ -172,7 +173,7 @@ def replay_directory(case, linux_container=False):
 
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
-    if linux_container and case not in ['onboarding-import-app', 'direct-resume-app', 'async-agent-app', 'window-agent-app', 'agent-reconnect-app', 'prompt-expiry-app', 'prompt-reconnect-app', 'agent-media-boundary-app', 'held-helper-main-app', 'held-helper-subagent-app', 'system-policy-transition-app', 'question-owner-failure-app', 'lsp-unload-app', 'lsp-lifetime-app', 'lsp-lifecycle-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
+    if linux_container and case not in ['imported-image-app', 'onboarding-import-app', 'direct-resume-app', 'async-agent-app', 'window-agent-app', 'agent-reconnect-app', 'prompt-expiry-app', 'prompt-reconnect-app', 'agent-media-boundary-app', 'held-helper-main-app', 'held-helper-subagent-app', 'system-policy-transition-app', 'question-owner-failure-app', 'lsp-unload-app', 'lsp-lifetime-app', 'lsp-lifecycle-app', 'lsp-app', 'reset-task-app', 'system-policy-unreadable-app', 'system-policy-app', 'agent-ime-cancel-app', 'pdf-pages-app', 'native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
         raise ValueError('Linux container adoption covers reviewed pane, held-policy, prompt-timeout, tool-width Agent IME lifetime and Agent caret profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')
@@ -217,7 +218,7 @@ def run(case, linux_container=False):
     """.replace('__probe_kind__', json.dumps('terminal-managed-transition-app' if case in ['held-helper-main-app', 'held-helper-subagent-app'] else 'terminal-plan-app-theme'))
         if case == 'onboarding-import-app':
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-onboarding-import')
-        if case == 'direct-resume-app':
+        if case in ['direct-resume-app', 'imported-image-app']:
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-direct-resume')
         if case in ['reset-task-app', 'async-agent-app']:
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-task-controls')

@@ -100,6 +100,11 @@ test('directly resumes unrepresented saved native history with its metadata and 
   const sourceThreadId = (await context()).threadId
   const costBeforeCheckpoint=(await context()).claude.totalCostUsd
   await composer.fill('NativeForkCheckpointAlpha: remember this source-only marker.')
+  const importedImage=process.env.CLAUDE_RESEARCH_IMPORT_IMAGE==='1'?(await readFile(join(workspace!,'native-app-image.png'))).toString('base64'):undefined
+  if(importedImage){
+    await card.evaluate((element,data)=>{const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0)),clipboard=new DataTransfer();clipboard.items.add(new File([bytes],'import-marker.png',{type:'image/png'}));element.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}))},importedImage)
+    await expect(card.getByTitle('import-marker 1.png',{exact:true})).toBeVisible()
+  }
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.some((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.') }).toBe(true)
   const checkpoint = (await context()).messages.filter((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.').at(-1)
@@ -122,6 +127,12 @@ test('directly resumes unrepresented saved native history with its metadata and 
   const imported = await context()
   expect(imported.sessionId).toBe(sessionId)
   expect(imported.claude.cwd).toBe(workspace)
+  if(importedImage){
+    const user=imported.messages.find((row:any)=>row.text==='NativeForkCheckpointAlpha: remember this source-only marker.')
+    expect(user?.references?.images?.map((image:any)=>image.url)).toEqual(['data:image/png;base64,'+importedImage])
+    const originalMedia=user.context.claudeTerminalMessage.media
+    expect(originalMedia.filter((block:any)=>block.type==='image').map((block:any)=>block.source)).toEqual([{type:'base64',media_type:'image/png',data:importedImage}])
+  }
   expect(imported.messages.filter((m: any) => m.context?.cliUuid === checkpoint.context.cliUuid)).toHaveLength(1)
   await writeFile(join(workspace!, 'import-before-continuation.json'), JSON.stringify({nativeCost,imported}, null, 2))
   expect(imported.claude.totalCostUsd).toBe(nativeCost)
@@ -195,8 +206,12 @@ test('directly resumes unrepresented saved native history with its metadata and 
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
     const review=appPage.getByRole('button',{name:'Review imported checkpoint',exact:true})
-    await review.scrollIntoViewIfNeeded()
-    await expect(review).toBeInViewport()
+    if(importedImage){
+      const image=appPage.locator('img[src="data:image/png;base64,'+importedImage+'"]')
+      await image.scrollIntoViewIfNeeded()
+      await expect(image).toBeInViewport()
+      await expect.poll(()=>image.evaluate(image=>(image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    }else{await review.scrollIntoViewIfNeeded();await expect(review).toBeInViewport()}
     await expect(composer).toHaveText(resumedDraft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     expect(await appPage.evaluate(()=>({width:innerWidth,height:innerHeight}))).toEqual({width,height:width===680?600:900})
@@ -218,5 +233,5 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect(continued.claude.totalCostUsd).toBe(nativeTotal)
   expect(continued.claude.cwd).toBe(workspace)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, nativeImportedClient:true, addressedRetiredClient, clientReceipts:await clientReceipts(), resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, nativeImportedClient:true, nativeImportedImage:!!importedImage, addressedRetiredClient, clientReceipts:await clientReceipts(), resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
 })
