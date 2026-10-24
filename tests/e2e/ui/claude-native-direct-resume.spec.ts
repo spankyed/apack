@@ -126,7 +126,40 @@ test('directly resumes unrepresented saved native history with its metadata and 
   const resumedDraft='Continue after importing the saved native conversation.'
   await composer.fill(resumedDraft)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  await expect.poll(async()=>(await context()).native?.state?.status,{timeout:25000}).toBe('live')
+  terminalScreen?.dispose();terminalScreen=undefined
+  {
+  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  ;(globalThis as any).self ??= globalThis
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const event=rows.map(row=>row.meta?.event).filter(event=>event?.type==='CLAUDE_TERMINAL_RESIZE'&&event.ownerId===ownerId).at(-1)
+    return event?{cols:event.columns,rows:event.rows}:undefined
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
+  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
+  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
+  let lastSequence = 0
+  let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
+  await expect.poll(async () => {
+    const current = await context(), native = current.native
+    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
+    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
+    const buffer = terminalScreen!.buffer.active
+    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
+    if (native?.state?.status === 'live' && native.state.mainStatus?.includes('AppNativeMain ' + sessionId)) return true
+    const screen = recognizeOnboardingPrompt(text, workspace)
+    await writeFile(join(workspace!, 'native-resume-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
+    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
+    else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
+    else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
+    else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
+    else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
+    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
+  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  }
   const reopenedNativePid=(await context()).native.state.nativePid
   expect(reopenedNativePid).not.toBe(boundNativePid)
   expect((await context()).native.state.sessionId).toBe(sessionId)
