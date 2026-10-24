@@ -482,6 +482,15 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   cost is, which `transact` already batches. A create read 23 keys to write 12; reading the value a write replaces
   only where its index is built (`306043d52`) makes it 18 reads, and an update 5 rather than 7. The binding's
   crossings are not what dominates, so no native layer is called for.
+- **The app on real data, end to end:** a copy of the development data dir (format 3), converted by
+  `scripts/ears-convert.ts` — 232 entities, 1,582 attributes, 325 relations, 2 sequences — and the built API booted on
+  it as the guide's manual boot does. It installed and applied default-setup's content, started the brain's root flow,
+  and ran the reconcile actions over the stored threads and artifacts, all successful; boot logged `Database 2.0 MB on
+  disk, heap 120.7 MB` (the whole process: the packs' code and the API). Stopped by its pid, the copy read back with
+  `apack db query` holds what that boot committed (the applied content's revision, the app version). The run found
+  one defect, fixed: format 3 held 469 attribute rows with no value (`{ t: 'undefined' }`: `actionFn`, `description`,
+  `final`, `mode`, `params`, `fieldMappings`), which its hydration read as absent and the conversion refused; it now
+  skips and counts them (`emptyAttributes`).
 - **Test time:** `npm run chain -- --no-native` passed in 870.4 s on a 10-core budget (Steps 1–3's run: 821.6 s), every
   step run: `test:unit:host` 69.6 s, `test:unit:pack` 42.1 s, `test:integration` 576.6 s, `test:smoke` 13.0 s.
 
@@ -496,7 +505,7 @@ Done, 2026-10-24: no system keeps a second copy of the data. Read from each syst
 
 | System | What it keeps | Entity data? |
 |---|---|---|
-| `default-setup/library` | `documents`, `collections`, `currentItems` (entity DTO lists), the folder and path | Declared, set empty at start and written by nothing: they hold nothing. Dead fields, removable with a facade update; the views read the repository when asked |
+| `default-setup/library` | nothing | Its context declared entity lists (`documents`, `collections`, `currentItems`) that nothing wrote or read; removed. Its views read the repository when asked |
 | `host/settings` | `applied`: each feature's effective settings as last told, to send the next `FEATURE_SETTINGS_UPDATED` only to features whose settings changed | What it publishes, derived from the one `Settings` row; kept |
 | `default-setup/brain` | `eventQueue` (events waiting for the brain actor); module state: running flow actors, trigger listeners and cron jobs | No rows: run state and callbacks keyed by flow and trigger ids, rebuilt from the flows |
 | `default-setup/logs` | `logs`: the process's log events | Not EARS data |
