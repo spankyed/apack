@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–4 are done; Step 5 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–5 are done; Step 6 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -175,6 +175,28 @@ import ask for it.
 
 **Done when:** a write behind `durable()` survives power loss as modelled by the harness (a kill with the environment's
 unsynced pages dropped), and the write cases of the bench are read against Step 0.
+
+Done, 2026-10-24, with the power-loss model replaced, stated here: dropping an environment's unsynced pages needs a
+filesystem that can lose writes on demand (dm-flakey, a VM), which neither this Mac nor the Linux test container has —
+a `SIGKILL` leaves every committed page in the OS cache. What is modelled instead is the boundary that decides it: which
+flush each promise waits for. `tests/lmdb/durability.spec.ts` watches the environment's own `sync` and the flags each
+commit is made with: `durable()` resolves at once with nothing unsynced, starts a sync at once otherwise, and resolves
+only when a sync that *began after* the commit has finished — a write made while one runs waits for the next; a failed
+sync rejects; `close()`'s flushed write settles it. `transact(fn, { durable: true })` commits flushed
+(`ABORTABLE | SYNCHRONOUS_COMMIT`, LMDB's default), which flushes every commit before it, so `durable()` then has nothing
+to wait for, and a durable unit inside another makes the outer one durable. The background sync now runs once writes
+pause for `SYNC_IDLE_MS` (100 ms) — a burst shares one sync — and at the latest `SYNC_INTERVAL_MS` after the first
+unsynced commit. Each of five mutations fails the spec (`durable()` resolving at once; a sync counting commits made
+while it ran; the adapter ignoring `durable`; the journal not handing it up; no idle sync). The harness's units are now
+durable at random, so the flushed commit runs under the model, the reopen and the crash runs. `reset()` and
+`replaceWith()` were already flushed transactions, and a backup copies a read transaction, which holds every commit
+flushed or not, so neither needed `durable()`; import is `replaceWith`.
+
+Readings (the bench, a machine at load 35–45; new cases on an LMDB store of its own): 1,000 creates written
+`create().set().set()` 101 ms — 3,000 synchronous commits, about 34 µs each — against 9.1 ms on a sink that keeps
+nothing; the same as one `transact` 11.1 ms against 10.2 ms; a durable unit of one create 4.7 ms, and a create then
+`durable()` 4.8 ms (macOS `fsync`, which is not `F_FULLFSYNC`). The memory-engine write cases are within noise of Step 0's
+(1,000 creates 9.1 ms mean against 7.2–8.6 ms).
 
 ### 6. Telemetry and budgets
 The engine reports resident bytes per type, bytes out of line, the cache's size and hit rate, boot time, and commits

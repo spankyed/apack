@@ -12,6 +12,8 @@ interface Level {
   checks: Array<() => void>;
   /** What runs once the unit's writes are stored */
   after: Array<() => void>;
+  /** Whether the unit, or one inside it, asked to be on disk when it commits */
+  durable: boolean;
 }
 
 /** An engine's unit of work, shared by the stores that write */
@@ -94,13 +96,16 @@ export function createJournal(sink: PersistenceSink) {
     onUpdateRelation: hold((...args) => sink.onUpdateRelation(...args)),
     onRemoveRelation: hold((...args) => sink.onRemoveRelation(...args)),
     onUnitStart: () => sink.onUnitStart(),
-    onUnitEnd: () => sink.onUnitEnd(),
+    onUnitEnd: (options) => sink.onUnitEnd(options),
     close: sink.close && (() => sink.close?.()),
   };
 
-  /** Runs `fn` as one unit; a unit inside another commits into it and rolls back only its own writes */
-  function transact<T>(fn: () => T): T {
-    const level: Level = { seen: new Set(), undos: [], sinkMark: held.length, checks: [], after: [] };
+  /**
+   * Runs `fn` as one unit; a unit inside another commits into it and rolls back only its own writes. A `durable` unit
+   * makes the outermost one it is in durable
+   */
+  function transact<T>(fn: () => T, { durable = false }: { durable?: boolean } = {}): T {
+    const level: Level = { seen: new Set(), undos: [], sinkMark: held.length, checks: [], after: [], durable };
     levels.push(level);
     let result: T;
     try {
@@ -127,6 +132,7 @@ export function createJournal(sink: PersistenceSink) {
       parent.undos.push(...level.undos);
       parent.checks.push(...level.checks);
       parent.after.push(...level.after);
+      parent.durable ||= level.durable;
       for (const key of level.seen) parent.seen.add(key);
       return result;
     }
@@ -135,7 +141,7 @@ export function createJournal(sink: PersistenceSink) {
       try {
         sink.onUnitStart();
         for (const call of calls) call();
-        sink.onUnitEnd();
+        sink.onUnitEnd(level.durable ? { durable: true } : undefined);
       } catch (error) {
         // The sink refused the unit: memory goes back to what the sink holds
         for (let i = level.undos.length - 1; i >= 0; i--) level.undos[i]();

@@ -104,6 +104,7 @@ export namespace EARS {
 // @public
 export interface Ears {
     create: Create;
+    durable(): Promise<void>;
     findRelations(match?: RelationMatch): RelationRow[];
     getAttr(id: EARS.EntityId, field: EARS.AttrKind): EARS.AttributeValue | undefined;
     getRelation(relId: EARS.RelationId): RelationRow | undefined;
@@ -117,7 +118,7 @@ export interface Ears {
     nextLabel(type: EARS.Entity, base: string): string;
     query: Query;
     removeRelation(relId: EARS.RelationId): void;
-    transact<T>(fn: () => T): T;
+    transact<T>(fn: () => T, options?: TransactOptions): T;
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
         target?: EARS.EntityId;
@@ -288,6 +289,7 @@ export const OUT_OF_LINE_BYTES = 2048;
 export interface PersistenceSink {
     // (undocumented)
     close?(): void;
+    durable?(): Promise<void>;
     // (undocumented)
     onAddRelation(relId: string, kind: string, source: string, target: string, info: unknown): void;
     onCreateEntity(entityId: string, entityType: string): void;
@@ -296,7 +298,9 @@ export interface PersistenceSink {
     onDropAttr(kind: string, entityId: string): void;
     onPutAttr(kind: string, entityId: string, value: unknown): void;
     onRemoveRelation(relId: string): void;
-    onUnitEnd(): void;
+    onUnitEnd(options?: {
+        durable?: boolean;
+    }): void;
     onUnitStart(): void;
     // (undocumented)
     onUpdateRelation(relId: string, patch: {
@@ -499,6 +503,11 @@ E
 export type StoredRecord = {
     id: string;
 } & Record<string, unknown>;
+
+// @public
+export interface TransactOptions {
+    durable?: boolean;
+}
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {

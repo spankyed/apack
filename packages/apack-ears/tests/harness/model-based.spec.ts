@@ -27,14 +27,14 @@ function refusable(sink: PersistenceSink): { sink: PersistenceSink; refuseNext: 
     refuseNext: () => { refusing = true; },
     sink: {
       ...sink,
-      onUnitEnd() {
+      onUnitEnd(options) {
         if (refusing) {
           refusing = false;
           // The unit's writes were collected; the sink drops them as a refused transaction would
           sink.onUnitStart();
           throw new Error('disk full');
         }
-        sink.onUnitEnd();
+        sink.onUnitEnd(options);
       },
     },
   };

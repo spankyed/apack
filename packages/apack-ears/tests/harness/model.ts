@@ -13,8 +13,8 @@ export type Op =
   | { op: 'link'; id: string; kind: string; target: string }
   | { op: 'unlink'; id: string; kind: string; target: string }
   | { op: 'destroy'; id: string }
-  /** Writes made as one unit, which then returns or throws */
-  | { op: 'unit'; ops: Op[]; throws: boolean }
+  /** Writes made as one unit, which then returns or throws; a durable one commits flushed, which changes no data */
+  | { op: 'unit'; ops: Op[]; throws: boolean; durable: boolean }
   /** The store refuses the next unit it is asked to commit, as a full disk would */
   | { op: 'refuseNext' };
 
@@ -169,7 +169,7 @@ export function applyTo(engine: EarsEngine, op: Op, refuseNext: () => void): boo
         engine.transact(() => {
           for (const each of inner.ops) write(each);
           if (inner.throws) throw new Error('the unit threw');
-        });
+        }, { durable: inner.durable });
         return;
       case 'refuseNext': refuseNext(); return;
     }

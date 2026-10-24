@@ -17,6 +17,8 @@ export const valueKey = (kind: string, entityId: string) => {
  * `ABORTABLE | SYNCHRONOUS_COMMIT | NO_SYNC_FLUSH`, lmdb-js's `TransactionFlags`.
  */
 const COMMIT_WITHOUT_FLUSH = 0x10003 as TransactionFlags;
+/** How a durable unit commits: synchronously, and flushed to disk before it returns (`ABORTABLE | SYNCHRONOUS_COMMIT`) */
+const COMMIT_FLUSHED = 0x3 as TransactionFlags;
 
 /** Refuses a relation end that names no entity id: the unit it is in stores nothing */
 function requireEnd(relId: string, end: string, value: unknown): asserts value is string {
@@ -30,9 +32,13 @@ function requireEnd(relId: string, end: string, value: unknown): asserts value i
  * returns, or a throw, having stored none of it — which the engine answers by undoing the unit in memory. A unit's
  * writes edit working copies of the entity records they touch, in the order they were made, and each record is put
  * once as the unit commits. A large value (`isLarge`) is kept in `values` and marked in its record. A call made
- * outside a unit commits on its own. `onCommit` hears every commit, for the store's background sync.
+ * outside a unit commits on its own. A durable unit waits for the disk as it commits, which also makes every commit
+ * before it durable. `onCommit` hears every commit and whether it was flushed, for the store's sync.
  */
-export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): Required<PersistenceSink> {
+export function makeLmdbAdapter(
+  dbs: LmdbDbs,
+  onCommit: (flushed: boolean) => void = () => {},
+): Omit<Required<PersistenceSink>, 'durable'> {
   const { root, rows, values, relationRows } = dbs;
   /** The open unit's writes, or none outside one */
   let unit: Array<() => void> | null = null;
@@ -59,7 +65,7 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
     }
   };
 
-  const commit = (steps: Array<() => void>) => {
+  const commit = (steps: Array<() => void>, flushed = false) => {
     // Each step has a block body: a step returning lmdb's put promise would turn the transaction asynchronous
     root.transactionSync(() => {
       working = new Map();
@@ -72,8 +78,8 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
       } finally {
         working = null;
       }
-    }, COMMIT_WITHOUT_FLUSH);
-    onCommit();
+    }, flushed ? COMMIT_FLUSHED : COMMIT_WITHOUT_FLUSH);
+    onCommit(flushed);
   };
   const write = (step: () => void) => {
     if (unit) unit.push(step);
@@ -85,10 +91,10 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
       // A unit that threw part way left its writes here; they are not this one's
       unit = [];
     },
-    onUnitEnd() {
+    onUnitEnd(options) {
       const steps = unit ?? [];
       unit = null;
-      if (steps.length > 0) commit(steps);
+      if (steps.length > 0) commit(steps, options?.durable);
     },
     onCreateEntity(entityId: string, type: string) {
       write(() => { working!.set(entityId, { type, fields: [], outOfLine: [] }); });

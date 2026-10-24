@@ -5,7 +5,7 @@
  * @packageDocumentation
  */
 
-export { openLmdbStore, type LmdbStore, type LmdbStoreOptions } from './store.ts';
+export { openLmdbStore, SYNC_IDLE_MS, SYNC_INTERVAL_MS, type LmdbStore, type LmdbStoreOptions } from './store.ts';
 export { LMDB_FORMAT_VERSION, openEnvAt, closeEnv, type EntityRecord, type LmdbDbs, type RelationRecord } from './envs.ts';
 export { makeLmdbAdapter } from './adapter.ts';
 export { hydrate } from './hydrate.ts';

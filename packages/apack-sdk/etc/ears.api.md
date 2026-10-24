@@ -12,6 +12,7 @@ import type { Query } from '@apackdev/ears';
 import { RelationMatch } from '@apackdev/ears';
 import { RelationRow } from '@apackdev/ears';
 import { SchemaStats } from '@apackdev/ears';
+import { TransactOptions } from '@apackdev/ears';
 import type { Upsert } from '@apackdev/ears';
 import type { Write } from '@apackdev/ears';
 
@@ -49,7 +50,7 @@ export const NO_ENGINE_BOUND: string;
 export const removeRelation: (relId: EARS.RelationId) => void;
 
 // @public (undocumented)
-export const transact: <T>(fn: () => T) => T;
+export const transact: <T>(fn: () => T, options?: TransactOptions) => T;
 
 // @public
 export const untypedCreate: Create;

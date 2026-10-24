@@ -174,7 +174,7 @@ export interface LmdbStoreOptions {
 }
 
 // @public
-export function makeLmdbAdapter(dbs: LmdbDbs, onCommit?: () => void): Required<PersistenceSink>;
+export function makeLmdbAdapter(dbs: LmdbDbs, onCommit?: (flushed: boolean) => void): Omit<Required<PersistenceSink>, 'durable'>;
 
 // @public
 export function openEnvAt(basePath: string, input?: {
@@ -224,5 +224,11 @@ export const REMOVE_ATTRIBUTE: unique symbol;
 export function rewriteAttributes(basePath: string, rewrite: (kind: string, id: string, value: unknown) => unknown, input?: {
     removeEntities?: readonly string[];
 }): AttributeRewrite;
+
+// @public
+export const SYNC_IDLE_MS = 100;
+
+// @public
+export const SYNC_INTERVAL_MS = 1000;
 
 ```

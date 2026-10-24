@@ -34,7 +34,7 @@ const write: fc.Arbitrary<Op> = fc.oneof(
 /** Any op: a write, a unit of writes that returns or throws, or the store refusing the next commit */
 export const op: fc.Arbitrary<Op> = fc.oneof(
   { weight: 8, arbitrary: write },
-  { weight: 2, arbitrary: fc.record({ op: fc.constant('unit' as const), ops: fc.array(write, { minLength: 1, maxLength: 5 }), throws: fc.boolean() }) },
+  { weight: 2, arbitrary: fc.record({ op: fc.constant('unit' as const), ops: fc.array(write, { minLength: 1, maxLength: 5 }), throws: fc.boolean(), durable: fc.boolean() }) },
   { weight: 1, arbitrary: fc.constant({ op: 'refuseNext' } as Op) },
 );
 

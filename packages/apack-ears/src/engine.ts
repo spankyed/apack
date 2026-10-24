@@ -12,6 +12,15 @@ import { createRelations, type RelationMatch, type RelationRow } from './relatio
 import { createJournal, unitWrites } from './journal.ts';
 import { createNameChecks } from './names.ts';
 
+/** How a unit (`transact`) commits */
+export interface TransactOptions {
+  /**
+   * The unit is on disk when `transact` returns, so it survives the machine losing power, not only the app crashing:
+   * the commit waits for the disk, and so costs a sync. A durable unit inside another makes the outer one durable
+   */
+  durable?: boolean;
+}
+
 /** An engine's operations — its queries, writes and transactions: what a program is handed */
 export interface Ears {
   /** Queries the engine, untyped (a pack's `#generated/ears` types it) */
@@ -27,7 +36,13 @@ export interface Ears {
    * returns, persistence receives them together. Reads inside see its own writes. `fn` must be synchronous,
    * and a unit inside another commits into it.
    */
-  transact<T>(fn: () => T): T;
+  transact<T>(fn: () => T, options?: TransactOptions): T;
+  /**
+   * Resolves once every write that has returned is on disk. A write survives the app crashing when it returns, and
+   * the machine losing power within about a second (the store's background sync); a caller that needs the second
+   * at once waits for this, or writes in a `durable` unit. With no store behind the engine it resolves at once.
+   */
+  durable(): Promise<void>;
   /** Whether `name` is an entity type the engine's creator registered */
   isEntityType(name: string): boolean;
   /** Whether `name` is a relation kind the engine's creator registered */
@@ -111,6 +126,7 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
 
   const operations: Ears = {
     query, create, upsert, write, transact, isEntityType, isRelationKind, isRole,
+    durable: () => persistence.durable?.() ?? Promise.resolve(),
     nextLabel: counters.nextLabel,
     ...hierarchy,
     getRow: storage.getRow,

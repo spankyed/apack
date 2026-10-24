@@ -8,12 +8,17 @@ import { hydrate } from './hydrate.ts';
 import { LmdbReader } from './reader.ts';
 
 /**
- * How often what was committed since the last sync is flushed to disk. A commit survives the app crashing as soon as
- * it returns; this bounds what an OS crash or a power loss can take, which is the commits since the last sync
- * (decided 2026-10-23: SQLite's WAL with `synchronous=NORMAL` makes the same trade).
+ * The longest a commit waits to be flushed to disk. A commit survives the app crashing as soon as it returns; this
+ * bounds what an OS crash or a power loss can take, which is the commits since the last sync (decided 2026-10-23:
+ * SQLite's WAL with `synchronous=NORMAL` makes the same trade). A caller that can't lose a write waits for `durable()`.
  */
 export const SYNC_INTERVAL_MS = 1000;
 
+/**
+ * How long writes must pause before what they committed is flushed: a burst of commits shares one sync (group commit),
+ * and a lone write is on disk this long after it returns rather than `SYNC_INTERVAL_MS`
+ */
+export const SYNC_IDLE_MS = 100;
 
 /** An app's LMDB store: one environment, and the sink that writes the engine's changes to it */
 export interface LmdbStore {
@@ -77,9 +82,74 @@ export interface LmdbStoreOptions {
  */
 export function openLmdbStore({ path, engine, readOnly = false, log = console.log }: LmdbStoreOptions): LmdbStore {
   let env: LmdbDbs | null = openEnvAt(path, { readOnly });
-  /** Whether anything was committed since the last sync */
-  let unsynced = false;
-  const adapter = makeLmdbAdapter(env, () => { unsynced = true; });
+  // Commits are counted, so a sync knows which of them it made durable: the ones made before it started
+  let committed = 0;
+  let synced = 0;
+  const unsynced = () => synced < committed;
+  /** What `durable()` callers wait for: the commit count each needs synced */
+  let waiting: Array<{ through: number; resolve: () => void; reject: (error: Error) => void }> = [];
+  let syncing = false;
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  let overdue: ReturnType<typeof setTimeout> | undefined;
+
+  const settle = (error?: Error) => {
+    const still: typeof waiting = [];
+    for (const waiter of waiting) {
+      if (error) waiter.reject(error);
+      else if (waiter.through <= synced) waiter.resolve();
+      else still.push(waiter);
+    }
+    waiting = still;
+  };
+  /** Marks every commit so far durable: a flushed commit flushes every page before it */
+  const flushedThrough = (count: number) => {
+    synced = Math.max(synced, count);
+    if (!unsynced()) {
+      clearTimeout(idle);
+      clearTimeout(overdue);
+      idle = overdue = undefined;
+    }
+    settle();
+  };
+  /** Flushes what was committed, off the main thread; one sync runs at a time, and the next follows if needed */
+  const sync = () => {
+    // The running sync's end starts the next one, or arms the timers for it
+    if (syncing) return;
+    clearTimeout(idle);
+    clearTimeout(overdue);
+    idle = overdue = undefined;
+    if (!env || !unsynced()) return;
+    syncing = true;
+    const through = committed;
+    (env.root as unknown as { sync(done: (error?: Error) => void): void }).sync((error) => {
+      syncing = false;
+      if (error) {
+        log(`[LMDB] Syncing ${path} failed: ${error.message}`);
+        settle(error);
+      } else {
+        flushedThrough(through);
+      }
+      // Commits made while it ran: at once for a caller waiting on them, else once writes pause
+      if (!unsynced()) return;
+      if (waiting.length > 0) sync();
+      else schedule();
+    });
+  };
+  /** After a commit: a sync once writes pause, and at the latest `SYNC_INTERVAL_MS` after the first unsynced one */
+  const schedule = () => {
+    clearTimeout(idle);
+    idle = setTimeout(sync, SYNC_IDLE_MS);
+    idle.unref();
+    if (!overdue) {
+      overdue = setTimeout(sync, SYNC_INTERVAL_MS);
+      overdue.unref();
+    }
+  };
+  const adapter = makeLmdbAdapter(env, (flushed) => {
+    committed++;
+    if (flushed) flushedThrough(committed);
+    else schedule();
+  });
 
   const openEnv = (): LmdbDbs => {
     if (!env) throw new Error(`The LMDB store at ${path} is closed`);
@@ -90,21 +160,11 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     openEnv();
   };
 
-  // The background sync: one flush makes every commit before it durable, off the main thread
-  const timer = readOnly ? undefined : setInterval(() => {
-    if (!unsynced || !env) return;
-    unsynced = false;
-    (env.root as unknown as { sync(done: (error?: Error) => void): void }).sync((error) => {
-      if (error) log(`[LMDB] Syncing ${path} failed: ${error.message}`);
-    });
-  }, SYNC_INTERVAL_MS);
-  timer?.unref();
-
   /** Runs `fn` in one write transaction that waits for the disk: a reset and an import are each durable when they return */
   const durably = (fn: () => void) => {
     writable();
     openEnv().root.transactionSync(() => { fn(); });
-    unsynced = false;
+    flushedThrough(++committed);
   };
 
   /** Removes every row of the data databases; keys are read first, since a range is a live cursor */
@@ -122,26 +182,35 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     onUpdateRelation: (...args) => { writable(); adapter.onUpdateRelation(...args); },
     onRemoveRelation: (...args) => { writable(); adapter.onRemoveRelation(...args); },
     onUnitStart: () => { writable(); adapter.onUnitStart(); },
-    onUnitEnd: () => { writable(); adapter.onUnitEnd(); },
+    onUnitEnd: (options) => { writable(); adapter.onUnitEnd(options); },
     readAttr: (kind, entityId) => { openEnv(); return adapter.readAttr(kind, entityId); },
+    durable() {
+      if (!unsynced()) return Promise.resolve();
+      if (!env) return Promise.reject(new Error(`The LMDB store at ${path} is closed`));
+      const done = new Promise<void>((resolve, reject) => waiting.push({ through: committed, resolve, reject }));
+      sync();
+      return done;
+    },
     close: () => close(),
   };
 
   function close(): void {
     if (!env) return;
-    clearInterval(timer);
+    clearTimeout(idle);
+    clearTimeout(overdue);
     const closing = env;
     env = null;
     try {
       // lmdb-js has no synchronous sync, so one flushed write, to the environment's own records, makes every commit
       // before it durable
-      if (unsynced && !readOnly) {
+      if (unsynced() && !readOnly) {
         const meta = closing.root.openDB({ name: 'meta', encoding: 'json' });
         closing.root.transactionSync(() => { meta.put('syncedAt', Date.now()); });
       }
-      unsynced = false;
+      flushedThrough(committed);
     } catch (error) {
       log(`[LMDB] Flushing ${path} before closing failed: ${(error as Error).message}`);
+      settle(error as Error);
     }
     try {
       closeEnv(closing);

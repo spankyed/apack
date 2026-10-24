@@ -2,12 +2,17 @@
 // Run with `npm run bench -w @apackdev/ears`, which builds the package first: it times the engine in `dist`, the build
 // that ships, since a dev loader compiles with its own options. The baseline is in docs/plans/ears-storage-layout.md
 // (Step 4); the tolerance is +10% median per case.
-import { bench, describe } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterAll, bench, describe } from 'vitest';
 import type { EARS as EarsTypes, PersistenceSink } from '../src/index.ts';
 
 // A specifier held in a variable, so the typecheck (which runs before any build) reads the types from source
 const DIST = '../dist/index.js';
+const DIST_LMDB = '../dist/lmdb/index.js';
 const { createEarsEngine, EARS } = await import(/* @vite-ignore */ DIST) as typeof import('../src/index.ts');
+const { openLmdbStore } = await import(/* @vite-ignore */ DIST_LMDB) as typeof import('../src/lmdb/index.ts');
 
 const TASKS = 40_000;
 const PROJECTS = 5_000;
@@ -131,5 +136,37 @@ describe('writes', () => {
     engine.transact(() => {
       for (let i = 0; i < 1000; i++) engine.create('Note').set('title', `Note ${i}`).set('status', 'open');
     });
+  }, { iterations: 50, time: 0 });
+});
+
+describe('writes on an LMDB store', () => {
+  // The same writes, each committed to the files when it returns; the store opens an environment of its own
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ears-bench-'));
+  afterAll(() => {
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  let stored: typeof engine;
+  const store = openLmdbStore({ path: path.join(dir, 'ears-db'), engine: () => stored.admin, log: () => {} });
+  stored = createEarsEngine({ isEntityType: (name) => types.has(name), isRelationKind: () => true, isRole: () => true, persistence: store.sink });
+
+  bench('1,000 creates', () => {
+    for (let i = 0; i < 1000; i++) stored.create('Note').set('title', `Note ${i}`).set('status', 'open');
+  }, { iterations: 20, time: 0 });
+
+  bench('transact: 1,000 creates as one unit', () => {
+    stored.transact(() => {
+      for (let i = 0; i < 1000; i++) stored.create('Note').set('title', `Note ${i}`).set('status', 'open');
+    });
+  }, { iterations: 20, time: 0 });
+
+  // What a caller that cannot lose a write pays: the commit waits for the disk
+  bench('a durable unit of one create', () => {
+    stored.transact(() => { stored.create('Note').set('title', 'durable'); }, { durable: true });
+  }, { iterations: 50, time: 0 });
+
+  bench('a create, then durable()', async () => {
+    stored.create('Note').set('title', 'then synced');
+    await stored.durable();
   }, { iterations: 50, time: 0 });
 });
