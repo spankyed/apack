@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "304260ee9d08d136976f3866132a227771373c8d",
+  "researchCommit": "9853298245cd792263c3ff59f6b591b8a7edb419",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -87,7 +87,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "8c9915325f74ce1d5df733ba8a6358422d48a6c24a6066496cc591fef68b8881",
+    "src/integration/apack-terminal-owner-app.mjs": "3d94054662cdf41199a07fdc8f37602f21f622d6a270b452eee684a642ecdc19",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -124,7 +124,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "b96c29cafcfdad81b11022899e8f2c8a84fbff5761dd56160e165ad78c962b9d",
+    "src/integration/run-apack-controls.mjs": "aaf9d2a17c44e81933073af972ea16ffa67f24ba6f1866b36d7ddbb933aeaf8b",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -283,5 +283,5 @@
     "src/protocol/native-task-roster-observer.mjs": "ce304b2eac63472c4901da344624d6dab6ea90fddbc465a65f31cf1bc2eef2b0",
     "src/protocol/native-search-review-fixture.mjs": "a520afe2cfed0524a8debc6de94fee3003241cc08f13b8d27870af1b3f7bb1b9"
   },
-  "archiveSha256": "68a6ff161ae9b0a922db330bdd7db3576cc089a4f4eac02f2c2057354a926ebd"
+  "archiveSha256": "83db7892a495b445683b0e45e18d7355733f25683bebb5da66aac9aa4756a0ac"
 }
