@@ -24,3 +24,14 @@ export function sameValue(a: unknown, b: unknown): boolean {
   const [ka, kb] = [fields(a), fields(b)];
   return ka.length === kb.length && ka.every((k) => sameValue(a[k], b[k]));
 }
+
+/**
+ * Freezes `value` and everything it holds, and returns it: a stored value is immutable, so a read can hand it back as
+ * it is. A frozen object is skipped with what it holds, since a value is only ever frozen whole
+ */
+export function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const held of Object.values(value)) deepFreeze(held);
+  return value;
+}

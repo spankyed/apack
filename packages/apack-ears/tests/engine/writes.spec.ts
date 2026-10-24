@@ -432,6 +432,21 @@ describe('rows', () => {
     expect(e.query.ids(id).pickOne()).toBeUndefined();
   });
 
+  it('stores a value immutably: what a read returns cannot be changed, nor what the write was given', () => {
+    const tags = ['a', { nested: [1] }];
+    const id = e.create('Task').set('tags', tags).set('meta', { deep: { list: [1, 2] } }).id();
+    const row = e.getRow(id)!;
+    expect(() => (row.tags as unknown[]).push('b')).toThrow(TypeError);
+    expect(() => { (row.meta as { deep: { list: number[] } }).deep.list[0] = 9; }).toThrow(TypeError);
+    // The list given to set is the stored value, so it is frozen with it
+    expect(() => tags.push('c')).toThrow(TypeError);
+    expect(e.getRow(id)?.tags).toEqual(['a', { nested: [1] }]);
+    // A relation's info likewise
+    const other = e.create('Task').id();
+    e.write(id).link('blocks', other, { info: { weight: [1] } });
+    expect(() => { (e.findRelations()[0].info as { weight: number[] }).weight.push(2); }).toThrow(TypeError);
+  });
+
   it('a field named __proto__ is a field like any other', () => {
     const id = e.create('Task').set('__proto__', { x: 1 }).id();
     expect(e.getAttr(id, '__proto__')).toEqual({ x: 1 });

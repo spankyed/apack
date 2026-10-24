@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–1 are done; Step 2 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–2 are done; Step 3 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -110,6 +110,13 @@ the bench decides whether it is done always or in development and tests only.
 
 **Done when:** a spec shows a returned list and object cannot be changed, and the default-setup and pack suites pass
 with values frozen — any code that changed a read's value fails there and is fixed at its source.
+
+Done, 2026-10-24. `deepFreeze` (`utils.ts`) in `place`, the one memory write every attribute change, undo and
+hydration goes through, and in a relation's row; a frozen object is skipped with what it holds, so a value is walked
+once. Frozen always, not only in development: freezing measured within noise. The ears, SDK, host and API suites and
+the pack pool pass with values frozen — no code changed a stored value. Readings (loaded machine): 1,000 creates
+6.7 ms, bulk load 126 ms; the converted production copy hydrates in 0.97–1.24 s to 309.5 MB of heap (22.8k entities
+now that relations are not, 45.8k relations, 178.5k attributes).
 
 ### 3. Large values out of line
 A value whose serialized size passes the threshold is stored in its own LMDB database (`values`, keyed by entity and

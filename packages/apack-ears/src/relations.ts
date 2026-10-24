@@ -2,7 +2,7 @@ import { EARS } from './entities.ts';
 import type { Journal } from './journal.ts';
 import type { PersistenceSink, RelationEdge } from './runtime.ts';
 import { RESERVED_ENTITY_TYPES } from './errors.ts';
-import { idSuffix, sameValue } from './utils.ts';
+import { deepFreeze, idSuffix, sameValue } from './utils.ts';
 
 /** Which relations to match: any combination of kind, source and target */
 export interface RelationMatch {
@@ -54,7 +54,7 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
   const none: ReadonlySet<EARS.RelationId> = new Set();
 
   const rowOf = (id: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info: unknown): RelationRow =>
-    Object.freeze({ id, kind, source, target, info: info as EARS.AttributeValue | undefined });
+    Object.freeze({ id, kind, source, target, info: deepFreeze(info) as EARS.AttributeValue | undefined });
 
   // ─── Undo ──────────────────────────────────────────────────────────────
 

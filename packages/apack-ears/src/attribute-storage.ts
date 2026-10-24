@@ -1,5 +1,5 @@
 import { EARS } from './entities.ts';
-import { idSuffix, isPlainObject } from './utils.ts';
+import { deepFreeze, idSuffix, isPlainObject } from './utils.ts';
 import type { Journal } from './journal.ts';
 import type { PersistenceSink } from './runtime.ts';
 import type { RelationStats } from './relations.ts';
@@ -133,7 +133,8 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
       }
     } else {
       if (!row) rows.set(id, row = newRow());
-      setField(row, kind, next);
+      // Immutable once stored: a read hands the value back as it is, and nothing can change it in place
+      setField(row, kind, deepFreeze(next));
     }
     if (kind !== TRASHED_AT) return;
     if (next === ABSENT) trashed.delete(id);
