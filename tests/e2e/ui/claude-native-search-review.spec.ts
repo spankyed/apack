@@ -8,7 +8,16 @@ delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async({appPage,electronApp},info)=>{
+ if(info.status!==info.expectedStatus&&!appPage.isClosed()){
+  const state=await appPage.evaluate(()=>({focused:document.hasFocus(),visibility:document.visibilityState,text:document.body.innerText.slice(-16000),buttons:[...document.querySelectorAll('button[aria-label="Expand tool activity"]')].map(node=>({rect:node.getBoundingClientRect().toJSON(),style:{display:getComputedStyle(node).display,visibility:getComputedStyle(node).visibility,opacity:getComputedStyle(node).opacity}}))})).catch(error=>({error:String(error)}))
+  await writeFile(join(workspace!,'native-search-failure.json'),JSON.stringify(state))
+  const window=await electronApp.browserWindow(appPage)
+  const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64')).catch(()=>undefined)
+  if(png)await writeFile(info.outputPath('native-search-failure.png'),Buffer.from(png,'base64'))
+ }
+ terminalScreen?.dispose();terminalScreen=undefined
+})
 test('reviews original Glob and Grep results while preserving everyday composing', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(180000)
   expect(process.env.HOME).toBe(workspace)
@@ -77,6 +86,10 @@ test('reviews original Glob and Grep results while preserving everyday composing
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('AppNativeMain ' + sessionId)
   const composer = card.locator('[contenteditable="true"]')
+  const ownedWindow=await electronApp.browserWindow(appPage)
+  await ownedWindow.evaluate(window=>{window.show();window.focus()})
+  await appPage.bringToFront()
+  await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(true)
   const cases=JSON.parse(await readFile(join(workspace!,'native-search-review-steps.json'),'utf8'))
   const results=[]
   for(const [index,step] of cases.entries()){
