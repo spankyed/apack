@@ -1,7 +1,7 @@
 # EARS storage: layout, relations, queries and write durability
 
-Status: the engine's in-memory work is done (below, under Done), 2026-10-24; the cut-over to LMDB is next, Steps 1–6 in
-order. Takes up review items 6
+Status: **the cut-over is complete**, 2026-10-24: the app runs on LMDB with no in-memory copy of the data, Steps 1–6
+done (each records how, below). PR #273. Takes up review items 6
 (row reads) and 9 (durability) from the EARS API cleanup, and supersedes the open parts of
 [goal-lmdb-only.md](../goals/goal-lmdb-only.md) (PR #261, closed unmerged), which holds the spike's measurements and
 the lock analysis.
@@ -433,6 +433,56 @@ Done, 2026-10-24.
 - `getSchemaStats`' key-only walk on the production-size copy.
 
 **Done when:** each reading is recorded here, or the prerequisite it lacked is.
+
+Done, 2026-10-24. macOS (MacBook Pro), Node 23.11, lmdb 3.5.3, 76–80% idle (`npm run check:idle`) before and after each
+run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMDB store in a temp dir; the engine in
+`dist`.
+
+- **Heap and boot** (`npm run bench:heap -w @apackdev/ears`, three runs, identical to 0.1 MB): **2.7 MB** of heap with
+  the graph loaded, against 61.3 MB for the memory engine (the baseline) and 312.7 MB for `MemoryKV`. Opening the
+  store again, creating the engine and counting what it holds (`admin.countEntities()`, the app's boot reading) takes
+  **30.6 ms** (30.3–30.9), leaving 0.3 MB of heap; the memory engine's boot was loading the whole graph, 180.9 ms in
+  the baseline and growing with the data. 78.9 MB on disk.
+- **`getSchemaStats`**, a keys-only walk of the whole store: 323 ms (320–329) over the bench's graph. The production-size
+  copy this was to be read on is not on this machine (the development data dir holds 2,051 attributes and 325
+  relations, 1.8 MB), so it has not been read at that size.
+- **Cold page cache p99 on the production-size copy: not taken.** The prerequisite is that copy; with it, the reading is
+  the bench's query cases after `sudo purge`, which this session does not run.
+- **The bench on LMDB** (mean ms, `npm run bench -w @apackdev/ears`; each case ran twice and the two agree within 5%,
+  the first figure given):
+
+  | Case | Baseline (memory engine) | LMDB |
+  |---|---|---|
+  | bulk load | 180.9 | 2,930 |
+  | query by type with where and pickAll | 16.6 | 138.8 |
+  | 1,000 where lookups by a unique value | 0.76 | 8.80 |
+  | 10 where lookups on an unindexed field | — | 796.4 |
+  | 100 withRole lookups | 12.0 | 90.4 |
+  | 1,000 `query.ids(id)` lookups | 0.28 | 1.73 |
+  | query by type with 3 chained steps (`orderBy('rank')`) | 11.8 | 85.3 |
+  | relation traversal | 0.0025 | 0.058 |
+  | `orderBy` a string over 40k | 11.9 | 90.7 |
+  | 1,000 `query(type).first()` over 40k | 3,815 | 5.29 |
+  | 1,000 `getRow` | 0.72 | 9.33 |
+  | `pickAll` over 40k | 35.7 | 374.0 |
+  | 100 `linkedWith` | 52.5 | 448.9 |
+  | link 10k tasks to one project, then destroy it | 6,178 | 891.9 |
+  | 1,000 creates | 4.50 | 139.9 |
+  | 1,000 short codes | 4.43 | 97.8 |
+  | transact: 1,000 creates as one unit | 6.93 | 23.7 |
+
+  Reads that visit every row of a 40k type are 8–10x the memory engine's, and a read by id 6–13x: each row is a
+  range of keys, read through a cursor and decoded, where the memory engine handed out the object it held. The
+  `first()` and hub cases, which the memory engine walked or copied in full, are 720x and 7x faster. A bulk load is
+  16x slower and is now a conversion's cost, not a boot's.
+- **The write path** (`node --cpu-prof`, 5,000 creates of four fields, then 5,000 updates of one, each its own unit,
+  self time per package): a create 79 µs and an update 32 µs. lmdb-js is 58% of the time — the commit itself
+  (`finishTxn`, LMDB writing the transaction's pages) 32%, and its per-write instruction buffer 11% — the engine 18%,
+  `msgpackr` 5%. Under one unit, 1,000 creates take 23.7 ms, 24 µs each: per commit, not per key, is where a write's
+  cost is, which `transact` already batches. A create read 23 keys to write 12; reading the value a write replaces
+  only where its index is built (`306043d52`) makes it 18 reads, and an update 5 rather than 7. The binding's
+  crossings are not what dominates, so no native layer is called for.
+- **Test time** is the chain's step readings, recorded with its run on the PR (#273).
 
 ### 6. What the systems keep in their contexts
 An audit: a system that holds entity lists to answer `SEND_STATE` is a second copy of the data in app code. Each one
