@@ -137,16 +137,28 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     }
   }
   function kill() {
-    if (closed || !terminal) return
+    if (closed || stopping || !terminal) return
     stopping = true
-    try { if (terminal.pid > 1 && terminal.pid !== process.pid) process.kill(-terminal.pid, 'SIGTERM') } catch { /* already gone */ }
-    try { terminal.kill('SIGTERM') } catch { /* already gone */ }
-    if (!hardStop) {
-      const pid = terminal.pid
-      hardStop = setTimeout(() => { if (!closed) { try { process.kill(-pid, 'SIGKILL') } catch { /* gone */ } } }, 2000)
+    const pid = terminal.pid, nativePid = bridge.nativePid
+    const stopGroup = () => {
+      if (closed || terminal?.pid !== pid) return
+      try { if (pid > 1 && pid !== process.pid) process.kill(-pid, 'SIGTERM') } catch { /* already gone */ }
+      try { terminal.kill('SIGTERM') } catch { /* already gone */ }
+    }
+    // Keep owned servers alive while the original CLI runs its shutdown handlers.
+    if (nativePid && nativePid !== process.pid) {
+      void isClaudeNativeDescendant(nativePid, pid).then(owned => {
+        if (closed || terminal?.pid !== pid) return
+        if (!owned) { stopGroup(); return }
+        try { process.kill(nativePid, 'SIGTERM') } catch { stopGroup() }
+      }, stopGroup)
+    } else stopGroup()
+    if (!hardStop && !closed) {
+      hardStop = setTimeout(() => { if (!closed && pid > 1 && pid !== process.pid) { try { process.kill(-pid, 'SIGKILL') } catch { /* gone */ } } }, 2000)
       hardStop.unref()
     }
   }
+
   let started = false
   async function start(): Promise<ClaudeNativeTerminalOwner> {
     if (started || closed) throw new Error('Native terminal startup is no longer available')

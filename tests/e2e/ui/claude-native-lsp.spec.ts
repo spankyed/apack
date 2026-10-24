@@ -98,6 +98,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
     if(phase===1)await expect(result).toContainText('definitions.review')
     if(phase===2)await expect(result).toContainText('OwnedReleaseDefinition')
     if(phase===3)await expect(result).toContainText(/server|language|support|LSP/i)
+    await expect.poll(()=>readFile(join(workspace!,'native-lsp-result-native_lsp_'+phase+'.json'),'utf8').then(()=>true,()=>false),{timeout:10000}).toBe(true)
     const receipt=JSON.parse(await readFile(join(workspace!,'native-lsp-result-native_lsp_'+phase+'.json'),'utf8'));expect(receipt.props.tool_use_id).toBe('native_lsp_'+phase)
     steps.push({phase,text,resultText:await result.innerText()})
     if(phase===1||phase===3)for(const[width,height]of[[1100,900],[680,600]]){
