@@ -34,6 +34,7 @@ with tempfile.TemporaryDirectory(prefix='claude-policy-root-') as temporary:
     for path in control.iterdir():
      if path.is_file() and not path.is_symlink():shutil.copy2(path,destination/path.name)
    shutil.copy2(Path(temporary)/'fixture.log',destination/'fixture.log')
+   for path in [destination.parent,destination,*destination.iterdir()]:os.chown(path,user.pw_uid,user.pw_gid)
   assert service.returncode==0,'Policy fixture did not finish cleanly; inspect preserved root fixture log'
   assert (control/'restored.json').is_file(),'Original policy restoration receipt missing'
   raise SystemExit(result.returncode)
