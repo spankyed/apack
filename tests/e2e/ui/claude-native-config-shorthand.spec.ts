@@ -87,9 +87,9 @@ test('recovers from refused native Config shorthand with acknowledged persistenc
   const originalSettings=await settings()
   const steps=[
     {args:'researchUnknownSetting=true',expected:"researchUnknownSetting isn't a /config setting.",key:'spinnerTipsEnabled',value:undefined},
-    {args:'spinnerTipsEnabled=perhaps',expected:'Show tips takes true or false',key:'spinnerTipsEnabled',value:undefined},
-    {args:'spinnerTipsEnabled=false',expected:'Set Show tips to false',key:'spinnerTipsEnabled',value:false},
-    {args:'spinnerTipsEnabled=true',expected:'Set Show tips to true',key:'spinnerTipsEnabled',value:true},
+    {args:'tips=perhaps',expected:'Show tips takes true or false',key:'spinnerTipsEnabled',value:undefined},
+    {args:'tips=false',expected:'Set Show tips to false',key:'spinnerTipsEnabled',value:false},
+    {args:'tips=true',expected:'Set Show tips to true',key:'spinnerTipsEnabled',value:true},
   ]
   for(const [index,step]of steps.entries()){
     const before=await context(),beforeSettings=await settings()
