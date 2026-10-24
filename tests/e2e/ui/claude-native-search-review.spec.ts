@@ -138,7 +138,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
       await appPage.setViewportSize({width,height:width===680?600:900})
       if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
       await card.getByRole('button',{name:'Refresh session context',exact:true}).click()
-      await expect(card.getByText('Session context refreshed '+(index+1),{exact:true})).toBeVisible()
+      await expect(card.getByText('Session context refreshed '+(index*2+1),{exact:true})).toBeVisible()
       await composer.click();await composer.press('End');await composer.pressSequentially(' More.')
       const draft=await composer.innerText()
       const snapshot=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
@@ -152,13 +152,18 @@ test('reviews original Glob and Grep results while preserving everyday composing
       expect((await context()).messages.map((message:any)=>message.id)).toEqual(messageIds)
       expect((await context()).claude.turns).toBe(initial.claude.turns)
       if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
-      await expect(card.getByText('Session context refreshed '+(index+1),{exact:true})).toBeVisible()
+      await expect(card.getByText('Session context refreshed '+(index*2+1),{exact:true})).toBeVisible()
+      await expect(card.getByText('Claude message controls unavailable',{exact:true})).toHaveCount(0)
+      await card.getByRole('button',{name:'Refresh session context',exact:true}).click()
+      await expect(card.getByText('Session context refreshed '+(index*2+2),{exact:true})).toBeVisible()
+      const freshRead=JSON.parse(await readFile(join(workspace!,'native-idle-redraw-receipts.json'),'utf8'))
+      expect(freshRead.read.text).toBe(draft)
       for(const control of [composer,card.getByRole('button',{name:'Refresh session context',exact:true}),card.getByRole('button',{name:'Send',exact:true})])await expect(control).toBeInViewport()
       const png=await ownedWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
       await writeFile(testInfo.outputPath('native-idle-redraw-'+width+'.png'),Buffer.from(png,'base64'))
     }
     const childrenAfter=await readFile(join(workspace!,'native-children.jsonl'),'utf8');expect(childrenAfter).toBe(childrenBefore)
-    const receipt=JSON.parse(await readFile(join(workspace!,'native-idle-redraw-receipts.json'),'utf8'));expect(receipt.count).toBe(2)
+    const receipt=JSON.parse(await readFile(join(workspace!,'native-idle-redraw-receipts.json'),'utf8'));expect(receipt.count).toBe(4)
     idleProof={messageIds,turnsBefore:initial.claude.turns,turnsAfter:(await context()).claude.turns,childrenBefore,childrenAfter,receipt,draft:await composer.innerText()}
   }
   if(cwdNavigation){
