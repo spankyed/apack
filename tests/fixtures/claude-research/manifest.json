@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "a2daae9951f70cd9f9cb501918de88e0aa48fdfe",
+  "researchCommit": "810fbc95602901758fab9a427298208d896b190c",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -124,7 +124,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "aaf9d2a17c44e81933073af972ea16ffa67f24ba6f1866b36d7ddbb933aeaf8b",
+    "src/integration/run-apack-controls.mjs": "751fa104a857d5577d0ce9fd2128137d2696cfafa43a7049a129a40a6a115ff7",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -283,5 +283,5 @@
     "src/protocol/native-task-roster-observer.mjs": "ce304b2eac63472c4901da344624d6dab6ea90fddbc465a65f31cf1bc2eef2b0",
     "src/protocol/native-search-review-fixture.mjs": "22660edad17753efe230367057253a985b5b8d17b4e9327fbed461bd7ae3021a"
   },
-  "archiveSha256": "b8dfbf82ac72bbbafa2d44b3752767271025d6e5ab915b2e18522cb89bb3318a"
+  "archiveSha256": "add4472aad86f986ce9c22ca8d19ded0cb8888f227dbaf4f4338acc84511c44e"
 }
