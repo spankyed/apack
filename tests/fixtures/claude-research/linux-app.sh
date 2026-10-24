@@ -13,7 +13,7 @@ fi
 export APACK_CHAIN_CORES=2
 # test:linux already prepares the published packages and platform-specific default pack.
 npm run build:runtime -- --cores 2
-if [[ "${1:-}" == system-policy-app ]]; then
+if [[ "${1:-}" == system-policy-app || "${1:-}" == system-policy-transition-app ]]; then
   node tests/fixtures/claude-research/install-system-policy.mjs
 elif [[ "${1:-}" == system-policy-unreadable-app ]]; then
   node tests/fixtures/claude-research/install-system-policy.mjs --unreadable
@@ -25,6 +25,9 @@ if [[ "$(id -u)" == 0 ]]; then
   chown node:node "$evidence"
   mkdir -p /work/.apack/tests /work/tests/results
   chown -R node:node /work/.apack/tests /work/tests/results
+  if [[ "${1:-}" == system-policy-transition-app ]]; then
+    exec python3 tests/fixtures/claude-research/run-policy-transitions.py
+  fi
   exec runuser -u node -- xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/claude-research-ci.py --linux-container "${1:-action-panes-app}"
 fi
 exec xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/claude-research-ci.py --linux-container "${1:-action-panes-app}"

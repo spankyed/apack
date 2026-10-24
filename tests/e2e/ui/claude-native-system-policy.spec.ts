@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir } from 'node:fs/promises'
+import { readFile, writeFile, readdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -109,6 +109,31 @@ test('honors real Linux system policy before user settings in the everyday compo
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height})
     const name='native-system-policy-'+(unreadable?'unreadable-':'')+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
   }
+  let liveTransitions:any
+  if(process.env.CLAUDE_RESEARCH_SYSTEM_POLICY_TRANSITIONS==='1'){
+    expect(unreadable).toBe(false)
+    const control=process.env.CLAUDE_RESEARCH_SYSTEM_POLICY_CONTROL!
+    expect(control).toMatch(/^\/work\/\.claude-research\/policy-transition-[^/]+$/)
+    const ready=JSON.parse(await readFile(join(control,'ready.json'),'utf8'));expect(ready.path).toBe('/etc/claude-code/managed-settings.json')
+    const ownerId=(await context()).native.state.ownerId,receipts:any[]=[],phases:any[]=[]
+    for(const [sequence,mode] of [[1,'private'],[2,'managed']] as const){
+      const request=join(control,'request-'+sequence+'.json');await writeFile(request+'.tmp',JSON.stringify({sequence,mode}));await rename(request+'.tmp',request)
+      await expect.poll(()=>readFile(join(control,'receipt-'+sequence+'.json'),'utf8').then(text=>{const receipt=JSON.parse(text);expect(receipt.mode).toBe(mode);return receipt},()=>undefined)).toBeTruthy()
+      receipts.push(JSON.parse(await readFile(join(control,'receipt-'+sequence+'.json'),'utf8')))
+      const tools=card.getByRole('button',{name:'Session tools',exact:true})
+      if(mode==='private'){await expect(status).toContainText('Session ready',{timeout:15000});await expect(status).not.toContainText('Managed OS policy ready');await expect(tools).toBeVisible({timeout:15000})}
+      else{await expect(status).toContainText('Managed OS policy ready',{timeout:15000});await expect(status).not.toContainText('Session ready');await expect(tools).toHaveCount(0,{timeout:15000})}
+      const state=await context();expect(state.native.state.ownerId).toBe(ownerId);expect(state.native.state.nativePid).toBe(boundNativePid);expect(state.sessionId).toBe(sessionId);expect(state.turns).toBe(1)
+      expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
+      phases.push({mode,ownerId:state.native.state.ownerId,nativePid:state.native.state.nativePid,sessionId:state.sessionId,turns:state.turns,status:await status.innerText(),privateControls:await tools.count()})
+      for(const [width,height] of [[1100,900],[680,600]]){
+        await appPage.setViewportSize({width,height});for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})])await expect(item).toBeInViewport({ratio:1})
+        const png=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-system-policy-'+mode+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));captures.push(name)
+      }
+    }
+    liveTransitions={sameNativeOwner:true,noPhantomTurn:true,draftRetained:true,privateControlsRestored:true,managedControlsRetired:true,receipts,phases}
+    await writeFile(join(workspace!,'native-system-policy-transition-proof.json'),JSON.stringify(liveTransitions,null,2))
+  }
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
   const sent='Review this managed policy session without running tools.'
   await composer.fill(sent);await card.getByRole('button',{name:'Send',exact:true}).click()
@@ -117,7 +142,7 @@ test('honors real Linux system policy before user settings in the everyday compo
   await expect.poll(async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));const matches=rows.filter(row=>row.type==='user'&&row.isMeta!==true&&(row.message?.content===sent||row.message?.content?.some?.((block:any)=>block.type==='text'&&block.text===sent)));if(matches.length){expect(matches).toHaveLength(1);original=matches[0];return true}}catch(error:any){if(error.code!=='ENOENT')throw error}}return false}).toBe(true)
   await composer.fill(draft);if(!unreadable)await expect(status).toContainText('Managed OS policy ready')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-system-policy-app-proof.json'),JSON.stringify({sessionId,boundNativePid,captures,draftRetained:true,privateControlsSuppressed:!unreadable,userStatusOverridden:!unreadable,nativeManagedWarning:unreadable,originalSettingsConsent:settingsConsent,successfulContinuation:unreadable,warningText:unreadable?await warning.innerText():undefined,nativeHumanUuid:original.uuid,sent}))
+  await writeFile(join(workspace!,'native-system-policy-app-proof.json'),JSON.stringify({sessionId,boundNativePid,captures,liveTransitions,draftRetained:true,privateControlsSuppressed:!unreadable,userStatusOverridden:!unreadable,nativeManagedWarning:unreadable,originalSettingsConsent:settingsConsent,successfulContinuation:unreadable,warningText:unreadable?await warning.innerText():undefined,nativeHumanUuid:original.uuid,sent}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue this saved policy review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(3);expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
