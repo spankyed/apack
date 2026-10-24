@@ -8,7 +8,9 @@ import { spawn } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
-import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
+import { answerDatabaseRequest, encodeDatabaseAnswer, findDatabaseWriter, holdDatabaseWriteLock, openAppDatabase, openDatabaseStore, openRunHistoryStore, readInstalledSchema, type DatabaseRequest } from '@apackdev/host/database';
+import * as http from 'node:http';
+import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { exportDatabase } from '@apackdev/host/backup';
 import { closeEnv, openEnvAt, LMDB_FORMAT_VERSION } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
@@ -562,9 +564,9 @@ describe('apack db script', () => {
   it('reports a write the script made that could not be stored, where it was made, and keeps none of it', async () => {
     const dir = await appDataDir();
     // A script writes as it goes, outside any transaction: each write is stored when it returns, or refused there
-    const file = writeScript(dir, 'broken.mjs', "export default ({ db }) => { db.ears.write('Note-a').set('title', 'Kept'); db.ears.write('Note-a').set('count', 1n); throw new Error('never reached'); };");
+    const file = writeScript(dir, 'broken.mjs', "export default ({ db }) => { db.ears.write('Note-a').set('title', 'Kept'); db.ears.write('Note-a').set('count', 2n ** 70n); throw new Error('never reached'); };");
     const { error } = await run(['script', file, '--data-dir', dir]);
-    expect(error?.message).toMatch(/BigInt/);
+    expect(error?.message).toMatch(/too large/);
     expect(error?.message).not.toMatch(/never reached/);
     const { out } = await ok(['query', "return [getRow('Note-a')?.title, getRow('Note-a')?.count]", '--data-dir', dir, '-o', 'json']);
     expect(JSON.parse(out)).toEqual(['Kept', null]);
@@ -1215,5 +1217,137 @@ describe('a data dir whose packs are gone', () => {
     const { dir, packDir } = await withoutItsPack();
     const { out } = await ok(['query', 'return EARS.Entity.Note', '--data-dir', dir, '--schema-from', packDir]);
     expect(out).toBe('Note');
+  });
+});
+
+describe('apack db through the running app', () => {
+  /**
+   * The app running on a data dir, as `apack db` meets it: the database opened and held in this process, answering
+   * `POST /db` through `answerDatabaseRequest` as the API does, and its port and token published where the API
+   * publishes them
+   */
+  async function serveAsApp(dir: string) {
+    const { target } = parseDbArgs(['--data-dir', dir], {}, '');
+    const database = await openAppDatabase({ env: target.env, userDataDir: dir, log: () => {} });
+    const runHistory = openRunHistoryStore(database.paths.runHistory);
+    const token = 'the-run-token';
+    const requests: DatabaseRequest[] = [];
+    const server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        if (req.headers[API_TOKEN_HEADER] !== token) {
+          res.writeHead(403);
+          res.end('the API token is missing or wrong');
+          return;
+        }
+        const request = JSON.parse(body) as DatabaseRequest;
+        requests.push(request);
+        void answerDatabaseRequest(request, { ...database, runHistory }).then((answer) => {
+          res.writeHead(200);
+          res.end(encodeDatabaseAnswer(answer));
+        });
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, API_HOST, resolve));
+    const { port } = server.address() as { port: number };
+    fs.writeFileSync(target.apiPortFile, JSON.stringify({ port, pid: process.pid }));
+    fs.writeFileSync(target.apiTokenFile, token);
+    return {
+      database,
+      requests,
+      async stop() {
+        fs.rmSync(target.apiPortFile, { force: true });
+        fs.rmSync(target.apiTokenFile, { force: true });
+        await new Promise((resolve) => server.close(resolve));
+        runHistory.close();
+        database.close();
+      },
+    };
+  }
+
+  const QUERY = "return { at: new Date(0), big: 2n ** 70n, notes: query(EARS.Entity.Note).pickAll(['title']).map((n) => n.title).sort() }";
+
+  it('answers query and runs as they are answered offline', async () => {
+    const dir = await appDataDir();
+    const offline = [await ok(['query', QUERY, '--data-dir', dir]), await ok(['runs', '--data-dir', dir]), await ok(['runs', '--run', 'RunNode-1', '--data-dir', dir])];
+    const app = await serveAsApp(dir);
+    try {
+      const through = [await ok(['query', QUERY, '--data-dir', dir]), await ok(['runs', '--data-dir', dir]), await ok(['runs', '--run', 'RunNode-1', '--data-dir', dir])];
+      expect(through.map(({ out }) => out)).toEqual(offline.map(({ out }) => out));
+      expect(through[0].err).toBe(`Database: ${dir} (the running app's)`);
+      expect(app.requests.map(({ kind }) => kind)).toEqual(['query', 'runs', 'runs']);
+      // A run that isn't there is refused as it is offline
+      expect((await run(['runs', '--run', 'RunNode-9', '--data-dir', dir])).error?.message).toBe('No run node RunNode-9 in the run history');
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it("writes through the app's engine, which holds the write at once, and takes no lock to do it", async () => {
+    const dir = await appDataDir();
+    const app = await serveAsApp(dir);
+    try {
+      const { out } = await ok(['exec', "write('Note-a').set('title', 'Through the app'); return getRow('Note-a').title", '--data-dir', dir]);
+      expect(out).toBe('Through the app');
+      expect(app.database.ears.getRow(id('Note-a'))?.title).toBe('Through the app');
+      expect(findDatabaseWriter(dir)).toBeNull();
+      // A failure is the one offline gives, and keeps none of what it wrote
+      const refused = await run(['exec', "write('Note-a').set('title', 'Never'); throw new Error('boom')", '--data-dir', dir]);
+      expect(refused.error?.message).toMatch(/^Transaction failed: boom[\s\S]*Nothing it wrote was kept/);
+      expect(app.database.ears.getRow(id('Note-a'))?.title).toBe('Through the app');
+    } finally {
+      await app.stop();
+    }
+    // In the files too, once the app has gone
+    expect((await ok(['query', "return getRow('Note-a').title", '--data-dir', dir])).out).toBe('Through the app');
+  });
+
+  it('runs a script that writes in the app, with what it logs, and a read-only one offline', async () => {
+    const dir = await appDataDir();
+    const file = path.join(dir, 'rename.ts');
+    fs.writeFileSync(file, [
+      'export default ({ db, EARS, args, log }: any) => {',
+      "  db.ears.write('Note-b').set('title', args[0]);",
+      "  log(`${db.ears.query(EARS.Entity.Note).ids().length} notes`);",
+      "  return db.ears.getRow('Note-b').title;",
+      '};',
+    ].join('\n'));
+    const app = await serveAsApp(dir);
+    try {
+      const { out } = await ok(['script', file, '--data-dir', dir, '--', 'Renamed']);
+      expect(out.split('\n')).toEqual(['2 notes', 'Renamed']);
+      expect(app.database.ears.getRow(id('Note-b'))?.title).toBe('Renamed');
+      const count = path.join(dir, 'count.ts');
+      fs.writeFileSync(count, "export default ({ db, EARS }: any) => db.ears.query(EARS.Entity.Note).ids().length;");
+      const readOnly = await ok(['script', count, '--read-only', '--data-dir', dir]);
+      expect(readOnly.out).toBe('2');
+      expect(readOnly.err).toContain(`Database: ${dir} (offline)`);
+      expect(app.requests.map(({ kind }) => kind)).toEqual(['script']);
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('refuses a request the app refuses, and works offline when nothing answers on the published port', async () => {
+    const dir = await appDataDir();
+    const app = await serveAsApp(dir);
+    const { target } = parseDbArgs(['--data-dir', dir], {}, '');
+    try {
+      fs.writeFileSync(target.apiTokenFile, 'a-stale-token');
+      expect((await run(['query', 'return 1', '--data-dir', dir])).error?.message).toMatch(/refused the request: 403/);
+    } finally {
+      await app.stop();
+    }
+    // A port nothing listens on, with a token beside it: offline
+    const closed = http.createServer();
+    await new Promise<void>((resolve) => closed.listen(0, API_HOST, resolve));
+    const { port } = closed.address() as { port: number };
+    await new Promise((resolve) => closed.close(resolve));
+    fs.writeFileSync(target.apiPortFile, JSON.stringify({ port, pid: process.pid }));
+    fs.writeFileSync(target.apiTokenFile, 'the-run-token');
+    const offline = await ok(['query', 'return 1', '--data-dir', dir]);
+    expect(offline.out).toBe('1');
+    expect(offline.err).toContain('(offline)');
   });
 });

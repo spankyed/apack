@@ -5,6 +5,8 @@ import { WebSocketServer } from 'ws';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { appRouter } from './index.ts';
 import { createRpcContext } from './context.ts';
+import { handleDatabaseRequest } from './database.ts';
+import { DATABASE_REQUEST_PATH } from '@apackdev/host/database';
 import { jsonSafeEncoder } from './encoder.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/config.ts';
@@ -94,17 +96,23 @@ function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) 
     void handleDevRequest(req.url, req, res);
     return;
   }
+  if (req.method === 'POST' && req.url === DATABASE_REQUEST_PATH) {
+    handleDatabaseRequest(req, res).catch((err: unknown) => {
+      logger.error(`${DATABASE_REQUEST_PATH} failed:`, err as Error);
+      if (!res.headersSent) answer(res, 500, { error: (err as Error).message });
+    });
+    return;
+  }
 
   res.writeHead(404);
   res.end();
 }
 
 /**
- * Tells local tools where this API is. Every run publishes its port, so a tool finds it and can tell that an app is
- * running on the data dir, whatever the platform (`apack db` refuses to change a database an app holds); the port
- * alone opens nothing, since a call needs the token. The token itself goes to a file only where a local tool may use
- * it: a development app (`apack pack dev`, the built-in pack's watcher), and an API started by hand, which made up its
- * own. That file is readable only by the user. Both are removed when the process exits.
+ * Tells local tools where this API is and how to call it: its port, so a tool finds it and can tell that an app is
+ * running on the data dir, and its token, which every call needs — `apack db`, which reaches the data through the
+ * running app (`POST /db`), `apack pack dev` and the built-in pack's watcher. Every run publishes both, the token in a
+ * file only the user can read, in the data dir a tool could open anyway. Both are removed when the process exits.
  */
 export function publishApiFiles(port: number, token: string): void {
   const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
@@ -114,7 +122,6 @@ export function publishApiFiles(port: number, token: string): void {
     writePrivateFile(apiPortFile, JSON.stringify({ port, pid: process.pid } satisfies ApiEndpoint));
   } catch {}
 
-  if (process.env.NODE_ENV !== 'development' && !apiTokenIsOwn()) return;
   try {
     writePrivateFile(apiTokenFile, token);
     if (apiTokenIsOwn()) logger.info(`No APACK_API_TOKEN given: clients send the token in ${apiTokenFile}`);
@@ -156,11 +163,9 @@ export function createWebSocketServer() {
   // Safety net: always kill terminal processes before the API process exits
   process.on('exit', () => {
     appPacks?.runShutdownHooks();
-    // The adapter buffers writes and flushes them from a microtask, so whatever is pending at exit only
-    // reaches disk if something closes the store. Nothing did until 2026-10-01.
+    // Closing flushes to disk what the background sync has not yet
     try {
-      const { errorCount, lastError } = appStore?.close() ?? { errorCount: 0, lastError: null };
-      if (errorCount > 0) console.error(`[backend] ${errorCount} write(s) didn't reach the database`, lastError);
+      appStore?.close();
     } catch (error) {
       console.error('[backend] Closing the database failed', error);
     }

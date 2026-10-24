@@ -1,5 +1,5 @@
 // The API takes calls only from clients with its token, which Electron main creates for each app run (an API started by
-// hand makes up its own): the app's windows send it when connecting, local tools with POST /dev/reload. A web page (the in-app browser's included)
+// hand makes up its own): the app's windows send it when connecting, local tools with POST /dev/reload and POST /db. A web page (the in-app browser's included)
 // can't learn it. /dev/reload is also only for development and test apps, and the server listens on loopback only.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -16,6 +16,7 @@ const { apiToken, apiTokenIsOwn, isApiToken } = await import('../../src/boot/con
 const { resolveAppEnvironment } = await import('@apackdev/sdk/env');
 const { readApiEndpoint } = await import('@apackdev/host/process-liveness');
 const { API_TOKEN_HEADER } = await import('@apackdev/sdk/utils/pure');
+const { handleDatabaseRequest } = await import('../../src/transport/database.ts');
 afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 
 const TOKEN = 'the-run-token';
@@ -94,7 +95,7 @@ describe('the files the API publishes', () => {
   const { apiPortFile, apiTokenFile } = resolveAppEnvironment();
   const clear = () => { for (const file of [apiPortFile, apiTokenFile]) fs.rmSync(file, { force: true }); };
 
-  it("publishes its port for every run, so a local tool can tell an app is running on the data dir", () => {
+  it("publishes its port and token for every run, so a local tool finds the app on the data dir and can call it", () => {
     clear();
     // A file from an earlier run, readable by anyone
     fs.mkdirSync(path.dirname(apiPortFile), { recursive: true });
@@ -109,11 +110,12 @@ describe('the files the API publishes', () => {
     expect(readApiEndpoint(apiPortFile)).toEqual({ port: 4321, pid: process.pid });
     // Only the user reads it, whatever the data dir's own permissions are
     expect(fs.statSync(apiPortFile).mode & 0o777).toBe(0o600);
-    // The token stays out of the data dir: no local tool needs it there
-    expect(fs.existsSync(apiTokenFile)).toBe(false);
+    // `apack db` calls a packaged app too, with the run's token, which only the user reads
+    expect(fs.readFileSync(apiTokenFile, 'utf-8')).toBe(TOKEN);
+    expect(fs.statSync(apiTokenFile).mode & 0o777).toBe(0o600);
   });
 
-  it('publishes the token too for a development app, and for one that made up its own', () => {
+  it('publishes the token of a development app, and of one that made up its own', () => {
     clear();
     process.env.NODE_ENV = 'development';
     publishApiFiles(4322, TOKEN);
@@ -130,5 +132,25 @@ describe('the files the API publishes', () => {
     } finally {
       process.env.APACK_API_TOKEN = TOKEN;
     }
+  });
+});
+
+describe('POST /db', () => {
+  /** What the handler answered: its status and body */
+  async function answer(headers: Record<string, string>): Promise<{ status: number; body: string }> {
+    let status = 0;
+    let body = '';
+    const res = { writeHead: (code: number) => { status = code; }, end: (text: string) => { body = text; }, headersSent: false };
+    await handleDatabaseRequest({ headers } as never, res as never, TOKEN);
+    return { status, body };
+  }
+
+  it('answers only a caller with the API token, whatever the build', async () => {
+    expect(await answer({})).toEqual({ status: 403, body: 'the API token is missing or wrong' });
+    expect(await answer(withToken('a-guess'))).toEqual({ status: 403, body: 'the API token is missing or wrong' });
+  });
+
+  it('refuses until the app has opened its data, rather than answer from none', async () => {
+    expect(await answer(withToken(TOKEN))).toEqual({ status: 503, body: 'the app has not opened its data yet' });
   });
 });

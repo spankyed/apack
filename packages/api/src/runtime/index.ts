@@ -59,15 +59,11 @@ export interface AppStore {
 export let appPacks: PackRegistry;
 export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
 
-/**
- * The open store, so shutdown can flush it.
- *
- * Nothing closed it until 2026-10-01: shutdown stopped the actor and closed the servers, so the adapter's
- * final flush never ran in production and whatever sat in its buffers at exit was simply gone — along with
- * `errorCount`, which `openAppDatabase().close()` has always known how to report and which no running app
- * ever read.
- */
+/** The open store, so shutdown can flush it and `apack db` reach the data through the app (`transport/database.ts`) */
 export let appStore: LmdbStore | undefined;
+
+/** The app's engine, which `apack db` reaches through the app */
+export let appEngine: EarsEngine | undefined;
 
 /** The run history's open store, so shutdown can close it */
 export let appRunHistory: RecordStore<RunNode> | undefined;
@@ -115,6 +111,7 @@ export function openAppStore(): AppStore {
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
   appStore = store;
+  appEngine = engine;
   appRunHistory = runHistory;
   return { store, runHistory, engine, packs };
 }

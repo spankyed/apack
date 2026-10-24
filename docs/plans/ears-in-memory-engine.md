@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–6 are done; Step 7 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–7 are done; Step 8 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -231,6 +231,31 @@ and open the files only when none does; the write lock then guards only tools wo
 
 **Done when:** each command gives the same result against a running app and offline, and a write through the app is
 seen at once by the app's own views.
+
+Done, 2026-10-24. The API takes `POST /db` (`transport/database.ts`) from a caller with its token, in every build,
+and answers through `answerDatabaseRequest` (`@apackdev/host/database`, `serve.ts`) over the engine, store and run
+history it holds: a `query`, an `exec` (one transaction), `runs` (a run's tree, or the runs newest first) or a `script`
+— compiled by the CLI to one ES module with its packages resolved from where it lives, imported and called in the
+app's process with the same `{ db, EARS, args, log }`. The answer is the structured clone of the result (`node:v8`),
+so Dates, BigInts and `undefined` print exactly as offline. The app now publishes its token, 0600, for every run beside
+its port: the CLI needs it to call a packaged app, and anyone who can read it can read the database files beside it.
+`apack db query`, `exec`, `script` and `runs` ask the app first (`askRunningApp`) and go offline when no app answers;
+a `--read-only` script stays offline, where read-only is enforced, since the app cannot stop a script writing — and
+since Step 0 every commit the app made is in the files to read. Through the app no write lock is taken: its engine is
+the one writer, and the lock guards only tools working offline. `consoleScope` and the script runner moved to the host
+so both paths build the same `EARS` and fail with the same messages. `repl` and the destructive commands stay offline.
+
+`db.integration.spec.ts` serves a data dir as the app does (the database open in the test, `POST /db` answered by
+`answerDatabaseRequest`): `query` (a Date, a BigInt, sorted titles) and `runs` print byte for byte what they print
+offline; an `exec` through it is in the app's engine at once and in the files after, takes no lock, and its failure is
+offline's; a script that writes runs in the app with its log lines, a read-only one offline; a refused token is
+reported, and a port nothing answers on falls back offline. The API's own route refuses a missing or wrong token and
+answers 503 before the data is open. "Seen at once by the app's views" is proved to the engine: a view shows the write
+on its next read, and following it without a read is Step 8.
+
+Readings (2026-10-24, the production copy as a data dir, a stand-in app serving it): `apack db query` offline
+1.10–1.21 s — process start, schema and a 0.3 s hydrate — and 0.84–0.92 s through the app, where the CLI's own start is
+nearly all of it and the query a few milliseconds.
 
 ### 8. Commit change sets and live queries
 Each commit emits its change set; `subscribe(query, onChange)` on the engine, and through the SDK to systems and

@@ -86,13 +86,9 @@ export const asSessionPage = (page: Page, app: EngineAppDriver, window?: EngineW
 });
 
 /**
- * Where the API is, asked of the app window rather than read off disk.
- *
- * The port file would do, but the **token file is not always written**: `publishApiFiles` skips it unless
- * `NODE_ENV` is development or the API invented its own token, and a packaged app satisfies neither. So reading
- * from disk would work in a checkout and fail against `apack pack drive --channel beta`, which is the worst split to
- * ship. The window has both from the preload, which is also how `tests/e2e/app-integration/api-access.spec.ts`
- * gets them.
+ * Where the API is, asked of the app window rather than read off disk: the window has both from the preload, which
+ * is also how `tests/e2e/app-integration/api-access.spec.ts` gets them, and a session driving the app holds the window
+ * already, where the files belong to whichever data dir the app was given.
  */
 async function apiAddressFromWindow(page: SessionPage): Promise<{ port: number; token: string }> {
   const found = await page.evaluateExpression(

@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
-import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { cliDirs } from '../../app/pack-host';
 import { resolveStoredProfile } from '../../app/profiles';
@@ -33,7 +32,7 @@ export const TARGET_USAGE = [
   '                         a pack directory, or a directory of them (an app, a checkout)',
 ].join('\n');
 
-export type DbTarget = Pick<AppEnvironment, 'env' | 'userDataDir' | 'apiPortFile'> & {
+export type DbTarget = Pick<AppEnvironment, 'env' | 'userDataDir' | 'apiPortFile' | 'apiTokenFile'> & {
   /** The command named this data dir (`--data-dir` or `--profile`) rather than taking the default */
   named: boolean;
   /** `--schema-from`: packs naming the entity types a data dir doesn't publish — a snapshot, a pack, or a directory of packs */
@@ -65,10 +64,15 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
     : undefined;
   const context = resolveAppEnvironment({ env, ...(userDataDir !== undefined && { userDataDir }) });
   const target: DbTarget = {
-    env, userDataDir: context.userDataDir, apiPortFile: context.apiPortFile, named: named.length === 1,
+    env, userDataDir: context.userDataDir, apiPortFile: context.apiPortFile, apiTokenFile: context.apiTokenFile, named: named.length === 1,
     ...(schemaFrom !== undefined && { schemaFrom: path.resolve(schemaFrom) }),
   };
   return { values: parsed.values as typeof parsed.values & Record<keyof O, unknown>, positionals: parsed.positionals, target };
+}
+
+/** A command that changes the database says which data dir it means, so a forgotten flag never hits the production app's */
+export function requireNamedForWrite(target: DbTarget, write: boolean): void {
+  if (write && !target.named) throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
 }
 
 export interface OpenOptions {
@@ -85,9 +89,7 @@ export interface OpenOptions {
  * warns that it may miss what the app hasn't written yet.
  */
 export async function openTarget(target: DbTarget, { write, command }: OpenOptions, io: DbIo): Promise<AppDatabase> {
-  if (write && !target.named) {
-    throw new Error('Name the data dir to change: --profile <name> or --data-dir <path>');
-  }
+  requireNamedForWrite(target, write);
   io.err(`Database: ${target.userDataDir} (offline)`);
   // Taken before the check, so an app that starts from here on finds it and refuses to open the database
   const lock = write ? holdDatabaseWriteLock(target.userDataDir, `apack db ${command}`) : null;
@@ -168,26 +170,4 @@ export function undeclaredEntityTypes(db: AppDatabase): Array<{ type: string; ro
     .filter(([type]) => !declared.has(type))
     .map(([type, rows]) => ({ type, rows }))
     .sort((left, right) => right.rows - left.rows || left.type.localeCompare(right.type));
-}
-
-/**
- * `EARS` for console code: the SDK's names, the installed packs' — and the entity types the data turned out to
- * hold, so that a type whose pack is gone can still be named in a query.
- *
- * **Declared wins on a collision**, so a pack's name keeps the value it declared and an observed type only ever
- * adds a name that stood for nothing. That ordering is the whole of what keeps this a widening of the console
- * rather than of the schema: `db.schema` still means *declared*. The engine's entity-type check is wider —
- * `openAppDatabase` adds the types hydration found, so a write naming an observed type goes through, unchecked
- * by any pack.
- *
- * **`relKinds` and `roles` are deliberately not widened.** `EARS.RelKind.RELATES_TO` is `'relates_to'` and the data
- * holds only the value, so no amount of observation produces the alias; a dir with no snapshots has to be given one.
- */
-export function consoleScope(db: AppDatabase): ConsoleScope {
-  const observed = Object.fromEntries(Object.keys(db.ears.getSchemaStats().entities).map((type) => [type, type]));
-  return {
-    EARS: consoleEars({ entities: { ...observed, ...db.schema.entities }, relKinds: db.schema.relKinds, roles: db.schema.roles }, {
-      hint: 'Name the pack that declares it with --schema-from, which takes a snapshot, a pack, or a directory of packs.',
-    }),
-  };
 }

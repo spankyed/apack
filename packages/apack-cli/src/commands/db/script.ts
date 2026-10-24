@@ -2,12 +2,12 @@
 // imports what it likes, and keeps its own helpers). The database is handed to it, rather than left for it to open:
 // the published CLI carries its own copy of the engine, so a script importing @apackdev/ears would get a second one.
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { builtinModules, createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import type { AppDatabase } from '@apackdev/host/database';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { consoleScope, importScriptSource, runDatabaseScript } from '@apackdev/host/database';
+import { askRunningApp } from './app';
+import { openTarget, parseDbArgs, requireNamedForWrite, TARGET_USAGE, withDatabase, type DbIo } from './target';
 import { flushOutput, outputFormat, writeResult } from './output';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -35,34 +35,23 @@ export const SCRIPT_USAGE = [
   '  log    prints a line, like the script\'s own output',
   '',
   'Options:',
-  '  --read-only            Open the database without writing, so the script can run while apack does',
+  '  --read-only            Open the database without writing, rather than run in the app running on it',
   '  -o, --output <format>  pretty (default), json or csv, for what the script returns',
   '  --out <file>           Write that result to a file',
   TARGET_USAGE,
 ].join('\n');
 
-/** What a script's default export is called with */
-export interface DbScriptContext {
-  db: AppDatabase;
-  EARS: object;
-  /** The arguments after `--` */
-  args: string[];
-  log(line: string): void;
-}
-
 /** JavaScript this Node runs as it is */
 const JAVASCRIPT = /\.(mjs|cjs|js)$/;
 
 /**
- * The script as a module. TypeScript is compiled first, into a temp file rather than the script's own directory,
- * which may be one this user can't write: this process runs through tsx, whose importer only transforms files inside
- * the project, so a script anywhere else would reach Node as TypeScript it can't read. Its relative imports are
- * compiled in and its packages are resolved, from where the script lives, to the paths they have there, so the
- * compiled copy loads the same modules wherever it sits.
+ * The script compiled to one ES module: its relative imports compiled in and its packages resolved, from where the
+ * script lives, to the paths they have there, so the module loads the same modules wherever it is imported from — a
+ * temp file here, or the running app, which imports it in its own process. It is compiled rather than imported as it
+ * is because this process runs through tsx, whose importer only transforms files inside the project, so a script
+ * anywhere else would reach Node as TypeScript it can't read.
  */
-async function importScript(scriptFile: string): Promise<{ default?: unknown }> {
-  if (JAVASCRIPT.test(scriptFile)) return import(pathToFileURL(scriptFile).href) as Promise<{ default?: unknown }>;
-
+async function compileScript(scriptFile: string): Promise<string> {
   const { build } = await import('esbuild');
   const resolveFromScript = createRequire(scriptFile);
   const { outputFiles } = await build({
@@ -95,19 +84,26 @@ async function importScript(scriptFile: string): Promise<{ default?: unknown }> 
       },
     }],
   });
+  return outputFiles[0].text;
+}
 
-  const compiled = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-db-script-')), `${path.basename(scriptFile)}.mjs`);
+/** What the script failed to compile with, named after the script, so a failure is never read as the CLI's own */
+async function compiled(scriptFile: string): Promise<string> {
   try {
-    fs.writeFileSync(compiled, outputFiles[0].text);
-    return await import(pathToFileURL(compiled).href) as { default?: unknown };
-  } finally {
-    fs.rmSync(path.dirname(compiled), { recursive: true, force: true });
+    return await compileScript(scriptFile);
+  } catch (error) {
+    throw new Error(`${scriptFile} failed: ${errorMessage(error)}`, { cause: error });
   }
 }
 
-/** What the script failed with, named after the script, so a failure is never read as the CLI's own */
-function scriptFailure(scriptFile: string, error: unknown): Error {
-  return new Error(`${scriptFile} failed: ${errorMessage(error)}`, { cause: error });
+/** The script as a module offline: JavaScript as it is, TypeScript compiled */
+async function importScript(scriptFile: string): Promise<{ default?: unknown }> {
+  if (!JAVASCRIPT.test(scriptFile)) return importScriptSource(scriptFile, await compiled(scriptFile));
+  try {
+    return await import(pathToFileURL(scriptFile).href) as { default?: unknown };
+  } catch (error) {
+    throw new Error(`${scriptFile} failed: ${errorMessage(error)}`, { cause: error });
+  }
 }
 
 export async function dbScript(args: string[], io: DbIo): Promise<void> {
@@ -118,23 +114,22 @@ export async function dbScript(args: string[], io: DbIo): Promise<void> {
   const scriptFile = path.resolve(file);
   if (!fs.existsSync(scriptFile)) throw new Error(`No script at ${scriptFile}`);
 
-  // A script writes unless it says it only reads, so it's refused while an app runs on the data dir
-  const db = await openTarget(target, { write: !values['read-only'], command: 'script' }, io);
+  // A script writes unless it says it only reads. The running app runs one that writes in its own process, over the
+  // data it holds; one that only reads runs offline, where opening the files read-only is what keeps it to its word,
+  // and every commit the app made is there to read
+  const write = !values['read-only'];
+  requireNamedForWrite(target, write);
   try {
-    const result = await withDatabase(db, async () => {
-      const module = await importScript(scriptFile).catch((error: unknown) => { throw scriptFailure(scriptFile, error); });
-      if (typeof module.default !== 'function') {
-        throw new Error(`${scriptFile} exports no function to run: export default ({ db, EARS, args, log }) => { ... }`);
-      }
-      const context: DbScriptContext = { db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out };
-      try {
-        // Awaited here, inside withDatabase: the script's own work — its writes, an interactive question — finishes
-        // before the database is closed, and what it throws or rejects with fails the command rather than being lost
-        return await (module.default as (context: DbScriptContext) => unknown)(context);
-      } catch (error) {
-        throw scriptFailure(scriptFile, error);
-      }
-    });
+    const answered = write
+      ? await askRunningApp(target, async () => ({ kind: 'script', file: scriptFile, source: await compiled(scriptFile), args: scriptArgs }), io)
+      : null;
+    const result = answered ? answered.result : await (async () => {
+      const db = await openTarget(target, { write, command: 'script' }, io);
+      // Awaited inside withDatabase: the script's own work — its writes, an interactive question — finishes before
+      // the database is closed, and what it throws or rejects with fails the command rather than being lost
+      return withDatabase(db, async () =>
+        runDatabaseScript(await importScript(scriptFile), scriptFile, { db, EARS: consoleScope(db).EARS, args: scriptArgs, log: io.out }));
+    })();
     if (result !== undefined) writeResult(result, { format, out: values.out as string | undefined }, io);
   } finally {
     // What the script printed reaches stdout before the CLI exits, which drops whatever is still buffered for a pipe

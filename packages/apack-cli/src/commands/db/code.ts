@@ -1,7 +1,9 @@
 // apack db query | exec: console code (the Database surface's) run on the data dir's database
 import * as fs from 'node:fs';
 import { runQueryCode, runTransactionCode } from '@apackdev/sdk/database-console';
-import { consoleScope, openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { consoleScope } from '@apackdev/host/database';
+import { askRunningApp } from './app';
+import { openTarget, parseDbArgs, requireNamedForWrite, TARGET_USAGE, withDatabase, type DbIo } from './target';
 import { outputFormat, writeResult } from './output';
 
 const OPTIONS = {
@@ -33,9 +35,13 @@ async function runCode(command: 'query' | 'exec', args: string[], io: DbIo): Pro
   if (!code.trim()) throw new Error(`No code to run\n\n${usage(command)}`);
 
   const write = command === 'exec';
-  const db = await openTarget(target, { write, command }, io);
-  const result = await withDatabase(db, () =>
-    write ? runTransactionCode(code, consoleScope(db)) : runQueryCode(code, consoleScope(db)));
+  requireNamedForWrite(target, write);
+  // The running app answers over the data it holds; offline, the files are opened and the same code runs here
+  const answered = await askRunningApp(target, () => ({ kind: command, code }), io);
+  const result = answered ? answered.result : await (async () => {
+    const db = await openTarget(target, { write, command }, io);
+    return withDatabase(db, () => (write ? runTransactionCode(code, consoleScope(db)) : runQueryCode(code, consoleScope(db))));
+  })();
   writeResult(result, { format, out: values.out as string | undefined }, io);
 }
 
