@@ -440,6 +440,19 @@ either keeps only what it publishes or reads it back when asked.
 
 **Done when:** each system holding entity data is listed here with what it keeps and why.
 
+Done, 2026-10-24: no system keeps a second copy of the data. Read from each system's declared context
+(`be/contract.ts`) and the module state of its backend (`new Map`/`new Set` at module scope):
+
+| System | What it keeps | Entity data? |
+|---|---|---|
+| `default-setup/library` | `documents`, `collections`, `currentItems` (entity DTO lists), the folder and path | Declared, set empty at start and written by nothing: they hold nothing. Dead fields, removable with a facade update; the views read the repository when asked |
+| `host/settings` | `applied`: each feature's effective settings as last told, to send the next `FEATURE_SETTINGS_UPDATED` only to features whose settings changed | What it publishes, derived from the one `Settings` row; kept |
+| `default-setup/brain` | `eventQueue` (events waiting for the brain actor); module state: running flow actors, trigger listeners and cron jobs | No rows: run state and callbacks keyed by flow and trigger ids, rebuilt from the flows |
+| `default-setup/logs` | `logs`: the process's log events | Not EARS data |
+| `default-setup/code` | the browsed directory, a git repository handle and its watcher; module state: CLI and process handles, a git command cache | No |
+| `default-setup/library` search index | `indexCache` (vector indices) | Dormant: switched off, and its vectors are files |
+| `actions`, `database`, `flows`, `notes`, `prompts`, `threads`, `browser`, `host/packs`, `host/application` | no context, or an empty one | No |
+
 Narrowing the two locks for multi-process writes follows these steps.
 
 ## Done
