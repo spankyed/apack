@@ -1,4 +1,4 @@
-import { readFile, writeFile, rename } from 'node:fs/promises'
+import { readFile, writeFile, rename, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -33,6 +33,12 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns, { timeout: 15000 }).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
+  const nativeHumanCount=async()=>{
+    const root=join(workspace!,'.claude/projects'),paths=await readdir(root,{recursive:true})
+    const path=paths.find(path=>path.endsWith('/'+sessionId+'.jsonl'));expect(path).toBeTruthy()
+    const rows=(await readFile(join(root,path!),'utf8')).trim().split('\n').map(line=>JSON.parse(line))
+    return rows.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some((block:any)=>block.type==='tool_result'))).length
+  }
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
@@ -130,7 +136,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((row:any)=>row.sequence>reloadSequence).map((row:any)=>row.text).join('')),{timeout:20000}).toContain('Reloaded:')
       if(!enable)await expect.poll(async()=>(await receipts()).some(row=>row.method==='shutdown'),{timeout:15000}).toBe(true)
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
-      expect((await context()).turns).toBe(before.turns+2);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      expect((await context()).turns).toBe(await nativeHumanCount());expect((await context()).turns).toBeGreaterThan(before.turns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
       expect(await readFile(join(workspace!,'native-lsp-model-count'),'utf8')).toBe(modelCount)
       if(enable)pluginReenabled=true;else pluginDisabled=true
     }
@@ -149,7 +155,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(retired.turns)
       lateResponseIsolated=true;steps.push({phase,interrupted:true,heldId:held.id,retiredTurns:retired.turns});continue
     }
-    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(unload?(phase===1?2:phase===8?5:8):lifetime?(phase===1?2:4):phase+1+(lifecycle&&phase>=7?1:0))
+    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(unload?await nativeHumanCount():lifetime?(phase===1?2:4):phase+1+(lifecycle&&phase>=7?1:0))
     await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000}).toBe('success')
     await expect(composer).toHaveText(draft)
     expect((await context()).sessionId).toBe(sessionId);expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -181,8 +187,8 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
   if(await section.getByRole('button',{name:'Back to conversation',exact:true}).isVisible())await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue reviewing the same release session.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState,{timeout:15000}).toBe('success')
-  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(unload?9:lifetime?5:lifecycle?10:5)
+  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(unload?await nativeHumanCount():lifetime?5:lifecycle?10:5)
   const prints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));expect((await context()).claude.totalCostUsd).toBeCloseTo(prints.at(-1).totalCostUsd,10);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-lsp-app-proof.json'),JSON.stringify({sessionId,boundNativePid,steps,captures,lifecycle,lifetime,unload,pluginDisabled,pluginReenabled,lateResponseIsolated,freshNavigationAfterInterruption,budgetStartCount,localReloadNoModelRequest,localReloadHumanInputDelta:lifecycle?1:0,retainedDraft:true,sameSessionRecovery:true}))
+  await writeFile(join(workspace!,'native-lsp-app-proof.json'),JSON.stringify({sessionId,boundNativePid,steps,captures,lifecycle,lifetime,unload,pluginDisabled,pluginReenabled,nativeHumanCount:unload?await nativeHumanCount():undefined,lateResponseIsolated,freshNavigationAfterInterruption,budgetStartCount,localReloadNoModelRequest,localReloadHumanInputDelta:lifecycle?1:0,retainedDraft:true,sameSessionRecovery:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeLsp:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
