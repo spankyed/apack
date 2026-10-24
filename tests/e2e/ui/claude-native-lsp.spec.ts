@@ -121,7 +121,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       await composer.fill('');await section.getByRole('button',{name:'Use native interface',exact:true}).click()
       await input.press('Control+a');await input.press('Control+k')
       const sequence=(await context()).native.output.at(-1)?.sequence??0
-      await input.pressSequentially('/plugin '+(enable?'enable':'disable')+' native-history-fixture@inline');await input.press('Enter')
+      await input.pressSequentially('/plugin '+(enable?'enable':'disable')+' native-history-fixture@inline',{delay:40});await input.press('Enter')
       await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((row:any)=>row.sequence>sequence).map((row:any)=>row.text).join('')),{timeout:20000}).toContain(enable?'Enabled':'Disabled')
       await input.press('Escape')
       if(!enable)await expect.poll(async()=>(await receipts()).some(row=>row.method==='shutdown'),{timeout:15000}).toBe(true)
