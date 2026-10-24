@@ -141,6 +141,8 @@ export interface Format4Conversion {
   attributes: number;
   /** Of those, the large ones, kept in `values` */
   outOfLine: number;
+  /** Attribute rows holding no value (`{ t: 'undefined' }`), which no read could tell from an absent attribute: left out */
+  emptyAttributes: number;
   /** Ids holding attributes and no entity row, kept as records of no type */
   untyped: number;
   /** Relations rewritten as `RelationRecord`s */
@@ -160,7 +162,7 @@ export function convertToFormat4(basePath: string): Format4Conversion {
     const rows = root.openDB({ name: 'rows' }) as Database<EntityRecord, string>;
     const values = root.openDB({ name: 'values' }) as Database<unknown, string>;
     const relationRows = root.openDB({ name: 'relationRows' }) as Database<RelationRecord, string>;
-    const result: Format4Conversion = { entities: 0, attributes: 0, outOfLine: 0, untyped: 0, relations: 0 };
+    const result: Format4Conversion = { entities: 0, attributes: 0, outOfLine: 0, emptyAttributes: 0, untyped: 0, relations: 0 };
     root.transactionSync(() => {
       const records = new Map<string, EntityRecord>();
       for (const { key, value } of entities.getRange()) {
@@ -170,9 +172,10 @@ export function convertToFormat4(basePath: string): Format4Conversion {
         const sep = key.indexOf(SEP);
         const kind = key.slice(0, sep);
         const id = key.slice(sep + 1);
+        const decoded = decodeAttr(value);
+        if (decoded === undefined) { result.emptyAttributes++; continue; }
         let record = records.get(id);
         if (!record) records.set(id, record = { type: null, fields: [], outOfLine: [] });
-        const decoded = decodeAttr(value);
         if (isLarge(decoded)) {
           values.put(valueKey(kind, id), decoded);
           record.outOfLine.push([kind, sizeOf(decoded), Array.isArray(decoded) ? decoded.length : null]);

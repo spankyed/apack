@@ -168,8 +168,10 @@ it('gathers each entity into one record, a large value into `values`, and keeps 
   const dir = format3({ 'Note-1': 'Note' }, {
     'title|Note-1': 'short', 'body|Note-1': long, 'list|Note-1': list, 'seenAt|Note-1': at,
     'title|Note-9': 'no entity row',
+    // A row holding no value, as format 3 could store one
+    'final|Note-1': undefined,
   });
-  expect(convertToFormat4(dir)).toEqual({ entities: 1, attributes: 5, outOfLine: 2, untyped: 1, relations: 0 });
+  expect(convertToFormat4(dir)).toEqual({ entities: 1, attributes: 5, outOfLine: 2, emptyAttributes: 1, untyped: 1, relations: 0 });
   const { records, values } = read(dir);
   expect(records).toEqual({
     'Note-1': {
