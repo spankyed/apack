@@ -60,6 +60,7 @@ export interface Format3Conversion {
 // @public
 export interface Format4Conversion {
     attributes: number;
+    emptyAttributes: number;
     entities: number;
     outOfLine: number;
     relations: number;

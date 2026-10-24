@@ -97,11 +97,12 @@ Storage earns trust by technique, not by examples.
 **Done when:** both run in the ears suite (a bounded number of runs, seeds reported on failure) and each fails under a
 mutation of the journal's rollback, the adapter's unit commit and the store's close flush.
 
-Done, 2026-10-24 (`packages/apack-ears/tests/engine/model-based.spec.ts` and `crash.spec.ts`, their support in
+Done, 2026-10-24 (`packages/apack-ears/tests/engine/model-based.spec.ts`, and the integration half's
+`tests/lmdb/reopen.integration.spec.ts` and `crash.integration.spec.ts`, their support in
 `tests/_harness/`). `model.ts` is the reference model and `stateOf`, `workload.ts`
 the random workload over six ids (creates, sets, appends, deletes, links, unlinks, destroys, units that return or
 throw, and the store refusing the next commit). `model-based.spec.ts`: 300 runs against the model, every write
-compared, and 60 runs on an LMDB store reopened against memory; `crash.spec.ts`: 6 runs of a 400-write child killed at
+compared, and 60 runs on an LMDB store reopened against memory (`reopen`); `crash`: 6 runs of a 400-write child killed at
 a random acknowledgement. Each fails under a mutation: the journal's rollback removed fails both model-based
 properties; the adapter's commit deferred to a microtask fails the files-against-memory property; deferred by 20 ms,
 the crash property. The suite's cost: about 2 s and 3.5 s.

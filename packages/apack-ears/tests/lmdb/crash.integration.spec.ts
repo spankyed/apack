@@ -1,4 +1,4 @@
-// The correctness harness, crash injection: a child runs a seeded workload against an LMDB store, acknowledging each
+// The correctness harness, crash injection (tests/_harness/): a child runs a seeded workload against an LMDB store, acknowledging each
 // write once it has returned, and is killed (SIGKILL) at a random moment. Reopened, the files hold exactly what the
 // model holds after the writes acknowledged — or after one more, the write in flight when the kill landed.
 //

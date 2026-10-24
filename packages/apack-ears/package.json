@@ -20,6 +20,7 @@
     "build:package": "tsx ../../scripts/build-package.ts .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "bench": "npm run build:package && vitest bench --run",
     "bench:heap": "npm run build:package && node --expose-gc bench/heap.ts",
     "bench:budget": "npm run build:package && node bench/budget.ts",
