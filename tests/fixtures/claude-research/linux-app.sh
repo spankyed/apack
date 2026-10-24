@@ -13,6 +13,9 @@ fi
 export APACK_CHAIN_CORES=2
 # test:linux already prepares the published packages and platform-specific default pack.
 npm run build:runtime -- --cores 2
+if [[ "${1:-}" == system-policy-app ]]; then
+  node tests/fixtures/claude-research/install-system-policy.mjs
+fi
 # The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
 if [[ "$(id -u)" == 0 ]]; then
   evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/.claude-research}"

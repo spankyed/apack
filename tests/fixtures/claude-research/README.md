@@ -24,6 +24,7 @@ npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mc
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-legacy-browser-app
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-retry-browser-app
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh pdf-pages-app
+npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh system-policy-app
 ```
 
 The Linux runner already prepares published packages and the platform-specific default pack.
