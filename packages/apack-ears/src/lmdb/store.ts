@@ -35,8 +35,10 @@ export interface LmdbStore {
   readonly env: LmdbDbs;
   /** Whether the environment is open */
   isOpen(): boolean;
-  /** Loads the database into the store's engine */
+  /** Loads the database into the store's engine, and logs what it loaded and what that took */
   hydrate(): Promise<void>;
+  /** What the store has done since it opened: its readings, for a person or a budget to read */
+  stats(): LmdbStoreStats;
   /** Direct reads of the environment, without hydrating it */
   read(): LmdbReader;
   /**
@@ -61,6 +63,20 @@ export interface LmdbStore {
   replaceWith(dir: string): void;
 }
 
+/** What an LMDB store has done since it opened (`LmdbStore.stats`) */
+export interface LmdbStoreStats {
+  /** How long hydrating took, or null before it has */
+  hydrateMs: number | null;
+  /** Units committed */
+  commits: number;
+  /** Of those, the ones flushed as they committed (durable units, a reset, an import) */
+  flushedCommits: number;
+  /** Background and `durable()` syncs that finished */
+  syncs: number;
+  /** How long the store has been open, for the rates */
+  openMs: number;
+}
+
 /** What an LMDB store is opened with */
 export interface LmdbStoreOptions {
   /** The database directory */
@@ -82,6 +98,10 @@ export interface LmdbStoreOptions {
  */
 export function openLmdbStore({ path, engine, readOnly = false, log = console.log }: LmdbStoreOptions): LmdbStore {
   let env: LmdbDbs | null = openEnvAt(path, { readOnly });
+  const opened = performance.now();
+  let hydrateMs: number | null = null;
+  let flushedCommits = 0;
+  let syncs = 0;
   // Commits are counted, so a sync knows which of them it made durable: the ones made before it started
   let committed = 0;
   let synced = 0;
@@ -127,6 +147,7 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
         log(`[LMDB] Syncing ${path} failed: ${error.message}`);
         settle(error);
       } else {
+        syncs++;
         flushedThrough(through);
       }
       // Commits made while it ran: at once for a caller waiting on them, else once writes pause
@@ -145,9 +166,13 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
       overdue.unref();
     }
   };
+  const stats = (): LmdbStoreStats => ({ hydrateMs, commits: committed, flushedCommits, syncs, openMs: performance.now() - opened });
   const adapter = makeLmdbAdapter(env, (flushed) => {
     committed++;
-    if (flushed) flushedThrough(committed);
+    if (flushed) {
+      flushedCommits++;
+      flushedThrough(committed);
+    }
     else schedule();
   });
 
@@ -164,6 +189,7 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
   const durably = (fn: () => void) => {
     writable();
     openEnv().root.transactionSync(() => { fn(); });
+    flushedCommits++;
     flushedThrough(++committed);
   };
 
@@ -214,7 +240,8 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     }
     try {
       closeEnv(closing);
-      log('[LMDB] Environment closed successfully');
+      const { commits, flushedCommits: flushed, syncs: synced, openMs } = stats();
+      log(`[LMDB] Environment closed: ${commits} commits (${flushed} flushed) and ${synced} syncs over ${(openMs / 1000).toFixed(1)} s`);
     } catch (error) {
       if (!isAlreadyClosed(error)) log(`[LMDB] Closing ${path} met an error: ${(error as Error).message}`);
     }
@@ -226,7 +253,12 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     readOnly,
     get env() { return openEnv(); },
     isOpen: () => env !== null,
-    hydrate: () => hydrate({ engine: engine(), env: openEnv(), log }),
+    async hydrate() {
+      const started = performance.now();
+      await hydrate({ engine: engine(), env: openEnv(), log });
+      hydrateMs = performance.now() - started;
+    },
+    stats,
     read: () => new LmdbReader(openEnv()),
     async copyTo(targetDir) {
       // LMDB writes data.mdb into a directory that already exists, and no lock.mdb: it makes one when opened

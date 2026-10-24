@@ -1,5 +1,7 @@
-// apack db inspect: an entity's relations, followed a few levels, or relation counts per entity type
-import type { Ears, EARS } from '@apackdev/ears';
+// apack db inspect: an entity's relations, followed a few levels, or relation counts per entity type and what the
+// engine holds
+import type { Ears, EARS, MemoryStats } from '@apackdev/ears';
+import type { LmdbStoreStats } from '@apackdev/ears/lmdb';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
 const OPTIONS = {
@@ -13,7 +15,7 @@ export const INSPECT_USAGE = [
   'Usage: apack db inspect [<entity-id> | --type <Entity>] [options]',
   '',
   'Prints an entity with its relations, or the first five entities of a type, or with neither, relation counts per',
-  'entity type.',
+  'entity type and what the engine holds: per type in memory, out of memory, its cache, and what loading took.',
   '',
   'Options:',
   '  -t, --type <Entity>    The first five entities of a type',
@@ -96,6 +98,32 @@ export function relationStatsLines(ears: Ears, entityTypes: Iterable<string>): s
   return [line(header), ...rows.map(line)];
 }
 
+/** Lines of a table: a left-aligned first column and right-aligned numbers */
+function table(header: string[], rows: string[][]): string[] {
+  const widths = header.map((title, column) => Math.max(title.length, ...rows.map((row) => row[column].length)));
+  const line = (cells: string[]) => cells.map((cell, column) => (column === 0 ? cell.padEnd(widths[column]) : cell.padStart(widths[column]))).join('  ');
+  return [line(header), ...rows.map(line)];
+}
+
+const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MB`;
+
+/**
+ * What the engine holds per type (its values' size serialized, an out-of-line value counted as its marker), what it
+ * keeps out of memory, its cache, and what opening the data took
+ */
+export function memoryLines(memory: MemoryStats, store: LmdbStoreStats): string[] {
+  const types = Object.entries(memory.types).sort(([, a], [, b]) => b.bytes - a.bytes);
+  const total = types.reduce((sum, [, { bytes }]) => sum + bytes, 0);
+  const { cache } = memory;
+  const reads = cache.hits + cache.misses;
+  return [
+    ...table(['In memory', 'Entities', 'Attributes', 'Values'], types.map(([type, stats]) => [type, String(stats.entities), String(stats.attributes), mb(stats.bytes)])),
+    `${mb(total)} of values in memory; ${memory.outOfLine.values} values out of memory: ${mb(memory.outOfLine.bytes)}`,
+    `cache: ${cache.values} values, ${mb(cache.bytes)} of ${mb(cache.capacity)}; ${reads === 0 ? 'no reads' : `${cache.hits} of ${reads} reads answered`}`,
+    `loaded in ${store.hydrateMs === null ? '—' : `${Math.round(store.hydrateMs)} ms`}; heap ${mb(process.memoryUsage().heapUsed)}`,
+  ];
+}
+
 export async function dbInspect(args: string[], io: DbIo): Promise<void> {
   const { values, positionals, target } = parseDbArgs(args, OPTIONS, INSPECT_USAGE);
   if (positionals.length > 1) throw new Error(`Inspect one entity at a time\n\n${INSPECT_USAGE}`);
@@ -119,6 +147,8 @@ export async function dbInspect(args: string[], io: DbIo): Promise<void> {
       for (const id of ids.slice(0, 5)) graphLines(db.ears, id, { depth, directions }).forEach((line) => io.out(line));
     } else {
       relationStatsLines(db.ears, db.schema.getRegisteredEntityTypes()).forEach((line) => io.out(line));
+      io.out('');
+      memoryLines(db.admin.memoryStats(), db.store.stats()).forEach((line) => io.out(line));
     }
   });
 }

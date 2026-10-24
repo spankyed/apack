@@ -215,11 +215,11 @@ describe('openLmdbStore', () => {
     await readOnly.hydrate();
     expect(getAttr(id('Note-1'), 'title')).toBe('kept');
     expect(engine.findRelations()).toHaveLength(1);
-    expect(lines).toContainEqual(expect.stringMatching(/^\[LMDB\] Hydrated 2 entities \(\d+ attributes\), 1 relations$/));
+    expect(lines).toContainEqual(expect.stringMatching(/^\[LMDB\] Hydrated 2 entities \(\d+ attributes, 0 of them out of memory: 0\.0 MB\), 1 relations$/));
     expect(() => engine.write(id('Note-1')).set('title', 'changed')).toThrow('is open read-only');
     expect(() => readOnly.reset()).toThrow('is open read-only');
     readOnly.close();
-    expect(lines).toContain('[LMDB] Environment closed successfully');
+    expect(lines).toContainEqual(expect.stringMatching(/^\[LMDB\] Environment closed: 0 commits \(0 flushed\) and 0 syncs over [\d.]+ s$/));
 
     const reopened = openStore();
     expect(reopened.read().getAttr('Note-1', 'title')).toBe('kept');

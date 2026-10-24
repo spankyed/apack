@@ -3,7 +3,7 @@
 // the faces define the contract, not a security boundary (packs run in-process).
 import type { EARS } from './entities.ts';
 import { noopSink, type EARSRuntimeDeps } from './runtime.ts';
-import { createAttributeStorage, type EntityRow, type SchemaStats } from './attribute-storage.ts';
+import { createAttributeStorage, type EntityRow, type MemoryStats, type SchemaStats } from './attribute-storage.ts';
 import { createQuery, type Query } from './query.ts';
 import { createHierarchy } from './hierarchy.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
@@ -85,6 +85,8 @@ export interface EarsAdmin {
    * the engine reads it back with `PersistenceSink.readAttr` when it is first read
    */
   bulkLoadOutOfLine(id: EARS.EntityId, kind: EARS.AttrKind, size: number, length: number | undefined): void;
+  /** What the engine holds in memory per type, what it keeps out of it, and its cache: a walk of every value */
+  memoryStats(): MemoryStats;
   /** Writes an attribute's value, any kind the engine owns included */
   putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
   /** Removes an attribute */
@@ -152,6 +154,7 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
     getEntitiesOfType: storage.getEntitiesOfType,
     bulkLoadAttr: storage.bulkLoadAttr,
     bulkLoadOutOfLine: storage.bulkLoadOutOfLine,
+    memoryStats: storage.memoryStats,
     putAttr: storage.putAttr,
     deleteAttr: storage.deleteAttr,
     addRelation: relations.add,

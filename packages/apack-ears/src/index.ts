@@ -10,7 +10,7 @@ export type {
   EARSRuntimeDeps, EarsSchema, UntypedSchema, QueryBuilder, WriteBuilder, RelationEdge, LinkOptions, RowIdentity, ShortCodeIdentity, WriteOptions, WriteTarget, FieldValue, FieldValues, ListElement, WritableField, OptionalField, RequiredField, CreateFields, WhereValue, RowRules, ShortCode,
 } from './runtime.ts';
 export { b64Encode, b64Decode, type Query } from './query.ts';
-export { entityTypeOf, type EntityRow, type SchemaStats } from './attribute-storage.ts';
+export { entityTypeOf, type EntityRow, type MemoryStats, type SchemaStats } from './attribute-storage.ts';
 export { OUT_OF_LINE_BYTES } from './values.ts';
 export { getTimestamp } from './numbering.ts';
 export type { RelationMatch, RelationRow, RelationStats } from './relations.ts';

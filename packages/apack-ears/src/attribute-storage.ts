@@ -31,6 +31,9 @@ class OutOfLine {
 /** How many bytes of out-of-line values stay decoded, the most recently read kept */
 const CACHE_BYTES = 16 * 1024 * 1024;
 
+/** What an out-of-line value's marker counts for in `memoryStats`: its size and length, two numbers */
+const MARKER_BYTES = 16;
+
 /** The longest string the value index holds: a longer one is matched by walking, so the index never keeps it in memory */
 export const INDEXED_STRING_MAX = 256;
 
@@ -96,6 +99,9 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   // Out-of-line values recently read, by `kind␟id`, in the order they were last read; a Map keeps that order
   const cache = new Map<string, { value: unknown; size: number }>();
   let cachedBytes = 0;
+  // Reads of out-of-line values answered from the cache, and read back from the store
+  let cacheHits = 0;
+  let cacheMisses = 0;
   const cacheKey = (id: EARS.EntityId, kind: EARS.AttrKind) => `${kind}\x1F${id}`;
   const forget = (key: string) => {
     const hit = cache.get(key);
@@ -120,11 +126,13 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
     const key = cacheKey(id, kind);
     const hit = cache.get(key);
     if (hit) {
+      cacheHits++;
       // Read again: the most recently read, so the last to be dropped
       cache.delete(key);
       cache.set(key, hit);
       return hit.value as EARS.AttributeValue;
     }
+    cacheMisses++;
     const value = deepFreeze(readAttr!(kind, id)) as EARS.AttributeValue;
     remember(key, value, marker.size);
     return value;
@@ -472,8 +480,39 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
     };
   }
 
+  /**
+   * What memory holds, per type: its entities, their attributes and their values' size serialized — what the engine
+   * keeps of them, an out-of-line value counted as its marker — and the values kept out of line, and the cache. A walk
+   * of every value, so a reading to take on demand, not on a write's path
+   */
+  function memoryStats(): MemoryStats {
+    const types: MemoryStats['types'] = {};
+    const outOfLine = { values: 0, bytes: 0 };
+    for (const [id, row] of rows) {
+      const type = entityTypeOf(id);
+      const stats = (types[type] ??= { entities: 0, attributes: 0, bytes: 0 });
+      stats.entities++;
+      for (const kind in row) {
+        const value = row[kind];
+        stats.attributes++;
+        if (value instanceof OutOfLine) {
+          outOfLine.values++;
+          outOfLine.bytes += value.size;
+          stats.bytes += kind.length + MARKER_BYTES;
+        } else {
+          stats.bytes += kind.length + sizeOf(value);
+        }
+      }
+    }
+    return {
+      types,
+      outOfLine,
+      cache: { values: cache.size, bytes: cachedBytes, capacity: CACHE_BYTES, hits: cacheHits, misses: cacheMisses },
+    };
+  }
+
   return {
-    clear, bulkLoadAttr, bulkLoadOutOfLine,
+    clear, bulkLoadAttr, bulkLoadOutOfLine, memoryStats,
     putAttr: put, appendAttr: append, mergeAttr: merge, removeAt, removeValue, deleteAttr,
     entityCreated, grantRole, revokeRole,
     getAttr, hasAttr, getRoles, getRow, getAllEntities, getEntitiesOfType, entitiesOfType, hasEntity, isTrashed, isLive, holders, orderOf,
@@ -485,6 +524,16 @@ export type AttributeStorage = ReturnType<typeof createAttributeStorage>;
 
 /** An entity as a read gives it: its id and type, and every attribute it holds */
 export type EntityRow = { id: EARS.EntityId; entityType: EARS.Entity } & Record<string, unknown>;
+
+/** What an engine holds in memory and out of it (`EarsAdmin.memoryStats`) */
+export interface MemoryStats {
+  /** Per entity type: its entities, their attributes, and the bytes their values take serialized as memory holds them */
+  types: Record<string, { entities: number; attributes: number; bytes: number }>;
+  /** The values kept out of memory, read back when read, and their bytes serialized */
+  outOfLine: { values: number; bytes: number };
+  /** The out-of-line values held decoded, in `capacity` bytes, and the reads it answered and missed */
+  cache: { values: number; bytes: number; capacity: number; hits: number; misses: number };
+}
 
 /** What an engine holds, each map keyed by a name its data holds */
 export interface SchemaStats {

@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–5 are done; Step 6 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–6 are done; Step 7 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -207,6 +207,23 @@ budget (boot about 300 ms, structure about 50 MB).
 
 **Done when:** the readings are printed at boot and by `apack db inspect`, and the budget fails under a mutation that
 keeps large values in memory. This is the honest trigger for when an in-memory engine stops being the right design.
+
+Done, 2026-10-24, with boot reported rather than gated: the repo's rule is that load inflates a duration and cannot
+deflate it, so a boot budget would fail a loaded machine and not a slow engine; the heap, which load does not move, is
+the gate. `admin.memoryStats()` gives, per type, its entities, attributes and values' size serialized as memory holds
+them (an out-of-line value as its marker), the values out of memory and their bytes, and the cache's values, bytes,
+hits and misses — a walk of every value, 15 ms on the production copy, so taken on demand. `store.stats()` gives the
+hydrate time, commits (and the flushed ones), syncs and time open. Hydration logs its out-of-line values, closing logs
+the commits and syncs, the API's boot line keeps its time and heap, and `apack db inspect` with no argument prints a
+per-type memory table, the out-of-memory total, the cache and the load time. `npm run bench:budget -w @apackdev/ears`
+writes data of the production data's profiled shape (`bench/production-shape.ts`: 22.8k entities, their small fields
+by kind, 5.6k large values by kind, 45.8k relations) at 1× and 2×, boots each three times in its own process and exits
+1 when the heap passes `HEAP_BUDGET_MB` (64) a scale. With hydration loading large values into memory it fails at both
+scales: 186.1 MB of 64 and 371.5 MB of 128.
+
+Readings (2026-10-24, a machine at load 17–30): the budget, 1× heap 38.5 MB, boot 167–172 ms; 2× heap 76.5 MB, boot
+311–326 ms — heap and boot both linear in the data, as the hypothesis says. The production copy: 9.4 MB of values in
+memory (Message 8.4 MB over 19.8k entities), 5,613 values out of it (148 MB), hydrate 271 ms.
 
 ### 7. The app as the database server
 `apack db query`, `exec`, `script` and `runs` send their work to the running app's API when one runs on the data dir,

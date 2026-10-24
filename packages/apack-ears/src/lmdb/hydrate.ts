@@ -13,13 +13,19 @@ export async function hydrate(params: {
 
   let entityCount = 0;
   let attrCount = 0;
+  let outOfLine = 0;
+  let outOfLineBytes = 0;
   let untyped = 0;
   for (const { key, value: record } of env.rows.getRange()) {
     // Attributes written to an id no entity was created with are kept and not loaded, as the engine never held them
     if (record.type === null) { untyped++; continue; }
     const id = key as EARS.EntityId;
     for (const [kind, value] of record.fields) engine.bulkLoadAttr(id, kind as EARS.AttrKind, value);
-    for (const [kind, size, length] of record.outOfLine) engine.bulkLoadOutOfLine(id, kind as EARS.AttrKind, size, length ?? undefined);
+    for (const [kind, size, length] of record.outOfLine) {
+      engine.bulkLoadOutOfLine(id, kind as EARS.AttrKind, size, length ?? undefined);
+      outOfLine++;
+      outOfLineBytes += size;
+    }
     entityCount++;
     attrCount += record.fields.length + record.outOfLine.length;
   }
@@ -31,5 +37,6 @@ export async function hydrate(params: {
     relCount++;
   }
 
-  log(`[LMDB] Hydrated ${entityCount} entities (${attrCount} attributes), ${relCount} relations`);
+  const mb = (outOfLineBytes / 2 ** 20).toFixed(1);
+  log(`[LMDB] Hydrated ${entityCount} entities (${attrCount} attributes, ${outOfLine} of them out of memory: ${mb} MB), ${relCount} relations`);
 }

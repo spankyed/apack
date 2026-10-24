@@ -163,6 +163,24 @@ describe('large values out of memory', () => {
     expect(Object.isFrozen(e.getAttr(a, 'title'))).toBe(true);
   });
 
+  it('reports what memory holds per type, what it keeps out of it, and the reads the cache answered', () => {
+    const { sink } = storingSink();
+    const e = engine(sink);
+    const a = e.create('Task', { title: big(1), small: 'kept' }).id();
+    e.create('Task', { small: 'only' });
+    const held = e.admin.memoryStats();
+    expect(held.outOfLine).toEqual({ values: 1, bytes: big(1).length });
+    // Its two entities, their attributes (the engine's times included), and the large title counted as its marker
+    expect(held.types.Task).toMatchObject({ entities: 2, attributes: 7 });
+    expect(held.types.Task.bytes).toBeLessThan(OUT_OF_LINE_BYTES);
+    expect(held.cache).toMatchObject({ values: 1, bytes: big(1).length, hits: 0, misses: 0 });
+
+    e.getAttr(a, 'title');
+    for (let i = 0; i < 20; i++) e.create('Task', { title: 'x'.repeat(1024 * 1024) });
+    e.getAttr(a, 'title');
+    expect(e.admin.memoryStats().cache).toMatchObject({ hits: 1, misses: 1 });
+  });
+
   it('keeps every value in memory when the sink cannot read one back', () => {
     const e = engine(recordingSink().sink);
     const a = e.create('Task', { title: big(1) }).id();

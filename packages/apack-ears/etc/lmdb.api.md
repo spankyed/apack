@@ -163,6 +163,7 @@ export interface LmdbStore {
     replaceWith(dir: string): void;
     reset(): void;
     readonly sink: Required<PersistenceSink>;
+    stats(): LmdbStoreStats;
 }
 
 // @public
@@ -171,6 +172,15 @@ export interface LmdbStoreOptions {
     log?: (message: string) => void;
     path: string;
     readOnly?: boolean;
+}
+
+// @public
+export interface LmdbStoreStats {
+    commits: number;
+    flushedCommits: number;
+    hydrateMs: number | null;
+    openMs: number;
+    syncs: number;
 }
 
 // @public

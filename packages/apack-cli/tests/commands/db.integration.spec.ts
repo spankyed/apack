@@ -796,6 +796,8 @@ describe('apack db inspect', () => {
     const dir = await appDataDir();
     const stats = await ok(['inspect', '--data-dir', dir]);
     expect(stats.out.split('\n')).toContainEqual(expect.stringMatching(/^Note\s+2\s+1\s+0\.5$/));
+    expect(stats.out.split('\n')).toContainEqual(expect.stringMatching(/^Note\s+2\s+\d+\s+0\.0 MB$/));
+    expect(stats.out).toMatch(/ of values in memory; 0 values out of memory: 0\.0 MB\ncache: 0 values/);
     const byType = await ok(['inspect', '--type', 'Settings', '--data-dir', dir]);
     expect(byType.out.split('\n').slice(0, 2)).toEqual(['1 Settings entities', '[Settings] Settings-app "App"']);
     expect((await run(['inspect', 'Note-a', '--type', 'Note', '--data-dir', dir])).error?.message).toMatch(/not both/);

@@ -139,6 +139,7 @@ export interface EarsAdmin {
     deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
     getAllEntities(): EARS.EntityId[];
     getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
+    memoryStats(): MemoryStats;
     putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
@@ -271,6 +272,26 @@ export interface LinkOptions<R extends string = string> {
 
 // @public
 export type ListElement<T> = [T] extends [readonly (infer U)[]] ? U : unknown;
+
+// @public
+export interface MemoryStats {
+    cache: {
+        values: number;
+        bytes: number;
+        capacity: number;
+        hits: number;
+        misses: number;
+    };
+    outOfLine: {
+        values: number;
+        bytes: number;
+    };
+    types: Record<string, {
+        entities: number;
+        attributes: number;
+        bytes: number;
+    }>;
+}
 
 // @public
 export const noopSink: PersistenceSink;
