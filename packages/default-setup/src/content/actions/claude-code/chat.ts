@@ -14,7 +14,7 @@
  * `mode === 'Claude Code'`.
  */
 
-import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
+import { copyClaudeChannelSelection } from '../../../features/code/common/native-channels.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z, EntityId } from '#generated/services.ts';
