@@ -185,8 +185,14 @@ const promptsState = setup({
       });
     },
 
-    // News every window hears, whoever created it: it adds the prompt and selects nothing, so opening it fetches it
-    addCreatedPrompt: assign(({ context, event }) => ({ prompts: [...context.prompts, typeOf('PROMPT_CREATED', event).prompt] })),
+    // News every window hears, whichever window made the change: each names its prompt, and changes the selection only
+    // when it is that prompt. A created prompt selects nothing, so opening it fetches it, and one the list holds
+    // already is replaced rather than listed twice
+    addCreatedPrompt: assign(({ context, event }) => {
+      const { prompt } = typeOf('PROMPT_CREATED', event);
+      const held = context.prompts.some(p => p.id === prompt.id);
+      return { prompts: held ? context.prompts.map(p => (p.id === prompt.id ? prompt : p)) : [...context.prompts, prompt] };
+    }),
 
     updatePromptInList: assign(({ context, event }) => {
       const ev = typeOf('PROMPT_UPDATED', event);
@@ -194,7 +200,7 @@ const promptsState = setup({
         prompts: context.prompts.map(p => 
           p.id === ev.promptId ? ev.prompt : p
         ),
-        selectedPrompt: ev.prompt,
+        ...(context.selectedPromptId === ev.promptId && { selectedPrompt: ev.prompt }),
       };
     }),
 
@@ -202,8 +208,7 @@ const promptsState = setup({
       const ev = typeOf('PROMPT_DELETED', event);
       return {
         prompts: context.prompts.filter(p => p.id !== ev.promptId),
-        selectedPromptId: undefined,
-        selectedPrompt: undefined,
+        ...(context.selectedPromptId === ev.promptId && { selectedPromptId: undefined, selectedPrompt: undefined }),
       };
     }),
 
@@ -451,6 +456,8 @@ const promptsState = setup({
     /** Whether this page is the one just asked for — two clicks ask for the same one */
     isNextPage: ({ context, event }) =>
       (event as { data?: { page?: number } }).data?.page === context.page + 1,
+    /** Whether the deleted prompt is the one open */
+    deletesSelected: ({ context, event }) => (event as { promptId?: string }).promptId === context.selectedPromptId,
   },
 }).createMachine({
   id,
@@ -502,10 +509,10 @@ const promptsState = setup({
     PROMPT_UPDATED: {
       actions: 'updatePromptInList'
     },
-    PROMPT_DELETED: {
-      actions: 'removeDeletedPrompt',
-      target: '.list'
-    },
+    PROMPT_DELETED: [
+      { guard: 'deletesSelected', actions: 'removeDeletedPrompt', target: '.list' },
+      { actions: 'removeDeletedPrompt' },
+    ],
     TOGGLE_INPUTS_SECTION: { actions: 'toggleInputsSection' },
     TOGGLE_OUTPUT_SECTION: { actions: 'toggleOutputSection' },
     TOGGLE_METADATA_SECTION: { actions: 'toggleMetadataSection' },

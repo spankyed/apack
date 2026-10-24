@@ -231,3 +231,24 @@ it('fetches a prompt created elsewhere when it is opened', () => {
   actor.send(answerTo(selectCall(1), { type: 'PROMPT_SELECTED', promptId: 'Prompt-x', data: aPrompt('Prompt-x') }));
   expect(actor.getSnapshot().context.selectedPrompt?.id).toBe('Prompt-x');
 });
+
+it('keeps the open prompt when another window updates or deletes a different one, and lists a prompt once', () => {
+  const actor = connected();
+  actor.send({ type: 'PROMPT.SELECT', promptId: 'Prompt-p1' });
+  actor.send(answerTo(selectCall(0), { type: 'PROMPT_SELECTED', promptId: 'Prompt-p1', data: aPrompt('Prompt-p1') }));
+  actor.send({ type: 'PROMPT_CREATED', promptId: 'Prompt-p2', prompt: aPrompt('Prompt-p2') });
+  actor.send({ type: 'PROMPT_CREATED', promptId: 'Prompt-p2', prompt: aPrompt('Prompt-p2') });
+  actor.send({ type: 'PROMPT_UPDATED', promptId: 'Prompt-p2', prompt: { ...aPrompt('Prompt-p2'), label: 'changed' } });
+  actor.send({ type: 'PROMPT_DELETED', promptId: 'Prompt-p3' });
+
+  const { context } = actor.getSnapshot();
+  expect(context.prompts.map((p) => p.id), 'a prompt created twice is listed once').toEqual(['Prompt-p1', 'Prompt-p2']);
+  expect(context.selectedPromptId).toBe('Prompt-p1');
+  expect(context.selectedPrompt?.label).toBe('Prompt-p1');
+  expect(actor.getSnapshot().matches('detail')).toBe(true);
+
+  // Deleting the open prompt closes it
+  actor.send({ type: 'PROMPT_DELETED', promptId: 'Prompt-p1' });
+  expect(actor.getSnapshot().context.selectedPromptId).toBeUndefined();
+  expect(actor.getSnapshot().matches('list')).toBe(true);
+});
