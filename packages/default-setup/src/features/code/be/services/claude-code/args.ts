@@ -72,6 +72,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── MCP / plugins / dirs ─────────────────────────────────────────────────
   if (opts.mcpConfig?.length) args.push('--mcp-config', ...opts.mcpConfig)
+  if (opts.channels?.length) args.push('--channels', ...opts.channels)
   if (opts.strictMcpConfig) args.push('--strict-mcp-config')
   if (opts.pluginDir?.length) {
     for (const dir of opts.pluginDir) args.push('--plugin-dir', dir)

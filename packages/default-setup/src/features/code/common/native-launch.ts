@@ -12,4 +12,5 @@ export interface ClaudeNativeLaunch {
   appendSystemPrompt?: string
   addDir?: string[]
   pluginDir?: string[]
+  channels?: string[]
 }

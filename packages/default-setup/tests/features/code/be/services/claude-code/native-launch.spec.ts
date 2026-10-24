@@ -32,3 +32,12 @@ it('keeps the acknowledged pre-Plan mode with Plan and clears it after an explic
  expect(()=>readSavedClaudeNativeLaunch({...state,prePlanMode:'invalid'})).toThrow()
  expect(saved.prePlanMode).toBe('acceptEdits')
 })
+
+it('retains explicit channel selection on saved resume without sharing its mutable array',async()=>{
+ const {snapshotClaudeNativeLaunch}=await import('#features/code/be/services/claude-code/native-launch.ts')
+ const channels=['plugin:review@owned'],saved=snapshotClaudeNativeLaunch({...launch,permissionMode: 'acceptEdits',channels})
+ channels.push('plugin:other@owned')
+ expect(saved.channels).toEqual(['plugin:review@owned'])
+ expect(readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved})?.channels).toEqual(['plugin:review@owned'])
+ expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:{...saved,channels:['']}})).toThrow()
+})

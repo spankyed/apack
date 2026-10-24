@@ -1623,9 +1623,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1655,9 +1655,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1874,6 +1874,7 @@ interface ClaudeNativeLaunch {
     appendSystemPrompt?: string;
     addDir?: string[];
     pluginDir?: string[];
+    channels?: string[];
 }
 
 type ClaudeNativeMcpForm = z.infer<typeof ClaudeNativeMcpFormSchema>;
@@ -2961,6 +2962,7 @@ interface ClaudeNativeTerminalOptions {
     appendSystemPrompt?: string;
     addDir?: string[];
     pluginDir?: string[];
+    channels?: string[];
     signal?: AbortSignal;
 }
 
@@ -8714,6 +8716,8 @@ interface QueryOptions {
     systemPromptFile?: string;
     appendSystemPromptFile?: string;
     mcpConfig?: string[];
+    /** Explicit native channel selection; original policy and allowlist still govern admission. */
+    channels?: string[];
     strictMcpConfig?: boolean;
     pluginDir?: string[];
     addDir?: string[];

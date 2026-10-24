@@ -8,12 +8,12 @@ export const ClaudeNativeLaunchSchema = z.object({
   sessionId: z.string().uuid(), cwd: z.string().refine(isAbsolute),
   model: z.string().min(1).optional(), permissionMode: PermissionModeSchema.optional(), prePlanMode: PermissionModeSchema.exclude(['plan']).optional(),
   allowedTools: z.array(z.string()).optional(), disallowedTools: z.array(z.string()).optional(),
-  appendSystemPrompt: z.string().optional(), addDir: z.array(z.string()).optional(), pluginDir: z.array(z.string()).optional(),
+  appendSystemPrompt: z.string().optional(), addDir: z.array(z.string()).optional(), pluginDir: z.array(z.string()).optional(), channels: z.array(z.string().min(1)).optional(),
 }).strict() satisfies z.ZodType<ClaudeNativeLaunch>
 
 export function snapshotClaudeNativeLaunch(value: ClaudeNativeLaunch): ClaudeNativeLaunch {
-  const {sessionId,cwd,model,permissionMode,prePlanMode,allowedTools,disallowedTools,appendSystemPrompt,addDir,pluginDir}=value
-  return {sessionId,cwd,model,permissionMode,...(permissionMode === 'plan' && prePlanMode ? {prePlanMode} : {}),allowedTools:allowedTools?.slice(),disallowedTools:disallowedTools?.slice(),appendSystemPrompt,addDir:addDir?.slice(),pluginDir:pluginDir?.slice()}
+  const {sessionId,cwd,model,permissionMode,prePlanMode,allowedTools,disallowedTools,appendSystemPrompt,addDir,pluginDir,channels}=value
+  return {sessionId,cwd,model,permissionMode,...(permissionMode === 'plan' && prePlanMode ? {prePlanMode} : {}),allowedTools:allowedTools?.slice(),disallowedTools:disallowedTools?.slice(),appendSystemPrompt,addDir:addDir?.slice(),pluginDir:pluginDir?.slice(),channels:channels?.slice()}
 }
 
 export function readClaudePlanRestoreMode(state: Record<string, unknown> | undefined): import('./types.ts').PermissionMode | undefined {

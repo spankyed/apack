@@ -255,3 +255,10 @@ describe('argsFromOptions', () => {
     })
   })
 })
+
+it('passes explicit approved-channel selection as native argv without development-channel bypass', () => {
+  const args = argsFromOptions({channels:['plugin:review@owned','plugin:notes@owned']})
+  expectContains(args,['--channels','plugin:review@owned','plugin:notes@owned'])
+  expect(args).not.toContain('--dangerously-load-development-channels')
+  expect(argsFromOptions({channels:[]})).not.toContain('--channels')
+})

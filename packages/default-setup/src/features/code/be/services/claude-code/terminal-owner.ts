@@ -90,6 +90,7 @@ export interface ClaudeNativeTerminalOptions {
   appendSystemPrompt?: string
   addDir?: string[]
   pluginDir?: string[]
+  channels?: string[]
   signal?: AbortSignal
 }
 
@@ -167,6 +168,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
       terminalEnv.BUN_OPTIONS = bridge.bunOptions
       for (const directory of options.pluginDir ?? []) args.push('--plugin-dir', directory)
+      if (options.channels?.length) args.push('--channels', ...options.channels)
       if (options.model) args.push('--model', options.model)
       if (options.allowedTools?.length) args.push('--allowed-tools', ...options.allowedTools)
       if (options.disallowedTools?.length) args.push('--disallowed-tools', ...options.disallowedTools)

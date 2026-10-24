@@ -356,6 +356,8 @@ export interface QueryOptions {
 
   // MCP / plugins / dirs
   mcpConfig?: string[]
+  /** Explicit native channel selection; original policy and allowlist still govern admission. */
+  channels?: string[]
   strictMcpConfig?: boolean
   pluginDir?: string[]
   addDir?: string[]
