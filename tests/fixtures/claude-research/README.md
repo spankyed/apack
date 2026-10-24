@@ -23,8 +23,9 @@ npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mc
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-browser-return-app
 ```
 
-The launcher installs missing display prerequisites, then uses the build-chain cache to refresh the
-default pack and app runtime for the current inputs. Research replay uses one locked directory at `/work/.claude-research/current`.
+The Linux runner already prepares published packages and the platform-specific default pack.
+The fixture launcher installs missing display prerequisites and uses the build-chain cache to refresh
+only the app runtime. Research replay uses one locked directory at `/work/.claude-research/current`.
 Copy needed evidence out before the next sync/replay; it replaces this directory. Do not restore
 the old unbounded `node_modules/.cache/claude-research-linux` layout.
 

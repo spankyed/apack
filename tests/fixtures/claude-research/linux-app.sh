@@ -7,7 +7,8 @@ if ! command -v xvfb-run >/dev/null || ! command -v xclip >/dev/null; then
   apt-get install -y --no-install-recommends xvfb xauth xclip python3 procps fonts-dejavu-core
 fi
 export APACK_CHAIN_CORES=2
-npm run chain -- --no-native --cores 2 --only packages:ensure,build:default-setup,build:runtime
+# test:linux already prepares the published packages and platform-specific default pack.
+npm run chain -- --no-native --cores 2 --only build:runtime
 # The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
 if [[ "$(id -u)" == 0 ]]; then
   evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/.claude-research}"
