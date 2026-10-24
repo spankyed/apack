@@ -25,6 +25,10 @@ test('completes an everyday native review across Agent, approval, question and i
   await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  await expect.poll(async () => (await context()).turns).toBe(1)
+  await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
   const channelDialog=appPage.getByRole('dialog',{name:'Claude channels',exact:true})
   const channelWindow=await electronApp.browserWindow(appPage),channelCaptures:string[]=[]
   const openChannels=async()=>{const button=card.getByRole('button',{name:'Claude channels',exact:true});if(await button.isVisible())await button.click();else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude channels',exact:true}).click()}await expect(channelDialog).toBeVisible()}
@@ -35,9 +39,6 @@ test('completes an everyday native review across Agent, approval, question and i
   for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toHaveValue('plugin:review@owned\nplugin:notes@owned');await captureChannels('saved',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
   await openChannels();await channelDialog.getByRole('textbox').fill('');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click();await expect.poll(selectedChannels).toEqual([])
   await expect(card.locator('[contenteditable="true"]')).toHaveText('Help me review the release notes and checklist.');await appPage.setViewportSize({width:1100,height:900})
-  await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
