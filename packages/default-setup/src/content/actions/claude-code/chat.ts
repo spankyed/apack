@@ -116,7 +116,7 @@ export async function action(
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
   let channels: string[] | undefined;
-  try { channels = requestedChannels === undefined ? prior?.nativeLaunch?.channels?.slice() : copyClaudeChannelSelection(requestedChannels); }
+  try { channels = requestedChannels === undefined ? (prior?.channelSelection ?? prior?.nativeLaunch?.channels)?.slice() : copyClaudeChannelSelection(requestedChannels); }
   catch (error) { return {success: false, error: error instanceof Error ? error.message : String(error)}; }
   if (requestedChannels !== undefined && services.cli.claudeCode.getNativeTerminal(threadId)) return {success: false, error: 'Stop the native session before changing channel selection'};
   const selection = requestedModel ?? prior?.modelOverride;

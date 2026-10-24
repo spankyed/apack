@@ -148,6 +148,7 @@
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
               @native-ui-notice="operateNativeNotice" @native-ui-scroll="scrollNativeUi" @native-ui-pane="operateNativePane" @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
+              @channels-change="channels => currentThread?.id && sendToSystem('threads', {type: 'SET_CLAUDE_CHANNELS', threadId: currentThread.id, channels})"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
               @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"

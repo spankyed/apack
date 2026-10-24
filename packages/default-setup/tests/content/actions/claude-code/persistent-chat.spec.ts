@@ -1,3 +1,4 @@
+import {getClaudeState} from '../../../../src/content/actions/claude-code/_helpers/thread-context.ts';
 import { PassThrough } from 'node:stream';
 import { mockService, startApp, importFlows, type TestApp } from '@apackdev/testing/harness';
 import { actionLabel } from '../../../_support/flows.ts';
@@ -200,9 +201,9 @@ it('retains explicit channel intent while a fork queues input and refuses live n
  const channels=['plugin:review@owned']
  expect(await chat({threadId:id,text:'Review',channels},services,{} as never,'')).toMatchObject({queued:true})
  channels.push('plugin:other@owned')
- expect(repository.threadQueries.byId(id)?.context?.claudeCode?.queuedMessage?.channels).toEqual(['plugin:review@owned'])
+ expect(getClaudeState(services,id)?.queuedMessage?.channels).toEqual(['plugin:review@owned'])
  getNativeTerminal.mockReturnValue({})
  expect(await chat({threadId:id,text:'Replace',channels:[]},services,{} as never,'')).toMatchObject({success:false,error:'Stop the native session before changing channel selection'})
- expect(repository.threadQueries.byId(id)?.context?.claudeCode?.queuedMessage?.text).toBe('Review')
+ expect(getClaudeState(services,id)?.queuedMessage?.text).toBe('Review')
  expect(await chat({threadId:id,text:'Invalid',channels:['--dangerously-load-development-channels']},services,{} as never,'')).toMatchObject({success:false})
 })

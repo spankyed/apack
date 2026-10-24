@@ -1,3 +1,4 @@
+import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
 import { prepareClaudeNativeInput } from './claude-native-input.ts';
 import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
@@ -146,6 +147,16 @@ export const threadsSystem = setup({
         id: threadId,
         data: repository.threadQueries.extendedData(threadId),
       });
+    },
+    setClaudeChannels: ({event}) => {
+      const {threadId,channels}=threadsSpec.typeOf('SET_CLAUDE_CHANNELS',event);
+      try {
+        if(services.cli.claudeCode.getNativeTerminal(threadId)||services.cli.claudeCode.isConversationBusy(threadId))throw Error('Stop the native session and wait for current work before changing channels');
+        const thread=repository.threadQueries.byId(threadId as EARS.EntityId);
+        if(!thread)throw Error('Conversation no longer exists');
+        repository.threadCommands.update(thread.id,{context:{...thread.context,claudeCode:{...thread.context?.claudeCode,channelSelection:copyClaudeChannelSelection(channels)}}});
+        broadcastToSurface('threads',{type:'SET_VIEW_DATA',id:thread.id,data:repository.threadQueries.extendedData(thread.id)});
+      }catch(error){reportThreadOperationError('update',error,threadId);}
     },
     updateThreadField: ({ event }) => {
       const { key, value, threadId } = threadsSpec.typeOf('UPDATE_THREAD_FIELD', event);
@@ -986,6 +997,7 @@ export const threadsSystem = setup({
           VIEW_THREAD: {
             actions: 'sendViewData',
           },
+          SET_CLAUDE_CHANNELS: {actions: 'setClaudeChannels'},
           UPDATE_THREAD_FIELD: {
             actions: 'updateThreadField',
           },

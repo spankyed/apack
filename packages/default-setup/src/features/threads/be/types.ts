@@ -504,6 +504,7 @@ export type IncomingThreadsEvents =
   | { type: 'CREATE_THREAD'; topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }
   | { type: 'VIEW_THREAD'; threadId: string }
   | { type: 'UPDATE_THREAD_STATUS'; threadId: string; status: string }
+  | { type: 'SET_CLAUDE_CHANNELS'; threadId: string; channels: string[] }
   | { type: 'UPDATE_THREAD_FIELD'; threadId: string; key: string; value: any }
   | { type: 'DELETE_THREAD'; threadId: string }
   | { type: 'SET_THREAD_PARENT'; childIds: string[]; parentId: string }

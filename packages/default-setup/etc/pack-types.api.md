@@ -1461,8 +1461,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     cwd: string;
     revision: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1478,8 +1478,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, {
     cwd: string;
     revision: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1623,9 +1623,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
-    question: string;
     input: Record<string, unknown>;
     sessionId: string;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1655,9 +1655,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
-    question: string;
     input: Record<string, unknown>;
     sessionId: string;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -6587,6 +6587,10 @@ type IncomingThreadsEvents = ClaudeTerminalViewRequest | ClaudeUiViewRequest | {
     type: 'UPDATE_THREAD_STATUS';
     threadId: string;
     status: string;
+} | {
+    type: 'SET_CLAUDE_CHANNELS';
+    threadId: string;
+    channels: string[];
 } | {
     type: 'UPDATE_THREAD_FIELD';
     threadId: string;
@@ -13441,8 +13445,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        topic: string;
         shortCode: _apackdev_ears.ShortCode<"THR">;
+        topic: string;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

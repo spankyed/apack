@@ -41,3 +41,10 @@ it('retains explicit channel selection on saved resume without sharing its mutab
  expect(readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:saved})?.channels).toEqual(['plugin:review@owned'])
  expect(()=>readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch:{...saved,channels:['']}})).toThrow()
 })
+
+it('applies an explicit stopped-session channel selection including clearing on native resume',()=>{
+ const nativeLaunch={...launch,channels:['plugin:old@owned']}
+ expect(readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch,channelSelection:['plugin:new@owned']})?.channels).toEqual(['plugin:new@owned'])
+ expect(readSavedClaudeNativeLaunch({sessionId,cwd:'/saved',nativeLaunch,channelSelection:[]})?.channels).toEqual([])
+ expect(nativeLaunch.channels).toEqual(['plugin:old@owned'])
+})

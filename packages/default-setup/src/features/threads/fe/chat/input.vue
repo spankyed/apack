@@ -210,10 +210,12 @@
 
       </div>
     </form>
+    <ClaudeChannelSettings v-if="channelsOpen" :key="currentThread?.id" :channels="savedChannels" :locked="!!nativePrompt || !!isBusy" @close="channelsOpen=false" @save="channels => { emit('channels-change', channels); channelsOpen=false }" />
   </div>
 </template>
 
 <script setup lang="ts">
+import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
@@ -291,7 +293,10 @@ const props = defineProps<{
 }>()
 
 // Define emits including new button actions
+const savedChannels=computed(()=>{const state=props.currentThread?.context?.claudeCode;const raw=state?.channelSelection ?? (state?.nativeLaunch as import('#features/code/common/native-launch.ts').ClaudeNativeLaunch|undefined)?.channels;return Array.isArray(raw)?raw.filter((value):value is string=>typeof value==='string'):[]})
+const channelsOpen=ref(false)
 const emit = defineEmits<{
+  (e: 'channels-change', channels: string[]): void
   (e: 'native-tools-expanded', expanded: boolean): void
   (e: 'send-message', message: string, references?: MessageReferences): void
   (e: 'send-command', command: string, text: string, references?: MessageReferences): void
@@ -740,6 +745,7 @@ const leftButtons = computed<ActionButton[]>(() => {
     { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
     { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
   )
+  if(props.currentMode === 'Claude Code' && props.currentThread?.id) buttons.push({icon:Plug,label:'Claude channels',action:'claude-channels'})
   // Note: In expanded view, 'quick-message' is rendered via QuickPromptsPopup instead
   if (speechSupported.value) {
     buttons.push({
@@ -765,6 +771,7 @@ watch(() => props.currentThread?.id, () => {
 })
 
 const handleButtonClick = (action: string) => {
+  if(action === 'claude-channels'){channelsOpen.value=true;return}
   if (action === 'native-settings') { void openNativePanel('/config'); return }
   if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (action === 'native-mcp') { void openNativePanel('/mcp'); return }

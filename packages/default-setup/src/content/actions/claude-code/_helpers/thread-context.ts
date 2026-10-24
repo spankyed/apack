@@ -61,6 +61,7 @@ export interface PendingControlRequest {
 }
 
 export interface ClaudeCodeThreadState {
+  channelSelection?: string[];
   nativeLaunch?: import('#features/code/common/native-launch.ts').ClaudeNativeLaunch;
   sessionId?: string;
   /** History of previous sessionIds (oldest first), populated when compaction/fork/revert replaces the active session. */

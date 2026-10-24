@@ -1,3 +1,4 @@
+import {copyClaudeChannelSelection} from '../../../common/native-channels.ts'
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
 import { PermissionModeSchema } from './types.ts'
@@ -29,5 +30,6 @@ export function readSavedClaudeNativeLaunch(state: Record<string, unknown> | und
   const permissionMode = state.permissionMode === undefined ? launch.permissionMode : PermissionModeSchema.parse(state.permissionMode)
   const staged = state.additionalDirs === undefined ? undefined : z.array(z.string().min(1)).parse(state.additionalDirs)
   const addDir = staged === undefined ? launch.addDir : [...new Set([...(launch.addDir ?? []), ...staged])]
-  return {...launch,model,permissionMode,prePlanMode: permissionMode === 'plan' ? readClaudePlanRestoreMode(state) : undefined,...(addDir === undefined ? {} : {addDir})}
+  const channels=state.channelSelection===undefined?launch.channels:copyClaudeChannelSelection(state.channelSelection)
+  return {...launch,channels,model,permissionMode,prePlanMode: permissionMode === 'plan' ? readClaudePlanRestoreMode(state) : undefined,...(addDir === undefined ? {} : {addDir})}
 }
