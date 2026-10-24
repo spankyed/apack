@@ -102,7 +102,12 @@ one. None of those was a missing id.
 `commit.FILES_STAGED`, `ITEM_RENAMED` — a mutation happened and every view that cares folds it into its
 store. A handler that tries to decide whether such an event is "mine" is making a category error: nobody
 asked for it, so there is no request it could fail to match. These are already correct and must not be
-guarded, and they are the commonest of the three.
+guarded, and they are the commonest of the three. **A notification of a data change comes from a live query, not
+from the command that wrote**: the prompts system subscribes to every prompt (`subscribe`, `@apackdev/sdk/ears`, in a
+callback actor the system invokes) and tells the surface each one created, updated or deleted, so a write from
+anywhere — another feature, an action, a content apply, the Database console, `apack db` — reaches the view, and no
+command announces its own write. A surface handling one names the row it is about, and changes its selection only
+when it is that row.
 
 **A view fetching data wants the answer to land in a slot keyed by what it asked for.** Then correlation
 is structural rather than checked: a late or another window's reply writes its own slot, the view reads

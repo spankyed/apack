@@ -256,6 +256,7 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     async hydrate() {
       const started = performance.now();
       await hydrate({ engine: engine(), env: openEnv(), log });
+      engine().replaced();
       hydrateMs = performance.now() - started;
     },
     stats,

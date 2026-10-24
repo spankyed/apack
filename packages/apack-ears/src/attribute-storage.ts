@@ -1,3 +1,4 @@
+import type { ChangeTracking } from './changes.ts';
 import { EARS } from './entities.ts';
 import { deepFreeze, idSuffix, isPlainObject } from './utils.ts';
 import type { Journal } from './journal.ts';
@@ -70,9 +71,11 @@ const isEmpty = (row: Row) => {
 };
 
 /** An engine's attributes (by entity, then kind), its entity index by type, and the writes and reads over them */
-export function createAttributeStorage({ persistence, journal, readAttr }: {
+export function createAttributeStorage({ persistence, journal, changes, readAttr }: {
   persistence: PersistenceSink;
   journal: Journal;
+  /** Where each write says what it changed and each read what it read, for subscriptions (`changes.ts`) */
+  changes: ChangeTracking;
   /** Reads a stored value back (`PersistenceSink.readAttr`): given one, large values are kept out of memory */
   readAttr?: (kind: string, entityId: string) => unknown;
 }) {
@@ -193,6 +196,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
 
   /** The entities holding `value` under `kind`, or a list with it (a primitive: an object is never indexed) */
   const holders = (kind: EARS.AttrKind, value: unknown): ReadonlySet<EARS.EntityId> => {
+    changes.readKind(kind);
     let index = valueIndex.get(kind);
     if (!index) {
       valueIndex.set(kind, index = new Map());
@@ -210,6 +214,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
    * whether `next` is already where it belongs, in memory or out of line, as a value loaded from the store is
    */
   const place = (id: EARS.EntityId, kind: EARS.AttrKind, next: EARS.AttributeValue | typeof ABSENT, sized = false) => {
+    changes.wroteAttribute(id, kind);
     let row = rows.get(id);
     if (valueIndex.size > 0) {
       const index = valueIndex.get(kind);
@@ -248,16 +253,36 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
       return () => place(id, kind, before);
     });
 
-  /** Records whether the entity was in the index, to put that back */
+  /** Records whether the entity was in the index, and where, to put that back */
   const touchIndexed = (id: EARS.EntityId) =>
     journal.open && journal.touch(`e\x1F${id}`, () => {
       const type = entityTypeOf(id);
-      const was = entityIndex.get(type)?.has(id) ?? false;
+      const order = entityIndex.get(type)?.get(id);
       return () => {
-        if (was) enter(id);
+        if (order !== undefined) reenter(id, type, order);
         else leave(id);
       };
     });
+
+  /**
+   * Puts an entity back in its type's index at the place it had, so a rolled-back destroy leaves the type's order as
+   * it found it: a walk follows the index's insertion order, so an entity that was not last rebuilds it
+   */
+  const reenter = (id: EARS.EntityId, type: EARS.Entity, order: number) => {
+    const ids = entityIndex.get(type);
+    if (!ids) {
+      entityIndex.set(type, new Map([[id, order]]));
+      return;
+    }
+    if (ids.has(id)) return;
+    let last = -1;
+    for (const at of ids.values()) last = at;
+    if (order > last) {
+      ids.set(id, order);
+      return;
+    }
+    entityIndex.set(type, new Map([...ids, [id, order] as const].sort(([, a], [, b]) => a - b)));
+  };
 
   /** Puts the entity in its type's index, last */
   const enter = (id: EARS.EntityId, type = entityTypeOf(id)) => {
@@ -303,6 +328,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
 
   /** What memory holds for a field: its value, an out-of-line value's marker, or `ABSENT` */
   const held = (id: EARS.EntityId, kind: EARS.AttrKind): EARS.AttributeValue | typeof ABSENT => {
+    changes.readEntity(id);
     const row = rows.get(id);
     return row && owns(row, kind) ? row[kind] : ABSENT;
   };
@@ -398,6 +424,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
 
   /** The entity's row — its id, type and every attribute, each exactly as written — or undefined when no entity has the id */
   const getRow = (id: EARS.EntityId): EntityRow | undefined => {
+    changes.readEntity(id);
     if (!hasEntity(id)) return undefined;
     const row: EntityRow = { id, entityType: entityTypeOf(id) };
     const fields = rows.get(id);
@@ -406,6 +433,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   };
 
   const getAllEntities = () => {
+    changes.readEverything();
     const all: EARS.EntityId[] = [];
     for (const ids of entityIndex.values()) {
       for (const id of ids.keys()) all.push(id);
@@ -413,14 +441,17 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
     return all;
   };
 
-  const getEntitiesOfType = (t: EARS.Entity) =>
-    [...(entityIndex.get(t)?.keys() ?? [])];
+  const getEntitiesOfType = (t: EARS.Entity) => {
+    changes.readType(t);
+    return [...(entityIndex.get(t)?.keys() ?? [])];
+  };
   /**
    * Visits the type's entities in order, read as they are walked rather than copied first, until `visit` answers
    * false; whether it went to the end. A walk reaches only those in the type when it began: an entity entering while
    * it runs (a `where` predicate's write) takes a later place, where the walk stops.
    */
   const entitiesOfType = (t: EARS.Entity, visit: (id: EARS.EntityId) => boolean): boolean => {
+    changes.readType(t);
     const bound = nextOrder;
     for (const [id, order] of entityIndex.get(t) ?? []) {
       if (order >= bound) return true;
@@ -430,10 +461,15 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   };
 
   /** Whether the entity is in the engine, from its type's index rather than a scan of every entity */
-  const hasEntity = (id: EARS.EntityId) =>
-    entityIndex.get(entityTypeOf(id))?.has(id) ?? false;
+  const hasEntity = (id: EARS.EntityId) => {
+    changes.readEntity(id);
+    return entityIndex.get(entityTypeOf(id))?.has(id) ?? false;
+  };
   /** Whether the entity is in the trash */
-  const isTrashed = (id: EARS.EntityId) => trashed.has(id);
+  const isTrashed = (id: EARS.EntityId) => {
+    changes.readEntity(id);
+    return trashed.has(id);
+  };
   /** Whether the entity is in the engine and not in the trash: what a read by type, id or link reaches */
   const isLive = (id: EARS.EntityId) => hasEntity(id) && !trashed.has(id);
 

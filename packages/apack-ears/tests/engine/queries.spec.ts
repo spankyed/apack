@@ -275,8 +275,8 @@ describe('the value index', () => {
     for (const [k, v] of [['status', 'open'], ['status', 'done'], ['tags', 'x'], ['tags', 'y']] as const) {
       expect(e.query('Task').where(k, v).ids(), `${k} = ${v}`).toEqual(walked(['Task'], k, v));
     }
-    // t.d came back from an undone destroy, so it is last in its type's order now
-    expect(e.query('Task').where('status', 'open').ids()).toEqual([late, t.d]);
+    // An undone destroy puts t.d back where it was in its type's order, before the task created after it
+    expect(e.query('Task').where('status', 'open').ids()).toEqual([t.d, late]);
     expect(e.query('Task').withRole('focus').ids()).toEqual([t.c, late]);
     // A step after the start reads the index too, and keeps what the step before it narrowed to
     expect(e.query('Task').where('tags', 'x').withRole('focus').ids()).toEqual([late]);

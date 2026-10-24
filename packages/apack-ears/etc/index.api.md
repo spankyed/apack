@@ -24,6 +24,17 @@ export interface BaseEntity {
 }
 
 // @public
+export interface ChangeSet {
+    readonly entities: ReadonlySet<EARS.EntityId>;
+    readonly kinds: ReadonlySet<string>;
+    // (undocumented)
+    readonly relationKinds: ReadonlySet<string>;
+    readonly relations: ReadonlySet<EARS.RelationId>;
+    readonly replaced: boolean;
+    readonly types: ReadonlySet<string>;
+}
+
+// @public
 export interface Create {
     // (undocumented)
     <E extends string>(type: TypeName<E>, row?: Record<string, unknown> & RowIdentity): WriteBuilder<E>;
@@ -116,8 +127,10 @@ export interface Ears {
     isRelationKind(name: string): boolean;
     isRole(name: string): boolean;
     nextLabel(type: EARS.Entity, base: string): string;
+    onCommit(listener: (changes: ChangeSet) => void): () => void;
     query: Query;
     removeRelation(relId: EARS.RelationId): void;
+    subscribe<T>(read: () => T, onChange: (value: T) => void): () => void;
     transact<T>(fn: () => T, options?: TransactOptions): T;
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
@@ -141,6 +154,7 @@ export interface EarsAdmin {
     getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
     memoryStats(): MemoryStats;
     putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
+    replaced(): void;
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
         target?: EARS.EntityId;

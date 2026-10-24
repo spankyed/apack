@@ -53,8 +53,17 @@ export function unitWrites<T extends object, K extends keyof T>(journal: Pick<Jo
   return wrapped;
 }
 
+/** Who hears where the outermost unit is: it began, it committed (its after-commit work done), or it rolled back */
+export interface UnitHooks {
+  unitStarted(): void;
+  unitCommitted(): void;
+  unitRolledBack(): void;
+}
+
+const NO_HOOKS: UnitHooks = { unitStarted() {}, unitCommitted() {}, unitRolledBack() {} };
+
 /** A journal, and the sink that holds an open unit's calls back from `sink` */
-export function createJournal(sink: PersistenceSink) {
+export function createJournal(sink: PersistenceSink, hooks: UnitHooks = NO_HOOKS) {
   const levels: Level[] = [];
   const held: Array<() => void> = [];
 
@@ -106,6 +115,7 @@ export function createJournal(sink: PersistenceSink) {
    */
   function transact<T>(fn: () => T, { durable = false }: { durable?: boolean } = {}): T {
     const level: Level = { seen: new Set(), undos: [], sinkMark: held.length, checks: [], after: [], durable };
+    if (levels.length === 0) hooks.unitStarted();
     levels.push(level);
     let result: T;
     try {
@@ -122,6 +132,7 @@ export function createJournal(sink: PersistenceSink) {
       levels.pop();
       for (let i = level.undos.length - 1; i >= 0; i--) level.undos[i]();
       held.length = level.sinkMark;
+      if (levels.length === 0) hooks.unitRolledBack();
       throw error;
     }
     levels.pop();
@@ -145,10 +156,12 @@ export function createJournal(sink: PersistenceSink) {
       } catch (error) {
         // The sink refused the unit: memory goes back to what the sink holds
         for (let i = level.undos.length - 1; i >= 0; i--) level.undos[i]();
+        hooks.unitRolledBack();
         throw error;
       }
     }
     for (const fn of level.after) fn();
+    hooks.unitCommitted();
     return result;
   }
 

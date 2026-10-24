@@ -1,3 +1,4 @@
+import type { ChangeTracking } from './changes.ts';
 import { EARS } from './entities.ts';
 import type { Journal } from './journal.ts';
 import type { PersistenceSink, RelationEdge } from './runtime.ts';
@@ -46,7 +47,12 @@ type Side = keyof KindIndex;
  * attributes and no type's index lists it. Each write records how to undo itself while a unit is open (`journal`) and
  * tells `persistence`.
  */
-export function createRelations({ journal, persistence }: { journal: Journal; persistence: PersistenceSink }) {
+export function createRelations({ journal, persistence, changes }: {
+  journal: Journal;
+  persistence: PersistenceSink;
+  /** Where each write says what it changed and each read what it read, for subscriptions (`changes.ts`) */
+  changes: ChangeTracking;
+}) {
   /** Each relation's row, by id. A row is frozen and replaced whole on a change, so a read hands out the stored row */
   const rows = new Map<EARS.RelationId, RelationRow>();
   const index = new Map<string, KindIndex>();
@@ -91,8 +97,10 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
   const dropIfEmpty = (kind: string, entry: KindIndex) => {
     if (entry.bySource.size === 0 && entry.byTarget.size === 0) index.delete(kind);
   };
-  const listOf = (kind: string, side: Side, entity: EARS.EntityId): ReadonlySet<EARS.RelationId> =>
-    index.get(kind)?.[side].get(entity) ?? none;
+  const listOf = (kind: string, side: Side, entity: EARS.EntityId): ReadonlySet<EARS.RelationId> => {
+    changes.readEntity(entity);
+    return index.get(kind)?.[side].get(entity) ?? none;
+  };
 
   const addToList = (entry: KindIndex, side: Side, entity: EARS.EntityId, relId: EARS.RelationId) => {
     const list = entry[side].get(entity);
@@ -123,6 +131,7 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
 
   /** Puts the relation's row, recording how to put back the one before */
   const placeRow = (relId: EARS.RelationId, row: RelationRow | undefined) => {
+    changes.wroteRelation(relId, rows.get(relId), row);
     touchRow(relId);
     if (row) rows.set(relId, row);
     else rows.delete(relId);
@@ -131,9 +140,15 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
   // ─── Reads ─────────────────────────────────────────────────────────────
 
   /** The relation's row, or undefined when no relation has the id */
-  const get = (relId: EARS.RelationId): RelationRow | undefined => rows.get(relId);
+  const get = (relId: EARS.RelationId): RelationRow | undefined => {
+    changes.readRelation(relId);
+    return rows.get(relId);
+  };
   /** Whether a relation has the id: any string, so a refusal of an id given untyped can say it names a relation */
-  const has = (id: string) => rows.has(id as EARS.RelationId);
+  const has = (id: string) => {
+    changes.readRelation(id as EARS.RelationId);
+    return rows.has(id as EARS.RelationId);
+  };
 
   /**
    * The relations both in an entity's set leaving it and in another's arriving at it — the edges between the two —
@@ -149,6 +164,13 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
   /** The ids of the relations matching every end and kind named; with none named, every relation */
   const matchIds = ({ kind, source, target }: Omit<RelationMatch, 'kind'> & { kind?: string }): EARS.RelationId[] => {
     const kinds = kind !== undefined ? [kind] : [...index.keys()];
+    // An end named is what the read depends on; with none, the kind, or every relation
+    if (source !== undefined) changes.readEntity(source);
+    if (target !== undefined) changes.readEntity(target);
+    if (source === undefined && target === undefined) {
+      if (kind !== undefined) changes.readRelationKind(kind);
+      else changes.readEverything();
+    }
     const out = new Set<EARS.RelationId>();
     for (const k of kinds) {
       const entry = index.get(k);
@@ -187,6 +209,7 @@ export function createRelations({ journal, persistence }: { journal: Journal; pe
 
   /** Every entity `id` has a relation to or from, of any kind */
   const linkedWith = (id: EARS.EntityId): EARS.EntityId[] => {
+    changes.readEntity(id);
     const out = new Set<EARS.EntityId>();
     for (const { bySource, byTarget } of index.values()) {
       for (const relId of bySource.get(id) ?? none) out.add(rows.get(relId)!.target);

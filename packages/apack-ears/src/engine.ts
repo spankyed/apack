@@ -1,9 +1,10 @@
 // An EARS engine: its stores, indexes and caches, and the operations over them as the engine's own members, with the
 // creator's privileges beside them in `admin`. A program is handed the engine typed as `Ears`, which has no `admin`:
 // the faces define the contract, not a security boundary (packs run in-process).
+import { createChangeTracking, type ChangeSet } from './changes.ts';
 import type { EARS } from './entities.ts';
 import { noopSink, type EARSRuntimeDeps } from './runtime.ts';
-import { createAttributeStorage, type EntityRow, type MemoryStats, type SchemaStats } from './attribute-storage.ts';
+import { createAttributeStorage, entityTypeOf, type EntityRow, type MemoryStats, type SchemaStats } from './attribute-storage.ts';
 import { createQuery, type Query } from './query.ts';
 import { createHierarchy } from './hierarchy.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
@@ -43,6 +44,15 @@ export interface Ears {
    * at once waits for this, or writes in a `durable` unit. With no store behind the engine it resolves at once.
    */
   durable(): Promise<void>;
+  /**
+   * Calls `onChange` with what `read` returns, now and after every commit that changes it: `read` runs again when a
+   * commit wrote an entity, type, attribute kind or relation it read, and `onChange` is called only when the result
+   * is no longer the same value (`sameValue`). `read` is synchronous and reads through the engine; returns what stops
+   * the subscription. A live query: what a view shows follows the data without anyone announcing a change.
+   */
+  subscribe<T>(read: () => T, onChange: (value: T) => void): () => void;
+  /** Calls `listener` with each commit's change set — what the outermost unit wrote — or a replacement of the data */
+  onCommit(listener: (changes: ChangeSet) => void): () => void;
   /** Whether `name` is an entity type the engine's creator registered */
   isEntityType(name: string): boolean;
   /** Whether `name` is a relation kind the engine's creator registered */
@@ -72,8 +82,10 @@ export interface Ears {
 
 /** An engine's data lifecycle and direct writes: for the code that created it (the app's composition root, tests, tooling) */
 export interface EarsAdmin {
-  /** Empties the engine's attributes, entity index and relation index */
+  /** Empties the engine's attributes, entity index and relation index, and tells subscriptions the data was replaced */
   clear(): void;
+  /** Tells subscriptions the data was replaced: what a bulk load (hydration) calls once it has loaded */
+  replaced(): void;
   /** Every entity's id, the engine's numbering sequences and those in the trash included: a raw listing */
   getAllEntities(): EARS.EntityId[];
   /** Every id of a type, the engine's own types and those in the trash included: a raw listing */
@@ -112,13 +124,14 @@ export interface EarsEngine extends Ears {
  */
 export function createEarsEngine({ persistence = noopSink, isEntityType, isRelationKind, isRole, rowRules = () => undefined }: EARSRuntimeDeps): EarsEngine {
   const names = createNameChecks({ isRelationKind, isRole });
-  const { journal, unitSink, transact } = createJournal(persistence);
+  const changes = createChangeTracking(entityTypeOf);
+  const { journal, unitSink, transact } = createJournal(persistence, changes);
   // Every write is made in a unit, so the sink sees nothing but units, and one it refuses is undone in memory
-  const storage = unitWrites(journal, createAttributeStorage({ persistence: unitSink, journal, readAttr: persistence.readAttr?.bind(persistence) }), [
+  const storage = unitWrites(journal, createAttributeStorage({ persistence: unitSink, journal, changes, readAttr: persistence.readAttr?.bind(persistence) }), [
     'putAttr', 'appendAttr', 'mergeAttr', 'removeAt', 'removeValue', 'deleteAttr', 'entityCreated', 'grantRole', 'revokeRole',
     'destroyEntity',
   ]);
-  const relations = unitWrites(journal, createRelations({ persistence: unitSink, journal }), [
+  const relations = unitWrites(journal, createRelations({ persistence: unitSink, journal, changes }), [
     'add', 'replace', 'update', 'remove', 'unlink', 'removeEntity',
   ]);
   const query = createQuery({ storage, relations, isEntityType, names });
@@ -129,6 +142,8 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
   const operations: Ears = {
     query, create, upsert, write, transact, isEntityType, isRelationKind, isRole,
     durable: () => persistence.durable?.() ?? Promise.resolve(),
+    subscribe: changes.subscribe,
+    onCommit: changes.onCommit,
     nextLabel: counters.nextLabel,
     ...hierarchy,
     getRow: storage.getRow,
@@ -149,7 +164,9 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
     clear: () => {
       storage.clear();
       relations.clear();
+      changes.replaced();
     },
+    replaced: changes.replaced,
     getAllEntities: storage.getAllEntities,
     getEntitiesOfType: storage.getEntitiesOfType,
     bulkLoadAttr: storage.bulkLoadAttr,

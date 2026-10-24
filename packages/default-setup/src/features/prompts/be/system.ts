@@ -1,7 +1,9 @@
 import { featureSettings } from '#generated/settings.ts';
 
 import { broadcastToSurface } from '#generated/events.ts';
-import { setup } from 'xstate';
+import { isDeepStrictEqual } from 'node:util';
+import { fromCallback, setup } from 'xstate';
+import { subscribe } from '@apackdev/sdk/ears';
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingPromptEvents } from './types.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
@@ -26,10 +28,35 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('prompts');
 
+/**
+ * The prompts as every window's list holds them, kept current: a live query on every prompt, whose changes are told to
+ * the surface as the prompt created, updated or deleted — whoever wrote it: this system, a content apply, an action,
+ * the Database console or `apack db`. No command here announces its own write.
+ */
+const followPrompts = fromCallback(() => {
+  let previous: Map<string, unknown> | undefined;
+  return subscribe(() => repository.promptQueries.all(), (prompts) => {
+    const next = new Map(prompts.map((prompt) => [prompt.id as string, prompt]));
+    // The first answer is what the surface asks for when it connects (`SEND_STATE`), not a change
+    if (previous) {
+      for (const prompt of prompts) {
+        const before = previous.get(prompt.id);
+        if (before === undefined) broadcastToSurface('prompts', { type: 'PROMPT_CREATED', prompt, promptId: prompt.id });
+        else if (!isDeepStrictEqual(before, prompt)) broadcastToSurface('prompts', { type: 'PROMPT_UPDATED', prompt, promptId: prompt.id });
+      }
+      for (const id of previous.keys()) {
+        if (!next.has(id)) broadcastToSurface('prompts', { type: 'PROMPT_DELETED', promptId: id as EARS.EntityId });
+      }
+    }
+    previous = next;
+  });
+});
+
 export const promptsSpec = defineSystem<Contract>();
 
 export const promptsSystem = setup({
   types: promptsSpec.types,
+  actors: { followPrompts },
   actions: promptsSpec.actions({
     sendPromptsConnectedData: () => {
       const connectedData = repository.promptQueries.connectedData();
@@ -67,19 +94,13 @@ export const promptsSystem = setup({
     },
     createPrompt: ({ event }) => {
       const ev = promptsSpec.typeOf('CREATE_PROMPT', event);
-      const prompt = repository.promptCommands.create({
+      repository.promptCommands.create({
         label: ev.label,
         inputs: ev.inputs,
         templateFn: ev.templateFn,
         outputSchema: ev.outputSchema,
         description: ev.description,
         category: ev.category
-      });
-
-      broadcastToSurface('prompts', {
-        type: 'PROMPT_CREATED',
-        prompt: prompt,
-        promptId: prompt.id,
       });
     },
     updatePrompt: ({ event }) => {
@@ -94,24 +115,10 @@ export const promptsSystem = setup({
       if (ev.category !== undefined) updates.category = ev.category;
       
       repository.promptCommands.update(ev.promptId as EARS.EntityId, updates);
-
-      const updatedPrompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId);
-      if (updatedPrompt) {
-        broadcastToSurface('prompts', {
-          type: 'PROMPT_UPDATED',
-          prompt: updatedPrompt,
-          promptId: updatedPrompt.id,
-        });
-      }
     },
     deletePrompt: ({ event }) => {
       const ev = promptsSpec.typeOf('DELETE_PROMPT', event);
       repository.promptCommands.delete(ev.promptId as EARS.EntityId);
-      
-      broadcastToSurface('prompts', {
-        type: 'PROMPT_DELETED',
-        promptId: ev.promptId as EARS.EntityId,
-      });
     },
     fetchPromptsPage: ({ event }) => {
       const ev = promptsSpec.typeOf('FETCH_PROMPTS_PAGE', event);
@@ -135,7 +142,6 @@ export const promptsSystem = setup({
     },
     importPrompts: ({ event, reply }) => {
       const { prompts: importData } = promptsSpec.typeOf('IMPORT_PROMPTS', event);
-      const surfaceId = 'prompts' as const;
 
       logger.info('Importing prompts', { count: Array.isArray(importData) ? importData.length : 0 });
 
@@ -158,7 +164,7 @@ export const promptsSystem = setup({
         }
 
         try {
-          const prompt = repository.promptCommands.create({
+          repository.promptCommands.create({
             label: item.label,
             inputs: item.inputs || {},
             templateFn: item.templateFn,
@@ -166,13 +172,6 @@ export const promptsSystem = setup({
             description: item.description,
             category: item.category,
           });
-
-          broadcastToSurface(surfaceId, {
-            type: 'PROMPT_CREATED',
-            prompt,
-            promptId: prompt.id,
-          });
-
           count++;
         } catch (err) {
           const message = errorMessage(err);
@@ -192,17 +191,6 @@ export const promptsSystem = setup({
         type: 'PROMPTS_IMPORTED',
         count,
         ...(errors.length > 0 ? { errors } : {}),
-      });
-
-      // Refresh the full prompts list
-      const connectedData = repository.promptQueries.connectedData();
-      const promptsSettings = featureSettings.forFeature('prompts').get();
-      broadcastToSurface(surfaceId, {
-        type: 'PROMPTS_CONNECTED',
-        data: {
-          ...connectedData,
-          categories: promptsSettings?.categories || [],
-        },
       });
 
       logger.info('Prompts import complete', { count, errors: errors.length });
@@ -253,17 +241,7 @@ export const promptsSystem = setup({
       for (const p of repository.promptQueries.all()) {
         const nextCategory = mapScalar(p.category, renames, removed, emptyCategoryName);
         
-        if (nextCategory !== p.category) {
-          repository.promptCommands.update(p.id, { category: nextCategory });
-          const updated = repository.promptQueries.byId(p.id);
-          if (updated) {
-            broadcastToSurface('prompts', {
-              type: 'PROMPT_UPDATED', 
-              prompt: updated, 
-              promptId: updated.id
-            });
-          }
-        }
+        if (nextCategory !== p.category) repository.promptCommands.update(p.id, { category: nextCategory });
       }
     },
   }),
@@ -272,6 +250,7 @@ export const promptsSystem = setup({
     id: 'prompts',
     initial: 'idle',
     context: () => ({}),
+    invoke: { src: 'followPrompts' },
     on: {
       PROMPT_SELECT: {
         actions: 'sendPromptData',

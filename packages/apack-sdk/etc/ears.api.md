@@ -49,6 +49,9 @@ export const NO_ENGINE_BOUND: string;
 // @public (undocumented)
 export const removeRelation: (relId: EARS.RelationId) => void;
 
+// @public
+export const subscribe: <T>(read: () => T, onChange: (value: T) => void) => () => void;
+
 // @public (undocumented)
 export const transact: <T>(fn: () => T, options?: TransactOptions) => T;
 

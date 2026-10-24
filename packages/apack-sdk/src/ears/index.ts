@@ -73,6 +73,13 @@ export const untypedUpsert: Upsert = onBound('upsert');
 export const untypedWrite: Write = onBound('write');
 
 export const transact = onBound('transact');
+/**
+ * A live query on the bound engine: calls `onChange` with what `read` returns, now and after each commit that changes
+ * it, wherever the write came from — this feature, another, an action, the Database console or `apack db`. Returns
+ * what stops it, which the subscriber calls when it stops (an actor's cleanup). It stays on the engine bound when it
+ * was made.
+ */
+export const subscribe = onBound('subscribe');
 export const isEntityType = onBound('isEntityType');
 export const getRelation = onBound('getRelation');
 export const findRelations = onBound('findRelations');

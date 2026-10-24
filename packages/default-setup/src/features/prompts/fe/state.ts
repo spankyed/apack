@@ -185,9 +185,9 @@ const promptsState = setup({
       });
     },
 
-    // News every window hears, whichever window made the change: each names its prompt, and changes the selection only
-    // when it is that prompt. A created prompt selects nothing, so opening it fetches it, and one the list holds
-    // already is replaced rather than listed twice
+    // News every window hears, whoever wrote it — this window, another, or any other writer of the data: each names
+    // its prompt, and changes the selection only when it is that prompt. A created prompt selects nothing, so opening
+    // it fetches it, and one the list holds already is replaced rather than listed twice
     addCreatedPrompt: assign(({ context, event }) => {
       const { prompt } = typeOf('PROMPT_CREATED', event);
       const held = context.prompts.some(p => p.id === prompt.id);

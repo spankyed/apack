@@ -1,6 +1,7 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–7 are done; Step 8 is next.
+Status: Steps 0–8 done, 2026-10-24, on branch `session/ears-in-memory-path`; the judging table below holds this
+engine's readings, and Step 10's column is read on its own branch.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -265,20 +266,50 @@ subscription first, to price the rest.
 **Done when:** a subscription sees exactly the commits that change its result (the harness extended to subscriptions),
 and the moved feature's specs pass with its broadcasts deleted.
 
+Done, 2026-10-24. `changes.ts`: each write in a unit names what it touched — the entity and its type, the attribute
+kind, a relation, its kind and both ends — and the journal's outermost commit publishes them as one `ChangeSet`
+(`engine.onCommit`); a rollback publishes nothing; `admin.clear()` and the store's hydration (`admin.replaced()`)
+publish the data replaced. `engine.subscribe(read, onChange)` records what `read` reads as it runs — an entity by id
+(`held`, `getRow`, `hasEntity`, a relation walk from it), a type walked, a value-index kind, a relation by id or kind,
+or everything — runs it again when a change set meets those reads, and calls back only when the result is no longer
+`sameValue`. The SDK's `subscribe` (`@apackdev/sdk/ears`) is over the bound engine.
+
+The harness property: over 200 random workloads, six subscriptions (an entity, a type, a `where`, relations from an
+end, relations of a kind, and the whole state) are each called back after exactly the ops that change their result.
+Its first run found a defect older than this step: a rolled-back destroy put the entity back at the end of its type's
+order, so `query(type).ids()` came back reordered after a unit that threw (the Step 1 model compared sorted state).
+An undo now puts it back where it was (`reenter`), and the value-index spec that recorded the old order says so.
+Mutations of the type walk's read, of a change set's types and of its relation kinds each fail the specs; dropping the
+relation-walk, `findRelations`-by-end or value-index reads does not, since each read also reaches every entity it
+returns through `hasEntity`/`held` — equivalent, not missing.
+
+The moved feature is prompts: the system invokes a callback actor holding `subscribe(() => promptQueries.all())` and
+turns each change of the result into `PROMPT_CREATED`, `PROMPT_UPDATED` or `PROMPT_DELETED`, the events its surface
+already took; every hand-written broadcast after a write is deleted (create, update, delete, import, the category
+rename, and the import's list refresh). Its specs pass unchanged, and a new one writes prompts through the repository
+with nothing announcing them, which the surface now hears. Hearing every writer exposed three assumptions in the
+surface — an update replaced the open prompt whatever its id, a delete closed the open prompt whichever went, and a
+create appended an id already listed — each fixed and specced. Price: the system 32 lines added and 53 removed, the
+surface 15 and 9; the other features hand-writing the same are library (32 broadcasts), threads (28), notes (28),
+brain (22), database (20), flows (14) and actions (8).
+
+Readings: the bench's read cases within noise of Step 7 on a loaded machine (relation traversal 2.6 µs, `getRow` ×1,000
+0.20 ms) — a read with no subscription running costs one null check per tracked read; writes 1,000 creates 8.8 ms.
+
 ## Judging it against Step 10
 
 On the same evidence, at the end and at each step that changes a reading:
 
-| | Reading |
-|---|---|
-| correctness | the Step 1 harness and the store contract, run against both engines |
-| reads | the ears bench's read cases |
-| writes | the bench's write cases, and a durable write's latency |
-| boot | the converted production copy, cold |
-| memory | the engine's heap on the production copy, at its size and twice it |
-| tools and agents | what a tool sees of a running app's data, and how it writes |
-| what the app gains | live queries (Step 8); for Step 10, its own list |
-| complexity | lines added and removed, and the public API either one changes |
+| | Reading | This engine (2026-10-24, the readings above) |
+|---|---|---|
+| correctness | the Step 1 harness and the store contract, run against both engines | model-based (engine, files, subscriptions), crash and power-loss-boundary specs pass; two defects found and fixed on the way (frozen-value mutation in onboarding, rollback order) |
+| reads | the ears bench's read cases | unchanged by every step, within noise; a large value read back 1.0–1.2 ms warm, 2.4–2.8 ms cold for the largest thread |
+| writes | the bench's write cases, and a durable write's latency | memory engine 1,000 creates 8.8 ms; on LMDB 101 ms as 3,000 synchronous commits, 11.1 ms as one unit; a durable write 3.5–4.8 ms |
+| boot | the converted production copy, cold | 1.3–1.5 s → 0.24–0.27 s (format 4); budget data 170 ms at 1×, 320 ms at 2× |
+| memory | the engine's heap on the production copy, at its size and twice it | 308 MB → 52.4 MB on the production copy; budget data 38.5 MB at 1×, 76.5 MB at 2×, gated at 64 MB a scale; 116 → 86 MB on disk compacted |
+| tools and agents | what a tool sees of a running app's data, and how it writes | `apack db query`/`exec`/`script`/`runs` go through the running app: its data, its engine as the one writer, no lock; 0.84–0.92 s a call against 1.10–1.21 s offline, the CLI's start nearly all of it |
+| what the app gains | live queries (Step 8); for Step 10, its own list | `subscribe` and commit change sets; prompts follows every writer with its broadcasts deleted; six more features carry 150 hand-written broadcasts to move |
+| complexity | lines added and removed, and the public API either one changes | ears src +1,225 −703, tests +1,139 −342, bench +183; host +160 −33, CLI +168 −94, API +81 −40, SDK +7, default-setup +53 −63; API: `subscribe`, `onCommit`, `durable`, `transact` options, `memoryStats`, `bulkLoadOutOfLine`, `replaced`, `stats`, format 4 records, `POST /db` |
 
 ## Coordination
 

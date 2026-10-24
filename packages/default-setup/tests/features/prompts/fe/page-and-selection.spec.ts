@@ -232,7 +232,7 @@ it('fetches a prompt created elsewhere when it is opened', () => {
   expect(actor.getSnapshot().context.selectedPrompt?.id).toBe('Prompt-x');
 });
 
-it('keeps the open prompt when another window updates or deletes a different one, and lists a prompt once', () => {
+it('keeps the open prompt when another one is updated or deleted, as news from any writer can be, and lists a prompt once', () => {
   const actor = connected();
   actor.send({ type: 'PROMPT.SELECT', promptId: 'Prompt-p1' });
   actor.send(answerTo(selectCall(0), { type: 'PROMPT_SELECTED', promptId: 'Prompt-p1', data: aPrompt('Prompt-p1') }));
