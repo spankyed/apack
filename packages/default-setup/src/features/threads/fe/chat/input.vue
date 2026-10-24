@@ -210,7 +210,7 @@
 
       </div>
     </form>
-    <ClaudeChannelSettings v-if="channelsOpen" :key="currentThread?.id" :channels="savedChannels" :locked="!!nativePrompt || !!isBusy" @close="channelsOpen=false" @save="channels => { emit('channels-change', channels); channelsOpen=false }" />
+    <ClaudeChannelSettings v-if="channelsOpen" :key="currentThread?.id" :channels="savedChannels" :locked="!!nativeSubmit || !!isBusy" @close="channelsOpen=false" @save="channels => { emit('channels-change', channels); channelsOpen=false }" />
   </div>
 </template>
 

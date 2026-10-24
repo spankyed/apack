@@ -1,6 +1,6 @@
 <template>
-  <dialog ref="dialog" class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg bg-transparent p-0 text-neutral-200 backdrop:bg-black/60" @cancel.prevent="$emit('close')">
-    <section role="dialog" aria-modal="true" aria-labelledby="claude-channel-title" class="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900 shadow-xl">
+  <dialog ref="dialog" aria-labelledby="claude-channel-title" class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg bg-transparent p-0 text-neutral-200 backdrop:bg-black/60" @cancel.prevent="$emit('close')">
+    <section class="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900 shadow-xl">
       <div class="min-h-0 overflow-y-auto p-5">
         <h2 id="claude-channel-title" class="text-base font-semibold">Claude channels</h2>
         <p class="mt-2 text-sm text-neutral-400">Choose the configured channel servers or approved plugins for this conversation. Claude decides which can connect.</p>

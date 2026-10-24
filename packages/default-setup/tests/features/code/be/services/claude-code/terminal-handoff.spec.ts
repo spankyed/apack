@@ -165,3 +165,10 @@ it('refuses staged roots from a different session before closing the live print 
  await expect(openNativeTerminal('thread',{resume:{sessionId:'22222222-2222-4222-8222-222222222222',cwd:'/native-cwd',addDir:['/foreign']}},mocks.prepare)).rejects.toThrow('matches')
  expect(mocks.prepare).not.toHaveBeenCalled();expect(first.handle.close).not.toHaveBeenCalled()
 })
+
+it.each([{channels:['plugin:review@owned']},{channels:[]}])('uses saved channel selection during idle print-to-native handoff: $channels',async({channels})=>{
+ await printOwner();const native=terminal()
+ mocks.prepare.mockResolvedValueOnce({start:async()=>native,dispose:async()=>{}})
+ await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',channels}},mocks.prepare)
+ expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({channels}))
+})
