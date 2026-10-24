@@ -13,6 +13,8 @@ test.afterEach(async ({appPage}, testInfo) => {
     await appPage.screenshot({path:testInfo.outputPath('native-agent-source-layout-failure.png')}).catch(()=>{})
     const layout=await appPage.evaluate(()=>Array.from(document.querySelectorAll('[aria-label="Focused Agent conversation"], [aria-label="Agent message"], [data-testid="composer-native-status"], [data-native-agent-draft-viewport]')).map(element=>({label:element.getAttribute('aria-label')??element.getAttribute('data-testid')??'draft viewport',bounds:element.getBoundingClientRect().toJSON(),height:element.clientHeight,scrollHeight:element.scrollHeight,scrollTop:element.scrollTop}))).catch(error=>({captureError:String(error)}))
     await writeFile(join(workspace!,'native-agent-source-layout-failure.json'),JSON.stringify(layout))
+    const terminalState=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeTerminalViews}}).catch(error=>({captureError:String(error)}))
+    await writeFile(join(workspace!,'native-agent-media-terminal-failure.json'),JSON.stringify(terminalState))
   }
   terminalScreen?.dispose();terminalScreen=undefined
 })
@@ -104,10 +106,15 @@ test('observes original selected-Agent terminal image delivery without app media
   await expect(focused).toBeHidden()
   await expect.poll(async()=>(await observed())?.draft.text).toBe('')
   const before=await observed();expect(before.draft.text).toBe('')
-  const attachment=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const entry=(Object.entries(c.nativeTerminalViews) as [string,any][]).filter(([,v])=>v.threadId===c.currentThread?.id&&v.state?.status==='live'&&v.state.view?.kind==='agent').at(-1);if(!entry)return;return {threadId:c.currentThread.id,mountId:entry[0],ownerId:entry[1].state.ownerId}})
+  await expect(input).toBeVisible()
+  // Address the terminal actually mounted on screen, not the hidden Agent view's attachment.
+  const visibleAttachment=async()=>{const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));const ownerId=(await context()).native.state.ownerId;const event=rows.map(row=>row.meta?.event).filter(event=>event?.type==='CLAUDE_TERMINAL_RESIZE'&&event.ownerId===ownerId).at(-1);return event?{threadId:event.threadId,mountId:event.mountId,ownerId:event.ownerId}:undefined}
+  await expect.poll(visibleAttachment).toBeTruthy()
+  const attachment=await visibleAttachment()
   expect(attachment).toBeTruthy()
   const terminalInput=async(text:string)=>appPage.evaluate(({attachment,text})=>(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_TERMINAL_INPUT',...attachment,text}),{attachment:attachment!,text})
-  await terminalInput('NativeAgentMediaBoundary review this image ')
+  await input.pressSequentially('NativeAgentMediaBoundary review this image ')
+  await expect.poll(async()=>(await observed())?.draft.text).toContain('NativeAgentMediaBoundary')
   await terminalInput('\x1b[200~'+join(workspace!,'native-app-image.png')+'\x1b[201~')
   await expect.poll(async()=>(await observed())?.draft.text,{timeout:15000}).toMatch(/NativeAgentMediaBoundary[\s\S]*\[Image\s*#\d+\]/i)
   const prepared=await observed();expect(prepared.selected).toBe(taskId)
