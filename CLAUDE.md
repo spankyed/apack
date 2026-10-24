@@ -170,6 +170,11 @@ launching; preserve evidence without changing macOS security settings. Cause rem
 [launch incident](docs/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
 macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts`; pure unit checks stay in the
 fast half.
+`test:linux` limits each run's entire container to 6 GiB RAM, no additional swap and two CPUs,
+including installation, builds and subprocesses. Coordinate one expensive run across worktrees;
+separate containers each receive their own allowance. These limits do not cover Docker image builds
+or commands run directly on the Mac. Use `npm run test:linux -- npm run test:integration` when the
+integration pool needs this resource boundary; do not retry an out-of-memory run automatically.
 Run required final strict acceptance with `gh workflow run ci.yml --ref <branch> -f strict_chain=true`: it
 runs strict `--all` on disposable macOS runners as parallel jobs (`strict-chain.yml`): a producers job, then
 two integration shards, two native shards, and the app half with the remaining checks, beside each other on

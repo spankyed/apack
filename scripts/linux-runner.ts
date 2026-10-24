@@ -21,6 +21,9 @@ const IMAGE = `apack-linux-test:${short(fs.readFileSync(DOCKERFILE))}`;
 /** One working copy per checkout, so two worktrees never share a container `node_modules` */
 const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
+// Bound the whole process tree, including compiler children and native allocations. Equal memory/swap
+// limits allow no additional swap; exhaustion fails the container rather than consuming host swap.
+const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2'];
 /**
  * The run lock, at the volume's root. Named once because two places must agree on it: the `flock` below and
  * the rsync filter that keeps `--delete` from removing it while this run holds it.
@@ -121,7 +124,7 @@ function pruneAbandonedVolumes(): void {
   const mine = WORK_VOLUME;
   for (const name of listed.stdout.split('\n').map((line) => line.trim())) {
     if (!name.startsWith('apack-linux-work-') || name === mine) continue;
-    const read = docker(['run', '--rm', '-v', `${name}:/work:ro`, IMAGE, 'cat', `/work/${CHECKOUT_FILE}`]);
+    const read = docker(['run', '--rm', ...RESOURCE_LIMITS, '-v', `${name}:/work:ro`, IMAGE, 'cat', `/work/${CHECKOUT_FILE}`]);
     const checkout = read.status === 0 ? read.stdout.trim() : '';
     if (!checkout || fs.existsSync(checkout)) continue;
     if (docker(['volume', 'rm', name]).status === 0) {
@@ -214,7 +217,7 @@ const script = ['set -e', run].join('\n');
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', ...RESOURCE_LIMITS, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
