@@ -309,6 +309,61 @@ Done, 2026-10-24.
 under Done, any case past +10% reported; a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early
 and a live query reads no trashed entity.
 
+Done, 2026-10-24.
+- **The engine is written on the seam.** `store-access.ts` (`createStoreAccess`) gives the modules their reads and
+  writes: a read runs in the snapshot or unit already open, or opens a snapshot; an engine operation's writes join the
+  unit open, as a statement joins its transaction; `unit` (what `transact` runs in) is a savepoint inside another.
+  `attribute-storage.ts` and `relations.ts` are the key layout above, with three keys it didn't name:
+  `['x', type, kind, value, seq]` (an index is per type and field, as Step 1 declares it), `['xb', type, kind]` (an index
+  is built on its first read, from the type's rows, and kept once built), and `['b', source, kind, target, seq]` →
+  relId (the edges between two ends: a link finds the edge it would repeat without reading a hub's thousands; linking
+  10k edges to one entity was quadratic without it, 3 s for 1k). A relation's id is `Relation-<time><seq>`, so ids sort
+  in the order relations were made.
+- **Rollback is the seam's.** The journal keeps a unit's commit-time checks and holds its sink calls until the outermost
+  unit commits (until Step 4 deletes the sink); its undo log is gone.
+- **Keys are encoded by a codec of the seam's own** (`kv.ts`): a tag byte per element, a string's UTF-8 ended by 0, a
+  number as eight order-preserving bytes. `ordered-binary`'s `readKey` was 3 s of a 6 s profile of the bench's cases;
+  neither backend needs it, both comparing bytes. Values are `msgpackr` with maps decoded as `Map`s and rebuilt as
+  objects, since decoding straight to an object renames a `__proto__` key. `MemoryKV` keeps its keys in a chunked
+  sorted list (an insert moves at most a chunk), since one sorted array made a load quadratic.
+- **Numbering is `['s', key]`** and `Sequence` leaves `RESERVED_ENTITY_TYPES` (the SDK's manifest check follows it).
+- **Each terminal reads in one snapshot**; `map`, `forEach` and `reduce` call back after it is released, so a callback
+  reads its own writes. A start from types walks its range — `['e', …]` live, `['d', …]` trashed, both merged by
+  sequence with the trash — and `count()` of a bare type is one get of `['c', type]`.
+- **The bridge:** the app still hydrates its format-3 files into the engine, now in one unit (`admin.bulkLoad`), which
+  Step 4 deletes with hydration.
+- **The contract changed in three places, each spec updated:** an entity a throwing unit had destroyed comes back in
+  its place rather than last (the store is left as the unit found it); schema stats are keyed in name order rather than
+  first-seen; `Sequence` is no reserved type.
+- **Reads counted:** `tests/engine/queries.spec.ts` ("reads") runs an engine over a `MemoryKV` that counts each get
+  and each entry a range visits: `first()`, `exists()`, `limit(3)` and `count()` of a type read fewer than ten entries
+  with 1,000 live and 1,000 trashed Tasks, and `ids()` reads the live thousand alone. Each mutation-checked.
+- Suites: ears 265, sdk 1,273, host 1,761, the pack pool 923, all passing.
+- **Bench on `MemoryKV`** (mean ms; the readings under Done for comparison) — every case is past +10%, as reading through
+  a store that encodes every key and decodes every value is expected to be; `MemoryKV` is for tests and tooling, and
+  Step 5 measures the app's backend:
+
+  | Case | Before (memory engine) | `MemoryKV` |
+  |---|---|---|
+  | bulk load | 180.9 | 4,538 |
+  | query by type with where and pickAll | 6.59 | 112.4 |
+  | 1,000 where lookups by a unique value | 1.01 | 5.76 |
+  | 10 where lookups on an unindexed field | 58.7 | 727.3 |
+  | 100 withRole lookups | 8.34 | 237.0 |
+  | 1,000 `query.ids(id)` lookups | 0.27 | 3.99 |
+  | 3 chained steps (`orderBy('rank')`) | 11.4 | 250.9 |
+  | relation traversal | 0.0025 | 0.0285 |
+  | `orderBy` a string over 40k | 13.6 | 204.1 |
+  | 1,000 `query(type).first()` over 40k | 0.27 | 4.73 |
+  | 1,000 `getRow` | 0.17 | 16.2 |
+  | `pickAll` over 40k | 14.1 | 474.5 |
+  | 100 `linkedWith` | 44.4 | 453.8 |
+  | link 10k tasks to one project, then destroy it | 40.6 | 271.6 |
+  | 1,000 creates | 3.81 | 26.8 |
+  | 1,000 short codes | 4.62 | 30.0 |
+  | transact: 1,000 creates as one unit | 5.82 | 30.3 |
+  | heap, graph loaded | 67.8 MB | 312.7 MB |
+
 ### 4. The app on LMDB
 - The LMDB backend with format 4, and a 3 → 4 step in `scripts/ears-convert.ts`. Only the developers' own data is in an
   older format, converted explicitly, on a copy.
