@@ -116,13 +116,31 @@ test('retains newer parent and Agent drafts when original replies cross API reco
     for (const owner of ['parent', 'agent']) {
       if (owner === 'agent') {
         if (!await row.isVisible()) await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
-        await appPage.evaluate(()=>{const rows:any[]=[];const record=()=>{const actor=(window as any).applicationState.system.get('default-setup/threads'),c=actor.getSnapshot().context;rows.push({at:Date.now(),agents:Array.from(document.querySelectorAll('[data-native-agent-id]')).map(node=>({id:node.getAttribute('data-native-agent-id'),text:node.textContent?.slice(-600),rect:node.getBoundingClientRect().toJSON()})),views:Object.entries(c.nativeTerminalViews).map(([mountId,v]:[string,any])=>({mountId,view:v.state?.view,task:v.task}))});if(rows.length>30)rows.shift()};record();let frame:number|undefined;const observer=new MutationObserver(()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;record()})});observer.observe(document.body,{childList:true,subtree:true});(window as any).__agentHandoffDiagnostic={rows,stop:()=>{observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)}}})
+        await appPage.evaluate(()=>{
+          const rows:any[]=[]
+          const record=()=>{
+            const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+            rows.push({at:Date.now(),
+              agents:Array.from(document.querySelectorAll('[data-native-agent-id]')).map(node=>({id:node.getAttribute('data-native-agent-id'),messageId:node.closest('[data-chat-message]')?.getAttribute('data-chat-message'),rect:node.getBoundingClientRect().toJSON()})),
+              messages:Array.from(document.querySelectorAll('[data-chat-message]')).map(node=>({id:node.getAttribute('data-chat-message'),activities:Array.from(node.querySelectorAll('[data-native-tool-activity]')).map(block=>({tools:block.getAttribute('data-native-tool-ids'),expanded:block.querySelector('button')?.getAttribute('aria-expanded')}))})),
+              views:Object.entries(c.nativeTerminalViews).map(([mountId,v]:[string,any])=>({mountId,view:v.state?.view,focus:v.state?.focus,task:v.task})),
+              drawings:Object.values(c.nativeUiViews).map((v:any)=>({status:v.state?.status,frames:v.state?.transcriptMessages?.map((f:any)=>({component:f.component,uuid:f.uuid,messageId:f.messageId,status:f.body?.status,isExpanded:f.isExpanded,groupExpanded:f.groupExpanded,tools:f.tools?.map((t:any)=>t.id)}))})),
+            });if(rows.length>30)rows.shift()
+          }
+          record();let frame:number|undefined
+          const observer=new MutationObserver(()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;record()})})
+          observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-expanded']})
+          ;(window as any).__agentHandoffDiagnostic={rows,stop:()=>{observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)}}
+        })
         try {
           await row.getByRole('button', { name: 'Open Agent', exact: true }).click()
           await expect(focused).toBeVisible()
         } catch(error) {
           const state=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {nativeTerminalViews:c.nativeTerminalViews,nativeUiViews:c.nativeUiViews,threadId:c.currentThread?.id,domTransitions:(window as any).__agentHandoffDiagnostic?.rows}})
           await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-failure.json'),JSON.stringify(state))
+          const nativeWindow=await _electronApp.browserWindow(appPage)
+          const png=await nativeWindow.evaluate(async win=>(await win.webContents.capturePage()).toPNG().toString('base64'))
+          await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-failure.png'),Buffer.from(png,'base64'))
           throw error
         } finally { await appPage.evaluate(()=>{(window as any).__agentHandoffDiagnostic?.stop();delete (window as any).__agentHandoffDiagnostic}) }
       }
