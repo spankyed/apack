@@ -9,7 +9,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('reviews original native image PDF and notebook results', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
+test('reviews original native image PDF and notebook results', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
@@ -85,6 +85,7 @@ test('reviews original native image PDF and notebook results', async ({ app, app
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText(statusLabel)
   await appPage.setViewportSize({ width: 680, height: 600 })
+  const nativeWindow=await electronApp.browserWindow(appPage)
   const composer = card.locator('[contenteditable="true"]')
   const receipts:any[]=[]
   const pdfPageSuccess=process.env.CLAUDE_RESEARCH_PDF_SUCCESS==='1'
@@ -105,7 +106,7 @@ test('reviews original native image PDF and notebook results', async ({ app, app
     expect(original?.uuid).toBeTruthy();expect(receipt.props.output).toEqual(original.toolUseResult)
     const frames=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).flatMap((view:any)=>view.state?.transcriptMessages??[]));expect(frames.find((frame:any)=>frame.component==='ToolResult'&&frame.uuid===id)).toMatchObject({resultUuid:original.uuid,assistantUuid:originalCall.uuid})
     receipts.push({id,name,type:pdfPages?'error':receipt.props.output.type,formatted:await result.innerText(),nativeResultUuid:original.uuid,nativeAssistantUuid:originalCall.uuid,output:receipt.props.output})
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(async()=>{await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport()}).toPass({timeout:8000});await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-media-'+turn+'-'+size.width+'.png')})}
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(async()=>{await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport()}).toPass({timeout:8000});await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))));const captured=await nativeWindow.evaluate(async(window,dimensions)=>{const image=await window.webContents.capturePage({x:0,y:0,...dimensions});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size);expect(captured.size).toEqual(size);await writeFile(testInfo.outputPath('native-media-'+turn+'-'+size.width+'.png'),Buffer.from(captured.png,'base64'))}
     if(await toggle.getAttribute('aria-expanded')==='true')await toggle.click();expect((await context()).native.state.nativePid).toBe(boundNativePid)
   }
   await writeFile(join(workspace!,'native-media-app-proof.json'),JSON.stringify(receipts))
