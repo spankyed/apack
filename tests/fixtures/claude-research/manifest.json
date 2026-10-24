@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "68434f0001e0bfdcd30bedfcfe37f80b19b8585b",
+  "researchCommit": "2bf2ebd8b3e6035bf75540a42a96cfa5a29f8da1",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -200,7 +200,7 @@
     "src/protocol/native-print-theme.mjs": "62d5f1d8a48e9ba6b22326a8652df31d58316060ea03af26e888a2aab70786f9",
     "src/protocol/native-process-observer.mjs": "7fd2a67bcd4f2e24484fde9ac3069c43b9beb2353422de9ace08b97e449bb1a5",
     "src/protocol/native-question-gates.mjs": "a2aee2181ee04f92cf108c2201af0b52a8e02e44f7175f540e31fae5ab7e4ef2",
-    "src/protocol/native-read-media-fixture.mjs": "f4798bb221f225d772d0b17125c6cf4534a24b772642347b29926e34be3a84f6",
+    "src/protocol/native-read-media-fixture.mjs": "ac22482db23f6f61f57bad65272891254d48bd411c5a602bfee264fa29a7b4a4",
     "src/protocol/native-resting-hover-fixture.mjs": "bfa6458556b421cf171f64bf1f88d627919ffe1c72960f1a313c8d6a50ec5857",
     "src/protocol/native-root-ime-fixture.mjs": "bcd42bab8846ff0db7c44c36ecd7657d5bc23e261f4ec3e71681b37614390d75",
     "src/protocol/native-snapshot-action-fixture.mjs": "10b2209e0981ed6f2ca167632bf445a7dd1131f158fb38b87c88a59bd65f67eb",
@@ -273,5 +273,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "6dd5074423e064ce5555a330b1fe6fb998b7323ebb9d8e35b4166b409700610b"
+  "archiveSha256": "48ea673fe73f6765fc72933dadb662ab59c5eb615da03404d99bc5cbff4b61e9"
 }
