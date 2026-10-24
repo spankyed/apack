@@ -116,14 +116,15 @@ test('retains newer parent and Agent drafts when original replies cross API reco
     for (const owner of ['parent', 'agent']) {
       if (owner === 'agent') {
         if (!await row.isVisible()) await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
+        await appPage.evaluate(()=>{const rows:any[]=[];const record=()=>{const actor=(window as any).applicationState.system.get('default-setup/threads'),c=actor.getSnapshot().context;rows.push({at:Date.now(),agents:Array.from(document.querySelectorAll('[data-native-agent-id]')).map(node=>({id:node.getAttribute('data-native-agent-id'),text:node.textContent?.slice(-600),rect:node.getBoundingClientRect().toJSON()})),views:Object.entries(c.nativeTerminalViews).map(([mountId,v]:[string,any])=>({mountId,view:v.state?.view,task:v.task}))});if(rows.length>30)rows.shift()};record();let frame:number|undefined;const observer=new MutationObserver(()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;record()})});observer.observe(document.body,{childList:true,subtree:true});(window as any).__agentHandoffDiagnostic={rows,stop:()=>{observer.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)}}})
         try {
           await row.getByRole('button', { name: 'Open Agent', exact: true }).click()
           await expect(focused).toBeVisible()
         } catch(error) {
-          const state=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {nativeTerminalViews:c.nativeTerminalViews,nativeUiViews:c.nativeUiViews,threadId:c.currentThread?.id}})
+          const state=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {nativeTerminalViews:c.nativeTerminalViews,nativeUiViews:c.nativeUiViews,threadId:c.currentThread?.id,domTransitions:(window as any).__agentHandoffDiagnostic?.rows}})
           await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-failure.json'),JSON.stringify(state))
           throw error
-        }
+        } finally { await appPage.evaluate(()=>{(window as any).__agentHandoffDiagnostic?.stop();delete (window as any).__agentHandoffDiagnostic}) }
       }
       const editor = owner === 'parent' ? composer : agentComposer, container = owner === 'parent' ? card : form
       for (const kind of ['edit', 'completion']) {
