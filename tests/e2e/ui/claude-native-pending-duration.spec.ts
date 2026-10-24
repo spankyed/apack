@@ -54,7 +54,7 @@ test('mirrors original pending background Agent duration and completion', async 
   const terminal = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0, lastScreen = ''
   async function screen() {
-    if (await input.isVisible()) { const cols = await dimensions(); if (cols > 1 && cols !== terminal.cols) terminal.resize(cols, 200) }
+    if (await input.isVisible()) { const size=await resize(); if(size&&size.cols>1&&(size.cols!==terminal.cols||size.rows!==terminal.rows))terminal.resize(size.cols,Math.max(2,size.rows)) }
     const native = (await context()).native, chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
     if (chunks.length) { await new Promise<void>(resolve => terminal.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminal.buffer.active
