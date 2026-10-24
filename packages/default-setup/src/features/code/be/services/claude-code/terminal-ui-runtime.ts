@@ -17,6 +17,7 @@ import { claudeTerminalComposerRuntime } from './terminal-composer-runtime.ts'
 import { claudeTerminalToolGroupRuntime, claudeTerminalToolGroupDrawingRuntime } from './terminal-tool-group-runtime.ts'
 import { claudeTerminalToolProgressRuntime } from './terminal-tool-progress-runtime.ts'
 import { claudeTerminalToolUseRuntime } from './terminal-tool-use-runtime.ts'
+import { claudeTerminalDiagnosticRuntime } from './terminal-diagnostic-runtime.ts'
 import { claudeTerminalToolOutputRuntime } from './terminal-tool-output-runtime.ts'
 import { claudeTerminalInstanceRuntime } from './terminal-instance-runtime.ts'
 import { claudeTerminalParentCommandRuntime } from './terminal-parent-command-runtime.ts'
@@ -219,6 +220,7 @@ ${claudeTerminalInstanceRuntime}
 ${claudeTerminalActionKeyRuntime}
 ${claudeTerminalClientRuntime}
 ${claudeTerminalToolOutputRuntime}
+${claudeTerminalDiagnosticRuntime}
 ${claudeTerminalToolUseRuntime}
 ${claudeTerminalToolProgressRuntime}
 ${claudeTerminalToolGroupRuntime}
@@ -964,6 +966,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_ui_terminal_placements'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native terminal placement view is detached');return {placements:terminalPlacementList(n)};}
  if(request.subtype==='apack_ui_composer'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native composer view is detached');return {placements:nativeComposerList(n,request.client_id)};}
+ if(request.subtype==='apack_ui_diagnostics'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native diagnostic view is detached');if(request.columns!==undefined&&(!Number.isSafeInteger(request.columns)||request.columns<20||request.columns>240))throw Error('Invalid diagnostic width');return {diagnostics:await nativeDiagnosticList(n,request.client_id,request.columns,abort.signal)};}
  if(request.subtype==='apack_ui_tool_groups'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native group view is detached');return {groups:nativeToolGroupList(n,request.client_id)};}
  if(request.subtype==='apack_ui_client'){if(!clients.has(request.client_id))throw Error('Native Client view is detached');const surface=n.nativeClients.surface(request.client_id,request.id);if(!surface)return{handled:false};if(surface==='desktop')await n.gate._Jo('desktop');return n.nativeClients.event(request.client_id,request.id,request.sequence,request.event);}
  const schema=schemaNames[request.subtype];

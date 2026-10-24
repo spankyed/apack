@@ -21,6 +21,8 @@ export function readClaudeUiActionKeys(value: unknown): ClaudeUiActionKeyState |
   const parsed = actionKeys.safeParse(value)
   return parsed.success ? parsed.data : undefined
 }
+const diagnosticAttachment = z.object({id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/),anchorIds:z.array(z.string().min(1).max(256)).max(256),summary:z.string().max(65536),detail:z.string().max(65536)}).strict()
+export type ClaudeUiDiagnosticAttachment = z.infer<typeof diagnosticAttachment>
 const toolGroup = z.object({id:z.string().min(1).max(256),anchorIds:z.array(z.string().min(1).max(256)).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
 export type ClaudeUiToolGroup = z.infer<typeof toolGroup>
 const composerPlacement=z.object({component:z.enum(['Spinner','SessionMode','PromptHint']),id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
@@ -141,6 +143,11 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     async composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]> {
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({placements:z.array(composerPlacement).max(32)}).strict().parse(await request({subtype:'apack_ui_composer',client_id:clientId.parse(id)})).placements
+    },
+    async diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]> {
+      const valid=clientId.parse(id),width=z.number().int().min(20).max(240).optional().parse(columns)
+      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      return z.object({diagnostics:z.array(diagnosticAttachment).max(32)}).strict().parse(await request({subtype:'apack_ui_diagnostics',client_id:valid,...(width===undefined?{}:{columns:width})})).diagnostics
     },
     async toolGroups(id: string): Promise<ClaudeUiToolGroup[]> {
       const valid=clientId.parse(id)

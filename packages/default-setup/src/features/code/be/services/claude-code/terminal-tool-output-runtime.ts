@@ -4,7 +4,7 @@ export const claudeTerminalToolOutputRuntime = String.raw`async function renderN
  const columns=Math.max(20,Math.min(240,options.columns??process.stdout.columns??80));
  const theme=nativeThemeProvider(n),tools=n.toolExport.uer(options.tools);
  const source=n.runtime.sQt(facts.messages.map(message=>({message})));
- const props={message,lookups:source.lookups,containerWidth:columns,addMargin:false,tools,commands:[],verbose:options.verbose!==false,inProgressToolUseIDs:facts.progress??source.inProgressToolUseIDs,progressMessagesForMessage:[],shouldAnimate:false,shouldShowDot:options.toolUse===true,style:'condensed',isTranscriptMode:true,isStatic:true,disableDisplayOverride:true};
+ const props={message,lookups:source.lookups,containerWidth:columns,addMargin:false,tools,commands:[],verbose:options.verbose!==false,inProgressToolUseIDs:facts.progress??source.inProgressToolUseIDs,progressMessagesForMessage:[],shouldAnimate:false,shouldShowDot:options.toolUse===true,style:'condensed',isTranscriptMode:options.transcript!==false,isStatic:true,disableDisplayOverride:true};
  // Match Claude's export providers. A fresh default app store never owns the live view's tasks.
  const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,children:n.jsx.e(theme.type,{value:theme.value,children:n.jsx.e(n.toolRendering.h3,props)})});
  const text=await n.staticRender.v6e(tree,{columns});
