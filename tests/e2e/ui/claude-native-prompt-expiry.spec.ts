@@ -116,15 +116,16 @@ test('retires the original parent lease and refuses its addressed stale action a
     parentDraft='Review #current-parent-complete'
     await composer.fill(parentDraft)
     await readCurrent(card, parentDraft)
-    const lease = await appPage.evaluate(() => {
+    let lease: any
+    await expect.poll(async()=>{ lease=await appPage.evaluate(() => {
       const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
       const entries = Object.entries(context.nativeUiViews).filter(([, view]: [string, any]) => view.threadId === context.currentThread.id && !view.mountRequest?.nativeView && view.state.status === 'live') as [string, any][]
-      if (entries.length !== 1) throw Error('Expected one current parent native UI lease')
+      if (entries.length !== 1) return undefined
       const [mountId, view] = entries[0]
       const find = (value: any): string | undefined => { if (!value || typeof value !== 'object') return; if (value.kind === 'button' && value.label === 'Use review template' && value.actionId) return value.actionId; for (const child of Object.values(value)) { const found = find(child); if (found) return found } }
-      const actionId = find(view.state); if (!actionId || !view.attachmentId) throw Error('Expected original native action and attachment')
+      const actionId = find(view.state); if (!actionId || !view.attachmentId) return undefined
       return { mountId, threadId: view.threadId, attachmentId: view.attachmentId, promptRevision: view.promptRevision, actionId }
-    })
+    });return !!lease }).toBe(true)
     const attachments = async () => (await readFile(join(workspace!, 'native-ui-attachments.jsonl'), 'utf8')).trim().split('\n').filter(Boolean).map(row => JSON.parse(row))
     const nativeAttachment = (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1)
     expect(nativeAttachment).toBeTruthy()
