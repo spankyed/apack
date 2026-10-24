@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('applies staged Plan and Edit only on Send and restores a staged phase after window reload', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -16,7 +16,7 @@ test('applies staged Plan and Edit only on Send and restores a staged phase afte
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -91,7 +91,7 @@ test('applies staged Plan and Edit only on Send and restores a staged phase afte
   expect(await humanRows()).toEqual(historyBefore)
   const staged=await appPage.evaluate(threadId=>{const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {phase:state.phase,stored:localStorage.getItem('default-setup/threads:claude-composer-phase:'+JSON.stringify([['main'],threadId]))}},threadId)
   expect(staged.phase).toBe('Plan');expect(JSON.parse(staged.stored!).phase).toBe('Plan')
-  await appPage.reload();await app.waitForPlugin('default-setup/threads');await app.navigate('default-setup/threads')
+  await appPage.reload();await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads')
   await appPage.evaluate(threadId=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'VIEW_THREAD',threadId});actor.send({type:'VIEW_DASHBOARD'})},threadId)
   await expect(card.getByRole('button',{name:'Plan',exact:true})).toBeVisible();await expect(composer).toHaveText(planText)
   await expect.poll(async()=>(await context()).native?.state?.nativePid).toBe(boundNativePid)

@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('keeps linked context and native caret through decorated code fence normalization', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -16,7 +16,7 @@ test('keeps linked context and native caret through decorated code fence normali
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')

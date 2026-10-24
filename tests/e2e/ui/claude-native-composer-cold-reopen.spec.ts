@@ -7,7 +7,7 @@ import {stripVTControlCharacters} from 'node:util'
 import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import {test,expect} from '@apackdev/testing'
 const workspace=process.env.CLAUDE_RESEARCH_WORKSPACE,onboarding=process.env.CLAUDE_RESEARCH_ONBOARDING
-let screenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined
+let screenTerminal:import('@xterm/xterm').Terminal|undefined
 test.afterEach(()=>screenTerminal?.dispose())
 test.skip(!workspace||!onboarding,'Explicit private native composer cold-reopen fixture required')
 test('cold restores independent Plan, draft and directory choices before original native admission',async({app,appPage,electronApp},testInfo)=>{
@@ -18,7 +18,7 @@ test('cold restores independent Plan, draft and directory choices before origina
  expect(electronApp.process().pid).not.toBe(saved.mainPid);expect(api.pid).not.toBe(saved.apiPid)
  for(const pid of [saved.mainPid,saved.apiPid]){let live=false;try{execFileSync('/bin/ps',['-p',String(pid),'-o','pid='],{stdio:'pipe'});live=true}catch(error:any){expect(error.status).toBe(1)}expect(live).toBe(false)}
  const errors:string[]=[];appPage.on('pageerror',e=>errors.push(e.message))
- await app.waitForPlugin('default-setup/threads');await app.navigate('default-setup/threads')
+ await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads')
  await appPage.evaluate(threadId=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'VIEW_THREAD',threadId});actor.send({type:'VIEW_DASHBOARD'})},saved.threadId)
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.locator('[contenteditable="true"]'),status=card.getByTestId('composer-native-status')
  const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator('textarea.xterm-helper-textarea')

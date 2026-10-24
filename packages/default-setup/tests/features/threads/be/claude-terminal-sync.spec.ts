@@ -9,7 +9,7 @@ const fake = vi.hoisted(() => ({
   thread: { context: {} as Record<string, unknown> },
   broadcast: vi.fn(),
 }))
-vi.mock('#generated/events.ts', () => ({ broadcastToPlugin: fake.broadcast }))
+vi.mock('#generated/events.ts', () => ({ broadcastToSurface: fake.broadcast }))
 vi.mock('#generated/repository.ts', () => ({ repository: {
   chatQueries: { threadData: () => ({ ...fake.thread, messages: fake.messages }), messageById: (id: string) => fake.messages.find(message => message.id === id) },
   threadQueries: { byId: () => fake.thread },

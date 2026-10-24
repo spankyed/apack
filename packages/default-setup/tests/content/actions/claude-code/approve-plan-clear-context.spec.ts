@@ -47,7 +47,7 @@ describe('CC: Approve Plan Clear Context', () => {
     mockService<Services, 'action'>('action', { executeIfFound: execute });
     mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'emitter'>('emitter', { broadcastToPlugin: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { broadcastToSurface: vi.fn() });
     mockService<Services, 'artifact'>('artifact', {
       updateAndNotify: vi.fn((artifact: EntityId, options: { content?: unknown }) => {
         repository.chatCommands.updateArtifact(artifact, { content: options.content });

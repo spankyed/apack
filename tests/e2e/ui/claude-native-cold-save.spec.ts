@@ -13,7 +13,7 @@ test('saves native launch, history and draft before a complete app shutdown', as
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -93,7 +93,7 @@ test('saves native launch, history and draft before a complete app shutdown', as
       expect(savedLaunch).toEqual({sessionId,cwd:workspace});expect(imported.claude.totalCostUsd).toBe(nativeCost);
       savedHistory=imported.messages.filter((m:any)=>m.context?.cliUuid).map((m:any)=>({id:m.id,uuid:m.context.cliUuid,text:m.text,sender:m.sender}));
       let journal:any[]=[];
-      for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{journal=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);break}catch(error:any){if(error.code!=='ENOENT')throw error}}
+      for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{journal=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line => JSON.parse(line));break}catch(error:any){if(error.code!=='ENOENT')throw error}}
       const canonicalHistory=history.map((old:any)=>{const row=journal.find(row=>row.uuid===old.uuid);expect(row).toBeTruthy();const content=row.message.content;const text=typeof content==='string'?content:content.filter((b:any)=>b.type==='text').map((b:any)=>b.text).join('\n');return {...old,text};});
       for(const old of canonicalHistory){const rows=savedHistory.filter((m:any)=>m.uuid===old.uuid);expect(rows).toHaveLength(1);expect(rows[0]).toMatchObject({uuid:old.uuid,text:old.text,sender:old.sender});}
       expect(imported.claude.toolCallCount).toBe(before.claude.toolCallCount);

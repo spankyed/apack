@@ -3,7 +3,7 @@ import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-ter
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
 const actor = vi.hoisted(() => ({ send: vi.fn() }))
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
-vi.mock('@apackdev/sdk/fe', () => ({ usePlugin: () => actor }))
+vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor }))
 vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
 vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined

@@ -36,7 +36,9 @@ it('coalesces queued edits, adopts app changes and retires edits on detach', asy
   type Edit = { before: Box; after: Box; key?: { key: string; name: string } }
   const start = claudeTerminalUiRuntime.indexOf('const edits=new Map();')
   const end = claudeTerminalUiRuntime.indexOf('// Each attached composer')
-  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(start, end)};({editPrompt,clearEdit})`, { AbortController, Promise, Map }) as {
+  const themeStart = claudeTerminalUiRuntime.indexOf('function nativeThemeProvider(')
+  const themeEnd = claudeTerminalUiRuntime.indexOf('function nativeThemeTree(')
+  const api = vm.runInNewContext(`${claudeTerminalUiRuntime.slice(themeStart, themeEnd)}${claudeTerminalUiRuntime.slice(start, end)};({editPrompt,clearEdit})`, { AbortController, Promise, Map }) as {
     editPrompt(native: unknown, client: string, box: Box, key?: { key: string }, by?: string): Promise<Box> | Box
     clearEdit(client: string): void
   }

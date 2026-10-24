@@ -35,7 +35,7 @@ it('keeps the fork navigation reply addressed to its original requester after va
   const app=await startApp({systems:['threads']})
   const f=fixture()
   const clients:Array<string|undefined>=[]
-  const off=testRootEvents.onPluginSend(message=>{if(message.to==='default-setup/threads'&&message.event.type==='LOAD_CHAT_THREAD')clients.push(message.client)})
+  const off=testRootEvents.onSurfaceSend(message=>{if(message.to==='default-setup/threads'&&message.event.type==='LOAD_CHAT_THREAD')clients.push(message.client)})
   try {
     await app.send('threads',{type:'FORK_THREAD',threadId:f.id,messageId:f.first.id},{sender:'default-setup/threads',client:'fork-window'})
     await vi.waitFor(()=>expect(repository.threadCommands.forkCount(f.id)).toBe(1))

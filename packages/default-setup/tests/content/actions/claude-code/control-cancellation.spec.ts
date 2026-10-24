@@ -10,27 +10,28 @@ function setup() {
     sessionId: 'session-fixture', isRunning: true,
     pendingControlRequest: { requestId: 'current-request', toolName: 'Bash', approvalMessageId: 'approval-fixture' },
   } } });
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn() });
-  return id;
+  const updateMessageState = vi.fn();
+  mockService<Services, 'chat'>('chat', { updateMessageState });
+  return { id, updateMessageState };
 }
 
 describe('native control cancellation', () => {
   it('preserves a replacement approval when an earlier request is cancelled', () => {
-    const id = setup();
+    const { id, updateMessageState } = setup();
     expect(cancelPendingControlRequest(services, id, 'old-request')).toBe(false);
     expect(getClaudeState(services, id)?.pendingControlRequest?.requestId).toBe('current-request');
-    expect(services.chat.updateMessageState).not.toHaveBeenCalled();
+    expect(updateMessageState).not.toHaveBeenCalled();
   });
   it('retires the matching UI block once and preserves the running session', () => {
-    const id = setup();
+    const { id, updateMessageState } = setup();
     expect(cancelPendingControlRequest(services, id, 'current-request')).toBe(true);
-    expect(services.chat.updateMessageState).toHaveBeenCalledWith('approval-fixture', {
+    expect(updateMessageState).toHaveBeenCalledWith('approval-fixture', {
       responseTimestamp: expect.any(Number), blockResponse: { cancelled: true },
     });
     const state = getClaudeState(services, id);
     expect(state?.pendingControlRequest).toBeUndefined();
     expect(state).toMatchObject({ sessionId: 'session-fixture', isRunning: true });
     expect(cancelPendingControlRequest(services, id, 'current-request')).toBe(false);
-    expect(services.chat.updateMessageState).toHaveBeenCalledTimes(1);
+    expect(updateMessageState).toHaveBeenCalledTimes(1);
   });
 });

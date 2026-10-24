@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('applies quoted staged folders on native handoff and stopped-session reopen', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -16,7 +16,7 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -95,11 +95,12 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
   await stop();await stageDirectory(secondDirectory)
   await expect(composer).toHaveText(draft)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  let reopenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined,reopenSequence=0,reopenNavigated=false,reopenTrustAt=0,reopenTrustAttempts=0
+  let reopenTerminal:import('@xterm/xterm').Terminal|undefined,reopenSequence=0,reopenNavigated=false,reopenTrustAt=0,reopenTrustAttempts=0
   try{await expect.poll(async()=>{
     const native=(await context()).native;if(!native?.state||typeof native.state.nativePid!=='number'||native.state.nativePid===boundNativePid)return false;if(native.state.status==='live')return true;if(['error','exited'].includes(native.state.status))throw Error('Native reopen ended before trust was accepted')
     if(!reopenTerminal){const size=await resize();if(!size)return false;reopenTerminal=new Terminal({cols:size.cols,rows:size.rows,allowProposedApi:true})}
     const chunks=native.output.filter((chunk:any)=>chunk.sequence>reopenSequence);if(chunks.length){await new Promise<void>(resolve=>reopenTerminal!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));reopenSequence=chunks.at(-1).sequence}
+    if(!reopenTerminal)throw new Error('Native reopen terminal was not initialized')
     const buffer=reopenTerminal.buffer.active,text=Array.from({length:reopenTerminal.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n'),screen=recognizeOnboardingPrompt(text,workspace)
     await writeFile(join(workspace!,'native-directory-reopen-gate.json'),JSON.stringify({state:native.state,text,screen,reopenNavigated,reopenTrustAttempts}))
     if((screen==='workspace-trust'||screen==='workspace-trust-selected')&&!reopenNavigated)await appPage.screenshot({path:testInfo.outputPath('native-directory-reopen-trust.png')})

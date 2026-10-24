@@ -32,7 +32,7 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const { nativeActionAppBindings } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_ACTION_KEYS_FIXTURE!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -386,7 +386,7 @@ test('routes live native Button actions through the retained main and Agent app 
   await appPage.evaluate(({mountId,revision,sequence})=>{
     const actor=(window as any).applicationState.system.get('default-setup/threads')
     // The shell supplies the plugin delivery address; raw actor.send has no backend reply channel.
-    ;(window as any).applicationState.send({type:'SEND_TO_PLUGIN',plugin:'default-setup/threads',events:[{type:'CLAUDE_UI_KEY',threadId:actor.getSnapshot().context.currentThread.id,mountId,revision,sequence,event:{key:'r',ctrl:true,alt:true,super:false,shift:false,from_composer:true}}]})
+    ;(window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[{type:'CLAUDE_UI_KEY',threadId:actor.getSnapshot().context.currentThread.id,mountId,revision,sequence,event:{key:'r',ctrl:true,alt:true,super:false,shift:false,from_composer:true}}]})
   },{mountId:old.mountId,revision:old.state.actionKeys.revision,sequence:staleSequence})
   await expect.poll(async()=>appPage.evaluate(({mountId,sequence})=>{
     const result=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews[mountId]?.actionKeyResult

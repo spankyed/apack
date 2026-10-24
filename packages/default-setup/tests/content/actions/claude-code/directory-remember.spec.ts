@@ -21,7 +21,7 @@ beforeEach(async()=>{
   writeSettings=vi.fn(cliService.claudeCode.writeSettings);
   mockService<Services,'cli'>('cli',{claudeCode:{...cliService.claudeCode,readSettings,writeSettings}});
   mockService<Services,'chat'>('chat',{sendBlockMessage:vi.fn()});
-  mockService<Services,'emitter'>('emitter',{broadcastToPlugin:vi.fn()});
+  mockService<Services,'emitter'>('emitter',{broadcastToSurface:vi.fn()});
 });
 afterEach(async()=>{vi.unstubAllEnvs();await rm(root,{recursive:true,force:true});});
 const run=(text='/added --remember')=>action({command:'cc-add-dir',threadId,text},services,{} as never,'directory-flow');

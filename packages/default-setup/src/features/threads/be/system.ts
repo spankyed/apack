@@ -9,7 +9,7 @@ import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
-import { assign, setup, fromPromise, spawnChild } from 'xstate';
+import { setup, fromPromise, spawnChild } from 'xstate';
 import { runThreadHistoryOperation, type ThreadHistoryOperationInput } from './history-operation.ts';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';

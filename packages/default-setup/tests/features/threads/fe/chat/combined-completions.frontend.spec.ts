@@ -24,8 +24,8 @@ afterEach(() => { app?.unmount(); editor?.destroy(); document.body.replaceChildr
 
 function mount(kind: 'command' | 'reference') {
   editor = new Editor({ extensions: [StarterKit], content: kind === 'command' ? '/h' : '@n' })
-  if (kind === 'command') editor.registerPlugin(new Plugin({ key: commandSuggestionPluginKey, state: { init: () => ({ active: true, query: 'h', selectedCommand: null, previousCommand: null }), apply: (_tr, state) => state } }))
-  else editor.registerPlugin(new Plugin({ key: referenceSuggestionPluginKey, state: { init: () => ({ active: true, query: 'n', triggerPos: 1, level: 'category' as const, selectedCategory: null, categoryQuery: '' }), apply: (_tr, state) => state } }))
+  if (kind === 'command') editor.registerPlugin(new Plugin({ key: commandSuggestionKey, state: { init: () => ({ active: true, query: 'h', selectedCommand: null, previousCommand: null }), apply: (_tr, state) => state } }))
+  else editor.registerPlugin(new Plugin({ key: referenceSuggestionKey, state: { init: () => ({ active: true, query: 'n', triggerPos: 1, level: 'category' as const, selectedCategory: null, categoryQuery: '' }), apply: (_tr, state) => state } }))
   const select = vi.fn(() => true), dismiss = vi.fn()
   setEditorCompletionOffer(editor, { id: 'offer-one', rows: [{ text: 'native-result', label: 'Native row', select }], dismiss })
   const root = document.createElement('div'); document.body.append(root, editor.view.dom)

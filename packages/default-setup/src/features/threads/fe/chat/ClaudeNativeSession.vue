@@ -66,14 +66,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { usePlugin } from '@apackdev/sdk/fe'
+import { useSurface } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
-const actor: ThreadsState = usePlugin()
+const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])

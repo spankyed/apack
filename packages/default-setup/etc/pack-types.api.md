@@ -4585,8 +4585,7 @@ interface CliServiceType {
     };
     /**
      * Claude Code wrapper. Highlights only — the full surface (sessions, mcp,
-     * surfaces, skills, …) is available via `import { claudeCode } from
-     * '#features/code/be/services/claude-code/index.ts'`.
+     * plugins, skills, …) is available from '#features/code/be/services/claude-code/index.ts'.
      */
     /** Clear-cache resolve + exec test — same path as the Settings test button. */
     testCli(provider: string): Promise<{
@@ -4854,11 +4853,6 @@ interface CollectionDTO {
     createdAt: string;
     updatedAt: string;
     symlinkPath?: string;
-}
-
-interface CommandItem {
-    name: string;
-    placeholder: string;
 }
 
 type CommandLifecycleLine = z.infer<typeof CommandLifecycleLineSchema>;

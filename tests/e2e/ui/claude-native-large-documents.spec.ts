@@ -12,7 +12,7 @@ test('reads large original native Code and Markdown without losing the parent co
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -58,7 +58,7 @@ test('reads large original native Code and Markdown without losing the parent co
   const expected=JSON.parse(await readFile(join(workspace!,'large-document-fixture.json'),'utf8'));
   const draft='Keep the release checklist draft while I inspect the migration registry.';
   const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
-  async function document(kind:string){return appPage.evaluate(kind=>{
+  async function nativeDocument(kind:string){return appPage.evaluate(kind=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const pending=Object.values(state.nativeUiViews).map((view:any)=>view.state);let count=0;
     while(pending.length&&++count<20000){const value:any=pending.pop();if(!value||typeof value!=='object')continue;if(value.kind===kind)return {kind:value.kind,source:value.source??value.text,nativeAnsi:value.nativeAnsi,formattingFallback:value.formattingFallback};pending.push(...Object.values(value).filter(value=>value&&typeof value==='object'));}return null;
@@ -79,7 +79,7 @@ test('reads large original native Code and Markdown without losing the parent co
         const tab=appPage.getByRole('button',{name:kind==='code'?'Source':'Guide',exact:true});
         if(await (kind==='code'?code:markdown).count()===0)await tab.click();
         const drawn=kind==='code'?code:markdown;await expect(drawn).toHaveCount(1,{timeout:15000});
-        const data=await document(kind);expect(data.source).toBe(kind==='code'?expected.code:expected.markdown);expect(data.source.length).toBeGreaterThan(32768);expect(data.formattingFallback).toBeUndefined();
+        const data=await nativeDocument(kind);if(!data)throw new Error('Native document drawing missing: '+kind);expect(data.source).toBe(kind==='code'?expected.code:expected.markdown);expect(data.source.length).toBeGreaterThan(32768);expect(data.formattingFallback).toBeUndefined();
         expect(data.nativeAnsi).toContain('\x1b[');if(kind==='code')expect(data.nativeAnsi.length).toBeGreaterThan(65536);
         expect(await drawn.textContent()).toBe(stripVTControlCharacters(data.nativeAnsi));expect(await drawn.locator('[class*="hljs"]').count()).toBe(0);
         const last=drawn.locator('span').last();await expect.poll(async()=>{await last.evaluate(node=>node.scrollIntoView({block:'center'}));return last.evaluate(node=>{const r=node.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})}).toBe(true);await expect(last).toBeInViewport({ratio:1});

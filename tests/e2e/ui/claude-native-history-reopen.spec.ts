@@ -12,7 +12,7 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -58,7 +58,7 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
   const expected=JSON.parse(await readFile(join(workspace!,'large-document-fixture.json'),'utf8'));
   const draft='Keep the release checklist draft while I inspect the migration registry.';
   const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
-  async function document(kind:string){return appPage.evaluate(kind=>{
+  async function nativeDocument(kind:string){return appPage.evaluate(kind=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const pending=Object.values(state.nativeUiViews).map((view:any)=>view.state);let count=0;
     while(pending.length&&++count<20000){const value:any=pending.pop();if(!value||typeof value!=='object')continue;if(value.kind===kind)return {kind:value.kind,source:value.source??value.text,nativeAnsi:value.nativeAnsi,formattingFallback:value.formattingFallback};pending.push(...Object.values(value).filter(value=>value&&typeof value==='object'));}return null;
@@ -118,14 +118,14 @@ test('reopens saved native drawings under a fresh owner and refuses retired acti
     const reopenedNativePid=(await context()).native.state.nativePid;expect(reopenedNativePid).not.toBe(boundNativePid);
     await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft);
     if(await code.count()===0&&await markdown.count()===0)await appPage.getByRole('button',{name:'Expand tool activity',exact:true}).click();
-    await expect(code).toHaveCount(1,{timeout:15000});expect((await document('code')).source).toBe(expected.code);
+    await expect(code).toHaveCount(1,{timeout:15000});expect((await nativeDocument('code'))?.source).toBe(expected.code);
     await expect(appPage.locator('[data-native-plugin-status]')).toHaveCount(0);
     const reopened=await context();expect(reopened.sessionId).toBe(sessionId);expect(reopened.threadId).toBe(before.threadId);expect(reopened.claude.totalCostUsd).toBe(nativeCost);expect(reopened.claude.toolCallCount).toBe(toolCallCount);if(ownerFailure){await expect(section.getByText(/disconnected unexpectedly/)).toHaveCount(0);expect((await ledger()).modelUsage).toEqual(checkpoint.modelUsage);}
     for(const old of history){const rows=reopened.messages.filter((m:any)=>m.context?.cliUuid===old.uuid);expect(rows).toHaveLength(1);expect({id:rows[0].id,uuid:rows[0].context.cliUuid,text:rows[0].text,sender:rows[0].sender}).toEqual(old);}
     const fresh=await guideCapability();expect(fresh).toBeTruthy();expect(fresh!.actionId).not.toBe(retired!.actionId);
     await appPage.evaluate(({current,old})=>{(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_UI_PRESS',threadId:current.threadId,mountId:current.mountId,actionId:old.actionId})},{current:fresh!,old:retired!});
     await appPage.getByRole('button',{name:'Guide',exact:true}).click();await expect(markdown).toHaveCount(1);await expect.poll(async()=>(await callbacks()).length).toBe(2);
-    expect((await callbacks()).map((v:any)=>v.tab)).toEqual(['guide','guide']);expect((await document('markdown')).source).toBe(expected.markdown);
+    expect((await callbacks()).map((v:any)=>v.tab)).toEqual(['guide','guide']);expect((await nativeDocument('markdown'))?.source).toBe(expected.markdown);
     await expect(appPage.locator('[data-native-plugin-status]')).toContainText('Migration guide reviewed');
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900});

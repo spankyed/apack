@@ -18,7 +18,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const socketFrames:any[]=[];const cdp=fileLayout?await appPage.context().newCDPSession(appPage):undefined;if(cdp){await cdp.send('Network.enable');cdp.on('Network.webSocketFrameReceived',event=>{if(!/CLAUDE_UI_STATE|CLAUDE_TERMINAL_STATE/.test(event.response.payloadData)&&(()=>{try{const frame=JSON.parse(event.response.payloadData);return !!frame.error||!!frame.result?.data}catch{return true}})())socketFrames.push({at:Date.now(),id:event.requestId,data:event.response.payloadData});if(socketFrames.length>1000)socketFrames.shift()})}
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')

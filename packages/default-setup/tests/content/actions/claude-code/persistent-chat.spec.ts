@@ -40,7 +40,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
   const emit = vi.fn();
   // Compiled flows consume the real completion bus; direct source runs record it.
-  if (mode === 'source') mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToPlugin: vi.fn() });
+  if (mode === 'source') mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
   const completions = () => emit.mock.calls.map(([, event]) => event).filter(event => event.eventType === 'cc.stream.completed');
   const finish = async (number: number) => {
     events.write({ type: 'command_lifecycle', state: 'started', command_uuid: `input-${number}` });
@@ -145,7 +145,7 @@ it('preserves native assistant rows when one provider reply becomes several tran
   const errors = vi.fn();
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: errors });
   const emitted = vi.fn();
-  mockService<Services, 'emitter'>('emitter', { sendToSystem: emitted, broadcastToPlugin: vi.fn() });
+  mockService<Services, 'emitter'>('emitter', { sendToSystem: emitted, broadcastToSurface: vi.fn() });
   const user = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'paired reply' });
   expect(await chat({ threadId: id, text: 'paired reply', messageId: user.id }, services, {} as never, '')).toMatchObject({ streaming: true });
   events.write({ type: 'command_lifecycle', state: 'started', command_uuid: 'input-paired' });
@@ -183,7 +183,7 @@ it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','a
  mockService<Services,'chat'>('chat',{...chatService,resolveReferences:vi.fn(async()=>({textPrefix:'',imageBlocks:[]}))} as never)
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})
- mockService<Services,'emitter'>('emitter',{sendToSystem:vi.fn(),broadcastToPlugin:vi.fn()})
+ mockService<Services,'emitter'>('emitter',{sendToSystem:vi.fn(),broadcastToSurface:vi.fn()})
  const user=repository.chatCommands.addMessage({threadId:id,sender:'user',text:'Phase review'})
  expect(await chat({threadId:id,text:'Phase review',messageId:user.id,phase},services,{} as never,'')).toMatchObject({streaming:true})
  expect(opened.mock.calls[0]![2].permissionMode).toBe('acceptEdits')

@@ -473,7 +473,7 @@ const permissionDescription = computed(
   () => permissionOptions.find(o => o.value === permissionMode.value)?.description ?? '',
 )
 
-const permissionChanges = usePluginState('threads', s => s.permissionModeChanges)
+const permissionChanges = useSurfaceState('threads', s => s.permissionModeChanges)
 const permissionChange = computed(() => permissionChanges.value[currentThreadId.value ?? ''])
 
 function selectPermissionMode(mode: PermissionMode) {
@@ -483,7 +483,7 @@ function selectPermissionMode(mode: PermissionMode) {
     console.warn('[claude-session-artifact] no current thread; cannot update permission mode')
     return
   }
-  sendToPlugin('threads', { type: 'SET_CLAUDE_PERMISSION_MODE', threadId, mode })
+  sendToSurface('threads', { type: 'SET_CLAUDE_PERMISSION_MODE', threadId, mode })
 }
 
 function clearGoal() {

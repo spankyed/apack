@@ -13,7 +13,7 @@ test('completes native extended questions, follow-up, refusal retry and cancella
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -65,7 +65,7 @@ test('completes native extended questions, follow-up, refusal retry and cancella
     await expect(panel.getByText('Which language should the examples use?', { exact: true })).toBeVisible()
   }
   async function done() { await expect(panel).toBeHidden(); await expect.poll(async () => (await context()).native?.state.busy).toBe(false) }
-  const replayProof=[]
+  const replayProof: {stage: string; retired: unknown; fresh: unknown; before: unknown; after: unknown}[]=[]
   async function rejectRetired(retired:any,stage:string){
     const fresh=(await context()).claude.pendingControlRequest
     expect(fresh.approvalMessageId).not.toBe(retired.approvalMessageId)

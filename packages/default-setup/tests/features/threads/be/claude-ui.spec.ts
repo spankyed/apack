@@ -88,7 +88,7 @@ it('answers native UI updates only to the requesting connection through the actu
   const { startApp } = await import('@apackdev/testing/harness')
   const { testRootEvents } = await import('@apackdev/sdk/testing')
   const sent: (string | undefined)[] = []
-  const stop = testRootEvents.onPluginSend(message => {
+  const stop = testRootEvents.onSurfaceSend(message => {
     if (message.event.type === 'CLAUDE_UI_STATE') sent.push(message.client)
   })
   try {

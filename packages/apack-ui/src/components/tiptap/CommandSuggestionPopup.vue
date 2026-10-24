@@ -97,7 +97,7 @@ function handleClickOutside(event: MouseEvent) {
   const target = event.target as Node
   if (popupEl.value?.contains(target)) return
   const tr = props.editor.state.tr
-  tr.setMeta(commandSuggestionPluginKey, { deactivate: true })
+  tr.setMeta(commandSuggestionKey, { deactivate: true })
   props.editor.view.dispatch(tr)
 }
 

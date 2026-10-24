@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockService, startApp, type TestApp } from '@apackdev/testing/harness';
-import { services, type Services } from '#generated/services.ts';
+import { type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { actionLabel, writeDefaultFlows } from '../../../_support/flows.ts';
 
 let app: TestApp;
-const kill = vi.fn(), respond = vi.fn();
+const kill = vi.fn(), respond = vi.fn(), sendBlockMessage = vi.fn();
 beforeEach(async () => {
-  kill.mockClear(); respond.mockClear();
+  kill.mockClear(); respond.mockClear(); sendBlockMessage.mockClear();
   writeDefaultFlows();
   mockService<Services, 'codex'>('codex', { start: vi.fn(async () => {}) });
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ kill, respond })), clearHandle: vi.fn() } as never });
-  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn(), createThreadAndNotify: vi.fn() });
+  mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage, createThreadAndNotify: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   app = await startApp({ systems: ['brain'] });
   await app.runFlow('Claude Code');
@@ -33,7 +33,7 @@ describe('compiled Claude response routing', () => {
     const run = await app.runFlow('Claude Code', { event: 'user.command', data: { command: 'cc-plan', threadId: id } });
     expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Plan']);
     expect(getPlan).toHaveBeenCalledOnce();
-    expect(services.chat.sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ threadId: id,
+    expect(sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ threadId: id,
       blocks: [{ type: 'markdown', props: { content: '# Native plan', label: 'Plan' } }] }));
   });
   it.each(['AskUserQuestion', 'Bash', 'ExitPlanMode'])('retires a %s response after process loss without starting chat', async tool => {
@@ -47,7 +47,7 @@ describe('compiled Claude response routing', () => {
     expect(execute).not.toHaveBeenCalled();
     expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({ isRunning: false, chatState: 'error' });
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeUndefined();
-    expect(services.chat.sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('request expired') }));
+    expect(sendBlockMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('request expired') }));
   });
   it('forwards the current native request identity to clear-context approval', async () => {
     const id = thread();

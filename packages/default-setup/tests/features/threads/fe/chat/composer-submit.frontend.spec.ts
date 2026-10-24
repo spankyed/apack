@@ -7,6 +7,7 @@ import type { Editor } from '@tiptap/core'
 import type { useAttachments } from '#features/threads/fe/chat/composables/useAttachments.ts'
 import ChatInput from '#features/threads/fe/chat/input.vue'
 
+const surface = { id: 'default-setup/threads', sessionId: 'composer-fixture', getSnapshot: () => ({ context: { commands: [{ name: 'cc-model', placeholder: 'Model' }] } }) }
 let editor: Editor
 let attachments: ReturnType<typeof useAttachments>
 let app: App | undefined
@@ -21,7 +22,7 @@ vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
   const { default: StarterKit } = await import('@tiptap/starter-kit')
   const { Markdown } = await import('tiptap-markdown')
   return { default: defineComponent({ emits: ['update:modelValue'], setup(_props, { expose, emit }) {
-    editor = new Editor({ extensions: [StarterKit, Markdown], onUpdate: ({ editor }) => emit('update:modelValue', (editor.storage as any).markdown.getMarkdown()) })
+    editor = new Editor({ extensions: [StarterKit, Markdown, CommandSuggestion], onUpdate: ({ editor }) => emit('update:modelValue', (editor.storage as any).markdown.getMarkdown()) })
     expose({ editor }); onUnmounted(() => editor.destroy())
     return () => h('div', { 'data-testid': 'editor-fixture' })
   } }) }
@@ -39,7 +40,7 @@ function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
   const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }); app.mount(root)
+  app = createApp({ render: () => h(SurfaceScope, { surface: 'default-setup/threads' }, { default: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }) }); app.mount(root)
   editor.commands.setContent('first')
   return { state, send, hostResponse, press, command, prompt, complete, root, submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }
 }
@@ -303,7 +304,6 @@ it('retains a native draft until acceptance and keeps a rejected draft retryable
 it('routes an explicitly selected app command through the app while a native owner is attached', async () => {
   const f = mount(async () => undefined), nativeSubmit = vi.fn(async () => {});
   f.state.nativeSubmit = nativeSubmit; await nextTick();
-  editor.registerPlugin(commandSuggestionPlugin(editor, () => [{ name: 'cc-model', placeholder: 'Model' }]));
   editor.commands.setContent('/cc-model haiku');
   f.submit();
   await vi.waitFor(() => expect(f.command).toHaveBeenCalledWith('cc-model', 'haiku', {}));

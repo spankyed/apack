@@ -53,7 +53,7 @@ import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { usePlugin } from '@apackdev/sdk/fe'
+import { useSurface } from '@apackdev/sdk/fe'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
@@ -72,7 +72,7 @@ const emit = defineEmits<{ draft: [target: ClaudeNativeAgentUiTarget, text: stri
 const transcriptViewport = ref<HTMLElement>(), transcriptContent = ref<HTMLElement>()
 const scrollTarget = props.target
 const transcriptScroll = useClaudeAgentScroll({ viewport: transcriptViewport, content: transcriptContent, active: () => props.active, initial: props.scrollPosition, save: position => emit('scrollPosition', scrollTarget, position) })
-const actor: ThreadsState = usePlugin(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
+const actor: ThreadsState = useSurface(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
 const context = useSelector(actor, state => state.context)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
 const state = computed(() => snapshot.value?.state)

@@ -745,11 +745,11 @@ it('reveals the focused field label on viewport resize without moving focus from
   expect(site.scrollTop).toBe(280)
   fieldHeight = 96
   resizeObservers.forEach(callback => callback())
-  expect(site.scrollTop).toBe(296)
+  await vi.waitFor(() => expect(site.scrollTop).toBe(296))
   expect(document.activeElement).toBe(input)
   height = 60
   resizeObservers.forEach(callback => callback())
-  expect(site.scrollTop).toBe(300)
+  await vi.waitFor(() => expect(site.scrollTop).toBe(300))
   expect(document.activeElement).toBe(input)
   const draft = f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!
   draft.focus(); site.scrollTop = 140
@@ -900,10 +900,10 @@ it('reserves a complete focused field and feedback row when its compact site is 
   control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))
   await nextTick(); fieldHeight = 82
   resizeObservers.forEach(callback=>callback()); await nextTick()
-  expect(strip.style.minHeight).toBe('189px')
+  await vi.waitFor(() => expect(strip.style.minHeight).toBe('max(189px, min(107px, calc(var(--composer-available-height) * 0.5)))'))
   expect(field.querySelector('[role=alert]')?.textContent).toContain('Shorten this field')
   expect(control.value).toBe(value); expect(document.activeElement).toBe(control)
   expect(f.field).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled()
   f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!.focus(); await nextTick()
-  expect(strip.style.minHeight).toBe('')
+  expect(strip.style.minHeight).toBe('min(107px, calc(var(--composer-available-height) * 0.5))')
 })

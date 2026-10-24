@@ -12,7 +12,7 @@ test('native extension fields, paint and hover work inside the actual composer',
   expect(new URL(endpoint!).hostname).toBe('127.0.0.1');
   const errors: string[] = [];
   appPage.on('pageerror', error => errors.push(error.message));
-  await app.waitForPlugin('default-setup/threads');
+  await app.waitForSurface('default-setup/threads');
   await app.navigate('default-setup/threads');
   await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.forcedMode)).toBe('Birth');
   await app.navigate('host/settings');

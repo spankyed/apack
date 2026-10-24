@@ -1005,7 +1005,7 @@ const threadsState = setup({
       const stagedPhase = currentThread?.context?.claudeCode && currentThread.id ? readClaudeComposerPhase(currentThread.id)?.phase : undefined;
       if (stagedPhase) modeUpdate.phase = stagedPhase;
 
-      // Restore previously open tabs from this surface's storage
+      // Restore previously open tabs from localStorage
       const backendTabs: Tab[] = typedEvent.data.tabs || [];
       const stored = loadTabsFromStorage();
       const backendTabIds = new Set(backendTabs.map(t => t.id));

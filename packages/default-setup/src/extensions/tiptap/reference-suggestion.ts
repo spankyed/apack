@@ -1,6 +1,6 @@
+import { nativePromptEditors } from './native-prompt-scope.ts'
 import { Extension, type Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { nativePromptEditors } from './native-prompt-scope.ts'
 import { getReferenceCategoryDeclarations } from '@apackdev/sdk/fe/references'
 
 export interface ReferenceSuggestionState {

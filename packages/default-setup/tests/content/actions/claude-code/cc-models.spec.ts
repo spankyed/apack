@@ -11,13 +11,14 @@ import { action } from '../../../../src/content/actions/claude-code/cc-command.t
 
 function setup(cwd?: string) {
  const catalog = { models: [{ value: 'native-alias', displayName: 'Native choice', resolvedModel: 'native-id', supportedEffortLevels: ['future-effort'] }] };
+ const getNativeTerminal = vi.fn();
  const live = vi.fn().mockResolvedValue(catalog), fresh = vi.fn().mockResolvedValue(catalog);
  mockService<Services, 'cli'>('cli', { claudeCode: {
-  getNativeTerminal: vi.fn(), getWorkingDir: () => '/selected', getConversation: () => cwd ? { owner: { sessionCwd: cwd, handle: { getModels: live } } } : undefined,
+  getNativeTerminal, getWorkingDir: () => '/selected', getConversation: () => cwd ? { owner: { sessionCwd: cwd, handle: { getModels: live } } } : undefined,
   getModels: fresh,
  } as never });
  mockService<Services, 'chat'>('chat', { sendBlockMessage: vi.fn() });
- return { live, fresh };
+ return { live, fresh, getNativeTerminal };
 }
 const run = (text?: string) => action({ command: 'cc-models', threadId: 'catalog-thread', text }, services, {} as never, 'catalog-flow');
 describe('native model catalog command', () => {
@@ -74,7 +75,7 @@ it.skipIf(!process.env.CLAUDE_CATALOG_TEST_BINARY)('presents the actual native c
 it('reads the current terminal catalog without a discovery process', async () => {
  const f=setup();
  const getModels=vi.fn(async()=>({models:[{value:'native-new',displayName:'Native new model',disabled:true}]}));
- vi.mocked(services.cli.claudeCode.getNativeTerminal).mockReturnValue({state:{cwd:'/selected',sessionId:'session'},getModels} as never);
+ f.getNativeTerminal.mockReturnValue({state:{cwd:'/selected',sessionId:'session'},getModels} as never);
  const result=await run();
  expect(result.text).toContain('native-new: Native new model');
  expect(result.text).toContain('[unavailable]');

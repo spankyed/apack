@@ -226,14 +226,13 @@ import NativePanePanel from './NativePanePanel.vue'
 import StatusLine from './StatusLine.vue'
 import NativeComposerPlacements from './NativeComposerPlacements.vue'
 import NativeUiNotices from './NativeUiNotices.vue'
-import { setClaudeCompletionOffer } from '../../../../extensions/tiptap/claude-completions.ts'
-import { referenceSuggestionPluginKey } from '../../../../extensions/tiptap/reference-plugin-key.ts'
+import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
+import { referenceSuggestionKey } from '../../../../extensions/tiptap/reference-suggestion.ts'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
 import { copyClaudeUiText } from './native-ui-clipboard.ts'
 import { claudePromptSourceReferences } from './native-prompt-source.ts'
 import { bindClaudePromptEditor } from './native-prompt-editor.ts'
-import { Plugin } from '@tiptap/pm/state'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
 import { DOUBLE_ESC_MS } from '@apackdev/ui/components/tiptap/composables/createEditorKeyboard'
 import { useAttachments } from './composables/useAttachments.ts'
@@ -423,14 +422,14 @@ watch([() => tiptapRef.value?.editor, () => props.nativePrompt?.mountId, () => p
   if (editor && mountId) promptEditor = bindClaudePromptEditor(editor, edit => emit('native-prompt-edit', edit), message => { nativePromptProblem.value = message }, props.nativePrompt?.revision, { initialRevision: props.nativePrompt?.completionRevision, request: request => emit('native-prompt-autocomplete', request), update: (rows, offerId) => {
     nativeCompletions.value = offerId ? rows.map(row => ({ ...row, offerId })) : []
     const owner = promptEditor
-    setClaudeCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
+    setEditorCompletionOffer(editor, offerId && rows.length ? { id: offerId, rows: rows.map((row, index) => ({ ...row, select: () => owner?.selectCompletion(index, offerId) ?? false })), dismiss: () => owner?.dismissCompletions() } : undefined)
   } }, { viewport: editorAreaRef.value, canSuggest: () => !props.disabled && !props.isBusy && !submitting.value && !hasAttachments.value && !hostPopupActive.value && !nativeCompletions.value.length && document.hasFocus() && !document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') })
 }, { flush: 'post' })
 watch(() => tiptapRef.value?.editor, (editor, _previous, onCleanup) => {
   if (!editor) { hostPopupActive.value = false; return }
   const update = () => {
-    const command = commandSuggestionPluginKey.getState(editor.state)
-    hostPopupActive.value = !!(command?.active && !command.selectedCommand) || referenceSuggestionPluginKey.getState(editor.state)?.active === true
+    const command = commandSuggestionKey.getState(editor.state)
+    hostPopupActive.value = !!(command?.active && !command.selectedCommand) || referenceSuggestionKey.getState(editor.state)?.active === true
   }
   update(); editor.on('transaction', update)
   onCleanup(() => { editor.off('transaction', update) })

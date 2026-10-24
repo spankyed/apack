@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
   if(testInfo.status!==testInfo.expectedStatus){
     await appPage.screenshot({path:testInfo.outputPath('native-agent-source-layout-failure.png')}).catch(()=>{})
@@ -23,7 +23,7 @@ test('preserves literal parent and Agent drafts through remount and exact native
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -163,7 +163,7 @@ test('preserves literal parent and Agent drafts through remount and exact native
         let top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom),draftScrolls=0
         const scrollAncestors:unknown[]=[]
         for(let node=selection.anchorNode?.parentElement;node;node=node.parentElement){if(/auto|scroll|hidden|clip/.test(getComputedStyle(node).overflowY)){const box=node.getBoundingClientRect();top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
-        for(let node:HTMLElement|null=area;node&&node.tagName!=='FORM';node=node.parentElement)if(/auto|scroll/.test(getComputedStyle(node).overflowY)){draftScrolls++;scrollAncestors.push({tag:node.tagName,classes:node.className,height:node.clientHeight,scrollHeight:node.scrollHeight})}
+        for(let node:Element|null=area;node&&node.tagName!=='FORM';node=node.parentElement)if(/auto|scroll/.test(getComputedStyle(node).overflowY)){draftScrolls++;scrollAncestors.push({tag:node.tagName,classes:node.className,height:node.clientHeight,scrollHeight:node.scrollHeight})}
         return {visible:caret.height>0&&caret.top>=top-1&&caret.bottom<=bottom+1&&draftScrolls===1,draftScrolls,scrollAncestors,caret:{top:caret.top,bottom:caret.bottom,height:caret.height},clip:{top,bottom}}
       })
       await writeFile(join(workspace!,'native-agent-source-caret-'+width+'.json'),JSON.stringify(geometry));return geometry.visible

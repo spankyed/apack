@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('keeps independent staged Plan and Edit across simultaneous app windows and renderer reload', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -16,7 +16,7 @@ test('keeps independent staged Plan and Edit across simultaneous app windows and
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -94,7 +94,7 @@ test('keeps independent staged Plan and Edit across simultaneous app windows and
   await focus(appPage);await composer.fill(planText);await pick(appPage,card,'Plan')
   const historyBefore=await humanRows(),mainInitial=await snapshot(appPage)
   const opened=electronApp.waitForEvent('window')
-  await appPage.evaluate(()=>(window as any).electronAPI.plugins.popout('default-setup/threads','Threads'))
+  await appPage.evaluate(()=>(window as any).electronAPI.surfaces.popout('default-setup/threads','Threads'))
   const popout=await opened;popout.on('pageerror',e=>errors.push(e.message));await popout.waitForLoadState('domcontentloaded')
   await expect.poll(()=>popout.evaluate(()=>!!(window as any).applicationState?.system.get('default-setup/threads'))).toBe(true)
   await popout.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId}),threadId)

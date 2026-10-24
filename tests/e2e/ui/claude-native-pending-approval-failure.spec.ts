@@ -13,7 +13,7 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
   const restriction = planScenario === 'managed-clear'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
-  await app.waitForPlugin('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
@@ -42,7 +42,7 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
   const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm')
-  let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
+  let terminalScreen: import('@xterm/xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
   async function screenText(native:any){
     if(!native?.state?.ownerId)return ''
     if(screenOwner!==native.state.ownerId){

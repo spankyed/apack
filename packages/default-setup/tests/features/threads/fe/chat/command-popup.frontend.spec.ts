@@ -17,8 +17,8 @@ it('preserves an unmatched native slash command when clicking Send outside the a
     await vi.waitFor(() => expect(document.querySelector('.command-suggestion-popup')).not.toBeNull())
     send.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     expect(editor.state.doc.textContent).toBe('/context')
-    expect(commandSuggestionPluginKey.getState(editor.state)?.active).toBe(false)
-  } finally { app.unmount(); editor.destroy(); document.body.replaceChildren() }
+    expect(commandSuggestionKey.getState(editor.state)?.active).toBe(false)
+  } finally { app.unmount(); editor.destroy(); stopFeTestRuntime(); document.body.replaceChildren() }
 })
 
 it('holds app command matching for an editor with a native producer and restores it after detach', () => {

@@ -15,13 +15,13 @@ test('cold reopens the saved native session without an invented model turn',asyn
  expect(electronApp.process().pid).not.toBe(saved.mainPid);
  const api=JSON.parse(await readFile(resolveAppEnvironment({env:'test',userDataDir:join(workspace!,'app-data')}).apiPortFile,'utf8'));expect(api.pid).not.toBe(saved.apiPid);
  for(const pid of [saved.mainPid,saved.apiPid]){let live=false;try{execFileSync('/bin/ps',['-p',String(pid),'-o','pid='],{stdio:'pipe'});live=true}catch(error:any){expect(error.status).toBe(1)}expect(live).toBe(false)}
- await app.waitForPlugin('default-setup/threads');await app.navigate('default-setup/threads');
+ await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads');
  await appPage.evaluate(id=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId:id,restore:true}),saved.threadId);
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.locator('[contenteditable="true"]');
  const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator('textarea.xterm-helper-textarea');
  const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
  const context=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {phase:c.phase,mode:c.mode,threadId:c.currentThread?.id,sessionId:c.currentThread?.context?.claudeCode?.sessionId,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,ui:c.nativeUiViews,native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id)} as any});
-  async function document(kind:string){return appPage.evaluate(kind=>{
+  async function nativeDocument(kind:string){return appPage.evaluate(kind=>{
     const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const pending=Object.values(state.nativeUiViews).map((view:any)=>view.state);let count=0;
     while(pending.length&&++count<20000){const value:any=pending.pop();if(!value||typeof value!=='object')continue;if(value.kind===kind)return {kind:value.kind,source:value.source??value.text,nativeAnsi:value.nativeAnsi,formattingFallback:value.formattingFallback};pending.push(...Object.values(value).filter(value=>value&&typeof value==='object'));}return null;
@@ -65,7 +65,7 @@ test('cold reopens the saved native session without an invented model turn',asyn
     await expect.poll(async()=>(await context()).native.state.session?.permissionMode).toBe(saved.stagedPermissionMode);if(saved.stagedModel){await expect.poll(async()=>(await context()).native.state.session?.model).toMatch(/haiku/i);expect((await context()).claude.modelOverride).toBe(saved.stagedModel);}
     await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft);
     if(await code.count()===0&&await markdown.count()===0)await appPage.getByRole('button',{name:'Expand tool activity',exact:true}).click();
-    await expect(code).toHaveCount(1,{timeout:15000});expect((await document('code')).source).toBe(expected.code);
+    await expect(code).toHaveCount(1,{timeout:15000});expect((await nativeDocument('code'))?.source).toBe(expected.code);
     await expect(appPage.locator('[data-native-plugin-status]')).toHaveCount(0);
     const reopened=await context();expect(reopened.sessionId).toBe(sessionId);expect(reopened.threadId).toBe(saved.threadId);expect(reopened.claude.totalCostUsd).toBe(saved.nativeCost);expect(reopened.claude.toolCallCount).toBe(saved.toolCallCount);
     expect(reopened.messages.filter((m:any)=>m.context?.cliUuid).map((m:any)=>m.context.cliUuid)).toEqual(saved.history.map((m:any)=>m.uuid));
@@ -73,7 +73,7 @@ test('cold reopens the saved native session without an invented model turn',asyn
     const fresh=await guideCapability();expect(fresh).toBeTruthy();expect(fresh!.actionId).not.toBe(saved.retired.actionId);
     await appPage.evaluate(({current,old})=>{(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_UI_PRESS',threadId:current.threadId,mountId:current.mountId,actionId:old.actionId})},{current:fresh!,old:saved.retired});
     await appPage.getByRole('button',{name:'Guide',exact:true}).click();await expect(markdown).toHaveCount(1);await expect.poll(async()=>(await callbacks()).length).toBe(2);
-    expect((await callbacks()).map((v:any)=>v.tab)).toEqual(['guide','guide']);expect((await document('markdown')).source).toBe(expected.markdown);
+    expect((await callbacks()).map((v:any)=>v.tab)).toEqual(['guide','guide']);expect((await nativeDocument('markdown'))?.source).toBe(expected.markdown);
     await expect(appPage.locator('[data-native-plugin-status]')).toContainText('Migration guide reviewed');
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900});
