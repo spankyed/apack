@@ -107,6 +107,11 @@ test('directly resumes unrepresented saved native history with its metadata and 
   await expect.poll(async () => (await context()).claude.turns).toBe(2)
   const nativeJournalCost=async()=>{for(const bucket of await _readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));return rows.filter(row=>row.type==='cost-state').at(-1)?.totalCostUSD}catch(error:any){if(error.code!=='ENOENT')throw error}}}
   await expect.poll(async()=>{const cost=await nativeJournalCost();return typeof cost==='number'&&cost>costBeforeCheckpoint&&(await context()).claude.totalCostUsd===cost}).toBe(true)
+  const clientReceipts=async()=>JSON.parse(await readFile(join(workspace!,'native-resume-client-receipts.json'),'utf8').catch(()=>'[]'))
+  const uiPresses=async()=>{const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));return rows.filter(row=>row.meta?.event?.type==='CLAUDE_UI_PRESS')}
+  await appPage.getByRole('button',{name:'Review imported checkpoint',exact:true}).click()
+  await expect.poll(async()=>(await clientReceipts()).length).toBe(1)
+  const retiredClientAction=(await uiPresses()).at(-1).meta.event
   const nativeFacts = (await context()).claude
   const nativeCost = nativeFacts.totalCostUsd
   expect(nativeCost).toBeGreaterThan(0)
@@ -168,6 +173,17 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect((await context()).native.state.sessionId).toBe(sessionId)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await expect(composer).toHaveText(resumedDraft)
+  await expect(appPage.getByText('Checkpoint review count 0',{exact:true})).toBeVisible()
+  const freshMount=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const [mountId]=Object.entries(c.nativeUiViews).find(([,v]:[string,any])=>v.threadId===c.currentThread.id&&v.state?.status==='live')!;return {threadId:c.currentThread.id,mountId}})
+  const addressedRetiredClient={...retiredClientAction,...freshMount}
+  const beforeRetired=(await uiPresses()).length
+  await appPage.evaluate(event=>(window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[event]}),addressedRetiredClient)
+  await expect.poll(async()=>(await uiPresses()).slice(beforeRetired).some(row=>row.meta.from&&row.meta.event.mountId===freshMount.mountId&&row.meta.event.actionId===retiredClientAction.actionId)).toBe(true)
+  await expect(appPage.getByText('Checkpoint review count 0',{exact:true})).toBeVisible()
+  await appPage.getByRole('button',{name:'Review imported checkpoint',exact:true}).click()
+  await expect.poll(async()=>(await clientReceipts()).length).toBe(2)
+  expect((await clientReceipts()).map((row:any)=>row.pressed)).toEqual([1,1])
+  await expect(composer).toHaveText(resumedDraft)
   const tools=card.getByRole('button',{name:'Session tools',exact:true})
   if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
   await card.getByRole('button',{name:'Review resumed draft',exact:true}).click()
@@ -199,5 +215,5 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect(continued.claude.totalCostUsd).toBe(nativeTotal)
   expect(continued.claude.cwd).toBe(workspace)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, nativeImportedClient:true, addressedRetiredClient, clientReceipts:await clientReceipts(), resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
 })
