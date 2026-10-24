@@ -194,6 +194,9 @@ test('directly resumes unrepresented saved native history with its metadata and 
   await tools.click()
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
+    const review=appPage.getByRole('button',{name:'Review imported checkpoint',exact:true})
+    await review.scrollIntoViewIfNeeded()
+    await expect(review).toBeInViewport()
     await expect(composer).toHaveText(resumedDraft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     expect(await appPage.evaluate(()=>({width:innerWidth,height:innerHeight}))).toEqual({width,height:width===680?600:900})
