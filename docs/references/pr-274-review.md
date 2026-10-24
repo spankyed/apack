@@ -6,6 +6,9 @@ branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273
 reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
+**Status, 2026-10-24:** the harness, the durability spec and the sync policy are taken (under Taken already, below);
+the prompts fix, compaction on conversion and production-shaped bench data are still to take, in that order.
+
 ## Head to head on the production copy
 
 Both engines were read on the same production backup (2026-10-17, 306 MB in format 1), converted.
@@ -25,42 +28,7 @@ Step 5.
 
 ## Take
 
-### 1. The correctness harness
-
-The strongest thing in #274, and what #273 lacks most.
-
-- **Model-based** (`tests/engine/model-based.spec.ts`, `tests/_harness/model.ts`, `workload.ts`): random workloads
-  from `fast-check` over a small pool of ids, so writes collide, refer to each other and are refused. Each op is
-  applied to a plain reference model and to the engine; after every op the engine holds what the model holds and
-  refuses what the model refuses. Units that return or throw and a store refusing a commit (a full disk) are ops
-  too. A second property reopens the files and compares them with memory.
-- **Crash injection** (`tests/engine/crash.spec.ts`, `tests/_harness/crash-child.mts`): a child runs a seeded workload,
-  writes each acknowledgement to stdout once the write returns, and is killed with SIGKILL at a random point. The
-  reopened files must equal the model after the acknowledged writes, or after one more (the write in flight).
-
-**#273 today:** one fixed SIGKILL case (`tests/lmdb/store.spec.ts`) and the contract suite on both backends; no
-random workloads, no refusals mid-sequence, no kill at an arbitrary point.
-
-**Cost:** port from #274's persistence-sink API to `kv`. The model and workload carry over as they are; the drivers
-change (create the engine on a store, no `hydrate`). A refusing store is a `KvBackend` wrapper whose `write` throws
-once when told to. Run it under both test projects (`ears` and `ears-on-lmdb`). Adds `fast-check` as a dev
-dependency of `@apackdev/ears`.
-
-### 2. A deterministic durability spec
-
-`tests/lmdb/durability.spec.ts` in #274 mocks the environment's `sync`, so each case decides when a sync finishes or
-fails, and fakes the timers. It covers two cases #273 does not:
-
-- a write made while a sync is running is not covered by that sync, and `durable()` waits for the next;
-- a sync that fails rejects the `durable()` waiting on it, and the next call tries again.
-
-**#273 today:** `3830b86b2` faked the store's timers for the pause and the cap, but the sync itself is still LMDB's,
-so neither case above is exercised.
-
-**Cost:** small. The store does not expose its root; the spec needs either a test seam on `openLmdbStore` (the sync
-function as an option) or a spy reached through the backend.
-
-### 3. The prompts selection fix
+### 1. The prompts selection fix
 
 A defect on master and on #273 alike, unrelated to either engine
 (`packages/default-setup/src/features/prompts/fe/state.ts`):
@@ -75,7 +43,7 @@ it, and adds a case to `tests/features/prompts/fe/page-and-selection.spec.ts`.
 
 **Cost:** the diff and its spec, as its own commit.
 
-### 4. Compaction on conversion
+### 2. Compaction on conversion
 
 #274's converted production copy compacts from 116 to 86 MB. #273's is 387 MB after conversion, because LMDB keeps
 the pages the format 3 tables freed, and they are reused by later writes rather than returned.
@@ -84,7 +52,7 @@ the pages the format 3 tables freed, and they are reused by later writes rather 
 (`root.backup(dir, true)`) and swaps it in. A conversion runs once, on a copy, so the extra copy costs nothing a user
 waits on.
 
-### 5. Production-shaped bench data
+### 3. Production-shaped bench data
 
 `bench/production-shape.ts` and `bench/budget.ts` in #274 generate data shaped like the production database (its
 types, field sizes and relation counts, profiled 2026-10-24) at 1× and 2×. #273's bench is a uniform graph of three
@@ -119,10 +87,44 @@ development, or when the API made up its own).
 
 ## Taken already
 
+### The correctness harness
+
+Ported in `5acbd7784`, then taken further than #274 went (`4048a3193`, `0cf3e237e`):
+
+- **Model-based** (`tests/engine/model-based.spec.ts`, `tests/_harness/`): after every op the engine holds what a plain
+  reference model holds and refuses what it refuses, on a memory backend and on a refusing LMDB one. Beyond #274's,
+  it checks the derived reads the engine keeps in keys of their own — a type's entities, count and trash, an indexed
+  and an unindexed `where`, `withRole`, each kind's `out`/`in`, in order — and its workload adds trash, restore,
+  grant, revoke and nested units.
+- **Crash injection** (`tests/lmdb/crash.integration.spec.ts`): a child killed with SIGKILL at a random point; the
+  reopened files hold the model's state after the acknowledged writes, or one more. It counts acknowledgements on
+  `close` rather than `exit`, since stdout can still be draining at exit.
+- **Dropped:** #274's reopen property compared the engine with its own files reopened, which on an engine that reads
+  its files are the same bytes; it passed with deletes disabled.
+- **What porting found.** #274's workload averaged six ops over less than one entity and refused nearly all of them
+  (not one link accepted in 300 runs); every run now creates its ids first and mixes in an edge linked, unlinked and
+  linked again. Extended, the model found an engine bug, fixed in `336755474`: an index built on its first read made
+  that read a write, so `withRole` and an indexed `where` threw on a read-only store or a full disk.
+- **Mutation-checked:** a stale index entry, a trash that doesn't move its range key, a count blind to trash, a
+  savepoint that doesn't undo, a stale incoming-edge key and a stale key between two ends each fail it.
+
+### A deterministic durability spec
+
+`tests/lmdb/durability.spec.ts`, as #274's is, but without a seam on the store: the spec wraps `lmdb`'s `open`, so each
+environment's `sync` is one the spec finishes or fails, and fakes the store's timers. It holds which sync each
+`durable()` waits for: one begun after the write, a write made during a sync waiting for the next, a running sync
+shared, a sync queued behind a failed one, and nothing started when nothing is owed.
+
+It found two defects in #273's store, fixed with it: a caller that joined a running sync was handed a promise that
+swallowed the sync's failure, so it heard "on disk" for writes that weren't; and a failed sync cleared what was owed,
+so the next `durable()` resolved without syncing at all. A failed sync now rejects every caller waiting on it and
+leaves its commits owed, and a timer's sync queued behind a running one, which nobody waits on, is caught rather than
+an unhandled rejection. Each of the four was mutation-checked.
+
 ### Sync once writes pause
 
 #274 syncs 100 ms after writes pause, and at most a second after the first unsynced commit. #273 adopted the same in
-`3830b86b2` (`SYNC_IDLE_MS`, `SYNC_INTERVAL_MS`), and the bus's sync request after each client message was removed: a
+`0950e2d3e` (`SYNC_IDLE_MS`, `SYNC_INTERVAL_MS`), and the bus's sync request after each client message was removed: a
 user's action is durable within 100 ms of its last write.
 
 ## Not needed here
@@ -138,5 +140,5 @@ user's action is durable within 100 ms of its last write.
 
 ## Order
 
-Items 1–3 strengthen what #273 already claims and change nothing it ships; 4 and 5 are small and improve the
-conversion and the readings. Live queries and the served database are designs to plan, after #273 lands.
+The prompts fix is a defect on master as well; compaction and the bench data are small and improve the conversion and
+the readings. Live queries and the served database are designs to plan, after #273 lands.
