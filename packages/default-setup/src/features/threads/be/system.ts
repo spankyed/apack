@@ -651,7 +651,7 @@ export const threadsSystem = setup({
             const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
             const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
             const sourceUserMessagesAfterFork = sourceIndex >= 0
-              ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user' && !m.deleted).length
+              ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
               : 0;
             const originalTopic = threadTopic || 'Untitled';
 

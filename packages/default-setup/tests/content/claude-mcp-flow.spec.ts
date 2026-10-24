@@ -15,7 +15,7 @@ it('routes MCP replies through the actual interaction listener and keeps ordinar
   const app = await startApp({ systems: ['brain'] });
   const payload = { threadId: 'Thread-fixture', messageId: 'Message-input', response: { buttonId: 'accept', content: { enabled: false, count: 0 } } };
   const reply = await app.runFlow('Claude Code', { event: 'interactive.message.response', data: payload });
-  expect(reply.steps.find(step => step.label === 'answer-elicitation')?.params).toEqual({ ...payload, requestId: 'native-input' });
+  expect(reply.steps.find(step => step.label === 'answer-elicitation')?.input.params).toEqual({ ...payload, requestId: 'native-input' });
   expect(reply.steps.some(step => step.label === 'claude-code')).toBe(false);
   const message = await app.runFlow('Claude Code', { event: 'user.message', data: { mode: 'Claude Code', text: 'Continue reviewing.' } });
   expect(message.steps.some(step => step.label === 'claude-code')).toBe(true);

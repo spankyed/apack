@@ -55,7 +55,7 @@ describe('compiled Claude response routing', () => {
       data: { threadId: id, messageId: 'approval-fixture', response: { approved: true, clearContext: true } } });
     expect(run.steps.map(actionLabel).filter(Boolean)).toEqual(['CC: Route Response', 'CC: Approve Plan Clear Context']);
     const approval = run.steps.find(step => actionLabel(step) === 'CC: Approve Plan Clear Context');
-    expect(approval?.params).toMatchObject({ threadId: id, requestId: 'current-plan' });
+    expect(approval?.input.params).toMatchObject({ threadId: id, requestId: 'current-plan' });
     // No plan draft exists: the real compiled action must preserve the process, not create an empty replacement.
     expect(kill).not.toHaveBeenCalled();
     expect(repository.threadQueries.byId(id)?.context?.claudeCode?.pendingControlRequest).toBeDefined();

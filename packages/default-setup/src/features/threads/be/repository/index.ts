@@ -453,8 +453,7 @@ function orderClaudeSessionMessages(threadId: EARS.EntityId, messages: Partial<M
 
 function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[] {
   return orderClaudeSessionMessages(threadId, (query.ids(threadId)
-    .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? [])
-    .filter(m => !m.deleted))
+    .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []))
     .sort((a, b) => {
       if (a.status === 'queued' && b.status !== 'queued') return 1;
       if (b.status === 'queued' && a.status !== 'queued') return -1;
@@ -574,7 +573,7 @@ export const chatQueries = {
   },
 
   hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId): boolean =>
-    query.ids(messageId).linksTo(EARS.RelKind.CONTAINS, EARS.Entity.Thread).ids().includes(threadId),
+    query.ids(messageId).out(EARS.RelKind.CONTAINS, EARS.Entity.Thread).ids().includes(threadId),
 
   messageById: (messageId: EARS.EntityId): MessageEntity | null => {
     const message = query.ids(messageId).pickOne([

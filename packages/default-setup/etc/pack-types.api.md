@@ -4,8 +4,7 @@
 
 ```ts
 import * as _apackdev_ears from '@apackdev/ears';
-import { EARS as EARS$2 } from '@apackdev/ears';
-import { ShortCode } from '@apackdev/ears';
+import { EARS as EARS$2, ShortCode } from '@apackdev/ears';
 import * as _apackdev_sdk from '@apackdev/sdk';
 import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS as EARS$1, FlowEntity, NodeBase, PromptEntity, SdkEntityShapes, TemplateInput } from '@apackdev/sdk';
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
@@ -1620,11 +1619,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    id: string;
     title: string;
+    id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1652,11 +1651,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     revision: string;
-    id: string;
     title: string;
+    id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -2019,9 +2018,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     revision: string;
     message: string;
     ready: boolean;
+    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
-    title: string;
     sessionId: string;
     token: string;
     serverName: string;
@@ -2038,9 +2037,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     revision: string;
     message: string;
     ready: boolean;
+    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
-    title: string;
     sessionId: string;
     token: string;
     serverName: string;
@@ -2072,17 +2071,17 @@ declare const ClaudeNativeNoticeSchema: z.ZodObject<{
     helpUrl: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
+    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
-    title: string;
     sessionId: string;
     paragraphs: string[];
     helpUrl: string;
 }, {
     revision: string;
+    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
-    title: string;
     sessionId: string;
     paragraphs: string[];
     helpUrl: string;
@@ -10108,12 +10107,12 @@ declare const attach: z.ZodEffects<z.ZodObject<{
         rows: z.ZodNumber;
         isFullscreen: z.ZodOptional<z.ZodBoolean>;
     }, "strict", z.ZodTypeAny, {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     }, {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     }>>;
     native_view: z.ZodOptional<z.ZodObject<{
@@ -10133,8 +10132,8 @@ declare const attach: z.ZodEffects<z.ZodObject<{
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
     native_view?: {
@@ -10146,8 +10145,8 @@ declare const attach: z.ZodEffects<z.ZodObject<{
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
     native_view?: {
@@ -10159,8 +10158,8 @@ declare const attach: z.ZodEffects<z.ZodObject<{
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
     native_view?: {
@@ -10172,8 +10171,8 @@ declare const attach: z.ZodEffects<z.ZodObject<{
     client_id: string;
     surface: "desktop" | "mobile" | "vscode";
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
     native_view?: {
@@ -10406,13 +10405,13 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
     columns: z.ZodNumber;
     rows: z.ZodNumber;
 }, "strict", z.ZodTypeAny, {
+    rows: number;
     kind: "resize";
     columns: number;
-    rows: number;
 }, {
+    rows: number;
     kind: "resize";
     columns: number;
-    rows: number;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"key">;
     key: z.ZodEffects<z.ZodString, string, string>;
@@ -10561,9 +10560,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
+        title: string;
         id: string;
         kind: "confirmation";
-        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     } | {
@@ -10611,9 +10610,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             message: string;
             kind: "blocked";
         } | {
+            title: string;
             id: string;
             kind: "confirmation";
-            title: string;
             confirmLabel: string;
             commandName?: string | undefined;
         } | {
@@ -10655,9 +10654,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
+        title: string;
         id: string;
         kind: "confirmation";
-        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     }>;
@@ -11940,15 +11939,15 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
     confirmLabel: z.ZodString;
     commandName: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
+    title: string;
     id: string;
     kind: "confirmation";
-    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }, {
+    title: string;
     id: string;
     kind: "confirmation";
-    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }>, z.ZodObject<{
@@ -12383,12 +12382,12 @@ declare const render: z.ZodObject<{
         rows: z.ZodNumber;
         isFullscreen: z.ZodOptional<z.ZodBoolean>;
     }, "strict", z.ZodTypeAny, {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     }, {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     }>>;
 }, "strict", z.ZodTypeAny, {
@@ -12399,8 +12398,8 @@ declare const render: z.ZodObject<{
     props: Record<string, unknown>;
     instance_revision?: number | undefined;
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
 }, {
@@ -12411,8 +12410,8 @@ declare const render: z.ZodObject<{
     props: Record<string, unknown>;
     instance_revision?: number | undefined;
     viewport?: {
-        columns: number;
         rows: number;
+        columns: number;
         isFullscreen?: boolean | undefined;
     } | undefined;
 }>;
@@ -13351,8 +13350,8 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
-        topic: string;
         status: string;
+        topic: string;
         shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
