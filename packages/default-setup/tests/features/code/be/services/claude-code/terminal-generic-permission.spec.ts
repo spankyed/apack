@@ -10,7 +10,7 @@ function fixture(card = false) {
   const payload = { toolName: 'mcp__research__echo', isMcp: true }
   const item = { id: 'original', kind: 'permission_prompt', payload }, open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
-  let current = dialog, ready = true, refuse = false
+  let current = dialog, ready = true, refuse = false, syntaxDisabled = false
   const select = vi.fn(() => { if (refuse) return false; open.splice(0); return true })
   const options = [
     { value: 'yes', label: 'Yes', feedbackConfig: { type: 'accept' } },
@@ -32,7 +32,7 @@ function fixture(card = false) {
   const fiber = { type: ozr, memoizedProps: { payload, wouldTakeAnswer: () => ready }, updateQueue: { memoCache: { data: [cache] } }, child: { type: root.type, memoizedProps: root.props, child: { type: qJ, memoizedProps: control } } }
   const session = { id: 'original-session' }, render = vi.fn(async (_tree: unknown, _options: unknown) => 'Original rendered parameter table')
   function AppStateProvider() {} function ThemeProvider() {}
-  const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render, v6e: render }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
+  const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render, v6e: render }, documentDefaults: { $Et: () => ({ tasks: { stale: true }, taskDecorations: { stale: true }, settings: { fixtureSetting: 'retained' } }) }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (text: string) => createHash('sha256').update(text).digest('hex')
   const fingerprints = new Map([
     ['063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73', hash(ozr.toString())],
@@ -42,10 +42,11 @@ function fixture(card = false) {
     process: { stdout: undefined }, createHash, stripVTControlCharacters, composerFunctionHashes: new WeakMap(), setTimeout,
     nativeFunctionName: (name: string) => name,
     nativeFunctionHash: (key: string) => { const value = fingerprints.get(key); if (!value) throw Error('Unreviewed native producer fingerprint'); return value },
+    nativeDocumentSyntaxFlag: () => syntaxDisabled,
     nativeThemeProvider: () => ({ type: ThemeProvider, value: { resolvedTheme: {} } }),
     nativeDialog: () => current,
   })
-  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, control, select, cancel, open, setReady(value: boolean) { ready = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, control, select, cancel, open, setReady(value: boolean) { ready = value }, setSyntaxDisabled(value: boolean) { syntaxDisabled = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 const response = (f: ReturnType<typeof fixture>, token: string, choice = 'yes', decision = 'allow', feedback?: string) => ({ toolName: f.dialog.payload.toolName, choiceToken: token, choice, decision, ...(feedback === undefined ? {} : { feedback }) })
 
@@ -110,7 +111,7 @@ it('renders native parameter elements inside the original session app-state and 
   f.cache[129] = node
   const shown = await f.runtime.choices(f.n, f.dialog)
   expect(shown.details).toContainEqual({ label: 'Parameters', value: 'Original rendered parameter table', ansi: 'Original rendered parameter table' })
-  expect(f.render).toHaveBeenCalledExactlyOnceWith({ type: f.AppStateProvider, props: { session: f.session, keybindings: false, children: { type: f.ThemeProvider, props: { value: { resolvedTheme: {} }, children: node } } } }, { columns: 100 })
+  expect(f.render).toHaveBeenCalledExactlyOnceWith({ type: f.AppStateProvider, props: { session: f.session, keybindings: false, initialState: { tasks: {}, taskDecorations: {}, settings: { fixtureSetting: 'retained', syntaxHighlightingDisabled: false } }, children: { type: f.ThemeProvider, props: { value: { resolvedTheme: {} }, children: node } } } }, { columns: 100 })
 })
 
 it('retains native default focus and invalidates presentations when focus or cancellation changes', async () => {
@@ -163,5 +164,14 @@ it('preserves original styled parameter links and fences answers against present
   expect(shown.details).toContainEqual({ label: 'Parameters', value: 'url: Review', ansi })
   f.render.mockResolvedValue('Changed original presentation')
   await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token))).rejects.toThrow('changed')
+  expect(f.select).not.toHaveBeenCalled()
+})
+
+it('uses the live syntax preference without borrowing tasks and refuses a changed setting mid-render', async () => {
+  const f = fixture(); f.cache[129] = { type: 'OriginalParameterTable', props: {} }; f.setSyntaxDisabled(true)
+  await f.runtime.choices(f.n, f.dialog)
+  expect(f.render.mock.calls[0][0]).toMatchObject({ props: { initialState: { tasks: {}, taskDecorations: {}, settings: { syntaxHighlightingDisabled: true } } } })
+  f.render.mockImplementation(async () => { f.setSyntaxDisabled(false); return 'Stale colored preview' })
+  await expect(f.runtime.choices(f.n, f.dialog)).rejects.toThrow('syntax setting changed')
   expect(f.select).not.toHaveBeenCalled()
 })
