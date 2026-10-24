@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { createEarsEngine, type EARS } from '@apackdev/ears';
+import { createEarsEngine, createMemoryKV, type EARS, type Key, type OrderedKV } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
 import type { LmdbStore } from '@apackdev/ears/lmdb';
 import { _memoryRunHistoryStore, testRootEvents } from '@apackdev/sdk/testing';
@@ -39,7 +39,16 @@ afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 
 // The host's own rows (settings, onboarding) and a pack's `Memo`
 const entityTypes = new Set([...HOST_ENTITY_TYPES, 'Memo']);
-const newEngine = () => createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => entityTypes.has(name) });
+const newEngine = (kv?: OrderedKV) => createEarsEngine({ kv, isRelationKind: () => true, isRole: () => true, isEntityType: (name) => entityTypes.has(name) });
+
+/** A run history whose reset waits for `finish`: a reset is under way until it is called */
+function blockedHistory() {
+  const runHistory = _memoryRunHistoryStore();
+  let finish!: () => void;
+  const reset = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  runHistory.reset = reset;
+  return { runHistory, reset, finish: () => finish() };
+}
 
 /** An external pack the app loaded: where it came from, as the loader records it */
 const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fixture-revision',
@@ -49,10 +58,9 @@ const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fi
 
 describe('createHostRuntime', () => {
   it('refuses overlapping resets and imports before either can touch the store', async () => {
-    let finish!: () => void;
-    const reset = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
-    const store = { reset } as unknown as LmdbStore;
-    const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), store, engine: newEngine(), transport: { rootEvents: testRootEvents },
+    const { runHistory, reset, finish } = blockedHistory();
+    const store = { reset: vi.fn() } as unknown as LmdbStore;
+    const runtime = createHostRuntime({ runHistory, store, engine: newEngine(), transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry() });
     const first = runtime.services.appData.reset();
     try {
@@ -60,14 +68,15 @@ describe('createHostRuntime', () => {
       await expect(runtime.services.appData.importBackup('/not-a-backup')).rejects.toThrow('already being replaced');
       expect(reset).toHaveBeenCalledOnce();
     } finally { finish(); await first; }
+    expect(store.reset).toHaveBeenCalledOnce();
     order.length = 0;
   });
 
   it('excludes pack operations while app data is replaced, and refuses to replace it under one', async () => {
-    let finish!: () => void;
-    const store = { reset: vi.fn(() => new Promise<void>(resolve => { finish = resolve; })) } as unknown as LmdbStore;
+    const { runHistory, finish } = blockedHistory();
+    const store = { reset: vi.fn() } as unknown as LmdbStore;
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), store, engine: newEngine(), transport: { rootEvents: testRootEvents },
+    const runtime = createHostRuntime({ runHistory, store, engine: newEngine(), transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs });
     const resetting = runtime.services.appData.reset();
     try {
@@ -132,12 +141,17 @@ describe('createHostRuntime', () => {
     }
   });
 
-  it("stops the packs, empties the engine, stores and keys, then starts the packs as a boot does", async () => {
-    const store = { reset: async () => { order.push('store reset'); } } as unknown as LmdbStore;
-    const engine = newEngine();
+  it("stops the packs, empties the stores and keys, then starts the packs as a boot does", async () => {
+    // The engine reads the store, so emptying the store is what empties the engine
+    const kv = createMemoryKV();
+    const emptied = () => kv.write((w) => {
+      const keys: Key[] = [];
+      w.range({ values: false }, (key) => { keys.push(key); });
+      for (const key of keys) w.del(key);
+    });
+    const store = { reset: () => { order.push('store reset'); emptied(); } } as unknown as LmdbStore;
+    const engine = newEngine(kv);
     const id = engine.create('Memo', { id: 'Memo-1' as EARS.EntityId }).set('title', 'kept?').id();
-    const clear = engine.admin.clear;
-    engine.admin.clear = () => { order.push('engine cleared'); clear(); };
     const packs = createNativePackTestRegistry();
     const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), store, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
     secretsStore.add('openai', 'Work', 'sk-proj-resetspec1234567890');
@@ -158,7 +172,7 @@ describe('createHostRuntime', () => {
     // One content call for every pack, after the migrations — where it was the shipped pack's boot apply and
     // then the installed packs', which is why only the second half retried or saw a dependency content
     expect(order).toEqual([
-      'onShutdown', 'engine cleared', 'store reset', 'onInit (0 keys)',
+      'onShutdown', 'store reset', 'onInit (0 keys)',
       'migrations', 'pack migrations (reset-pack)', 'pack content (reset-pack,written-pack)',
     ]);
     expect(engine.getRow(id)?.title).toBeUndefined();

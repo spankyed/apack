@@ -18,6 +18,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@apackdev/sdk/events';
+import type { EARS } from '@apackdev/ears';
 
 // The test environment keeps the data key in a file vault; `vaultDown` swaps it for an OS credential store that fails,
 // the way a system without one (or a locked keyring) does
@@ -36,7 +37,7 @@ process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 process.env.APACK_LOG_DIR = logDir;
 const { openAppStore } = await import('../../src/runtime/index.ts');
-const { store, packs } = openAppStore();
+const { store, engine, packs } = openAppStore();
 const { secretsRouter } = await import('../../src/transport/secrets.ts');
 const { rootEvents } = await import('../../src/transport/emitter.ts');
 const { createLogger, reportError } = await import('@apackdev/sdk/logger');
@@ -150,17 +151,18 @@ describe('secrets procedures', () => {
     expect('value' in services.secrets.list()[0]).toBe(false);
   });
 
-  it('services.appData.reset deletes stored keys once the database is open again', async () => {
+  it('services.appData.reset deletes stored keys once the database is emptied', async () => {
     await caller.add({ provider: 'openai', label: 'Work', value: KEY });
-    const openAtChange: boolean[] = [];
-    const stop = secretsStore.onChange(() => openAtChange.push(store.isOpen()));
+    engine.create('Prompt', { id: 'Prompt-before-reset' as EARS.EntityId, label: 'gone by then', inputs: {}, templateFn: 'return ""' });
+    const rowAtChange: boolean[] = [];
+    const stop = secretsStore.onChange(() => rowAtChange.push(engine.getRow('Prompt-before-reset' as EARS.EntityId) !== undefined));
     try {
       await services.appData.reset();
     } finally {
       stop();
     }
     expect(services.secrets.list()).toEqual([]);
-    expect(openAtChange).toEqual([true]);
+    expect(rowAtChange).toEqual([false]);
   });
 
   it.each([

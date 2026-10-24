@@ -9,7 +9,7 @@ import { splitRef } from '@apackdev/sdk/ids';
 import { procedure, router } from './trpc';
 import { createLogger } from '@apackdev/sdk/logger';
 import { rootEvents } from './emitter.ts';
-import { appClaims, appPacks, appSettingsAccess } from '../runtime/index.ts';
+import { appClaims, appPacks, appSettingsAccess, appStore } from '../runtime/index.ts';
 import { bindSettingsRequest, SETTINGS_MUTATIONS, SettingsRefusedError } from '@apackdev/host/settings';
 
 const logger = createLogger('app-events');
@@ -74,6 +74,9 @@ export const systemBusRouter = router({
           bindSettingsRequest(message.event, () => access.resolve(ctx.client, settingsCredential));
         }
         receiveClientEvent(appPacks, { ...message, client: ctx.client });
+        // A user's action is durable without anyone asking: once what it set off synchronously has committed, the
+        // store syncs if anything did. Work it started that commits later rides the store's group commit
+        setImmediate(() => appStore?.requestSync());
       } catch (error) {
         if (error instanceof SettingsRefusedError) throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
         if (error instanceof UnknownClientEventError) throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });

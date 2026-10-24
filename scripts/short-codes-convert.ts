@@ -16,7 +16,7 @@
  *   holds it; what is left — a taken number, or a code with none, such as a compiled flow's `F-<name>` — is numbered
  *   after the highest.
  * - **Codes of a type that isn't numbered** are removed.
- * - **Sequences:** every short code numbering row goes. The engine starts a prefix's sequence after the highest number
+ * - **Sequences:** every short code sequence goes (`['s', key]`; a label's, `label:…`, stays). The engine starts a prefix's sequence after the highest number
  *   its type holds, so none is handed out twice, whatever the data held before.
  * - **References:** a stored reference node (an object holding `shortCode` beside `refId` or `refType`) and a
  *   `data-short-code="…"` attribute in stored markup are rewritten to the new code — by the entity they name (`refId`,
@@ -29,7 +29,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { REMOVE_ATTRIBUTE, rewriteAttributes } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type EARS } from '@apackdev/ears';
+import { openLmdbStore } from '@apackdev/ears/lmdb';
 import { _packShortCodes, parseReferenceHref } from '@apackdev/sdk/framework';
 import { SDK_SHORT_CODES } from '@apackdev/sdk/types';
 
@@ -80,8 +81,54 @@ function database(dataDir: string): string {
 
 const typeOf = (id: string) => id.slice(0, id.indexOf('-'));
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** A short code numbering row; a label's numbering row is `Sequence-label:…` and stays */
-const isShortCodeSequence = (id: string) => id.startsWith('Sequence-') && !id.startsWith('Sequence-label:');
+/** A short code's numbering sequence, keyed `<type>:<prefix>`; a label's is `label:…` and stays */
+const isShortCodeSequence = (key: string) => !key.startsWith('label:');
+
+/** What a rewrite answers to remove the attribute it was given */
+const REMOVE_ATTRIBUTE: unique symbol = Symbol('REMOVE_ATTRIBUTE');
+
+/** The fields the engine keeps of every row, which no rewrite is given */
+const ENGINE_FIELDS = new Set(['id', 'entityType']);
+
+/**
+ * Rewrites the attributes of the database at `dir`, in place and in one unit: `rewrite` is given each attribute's kind,
+ * entity id and value, and answers its new value, undefined to leave it, or `REMOVE_ATTRIBUTE` to remove it;
+ * `removeSequences` names numbering sequences to remove. It answers the sequences it found, whatever it removed.
+ */
+function rewriteAttributes(
+  dir: string,
+  rewrite: (kind: string, id: string, value: unknown) => unknown,
+  { removeSequences = [] }: { removeSequences?: readonly string[] } = {},
+) {
+  const store = openLmdbStore({ path: dir });
+  try {
+    const engine = createEarsEngine({ kv: store.kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
+    const result = { rewritten: 0, removed: 0, sequencesRemoved: 0, sequences: [] as string[] };
+    engine.transact(() => {
+      for (const id of engine.admin.getAllEntities()) {
+        for (const [kind, value] of Object.entries(engine.getRow(id) ?? {})) {
+          if (ENGINE_FIELDS.has(kind)) continue;
+          const next = rewrite(kind, id, value);
+          if (next === undefined) continue;
+          if (next === REMOVE_ATTRIBUTE) { engine.admin.deleteAttr(id, kind as EARS.AttrKind); result.removed++; continue; }
+          engine.admin.putAttr(id, kind as EARS.AttrKind, next);
+          result.rewritten++;
+        }
+      }
+      store.kv.write((w) => {
+        w.range({ prefix: ['s'], values: false }, (key) => { result.sequences.push(String(key[1])); });
+        for (const key of removeSequences) {
+          if (w.get(['s', key]) === undefined) continue;
+          w.del(['s', key]);
+          result.sequencesRemoved++;
+        }
+      });
+    }, { durable: true });
+    return result;
+  } finally {
+    store.close();
+  }
+}
 
 /** Per type, what the conversion did to its codes */
 interface TypeSummary { kept: number; renamed: number; renumbered: number; removed: number }
@@ -89,10 +136,8 @@ interface TypeSummary { kept: number; renamed: number; renumbered: number; remov
 /** Each entity's new code (or removal), the codes references may be rewritten by, and the sequences to remove */
 function plan(dir: string, prefixes: Readonly<Record<string, string>>) {
   const held = new Map<string, Array<{ id: string; code: string }>>();
-  const sequences = new Set<string>();
-  rewriteAttributes(dir, (kind, id, value) => {
-    if (isShortCodeSequence(id)) sequences.add(id);
-    else if (kind === 'shortCode' && typeof value === 'string') {
+  const { sequences: found } = rewriteAttributes(dir, (kind, id, value) => {
+    if (kind === 'shortCode' && typeof value === 'string') {
       const type = typeOf(id);
       held.set(type, [...(held.get(type) ?? []), { id, code: value }]);
     }
@@ -152,7 +197,7 @@ function plan(dir: string, prefixes: Readonly<Record<string, string>>) {
       else ambiguous.add(code);
     }
   }
-  return { byId, codes, ambiguous, sequences: [...sequences], summary, renumbered };
+  return { byId, codes, ambiguous, sequences: found.filter(isShortCodeSequence), summary, renumbered };
 }
 
 /** A tag in stored markup carrying a short code: a reference pill's `<a>`, which names its entity in its href */
@@ -224,11 +269,11 @@ export function convertShortCodes(dir: string, prefixes: Readonly<Record<string,
     const next = rewriteReferences(value, byId, codes);
     if (leftPattern) mentionsLeft += mentions(next ?? value, leftPattern);
     return next;
-  }, { removeEntities: sequences });
+  }, { removeSequences: sequences });
   return {
     types: summary,
     renumbered,
-    sequencesRemoved: written.removedEntities,
+    sequencesRemoved: written.sequencesRemoved,
     attributesRewritten: written.rewritten,
     attributesRemoved: written.removed,
     mentionsLeft,

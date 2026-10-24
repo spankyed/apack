@@ -422,7 +422,8 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
         if (previous) sources.push({ snapshot: previous.snapshot, integrity: previous.integrity, dir, enabled: !disabled.has(id) });
       }
     }
-    catalog.replace(sources, problems, { reportConflicts: true });
+    // The first discovery is boot's, which takes what is installed (`admitSettings`)
+    catalog.replace(sources, problems, { reportConflicts: true, admitSettings: catalogDir !== undefined });
     catalogDir = packsDir;
   }
 

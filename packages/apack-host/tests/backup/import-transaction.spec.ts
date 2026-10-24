@@ -5,12 +5,16 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { LmdbStore } from '@apackdev/ears/lmdb';
 import { importDatabase } from '../../src/backup/index.ts';
 
-// Exercise filesystem rollback without opening native environments; import.spec covers real LMDB.
-vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
-  openEnvAt: () => ({ entities: { getRange: () => [] } }),
-  closeEnv: () => {},
-}));
+// Exercise the rollback's order without opening native environments: the backup reads as an empty database, and
+// the store's files are text. import.spec covers real LMDB.
+vi.mock('@apackdev/ears/lmdb', async importOriginal => {
+  const { createMemoryKV } = await import('@apackdev/ears');
+  return {
+    ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
+    openEnvironment: () => ({ root: { close: () => {} } }),
+    openLmdbStore: () => ({ kv: createMemoryKV(), close: () => {} }),
+  };
+});
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.removeSync(root); });
@@ -28,12 +32,12 @@ function fixture() {
   const store = {
     path: primary,
     copyTo: (dest: string) => fs.copy(primary, dest),
-    close: vi.fn(), reopen: vi.fn(),
+    replaceWith: (dir: string) => fs.copySync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb')),
   } as unknown as LmdbStore;
   return { root, primary, backup, media, store };
 }
 
-it('retains incumbent files through acceptance and restores them before rehydrating after refusal', async () => {
+it('retains incumbent files through acceptance and restores them before the restored data is announced', async () => {
   const { root, primary, backup, media, store } = fixture();
   const read = () => fs.readFileSync(path.join(primary, 'data.mdb'), 'utf8');
   const restored = vi.fn(async () => { expect(read()).toBe('incumbent'); });
@@ -49,7 +53,7 @@ it('retains incumbent files through acceptance and restores them before rehydrat
   expect(fs.readdirSync(root).some(name => name.startsWith('.apack-import-'))).toBe(false);
 });
 
-it('preserves both failures and the durable recovery path if restored data cannot be hydrated', async () => {
+it('preserves both failures and the durable recovery path if the restored data is refused too', async () => {
   const { root, backup, media, store } = fixture();
   let failure: unknown;
   try {

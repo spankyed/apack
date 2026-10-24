@@ -8,7 +8,7 @@ invoked operation on a copy; it is not part of boot or import.
 ## Runners
 
 API boot and app-data reset use `startPacks()`: pack `onInit`, `runAppMigrations(registry)`,
-`runPackMigrations(targets)`, then content apply. Backup import hydrates the accepted backup and runs
+`runPackMigrations(targets)`, then content apply. Backup import replaces the store's contents with the accepted backup's and runs
 the two migration runners directly; it does not reinitialize packs or reapply their content.
 
 | Runner | Target version | Recorded version |

@@ -16,7 +16,7 @@ vi.mock('@apackdev/host/bus', () => ({
   receiveClientEvent: () => {},
   UnknownClientEventError: class extends Error {},
 }));
-vi.mock('../../src/runtime/index.ts', () => ({ appPacks: {} }));
+vi.mock('../../src/runtime/index.ts', () => ({ appStore: undefined, appPacks: {} }));
 vi.mock('../../src/transport/emitter.ts', () => ({
   rootEvents: {
     onOutgoing: (callback: (message: Message) => void) => { listeners.add(callback); return () => listeners.delete(callback); },

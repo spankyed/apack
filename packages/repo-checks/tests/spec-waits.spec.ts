@@ -46,6 +46,9 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/tests/database/write-lock.spec.ts > waitFor':
     'polls a file lock, which has no event to subscribe to, and already deadlines naming what it waited for — '
     + 'the poll half of the rule, done properly',
+  'packages/apack-ears/tests/lmdb/store.spec.ts > syncs commits in groups: many units, one sync, within the window':
+    'group commit is a timer: the sync arriving within its window, unasked, is the assertion, and nothing else '
+    + 'announces it',
   'packages/repo-checks/tests/decision-mutations.spec.ts > MUTATIONS':
     'a race sentinel: the timer resolves "hung", so the duration is the definition of hung rather than a guess '
     + 'at how long something takes',
@@ -64,7 +67,6 @@ const NOT_CONVERTED_YET: readonly string[] = [
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
   'packages/repo-checks/tests/bounded-spawn.integration.spec.ts > kills the whole group, not the process it started',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
-  "packages/apack-ears/tests/lmdb/store.spec.ts > updates a relation it didn't see written in place, keeping when it was stored",
 ];
 
 /** Every spec file the unit suites hold — the population a finding can come from */
@@ -107,7 +109,7 @@ describe('a spec waits for the thing it waits for', () => {
    * Asserted as an exact number for the same reason `spec-cost`'s records are: a count that drifts upward
    * without anyone noticing is how a list of deliberate exceptions becomes a list of everything.
    */
-  it('has five waits left to examine', () => {
-    expect(NOT_CONVERTED_YET).toHaveLength(5);
+  it('has four waits left to examine', () => {
+    expect(NOT_CONVERTED_YET).toHaveLength(4);
   });
 });
