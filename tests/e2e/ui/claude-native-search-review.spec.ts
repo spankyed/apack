@@ -90,8 +90,9 @@ test('reviews original Glob and Grep results while preserving everyday composing
   await ownedWindow.evaluate(window=>{window.show();window.focus()})
   await appPage.bringToFront()
   await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(true)
+  const idleRedraw=process.env.CLAUDE_RESEARCH_IDLE_REDRAW==='1'
   const cwdNavigation=process.env.CLAUDE_RESEARCH_CWD_NAVIGATION==='1'
-  const cases=cwdNavigation?[]:JSON.parse(await readFile(join(workspace!,'native-search-review-steps.json'),'utf8'))
+  const cases=cwdNavigation||idleRedraw?[]:JSON.parse(await readFile(join(workspace!,'native-search-review-steps.json'),'utf8'))
   const results=[],navigation=[]
   for(const [index,step] of cases.entries()){
     const phase=index+1,id='native_search_review_'+phase
@@ -127,6 +128,39 @@ test('reviews original Glob and Grep results while preserving everyday composing
     }
     results.push({phase,id,original:original.props,formattedText:await result.innerText()})
   }
+  let idleProof:any
+  if(idleRedraw){
+    const initial=await context(),childrenBefore=await readFile(join(workspace!,'native-children.jsonl'),'utf8')
+    const messageIds=initial.messages.map((message:any)=>message.id)
+    const tools=card.getByRole('button',{name:'Session tools',exact:true})
+    await composer.fill('Keep this release review local.')
+    for(const [index,width] of [1100,680].entries()){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+      await card.getByRole('button',{name:'Refresh session context',exact:true}).click()
+      await expect(card.getByText('Session context refreshed '+(index+1),{exact:true})).toBeVisible()
+      await composer.click();await composer.press('End');await composer.pressSequentially(' More.')
+      const draft=await composer.innerText()
+      const snapshot=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
+      await appPage.evaluate(directory=>(window as any).applicationState.system.get('default-setup/threads').send({type:'NEW_THREAD_IN_PROJECT',directory}),workspace!)
+      await expect.poll(async()=>{const id=(await context()).threadId;return !!id&&id!==initial.threadId}).toBe(true)
+      await appPage.getByText(initial.topic,{exact:true}).first().click()
+      await expect.poll(async()=>(await context()).threadId).toBe(initial.threadId)
+      await expect.poll(()=>composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(snapshot)
+      expect(await composer.innerText()).toBe(draft)
+      await expect.poll(async()=>(await context()).native?.state?.nativePid).toBe(boundNativePid)
+      expect((await context()).messages.map((message:any)=>message.id)).toEqual(messageIds)
+      expect((await context()).claude.turns).toBe(initial.claude.turns)
+      if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+      await expect(card.getByText('Session context refreshed '+(index+1),{exact:true})).toBeVisible()
+      for(const control of [composer,card.getByRole('button',{name:'Refresh session context',exact:true}),card.getByRole('button',{name:'Send',exact:true})])await expect(control).toBeInViewport()
+      const png=await ownedWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+      await writeFile(testInfo.outputPath('native-idle-redraw-'+width+'.png'),Buffer.from(png,'base64'))
+    }
+    const childrenAfter=await readFile(join(workspace!,'native-children.jsonl'),'utf8');expect(childrenAfter).toBe(childrenBefore)
+    const receipt=JSON.parse(await readFile(join(workspace!,'native-idle-redraw-receipts.json'),'utf8'));expect(receipt.count).toBe(2)
+    idleProof={messageIds,turnsBefore:initial.claude.turns,turnsAfter:(await context()).claude.turns,childrenBefore,childrenAfter,receipt,draft:await composer.innerText()}
+  }
   if(cwdNavigation){
     const draft='Keep this release draft while browsing files.\nSecond line stays unsent.'
     for(const width of [1100,680]){
@@ -148,7 +182,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
       navigation.push({width,explorerDirectory,draftBefore,documentBefore,documentAfter:await composer.evaluate(element=>(element as any).editor.state.doc.toJSON()),draft:await composer.innerText(),nativePid:(await context()).native.state.nativePid,sessionId:(await context()).sessionId})
     }
   }
-  await writeFile(join(workspace!,'native-search-review-proof.json'),JSON.stringify({results,navigation,sessionId,boundNativePid}))
+  await writeFile(join(workspace!,'native-search-review-proof.json'),JSON.stringify({results,navigation,idleProof,sessionId,boundNativePid}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
@@ -157,5 +191,5 @@ test('reviews original Glob and Grep results while preserving everyday composing
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSearchReview:!cwdNavigation,nativeCwdNavigation:cwdNavigation,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSearchReview:!cwdNavigation&&!idleRedraw,nativeCwdNavigation:cwdNavigation,nativeIdleRedraw:idleRedraw,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
