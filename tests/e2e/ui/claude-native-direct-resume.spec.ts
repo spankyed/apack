@@ -126,7 +126,7 @@ test('directly resumes unrepresented saved native history with its metadata and 
   const resumedDraft='Continue after importing the saved native conversation.'
   await composer.fill(resumedDraft)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  await expect.poll(async()=>(await context()).native.state.status,{timeout:25000}).toBe('live')
+  await expect.poll(async()=>(await context()).native?.state?.status,{timeout:25000}).toBe('live')
   const reopenedNativePid=(await context()).native.state.nativePid
   expect(reopenedNativePid).not.toBe(boundNativePid)
   expect((await context()).native.state.sessionId).toBe(sessionId)
