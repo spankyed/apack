@@ -1,4 +1,4 @@
-// The correctness harness's reference model: what the engine's data should be after a sequence of writes, kept as
+// The correctness harness's reference model (tests/engine/model-based.spec.ts, crash.spec.ts): what the engine's data should be after a sequence of writes, kept as
 // plainly as a model can be, so the engine and its files are each compared against something with no cleverness in it
 import type { EarsEngine } from '../../src/index.ts';
 

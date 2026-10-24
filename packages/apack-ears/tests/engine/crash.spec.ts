@@ -11,12 +11,12 @@ import fc from 'fast-check';
 import { afterAll, expect, it } from 'vitest';
 import { createEarsEngine, type EarsEngine } from '../../src/index.ts';
 import { openLmdbStore } from '../../src/lmdb/index.ts';
-import { Model, stateOf, type State } from './model.ts';
-import { crashWorkload } from './workload.ts';
+import { Model, stateOf, type State } from '../_harness/model.ts';
+import { crashWorkload } from '../_harness/workload.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ears-crash-'));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
-const CHILD = path.join(import.meta.dirname, 'crash-child.mts');
+const CHILD = path.join(import.meta.dirname, '..', '_harness', 'crash-child.mts');
 const LENGTH = 400;
 
 /** Runs the child until it has acknowledged `killAt` writes (or finished), kills it, and says how many it acknowledged */
@@ -68,4 +68,4 @@ it('reopens a killed process to exactly the writes that returned, and at most th
     const candidates = [after[acked], after[Math.min(acked + 1, ops.length)]];
     expect(candidates, `seed ${seed}, killed after ${acked} acknowledged writes`).toContainEqual(stored);
   }), { numRuns: 6 });
-}, 120_000);
+});

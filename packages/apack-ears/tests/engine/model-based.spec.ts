@@ -11,8 +11,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { createEarsEngine, noopSink, type EarsEngine, type PersistenceSink } from '../../src/index.ts';
 import { sameValue } from '../../src/utils.ts';
 import { openLmdbStore } from '../../src/lmdb/index.ts';
-import { Model, applyTo, stateOf } from './model.ts';
-import { workload } from './workload.ts';
+import { Model, applyTo, stateOf } from '../_harness/model.ts';
+import { workload } from '../_harness/workload.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ears-harness-'));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));

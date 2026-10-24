@@ -97,7 +97,8 @@ Storage earns trust by technique, not by examples.
 **Done when:** both run in the ears suite (a bounded number of runs, seeds reported on failure) and each fails under a
 mutation of the journal's rollback, the adapter's unit commit and the store's close flush.
 
-Done, 2026-10-24 (`packages/apack-ears/tests/harness/`). `model.ts` is the reference model and `stateOf`, `workload.ts`
+Done, 2026-10-24 (`packages/apack-ears/tests/engine/model-based.spec.ts` and `crash.spec.ts`, their support in
+`tests/_harness/`). `model.ts` is the reference model and `stateOf`, `workload.ts`
 the random workload over six ids (creates, sets, appends, deletes, links, unlinks, destroys, units that return or
 throw, and the store refusing the next commit). `model-based.spec.ts`: 300 runs against the model, every write
 compared, and 60 runs on an LMDB store reopened against memory; `crash.spec.ts`: 6 runs of a 400-write child killed at

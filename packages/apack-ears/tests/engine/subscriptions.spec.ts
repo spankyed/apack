@@ -1,5 +1,5 @@
 // Live queries: a subscription is called with its read's result now and after each commit that changes it, and a
-// commit publishes what it changed. The harness (tests/harness/model-based.spec.ts) holds the exactness of it over
+// commit publishes what it changed. The harness (tests/engine/model-based.spec.ts) holds the exactness of it over
 // random workloads; these are the cases by name.
 import { describe, expect, it } from 'vitest';
 import type { ChangeSet } from '../../src/index.ts';
