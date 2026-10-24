@@ -6,7 +6,7 @@ import { createEarsEngine, type EarsEngine, type RowRules } from '@apackdev/ears
 import { _bindEars } from '../ears/index.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
 export { nativePackDeclarationFixture } from './pack-declaration.ts';
-import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROW_RULES, SDK_ROLES } from '../types/sdk-entities.ts';
+import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROW_RULES, SDK_ROLES, _withSdkIndexes } from '../types/sdk-entities.ts';
 import type { EARS } from '../types/entities.ts';
 import type { PackRegistryView } from '../runtime/packs-view.ts';
 import { _isHostBound } from '../runtime/host-runtime.ts';
@@ -69,7 +69,7 @@ function installFreshEngine(): EarsEngine {
     isEntityType: (value: string) => entityTypes.has(value),
     isRelationKind: (value: string) => relationKinds.has(value),
     isRole: (value: string) => roles.has(value),
-    rowRules: (type: string) => rowRules.get(type),
+    rowRules: (type: string) => _withSdkIndexes(rowRules.get(type)),
   });
   _bindEars(engine);
   return engine;

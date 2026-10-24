@@ -35,7 +35,7 @@
     "threads": {
       "description": "Converse with assistants and manage threads, messages and artifacts.",
       "entities": {
-        "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR" },
+        "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR", "indexes": ["pinned"] },
         "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity" },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
@@ -851,7 +851,7 @@
     "notes": {
       "description": "Write, organize and export notes.",
       "entities": {
-        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity" }
+        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"] }
       },
       "settings": {
         "schema": {
@@ -1081,8 +1081,8 @@
     "library": {
       "description": "Organize documents, collections and indexed content.",
       "entities": {
-        "SearchIndex": {},
-        "IndexedDoc": {}
+        "SearchIndex": { "indexes": ["folderId"] },
+        "IndexedDoc": { "indexes": ["indexId", "chunkKey"] }
       },
       "settings": {
         "schema": {

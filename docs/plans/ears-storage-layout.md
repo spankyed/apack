@@ -195,12 +195,22 @@ amplification.
 
 ### Open
 
-**Insertion order or id order.** The contract pins insertion order, which costs `['e', type, seq]`'s sequence, the
-`seq` in `['i', id]` and in every index key: a sequence per create and a hop per index match. Engine-minted ids are
-time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or node's,
-named after it) are not. Id order would drop the sequence as a contract change, with code that needs an order saying
-so through `orderBy`. Decided in Step 1 from these measurements, with the reasoning recorded here: which callers read a query's order without an `orderBy`, and
-what the sequence costs a create on format 4.
+**Insertion order or id order: insertion order stays** (decided 2026-10-24, Step 1). The contract pins insertion
+order, which costs `['e', type, seq]`'s sequence and the `seq` in `['i', id]` and in every index key. Engine-minted
+ids are time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or
+node's, named after it) are not, and two ids minted in the same millisecond order by their random suffix. Measured:
+
+- **Who reads the order without an `orderBy`.** Every type walk, raw listing and index read was switched to id order and
+  every unit suite run against it. Outside the ears contract specs (17 cases that pin the order), one product path
+  failed: exporting actions and prompts (`export-round-trip.spec.ts`, 4 cases), which writes `all()` in creation order
+  and loses it for rows created in one millisecond. The sdk (1,273) and host (1,761) suites and the rest of the pack
+  pool (919) passed.
+- **What the sequence costs a create.** On LMDB, a create of four attributes and `['i', id]` in one `transactionSync`
+  without a sync (`NO_SYNC_FLUSH`, `overlappingSync: false`), median of 5 runs of 5,000: 26.3 µs with the `['m', 'seq']`
+  read and write and a sequence key, 25.1 µs with the id in the key instead — 1.2 µs, about 5%.
+
+The sequence is cheap, a product path reads the order it gives, and id order would make same-millisecond creates and
+every explicitly named entity order arbitrarily. Format 4 keeps it.
 
 ## Steps: the engine on an ordered key-value seam
 
@@ -232,6 +242,26 @@ behaviour throughout; a pure re-layout needs no new spec.
 **Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
 counting reads); codegen refuses an undeclared field, mutation-checked; the warning fires once per call site; the order
 measurements and the decision are recorded under Open.
+
+Done, 2026-10-24.
+- The manifest's `indexes` (`apack.schema.json` regenerated) reach the row rules through codegen, which refuses a field a
+  shaped entity's shape doesn't declare; an unshaped entity's (`IndexedDoc`, `SearchIndex`) are taken as given.
+  `SDK_ROW_RULES` declares the SDK's (Action `label`, `category`; Prompt `label`; Document and Collection `name`), and
+  `SDK_INDEXES` adds `contentKey` to every type's, which the content applier finds an item by on whatever type wrote it
+  (`_withSdkIndexes`, given to both engines the SDK and the app create). The engine always indexes `role` and `shortCode`.
+- An index is per type and field, built from the type's rows on its first read and kept by `place`. A `where` on a type
+  start reads it where the type declares the field and filters the type's rows where it doesn't; past a start (ids, a
+  walk) a `where` tests each id. Values an index holds: `null`, booleans, finite numbers, strings up to 256 characters.
+- The read count is observed through the engine's `warn` port, which reports how many rows an unindexed `where`
+  filtered: 2,500 for an undeclared field, nothing through a declared one (`tests/engine/queries.spec.ts`, "declared
+  indexes", each path mutation-checked). The app passes `warn` in development, logged once per call site; the site is
+  the first stack frame outside the engine's own directory.
+- default-setup declares Thread `pinned`, Note `title` and `linkTargets`, SearchIndex `folderId`, IndexedDoc `indexId`
+  and `chunkKey`, from its `where` calls (Thread `status` appears only in prompt examples and the Database view's
+  sample queries).
+- Bench (mean ms, memory; the bench's Tasks now declare `status` and `title`, as an app's would): where and pickAll 6.59,
+  1,000 unique-value lookups 1.01, 10 lookups on an unindexed field walking all 40k Tasks 58.7 (5.9 ms a walk),
+  100 withRole 8.34; the rest within noise of the readings under Done.
 
 ### 2. The `OrderedKV` seam and `MemoryKV`
 - `OrderedKV`: `get`, `range` (with `start`, `end`, `reverse`, `limit`, keys only), `put`, `del`, and transactions: a

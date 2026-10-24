@@ -9,6 +9,7 @@ import type { _AppDataPaths } from '@apackdev/sdk/utils';
 import { findAppDataPaths } from './layout.ts';
 import { readInstalledSchema, type DatabaseSchema, type InstalledSchema } from './schema.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { _withSdkIndexes } from '@apackdev/sdk/types';
 import { createLogger } from '@apackdev/sdk/logger';
 import * as fs from 'node:fs';
 
@@ -17,6 +18,8 @@ const logger = createLogger('run-history');
 export interface DatabaseStoreOptions {
   /** Told when a write is dropped, with the row it was for (`openLmdbStore`'s port) */
   onWriteFailure?: (failure: WriteFailure) => void;
+  /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */
+  warn?: (message: string) => void;
   /** The database directory */
   path: string;
   /** The entity types: the app's registered packs, or the installed packs' manifests */
@@ -30,14 +33,15 @@ export interface DatabaseStoreOptions {
  * The LMDB store at `path` and a new engine persisting to it, which checks entity types against `schema`. Nothing is
  * hydrated or installed: the caller hydrates (`store.hydrate()`) once `schema` holds every entity type.
  */
-export function openDatabaseStore({ path, schema, readOnly, log, onWriteFailure }: DatabaseStoreOptions): { store: LmdbStore; engine: EarsEngine } {
+export function openDatabaseStore({ path, schema, readOnly, log, onWriteFailure, warn }: DatabaseStoreOptions): { store: LmdbStore; engine: EarsEngine } {
   const store = openLmdbStore({ path, onWriteFailure, engine: () => engine.admin, readOnly, log });
   const engine = createEarsEngine({
     persistence: store.sink,
     isEntityType: (name) => schema.getRegisteredEntityTypes().has(name),
     isRelationKind: (name) => schema.getRegisteredRelationKinds().has(name),
     isRole: (name) => schema.getRegisteredRoles().has(name),
-    rowRules: (type) => schema.getRowRules?.(type),
+    rowRules: (type) => _withSdkIndexes(schema.getRowRules?.(type)),
+    warn,
   });
   return { store, engine };
 }
