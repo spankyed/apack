@@ -6,8 +6,8 @@ branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273
 reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
-**Status, 2026-10-24:** the harness, the durability spec, the sync policy, the prompts fix and compaction are taken
-(under Taken already, below); production-shaped bench data is still to take.
+**Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
+already, below); compaction on conversion and production-shaped bench data are still to take, in that order.
 
 ## Head to head on the production copy
 
@@ -28,7 +28,16 @@ Step 5.
 
 ## Take
 
-### 1. Production-shaped bench data
+### 1. Compaction on conversion
+
+#274's converted production copy compacts from 116 to 86 MB. #273's is 387 MB after conversion, because LMDB keeps
+the pages the format 3 tables freed, and they are reused by later writes rather than returned.
+
+**Cost:** `scripts/ears-convert.ts` writes the converted environment through LMDB's compacting copy
+(`root.backup(dir, true)`) and swaps it in. A conversion runs once, on a copy, so the extra copy costs nothing a user
+waits on.
+
+### 2. Production-shaped bench data
 
 `bench/production-shape.ts` and `bench/budget.ts` in #274 generate data shaped like the production database (its
 types, field sizes and relation counts, profiled 2026-10-24) at 1× and 2×. #273's bench is a uniform graph of three
@@ -106,18 +115,6 @@ master in `c427e84fd`, which this branch is based on: the surface changes its se
 names, and a held prompt is replaced rather than added. `tests/features/prompts/fe/page-and-selection.spec.ts` covers
 all three.
 
-### Compaction on conversion and backup
-
-`scripts/ears-convert.ts` compacts the file a conversion leaves (`compactEnvironment`, `@apackdev/ears/lmdb`), and
-every backup copy is compacted: the database's `copyTo` and the run history's both pass `backup(dir, true)`. LMDB never
-shrinks a file, and a conversion writes the new format beside the old tables before emptying them.
-
-On the production copy of 2026-10-17 it takes the converted file from 369 to 258 MB, not to #274's 86 MB. What the
-258 MB holds: 5,526 values over 2 KB, mostly message text, are 146 MB of it, keys 18 MB and the other values 20 MB, the
-rest page overhead. The difference from #274 is those large values, which #273 stores uncompressed
-(`compression: false` on `kv`). Compressing them is a storage format change — format 5, and converting existing data
-again — so it is a decision of its own, not part of this.
-
 ### Sync once writes pause
 
 #274 syncs 100 ms after writes pause, and at most a second after the first unsynced commit. #273 adopted the same in
@@ -141,4 +138,4 @@ user's action is durable within 100 ms of its last write.
 
 ## Order
 
-The bench data is small and improves the readings. Live queries and the served database are designs to plan, after #273 lands.
+Compaction and the bench data are small and improve the conversion and the readings. Live queries and the served database are designs to plan, after #273 lands.
