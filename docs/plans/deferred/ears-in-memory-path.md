@@ -1,123 +1,103 @@
-# The in-memory path: writes committed when they return, and thread messages in a record store
+# The in-memory engine until Step 10: writes stored when they return, and a store contract Step 10 inherits
 
-Status: deferred by decision, 2026-10-23. This is the road not taken by
-[ears-storage-layout.md](../ears-storage-layout.md): the engine moves to disk (its Step 10) instead of staying in
-memory with these two fixes. Resume only if Step 10 is abandoned, or stalls long enough that the silent write loss
-(Part A) has to be fixed first. If Step 10 lands, close this: it deletes Part A's subject, and with one copy of the
-data no field is too large for the engine, which is Part B's.
+Status: revised 2026-10-24. Part A is built (`b3dc05d54`, branch `session/ears-in-memory-path`) and waits on one
+decision, when to land it (below). Part B is closed. The engine's destination is unchanged: it moves to disk, Step 10
+of [ears-storage-layout.md](../ears-storage-layout.md). This plan only decides what the in-memory engine gets before
+then, and what of it Step 10 keeps.
+
+## The rule this plan follows
+
+**Nothing here builds on the in-memory engine beyond fixing a defect in it.** Step 10 replaces that engine, so work on
+it is only worth doing when it closes a live bug sooner than Step 10 can, and only in a form Step 10 can delete without
+anyone outside `@apackdev/ears` and the host noticing. A new public contract — a manifest key, an SDK service, a
+caller-visible API — fails that test even when it works, because it reaches pack authors and has to be taken back.
 
 ## Context
 
-The engine is in memory: at boot the API hydrates every row of the database (`store.hydrate()`,
-`packages/api/src/runtime/index.ts`) and every read after that is a memory read. LMDB is a mirror the engine writes
-through a sink. Two costs follow, and each part below fixes one while keeping the engine in memory.
+The engine is in memory: at boot the API hydrates every row (`store.hydrate()`, `packages/api/src/runtime/index.ts`),
+and LMDB is a mirror the engine writes through a sink. Two costs follow.
 
-**What real data costs** (measured 2026-10-23, copies converted to format 3, the built engine, 3 runs each):
+**Writes could be lost without anyone knowing.** The adapter buffered writes and flushed them in a microtask; a row
+that failed was dropped and reported through `onWriteFailure` after the writer had moved on, so memory ran ahead of
+disk. A production app dropped 3,187 writes in one session that way. A backup started in the same turn as a write
+missed it (`copyTo` ran before the flush), and every flush was an `F_FULLFSYNC` on the API's main thread.
+
+**Memory and boot grow with the data.** Measured 2026-10-23 on copies converted to format 3, the built engine, 3 runs:
 
 | Data | Entities (relations) | Attribute values | Hydrate | Heap |
 |---|---|---|---|---|
 | The lead developer's production data (`abuddy/ears-db`, 292 MB) | 68.6k (45.8k) | 224k | 1.3–1.5 s | 308 MB |
 | The dev data dir (`apack-dev`) | 559 (325) | 2.4k | 22 ms | 1.4 MB |
 
-Of the production data's 171 MB of values:
+Of the production data's 171 MB of values, `Message.blocks` is 141 MB and `Artifact.content` 13 MB. Never measure a
+running app's files: copy `data.mdb`, convert the copy with `scripts/ears-convert.ts`, measure that.
 
-| Field | Rows | JSON |
-|---|---|---|
-| `Message.blocks` (thread transcripts) | 7.5k | 141 MB |
-| `Artifact.content` | 2.0k | 13 MB |
-| `Message.text` | 19.8k | 7 MB |
-| Relations (details and ids) | 45.8k | 6.6 MB |
-| everything else | | under 2 MB |
+## Part A — a write is stored when it returns, or throws and memory forgets it
 
-The probes are `npm run bench:heap -w @apackdev/ears` for the bench graph, and for real data a read-only hydrate of
-a converted copy (`openLmdbStore({ readOnly: true })`, then `getSchemaStats()` and each row's JSON size). Never open
-a running app's files: copy `data.mdb`, convert the copy with `scripts/ears-convert.ts`, measure that.
+Built in `b3dc05d54`. It closes the first cost.
 
-## Part A — writes committed when they return
+- **Every write is a unit.** `journal.unit` runs a write inside the open unit or as a unit of its own; `unitWrites`
+  applies it to the storage and relation mutators and to the write builder's operations (`create`, each builder call,
+  `updateRelation`, `removeRelation`), so the admin face's direct writes are units too.
+- **The journal commits before it forgets.** It keeps a unit's undos until the sink has stored it, and undoes the unit
+  in memory when the sink throws, so the engine never holds a write the files do not.
+- **The adapter commits each unit as one synchronous transaction** (`NO_SYNC_FLUSH`, on an environment opened with
+  `overlappingSync: false` through `openEnvAt`, which every process shares), and throws on a refusal. Nothing is
+  buffered, so `copyTo` holds every write that returned before it.
+- **Durability:** safe from the app crashing as soon as a write returns; a background `root.sync()` every
+  `SYNC_INTERVAL_MS` (1 s) and a flushed write on `close()` bound what an OS crash can take.
+- **Reset and import are transactions on the open store**, for the database and the run history alike: `reset()`
+  empties the data databases keeping the format stamp; `replaceWith(dir)` puts another store's contents in place.
+  Import installs every store in one synchronous stretch that the caller's acceptance (clear and hydrate) follows at
+  once. Gone: `reopen`, the write buffers, the row-by-row retry, `onWriteFailure`, `PersistenceErrorStats` and the
+  API's dropped-write report.
 
-**Done, 2026-10-24.** Every write is a unit (`journal.unit`, `unitWrites`); the journal keeps a unit's undos until the
-sink has stored it; the adapter commits each unit in one synchronous transaction without a flush and throws on a
-refusal; the store syncs every `SYNC_INTERVAL_MS` and on close; reset and import are transactions (`reset()`,
-`replaceWith(dir)`) on both store kinds, and `reopen`, the buffers and `onWriteFailure` are gone. Readings on a loaded
-machine (the built engine; other work running): 1,000 creates 7.2–8.6 ms against Step 4's 4.50, about what 1,000
-creates in one `transact` cost (7.4–9.4 ms), which is the undo record a write now always makes.
+**Measured** on a loaded machine (other work running; readings, not a baseline): 1,000 creates 7.2–8.6 ms against
+Step 4's 4.50, about what 1,000 creates in one `transact` cost (7.4–9.4 ms) — the undo record every write now makes.
 
-**Why.** `lmdb/adapter.ts` buffers writes and flushes them in a microtask; a row that fails is dropped and reported
-through `onWriteFailure` after the writer has moved on, so memory runs ahead of disk with no signal to the code that
-wrote. A production app dropped 3,187 writes in one session that way. The main environment also opens with default
-sync, so every flush is an `F_FULLFSYNC` on the API's main thread (3.5–8 ms in the spike), twice for a `transact`.
-And a backup can miss a write: `copyTo` (`lmdb/store.ts`) starts LMDB's `backup` in the turn it is called, before
-the adapter's microtask flush, so a write made earlier in that same synchronous turn is not in the copy (anything
-from an earlier turn has been flushed already).
+**What Step 10 keeps of it, and what it deletes.**
 
-**Design.**
+| Kept: the store and its lifecycle | Deleted: the second copy's machinery |
+|---|---|
+| the durability flags and the background sync | the journal's commit-before-forget |
+| `reset()` and `replaceWith(dir)` as transactions | `unitWrites` and the adapter's unit commit |
+| `BackupStore` and the host's import and reset | the sink port itself |
+| no `reopen`, no `onWriteFailure` | |
 
-- **Every write is a unit.** The journal gains `unit(fn)`: `fn` inside the open unit, or as a unit of its own when
-  none is open. The write builder's operations, `create`, `upsert`, `updateRelation`, and the storage's mutators
-  (so the admin face's direct writes too) go through it.
-- **The journal commits before it forgets.** The outermost unit sends its held calls between `onUnitStart` and
-  `onUnitEnd`, and keeps its undos until `onUnitEnd` returns; a sink that throws runs them in reverse and rethrows,
-  so memory never holds what disk refused. `onUnitStart` resets the adapter's collected steps, so a call that threw
-  mid-unit leaves nothing behind.
-- **The adapter commits synchronously**, one `transactionSync` per unit (block-bodied callbacks), and throws.
-  Removed: the buffers, `DROPPED`, `discardBuffered`, the row-by-row retry, `getErrorStats`, `onWriteFailure` and
-  the API's `reportDroppedWrite`.
-- **Durability:** commits with `NO_SYNC_FLUSH` on an environment opened with `overlappingSync: false`; a 1 s unref'd
-  timer runs `root.sync()` (asynchronous, off the main thread) when something was written; `close()` makes one
-  flushed write (a `meta` row), which makes every commit before it durable, since lmdb-js has no synchronous sync.
-  Safe from app crashes, ~1 s lost on an OS crash (decided 2026-10-23).
-- **Reset and import are transactions.** `reset()` clears the data databases in one transaction, keeping the stamp,
-  and becomes synchronous, so app reset runs `store.reset(); engine.clear()` with no write between them. Import is
-  `replaceWith(dir)` on both store kinds: open the candidate read-only, clear, copy its rows, one transaction; the
-  rollback is `replaceWith` of the rollback copy. Removed: `reopen`, `heldForReset`, `openFailure` and the carried
-  error stats; the running app's store never closes.
-- **A backup holds every write made before it.** With nothing buffered, `copyTo` copies what is committed, which is
-  every write that returned. Until Part A lands, the gap closes on its own with a flush of the adapter before
-  `backup` (three lines in `copyTo`); a spec writes and backs up in one turn and reads the write from the copy.
+The right column is the price of closing a data-loss bug before Step 10 lands, and it is paid once.
 
-**Costs.** Every write records an undo, as a `transact` write does today (1,000 creates: 4.5 ms alone against
-6.9 ms as one unit, an upper bound to measure). A full disk surfaces as an error in the system that wrote rather
-than as silent loss. `PersistenceSink` (in the change-controlled `runtime.ts`, though not part of the typed contract
-packs see) loses `getErrorStats`; `api:update` moves.
+## The store contract — what Part A gives Step 10
 
-**Done when:** a child killed with SIGKILL right after a write returns reopens with it; a commit that fails leaves
-memory unchanged and throws; reset and import work while systems keep writing; a backup started in the turn of a
-write holds it; each mutation-checked; the bench
-records the implicit unit's cost.
+Part A's specs are the part that outlives it. Each states behaviour at the store's boundary, which any engine behind
+it has to keep, so they are Step 10's acceptance criteria and not Part A's tests:
 
-## Part B — thread messages and their artifacts in a record store
+1. A write that returned survives the process being killed (`SIGKILL`) right after it.
+2. A unit the store refuses leaves nothing behind, in memory or on disk, and its refusal reaches the code that wrote.
+3. A backup started in the same turn as a write holds it.
+4. `reset()` and `replaceWith(dir)` each happen in one transaction with the store open, and `replaceWith` refuses a
+   store in another format, leaving the current contents in place.
+5. A closed store refuses a write, and the engine keeps none of it.
 
-**Why.** A transcript is a log: appended, read one thread at a time, never queried across threads, and growing
-without bound — the same diagnosis that moved run history out of the engine
-([run-history-store.md](../run-history-store.md)). It is 88% of the production data's values.
+They live in `packages/apack-ears/tests/lmdb/store.spec.ts`, `tests/engine/persistence.spec.ts` and
+`tests/lmdb/record-store.spec.ts` today, written against `openLmdbStore` and the engine. **Step 10 runs them unchanged
+against its engine**, where each still has a subject, and rewrites only the adapter-level cases
+(`tests/lmdb/persistence.spec.ts`), whose subject it deletes.
 
-**Today.** A thread `contains` its messages and `has` its artifacts
-(`default-setup/src/features/threads/be/repository/index.ts`): messages are read per thread in order
-(`query.ids(threadId).out(CONTAINS, Message).pick(messagePickFields)`), one is read or updated by id, and deleting a
-thread unlinks and destroys its messages.
+## Landing it — the one open decision
 
-**Design.**
+**One owner of the persistence layer at a time.** Step 10 is being built in the main checkout over the same files
+(the journal, the adapter, the store), so the two cannot land in either order without one rewriting the other. The
+decision is when Step 10 lands:
 
-- A record store per kind, `thread-messages` and `thread-artifacts` (`openRecordStore`), indexed by `threadId`, ids
-  time-sortable so an index range is creation order. No retention: unlike run history these are the user's content,
-  kept until the user deletes them.
-- A repository over them in the threads feature (`messages.forThread(id, page)`, `get`, `add`, `update`, `remove`,
-  `removeThread`), replacing the engine reads above. A thread keeps its own row in the engine; messages and
-  artifacts stop being entities and their `contains`/`has` relations go.
-- Backups gain the two stores (`BackupStores`), and the app's reset and import cover them, as they cover the run
-  history.
-- The developers' data moves explicitly, on a copy, with a conversion step in `scripts/ears-convert.ts`: each
-  `Message`/`Artifact` row and its relation becomes a record. Nothing converts at boot.
+- **More than a week or two away:** land Part A first — rebase on master, the full chain, a PR — and Step 10 rebases
+  onto it, keeping the left column above and deleting the right.
+- **Close:** don't land Part A. Its store-contract specs go to Step 10 as acceptance criteria, and the silent write
+  loss is fixed when Step 10 lands.
 
-**Open before starting.** Whether anything reads messages across threads (search, references, a note embedding a
-message), which would need an index or a reason to stay in the engine; and whether `Message` and `Artifact` are
-SDK-visible types any other pack queries.
+## Part B — closed
 
-**Done when:** the threads specs pass on the record stores; hydrate and heap on a converted copy of the production
-data are re-measured against the table above (expected: the 141 + 13 MB of values out of the heap).
-
-## What this leaves
-
-The in-memory engine and its rules: a new feature with large or unbounded data has to know to keep it out of the
-engine, and a read returns stored values by reference. Those, and tests running a memory engine whose sink stores
-nothing, are what ears-storage-layout.md's decision weighed against this path.
+Part B moved the transcripts out of memory: first as record stores (the Database console and the AI database actions
+query messages across threads, so that took a capability away), then as disk-only fields declared on an entity. Both
+are closed, for the rule above: each built a lasting contract — an SDK service, a manifest key — to manage memory in an
+engine Step 10 removes, and the measured cost (1.4 s at boot, 308 MB) is tolerable until then. Step 10 answers the
+second cost for every field at once, with nothing for a feature author to declare.
