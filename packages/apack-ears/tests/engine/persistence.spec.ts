@@ -1,7 +1,7 @@
 // The engine's contract: what it tells its persistence sink, in order, for a sequence of writes; and hydration
 // through bulk loading, which tells the sink nothing
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EARS } from '../../src/index.ts';
+import { EARS, OUT_OF_LINE_BYTES, type PersistenceSink } from '../../src/index.ts';
 import { engine, recordingSink, writesOf, type Id, type RelId } from './helpers.ts';
 
 beforeEach(() => {
@@ -123,6 +123,68 @@ it('undoes in memory a unit the sink refuses, and throws its refusal', () => {
   expect(e.findRelations()).toEqual([]);
   expect(() => e.write(b).destroy()).toThrow('disk full');
   expect(e.getRow(b)).toMatchObject({ title: 'other' });
+});
+
+describe('large values out of memory', () => {
+  /**
+   * A sink that stores what it is given and can read it back, as the LMDB store does: a unit's writes are stored when it
+   * ends, or none of them when it is refused (`refuse`)
+   */
+  function storingSink() {
+    const stored = new Map<string, unknown>();
+    const reads: string[] = [];
+    const state = { refusing: false };
+    let pending: Array<() => void> = [];
+    const sink: PersistenceSink = {
+      ...recordingSink().sink,
+      onUnitStart: () => { pending = []; },
+      onUnitEnd: () => {
+        const unit = pending;
+        pending = [];
+        if (state.refusing) throw new Error('disk full');
+        for (const write of unit) write();
+      },
+      onPutAttr: (kind, id, value) => { pending.push(() => stored.set(`${kind}|${id}`, structuredClone(value))); },
+      onDropAttr: (kind, id) => { pending.push(() => stored.delete(`${kind}|${id}`)); },
+      readAttr: (kind, id) => { reads.push(`${kind}|${id}`); return stored.get(`${kind}|${id}`); },
+    };
+    return { sink, stored, reads, state };
+  }
+  const big = (n: number) => `${n}`.repeat(OUT_OF_LINE_BYTES + 1);
+
+  it('reads a committed large value back from the store once the cache has dropped it, and a small one never', () => {
+    const { sink, reads } = storingSink();
+    const e = engine(sink);
+    const a = e.create('Task', { title: big(1), small: 'kept' }).id();
+    // Enough large values to push the first out of the cache
+    for (let i = 0; i < 20; i++) e.create('Task', { title: 'x'.repeat(1024 * 1024) });
+    expect(e.getRow(a)).toMatchObject({ title: big(1), small: 'kept' });
+    expect(reads).toEqual([`title|${a}`]);
+    expect(Object.isFrozen(e.getAttr(a, 'title'))).toBe(true);
+  });
+
+  it('keeps every value in memory when the sink cannot read one back', () => {
+    const e = engine(recordingSink().sink);
+    const a = e.create('Task', { title: big(1) }).id();
+    for (let i = 0; i < 20; i++) e.create('Task', { title: 'x'.repeat(1024 * 1024) });
+    expect(e.getAttr(a, 'title')).toBe(big(1));
+  });
+
+  it('reads a unit\'s own large write from memory, and puts back what the store holds when the store refuses it', () => {
+    const { sink, reads, state } = storingSink();
+    const e = engine(sink);
+    const a = e.create('Task', { title: big(1) }).id();
+    e.transact(() => {
+      e.write(a).set('title', big(2));
+      // More large writes than the cache holds: the first is still the unit's own until it commits
+      for (let i = 0; i < 20; i++) e.create('Task', { title: 'x'.repeat(1024 * 1024) });
+      expect(e.getAttr(a, 'title')).toBe(big(2));
+    });
+    expect(reads).not.toContain(`title|${a}`);
+    state.refusing = true;
+    expect(() => e.write(a).set('title', big(3))).toThrow('disk full');
+    expect(e.getAttr(a, 'title')).toBe(big(2));
+  });
 });
 
 describe('hydration', () => {

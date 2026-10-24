@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–2 are done; Step 3 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–3 are done; Step 4 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -127,6 +127,20 @@ store behind the engine (tests, the harness), a value stays in memory.
 **Done when:** the harness passes; heap on the production copy is measured against 308 MB (expected: about the 10–20 MB
 of structure plus the cache); opening a thread of the production copy is timed; the bench's read cases stay within
 +10%.
+
+Done, 2026-10-24. The value stays in the attribute row it is stored in; memory holds a frozen `OutOfLine` marker
+(its size, and its length when it is a list). A value over `OUT_OF_LINE_BYTES` (2,048) leaves memory once its unit
+commits (`journal.afterCommit`, new), so a unit reads its own writes from memory even past the cache, and an undo puts
+back the marker the store still answers for. Reads go through the persistence port's new synchronous `readAttr` and
+a 16 MB LRU cache (`CACHE_BYTES`); with no `readAttr` (tests, the harness's model run) every value stays in memory.
+The value index never holds a string over `INDEXED_STRING_MAX` (256): `where` on one walks. The harness's workload
+now writes large strings and lists too; a mutation that puts a value out of line before its commit fails the engine
+spec that writes past the cache inside a unit.
+
+Readings, the converted production copy (built engine, 3 runs): heap 309.5 → 74.4 MB (the 16 MB cache included);
+hydrate 0.97–1.24 → 1.39–1.42 s, the cost of sizing each value as it loads, which Step 4's format removes; the largest
+thread (1,647 messages) read with its transcripts 2.1–2.3 ms cold, 1.4–1.7 ms warm. The bench's read cases are within
+noise of Step 4's baseline; its heap probe, which holds no large values, 68.7 MB.
 
 ### 4. The row format and fast boot
 Format 4: an entity is one msgpack record of its small fields, keyed by its id, its large values in `values`;

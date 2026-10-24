@@ -3,7 +3,7 @@ import { EARS } from './entities.ts';
 import type { QueryBuilder, RelationEdge } from './runtime.ts';
 import { EarsError } from './errors.ts';
 import { SEQUENCE_TYPE } from './numbering.ts';
-import { entityTypeOf, holds, setField } from './attribute-storage.ts';
+import { entityTypeOf, holds, INDEXED_STRING_MAX, setField } from './attribute-storage.ts';
 
 /** A query started from types and not yet walked */
 interface TypeStart {
@@ -97,7 +97,8 @@ export function createQuery({ storage, relations, isEntityType, names }: { stora
 
   // A value the value index answers for: a primitive, compared as `===` does (so not NaN), under a stored kind
   const indexable = (kind: EARS.AttrKind, v: unknown) =>
-    kind !== ENTITY_TYPE && (v === null || ['string', 'number', 'boolean'].includes(typeof v)) && !Number.isNaN(v);
+    kind !== ENTITY_TYPE && (v === null || ['string', 'number', 'boolean'].includes(typeof v)) && !Number.isNaN(v)
+    && !(typeof v === 'string' && v.length > INDEXED_STRING_MAX);
 
   const collator = new Intl.Collator();
   /**

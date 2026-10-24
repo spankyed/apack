@@ -122,7 +122,7 @@ export class Model {
         if (!this.entities.has(op.id)) return `no entity has ${op.id}`;
         this.entities.delete(op.id);
         this.touched = true;
-        for (const e of [...this.edges]) {
+        for (const e of this.edges) {
           const [source, , target] = e.split('|');
           if (source === op.id || target === op.id) this.edges.delete(e);
         }

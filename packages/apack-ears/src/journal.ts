@@ -10,6 +10,8 @@ interface Level {
   undos: Array<() => void>;
   sinkMark: number;
   checks: Array<() => void>;
+  /** What runs once the unit's writes are stored */
+  after: Array<() => void>;
 }
 
 /** An engine's unit of work, shared by the stores that write */
@@ -29,6 +31,11 @@ export interface Journal {
   atCommit(check: () => void): void;
   /** Runs `fn` inside the open unit, or as a unit of its own when none is open: what every write is made through */
   unit<T>(fn: () => T): T;
+  /**
+   * Runs `fn` once the outermost unit's writes are stored — at once outside a unit — and never when the unit rolls
+   * back: for what may only follow a commit, such as letting memory forget a value the files now hold
+   */
+  afterCommit(fn: () => void): void;
 }
 
 /**
@@ -63,6 +70,11 @@ export function createJournal(sink: PersistenceSink) {
       else check();
     },
     unit: (fn) => (levels.length > 0 ? fn() : transact(fn)),
+    afterCommit(fn) {
+      const level = levels[levels.length - 1];
+      if (level) level.after.push(fn);
+      else fn();
+    },
   };
 
   // A held call copies an array it carries: the caller who wrote it may still change it before the unit commits
@@ -88,7 +100,7 @@ export function createJournal(sink: PersistenceSink) {
 
   /** Runs `fn` as one unit; a unit inside another commits into it and rolls back only its own writes */
   function transact<T>(fn: () => T): T {
-    const level: Level = { seen: new Set(), undos: [], sinkMark: held.length, checks: [] };
+    const level: Level = { seen: new Set(), undos: [], sinkMark: held.length, checks: [], after: [] };
     levels.push(level);
     let result: T;
     try {
@@ -114,6 +126,7 @@ export function createJournal(sink: PersistenceSink) {
       // undos restore what it found, and run before the parent's earlier ones
       parent.undos.push(...level.undos);
       parent.checks.push(...level.checks);
+      parent.after.push(...level.after);
       for (const key of level.seen) parent.seen.add(key);
       return result;
     }
@@ -129,6 +142,7 @@ export function createJournal(sink: PersistenceSink) {
         throw error;
       }
     }
+    for (const fn of level.after) fn();
     return result;
   }
 

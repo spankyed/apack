@@ -92,7 +92,7 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
   const names = createNameChecks({ isRelationKind, isRole });
   const { journal, unitSink, transact } = createJournal(persistence);
   // Every write is made in a unit, so the sink sees nothing but units, and one it refuses is undone in memory
-  const storage = unitWrites(journal, createAttributeStorage({ persistence: unitSink, journal }), [
+  const storage = unitWrites(journal, createAttributeStorage({ persistence: unitSink, journal, readAttr: persistence.readAttr?.bind(persistence) }), [
     'putAttr', 'appendAttr', 'mergeAttr', 'removeAt', 'removeValue', 'deleteAttr', 'entityCreated', 'grantRole', 'revokeRole',
     'destroyEntity',
   ]);

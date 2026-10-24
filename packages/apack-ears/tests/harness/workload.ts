@@ -11,9 +11,13 @@ const id = fc.constantFrom(...IDS);
 const key = fc.constantFrom(...KEYS);
 const kind = fc.constantFrom(...KINDS);
 const value: fc.Arbitrary<Value> = fc.oneof(
-  fc.string({ maxLength: 8 }),
-  fc.integer({ min: -100, max: 100 }),
-  fc.array(fc.integer({ min: 0, max: 9 }), { maxLength: 3 }),
+  { weight: 4, arbitrary: fc.string({ maxLength: 8 }) },
+  { weight: 4, arbitrary: fc.integer({ min: -100, max: 100 }) },
+  { weight: 4, arbitrary: fc.array(fc.integer({ min: 0, max: 9 }), { maxLength: 3 }) },
+  // Large enough to be kept out of memory once committed (OUT_OF_LINE_BYTES): a long string, and a long list an
+  // append then grows
+  { weight: 1, arbitrary: fc.integer({ min: 0, max: 9 }).map((n) => `${n}`.repeat(2100)) },
+  { weight: 1, arbitrary: fc.integer({ min: 0, max: 9 }).map((n) => Array.from({ length: 1100 }, () => n)) },
 );
 
 /** One write that is not a unit */

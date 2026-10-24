@@ -19,6 +19,30 @@ const ENTITY_TYPE = 'entityType' as EARS.AttrKind;
 /** When an entity was put in the trash: an entity holding it is trashed, and reads by type, id or link skip it */
 export const TRASHED_AT = 'trashedAt' as EARS.AttrKind;
 
+/**
+ * A value kept on disk rather than in memory: what memory holds in its place once the value is committed, with what
+ * reads need without the value — its size, and its length when it is a list
+ */
+class OutOfLine {
+  constructor(readonly size: number, readonly length: number | undefined) {}
+}
+
+/**
+ * How large a value must be, serialized, to be kept out of memory once committed: a few large values (a transcript,
+ * an artifact's content) are most of a database's bytes, and none of them is ever matched by the value index
+ */
+export const OUT_OF_LINE_BYTES = 2048;
+
+/** How many bytes of out-of-line values stay decoded, the most recently read kept */
+const CACHE_BYTES = 16 * 1024 * 1024;
+
+/** The longest string the value index holds: a longer one is matched by walking, so the index never keeps it in memory */
+export const INDEXED_STRING_MAX = 256;
+
+/** A value's size serialized, as the store holds it; a primitive other than a string counts as small */
+const sizeOf = (value: unknown): number =>
+  typeof value === 'string' ? value.length : value !== null && typeof value === 'object' ? (JSON.stringify(value)?.length ?? 0) : 8;
+
 /** No value: an attribute an entity doesn't hold, which `null`, a value, can't say */
 const ABSENT = Symbol('absent');
 
@@ -52,7 +76,12 @@ const isEmpty = (row: Row) => {
 };
 
 /** An engine's attributes (by entity, then kind), its entity index by type, and the writes and reads over them */
-export function createAttributeStorage({ persistence, journal }: { persistence: PersistenceSink; journal: Journal }) {
+export function createAttributeStorage({ persistence, journal, readAttr }: {
+  persistence: PersistenceSink;
+  journal: Journal;
+  /** Reads a stored value back (`PersistenceSink.readAttr`): given one, large values are kept out of memory */
+  readAttr?: (kind: string, entityId: string) => unknown;
+}) {
   // One value per attribute: a list is an array value. A stored value is never changed in place, so the value an
   // undo or a held sink call keeps is the value that was there. Kept by entity, so a row is read from its own
   // fields; what is read by kind across entities is the value index, derived from these
@@ -73,17 +102,69 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
   const valueIndex = new Map<EARS.AttrKind, Map<unknown, EARS.EntityId | Set<EARS.EntityId>>>();
   // What `holders` answers for a value nobody holds; never written to, since only `indexValue` adds and it adds to its own
   const none: ReadonlySet<EARS.EntityId> = new Set();
+  // Out-of-line values recently read, by `kind␟id`, in the order they were last read; a Map keeps that order
+  const cache = new Map<string, { value: unknown; size: number }>();
+  let cachedBytes = 0;
+  const cacheKey = (id: EARS.EntityId, kind: EARS.AttrKind) => `${kind}\x1F${id}`;
+  const forget = (key: string) => {
+    const hit = cache.get(key);
+    if (!hit) return;
+    cache.delete(key);
+    cachedBytes -= hit.size;
+  };
+  const remember = (key: string, value: unknown, size: number) => {
+    forget(key);
+    if (size > CACHE_BYTES) return;
+    cache.set(key, { value, size });
+    cachedBytes += size;
+    for (const [oldest, { size: dropped }] of cache) {
+      if (cachedBytes <= CACHE_BYTES) break;
+      cache.delete(oldest);
+      cachedBytes -= dropped;
+    }
+  };
+
+  /** An out-of-line value, from the cache or read back from the store */
+  const readOutOfLine = (id: EARS.EntityId, kind: EARS.AttrKind, marker: OutOfLine): EARS.AttributeValue => {
+    const key = cacheKey(id, kind);
+    const hit = cache.get(key);
+    if (hit) {
+      // Read again: the most recently read, so the last to be dropped
+      cache.delete(key);
+      cache.set(key, hit);
+      return hit.value as EARS.AttributeValue;
+    }
+    const value = deepFreeze(readAttr!(kind, id)) as EARS.AttributeValue;
+    remember(key, value, marker.size);
+    return value;
+  };
+
+  /** The value a field holds: an out-of-line one read back */
+  const resolve = (id: EARS.EntityId, kind: EARS.AttrKind, held: unknown): EARS.AttributeValue =>
+    (held instanceof OutOfLine ? readOutOfLine(id, kind, held) : held) as EARS.AttributeValue;
+
+  /** Puts a committed value out of line, unless it has been replaced since */
+  const outOfLine = (id: EARS.EntityId, kind: EARS.AttrKind, value: unknown, size: number) => {
+    const row = rows.get(id);
+    if (!row || !owns(row, kind) || row[kind] !== value) return;
+    setField(row, kind, Object.freeze(new OutOfLine(size, Array.isArray(value) ? value.length : undefined)) as unknown as EARS.AttributeValue);
+    remember(cacheKey(id, kind), value, size);
+  };
+
   function clear() {
     if (journal.open) throw new Error('clear() inside transact(): emptying the engine is not a write a unit can undo');
     rows.clear();
+    cache.clear();
+    cachedBytes = 0;
     entityIndex.clear();
     trashed.clear();
     valueIndex.clear();
   }
 
   const indexKey = (index: Map<unknown, EARS.EntityId | Set<EARS.EntityId>>, id: EARS.EntityId, key: unknown, add: boolean) => {
-    // An object is never a key, whether the value or a list's element
+    // An object is never a key, whether the value or a list's element, and nor is a long string
     if (key !== null && typeof key === 'object') return;
+    if (typeof key === 'string' && key.length > INDEXED_STRING_MAX) return;
     const held = index.get(key);
     if (add) {
       if (held === undefined) index.set(key, id);
@@ -107,7 +188,7 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
     let index = valueIndex.get(kind);
     if (!index) {
       valueIndex.set(kind, index = new Map());
-      for (const [id, row] of rows) if (owns(row, kind)) indexValue(index, id, row[kind], true);
+      for (const [id, row] of rows) if (owns(row, kind)) indexValue(index, id, resolve(id, kind, row[kind]), true);
     }
     const held = index.get(value);
     return held === undefined ? none : typeof held === 'string' ? new Set([held]) : held;
@@ -122,10 +203,12 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
     if (valueIndex.size > 0) {
       const index = valueIndex.get(kind);
       if (index) {
-        if (row && owns(row, kind)) indexValue(index, id, row[kind], false);
-        if (next !== ABSENT) indexValue(index, id, next, true);
+        if (row && owns(row, kind)) indexValue(index, id, resolve(id, kind, row[kind]), false);
+        if (next !== ABSENT) indexValue(index, id, resolve(id, kind, next), true);
       }
     }
+    // A value replaced or removed leaves the cache at once, rather than when it is the oldest
+    if (readAttr) forget(cacheKey(id, kind));
     if (next === ABSENT) {
       if (row && owns(row, kind)) {
         delete row[kind];
@@ -135,6 +218,11 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
       if (!row) rows.set(id, row = newRow());
       // Immutable once stored: a read hands the value back as it is, and nothing can change it in place
       setField(row, kind, deepFreeze(next));
+      // A large value leaves memory once the store holds it, so a unit reads its own writes until it commits
+      if (readAttr && !(next instanceof OutOfLine)) {
+        const size = sizeOf(next);
+        if (size > OUT_OF_LINE_BYTES) journal.afterCommit(() => outOfLine(id, kind, next, size));
+      }
     }
     if (kind !== TRASHED_AT) return;
     if (next === ABSENT) trashed.delete(id);
@@ -144,7 +232,8 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
   /** Records how to put back the entity's value of a kind */
   const touchValue = (id: EARS.EntityId, kind: EARS.AttrKind) =>
     journal.open && journal.touch(`a\x1F${kind}\x1F${id}`, () => {
-      const before = current(id, kind);
+      // As it is held, an out-of-line value as its marker: an undo puts back what the store still holds
+      const before = held(id, kind);
       return () => place(id, kind, before);
     });
 
@@ -193,7 +282,7 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
 
   /** Every write of an attribute: journaled, in memory, and told to persistence */
   const assign = (id: EARS.EntityId, kind: EARS.AttrKind, next: EARS.AttributeValue | typeof ABSENT) => {
-    if (next === ABSENT && current(id, kind) === ABSENT) return;
+    if (next === ABSENT && held(id, kind) === ABSENT) return;
     touchValue(id, kind);
     place(id, kind, next);
     if (next !== ABSENT) indexEntity(id);
@@ -201,9 +290,16 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
     else persistence.onPutAttr(kind, id, next);
   };
 
-  const current = (id: EARS.EntityId, kind: EARS.AttrKind): EARS.AttributeValue | typeof ABSENT => {
+  /** What memory holds for a field: its value, an out-of-line value's marker, or `ABSENT` */
+  const held = (id: EARS.EntityId, kind: EARS.AttrKind): EARS.AttributeValue | typeof ABSENT => {
     const row = rows.get(id);
     return row && owns(row, kind) ? row[kind] : ABSENT;
+  };
+
+  /** A field's value, an out-of-line one read back, or `ABSENT` */
+  const current = (id: EARS.EntityId, kind: EARS.AttrKind): EARS.AttributeValue | typeof ABSENT => {
+    const value = held(id, kind);
+    return value === ABSENT ? ABSENT : resolve(id, kind, value);
   };
 
   /** The attribute's list, refusing a value that isn't one */
@@ -277,7 +373,7 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
   };
   /** Whether the entity holds the attribute, `null` included */
   const hasAttr = (id: EARS.EntityId, k: EARS.AttrKind) =>
-    k === ENTITY_TYPE ? hasEntity(id) : current(id, k) !== ABSENT;
+    k === ENTITY_TYPE ? hasEntity(id) : held(id, k) !== ABSENT;
   const getRoles = (id: EARS.EntityId): string[] => {
     const roles = current(id, EARS.AttrKind.Role);
     return roles === ABSENT ? [] : roles as unknown as string[];
@@ -288,7 +384,7 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
     if (!hasEntity(id)) return undefined;
     const row: EntityRow = { id, entityType: entityTypeOf(id) };
     const fields = rows.get(id);
-    for (const k in fields) setField(row as Row, k, fields[k]);
+    for (const k in fields) setField(row as Row, k, resolve(id, k as EARS.AttrKind, fields[k]));
     return row;
   };
 
@@ -355,7 +451,7 @@ export function createAttributeStorage({ persistence, journal }: { persistence: 
         let stats = attributes.get(kind);
         if (!stats) attributes.set(kind, stats = { entityCount: 0, totalValues: 0 });
         stats.entityCount++;
-        stats.totalValues += Array.isArray(value) ? value.length : 1;
+        stats.totalValues += value instanceof OutOfLine ? value.length ?? 1 : Array.isArray(value) ? value.length : 1;
       }
       const held = owns(row, EARS.AttrKind.Role) ? row[EARS.AttrKind.Role] : undefined;
       if (held) for (const role of new Set(held as unknown as string[])) roles.set(role, (roles.get(role) ?? 0) + 1);

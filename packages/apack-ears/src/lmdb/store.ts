@@ -124,6 +124,7 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
     onRemoveRelation: (...args) => { writable(); adapter.onRemoveRelation(...args); },
     onUnitStart: () => { writable(); adapter.onUnitStart(); },
     onUnitEnd: () => { writable(); adapter.onUnitEnd(); },
+    readAttr: (kind, entityId) => { openEnv(); return adapter.readAttr(kind, entityId); },
     close: () => close(),
   };
 

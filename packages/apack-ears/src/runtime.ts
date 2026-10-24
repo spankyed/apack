@@ -48,6 +48,11 @@ export interface PersistenceSink {
    * and the engine then undoes the unit in memory, so it never holds a write the sink did not take
    */
   onUnitEnd(): void;
+  /**
+   * An attribute's stored value, read synchronously, or undefined when none is stored. A sink that can answer lets the
+   * engine keep large values out of memory, reading them back when asked; one that can't keeps every value in memory
+   */
+  readAttr?(kind: string, entityId: string): unknown;
   close?(): void;
 }
 

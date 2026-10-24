@@ -1,5 +1,6 @@
 import type { TransactionFlags } from 'lmdb';
 import type { LmdbDbs } from './envs.ts';
+import { decodeAttr, type AttrRecord } from './reader.ts';
 import type { PersistenceSink } from '../runtime.ts';
 
 type Encoded = { t: string; v: any };
@@ -139,6 +140,10 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
     },
     onRemoveRelation(relId: string) {
       write(() => { relations.remove(relId); });
+    },
+    readAttr(kind: string, entityId: string) {
+      const record = attrs.get(attrKey(kind, entityId)) as AttrRecord | undefined;
+      return record === undefined ? undefined : decodeAttr(record);
     },
     close() {},
   };
