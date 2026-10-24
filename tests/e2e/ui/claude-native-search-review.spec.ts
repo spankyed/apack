@@ -101,7 +101,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
     for(const width of [1100,680]){
       const height=width===680?600:900
       await appPage.setViewportSize({width,height})
-      await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport()
+      await expect(async()=>{await result.evaluate(element=>element.scrollIntoView({block:'nearest'}));await expect(result).toBeInViewport()}).toPass({timeout:5000})
       await expect(composer).toHaveText(draft)
       await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
       const window=await electronApp.browserWindow(appPage)
