@@ -212,28 +212,15 @@ behaviour throughout; a pure re-layout needs no new spec.
 
 ### How to carry out the steps
 
-- **The design is decided.** Implement it; a step that finds the plan wrong stops as blocked (below) rather than
-  redesigning.
-- **Steps 1–6 run in order, each committed before the next starts.** Commit on the current branch: no push, no pull
-  request, no new branch.
-- **The order question is decided in Step 1 by its rule** (under Open), recorded there, and work continues.
-- **The contract suite weakens nothing.** No assertion is loosened to pass. A spec that pins something the plan removes
-  (`Sequence` as an entity, the trash as a set) changes with that decision, and the commit says which spec and why.
-- **The chain runs once before a step's commit:** `npm run chain -- --no-native`, and the full `npm run chain` for
-  Step 4. Rerun it at most once, and only for a failure diagnosed and fixed. A failure in code the step didn't touch,
-  or one caused by files someone else changed during the run, is reported, not chased.
-- **A reading is recorded, never tuned for.** Where a check names a tolerance (+10% median against the readings here),
-  a reading past it is recorded and reported with the step, not optimised until it passes.
-- **A missing prerequisite is recorded, not worked around.** Docker for the full chain, `sudo purge` for a cold page
-  cache, the production-size copy (`~/Library/Application Support/abuddy/ears-db`, copied, never opened in place) —
-  without one, record what could not be checked and why, and finish the rest.
-- **A step is done** when its "done when" holds, its readings are recorded under it and its commit is made; then the
-  next step starts.
-- **Work stops in exactly one of two places:**
-  - **finished:** Step 6 done, and this plan's status says the cut-over is complete;
-  - **blocked:** after one diagnosis attempt, the blocker, its evidence and the next action are written into this
-    plan's status, any finished part that passes the chain is committed, and the report names the blocker — a correct
-    stop, not a failure to retry.
+- Commit as you go. Open a PR before completing.
+- No need to run the chain before each commit. Rerun only after fixing a failure you caused, or after a few turns to
+  verify.
+- Record benchmark numbers. Don't over-tune code to hit them, but make any obvious algorithmic improvements and
+  optimisations you notice.
+- **Done:** Step 6 is done, the app runs on LMDB with no in-memory copy of the data, and this plan's status says the
+  cut-over is complete.
+- **Blocked:** after multiple diagnosis attempts, write the blocker, the evidence and the next action into this plan's
+  status. Commit any finished part that passes, then stop.
 
 ### 1. Declared indexes, and the order question decided
 - `indexes` on an entity's manifest entry, written into the row rules and `SDK_ROW_RULES`; codegen refuses a field the
