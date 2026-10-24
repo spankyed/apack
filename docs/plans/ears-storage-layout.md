@@ -2,11 +2,7 @@
 
 Status: **the cut-over is complete**, 2026-10-24: the app runs on LMDB with no in-memory copy of the data, Steps 1–6
 done (each records how, below). PR #273.
-**Blocked, one reading:** Step 5's p99 with a *cold* page cache. Evidence: macOS evicts a file's pages only through
-`purge`, and `sudo -n purge` here asks for a password this session doesn't have; every reading below was taken warm (a
-copy just converted, then read twice). Next action: with the production copy below in place, run `sudo purge`, then
-the production-size readings script (`node --expose-gc <script> <copy>/apack/ears-db`, as in Step 5) once, and record
-its first-run p99s under Step 5. Everything else Step 5 asks for, production size included, is recorded. Takes up review items 6
+Every reading Step 5 asks for is recorded, production size and a cold page cache included. Takes up review items 6
 (row reads) and 9 (durability) from the EARS API cleanup, and supersedes the open parts of
 [goal-lmdb-only.md](../goals/goal-lmdb-only.md) (PR #261, closed unmerged), which holds the spike's measurements and
 the lock analysis.
@@ -470,7 +466,22 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   A read by id or by edge stays under half a millisecond at p99; what costs is a read of a whole large type, 27 µs a
   message row (messages hold their text), which on the API's thread is half a second. No product path reads every
   message today (a thread's messages are read by its edges); one that did would want paging rather than a warmer
-  cache. The cold-cache reading is blocked, above.
+  cache.
+- **Cold page cache, on the same copy:** `purge` needs root, so the copy went onto a sparse disk image (`hdiutil
+  create -type SPARSE -fs APFS`), which was detached — dropping its pages from the cache — and attached again before
+  each run; the point reads ran first, so nothing warmed the pages they read. Two runs:
+
+  | Reading | Cold | Warm |
+  |---|---|---|
+  | boot | 62.7–70.2 ms | 27.3–27.7 ms |
+  | `getRow`, 2,000 ids | p50 0.021 ms, p99 1.0–1.1 ms | p50 0.016 ms, p99 0.30–0.35 ms |
+  | `findRelations({ source })` | p50 0.009 ms, p99 0.46–0.57 ms | p99 0.05–0.06 ms |
+  | `query('Message').pickAll()`, first of five | 687–708 ms | 533–562 ms |
+  | `getSchemaStats`, read first | 799 ms | 480–492 ms |
+
+  The image's backing file may keep pages in the host's cache below the image, so these bound a cold read from
+  below; what they show is that a cold point read costs about a millisecond at p99 and nothing stalls the API's
+  thread. Neither warming at boot nor moving reads off the main thread is called for.
 - **The bench on LMDB** (mean ms, `npm run bench -w @apackdev/ears`; each case ran twice and the two agree within 5%,
   the first figure given):
 
