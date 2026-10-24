@@ -1,6 +1,7 @@
 # EARS storage: layout, relations, queries and write durability
 
-Status: Steps 1–7 and 9 done, Step 8 dropped, 2026-10-24; Step 10 next, in the order below. Takes up review items 6
+Status: the engine's in-memory work is done (below, under Done), 2026-10-24; the cut-over to LMDB is next, Steps 1–6 in
+order. Takes up review items 6
 (row reads) and 9 (durability) from the EARS API cleanup, and supersedes the open parts of
 [goal-lmdb-only.md](../goals/goal-lmdb-only.md) (PR #261, closed unmerged), which holds the spike's measurements and
 the lock analysis.
@@ -22,7 +23,7 @@ The engine holds the whole database in memory and mirrors it to LMDB:
 - **Memory runs ahead of disk.** `lmdb/adapter.ts` buffers writes and flushes them in a microtask; a row that fails is
   dropped and reported through `onWriteFailure` after the writer has moved on (one production session dropped 3,187).
   Each flush is an `F_FULLFSYNC` on the API's main thread (3.5–8 ms), and a `transact` pays it twice.
-- **What Steps 1–9 left in memory:** attributes by entity (`attribute-storage.ts`), one relations module owning each
+- **What the done work left in memory:** attributes by entity (`attribute-storage.ts`), one relations module owning each
   relation's row and its adjacency (`relations.ts`), lazy queries, a value index any queried kind joins, a trash set,
   and numbering rows that are still entities (`Sequence-…`).
 
@@ -90,8 +91,8 @@ What the layout decides, beyond the goal's first draft:
   `['c', type]` and sets `trashed` on `['i', id]`. A live query walks only live entities, with no per-entity lookup;
   `withTrashed` merges both ranges by sequence; `trashed` walks `['d', …]` alone.
 - **Numbering is keys, not entities.** `['s', key]` replaces the `Sequence-…` rows, so `query.all()` and the raw
-  listings have no engine entities to step around, and `Sequence` leaves `RESERVED_ENTITY_TYPES` (Step 9's third
-  follow-up, done here).
+  listings have no engine entities to step around, and `Sequence` leaves `RESERVED_ENTITY_TYPES` (the last
+  follow-up of relations not being entities, done here).
 - **No list-length keys and no catalogs.** `has(k)` is a get of `['v', id, kind]`. `getSchemaStats` walks key ranges
   reading keys only, which is an admin read; the goal's per-kind first-seen catalogs cost a write each and served only
   it.
@@ -136,7 +137,7 @@ RocksDB (WAL without sync by default) make the same trade.
 
 ### Reads
 
-**Reads stream from LMDB cursors, one read snapshot per terminal** (decided 2026-10-24). Step 7's lazy builder is
+**Reads stream from LMDB cursors, one read snapshot per terminal** (decided 2026-10-24). The lazy query builder is
 already the shape that streams:
 
 | Step | Reads | Streams in |
@@ -198,31 +199,110 @@ amplification.
 `seq` in `['i', id]` and in every index key: a sequence per create and a hop per index match. Engine-minted ids are
 time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or node's,
 named after it) are not. Id order would drop the sequence as a contract change, with code that needs an order saying
-so through `orderBy`. Settled by measuring, in Step 10.1: which callers read a query's order without an `orderBy`, and
+so through `orderBy`. Settled by measuring, in Step 1: which callers read a query's order without an `orderBy`, and
 what the sequence costs a create on format 4.
 
-## Steps (in order of lift)
+## Steps: the engine on an ordered key-value seam
 
-Each step is one commit, measured against the Step 4 baseline where it touches the engine. The ears contract suite
-(`tests/engine/`) pins behaviour throughout; a pure re-layout needs no new spec.
+Six steps, each one commit, shippable with its own checks; Step 1 lands on today's engine, so the cut-over carries
+less. Engine changes are measured against the baseline under Done. The ears contract suite (`tests/engine/`) pins
+behaviour throughout; a pure re-layout needs no new spec.
 
-### 1. Close PR #261
+### 1. Declared indexes, and the order question settled
+- `indexes` on an entity's manifest entry, written into the row rules and `SDK_ROW_RULES`; codegen refuses a field the
+  shape doesn't declare; `apack.schema.json` regenerates.
+- Today's value index covers declared kinds and roles only; a `where` on any other field filters the walk. The
+  development warning for an unindexed `where` over a large type.
+- Each pack's `indexes` chosen from its `where` calls.
+- The open order question measured and decided: the callers that read a query's order without an `orderBy`, and what a
+  sequence costs a create.
+
+**Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
+counting reads); codegen refuses an undeclared field, mutation-checked; the warning fires once per call site; the order
+question is recorded here as decided.
+
+### 2. The `OrderedKV` seam and `MemoryKV`
+- `OrderedKV`: `get`, `range` (with `start`, `end`, `reverse`, `limit`, keys only), `put`, `del`, and transactions: a
+  read snapshot, and a write unit that reads its own writes and commits or aborts whole.
+- `MemoryKV`, for tests only, never the app: a sorted map whose snapshots and units behave exactly as LMDB's, which is
+  what makes a test on it a test of the app.
+- One contract spec, run against both backends: ordering of array keys, snapshot isolation (a snapshot doesn't see a
+  later commit), a unit reading its own writes, abort leaving nothing, and a range closed on `break` and on a throw.
+
+**Done when:** the contract spec passes on `MemoryKV` and on an LMDB backend opened on a temp directory.
+
+### 3. The engine over the seam
+- Attribute storage and the relations module become the key layout above, over `OrderedKV`; the trash moves between
+  `['e', …]` and `['d', …]`; numbering moves to `['s', key]` and `Sequence` leaves the reserved types.
+- The read path above, with each terminal's snapshot and the unit's write transaction inside `transact`.
+- The app still boots by loading the LMDB files into a `MemoryKV`, a bridge this step adds and Step 4 deletes, so the
+  cut-over to disk is one change on its own.
+
+**Done when:** the contract suite passes unchanged on `MemoryKV`; the bench is within tolerance of the readings under
+Done;
+a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early and a live query reads no trashed entity.
+
+### 4. The app on LMDB
+- The LMDB backend with format 4, and a 3 → 4 step in `scripts/ears-convert.ts`. Only the developers' own data is in an
+  older format, converted explicitly, on a copy.
+- The durability design: synchronous commits without a sync, the group-commit sync, the sync a client's delivery
+  requests at the bus, `durable()` and `transact(fn, { durable: true })`, and the environment opened through one
+  function. Reset and import as transactions (`replaceWith(dir)`).
+- The host, API, CLI and SDK test runtime cut over. Deleted: hydration, Step 3's bridge, the sink, the adapter,
+  the journal and `LmdbReader`.
+- The development check that freezes returned values in tests.
+
+**Done when:**
+- the contract suite passes unchanged on both backends;
+- a write survives a child killed with SIGKILL right after it returns;
+- a write a client's message caused is synced without a `durable()` call, a flow's is not synced per commit, and a
+  write behind `durable()` is on disk when it resolves (the sync count observed through the backend);
+- a thousand queries that break early or throw leave the environment's reader count where it was (lmdb-js
+  `readerList()`).
+
+### 5. Measured
+- Boot, heap, the test run's time and the bench against the readings above and the baseline, the `orderBy`
+  regression from attributes by entity included; the bench's `first()`, `limit`, indexed-`where`, traversal and 10k-edge hub cases on
+  LMDB.
+- The write path profiled: a create and an update on format 4 (`node --cpu-prof`, self time per package). Without a
+  sync the spike measured 115 µs a create against a ~20 µs commit; the rest was write amplification, which format 4's
+  layout and declared indexes cut. Only if the binding's crossings still dominate does a native layer earn its place,
+  and then an existing binding (`heed` through napi-rs) before LMDB bindings of our own.
+- Query latency at p99 with a cold page cache on the production-size copy. If a cold read stalls the API's main
+  thread, warming at boot or moving large reads off it is decided with that number.
+- `getSchemaStats`' key-only walk on the production-size copy.
+
+**Done when:** each reading is recorded here.
+
+### 6. What the systems keep in their contexts
+An audit: a system that holds entity lists to answer `SEND_STATE` is a second copy of the data in app code. Each one
+either keeps only what it publishes or reads it back when asked.
+
+**Done when:** each system holding entity data is listed here with what it keeps and why.
+
+Narrowing the two locks for multi-process writes follows these steps.
+
+## Done
+
+The in-memory work, each a commit measured against the baseline below.
+
+### Close PR #261
 Done, 2026-10-23: closed unmerged, pointing here. Its key layout and measurements are in the goal; the spike's code is
 not reused.
 
-### 2. `link` idempotence by structural equality
+### `link` idempotence by structural equality
 Done: `link` compares `info` structurally, not by `JSON.stringify`, so key order makes no duplicate edge.
 
-### 3. `orderBy`: decorate-sort, collator, type order
+### `orderBy`: decorate-sort, collator, type order
 Done: each value is read once, then sorted; strings compare with one cached `Intl.Collator`; mixed types order by type,
 then value; undefined stays last. 3 chained steps 27.8 → 11.8 ms, `orderBy` a string 14.9 → 11.9 ms.
 
-### 4. Benchmark cases and baseline
+### The baseline
 Done, 2026-10-23. `bench/ears.bench.ts` times the engine in `dist` (`npm run bench -w @apackdev/ears` builds first);
 `bench/heap.ts` (`npm run bench:heap`) reads the heap with the same graph loaded. The bench graph holds 8 attribute
 kinds, so `getRow`'s O(K) showed less here than in the app, which holds hundreds.
 
-Baseline (mean ms, after Step 3; macOS, Node 23.11, lmdb 3.5.3, the bench's 50k entities / 200k attributes / 100k
+Baseline (mean ms, after the `orderBy` rework; macOS, Node 23.11, lmdb 3.5.3, the bench's 50k entities / 200k attributes / 100k
 relations):
 
 | Case | ms |
@@ -245,11 +325,11 @@ relations):
 | transact: 1,000 creates as one unit | 6.93 |
 | heap, graph loaded | 61.3 MB |
 
-### 5. Rewrite `goal-lmdb-only.md`
-Done, 2026-10-23: it holds Step 10's first design, the spike's measurements and the lock analysis.
+### Rewrite `goal-lmdb-only.md`
+Done, 2026-10-23: it holds the cut-over's first design, the spike's measurements and the lock analysis.
 
-### 6. Attributes by entity (review item 6)
-Done, 2026-10-23. Each row is a plain object, not a `Map` (mean ms against the Step 4 baseline):
+### Attributes by entity (review item 6)
+Done, 2026-10-23. Each row is a plain object, not a `Map` (mean ms against the baseline):
 
 | Case | Baseline | `Map` per entity | object per entity |
 |---|---|---|---|
@@ -262,21 +342,21 @@ Done, 2026-10-23. Each row is a plain object, not a `Map` (mean ms against the S
 | 3 chained steps (`orderBy('rank')`) | 11.8 | 13.4 | 13.0 |
 
 `orderBy` went over the +10% tolerance: each `getAttr` looked its id up in one map of every entity, relations included.
-Step 9 took relations out of that map; Step 10 measures it again on LMDB. A field named `__proto__` is set as an own
+Relations leaving the entity map took them out of it; Step 5 measures it again on LMDB. A field named `__proto__` is set as an own
 property (`setField`), with a spec.
 
-### 7. Lazy queries
+### Lazy queries
 Done, 2026-10-23. A step that keeps or walks ids is a stream: a loop over a visit callback, which answers whether to go
 on (generators measured slower: relation traversal 2.3×, `linkedWith` +47%). A builder is a recipe: chaining runs
 nothing, and every terminal runs the whole query against the data as it is then, so a predicate runs once per entity
 per terminal. 1,000 `query(type).first()` over 40k 3,815 → 0.25 ms, 100 `linkedWith` 49.4 → 44.7 ms.
 
-### 8. Writes committed when they return (review item 9) — dropped
+### Writes committed when they return (review item 9) — dropped
 With one copy of the data there is nothing to roll back, so the journal, the adapter, the sink and hydration go in
-Step 10 instead of being reworked. Its design is kept, with moving thread messages out of the engine, in
+the cut-over instead of being reworked. Its design is kept, with moving thread messages out of the engine, in
 [deferred/ears-in-memory-path.md](deferred/ears-in-memory-path.md), the path not taken.
 
-### 9. Relations are not entities
+### Relations are not entities
 Done, 2026-10-24, with two of its follow-ups:
 
 - A relation is a row of its own, not an entity: the entity index doesn't list it and `query` doesn't reach it.
@@ -287,87 +367,10 @@ Done, 2026-10-24, with two of its follow-ups:
   two refusing an id no relation has (`NO_SUCH_RELATION`). A relation's id is an `EARS.RelationId`, which `write`
   refuses at compile time (`WriteTarget`). Relations through `write`, the alternative, is deferred in
   [deferred/relation-write-builder.md](deferred/relation-write-builder.md).
-- The third follow-up, numbering rows out of the entity index, is Step 10's `['s', key]`.
-
-### 10. The engine on an ordered key-value seam
-
-Six steps, each shippable with its own checks. The first two land on today's engine, so the cut-over carries less.
-
-#### 10.1 Declared indexes, and the order question settled
-- `indexes` on an entity's manifest entry, written into the row rules and `SDK_ROW_RULES`; codegen refuses a field the
-  shape doesn't declare; `apack.schema.json` regenerates.
-- Today's value index covers declared kinds and roles only; a `where` on any other field filters the walk. The
-  development warning for an unindexed `where` over a large type.
-- Each pack's `indexes` chosen from its `where` calls.
-- The open order question measured and decided: the callers that read a query's order without an `orderBy`, and what a
-  sequence costs a create.
-
-**Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
-counting reads); codegen refuses an undeclared field, mutation-checked; the warning fires once per call site; the order
-question is recorded here as decided.
-
-#### 10.2 The `OrderedKV` seam and `MemoryKV`
-- `OrderedKV`: `get`, `range` (with `start`, `end`, `reverse`, `limit`, keys only), `put`, `del`, and transactions: a
-  read snapshot, and a write unit that reads its own writes and commits or aborts whole.
-- `MemoryKV`, for tests only, never the app: a sorted map whose snapshots and units behave exactly as LMDB's, which is
-  what makes a test on it a test of the app.
-- One contract spec, run against both backends: ordering of array keys, snapshot isolation (a snapshot doesn't see a
-  later commit), a unit reading its own writes, abort leaving nothing, and a range closed on `break` and on a throw.
-
-**Done when:** the contract spec passes on `MemoryKV` and on an LMDB backend opened on a temp directory.
-
-#### 10.3 The engine over the seam
-- Attribute storage and the relations module become the key layout above, over `OrderedKV`; the trash moves between
-  `['e', …]` and `['d', …]`; numbering moves to `['s', key]` and `Sequence` leaves the reserved types.
-- The read path above, with each terminal's snapshot and the unit's write transaction inside `transact`.
-- The app still boots by loading the LMDB files into a `MemoryKV`, a bridge this step adds and 10.4 deletes, so the
-  cut-over to disk is one change on its own.
-
-**Done when:** the contract suite passes unchanged on `MemoryKV`; the bench is within tolerance of Step 9's readings;
-a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early and a live query reads no trashed entity.
-
-#### 10.4 The app on LMDB
-- The LMDB backend with format 4, and a 3 → 4 step in `scripts/ears-convert.ts`. Only the developers' own data is in an
-  older format, converted explicitly, on a copy.
-- The durability design: synchronous commits without a sync, the group-commit sync, the sync a client's delivery
-  requests at the bus, `durable()` and `transact(fn, { durable: true })`, and the environment opened through one
-  function. Reset and import as transactions (`replaceWith(dir)`).
-- The host, API, CLI and SDK test runtime cut over. Deleted: hydration, the bridge from 10.3, the sink, the adapter,
-  the journal and `LmdbReader`.
-- The development check that freezes returned values in tests.
-
-**Done when:**
-- the contract suite passes unchanged on both backends;
-- a write survives a child killed with SIGKILL right after it returns;
-- a write a client's message caused is synced without a `durable()` call, a flow's is not synced per commit, and a
-  write behind `durable()` is on disk when it resolves (the sync count observed through the backend);
-- a thousand queries that break early or throw leave the environment's reader count where it was (lmdb-js
-  `readerList()`).
-
-#### 10.5 Measured
-- Boot, heap, the test run's time and the bench against the readings above and the Step 4 baseline, the `orderBy`
-  regression from Step 6 included; the bench's `first()`, `limit`, indexed-`where`, traversal and 10k-edge hub cases on
-  LMDB.
-- The write path profiled: a create and an update on format 4 (`node --cpu-prof`, self time per package). Without a
-  sync the spike measured 115 µs a create against a ~20 µs commit; the rest was write amplification, which format 4's
-  layout and declared indexes cut. Only if the binding's crossings still dominate does a native layer earn its place,
-  and then an existing binding (`heed` through napi-rs) before LMDB bindings of our own.
-- Query latency at p99 with a cold page cache on the production-size copy. If a cold read stalls the API's main
-  thread, warming at boot or moving large reads off it is decided with that number.
-- `getSchemaStats`' key-only walk on the production-size copy.
-
-**Done when:** each reading is recorded here.
-
-#### 10.6 What the systems keep in their contexts
-An audit: a system that holds entity lists to answer `SEND_STATE` is a second copy of the data in app code. Each one
-either keeps only what it publishes or reads it back when asked.
-
-**Done when:** each system holding entity data is listed here with what it keeps and why.
-
-Narrowing the two locks for multi-process writes follows Step 10.
+- The third follow-up, numbering rows out of the entity index, is Step 3's `['s', key]`.
 
 ## Out of scope
 
-- The typed contract (`entities.ts`, `runtime.ts`, `typed.ts`): Step 10 changes no type packs see. Declared indexes add
+- The typed contract (`entities.ts`, `runtime.ts`, `typed.ts`): these steps change no type packs see. Declared indexes add
   a manifest key (`indexes`), not a type.
-- `PACK_SNAPSHOT_FORMAT`. Steps 1–9 keep LMDB format 3; Step 10.4 is format 4.
+- `PACK_SNAPSHOT_FORMAT`. The store is format 3 until Step 4, which makes it format 4.

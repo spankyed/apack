@@ -1,9 +1,9 @@
 # The in-memory path: writes committed when they return, and thread messages in a record store
 
 Status: deferred by decision, 2026-10-23. This is the road not taken by
-[ears-storage-layout.md](../ears-storage-layout.md): the engine moves to disk (its Step 10) instead of staying in
-memory with these two fixes. Resume only if Step 10 is abandoned, or stalls long enough that the silent write loss
-(Part A) has to be fixed first. If Step 10 lands, close this: it deletes Part A's subject, and with one copy of the
+[ears-storage-layout.md](../ears-storage-layout.md): the engine moves to disk (its cut-over, Steps 1–6) instead of staying in
+memory with these two fixes. Resume only if the cut-over is abandoned, or stalls long enough that the silent write loss
+(Part A) has to be fixed first. If the cut-over lands, close this: it deletes Part A's subject, and with one copy of the
 data no field is too large for the engine, which is Part B's.
 
 ## Context
