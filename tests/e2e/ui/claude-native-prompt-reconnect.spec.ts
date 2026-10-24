@@ -140,7 +140,7 @@ test('retains newer parent and Agent drafts when original replies cross API reco
       }
       await openTools(container); await container.getByRole('button', { name: 'Use review template', exact: true }).click()
       await expect(editor).toHaveText('Review release notes before merging.'); await readCurrent(container, 'Review release notes before merging.')
-      await editor.press('Meta+a'); await editor.press('Backspace'); await expect(editor).toHaveText('')
+      await editor.press('ControlOrMeta+a'); await editor.press('Backspace'); await expect(editor).toHaveText('')
       await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-theme-edits.json'), 'utf8')).at(-1)?.result).toMatchObject({ text: '', cursor: 0 })
       await container.getByRole('button', { name: 'Suggest next step', exact: true }).click()
       await expect(editor.locator('.claude-prompt-suggestion')).toHaveText('Review the remaining release checklist.')
