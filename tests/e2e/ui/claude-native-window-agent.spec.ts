@@ -1,6 +1,5 @@
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
@@ -39,10 +38,10 @@ test('preserves independent window and Agent drafts through shared native view s
   const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
-    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
-    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));
-    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);
-    const cols=row?.match(/columns:\s*(\d+)/)?.[1];return cols?{cols:Number(cols),rows:200}:undefined;
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const event=rows.map(row=>row.meta?.event).filter(event=>event?.type==='CLAUDE_TERMINAL_RESIZE'&&event.ownerId===ownerId).at(-1)
+    return event?{cols:event.columns,rows:event.rows}:undefined
   }
   await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
@@ -55,7 +54,7 @@ test('preserves independent window and Agent drafts through shared native view s
     if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
+    if (native?.state?.status === 'live' && native.state.mainStatus?.includes('Session ready')) return true
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
@@ -123,7 +122,16 @@ test('preserves independent window and Agent drafts through shared native view s
   await secondWorker.fill('Popout Agent draft 👋');await expand(secondForm)
   await secondForm.getByRole('button',{name:'Read active composer',exact:true}).click()
   await expect.poll(async()=>(await reads()).length).toBe(1);expect((await reads())[0].box.text).toBe('Popout Agent draft 👋')
-  await appPage.evaluate(event=>(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_UI_PRESS',...event}),old!)
+  let freshMount:any
+  await expect.poll(async()=>{freshMount=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const rows=Object.entries(c.nativeUiViews).filter(([,view]:[string,any])=>view.threadId===c.currentThread.id&&view.mountRequest?.nativeView&&view.state.status==='live') as [string,any][];if(rows.length!==1)return;return {threadId:c.currentThread.id,mountId:rows[0][0]}});return !!freshMount}).toBe(true)
+  const addressedOldAction={...freshMount,actionId:old!.actionId}
+  expect(addressedOldAction.mountId).not.toBe(old!.mountId)
+  const deliveredControls=async()=>{const text=await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8');return text.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>row.meta?.event?.type==='CLAUDE_UI_PRESS')}
+  const beforeReplay=await deliveredControls()
+  // Removed parent mounts are intentionally unroutable; deliver the retired native token through the live Agent mount.
+  await appPage.evaluate(event=>(window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[{type:'CLAUDE_UI_PRESS',...event}]}),addressedOldAction)
+  await expect.poll(async()=>(await deliveredControls()).slice(beforeReplay.length).some(row=>row.meta.from&&row.meta.event.mountId===addressedOldAction.mountId&&row.meta.event.threadId===addressedOldAction.threadId&&row.meta.event.actionId===addressedOldAction.actionId)).toBe(true)
+  await expect(worker).toHaveText('Main Agent draft.');await expect(secondWorker).toHaveText('Popout Agent draft 👋')
   await secondForm.getByRole('button',{name:'Fill active composer',exact:true}).click()
   await expect.poll(async()=>(await reads()).length).toBe(2);expect((await reads())[1]).toMatchObject({result:{isFilled:true},box:{text:'Native focused worker draft.'}})
   await expect(worker).toHaveText('Main Agent draft.');await expect(secondWorker).toHaveText('Native focused worker draft.')
@@ -152,6 +160,6 @@ test('preserves independent window and Agent drafts through shared native view s
   await composer.fill('Resume the Agent review after window cleanup.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-window-agent-proof.json'),JSON.stringify({taskId,old,receipts:await reads(),sessionId,boundNativePid}))
+  await writeFile(join(workspace!,'native-window-agent-proof.json'),JSON.stringify({taskId,old,addressedOldAction,backendDelivered:true,receipts:await reads(),sessionId,boundNativePid}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeWindowAgentSwitch:true,nativeWindowAgentDrafts:true,nativeWindowAgentPrompt:true,nativeWindowAgentParentRefused:true,nativeWindowAgentDetach:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
