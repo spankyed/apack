@@ -83,11 +83,14 @@ test('reviews original Glob and Grep results while preserving everyday composing
     const phase=index+1,id='native_search_review_'+phase
     await composer.fill('SearchReviewTurn'+phase+': '+step.purpose)
     await card.getByRole('button',{name:'Send',exact:true}).click()
+    await expect(appPage.getByText('Search review step '+phase+' complete.',{exact:true})).toBeVisible({timeout:15000})
     const group=appPage.locator('[data-native-tool-ids~="'+id+'"]')
-    await expect(group).toBeVisible()
-    const expand=group.getByRole('button',{name:'Expand tool activity',exact:true})
-    if(await expand.isVisible())await expand.click()
-    else{const tools=group.getByRole('button',{name:/^Native tools/});if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')!=='true')await tools.click()}
+    await expect(async()=>{
+      const expand=group.getByRole('button',{name:'Expand tool activity',exact:true})
+      if(await expand.isVisible())await expand.click({timeout:1000})
+      else{const tools=group.getByRole('button',{name:/^Native tools/});if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')!=='true')await tools.click({timeout:1000})}
+      await expect(appPage.locator('[data-native-tool-use-id="'+id+'"]')).toBeVisible({timeout:1000})
+    }).toPass({timeout:10000})
     const receipt=async()=>JSON.parse(await readFile(join(workspace!,id+'-original.json'),'utf8').catch(()=>'{}'))
     await expect.poll(async()=>(await receipt()).props?.tool_use_id,{timeout:15000}).toBe(id)
     await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
