@@ -75,7 +75,7 @@ it('replaces deliberately, survives boot refresh, then restores a removed defaul
     untypedUpsert('Settings', { id: settingsId, data: choices });
   } finally {
     _bindEars(previousEngine);
-    expect(store.close().errorCount).toBe(0);
+    store.close();
   }
   expect(readInstalledPacks(context.installedPacksFile)[0]).toMatchObject({ enabled: true, updatesWith: 'app' });
   const fork = builtPack(path.join(tmp, 'fork'), 'default-pack', '2.0.0');

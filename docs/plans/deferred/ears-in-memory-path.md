@@ -35,6 +35,13 @@ a running app's files: copy `data.mdb`, convert the copy with `scripts/ears-conv
 
 ## Part A — writes committed when they return
 
+**Done, 2026-10-24.** Every write is a unit (`journal.unit`, `unitWrites`); the journal keeps a unit's undos until the
+sink has stored it; the adapter commits each unit in one synchronous transaction without a flush and throws on a
+refusal; the store syncs every `SYNC_INTERVAL_MS` and on close; reset and import are transactions (`reset()`,
+`replaceWith(dir)`) on both store kinds, and `reopen`, the buffers and `onWriteFailure` are gone. Readings on a loaded
+machine (the built engine; other work running): 1,000 creates 7.2–8.6 ms against Step 4's 4.50, about what 1,000
+creates in one `transact` cost (7.4–9.4 ms), which is the undo record a write now always makes.
+
 **Why.** `lmdb/adapter.ts` buffers writes and flushes them in a microtask; a row that fails is dropped and reported
 through `onWriteFailure` after the writer has moved on, so memory runs ahead of disk with no signal to the code that
 wrote. A production app dropped 3,187 writes in one session that way. The main environment also opens with default

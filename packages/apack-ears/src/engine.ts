@@ -9,7 +9,7 @@ import { createHierarchy } from './hierarchy.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createEntityCounters } from './numbering.ts';
 import { createRelations, type RelationMatch, type RelationRow } from './relations.ts';
-import { createJournal } from './journal.ts';
+import { createJournal, unitWrites } from './journal.ts';
 import { createNameChecks } from './names.ts';
 
 /** An engine's operations — its queries, writes and transactions: what a program is handed */
@@ -91,8 +91,14 @@ export interface EarsEngine extends Ears {
 export function createEarsEngine({ persistence = noopSink, isEntityType, isRelationKind, isRole, rowRules = () => undefined }: EARSRuntimeDeps): EarsEngine {
   const names = createNameChecks({ isRelationKind, isRole });
   const { journal, unitSink, transact } = createJournal(persistence);
-  const storage = createAttributeStorage({ persistence: unitSink, journal });
-  const relations = createRelations({ persistence: unitSink, journal });
+  // Every write is made in a unit, so the sink sees nothing but units, and one it refuses is undone in memory
+  const storage = unitWrites(journal, createAttributeStorage({ persistence: unitSink, journal }), [
+    'putAttr', 'appendAttr', 'mergeAttr', 'removeAt', 'removeValue', 'deleteAttr', 'entityCreated', 'grantRole', 'revokeRole',
+    'destroyEntity',
+  ]);
+  const relations = unitWrites(journal, createRelations({ persistence: unitSink, journal }), [
+    'add', 'replace', 'update', 'remove', 'unlink', 'removeEntity',
+  ]);
   const query = createQuery({ storage, relations, isEntityType, names });
   const hierarchy = createHierarchy({ query, names });
   const counters = createEntityCounters(storage);

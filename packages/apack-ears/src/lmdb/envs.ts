@@ -51,6 +51,10 @@ export function openEnvAt(basePath: string, { readOnly = false }: { readOnly?: b
     maxDbs: 8,
     compression: true,
     readOnly,
+    // A commit is synchronous and the store syncs in the background (`openLmdbStore`); overlapping syncs would make
+    // even an unflushed commit wait for the disk. Every process opens the environment here, so all agree, as LMDB
+    // requires of processes sharing one
+    overlappingSync: false,
   });
   try {
     checkStamp(root, basePath, readOnly, {

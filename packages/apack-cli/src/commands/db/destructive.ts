@@ -94,8 +94,8 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
       io.out(`\n${DRY_RUN}`);
       return null;
     }
+    db.store.reset();
     db.admin.clear();
-    await db.store.reset();
     // The write lock is held and no app runs on the data dir, so nothing has the run history open
     if (hasHistory) fs.rmSync(db.paths.runHistory, { recursive: true, force: true });
     if (!keepKeys) secrets.clearAll();

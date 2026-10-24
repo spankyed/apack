@@ -140,7 +140,7 @@ export class LmdbReader {
 
 // @public
 export interface LmdbStore {
-    close(): PersistenceErrorStats;
+    close(): void;
     copyTo(targetDir: string): Promise<void>;
     readonly env: LmdbDbs;
     hydrate(): Promise<void>;
@@ -148,8 +148,8 @@ export interface LmdbStore {
     readonly path: string;
     read(): LmdbReader;
     readonly readOnly: boolean;
-    reopen(): void;
-    reset(): Promise<void>;
+    replaceWith(dir: string): void;
+    reset(): void;
     readonly sink: Required<PersistenceSink>;
 }
 
@@ -157,13 +157,12 @@ export interface LmdbStore {
 export interface LmdbStoreOptions {
     engine: () => EarsAdmin;
     log?: (message: string) => void;
-    onWriteFailure?: (failure: WriteFailure) => void;
     path: string;
     readOnly?: boolean;
 }
 
-// @public (undocumented)
-export function makeLmdbAdapter(dbs: LmdbDbs, onWriteFailure?: (failure: WriteFailure) => void): Required<PersistenceSink>;
+// @public
+export function makeLmdbAdapter(dbs: LmdbDbs, onCommit?: () => void): Required<PersistenceSink>;
 
 // @public
 export function openEnvAt(basePath: string, input?: {
@@ -210,13 +209,5 @@ export const REMOVE_ATTRIBUTE: unique symbol;
 export function rewriteAttributes(basePath: string, rewrite: (kind: string, id: string, value: unknown) => unknown, input?: {
     removeEntities?: readonly string[];
 }): AttributeRewrite;
-
-// @public
-export interface WriteFailure {
-    // (undocumented)
-    error: unknown;
-    key: string;
-    op: string;
-}
 
 ```

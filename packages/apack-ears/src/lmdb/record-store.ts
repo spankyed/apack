@@ -37,19 +37,14 @@ type Dbs = { root: RootDatabase; records: Database<StoredRecord, string>; index:
  */
 export function openRecordStore<R extends { id: string } = StoredRecord>({ path: dir, indexes, readOnly = false }: RecordStoreOptions<R>): RecordStore<R> {
   let dbs: Dbs | null = null;
-  /**
-   * Why opening the files again failed, while it has: the store has nowhere to write, so a write throws rather than
-   * being dropped as it is while files are being replaced
-   */
-  let openFailure: Error | null = null;
   const newId = _idClock();
 
-  function openDbs(): Dbs {
-    if (readOnly && !fs.existsSync(path.join(dir, 'data.mdb'))) throw new Error(`No record store at ${dir}`);
-    if (!readOnly) fs.mkdirSync(path.dirname(dir), { recursive: true });
-    const root = open({ path: dir, maxDbs: 4, noSync: true, readOnly });
+  function openDbs(at = dir, asReadOnly = readOnly): Dbs {
+    if (asReadOnly && !fs.existsSync(path.join(at, 'data.mdb'))) throw new Error(`No record store at ${at}`);
+    if (!asReadOnly) fs.mkdirSync(path.dirname(at), { recursive: true });
+    const root = open({ path: at, maxDbs: 4, noSync: true, readOnly: asReadOnly });
     try {
-      checkStamp(root, dir, readOnly, { kind: RECORD_STORE_KIND, format: RECORD_STORE_FORMAT_VERSION, noun: 'record store' });
+      checkStamp(root, at, asReadOnly, { kind: RECORD_STORE_KIND, format: RECORD_STORE_FORMAT_VERSION, noun: 'record store' });
       return {
         root,
         records: root.openDB({ name: 'records', encoding: 'json' }),
@@ -67,31 +62,21 @@ export function openRecordStore<R extends { id: string } = StoredRecord>({ path:
   }
 
   /**
-   * The open environment to write to, or nothing while the store is closed — for a reset or an import, which
-   * replace it — when the write is dropped: a record store is a log, and what is written while its files are being
-   * replaced has nowhere to go, as the LMDB store drops writes made while it is closed
+   * The open environment to write to, or nothing once the store is closed, when the write is dropped: a record store
+   * is a log, and a write made as the app shuts down has nowhere to go
    */
   function writable(): Dbs | null {
     if (readOnly) throw new Error(`The record store at ${dir} is open read-only`);
-    if (openFailure) {
-      throw new Error(
-        `The record store at ${dir} is closed: opening it again failed (${openFailure.message}). `
-        + 'Nothing can be saved until the app is started again.',
-      );
-    }
     return dbs;
   }
 
-  /** Opens the files again, remembering a failure for the writes that follow */
-  function reopenDbs(): void {
-    try {
-      dbs = openDbs();
-      openFailure = null;
-    } catch (error) {
-      openFailure = error instanceof Error ? error : new Error(String(error));
-      throw error;
-    }
-  }
+  /** Removes every record and index entry; keys are read first, since a range is a live cursor */
+  const empty = ({ records, index }: Dbs) => {
+    // eslint-disable-next-line no-useless-spread -- a range is a live cursor, read whole before it is removed from
+    for (const key of [...records.getKeys()]) records.remove(key);
+    // eslint-disable-next-line no-useless-spread -- a range is a live cursor, read whole before it is removed from
+    for (const key of [...index.getKeys()]) index.remove(key);
+  };
 
   const entries = (record: StoredRecord): IndexKey[] =>
     _indexEntries(indexes, record as R).map(([name, value]) => [name, value, record.id]);
@@ -151,17 +136,23 @@ export function openRecordStore<R extends { id: string } = StoredRecord>({ path:
     },
     newId,
     close,
-    reopen() {
-      close();
-      reopenDbs();
+    reset() {
+      const open = writable();
+      if (!open) return;
+      open.root.transactionSync(() => { empty(open); });
     },
-    async reset() {
-      if (readOnly) throw new Error(`The record store at ${dir} is open read-only`);
-      close();
-      // Let LMDB release the files before deleting them
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      fs.rmSync(dir, { recursive: true, force: true });
-      reopenDbs();
+    replaceWith(source) {
+      const open = writable() ?? current();
+      const from = openDbs(source, true);
+      try {
+        open.root.transactionSync(() => {
+          empty(open);
+          for (const { key, value } of from.records.getRange()) open.records.put(key, value);
+          for (const { key, value } of from.index.getRange()) open.index.put(key, value);
+        });
+      } finally {
+        from.root.close();
+      }
     },
     async copyTo(targetDir) {
       fs.mkdirSync(targetDir, { recursive: true });

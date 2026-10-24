@@ -49,32 +49,33 @@ const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fi
 
 describe('createHostRuntime', () => {
   it('refuses overlapping resets and imports before either can touch the store', async () => {
-    let finish!: () => void;
-    const reset = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const reset = vi.fn();
     const store = { reset } as unknown as LmdbStore;
     const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), store, engine: newEngine(), transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+    // Asked again before the first has settled
     const first = runtime.services.appData.reset();
-    try {
-      await expect(runtime.services.appData.reset()).rejects.toThrow('already being replaced');
-      await expect(runtime.services.appData.importBackup('/not-a-backup')).rejects.toThrow('already being replaced');
-      expect(reset).toHaveBeenCalledOnce();
-    } finally { finish(); await first; }
+    const second = runtime.services.appData.reset();
+    const imported = runtime.services.appData.importBackup('/not-a-backup');
+    await expect(second).rejects.toThrow('already being replaced');
+    await expect(imported).rejects.toThrow('already being replaced');
+    await first;
+    expect(reset).toHaveBeenCalledOnce();
     order.length = 0;
   });
 
   it('excludes pack operations while app data is replaced, and refuses to replace it under one', async () => {
-    let finish!: () => void;
-    const store = { reset: vi.fn(() => new Promise<void>(resolve => { finish = resolve; })) } as unknown as LmdbStore;
+    const store = { reset: vi.fn() } as unknown as LmdbStore;
     const packs = createNativePackTestRegistry();
     const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), store, engine: newEngine(), transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs });
+    // Claimed in the turn the reset was asked for, before it settles
     const resetting = runtime.services.appData.reset();
     try {
       const free = packs.claimPackOperation('any-pack');
       if (free) packs.releasePackOperation('any-pack');
       expect(free).toBe(false);
-    } finally { finish(); await resetting; }
+    } finally { await resetting; }
     expect(packs.claimPackOperation('any-pack')).toBe(true);
     try {
       await expect(runtime.services.appData.reset()).rejects.toThrow('A pack is being installed or changed');
@@ -133,7 +134,7 @@ describe('createHostRuntime', () => {
   });
 
   it("stops the packs, empties the engine, stores and keys, then starts the packs as a boot does", async () => {
-    const store = { reset: async () => { order.push('store reset'); } } as unknown as LmdbStore;
+    const store = { reset: () => { order.push('store reset'); } } as unknown as LmdbStore;
     const engine = newEngine();
     const id = engine.create('Memo', { id: 'Memo-1' as EARS.EntityId }).set('title', 'kept?').id();
     const clear = engine.admin.clear;
@@ -158,7 +159,7 @@ describe('createHostRuntime', () => {
     // One content call for every pack, after the migrations — where it was the shipped pack's boot apply and
     // then the installed packs', which is why only the second half retried or saw a dependency content
     expect(order).toEqual([
-      'onShutdown', 'engine cleared', 'store reset', 'onInit (0 keys)',
+      'onShutdown', 'store reset', 'engine cleared', 'onInit (0 keys)',
       'migrations', 'pack migrations (reset-pack)', 'pack content (reset-pack,written-pack)',
     ]);
     expect(engine.getRow(id)?.title).toBeUndefined();

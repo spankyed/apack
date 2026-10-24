@@ -444,11 +444,13 @@ describe('apack db exec', () => {
     expect(out).toBe('Alpha');
   });
 
-  it('fails when a write never reaches the files', async () => {
+  it('fails when a write cannot be stored, keeping none of it', async () => {
     const dir = await appDataDir();
-    const { error } = await run(['exec', "write('Note-a').set('count', 1n)", '--data-dir', dir]);
-    // The value LMDB can't store, and the updatedAt the engine stamps in the same write
-    expect(error?.message).toMatch(/2 write\(s\) didn't reach the database/);
+    // A value LMDB can't store: the write is refused where it is made, and the transaction with it
+    const { error } = await run(['exec', "write('Note-a').set('title', 'Written').set('count', 1n)", '--data-dir', dir]);
+    expect(error?.message).toMatch(/^Transaction failed: .*BigInt[\s\S]*Nothing it wrote was kept/);
+    const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
+    expect(out).toBe('Alpha');
   });
 
   it('keeps none of what the code wrote when it throws part way', async () => {
@@ -557,13 +559,15 @@ describe('apack db script', () => {
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('From a script');
   });
 
-  it("reports the script's own error first when closing fails too", async () => {
+  it('reports a write the script made that could not be stored, where it was made, and keeps none of it', async () => {
     const dir = await appDataDir();
-    // A script writes as it goes, outside any transaction: a value LMDB can't store, then a throw
-    const file = writeScript(dir, 'broken.mjs', "export default ({ db }) => { db.ears.write('Note-a').set('count', 1n); throw new Error('boom'); };");
+    // A script writes as it goes, outside any transaction: each write is stored when it returns, or refused there
+    const file = writeScript(dir, 'broken.mjs', "export default ({ db }) => { db.ears.write('Note-a').set('title', 'Kept'); db.ears.write('Note-a').set('count', 1n); throw new Error('never reached'); };");
     const { error } = await run(['script', file, '--data-dir', dir]);
-    expect(error?.message).toMatch(/boom[\s\S]*failed to close: 1 write\(s\) didn't reach the database/);
-    expect((error as Error).cause).toBeInstanceOf(Error);
+    expect(error?.message).toMatch(/BigInt/);
+    expect(error?.message).not.toMatch(/never reached/);
+    const { out } = await ok(['query', "return [getRow('Note-a')?.title, getRow('Note-a')?.count]", '--data-dir', dir, '-o', 'json']);
+    expect(JSON.parse(out)).toEqual(['Kept', null]);
   });
 
   it('runs a plain module too, and writes what it returns to a file', async () => {

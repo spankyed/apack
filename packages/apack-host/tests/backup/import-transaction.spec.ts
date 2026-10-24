@@ -28,7 +28,9 @@ function fixture() {
   const store = {
     path: primary,
     copyTo: (dest: string) => fs.copy(primary, dest),
-    close: vi.fn(), reopen: vi.fn(),
+    // What a store's one-transaction replacement leaves: the copy's contents where the store's were
+    replaceWith: (from: string) => fs.copySync(path.join(from, 'data.mdb'), path.join(primary, 'data.mdb')),
+    close: vi.fn(),
   } as unknown as LmdbStore;
   return { root, primary, backup, media, store };
 }

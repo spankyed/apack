@@ -92,15 +92,15 @@ describe.each(Object.keys(STORES))('a record store %s', (where) => {
   it('is empty after a reset', async () => {
     const s = fresh();
     s.put({ id: 'R-1', parentId: 'P' });
-    await s.reset();
+    s.reset();
     expect(s.get('R-1')).toBeUndefined();
     expect(s.findBy('parentId', 'P')).toEqual([]);
   });
 });
 
 describe('openRecordStore', () => {
-  // A reset or an import closes the store while its files are replaced, and the app goes on running meanwhile
-  it('drops writes and finds nothing while closed, and refuses to copy itself', async () => {
+  // A log's last lines, written as the app shuts down, have nowhere to go once it is closed
+  it('drops writes and finds nothing once closed, and refuses to copy itself', async () => {
     const s = store();
     s.put({ id: 'R-1', parentId: 'P' });
     s.close();
@@ -109,15 +109,36 @@ describe('openRecordStore', () => {
     s.put({ id: 'R-2', parentId: 'P' });
     s.delete('R-1');
     await expect(s.copyTo(path.join(path.dirname(dir), 'copy'))).rejects.toThrow('is closed');
-    s.reopen();
-    expect(ids(s.findBy('parentId', 'P'))).toEqual(['R-1']);
+    const reopened = store();
+    expect(ids(reopened.findBy('parentId', 'P'))).toEqual(['R-1']);
   });
 
-  it('keeps its records across a reopen', async () => {
+  it('empties in one transaction on a reset, open throughout, and takes the next write', () => {
     const s = store();
     s.put({ id: 'R-1', parentId: 'P' });
-    s.reopen();
-    expect(s.get('R-1')).toBeDefined();
+    s.reset();
+    expect(s.get('R-1')).toBeUndefined();
+    expect(s.findBy('parentId', 'P')).toEqual([]);
+    s.put({ id: 'R-2', parentId: 'P' });
+    expect(ids(s.findBy('parentId', 'P'))).toEqual(['R-2']);
+  });
+
+  it("replaces its records and index entries with another store's in one transaction, and refuses an EARS database", async () => {
+    const s = store();
+    s.put({ id: 'R-old', parentId: 'P' });
+    const other = store({ at: path.join(path.dirname(dir), 'other') });
+    other.put({ id: 'R-new', parentId: 'Q' });
+    const copy = path.join(path.dirname(dir), 'copy');
+    await other.copyTo(copy);
+    s.replaceWith(copy);
+    expect(s.get('R-old')).toBeUndefined();
+    expect(ids(s.findBy('parentId', 'Q'))).toEqual(['R-new']);
+    expect(s.findBy('parentId', 'P')).toEqual([]);
+
+    const ears = path.join(path.dirname(dir), 'ears');
+    closeEnv(openEnvAt(ears));
+    expect(() => s.replaceWith(ears)).toThrow('are an EARS database, not a record store');
+    expect(ids(s.findBy('parentId', 'Q'))).toEqual(['R-new']);
   });
 
   it('copies itself into a directory a store opens again', async () => {
@@ -135,17 +156,6 @@ describe('openRecordStore', () => {
     expect(readOnly.get('R-1')).toBeDefined();
     expect(() => readOnly.put({ id: 'R-2' })).toThrow('read-only');
     expect(() => store({ readOnly: true, at: path.join(root, 'nothing-here') })).toThrow('No record store');
-  });
-
-  it('refuses a write once opening its files again has failed, rather than dropping it', () => {
-    const s = store();
-    s.close();
-    // Its files replaced by ones it refuses to open
-    fs.rmSync(dir, { recursive: true, force: true });
-    closeEnv(openEnvAt(dir));
-    expect(() => s.reopen()).toThrow('are an EARS database, not a record store');
-    expect(() => s.put({ id: 'R-1' })).toThrow('opening it again failed');
-    expect(s.findBy('status', 'active')).toEqual([]);
   });
 
   it('refuses an EARS database, and an EARS environment refuses it', () => {

@@ -53,10 +53,11 @@ export function createAppData({ store, history, engine, registry, settings, onRe
     async reset() {
       await exclusive(() => replaceData(async () => {
         registry.runShutdownHooks();
+        // Each store empties in one transaction and memory with it, in one synchronous stretch, so no write lands between
+        store.reset();
+        history.store.reset();
         engine.clear();
-        await store.reset();
-        await history.store.reset();
-        // Stored API keys go too, with their data keys; after the database reopens, since the settings system hears of it
+        // Stored API keys go too, with their data keys; after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         startPacks(registry);
       }));

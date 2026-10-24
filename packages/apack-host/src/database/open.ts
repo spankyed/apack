@@ -2,7 +2,7 @@
 // (apack db) share, so both hydrate a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsEngine, type Ears, type RecordStore } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { openLmdbStore, openRecordStore, type LmdbStore, type WriteFailure } from '@apackdev/ears/lmdb';
+import { openLmdbStore, openRecordStore, type LmdbStore } from '@apackdev/ears/lmdb';
 import { _RUN_HISTORY_INDEXES, type RunNode } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
@@ -15,8 +15,6 @@ import * as fs from 'node:fs';
 const logger = createLogger('run-history');
 
 export interface DatabaseStoreOptions {
-  /** Told when a write is dropped, with the row it was for (`openLmdbStore`'s port) */
-  onWriteFailure?: (failure: WriteFailure) => void;
   /** The database directory */
   path: string;
   /** The entity types: the app's registered packs, or the installed packs' manifests */
@@ -30,8 +28,8 @@ export interface DatabaseStoreOptions {
  * The LMDB store at `path` and a new engine persisting to it, which checks entity types against `schema`. Nothing is
  * hydrated or installed: the caller hydrates (`store.hydrate()`) once `schema` holds every entity type.
  */
-export function openDatabaseStore({ path, schema, readOnly, log, onWriteFailure }: DatabaseStoreOptions): { store: LmdbStore; engine: EarsEngine } {
-  const store = openLmdbStore({ path, onWriteFailure, engine: () => engine.admin, readOnly, log });
+export function openDatabaseStore({ path, schema, readOnly, log }: DatabaseStoreOptions): { store: LmdbStore; engine: EarsEngine } {
+  const store = openLmdbStore({ path, engine: () => engine.admin, readOnly, log });
   const engine = createEarsEngine({
     persistence: store.sink,
     isEntityType: (name) => schema.getRegisteredEntityTypes().has(name),
@@ -72,8 +70,8 @@ export interface AppDatabase {
   ears: Ears;
   admin: EarsAdmin;
   /**
-   * Flushes the writes made through the engine and closes the store, putting back the engine that was installed
-   * before this one. Throws when a write failed to reach the files, in this call's flush or earlier.
+   * Closes the store, flushing to disk what its writes committed, and puts back the engine that was installed before
+   * this one. A write the store refused threw when it was made, so there is nothing left to report here.
    */
   close(): void;
 }
@@ -161,11 +159,7 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, log,
     admin: engine.admin,
     close() {
       _bindEars(previousEngine);
-      const { errorCount, lastError } = store.close();
-      if (errorCount > 0) {
-        const cause = (lastError as { error?: unknown } | null)?.error ?? lastError;
-        throw new Error(`${errorCount} write(s) didn't reach the database in ${userDataDir}: ${errorMessage(cause)}`, { cause });
-      }
+      store.close();
     },
   };
 }

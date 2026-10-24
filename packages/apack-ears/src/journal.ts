@@ -1,6 +1,7 @@
 // What makes `transact` a transaction: while a unit is open, every write first records how to undo itself, and
-// the sink calls it makes are held rather than sent. A unit that returns sends them; one that throws runs the
-// undos in reverse and sends nothing.
+// the sink calls it makes are held rather than sent. A unit that returns sends them, and keeps its undos until the
+// sink has committed them: a sink that refuses runs them in reverse, so memory never holds what the sink did not
+// take. One that throws runs the undos and sends nothing. A write made outside any unit is a unit of its own (`unit`).
 import type { PersistenceSink } from './runtime.ts';
 
 /** One open unit: the keys it has recorded an undo for, the undos, where its sink calls start, and its checks */
@@ -26,6 +27,21 @@ export interface Journal {
    * unit leaves inconsistent part way is allowed, what it commits is not.
    */
   atCommit(check: () => void): void;
+  /** Runs `fn` inside the open unit, or as a unit of its own when none is open: what every write is made through */
+  unit<T>(fn: () => T): T;
+}
+
+/**
+ * `writes` with each of the named methods made through `journal.unit`: a write the caller makes outside `transact`
+ * is then a unit of its own, stored whole or not at all, and one inside a unit joins it
+ */
+export function unitWrites<T extends object, K extends keyof T>(journal: Pick<Journal, 'unit'>, writes: T, names: readonly K[]): T {
+  const wrapped = { ...writes };
+  for (const name of names) {
+    const write = writes[name] as unknown as (...args: unknown[]) => unknown;
+    (wrapped as Record<K, unknown>)[name] = (...args: unknown[]) => journal.unit(() => write(...args));
+  }
+  return wrapped;
 }
 
 /** A journal, and the sink that holds an open unit's calls back from `sink` */
@@ -46,6 +62,7 @@ export function createJournal(sink: PersistenceSink) {
       if (level) level.checks.push(check);
       else check();
     },
+    unit: (fn) => (levels.length > 0 ? fn() : transact(fn)),
   };
 
   // A held call copies an array it carries: the caller who wrote it may still change it before the unit commits
@@ -67,7 +84,6 @@ export function createJournal(sink: PersistenceSink) {
     onUnitStart: () => sink.onUnitStart(),
     onUnitEnd: () => sink.onUnitEnd(),
     close: sink.close && (() => sink.close?.()),
-    getErrorStats: sink.getErrorStats && (() => sink.getErrorStats!()),
   };
 
   /** Runs `fn` as one unit; a unit inside another commits into it and rolls back only its own writes */
@@ -103,11 +119,14 @@ export function createJournal(sink: PersistenceSink) {
     }
     const calls = held.splice(0);
     if (calls.length) {
-      sink.onUnitStart();
       try {
+        sink.onUnitStart();
         for (const call of calls) call();
-      } finally {
         sink.onUnitEnd();
+      } catch (error) {
+        // The sink refused the unit: memory goes back to what the sink holds
+        for (let i = level.undos.length - 1; i >= 0; i--) level.undos[i]();
+        throw error;
       }
     }
     return result;

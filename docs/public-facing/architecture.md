@@ -324,8 +324,8 @@ A flow run is not an entity: the engine never holds one, so a run's record is ne
 `@apackdev/host/backup`, reached by packs through `services.appData` (`@apackdev/host/services/app-data.ts`):
 
 - **Export** (`exportBackup(targetPath, name?, databases?)`): copies the chosen stores (`lmdb`, the database, and `runHistory`; default `lmdb`) into `<targetPath>/<name>` (default `apack-backup-<timestamp>`), with a `metadata.json` and, when `lmdb` is included, `media/`.
-- **Import** (`importBackup(path)`): requires `metadata.json`; restores only databases the app has. It copies the current files aside, closes the stores, replaces their files and media, reopens them and reloads memory; a restored run history's running nodes are marked `stopped`. On failure the previous files are put back and reloaded.
-- **Reset** (`reset()`): clears the engine's memory, deletes the database and the run history and reopens them, clears the stored API keys, then runs `onInit`, app-line migrations, pack-line migrations and content application in dependency order, leaving the app as a fresh boot does.
+- **Import** (`importBackup(path)`): requires `metadata.json`; restores only databases the app has. It copies the current stores aside, puts the backup's in their place, each in one transaction with the store open throughout, replaces the media and reloads memory; a restored run history's running nodes are marked `stopped`. On failure the previous stores are put back the same way and reloaded.
+- **Reset** (`reset()`): empties the database and the run history, each in one transaction, and the engine's memory with them, clears the stored API keys, then runs `onInit`, app-line migrations, pack-line migrations and content application in dependency order, leaving the app as a fresh boot does.
 
 ## Generated files
 

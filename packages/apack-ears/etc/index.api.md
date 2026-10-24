@@ -280,20 +280,10 @@ E
     [K in keyof ShapeOf<S, E>]-?: {} extends Pick<ShapeOf<S, E>, K> ? K : never;
 }[keyof ShapeOf<S, E>], WritableField<S, E>> : string;
 
-// @public
-export interface PersistenceErrorStats {
-    // (undocumented)
-    errorCount: number;
-    // (undocumented)
-    lastError: unknown;
-}
-
 // @public (undocumented)
 export interface PersistenceSink {
     // (undocumented)
     close?(): void;
-    // (undocumented)
-    getErrorStats?(): PersistenceErrorStats;
     // (undocumented)
     onAddRelation(relId: string, kind: string, source: string, target: string, info: unknown): void;
     onCreateEntity(entityId: string, entityType: string): void;
@@ -302,7 +292,6 @@ export interface PersistenceSink {
     onDropAttr(kind: string, entityId: string): void;
     onPutAttr(kind: string, entityId: string, value: unknown): void;
     onRemoveRelation(relId: string): void;
-    // (undocumented)
     onUnitEnd(): void;
     onUnitStart(): void;
     // (undocumented)
@@ -404,9 +393,8 @@ export interface RecordStore<R extends {
     put(record: R): void;
     // (undocumented)
     readonly readOnly: boolean;
-    // (undocumented)
-    reopen(): void;
-    reset(): Promise<void>;
+    replaceWith(dir: string): void;
+    reset(): void;
 }
 
 // @public

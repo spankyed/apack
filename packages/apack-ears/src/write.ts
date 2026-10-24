@@ -1,7 +1,7 @@
 // The engine's writes. Each entry point makes one claim about its argument and is held to it: `create` names a
 // type, `write` an entity that exists, and `upsert` a type and an id that is either free or that type's.
 import type { AttributeStorage } from './attribute-storage.ts';
-import type { Journal } from './journal.ts';
+import { unitWrites, type Journal } from './journal.ts';
 import { newId, entityTypeOf, TRASHED_AT } from './attribute-storage.ts';
 import type { Relations } from './relations.ts';
 import type { createHierarchy } from './hierarchy.ts';
@@ -40,7 +40,7 @@ export interface Write {
 /** An engine's writes, over its attribute storage, its relations and its cycle check */
 export function createWrites({ storage, relations, hierarchy, isEntityType, rowRules, counters, names, journal }: {
   storage: AttributeStorage;
-  journal: Pick<Journal, 'atCommit' | 'open'>;
+  journal: Pick<Journal, 'atCommit' | 'open' | 'unit'>;
   relations: Relations;
   hierarchy: Pick<ReturnType<typeof createHierarchy>, 'wouldCreateCycle'>;
   isEntityType: (name: string) => boolean;
@@ -236,6 +236,12 @@ export function createWrites({ storage, relations, hierarchy, isEntityType, rowR
       // The builder's entity exists — write refuses an id no entity has, and destroy ends the chain
       row: () => getRow(id) as ReturnType<WriteBuilder['row']>,
     };
+    // Each write is one unit: a builder call's writes, `updatedAt` included, are stored together or not at all
+    for (const name of Object.keys(self) as Array<keyof WriteBuilder>) {
+      if (name === 'id' || name === 'row') continue;
+      const write = self[name] as (...args: unknown[]) => unknown;
+      (self as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => journal.unit(() => write(...args));
+    }
     return self;
   }
 
@@ -329,5 +335,6 @@ export function createWrites({ storage, relations, hierarchy, isEntityType, rowR
     relations.remove(relId);
   }
 
-  return { create, upsert, write, updateRelation, removeRelation };
+  // A create, an upsert and a relation's change are each one unit, whatever they write
+  return unitWrites(journal, { create, upsert, write, updateRelation, removeRelation }, ['create', 'upsert', 'updateRelation', 'removeRelation']);
 }

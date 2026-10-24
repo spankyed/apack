@@ -27,7 +27,8 @@ export interface BackupStore {
   /** LMDB's own copy of one moment of the store into `targetDir` */
   copyTo(targetDir: string): Promise<void>;
   close(): unknown;
-  reopen(): void;
+  /** Replaces the store's contents with the copy at `dir`, in one transaction, with the store open throughout */
+  replaceWith(dir: string): void;
 }
 
 /**
@@ -141,43 +142,34 @@ export async function importDatabase(
       const store = stores[name];
       return store ? [{ name, store }] : [];
     });
-    const closeAll = () => { for (const { store } of restoring) store.close(); };
-    const reopenAll = () => { for (const { store } of restoring) store.reopen(); };
+    // Each store takes its new contents in one transaction, all of them in one synchronous stretch that the caller's
+    // acceptance (clearing memory and hydrating it again) follows at once, so no write lands between the two
+    const install = (from: string) => { for (const { name, store } of restoring) store.replaceWith(path.join(from, name)); };
     return await withReplacement(async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
       const hasMedia = await fs.pathExists(candidateMedia);
       if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
       try {
-        closeAll();
-        for (const { name, store } of restoring) {
-          await fs.remove(store.path);
-          await fs.copy(path.join(candidate, name), store.path);
-          log.info(`Imported ${name}`);
-        }
         if (hasMedia) {
           await fs.remove(mediaPath);
           await fs.copy(candidateMedia, mediaPath);
           log.info('Restored media assets');
         }
-        reopenAll();
+        install(candidate);
+        for (const { name } of restoring) log.info(`Imported ${name}`);
         const result = { databases, missingDatabases, unknownEntityTypes };
         await accept?.(result);
         log.info('Import completed');
         return result;
       } catch (error) {
         try {
-          closeAll();
-          for (const { name, store } of restoring) {
-            await fs.remove(store.path);
-            await fs.copy(path.join(rollback, name), store.path);
-          }
           if (hasMedia) {
             await fs.remove(mediaPath);
             const previousMedia = path.join(rollback, 'media');
             if (await fs.pathExists(previousMedia)) await fs.copy(previousMedia, mediaPath);
           }
-          reopenAll();
+          install(rollback);
           await restored?.();
         } catch (restoreError) {
           preserveRollback = true;

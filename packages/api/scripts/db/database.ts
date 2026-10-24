@@ -21,20 +21,6 @@ export async function openDatabase(): Promise<void> {
   await store.hydrate();
 }
 
-/** How many LMDB writes have failed in this process so far (the adapter logs a failed flush and carries on) */
-export function persistenceErrorCount(): number {
-  return store.sink.getErrorStats?.().errorCount ?? 0;
-}
-
-/**
- * Waits for the writes buffered so far to be flushed to LMDB (the adapter flushes in a microtask) and
- * returns the failed-write count after it, so a script can check it before closeDatabase.
- */
-export async function flushDatabase(): Promise<number> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  return persistenceErrorCount();
-}
-
 export function closeDatabase(): void {
   store.close();
 }

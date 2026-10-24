@@ -53,3 +53,6 @@ export function recordingSink(): { sink: PersistenceSink; calls: SinkCall[] } {
   };
   return { sink, calls };
 }
+
+/** The writes among a sink's calls, without the brackets every unit arrives in */
+export const writesOf = (calls: SinkCall[]): SinkCall[] => calls.filter(([method]) => method !== 'onUnitStart' && method !== 'onUnitEnd');

@@ -27,7 +27,7 @@ export interface FindByOptions {
   cursor?: string;
 }
 
-/** A record store: its records, and the store itself — where it is, and closing, reopening, resetting and copying it */
+/** A record store: its records, and the store itself — where it is, and closing, resetting, replacing and copying it */
 export interface RecordStore<R extends { id: string } = StoredRecord> {
   /** Where its files are, or `':memory:'` */
   readonly path: string;
@@ -42,11 +42,12 @@ export interface RecordStore<R extends { id: string } = StoredRecord> {
   findBy(index: string, value: IndexValue, options?: FindByOptions): R[];
   /** A new id, `<prefix>-<n>`, sorting after every id this store handed out before (a same-millisecond one too) */
   newId(prefix: string): string;
-  /** Closes the store. While it is closed — a reset or an import replacing its files — reads find nothing and writes are dropped */
+  /** Closes the store; once it is closed, reads find nothing and writes are dropped, as a log's last lines may be */
   close(): void;
-  reopen(): void;
-  /** Removes every record */
-  reset(): Promise<void>;
+  /** Removes every record, in one transaction, with the store open throughout */
+  reset(): void;
+  /** Replaces every record with those of the store at `dir` (a backup, or a rollback copy), in one transaction */
+  replaceWith(dir: string): void;
   /** A consistent copy of the store into `targetDir`, which a store on disk opens again */
   copyTo(targetDir: string): Promise<void>;
 }
@@ -105,8 +106,8 @@ export function createMemoryRecordStore<R extends { id: string } = StoredRecord>
     },
     newId,
     close() {},
-    reopen() {},
-    async reset() { records.clear(); },
+    reset() { records.clear(); },
+    replaceWith() { throw new Error('A record store in memory has no files to replace it with'); },
     async copyTo() { throw new Error('A record store in memory has no files to copy'); },
   };
 }
