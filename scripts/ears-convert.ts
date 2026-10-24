@@ -6,13 +6,14 @@
  *
  * Run it on a copy. The app refuses an older database rather than convert it at boot, so this is the one
  * place the conversion happens, explicitly, once (`convertToCurrentFormat`, `@apackdev/ears/lmdb`). It converts
- * the data dir's database a step per format, and prints what each step rewrote. An `ears-trace` directory beside it
+ * the data dir's database a step per format, compacts the file it leaves, and prints what each step rewrote and the
+ * file's size before and after compacting. An `ears-trace` directory beside it
  * is an older app's run history, which this version no longer reads: delete it.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { convertToCurrentFormat } from '@apackdev/ears/lmdb';
+import { compactEnvironment, convertToCurrentFormat } from '@apackdev/ears/lmdb';
 
 /** The data dir's database directory, in the app's layout or directly */
 function database(dataDir: string): string {
@@ -30,5 +31,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
     process.exit(2);
   }
   const dir = database(path.resolve(dataDir));
-  console.log(dir, JSON.stringify(convertToCurrentFormat(dir)));
+  const steps = convertToCurrentFormat(dir);
+  // A conversion leaves the old format's pages in the file, empty: a copy without them takes its place
+  const compacted = steps.length > 0 ? await compactEnvironment(dir) : undefined;
+  console.log(dir, JSON.stringify({ steps, ...(compacted && { compacted }) }));
 }
