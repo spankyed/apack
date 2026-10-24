@@ -81,11 +81,7 @@ test('retires the original parent lease and refuses its addressed stale action a
   await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
   const row = appPage.locator('[data-native-agent-id]').first()
   const taskId = await row.getAttribute('data-native-agent-id'); expect(taskId).toBeTruthy()
-  const brokerRows = (await readFile(join(workspace!, 'native-owned-broker.jsonl'), 'utf8')).trim().split('\n').map(row => JSON.parse(row))
-  const { delayOwnedUiHost } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_UI_DELAY!).href)
-  const directory = brokerRows.at(-1).directory, controllers: any[] = [], receipts: any[] = []
-  const focused = appPage.getByRole('region', { name: 'Focused Agent conversation', exact: true })
-  const form = focused.getByRole('form', { name: 'Agent message', exact: true }), agentComposer = form.locator('[contenteditable="true"]')
+  const controllers: any[] = [], receipts: any[] = []
   await appPage.evaluate(() => {
     const actor = (window as any).applicationState, sockets: WebSocket[] = [], original = WebSocket.prototype.send
     let previous = actor.getSnapshot().context.busSubscribed === true
@@ -105,11 +101,6 @@ test('retires the original parent lease and refuses its addressed stale action a
     await rename(join(workspace!, 'native-prompt-read.json'), join(workspace!, 'native-prompt-read-before-' + (++readSequence) + '.json')).catch(error => { if (error.code !== 'ENOENT') throw error })
     await openTools(container); await container.getByRole('button', { name: 'Read current draft', exact: true }).click()
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-read.json'), 'utf8').catch(() => 'null'))).toMatchObject({ text, cursor: text.length })
-  }
-  async function reconnect() {
-    const before = await appPage.evaluate(() => { const p = (window as any).__nativePromptReconnectProbe, socket = p.sockets.at(-1); if (!socket || socket.readyState !== 1) throw Error('Owned API socket was not observed'); const result = { sockets: p.sockets.length, lost: p.lost, connected: p.connected, closes: p.closes }; socket.close(4001, 'Owned native prompt reconnect fixture'); return result })
-    await expect.poll(async () => appPage.evaluate(before => { const p = (window as any).__nativePromptReconnectProbe; return p.sockets.length > before.sockets && p.lost > before.lost && p.connected > before.connected && p.closes > before.closes && p.sockets.at(-1)?.readyState === 1 && (window as any).applicationState.getSnapshot().context.busSubscribed === true }, before), { timeout: 2500, intervals: [20] }).toBe(true)
-    return before
   }
   let parentDraft = ''
   try {
