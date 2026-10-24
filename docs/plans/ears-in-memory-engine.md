@@ -297,16 +297,51 @@ brain (22), database (20), flows (14) and actions (8).
 Readings: the bench's read cases within noise of Step 7 on a loaded machine (relation traversal 2.6 µs, `getRow` ×1,000
 0.20 ms) — a read with no subscription running costs one null check per tracked read; writes 1,000 creates 8.8 ms.
 
+## Against Step 10's evidence
+
+Four follow-ups from reviewing Step 10's branch (PR 273), 2026-10-24:
+
+- **Rows holding no value.** Format 3 could store an attribute as `{ t: 'undefined' }`, which Step 10's conversion
+  found and skips. `convertToFormat4` kept them as fields present and `undefined`: 381 on the production copy, 469 on
+  the development copy. It now leaves them out and counts them (`emptyAttributes`).
+- **The app on the converted data, end to end** (the built API booted by hand, as the guide's manual boot does, on
+  copies; stopped by its pid). The development copy (234 entities): hydrate 7 ms, default-setup's content applied, the
+  brain's root flow started, the reconcile actions succeeded; `apack db query`, `exec` and `runs` went through the
+  running app (`Database: … (the running app's)`), an `exec` refused by the app's own row rules with offline's words,
+  and a write made through it was in the files once the app had stopped. The production copy: hydrate 214–258 ms,
+  heap +14.8 to +60.7 MB as the process settled (101.7–144.3 MB in all, the packs' code and the API included). Its
+  first boot went into settings recovery, as designed, its `Settings-app` row being pre-0.4; with that row cleared
+  on the copy (`apack db clear-settings --schema-from packages/default-setup/dist --force`) it booted fully: content
+  applied, root flow started, terminals restored. Its root flow names a step type no pack provides now (`flow`),
+  which the brain reports and steps past — the data's, as Step 10's run found too. `apack db query` through it
+  0.93–1.12 s, the CLI's start nearly all of it.
+- **This harness against Step 10's engine** (a worktree of PR 273's head, `c4e11bdd4`, the specs adapted to its
+  construction: `createMemoryKV`, a backend that refuses the next unit that writes, a store opened again with no
+  hydration). The model-based property, a new one that a rolled-back unit leaves each type in its insertion order,
+  the files against the engine and the crash property all pass on three seeds, in both of its vitest projects. The
+  subscription property has no subject there. The first injector refused empty units too, which Step 10 opens for a
+  write that changes nothing (an `unlink` of no edge) — the injector's error, since a full disk refuses only a commit
+  that writes.
+- **A cold page cache**, as Step 10 measured it: the production copy on a sparse disk image (`hdiutil create -type
+  SPARSE -fs APFS`), detached and attached before each run. What this engine reads from disk is boot and the large
+  values; two runs:
+
+  | Reading | Cold | Warm |
+  |---|---|---|
+  | boot | 266–283 ms | 234–240 ms |
+  | a transcript read back, 300 messages' `blocks` | p50 0.25–0.26 ms, p99 2.1–2.3 ms | p50 0.03 ms, p99 1.1–1.3 ms |
+  | the largest thread (1,647 messages) with its transcripts | 2.7–2.9 ms | 1.9–2.0 ms |
+
 ## Judging it against Step 10
 
 On the same evidence, at the end and at each step that changes a reading:
 
 | | Reading | This engine (2026-10-24, the readings above) |
 |---|---|---|
-| correctness | the Step 1 harness and the store contract, run against both engines | model-based (engine, files, subscriptions), crash and power-loss-boundary specs pass; two defects found and fixed on the way (frozen-value mutation in onboarding, rollback order) |
-| reads | the ears bench's read cases | unchanged by every step, within noise; a large value read back 1.0–1.2 ms warm, 2.4–2.8 ms cold for the largest thread |
+| correctness | the Step 1 harness and the store contract, run against both engines | model-based (engine, files, subscriptions), crash and power-loss-boundary specs pass; defects found and fixed on the way: onboarding changing a frozen value, a rollback's order, valueless rows kept by the conversion. Step 10's engine passes the same harness (above) |
+| reads | the ears bench's read cases | unchanged by every step, within noise; a large value read back p99 1.1–1.3 ms warm, 2.1–2.3 ms with a cold page cache; the largest thread 1.9–2.9 ms |
 | writes | the bench's write cases, and a durable write's latency | memory engine 1,000 creates 8.8 ms; on LMDB 101 ms as 3,000 synchronous commits, 11.1 ms as one unit; a durable write 3.5–4.8 ms |
-| boot | the converted production copy, cold | 1.3–1.5 s → 0.24–0.27 s (format 4); budget data 170 ms at 1×, 320 ms at 2× |
+| boot | the converted production copy, cold | 1.3–1.5 s → 0.24–0.27 s (format 4), 266–283 ms with a cold page cache; the whole app booted on it; budget data 170 ms at 1×, 320 ms at 2× |
 | memory | the engine's heap on the production copy, at its size and twice it | 308 MB → 52.4 MB on the production copy; budget data 38.5 MB at 1×, 76.5 MB at 2×, gated at 64 MB a scale; 116 → 86 MB on disk compacted |
 | tools and agents | what a tool sees of a running app's data, and how it writes | `apack db query`/`exec`/`script`/`runs` go through the running app: its data, its engine as the one writer, no lock; 0.84–0.92 s a call against 1.10–1.21 s offline, the CLI's start nearly all of it |
 | what the app gains | live queries (Step 8); for Step 10, its own list | `subscribe` and commit change sets; prompts follows every writer with its broadcasts deleted; six more features carry 150 hand-written broadcasts to move |
