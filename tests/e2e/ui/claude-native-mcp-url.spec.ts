@@ -132,7 +132,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
         await expect(page.getByRole('status')).toContainText('Review complete. Return to apack')
         const name = 'native-mcp-browser-' + width + '-completed.png'; await page.screenshot({ path: testInfo.outputPath(name) }); browserCaptures.push(name)
       }
-      await page.close()
+      await appPage.bringToFront(); expect(page.isClosed()).toBe(false)
     } finally {
       if (browser.isConnected()) try { await browser.close() } catch (error) { if (browser.isConnected()) cleanupError = error }
       await appPage.bringToFront()
@@ -145,7 +145,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     const receipts = (await readFile(join(workspace!, 'mcp-elicitation-receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
     const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === phase)
     expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
-    browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: true })
+    browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: true, browserOpenOnReturn: true })
   }
   const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
