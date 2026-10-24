@@ -134,7 +134,10 @@ test('retains newer parent and Agent drafts when original replies cross API reco
         if (kind === 'edit') expect(held.result.frame.text).toBe(text)
         else expect(held.result.suggestions).toContainEqual(expect.objectContaining({ text: `#${owner}-reconnect-complete` }))
         const connection = await reconnect()
-        await expect(editor).toBeEditable(); await expect(editor).toHaveText(text); await editor.fill(current)
+        await expect(editor).toBeEditable(); await expect(editor).toHaveText(text)
+        // Exercise actual selection/replacement in Tiptap after attachment recovery.
+        await editor.focus(); await editor.press('ControlOrMeta+a'); await appPage.keyboard.insertText(current)
+        await expect(editor).toHaveText(current)
         expect(await controller.release()).toBe(true)
         await expect.poll(async () => (await controller.refresh()).deliveredAt).toBeTruthy()
         expect(held.reason).toBe('explicit')
