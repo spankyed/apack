@@ -177,13 +177,17 @@ test('retains newer parent and Agent drafts when original replies cross API reco
     await expect.poll(async () => appPage.evaluate(before => Object.entries((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).some(([id, entry]: [string, any]) => entry.threadId === before.threadId && !entry.mountRequest?.nativeView && entry.attachmentId && entry.attachmentId !== before.attachmentId && entry.state.status === 'live' && entry.prompt?.status === 'applied' && entry.prompt.frame.text === 'Review #current-parent-complete' && entry.prompt.revision === entry.promptRevision && (id !== before.mountId || entry.promptRevision > before.promptRevision)), lease)).toBe(true)
     await expect(composer).toHaveText(parentDraft); expect((await context()).native.state.nativePid).toBe(boundNativePid)
     await readCurrent(card, parentDraft)
-    await appPage.evaluate(before => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'CLAUDE_UI_PRESS', mountId: before.mountId, threadId: before.threadId, actionId: before.actionId }), lease)
+    const deliveredControls=async()=>{const text=await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8');return text.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>row.meta?.event?.type==='CLAUDE_UI_PRESS')}
+    const priorControls=await deliveredControls(),address=priorControls.at(-1)?.meta?.from
+    expect(address).toBeTruthy()
+    await appPage.evaluate(before => (window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[{ type: 'CLAUDE_UI_PRESS', mountId: before.mountId, threadId: before.threadId, actionId: before.actionId }]}), lease)
+    await expect.poll(async()=>(await deliveredControls()).slice(priorControls.length).some(row=>row.meta.from===address&&row.meta.event.mountId===lease.mountId&&row.meta.event.threadId===lease.threadId&&row.meta.event.actionId===lease.actionId)).toBe(true)
     await readCurrent(card, parentDraft); await expect(composer).toHaveText(parentDraft)
     await card.getByRole('button', { name: 'Use review template', exact: true }).click()
     await expect(composer).toHaveText('Review release notes before merging.')
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-theme-fill.json'), 'utf8'))).toMatchObject({ before: { text: parentDraft }, result: { isFilled: true } })
     await readCurrent(card, 'Review release notes before merging.')
-    receipts.push({ owner: 'parent', kind: 'expired-attachment', offlineAt, recoveredAt: Date.now(), oldAttachmentId: lease.attachmentId, originalNativeAttachment: nativeAttachment, retired: (await attachments()).find(row => row.subtype === 'ui_detach' && row.detached && row.clientSha256 === nativeAttachment.clientSha256 && row.at >= offlineAt), replacement: (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1), retainedDraft: parentDraft, staleActionRefused: true, freshFill: true })
+    receipts.push({ owner: 'parent', kind: 'expired-attachment', offlineAt, recoveredAt: Date.now(), oldAttachmentId: lease.attachmentId, originalNativeAttachment: nativeAttachment, retired: (await attachments()).find(row => row.subtype === 'ui_detach' && row.detached && row.clientSha256 === nativeAttachment.clientSha256 && row.at >= offlineAt), replacement: (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1), retainedDraft: parentDraft, staleActionRefused: true, addressedStaleActionDelivered: true, controlAddress: address, freshFill: true })
     await appPage.screenshot({ path: testInfo.outputPath('apack-native-prompt-reconnect-expired.png') })
     await writeFile(join(workspace!, 'native-prompt-reconnect-receipts.json'), JSON.stringify(receipts))
   } finally {
