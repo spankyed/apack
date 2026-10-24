@@ -390,13 +390,7 @@ export const librarySystem = setup({
 }).createMachine({
   id: 'library',
   initial: 'idle',
-  context: () => ({
-    documents: [],
-    collections: [],
-    currentItems: [],
-    currentFolderId: null,
-    currentPath: [],
-  }),
+  context: {},
   on: {
     SEND_STATE: {
       actions: ['sendInitialData'],

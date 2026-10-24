@@ -111,16 +111,8 @@ export interface BreadcrumbItem {
   path: string[]
 }
 
-export interface LibrarySystemContext {
-  documents: DocumentDTO[]
-  collections: CollectionDTO[]
-  selectedDocumentId?: EARS.EntityId
-  selectedCollectionId?: EARS.EntityId
-  // New file browser context
-  currentItems: LibraryItem[]
-  currentFolderId: EARS.EntityId | null
-  currentPath: string[]
-}
+/** The library keeps nothing of its own: each view reads the repository when it is asked */
+export interface LibrarySystemContext {}
 
 // Library-internal re-exports from search-index subsystem
 export type { SearchEmbeddingModel, SearchEmbeddingModelId, LocalEmbeddingModel, InferenceEmbeddingModel } from '../embedding-models.ts'

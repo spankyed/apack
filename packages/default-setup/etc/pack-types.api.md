@@ -2798,14 +2798,8 @@ declare class LibraryService {
     rename(id: string, newName: string): Promise<void>;
 }
 
+/** The library keeps nothing of its own: each view reads the repository when it is asked */
 interface LibrarySystemContext {
-    documents: DocumentDTO[];
-    collections: CollectionDTO[];
-    selectedDocumentId?: EARS.EntityId;
-    selectedCollectionId?: EARS.EntityId;
-    currentItems: LibraryItem[];
-    currentFolderId: EARS.EntityId | null;
-    currentPath: string[];
 }
 
 /** A page of the app server's MCP server statuses */
