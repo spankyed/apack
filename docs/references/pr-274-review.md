@@ -6,8 +6,8 @@ branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273
 reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
-**Status, 2026-10-24:** the harness, the durability spec and the sync policy are taken (under Taken already, below);
-the prompts fix, compaction on conversion and production-shaped bench data are still to take, in that order.
+**Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
+already, below); compaction on conversion and production-shaped bench data are still to take, in that order.
 
 ## Head to head on the production copy
 
@@ -28,22 +28,7 @@ Step 5.
 
 ## Take
 
-### 1. The prompts selection fix
-
-A defect on master and on #273 alike, unrelated to either engine
-(`packages/default-setup/src/features/prompts/fe/state.ts`):
-
-- `PROMPT_UPDATED` for any prompt replaces `selectedPrompt` with it, so another window editing prompt B shows B in
-  place of the A this window has open;
-- `PROMPT_DELETED` for any prompt clears the selection and returns to the list;
-- `PROMPT_CREATED` for a prompt the list already holds adds it a second time.
-
-#274 changes the selection only when the event names the selected prompt, replaces a held prompt rather than adding
-it, and adds a case to `tests/features/prompts/fe/page-and-selection.spec.ts`.
-
-**Cost:** the diff and its spec, as its own commit.
-
-### 2. Compaction on conversion
+### 1. Compaction on conversion
 
 #274's converted production copy compacts from 116 to 86 MB. #273's is 387 MB after conversion, because LMDB keeps
 the pages the format 3 tables freed, and they are reused by later writes rather than returned.
@@ -52,7 +37,7 @@ the pages the format 3 tables freed, and they are reused by later writes rather 
 (`root.backup(dir, true)`) and swaps it in. A conversion runs once, on a copy, so the extra copy costs nothing a user
 waits on.
 
-### 3. Production-shaped bench data
+### 2. Production-shaped bench data
 
 `bench/production-shape.ts` and `bench/budget.ts` in #274 generate data shaped like the production database (its
 types, field sizes and relation counts, profiled 2026-10-24) at 1× and 2×. #273's bench is a uniform graph of three
@@ -89,7 +74,7 @@ development, or when the API made up its own).
 
 ### The correctness harness
 
-Ported in `5acbd7784`, then taken further than #274 went (`4048a3193`, `0cf3e237e`):
+Ported in `c9eeec751`, then taken further than #274 went (`deb20b011`, `3210c24e7`):
 
 - **Model-based** (`tests/engine/model-based.spec.ts`, `tests/_harness/`): after every op the engine holds what a plain
   reference model holds and refuses what it refuses, on a memory backend and on a refusing LMDB one. Beyond #274's,
@@ -103,14 +88,14 @@ Ported in `5acbd7784`, then taken further than #274 went (`4048a3193`, `0cf3e237
   its files are the same bytes; it passed with deletes disabled.
 - **What porting found.** #274's workload averaged six ops over less than one entity and refused nearly all of them
   (not one link accepted in 300 runs); every run now creates its ids first and mixes in an edge linked, unlinked and
-  linked again. Extended, the model found an engine bug, fixed in `336755474`: an index built on its first read made
+  linked again. Extended, the model found an engine bug, fixed in `ae0b37b5b`: an index built on its first read made
   that read a write, so `withRole` and an indexed `where` threw on a read-only store or a full disk.
 - **Mutation-checked:** a stale index entry, a trash that doesn't move its range key, a count blind to trash, a
   savepoint that doesn't undo, a stale incoming-edge key and a stale key between two ends each fail it.
 
 ### A deterministic durability spec
 
-`tests/lmdb/durability.spec.ts`, as #274's is, but without a seam on the store: the spec wraps `lmdb`'s `open`, so each
+`tests/lmdb/durability.spec.ts`, with its fixes in `a34a2ba20`, as #274's is, but without a seam on the store: the spec wraps `lmdb`'s `open`, so each
 environment's `sync` is one the spec finishes or fails, and fakes the store's timers. It holds which sync each
 `durable()` waits for: one begun after the write, a write made during a sync waiting for the next, a running sync
 shared, a sync queued behind a failed one, and nothing started when nothing is owed.
@@ -121,16 +106,29 @@ so the next `durable()` resolved without syncing at all. A failed sync now rejec
 leaves its commits owed, and a timer's sync queued behind a running one, which nobody waits on, is caught rather than
 an unhandled rejection. Each of the four was mutation-checked.
 
+### The prompts selection fix
+
+A defect on master and on #273 alike, unrelated to either engine
+(`packages/default-setup/src/features/prompts/fe/state.ts`): `PROMPT_UPDATED` for any prompt replaced the open one,
+`PROMPT_DELETED` for any prompt closed it, and `PROMPT_CREATED` for a prompt already listed listed it twice. Fixed on
+master in `c427e84fd`, which this branch is based on: the surface changes its selection only for the prompt an event
+names, and a held prompt is replaced rather than added. `tests/features/prompts/fe/page-and-selection.spec.ts` covers
+all three.
+
 ### Sync once writes pause
 
 #274 syncs 100 ms after writes pause, and at most a second after the first unsynced commit. #273 adopted the same in
-`0950e2d3e` (`SYNC_IDLE_MS`, `SYNC_INTERVAL_MS`), and the bus's sync request after each client message was removed: a
+`c8d7de6ae` (`SYNC_IDLE_MS`, `SYNC_INTERVAL_MS`), and the bus's sync request after each client message was removed: a
 user's action is durable within 100 ms of its last write.
 
 ## Not needed here
 
-- **Large values out of line** (#274 Steps 2–3): values over 2 KB leave memory once committed and are read back
-  through an LRU cache. #273 holds no values in memory.
+- **Large values out of line, for memory** (#274 Steps 2–3): values over 2 KB leave memory once committed and are
+  read back through an LRU cache. #273 holds no values in memory, so the memory reason doesn't apply. A different
+  reason does, and it is a separate question: `getRow` and `pickAll` read an entity's whole `['v', id]` range,
+  transcripts included, which is most of what reading every message costs (533–708 ms). Keeping large values under a
+  prefix of their own would leave those reads to the field that names them; `pick` already reads only the fields it
+  is given.
 - **The onboarding copy fix**: onboarding edited a stored value it had read, which #274's frozen values refused. On
   #273 every read decodes a fresh copy, so the edit harms nothing; the SDK's test runtime freezes reads, which is
   where such a mutation would show.
@@ -140,5 +138,4 @@ user's action is durable within 100 ms of its last write.
 
 ## Order
 
-The prompts fix is a defect on master as well; compaction and the bench data are small and improve the conversion and
-the readings. Live queries and the served database are designs to plan, after #273 lands.
+Compaction and the bench data are small and improve the conversion and the readings. Live queries and the served database are designs to plan, after #273 lands.

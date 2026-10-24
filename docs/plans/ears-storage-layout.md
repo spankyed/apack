@@ -515,7 +515,7 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   (`finishTxn`, LMDB writing the transaction's pages) 32%, and its per-write instruction buffer 11% — the engine 18%,
   `msgpackr` 5%. Under one unit, 1,000 creates take 23.7 ms, 24 µs each: per commit, not per key, is where a write's
   cost is, which `transact` already batches. A create read 23 keys to write 12; reading the value a write replaces
-  only where its index is built (`306043d52`) makes it 18 reads, and an update 5 rather than 7. The binding's
+  only where its index is built (`43579628f`) makes it 18 reads, and an update 5 rather than 7. The binding's
   crossings are not what dominates, so no native layer is called for.
 - **The app on real data, end to end:** a copy of the development data dir (format 3), converted by
   `scripts/ears-convert.ts` — 232 entities, 1,582 attributes, 325 relations, 2 sequences — and the built API booted on
