@@ -9,7 +9,7 @@ type Screen = { rows:number; write(text:string, done:()=>void):void; dispose():v
 let terminalScreen:Screen|undefined
 test.afterEach(()=>{terminalScreen?.dispose();terminalScreen=undefined})
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('directly resumes unrepresented saved native history with its metadata and accounting baseline', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
+test('directly resumes unrepresented saved native history with its metadata and accounting baseline', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(140000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
@@ -180,7 +180,10 @@ test('directly resumes unrepresented saved native history with its metadata and 
     await appPage.setViewportSize({width,height:width===680?600:900})
     await expect(composer).toHaveText(resumedDraft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
-    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('apack-native-session-import-'+width+'.png')})
+    expect(await appPage.evaluate(()=>({width:innerWidth,height:innerHeight}))).toEqual({width,height:width===680?600:900})
+    const window=await electronApp.browserWindow(appPage)
+    const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+    await writeFile(testInfo.outputPath('apack-native-session-import-'+width+'.png'),Buffer.from(png,'base64'))
   }
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
