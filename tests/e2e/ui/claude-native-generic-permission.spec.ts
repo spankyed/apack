@@ -140,10 +140,12 @@ test('preserves original generic MCP approval choices, withheld previews and the
       const parameters=original.nativeTerminal.genericTool.details.find((detail:{label:string})=>detail.label==='Parameters')
       expect(parameters.value).toContain('const release =')
       syntaxPreviews.push(parameters.ansi)
+      await writeFile(join(workspace!,'native-permission-syntax-previews.json'),JSON.stringify(syntaxPreviews))
       if (phase===2) expect(syntaxPreviews[1]).not.toBe(syntaxPreviews[0])
       if (phase===3) {
         // eslint-disable-next-line no-control-regex -- Compare only original terminal SGR color sequences.
-        const colorCodes=(value:string)=>value.match(/\x1b\[(?:38|48);[^m]*m/g)??[]
+        const colorCodes=(value:string)=>value.match(/\x1b\[(?:3[0-7]|9[0-7])m/g)??[]
+        expect(colorCodes(syntaxPreviews[0]!).length).toBeGreaterThan(0)
         expect(colorCodes(syntaxPreviews[0]!)).not.toEqual(colorCodes(syntaxPreviews[1]!))
         expect(colorCodes(syntaxPreviews[2]!)).toEqual(colorCodes(syntaxPreviews[0]!))
       }
