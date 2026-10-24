@@ -199,7 +199,9 @@ amplification.
 `seq` in `['i', id]` and in every index key: a sequence per create and a hop per index match. Engine-minted ids are
 time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or node's,
 named after it) are not. Id order would drop the sequence as a contract change, with code that needs an order saying
-so through `orderBy`. Measured in Step 1 and decided by the lead developer before Step 2: which callers read a query's order without an `orderBy`, and
+so through `orderBy`. Decided in Step 1 by this rule: keep insertion order unless the measurements show both that every caller reading a query's
+order without an `orderBy` can take one, and that the sequence costs a create more than 10%; then switch to id order,
+adding the `orderBy`s in the same step. Measured: which callers read a query's order without an `orderBy`, and
 what the sequence costs a create on format 4.
 
 ## Steps: the engine on an ordered key-value seam
@@ -212,9 +214,9 @@ behaviour throughout; a pure re-layout needs no new spec.
 
 - **The design is decided.** Implement it; a step that finds the plan wrong stops as blocked (below) rather than
   redesigning.
-- **One step per goal, in order.** Commit on the current branch: no push, no pull request, no new branch.
-- **Step 1 ends with a decision that isn't the implementer's.** It measures the order question and reports; the lead
-  developer decides insertion order or id order, records it under Open, and only then does Step 2 start.
+- **Steps 1–6 run in order, each committed before the next starts.** Commit on the current branch: no push, no pull
+  request, no new branch.
+- **The order question is decided in Step 1 by its rule** (under Open), recorded there, and work continues.
 - **The contract suite weakens nothing.** No assertion is loosened to pass. A spec that pins something the plan removes
   (`Sequence` as an entity, the trash as a set) changes with that decision, and the commit says which spec and why.
 - **The chain runs once before a step's commit:** `npm run chain -- --no-native`, and the full `npm run chain` for
@@ -225,25 +227,26 @@ behaviour throughout; a pure re-layout needs no new spec.
 - **A missing prerequisite is recorded, not worked around.** Docker for the full chain, `sudo purge` for a cold page
   cache, the production-size copy (`~/Library/Application Support/abuddy/ears-db`, copied, never opened in place) —
   without one, record what could not be checked and why, and finish the rest.
-- **A step finishes in exactly one of two states:**
-  - **Done:** its "done when" holds, its readings are recorded under it, the commit is made, and the report says what
-    was measured. The next step is not started.
-  - **Blocked:** after one diagnosis attempt, the blocker, its evidence and the next action are written into this
-    plan's status; any finished part that passes the chain is committed; the report names the blocker. Stopping
-    blocked is a correct finish, not a failure to retry.
+- **A step is done** when its "done when" holds, its readings are recorded under it and its commit is made; then the
+  next step starts.
+- **Work stops in exactly one of two places:**
+  - **finished:** Step 6 done, and this plan's status says the cut-over is complete;
+  - **blocked:** after one diagnosis attempt, the blocker, its evidence and the next action are written into this
+    plan's status, any finished part that passes the chain is committed, and the report names the blocker — a correct
+    stop, not a failure to retry.
 
-### 1. Declared indexes, and the order question measured
+### 1. Declared indexes, and the order question decided
 - `indexes` on an entity's manifest entry, written into the row rules and `SDK_ROW_RULES`; codegen refuses a field the
   shape doesn't declare; `apack.schema.json` regenerates.
 - Today's value index covers declared kinds and roles only; a `where` on any other field filters the walk. The
   development warning for an unindexed `where` over a large type.
 - Each pack's `indexes` chosen from its `where` calls.
-- The open order question measured, for the lead developer to decide: the callers that read a query's order without an
-  `orderBy`, and what a sequence costs a create.
+- The open order question measured and decided by its rule under Open: the callers that read a query's order without
+  an `orderBy`, and what a sequence costs a create.
 
 **Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
 counting reads); codegen refuses an undeclared field, mutation-checked; the warning fires once per call site; the order
-measurements are recorded under Open for the lead developer's decision.
+measurements and the decision are recorded under Open.
 
 ### 2. The `OrderedKV` seam and `MemoryKV`
 - `OrderedKV`: `get`, `range` (with `start`, `end`, `reverse`, `limit`, keys only), `put`, `del`, and transactions: a
