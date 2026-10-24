@@ -1278,6 +1278,11 @@
             "description": "Tools allowed without prompting",
             "required": false
           },
+          "channels": {
+            "type": "array",
+            "description": "Explicit Claude channel server/plugin selection; native policy and allowlist govern admission",
+            "required": false
+          },
           "disallowedTools": {
             "type": "array",
             "description": "Tools always denied",
