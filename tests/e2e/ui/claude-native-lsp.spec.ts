@@ -160,7 +160,10 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
     await expect(composer).toHaveText(draft)
     expect((await context()).sessionId).toBe(sessionId);expect((await context()).native.state.nativePid).toBe(boundNativePid)
     if(unload&&phase===8){
-      await expect(appPage.getByText('Original LSP tool was not admitted.',{exact:true})).toBeVisible()
+      const group=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="native_lsp_8"]');await expect(group).toBeVisible()
+      const toggle=group.getByRole('button').first();if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click()
+      const refusal=appPage.locator('[data-native-tool-result="native_lsp_8"]');await expect(refusal).toContainText('No such tool available: LSP')
+      for(const width of [1100,680]){const size={width,height:width===680?600:900};await appPage.setViewportSize(size);await refusal.scrollIntoViewIfNeeded();await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled();const capture=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size);const name='native-lsp-disabled-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(capture,'base64'));captures.push(name)}
       expect((await receipts()).filter(row=>row.event==='start')).toHaveLength(1)
       steps.push({phase,disabledAdmissionRefused:true});continue
     }

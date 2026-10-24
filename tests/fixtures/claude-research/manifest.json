@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "3424b9d732b002a6229e0b4c966fe8b06529123e",
+  "researchCommit": "705ed7e7d3ba9cc9bae67e404db13508e6c19a54",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -185,7 +185,7 @@
     "src/protocol/native-history-reopen-fixture.mjs": "35957458e3d38b8a938cee1d453655c4b153f98f0d9e26329dae85668affc8c4",
     "src/protocol/native-inline-eligibility-preload.mjs": "ad47a06d05a6250c9a202f84c7460c57869987ac3af744093121e98a524fcb3d",
     "src/protocol/native-large-document-fixture.mjs": "c0c05db460c2938c8528ec78825c1071de375977957e053877c5a7588f94d8c6",
-    "src/protocol/native-lsp-fixture.mjs": "0efcb501e9d275f638511393291c7d94f02880fdec56a9fb628d8f3b19c0fb82",
+    "src/protocol/native-lsp-fixture.mjs": "266ef8970f3f7c5a93ecbfcbf45f74738b996e6acc620c596a5c5bbbe599e2ca",
     "src/protocol/native-managed-files.mjs": "98ece77fe5a7ac98330991e4d9647c8d3761d26833aa52ca10fe912ef5b170ab",
     "src/protocol/native-managed-media-fixture.mjs": "765e83b1996ef41b2da56f3f2c934fe5394eff125c4f06bc39b63deb81363be2",
     "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
@@ -277,5 +277,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "65752a46badf86470ed9e57a5f7ebd92564f62ca353f7b61a368c4f5b64ac3bc"
+  "archiveSha256": "215719558f7cc730cca3f0cd108ff5fab31ff669bff3dffd2df2a8e348bd5979"
 }
