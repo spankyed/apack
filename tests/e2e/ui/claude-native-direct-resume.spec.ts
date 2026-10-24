@@ -128,7 +128,7 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect(imported.sessionId).toBe(sessionId)
   expect(imported.claude.cwd).toBe(workspace)
   if(importedImage){
-    const user=imported.messages.find((row:any)=>row.text==='NativeForkCheckpointAlpha: remember this source-only marker.')
+    const user=imported.messages.find((row:any)=>row.text.startsWith('NativeForkCheckpointAlpha: remember this source-only marker.'))
     expect(user?.references?.images?.map((image:any)=>image.url)).toEqual(['data:image/png;base64,'+importedImage])
     const originalMedia=user.context.claudeTerminalMessage.media
     expect(originalMedia.filter((block:any)=>block.type==='image').map((block:any)=>block.source)).toEqual([{type:'base64',media_type:'image/png',data:importedImage}])
