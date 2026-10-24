@@ -69,7 +69,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
   if (restriction) await expect(main).toHaveCount(0)
   else {
     await expect(main).toContainText('AppNativeMain ' + sessionId)
-    await expect(main).toContainText('Reviewing release notes')
+    await expect(main).toContainText('Second native status line')
   }
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
