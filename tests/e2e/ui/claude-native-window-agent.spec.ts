@@ -124,6 +124,11 @@ test('preserves independent window and Agent drafts through shared native view s
   }
   const form=focused.getByRole('form',{name:'Agent message',exact:true}),secondForm=secondFocused.getByRole('form',{name:'Agent message',exact:true})
   const worker=form.locator('[contenteditable="true"]'),secondWorker=secondForm.locator('[contenteditable="true"]')
+  // Completion withdraws the running decoration; wait for the next original helper refresh.
+  const agentCaption='AppNativeAgent completed'
+  await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.statusText,{timeout:15000}).toContain(agentCaption)
+  await expect(form.getByTestId('composer-native-status')).toContainText(agentCaption)
+  await expect(secondForm.getByTestId('composer-native-status')).toContainText(agentCaption)
   await worker.fill('Main Agent draft.')
   await focusWindow(popout);await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(false)
   await secondWorker.fill('Popout Agent draft 👋');await expand(secondForm)
@@ -146,6 +151,8 @@ test('preserves independent window and Agent drafts through shared native view s
     await popout.setViewportSize({width,height:width===680?600:900})
     const tools=secondForm.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
     await expect(secondForm.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+    await expect(secondForm.getByTestId('composer-native-status')).toContainText(agentCaption)
+    await expect(secondForm.getByTestId('composer-native-status')).toBeInViewport()
     await popout.screenshot({caret:'initial',path:testInfo.outputPath('native-window-agent-'+width+'.png')})
   }
   await secondFocused.getByRole('button',{name:'Back to conversation',exact:true}).click()
