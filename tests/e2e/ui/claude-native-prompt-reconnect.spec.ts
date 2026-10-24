@@ -75,12 +75,7 @@ test('retains newer parent and Agent drafts when original replies cross API reco
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('Session ready')
   const composer = card.locator('[contenteditable="true"]')
-  await composer.fill('Review the release notes with a worker.')
-  await card.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'completed'), { timeout: 20000 }).toBe(true)
-  await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
   const row = appPage.locator('[data-native-agent-id]').first()
-  const taskId = await row.getAttribute('data-native-agent-id'); expect(taskId).toBeTruthy()
   const brokerRows = (await readFile(join(workspace!, 'native-owned-broker.jsonl'), 'utf8')).trim().split('\n').map(row => JSON.parse(row))
   const { delayOwnedUiHost } = await import(pathToFileURL(process.env.CLAUDE_RESEARCH_UI_DELAY!).href)
   const directory = brokerRows.at(-1).directory, controllers: any[] = [], receipts: any[] = []
@@ -115,6 +110,11 @@ test('retains newer parent and Agent drafts when original replies cross API reco
   try {
     for (const owner of ['parent', 'agent']) {
       if (owner === 'agent') {
+        // Native unretained completed tasks expire after30s; create this step's worker now.
+        await composer.fill('Review the release notes with a worker.')
+        await card.getByRole('button',{name:'Send',exact:true}).click()
+        await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
+        await composer.fill(parentDraft)
         if (!await row.isVisible()) await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
         await appPage.evaluate(()=>{
           const rows:any[]=[]
