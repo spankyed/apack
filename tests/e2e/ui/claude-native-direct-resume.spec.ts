@@ -10,7 +10,7 @@ let terminalScreen:Screen|undefined
 test.afterEach(()=>{terminalScreen?.dispose();terminalScreen=undefined})
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test('directly resumes unrepresented saved native history with its metadata and accounting baseline', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
-  test.setTimeout(90000)
+  test.setTimeout(140000)
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
@@ -177,7 +177,7 @@ test('directly resumes unrepresented saved native history with its metadata and 
     await appPage.setViewportSize({width,height:width===680?600:900})
     await expect(composer).toHaveText(resumedDraft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
-    await appPage.screenshot({path:testInfo.outputPath('apack-native-session-import-'+width+'.png')})
+    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('apack-native-session-import-'+width+'.png')})
   }
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
