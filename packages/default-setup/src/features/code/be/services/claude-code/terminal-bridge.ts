@@ -150,9 +150,10 @@ export async function createClaudeTerminalBridge(options: {
         if (mainChanged) { generations.main = randomUUID(); projection.clearMain() }
         if (subChanged) { generations.subagent = randomUUID(); projection.clearDecorations() }
         if (mainChanged || subChanged) await saveObserver?.()
+        // A helper may finish before this poll; only its native launch policy can cross the handoff.
         for (const event of waiting.splice(0)) {
           const kind = event.kind as 'main' | 'subagent'
-          if (!policyChanged && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
+          if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
         if (changedSession) { preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
@@ -286,7 +287,8 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/native-status') {
         if (!observerPid || value.parentPid !== observerPid || !Number.isSafeInteger(value.childPid) || (value.childPid as number) < 2 || (value.kind !== 'main' && value.kind !== 'subagent') || value.generation !== generations[value.kind]) return reply(409, {})
-        if (!matches(value)) { waiting.push(value); if (waiting.length > 16) waiting.shift(); return reply(202, {}) }
+        if (value.policyKey !== undefined && (typeof value.policyKey !== 'string' || !/^\[(true|false),(true|false),(true|false)\]$/.test(value.policyKey))) return reply(400, {})
+        if (!matches(value) || value.policyKey !== undefined && value.policyKey !== helperPolicyKey) { waiting.push(value); if (waiting.length > 16) waiting.shift(); return reply(202, {}) }
         if (!projection.accept(value)) return reply(409, {})
         options.changed(); return reply(200, {})
       }

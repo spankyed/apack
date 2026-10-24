@@ -431,3 +431,36 @@ it('fences transient native previews and clears them across view changes and clo
   await bridge!.close()
   expect(bridge!.preview).toBeUndefined()
 })
+
+it.each(['main','subagent'] as const)('admits a fresh %s completion queued before its matching native policy poll',async kind=>{
+ await create()
+ await request('/poll',{sessionId:session,agents:[{id:'task',type:'worker',status:'running'}]})
+ const event={...await observed(kind==='main'?'main':'sub'),kind,generation:(await config()).generations[kind],policyKey:'[true,false,false]',...(kind==='subagent'?{tasks:[{id:'task',status:'running'}]}:{}),stdout:kind==='main'?'fresh managed helper':'{"id":"task","content":"fresh managed helper"}'}
+ expect((await request('/native-status',event)).status).toBe(202)
+ expect(bridge!.projection.mainStatus).toBeUndefined()
+ await request('/poll',{sessionId:session,agents:[{id:'task',type:'worker',status:'running'}],statusCommand:'main',subagentCommand:'sub',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ expect(kind==='main'?bridge!.projection.mainStatus:bridge!.projection.tasks[0].statusText).toBe('fresh managed helper')
+ expect((await request('/native-status',event)).status).toBe(409)
+ await request('/poll',{sessionId:session,agents:[],policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})
+ expect((await request('/native-status',event)).status).toBe(409)
+})
+it('refuses a queued old-policy result even when the new command matches',async()=>{
+ await create()
+ expect((await request('/native-status',{...await observed('next main'),policyKey:'[false,false,false]'})).status).toBe(202)
+ await request('/poll',{sessionId:session,agents:[],statusCommand:'next main',policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ expect(bridge!.projection.mainStatus).toBeUndefined()
+})
+it('captures original helper policy at spawn before the bridge policy poll',async()=>{
+ let nativePid:number|undefined
+ const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('fresh managed helper'))"
+ bridge=await createClaudeTerminalBridge({sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
+ await writeFile(join(bridge.directory,'ui.mjs'),"export const readNativeHelperPolicy=()=> '[true,false,false]';")
+ const launcher=join(bridge.directory,'fresh-policy.mjs')
+ await writeFile(launcher,`await import('./status.mjs');const{spawn}=await import('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);child.stdout.resume();await new Promise(resolve=>{child.once('close',resolve);child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));});`)
+ const child=spawn(process.execPath,[launcher],{stdio:['ignore','pipe','pipe']});nativePid=child.pid
+ let stderr='';child.stdout.resume();child.stderr.on('data',chunk=>stderr+=chunk)
+ const code=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)})
+ expect(code).toBe(0);expect(stderr).toBe('');expect(bridge.projection.mainStatus).toBeUndefined()
+ await request('/poll',{sessionId:session,agents:[],statusCommand:helper,policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+ expect(bridge.projection.mainStatus).toBe('fresh managed helper')
+},10000)

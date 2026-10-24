@@ -32,6 +32,8 @@ import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
+let helperPolicyReader;
+export function readNativeHelperPolicy(){return helperPolicyReader?.()}
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
@@ -721,6 +723,7 @@ async function control(request,abort){
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
   restoreNativePlanContext(n,binding.toolContext(abort),sessionId);
+  helperPolicyReader=()=>{const effective=settings.ut(),policy=settings.me('policySettings')??{};return JSON.stringify([policy.allowManagedHooksOnly===true,policy.disableAllHooks===true,effective.disableAllHooks===true])};
   const effective=settings.ut(),policy=settings.me('policySettings')??{};
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
