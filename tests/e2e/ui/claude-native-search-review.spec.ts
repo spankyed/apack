@@ -132,18 +132,20 @@ test('reviews original Glob and Grep results while preserving everyday composing
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900})
       await composer.fill(draft)
+      const draftBefore=await composer.innerText(),documentBefore=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
       await card.getByTitle(workspace!,{exact:true}).click()
       await app.waitForSurface('default-setup/code')
       await expect.poll(()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/code').getSnapshot().context.baseDirectory)).toBe(workspace)
       const explorerDirectory=await appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/code').getSnapshot().context.baseDirectory)
       await app.navigate('default-setup/threads')
-      await expect(composer).toHaveText(draft)
+      await expect.poll(()=>composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(documentBefore)
+      expect(await composer.innerText()).toBe(draftBefore)
       await expect(status).toContainText('AppNativeMain '+sessionId)
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
       await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
       const png=await ownedWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
       await writeFile(testInfo.outputPath('native-cwd-return-'+width+'.png'),Buffer.from(png,'base64'))
-      navigation.push({width,explorerDirectory,draft:await composer.innerText(),nativePid:(await context()).native.state.nativePid,sessionId:(await context()).sessionId})
+      navigation.push({width,explorerDirectory,draftBefore,documentBefore,documentAfter:await composer.evaluate(element=>(element as any).editor.state.doc.toJSON()),draft:await composer.innerText(),nativePid:(await context()).native.state.nativePid,sessionId:(await context()).sessionId})
     }
   }
   await writeFile(join(workspace!,'native-search-review-proof.json'),JSON.stringify({results,navigation,sessionId,boundNativePid}))
