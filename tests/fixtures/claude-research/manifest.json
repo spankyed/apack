@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "ed876c412030677ce312d719a3cb82718f7b274e",
+  "researchCommit": "e40713b4ddd7417eaf33f2122887eae4f1209c6f",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -229,7 +229,7 @@
     "src/protocol/owned-mcp-url-browser.mjs": "d10d411a45706d50381c2a108fe3ce751f1700ad1e3b2f7aad38925fc8af2435",
     "src/protocol/owned-playwright-window-focus.mjs": "972cd44bb9c40ca4550b8a0527d30ca3009489af5139b34ebb93789f5f023f7a",
     "src/protocol/owned-turn-control-observer.mjs": "8d86ffc4817c2e8fc1b66db7d6a46dd72cd4bed1f426f8a8065c2d469b7c4814",
-    "src/protocol/owned-ui-host-delay.mjs": "450844ddd84a40bc89c37e374653077fe450fac574a64a7c567d4bdac3e25ccb",
+    "src/protocol/owned-ui-host-delay.mjs": "467db5a267e1343a87c029513d71cc210eba74e5c8458ea1cb9e02c954f949de",
     "src/protocol/permission-catalog-trust.mjs": "4ab5c8b8f1e3c8da7e9b8d970299a42ed1d70e0b5668c9112b26d18e427d8ded",
     "src/protocol/permission-live-enforcement.mjs": "10038b03322e501ca616f37f1371f35ae6e6cf1aa409e05dbe1d0da04e33d8d7",
     "src/protocol/permission-live-settings.mjs": "b96c741fdd1b1aa91ff963e594d086cbe5efac43ad6c718fe46a5453c6d950f3",
@@ -281,5 +281,5 @@
     "src/protocol/verify-native-agent-media-boundary.mjs": "9d1c5fc8ce18bfd973b7e8a5846cefeb4a065b585b80706a18c4355ba9c6110f",
     "src/protocol/native-agent-media-boundary.mjs": "48d603356ecb85c666d0f90297d36f5375d6c17c0ddde1450d91374b57a1a7d5"
   },
-  "archiveSha256": "b9a7bd4dfe0891af185f4fd21659c9c2122fe525eb30e201ef78c18bb61174f2"
+  "archiveSha256": "d434a30a4ecfd4784a6e990c87110e7df552d5a978582b8793abc759e57ec451"
 }
