@@ -154,8 +154,9 @@ export const threadsSystem = setup({
         if(services.cli.claudeCode.getNativeTerminal(threadId)||services.cli.claudeCode.isConversationBusy(threadId))throw Error('Stop the native session and wait for current work before changing channels');
         const thread=repository.threadQueries.byId(threadId as EARS.EntityId);
         if(!thread)throw Error('Conversation no longer exists');
-        repository.threadCommands.update(thread.id,{context:{...thread.context,claudeCode:{...thread.context?.claudeCode,channelSelection:copyClaudeChannelSelection(channels)}}});
-        broadcastToSurface('threads',{type:'SET_VIEW_DATA',id:thread.id,data:repository.threadQueries.extendedData(thread.id)});
+        const context={...thread.context,claudeCode:{...thread.context?.claudeCode,channelSelection:copyClaudeChannelSelection(channels)}};
+        repository.threadCommands.update(thread.id,{context});
+        broadcastToSurface('threads',{type:'THREAD_UPDATED',threadId:thread.id,updates:{context}});
       }catch(error){reportThreadOperationError('update',error,threadId);}
     },
     updateThreadField: ({ event }) => {
