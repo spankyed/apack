@@ -123,10 +123,14 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       const sequence=(await context()).native.output.at(-1)?.sequence??0
       await input.pressSequentially('/plugin '+(enable?'enable':'disable')+' native-history-fixture@inline',{delay:40});await input.press('Enter')
       await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((row:any)=>row.sequence>sequence).map((row:any)=>row.text).join('')),{timeout:20000}).toContain(enable?'Enabled':'Disabled')
-      await input.press('Escape')
+      await input.press('Escape');await input.press('Escape')
+      await input.press('Control+a');await input.press('Control+k')
+      const reloadSequence=(await context()).native.output.at(-1)?.sequence??0
+      await input.pressSequentially('/reload-plugins --force',{delay:40});await input.press('Enter')
+      await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((row:any)=>row.sequence>reloadSequence).map((row:any)=>row.text).join('')),{timeout:20000}).toContain('Reloaded:')
       if(!enable)await expect.poll(async()=>(await receipts()).some(row=>row.method==='shutdown'),{timeout:15000}).toBe(true)
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
-      expect((await context()).turns).toBe(before.turns+1);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      expect((await context()).turns).toBe(before.turns+2);expect((await context()).native.state.nativePid).toBe(boundNativePid)
       expect(await readFile(join(workspace!,'native-lsp-model-count'),'utf8')).toBe(modelCount)
       if(enable)pluginReenabled=true;else pluginDisabled=true
     }
@@ -145,7 +149,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(retired.turns)
       lateResponseIsolated=true;steps.push({phase,interrupted:true,heldId:held.id,retiredTurns:retired.turns});continue
     }
-    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(unload?(phase===1?2:phase===8?4:6):lifetime?(phase===1?2:4):phase+1+(lifecycle&&phase>=7?1:0))
+    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(unload?(phase===1?2:phase===8?5:8):lifetime?(phase===1?2:4):phase+1+(lifecycle&&phase>=7?1:0))
     await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000}).toBe('success')
     await expect(composer).toHaveText(draft)
     expect((await context()).sessionId).toBe(sessionId);expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -177,7 +181,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
   if(await section.getByRole('button',{name:'Back to conversation',exact:true}).isVisible())await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue reviewing the same release session.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState,{timeout:15000}).toBe('success')
-  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(unload?7:lifetime?5:lifecycle?10:5)
+  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(unload?9:lifetime?5:lifecycle?10:5)
   const prints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));expect((await context()).claude.totalCostUsd).toBeCloseTo(prints.at(-1).totalCostUsd,10);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-lsp-app-proof.json'),JSON.stringify({sessionId,boundNativePid,steps,captures,lifecycle,lifetime,unload,pluginDisabled,pluginReenabled,lateResponseIsolated,freshNavigationAfterInterruption,budgetStartCount,localReloadNoModelRequest,localReloadHumanInputDelta:lifecycle?1:0,retainedDraft:true,sameSessionRecovery:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeLsp:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
