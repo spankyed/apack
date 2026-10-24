@@ -88,7 +88,7 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
   const receipts=async()=> (await readFile(join(workspace!,'native-lsp-receipts.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))
   const owner=JSON.parse(await readFile(join(workspace!,'native-lsp-owner.json'),'utf8')).owner
   const writeFault=async(value:Record<string,unknown>)=>{const path=join(workspace!,'native-lsp-fault.json');await writeFile(path+'.tmp',JSON.stringify({owner,...value}));await rename(path+'.tmp',path)}
-  let budgetStartCount=0,localReloadNoModelTurn=false
+  let budgetStartCount=0,localReloadNoModelRequest=false
   async function crash(failInitialization:boolean){
     const rows=await receipts(),server=rows.filter(row=>row.event==='start'&&!rows.some(exit=>exit.event==='exit'&&exit.pid===row.pid)).at(-1);expect(server).toBeTruthy()
     const before=(await readFile(join(workspace!,'native-debug.log'),'utf8')).split('crashed with exit code 7').length
@@ -110,14 +110,14 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       await input.pressSequentially('/reload-plugins --force');await input.press('Enter')
       await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((row:any)=>row.sequence>sequence).map((row:any)=>row.text).join('')),{timeout:20000}).toContain('Reloaded:')
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
-      expect((await context()).turns).toBe(before.turns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-      expect(await readFile(join(workspace!,'native-lsp-model-count'),'utf8')).toBe(modelCount);localReloadNoModelTurn=true
+      expect((await context()).turns).toBe(before.turns+1);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      expect(await readFile(join(workspace!,'native-lsp-model-count'),'utf8')).toBe(modelCount);localReloadNoModelRequest=true
     }
 
     await writeFile(join(workspace!,'native-lsp-phase'),String(phase))
     const text=phase===1?'Find the release definition.':phase===2?'Inspect the release type.':phase===3?'Check the unmapped document safely.':phase===4?'Recover the release definition after the server crash.':phase===5?'Inspect the startup failure safely.':phase===6?'Respect the language server recovery limit.':'Review the definition after reloading plugins.'
     await composer.fill(text);await card.getByRole('button',{name:'Send',exact:true}).click();await composer.fill(draft)
-    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(phase+1)
+    await expect.poll(async()=>(await context()).turns,{timeout:20000}).toBe(phase+1+(lifecycle&&phase>=7?1:0))
     await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000}).toBe('success')
     await expect(composer).toHaveText(draft)
     expect((await context()).sessionId).toBe(sessionId);expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -144,8 +144,8 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
   if(await section.getByRole('button',{name:'Back to conversation',exact:true}).isVisible())await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue reviewing the same release session.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState,{timeout:15000}).toBe('success')
-  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(lifecycle?9:5)
+  expect((await context()).sessionId).toBe(sessionId);expect((await context()).turns).toBe(lifecycle?10:5)
   const prints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));expect((await context()).claude.totalCostUsd).toBeCloseTo(prints.at(-1).totalCostUsd,10);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-lsp-app-proof.json'),JSON.stringify({sessionId,boundNativePid,steps,captures,lifecycle,budgetStartCount,localReloadNoModelTurn,retainedDraft:true,sameSessionRecovery:true}))
+  await writeFile(join(workspace!,'native-lsp-app-proof.json'),JSON.stringify({sessionId,boundNativePid,steps,captures,lifecycle,budgetStartCount,localReloadNoModelRequest,localReloadHumanInputDelta:lifecycle?1:0,retainedDraft:true,sameSessionRecovery:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeLsp:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
