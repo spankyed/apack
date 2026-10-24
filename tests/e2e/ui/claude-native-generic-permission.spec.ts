@@ -142,6 +142,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
       syntaxPreviews.push(parameters.ansi)
       if (phase===2) expect(syntaxPreviews[1]).not.toBe(syntaxPreviews[0])
       if (phase===3) {
+        // eslint-disable-next-line no-control-regex -- Compare only original terminal SGR color sequences.
         const colorCodes=(value:string)=>value.match(/\x1b\[(?:38|48);[^m]*m/g)??[]
         expect(colorCodes(syntaxPreviews[0]!)).not.toEqual(colorCodes(syntaxPreviews[1]!))
         expect(colorCodes(syntaxPreviews[2]!)).toEqual(colorCodes(syntaxPreviews[0]!))
