@@ -123,6 +123,11 @@ test('observes original selected-Agent terminal image delivery without app media
   const delivered=await observed();expect(delivered.taskId).toBe(taskId)
   await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status,{timeout:20000}).toBe('completed')
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  // Original selected-Agent Enter returns to main; reopen that same task through normal controls.
+  await expect(composer).toHaveText(parentDraft)
+  if(!await row.isVisible())await appPage.getByRole('button',{name:/^Native tools/}).first().click()
+  expect(await row.getAttribute('data-native-agent-id')).toBe(taskId)
+  await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   await expect(focused).toBeVisible()
   await expect(agentComposer).toHaveText(agentDraft)
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[]
