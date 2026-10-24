@@ -15,6 +15,8 @@ export APACK_CHAIN_CORES=2
 npm run build:runtime -- --cores 2
 if [[ "${1:-}" == system-policy-app ]]; then
   node tests/fixtures/claude-research/install-system-policy.mjs
+elif [[ "${1:-}" == system-policy-unreadable-app ]]; then
+  node tests/fixtures/claude-research/install-system-policy.mjs --unreadable
 fi
 # The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
 if [[ "$(id -u)" == 0 ]]; then
