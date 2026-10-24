@@ -525,6 +525,14 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   one defect, fixed: format 3 held 469 attribute rows with no value (`{ t: 'undefined' }`: `actionFn`, `description`,
   `final`, `mode`, `params`, `fieldMappings`), which its hydration read as absent and the conversion refused; it now
   skips and counts them (`emptyAttributes`).
+- **The app on the production-size copy, end to end:** the built API booted on the converted production backup as
+  well. Its first boot went into settings recovery, as designed: the backup's `Settings-app` row is in the pre-0.4
+  shape (`general`, `plugins`, …), which the current contract refuses. With that row cleared on the copy
+  (`apack db clear-settings --schema-from packages/default-setup --force`), it booted fully: default-setup installed and
+  its content applied, the brain started its root flow, 281 notes' `REFERENCES` relations were rebuilt from their text,
+  seven terminals restored, `Database 368.7 MB on disk, heap 120.2 MB`; stopped by its pid, its shells exited with it.
+  The backup's root flow names a step type no pack provides now (`flow`), which the brain reports and steps past —
+  a property of that data, not of the store.
 - **Test time:** `npm run chain -- --no-native` passed in 870.4 s on a 10-core budget (Steps 1–3's run: 821.6 s), every
   step run: `test:unit:host` 69.6 s, `test:unit:pack` 42.1 s, `test:integration` 576.6 s, `test:smoke` 13.0 s.
 
