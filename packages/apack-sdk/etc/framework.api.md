@@ -417,12 +417,14 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly indexes?: readonly string[];
     readonly shape?: string;
     readonly shortCode?: string;
 }
 
 // @internal
 export interface _PackEntityDeclaration {
+    indexes?: readonly string[];
     // (undocumented)
     name: string;
     // (undocumented)

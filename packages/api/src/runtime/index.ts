@@ -128,6 +128,8 @@ export function openAppStore(): AppStore {
     path: _getLmdbPath(),
     schema: packs,
     onWriteFailure: reportDroppedWrite,
+    // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
+    ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistoryStore(_getRunHistoryPath());
   runtime = createHostRuntime({ store, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
