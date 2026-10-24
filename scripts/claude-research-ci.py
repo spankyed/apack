@@ -13,6 +13,8 @@ import tarfile
 from urllib.request import urlopen
 
 CASES = {
+    'native-mcp-legacy-browser-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_MCP_ELICITATION': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_BROWSER': '1'},
+    'native-mcp-retry-browser-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_MCP_ELICITATION': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_BROWSER': '1'},
     'native-mcp-browser-return-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_MCP_ELICITATION': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL': '1', 'CLAUDE_RESEARCH_MCP_MODERN': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_BROWSER': '1'},
     'native-mcp-modern-url-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_MCP_ELICITATION': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL': '1', 'CLAUDE_RESEARCH_MCP_MODERN': '1'},
     'native-mcp-url-retry-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_MCP_ELICITATION': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL': '1', 'CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY': '1'},
@@ -149,7 +151,7 @@ def replay_directory(case, linux_container=False):
 
 def run(case, linux_container=False):
     target_platform = validate_host(linux_container)
-    if linux_container and case not in ['native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
+    if linux_container and case not in ['native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'text-direction-app', 'text-measurement-app', 'resting-hover-app', 'text-links-app', 'everyday', 'rich-streaming-model-app', 'streaming-model-pause-app', 'notebook-edit-app', 'mcp-oauth-app', 'mcp-panel-app', 'held-model-pause-app', 'task-manager-app', 'active-tool-pause-app', 'active-tool-cancel-app', 'attachment-media-app', 'config-theme-app', 'command-interactions-app', 'agent-settings-app', 'config-layout-app', 'config-model-app', 'agent-structured-app', 'composer-wrap-app', 'status-startup-app', 'action-panes-app', 'policy-held-client-app', 'prompt-timeout-app', 'tool-width-app', 'agent-ime-lifetime-app', 'agent-caret-app', 'agent-caret-fast-app']:
         raise ValueError('Linux container adoption covers reviewed pane, held-policy, prompt-timeout, tool-width Agent IME lifetime and Agent caret profiles only')
     if case not in CASES:
         raise ValueError('Unknown Claude research case')
@@ -199,7 +201,7 @@ def run(case, linux_container=False):
     if(result.status!=='complete')process.exitCode=1;
     """.replace('__scenario__', json.dumps('contexts' if case == 'native-action-contexts' else 'baseline'))
         (root / 'provenance.json').write_text(json.dumps({'research': manifest, 'productCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip(), 'case': case, 'executionPlatform': target_platform, 'executedTarget': target, 'suppliedNativeArchive': str(Path(supplied_archive).resolve()) if supplied_archive else None}, indent=2) + '\n')
-        subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=240 if case in ['native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
+        subprocess.run(['node', '--input-type=module', '-e', script, str(checkout), str(binary), str(root)], cwd=research, env=env, check=True, timeout=240 if case in ['native-mcp-legacy-browser-app', 'native-mcp-retry-browser-app', 'native-mcp-browser-return-app', 'native-mcp-modern-url-app', 'native-mcp-url-retry-app', 'native-mcp-url-app', 'native-mcp-form-app', 'mcp-elicitation-app', 'generic-permissions-app', 'tool-permissions-app', 'action-keys-app', 'action-contexts-app', 'action-dialog-app', 'action-panes-app'] else 210)
 
 
 if __name__ == '__main__':

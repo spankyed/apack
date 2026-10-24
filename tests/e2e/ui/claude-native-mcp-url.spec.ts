@@ -114,7 +114,8 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await expect(composer).toHaveText(draft)
     }
   }
-  async function visitBrowser(phase: number, width: number, height: number, complete: boolean, original: any, savedSelection: unknown) {
+  async function visitBrowser(phase: number, width: number, height: number, complete: boolean, original: any, savedSelection: unknown, settled = false) {
+    await appPage.setViewportSize({ width, height })
     await expect.poll(async () => {
       const value = await readFile(join(workspace!, 'owned-mcp-browser-latest.json'), 'utf8').then(text => JSON.parse(text), error => { if (error.code === 'ENOENT') return undefined; throw error })
       return value?.phase === phase && !browserIds.has(value.id)
@@ -127,10 +128,13 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       expect(page).toBeTruthy(); await page.setViewportSize({ width, height }); await page.bringToFront()
       await expect(page).toHaveURL(browserOrigin + '/release-review?phase=' + phase)
       await expect(page.getByRole('heading', { name: 'Release review', exact: true })).toBeVisible()
+      await expect(panel).toBeVisible(); expect((await frame()).id).toBe(original.id)
       if (complete) {
         await page.getByRole('button', { name: 'Finish review', exact: true }).click()
         await expect(page.getByRole('status')).toContainText('Review complete. Return to apack')
-        const name = 'native-mcp-browser-' + width + '-completed.png'; await page.screenshot({ path: testInfo.outputPath(name) }); browserCaptures.push(name)
+      }
+      if (complete || (!modern && !retry && phase === 10) || (retry && phase === 17)) {
+        const name = 'native-mcp-browser-' + width + '-' + (complete ? 'completed' : 'waiting') + '-phase-' + phase + '.png'; await page.screenshot({ path: testInfo.outputPath(name) }); browserCaptures.push(name)
       }
       await appPage.bringToFront(); expect(page.isClosed()).toBe(false)
     } finally {
@@ -138,14 +142,15 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await appPage.bringToFront()
     }
     if (cleanupError) throw cleanupError
-    await expect(panel).toBeVisible(); await expect(composer).toHaveText(draft)
+    if (settled) await expect(panel).toBeHidden(); else await expect(panel).toBeVisible()
+    await expect(composer).toHaveText(draft)
     expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
-    expect((await frame()).id).toBe(original.id); expect((await frame()).revision).toBe(original.revision); expect((await frame()).phase).toBe('prompt')
+    if (!settled) { expect((await frame()).id).toBe(original.id); expect((await frame()).revision).toBe(original.revision); expect((await frame()).phase).toBe(original.phase) }
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
     const receipts = (await readFile(join(workspace!, 'mcp-elicitation-receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
     const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === phase)
     expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
-    browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: true, browserOpenOnReturn: true })
+    browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: modern ? true : undefined, retryDeferred: retry ? true : undefined, waitingPreservedUntilCompletion: !modern && !retry ? true : undefined, browserOpenOnReturn: true })
   }
   const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
@@ -197,8 +202,14 @@ test('uses original terminal URL decisions, waiting and completion with cancella
         await expect.poll(async () => (await frame())?.phase).toBe('waiting')
         expect((await frame())?.id).toBe(original.id); expect((await frame())?.kind).toBe('mcp_url_elicitation')
         await expect(panel.getByRole('button', { name: 'Retry now', exact: true })).toBeEnabled()
-        if (step.scenario === 'url-retry') { await capturePhase('waiting'); await panel.getByRole('button', { name: 'Retry now', exact: true }).click() }
-        else await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+        if (step.scenario === 'url-retry') {
+          await capturePhase('waiting')
+          if (realBrowser) await visitBrowser(step.phase, 680, 600, true, await frame(), savedSelection)
+          await panel.getByRole('button', { name: 'Retry now', exact: true }).click()
+        } else {
+          if (realBrowser) await visitBrowser(step.phase, 1100, 900, false, await frame(), savedSelection)
+          await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+        }
       }
     } else if (step.scenario === 'url-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
     else if (step.scenario === 'url-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -211,17 +222,25 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       const waiting = await frame(); expect(waiting.phase).toBe('waiting'); expect(waiting.id).not.toBe(original.id)
       if (step.scenario === 'url-skip') {
         await capturePhase('waiting')
+        if (realBrowser) await visitBrowser(step.phase, 1100, 900, false, waiting, savedSelection)
         await panel.getByRole('button', { name: 'Reopen URL', exact: true }).click()
         await expect.poll(() => readFile(join(workspace!, 'native-mcp-url-browser.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(row => row.phase === step.phase).length)).toBe(2)
+        if (realBrowser) await visitBrowser(step.phase, 680, 600, false, waiting, savedSelection)
         await expect(panel.getByRole('button', { name: 'Skip confirmation', exact: true })).toBeEnabled()
         await panel.getByRole('button', { name: 'Skip confirmation', exact: true }).click()
-      } else if (step.scenario === 'url-waiting-cancel') await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      } else if (step.scenario === 'url-waiting-cancel') {
+        if (realBrowser) await visitBrowser(step.phase, 1100, 900, false, waiting, savedSelection)
+        await panel.getByRole('button', { name: 'Cancel', exact: true }).click()
+      }
       else {
         const completionPath = join(workspace!, 'mcp-url-completion-' + step.phase)
         await writeFile(completionPath + '.next', 'release-review-foreign'); await rename(completionPath + '.next', completionPath)
         await expect.poll(() => readFile(join(workspace!, 'native-debug.log'), 'utf8').then(text => text.includes('Received elicitation completion notification: release-review-foreign'))).toBe(true)
         expect((await frame())?.id).toBe(waiting.id); await expect(panel).toBeVisible()
-        await writeFile(completionPath + '.next', 'release-review-' + step.phase); await rename(completionPath + '.next', completionPath)
+        if (realBrowser) {
+          await appPage.setViewportSize({ width: 680, height: 600 })
+          await visitBrowser(step.phase, 680, 600, true, waiting, savedSelection, true)
+        } else { await writeFile(completionPath + '.next', 'release-review-' + step.phase); await rename(completionPath + '.next', completionPath) }
       }
     }
     await expect(panel).toBeHidden({ timeout: 15000 }); await expect.poll(async () => (await context()).native?.state?.busy, { timeout: 15000 }).toBe(false)
