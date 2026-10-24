@@ -131,7 +131,13 @@ test('observes original selected-Agent terminal image delivery without app media
   await expect(focused).toBeVisible()
   await expect(agentComposer).toHaveText(agentDraft)
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[]
-  for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});const png=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-agent-media-boundary-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));captures.push(name)}
+  for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});
+    const latest=focused.locator('[data-native-agent-message]').filter({hasText:'NativeAgentMediaBoundary'}),viewport=focused.getByRole('region',{name:'Agent transcript',exact:true})
+    await expect(latest).toHaveCount(1)
+    const geometry=await viewport.evaluate(element=>{const row=Array.from(element.querySelectorAll<HTMLElement>('[data-native-agent-message]')).find(row=>row.textContent?.includes('NativeAgentMediaBoundary'))!;const rect=(node:Element)=>node.getBoundingClientRect().toJSON();return {viewport:rect(element),parent:rect(element.parentElement!),row:rect(row),scrollTop:element.scrollTop,scrollHeight:element.scrollHeight,clientHeight:element.clientHeight}})
+    await writeFile(join(workspace!,'native-agent-latest-layout-'+width+'.json'),JSON.stringify(geometry))
+    await expect.poll(async()=>viewport.evaluate(element=>{const row=Array.from(element.querySelectorAll<HTMLElement>('[data-native-agent-message]')).find(row=>row.textContent?.includes('NativeAgentMediaBoundary'));if(!row)return false;const v=element.getBoundingClientRect(),r=row.getBoundingClientRect();return r.bottom<=v.bottom+1&&r.top>=v.top-1})).toBe(true)
+    const png=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-agent-media-boundary-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));captures.push(name)}
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parentDraft)
   expect((await context()).native.state.nativePid).toBe(boundNativePid);expect((await context()).sessionId).toBe(sessionId)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
