@@ -1,3 +1,4 @@
+import { copyClaudeChannelSelection } from '../../../common/native-channels.ts'
 /**
  * Pure translation from `QueryOptions` to the argv the CLI expects.
  *
@@ -72,7 +73,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── MCP / plugins / dirs ─────────────────────────────────────────────────
   if (opts.mcpConfig?.length) args.push('--mcp-config', ...opts.mcpConfig)
-  if (opts.channels?.length) args.push('--channels', ...opts.channels)
+  if (opts.channels?.length) args.push('--channels', ...copyClaudeChannelSelection(opts.channels))
   if (opts.strictMcpConfig) args.push('--strict-mcp-config')
   if (opts.pluginDir?.length) {
     for (const dir of opts.pluginDir) args.push('--plugin-dir', dir)

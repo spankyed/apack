@@ -921,7 +921,7 @@ export function finalizeSessionError(
 export async function replayQueuedMessage(
   services: Services,
   threadId: EntityId,
-  queued: { text: string; mode?: string; phase?: string; messageId?: string; references?: any },
+  queued: { channels?: string[]; text: string; mode?: string; phase?: string; messageId?: string; references?: any },
   log: any,
 ): Promise<void> {
   log.debug('draining queued message', { threadId, textLen: queued.text?.length });
@@ -935,6 +935,7 @@ export async function replayQueuedMessage(
       text: queued.text,
       mode: queued.mode,
       phase: queued.phase,
+      channels: queued.channels,
       messageId: queued.messageId,
       references: queued.references,
     });

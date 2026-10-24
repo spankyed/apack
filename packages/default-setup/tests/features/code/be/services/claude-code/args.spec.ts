@@ -262,3 +262,8 @@ it('passes explicit approved-channel selection as native argv without developmen
   expect(args).not.toContain('--dangerously-load-development-channels')
   expect(argsFromOptions({channels:[]})).not.toContain('--channels')
 })
+
+it('rejects a channel selector that could introduce a different CLI flag',()=>{
+ expect(()=>argsFromOptions({channels:['--dangerously-load-development-channels']})).toThrow('not CLI flags')
+ expect(()=>argsFromOptions({channels:['review\nother']})).toThrow('not CLI flags')
+})

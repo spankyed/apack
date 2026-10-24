@@ -1,3 +1,4 @@
+import { copyClaudeChannelSelection } from '../../../common/native-channels.ts'
 import { ClaudeNativeMcpUrlSchema, ClaudeNativeMcpUrlOperationSchema, type ClaudeNativeMcpUrl, type ClaudeNativeMcpUrlRequest } from '../../../common/native-mcp-url.ts'
 import { ClaudeNativeMcpFormSchema, ClaudeNativeMcpFormOperationSchema, type ClaudeNativeMcpFormRequest } from '../../../common/native-mcp-form.ts'
 import { ClaudeNativeGenericToolPermissionDialogsSchema, type ClaudeNativeGenericToolPermissionDialog, type ClaudeNativeGenericToolPermissionDialogResponse } from './terminal-dialogs.ts'
@@ -168,7 +169,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       const args = ['--resume', options.sessionId, '--permission-mode', options.permissionMode, '--plugin-dir', bridge.pluginRoot]
       terminalEnv.BUN_OPTIONS = bridge.bunOptions
       for (const directory of options.pluginDir ?? []) args.push('--plugin-dir', directory)
-      if (options.channels?.length) args.push('--channels', ...options.channels)
+      if (options.channels?.length) args.push('--channels', ...copyClaudeChannelSelection(options.channels))
       if (options.model) args.push('--model', options.model)
       if (options.allowedTools?.length) args.push('--allowed-tools', ...options.allowedTools)
       if (options.disallowedTools?.length) args.push('--disallowed-tools', ...options.disallowedTools)

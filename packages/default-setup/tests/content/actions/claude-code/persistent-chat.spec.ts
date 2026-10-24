@@ -190,3 +190,19 @@ it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','a
  expect(repository.threadQueries.byId(id)?.context?.claudeCode).toMatchObject({permissionMode:target,prePlanMode:expectedPrePlan})
  expect(native.send).toHaveBeenCalledOnce()
 })
+
+it('retains explicit channel intent while a fork queues input and refuses live native changes',async()=>{
+ const {id}=repository.threadCommands.create({topic:'Channel ownership',instructions:'',tags:[]})
+ repository.threadCommands.update(id,{context:{claudeCode:{cwd:'/fixture',forkPending:true}}})
+ const getNativeTerminal=vi.fn(()=>undefined as unknown)
+ mockService<Services,'cli'>('cli',{claudeCode:{getNativeTerminal} as never})
+ mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})
+ const channels=['plugin:review@owned']
+ expect(await chat({threadId:id,text:'Review',channels},services,{} as never,'')).toMatchObject({queued:true})
+ channels.push('plugin:other@owned')
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode?.queuedMessage?.channels).toEqual(['plugin:review@owned'])
+ getNativeTerminal.mockReturnValue({})
+ expect(await chat({threadId:id,text:'Replace',channels:[]},services,{} as never,'')).toMatchObject({success:false,error:'Stop the native session before changing channel selection'})
+ expect(repository.threadQueries.byId(id)?.context?.claudeCode?.queuedMessage?.text).toBe('Review')
+ expect(await chat({threadId:id,text:'Invalid',channels:['--dangerously-load-development-channels']},services,{} as never,'')).toMatchObject({success:false})
+})

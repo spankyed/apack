@@ -14,6 +14,7 @@
  * `mode === 'Claude Code'`.
  */
 
+import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z, EntityId } from '#generated/services.ts';
@@ -35,6 +36,7 @@ export const meta: ActionMeta = {
     phase: { type: 'string', description: 'Sub-phase within mode (Plan/Edit/review)', required: false },
     model: { type: 'string', description: 'Override Claude model (alias or full id)', required: false },
     allowedTools: { type: 'array', description: 'Tools allowed without prompting', required: false },
+    channels: { type: 'array', description: 'Explicit Claude channel server/plugin selection; native policy and allowlist govern admission', required: false },
     disallowedTools: { type: 'array', description: 'Tools always denied', required: false },
     systemPrompt: { type: 'string', description: 'Extra system prompt to append', required: false },
     messageId: { type: 'string', description: 'User message entity ID (for queued-state UI)', required: false },
@@ -86,6 +88,7 @@ export async function action(
     model: requestedModel,
     allowedTools,
     disallowedTools,
+    channels: requestedChannels,
     systemPrompt,
     messageId: userMessageId,
     references,
@@ -97,6 +100,7 @@ export async function action(
     model?: string;
     allowedTools?: string[];
     disallowedTools?: string[];
+    channels?: string[];
     systemPrompt?: string;
     messageId?: string;
     references?: any;
@@ -111,6 +115,10 @@ export async function action(
 
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
+  let channels: string[] | undefined;
+  try { channels = requestedChannels === undefined ? prior?.nativeLaunch?.channels?.slice() : copyClaudeChannelSelection(requestedChannels); }
+  catch (error) { return {success: false, error: error instanceof Error ? error.message : String(error)}; }
+  if (requestedChannels !== undefined && services.cli.claudeCode.getNativeTerminal(threadId)) return {success: false, error: 'Stop the native session before changing channel selection'};
   const selection = requestedModel ?? prior?.modelOverride;
   const model = selection === 'default' ? undefined : selection;
   if (prior?.historyError) {
@@ -137,7 +145,7 @@ export async function action(
   // Queue the message until CC: Handle Fork finishes persisting state.
   if (prior?.forkPending) {
     log.debug('fork in progress — queuing message', { threadId });
-    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
     if (userMessageId) {
       services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
     }
@@ -153,7 +161,7 @@ export async function action(
   });
 
   if (services.cli.claudeCode.isConversationBusy(threadId) && !prior?.pendingControlRequest && !prior?.pendingElicitation && !prior?.isRunning) {
-    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
     if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
     return { success: true, queued: true };
   }
@@ -163,7 +171,7 @@ export async function action(
     const handleExists = services.cli.claudeCode.isConversationBusy(threadId);
     if (handleExists) {
       log.debug('action already running — queuing message', { threadId });
-      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
       if (userMessageId) {
         services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
       }
@@ -247,6 +255,7 @@ export async function action(
         model,
         allowedTools,
         disallowedTools,
+        channels,
         systemPrompt,
         messageId: userMessageId,
         references,
@@ -445,6 +454,7 @@ export async function action(
       allowDangerouslySkipPermissions: true,
       allowedTools: allowedTools ?? DEFAULT_ALLOWED_TOOLS,
       disallowedTools,
+      channels,
       appendSystemPrompt: composedSystemPrompt,
       surfaceControlRequests: true,
       ...(useWorktree && { worktree: true as const }),
@@ -456,13 +466,13 @@ export async function action(
       ...(forkFrom?.cliUuid && { resumeSessionAt: forkFrom.cliUuid }),
     };
     const launchKey = JSON.stringify({ cwd: sessionCwd, model, allowedTools: options.allowedTools,
-      disallowedTools, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
+      disallowedTools, channels, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
     let conversation = services.cli.claudeCode.getConversation(threadId);
     const previousLaunch = conversation ? JSON.parse(conversation.launchKey) : undefined;
     const existingKey = previousLaunch ? JSON.stringify({
       cwd: conversation!.owner.sessionCwd ?? previousLaunch.cwd,
       model: conversation!.owner.modelSelection ?? previousLaunch.model,
-      allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools,
+      allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools, channels: previousLaunch.channels,
       appendSystemPrompt: previousLaunch.appendSystemPrompt, worktree: previousLaunch.worktree,
       addDir: previousLaunch.addDir,
     }) : undefined;
@@ -482,7 +492,7 @@ export async function action(
     if (services.cli.claudeCode.getConversation(threadId)?.owner !== owner || owner.closing) throw new Error('Claude conversation changed while applying composer phase');
     persistClaudeState(services, threadId, { permissionMode: acknowledgedMode, prePlanMode: acknowledgedMode === 'plan' ? prePlanMode : undefined });
     if (owner.busy) {
-      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
       if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
       thinking.finalise();
       toolActivity.finalise('done');
