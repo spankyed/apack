@@ -126,7 +126,14 @@ test('refuses reset for a live worker and isolates its late response after stopp
   const replacement=await context();expect(replacement.sessionId).not.toBe(sessionId);expect(replacement.messages.some((message:any)=>message.text==='Review the release notes for this project.')).toBe(true)
   const prints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));expect(prints.at(-1).sessionId).toBe(replacement.sessionId);expect(replacement.claude.totalCostUsd).toBeCloseTo(prints.at(-1).totalCostUsd,10)
   let freshRows:any[]=[];for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{freshRows=(await readFile(join(workspace!,'.claude/projects',bucket,replacement.sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}catch(error:any){if(error.code!=='ENOENT')throw error}}
-  const humans=freshRows.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true);expect(humans).toHaveLength(1);expect(JSON.stringify(humans[0].message.content)).toContain(freshText);expect(JSON.stringify(humans)).not.toContain('Review the release notes in the background.')
+  const humans=freshRows.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true);expect(humans).toHaveLength(1);expect(humans[0].sessionId).toBe(replacement.sessionId)
+  const freshPrompt=humans[0].message.content;expect(typeof freshPrompt).toBe('string')
+  expect(freshPrompt).toContain('The provider session is new, so use the prior thread transcript below as context.')
+  expect(freshPrompt).toContain('Prior thread transcript:')
+  expect(freshPrompt).toContain('User:\nReview the release notes in the background.')
+  expect(freshPrompt.endsWith('Latest user message:\n'+freshText)).toBe(true)
+  expect(freshPrompt).not.toContain(taskId);expect(freshPrompt).not.toContain(sessionId)
+  expect(humans[0].parentUuid).toBeNull()
   const baseline={sessionId:replacement.sessionId,turns:replacement.turns,cost:replacement.claude.totalCostUsd,messageIds:replacement.messages.map((message:any)=>message.id)}
   await writeFile(join(workspace!,'native-pending-duration-release'),'release the cancelled old provider after replacement')
   await expect.poll(()=>readFile(join(workspace!,'native-reset-task-provider-released.json'),'utf8').then(text=>JSON.parse(text),()=>undefined)).toMatchObject({heldReleased:true,disconnectedWhenReleased:true})
