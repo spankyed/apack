@@ -139,6 +139,8 @@ test('mirrors original pending background Agent duration and completion', async 
     const completedFrame = (await frames()).findLast((frame: any) => !before.has(frame.uuid) && /for \d/.test(frame.engineOutput ?? '') && !/Waiting for/.test(frame.engineOutput ?? ''))
     await expect(appPage.locator('[data-native-placement="TurnDuration"]').last()).toContainText(/for \d/)
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    expect(JSON.stringify((await context()).native.task)).toBe(taskBefore)
+    expect(JSON.stringify(await journal())).not.toContain('RetiredAgentMustNotReceiveThis')
     await writeFile(join(workspace!, 'native-pending-duration-proof.json'), JSON.stringify({ waiting: pendingFrame.engineOutput, completed: completedFrame.engineOutput, pendingFrame, completedFrame, pendingNativeRows, asyncLaunch:{agentId,toolUseId,resultUuid:launch.uuid},retiredControl,retiredControlBackendDelivered:true,retiredControlTaskStateUnchanged:JSON.stringify((await context()).native.task)===taskBefore }))
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click(); await section.getByRole('button', { name: 'Stop session', exact: true }).click()
     await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
