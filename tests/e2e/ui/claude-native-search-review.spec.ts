@@ -142,7 +142,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
       await composer.click();await composer.press('End');await composer.pressSequentially(' More.')
       const draft=await composer.innerText()
       const snapshot=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
-      await appPage.evaluate(directory=>(window as any).applicationState.system.get('default-setup/threads').send({type:'NEW_THREAD_IN_PROJECT',directory}),workspace!)
+      await appPage.getByText('Getting Started',{exact:true}).first().click()
       await expect.poll(async()=>{const id=(await context()).threadId;return !!id&&id!==initial.threadId}).toBe(true)
       await appPage.getByText(initial.topic,{exact:true}).first().click()
       await expect.poll(async()=>(await context()).threadId).toBe(initial.threadId)
