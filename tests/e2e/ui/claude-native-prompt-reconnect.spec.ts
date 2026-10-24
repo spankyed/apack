@@ -142,14 +142,17 @@ test('retains newer parent and Agent drafts when original replies cross API reco
           const png=await nativeWindow.evaluate(async win=>(await win.webContents.capturePage()).toPNG().toString('base64'))
           await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-failure.png'),Buffer.from(png,'base64'))
           throw error
-        } finally { await appPage.evaluate(()=>{(window as any).__agentHandoffDiagnostic?.stop();delete (window as any).__agentHandoffDiagnostic}) }
+        } finally {
+          const transitions=await appPage.evaluate(()=>{const probe=(window as any).__agentHandoffDiagnostic;probe?.stop();delete (window as any).__agentHandoffDiagnostic;return probe?.rows})
+          await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-transitions.json'),JSON.stringify(transitions))
+        }
       }
       const editor = owner === 'parent' ? composer : agentComposer, container = owner === 'parent' ? card : form
       for (const kind of ['edit', 'completion']) {
         const text = kind === 'edit' ? `Review the older ${owner} edit draft.` : `Review #${owner}-reconnect`
         const current = `Review the newer ${owner} ${kind} draft.`
         const controller = await delayOwnedUiHost({ directory, sessionId, workspace, kind, holdText: text }); controllers.push(controller)
-        await editor.fill(text); const held = await controller.waitHeld()
+        await editor.focus(); await editor.press('ControlOrMeta+a'); await appPage.keyboard.insertText(text); await expect(editor).toHaveText(text); const held = await controller.waitHeld()
         if (kind === 'edit') expect(held.result.frame.text).toBe(text)
         else expect(held.result.suggestions).toContainEqual(expect.objectContaining({ text: `#${owner}-reconnect-complete` }))
         const connection = await reconnect()
@@ -174,7 +177,7 @@ test('retains newer parent and Agent drafts when original replies cross API reco
       await container.getByRole('button', { name: 'Suggest next step', exact: true }).click()
       await expect(editor.locator('.claude-prompt-suggestion')).toHaveText('Review the remaining release checklist.')
       await editor.focus(); await editor.press('Tab'); await expect(editor).toHaveText('Review the remaining release checklist.')
-      await editor.fill(`Review #current-${owner}`)
+      await editor.focus(); await editor.press('ControlOrMeta+a'); await appPage.keyboard.insertText(`Review #current-${owner}`)
       await container.getByRole('button', { name: `Complete #current-${owner}`, exact: true }).click()
       await expect(editor).toHaveText(`Review #current-${owner}-complete`)
       const tools = container.getByRole('button', { name: 'Session tools', exact: true }); if (await tools.getAttribute('aria-expanded') === 'true') await tools.click()
@@ -184,15 +187,16 @@ test('retains newer parent and Agent drafts when original replies cross API reco
       else { await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click(); await expect(composer).toHaveText(parentDraft) }
     }
     await readCurrent(card, parentDraft)
-    const lease = await appPage.evaluate(() => {
+    let lease: any
+    await expect.poll(async()=>{ lease=await appPage.evaluate(() => {
       const context = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
       const entries = Object.entries(context.nativeUiViews).filter(([, view]: [string, any]) => view.threadId === context.currentThread.id && !view.mountRequest?.nativeView && view.state.status === 'live') as [string, any][]
-      if (entries.length !== 1) throw Error('Expected one current parent native UI lease')
+      if (entries.length !== 1) return undefined
       const [mountId, view] = entries[0]
       const find = (value: any): string | undefined => { if (!value || typeof value !== 'object') return; if (value.kind === 'button' && value.label === 'Use review template' && value.actionId) return value.actionId; for (const child of Object.values(value)) { const found = find(child); if (found) return found } }
-      const actionId = find(view.state); if (!actionId || !view.attachmentId) throw Error('Expected original native action and attachment')
+      const actionId = find(view.state); if (!actionId || !view.attachmentId) return undefined
       return { mountId, threadId: view.threadId, attachmentId: view.attachmentId, promptRevision: view.promptRevision, actionId }
-    })
+    });return !!lease }).toBe(true)
     const attachments = async () => (await readFile(join(workspace!, 'native-ui-attachments.jsonl'), 'utf8')).trim().split('\n').filter(Boolean).map(row => JSON.parse(row))
     const nativeAttachment = (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1)
     expect(nativeAttachment).toBeTruthy()
@@ -209,16 +213,19 @@ test('retains newer parent and Agent drafts when original replies cross API reco
     await expect(composer).toHaveText(parentDraft); expect((await context()).native.state.nativePid).toBe(boundNativePid)
     await readCurrent(card, parentDraft)
     const deliveredControls=async()=>{const text=await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8');return text.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>row.meta?.event?.type==='CLAUDE_UI_PRESS')}
+    const freshMount=await appPage.evaluate(threadId=>{const views=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews;const rows=Object.entries(views).filter(([,v]:[string,any])=>v.threadId===threadId&&!v.mountRequest?.nativeView&&v.attachmentId&&['live','rendering'].includes(v.state?.status)) as [string,any][];if(rows.length!==1)throw Error('Fresh parent mount unavailable');return {mountId:rows[0][0],attachmentId:rows[0][1].attachmentId}},lease.threadId)
+    expect(freshMount.attachmentId).not.toBe(lease.attachmentId)
+    const stalePress={mountId:freshMount.mountId,threadId:lease.threadId,actionId:lease.actionId}
     const priorControls=await deliveredControls(),address=priorControls.at(-1)?.meta?.from
     expect(address).toBeTruthy()
-    await appPage.evaluate(before => (window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[{ type: 'CLAUDE_UI_PRESS', mountId: before.mountId, threadId: before.threadId, actionId: before.actionId }]}), lease)
-    await expect.poll(async()=>(await deliveredControls()).slice(priorControls.length).some(row=>row.meta.from===address&&row.meta.event.mountId===lease.mountId&&row.meta.event.threadId===lease.threadId&&row.meta.event.actionId===lease.actionId)).toBe(true)
+    await appPage.evaluate(before => (window as any).applicationState.send({type:'SEND_TO_SURFACE',surface:'default-setup/threads',events:[{ type: 'CLAUDE_UI_PRESS', mountId: before.mountId, threadId: before.threadId, actionId: before.actionId }]}), stalePress)
+    await expect.poll(async()=>(await deliveredControls()).slice(priorControls.length).some(row=>row.meta.from===address&&row.meta.event.mountId===stalePress.mountId&&row.meta.event.threadId===stalePress.threadId&&row.meta.event.actionId===stalePress.actionId)).toBe(true)
     await readCurrent(card, parentDraft); await expect(composer).toHaveText(parentDraft)
     await card.getByRole('button', { name: 'Use review template', exact: true }).click()
     await expect(composer).toHaveText('Review release notes before merging.')
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-prompt-theme-fill.json'), 'utf8'))).toMatchObject({ before: { text: parentDraft }, result: { isFilled: true } })
     await readCurrent(card, 'Review release notes before merging.')
-    receipts.push({ owner: 'parent', kind: 'expired-attachment', offlineAt, recoveredAt: Date.now(), oldAttachmentId: lease.attachmentId, originalNativeAttachment: nativeAttachment, retired: (await attachments()).find(row => row.subtype === 'ui_detach' && row.detached && row.clientSha256 === nativeAttachment.clientSha256 && row.at >= offlineAt), replacement: (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1), retainedDraft: parentDraft, staleActionRefused: true, addressedStaleActionDelivered: true, controlAddress: address, freshFill: true })
+    receipts.push({ owner: 'parent', kind: 'expired-attachment', offlineAt, recoveredAt: Date.now(), oldAttachmentId: lease.attachmentId, retiredMountId:lease.mountId, addressedMountId:freshMount.mountId, freshAttachmentId:freshMount.attachmentId, originalNativeAttachment: nativeAttachment, retired: (await attachments()).find(row => row.subtype === 'ui_detach' && row.detached && row.clientSha256 === nativeAttachment.clientSha256 && row.at >= offlineAt), replacement: (await attachments()).filter(row => row.subtype === 'ui_attach' && row.taskId === null).at(-1), retainedDraft: parentDraft, staleActionRefused: true, addressedStaleActionDelivered: true, controlAddress: address, freshFill: true })
     await appPage.screenshot({ path: testInfo.outputPath('apack-native-prompt-reconnect-expired.png') })
     await writeFile(join(workspace!, 'native-prompt-reconnect-receipts.json'), JSON.stringify(receipts))
   } finally {
