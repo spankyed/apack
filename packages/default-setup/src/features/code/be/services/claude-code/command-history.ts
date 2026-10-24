@@ -8,7 +8,7 @@ export type ClaudeCommandHistoryPresentation =
 const decode = (text: string) => text.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')
 /** Recognize whole persisted command envelopes, never strip tags from ordinary message bodies. */
 export function presentClaudeCommandHistory(row: Record<string, unknown>, text: string): ClaudeCommandHistoryPresentation | undefined {
-  if (row.type !== 'user' || row.entrypoint !== 'cli' || row.origin !== undefined) return
+  if ((row.type !== 'user' && !(row.type === 'system' && row.subtype === 'local_command')) || row.entrypoint !== 'cli' || row.origin !== undefined) return
   const invocation = /^<command-name>([^<>]+)<\/command-name>\s*<command-message>([^<>]*)<\/command-message>\s*<command-args>([^<>]*)<\/command-args>$/.exec(text)
   if (invocation && /^\/[^\s<>]+$/.test(invocation[1]!)) {
     const name = decode(invocation[1]!), args = stripVTControlCharacters(decode(invocation[3]!))

@@ -6,7 +6,12 @@ const object = (value: unknown): Record<string, unknown> | undefined => value !=
 export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
-  const row = entry.row, message = object(row.message)
+  const source = entry.row
+  // Native local and immediate JSX commands persist system rows, with the same command envelopes.
+  const commandRow = source.type === 'system' && source.subtype === 'local_command' && typeof source.content === 'string'
+    && presentClaudeCommandHistory(source, source.content)
+  const row = commandRow ? { ...source, type: 'user', message: { content: source.content } } : source
+  const message = object(row.message)
   if (!message || row.sessionId !== entry.sessionId || row.isSidechain === true || row.agentId !== undefined || row.parent_tool_use_id || row.isMeta === true
     || (row.type !== 'user' && row.type !== 'assistant') || typeof row.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.uuid)) return
   const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : Array.isArray(message.content) ? message.content.map(object).filter((block): block is Record<string, unknown> => !!block) : []

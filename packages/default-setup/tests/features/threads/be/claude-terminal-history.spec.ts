@@ -60,3 +60,18 @@ it('keeps quoted, malformed, mixed-media and genuinely human command-like markup
   expect(projectClaudeTerminalHistory({ sessionId, row: base })?.text).toBe('&lt; literal')
   expect(projectClaudeTerminalHistory({ sessionId, row: { ...base, message: { content: [{ type: 'text', text }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'YWJj' } }] } } })?.text).toBe(text)
 })
+
+it('projects native system command journal rows without turning other system output into chat', () => {
+  const base = { ...row, type: 'system', subtype: 'local_command', entrypoint: 'cli', message: undefined }
+  const invocation = projectClaudeTerminalHistory({ sessionId, row: { ...base, content: '<command-name>/config</command-name>\n<command-message>config</command-message>\n<command-args>researchUnknownSetting=true</command-args>' } })!
+  expect(invocation).toMatchObject({ uuid, sessionId, sender: 'user', text: '/config researchUnknownSetting=true' })
+  expect(invocation.context.claudeNativeUserMessage).toBeUndefined()
+  const content = "<local-command-stdout>researchUnknownSetting isn't a /config setting.</local-command-stdout>"
+  const output = projectClaudeTerminalHistory({ sessionId, row: { ...base, content } })!
+  expect(output).toMatchObject({ uuid, sessionId, sender: 'assistant', text: "researchUnknownSetting isn't a /config setting." })
+  expect(output.context.claudeNativeCommand).toMatchObject({ kind: 'output', stream: 'stdout' })
+  expect(output.context.claudeNativeMessages).toBeUndefined()
+  for (const invalid of [{ ...base, subtype: 'other', content }, { ...base, origin: { kind: 'human' }, content }, { ...base, content: 'Unclassified system detail' }]) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: invalid })).toBeUndefined()
+  }
+})
