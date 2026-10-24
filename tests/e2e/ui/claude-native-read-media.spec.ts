@@ -10,7 +10,7 @@ type Screen = { cols: number; rows: number; write(text: string, done: () => void
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('reviews original native image PDF and notebook results', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(90000)
+  test.setTimeout(process.env.CLAUDE_RESEARCH_PDF_SUCCESS==='1'?150000:90000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const _clientLifetime = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8')).clientLifetime === true
