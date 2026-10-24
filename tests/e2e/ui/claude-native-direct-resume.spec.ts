@@ -98,12 +98,15 @@ test('directly resumes unrepresented saved native history with its metadata and 
     await expect.poll(async () => (await context()).claude.modelOverride).toBe('haiku')
   }
   const sourceThreadId = (await context()).threadId
+  const costBeforeCheckpoint=(await context()).claude.totalCostUsd
   await composer.fill('NativeForkCheckpointAlpha: remember this source-only marker.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.some((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.') }).toBe(true)
   const checkpoint = (await context()).messages.filter((m: any) => m.sender === 'assistant' && m.context?.claudeTerminalMessage && m.text === 'Fixture completed.').at(-1)
   expect(checkpoint.context.cliUuid).toBeTruthy()
   await expect.poll(async () => (await context()).claude.turns).toBe(2)
+  const nativeJournalCost=async()=>{for(const bucket of await _readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));return rows.filter(row=>row.type==='cost-state').at(-1)?.totalCostUSD}catch(error:any){if(error.code!=='ENOENT')throw error}}}
+  await expect.poll(async()=>{const cost=await nativeJournalCost();return typeof cost==='number'&&cost>costBeforeCheckpoint&&(await context()).claude.totalCostUsd===cost}).toBe(true)
   const nativeFacts = (await context()).claude
   const nativeCost = nativeFacts.totalCostUsd
   expect(nativeCost).toBeGreaterThan(0)
