@@ -22,8 +22,8 @@ Run the selected local native journey through the isolated checkout's Linux runn
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-form-app
 ```
 
-The launcher installs the display prerequisites when missing and builds the app runtime for the
-current inputs. Research replay uses one locked directory at `/work/.claude-research/current`.
+The launcher installs missing display prerequisites, then uses the build-chain cache to refresh the
+default pack and app runtime for the current inputs. Research replay uses one locked directory at `/work/.claude-research/current`.
 Copy needed evidence out before the next sync/replay; it replaces this directory. Do not restore
 the old unbounded `node_modules/.cache/claude-research-linux` layout.
 

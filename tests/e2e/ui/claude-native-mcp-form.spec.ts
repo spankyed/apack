@@ -124,14 +124,15 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
         await appPage.setViewportSize({ width, height })
         const title = panel.getByLabel('Release title', { exact: true })
         await title.focus()
-        const pendingInputBlocked = await title.evaluate(async element => {
+        const nativeButton = await section.getByRole('button', { name: 'Use native interface', exact: true }).elementHandle()
+        expect(nativeButton).not.toBeNull()
+        const pendingInputBlocked = await title.evaluate(async (element, button) => {
           const field = element as HTMLInputElement; field.value = 'A😀BC'
           field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'A😀BC' }))
           // Vue commits its pending-input guard before an async native acknowledgement can arrive.
           await Promise.resolve()
-          const nativeButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === 'Use native interface')!
-          const disabled = nativeButton.disabled; nativeButton.click(); return disabled
-        })
+          const control = button as HTMLButtonElement, disabled = control.disabled; control.click(); return disabled
+        }, nativeButton!)
         expect(pendingInputBlocked).toBe(true); await expect(panel).toBeVisible()
         await expect.poll(async () => (await frame())?.textInputValue).toBe('A😀BC')
         const beforeFocus = (await frame()).values, focusedFields: string[] = []
