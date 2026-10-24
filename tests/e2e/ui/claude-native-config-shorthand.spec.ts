@@ -110,7 +110,11 @@ test('recovers from refused native Config shorthand with acknowledged persistenc
       const body=appPage.getByTestId('chat-transcript').getByText(result.text,{exact:true})
       await expect(async()=>{await body.evaluate(element=>element.scrollIntoView({block:'nearest'}));await expect(body).toBeInViewport()}).toPass({timeout:5000})
       await expect(composer).toHaveText(draft)
-      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+      const send=card.getByRole('button',{name:'Send',exact:true})
+      await expect(send).toBeEnabled()
+      await expect(send).toBeInViewport()
+      await expect.poll(()=>body.evaluate(element=>{for(let node:Element|null=element;node;node=node.parentElement){if(Number(getComputedStyle(node).opacity)<0.99)return false}return true})).toBe(true)
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
       const png=await nativeWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
       await writeFile(testInfo.outputPath(`native-config-shorthand-${index+1}-${width}.png`),Buffer.from(png,'base64'))
     }
