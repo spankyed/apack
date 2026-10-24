@@ -199,9 +199,7 @@ amplification.
 `seq` in `['i', id]` and in every index key: a sequence per create and a hop per index match. Engine-minted ids are
 time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or node's,
 named after it) are not. Id order would drop the sequence as a contract change, with code that needs an order saying
-so through `orderBy`. Decided in Step 1 by this rule: keep insertion order unless the measurements show both that every caller reading a query's
-order without an `orderBy` can take one, and that the sequence costs a create more than 10%; then switch to id order,
-adding the `orderBy`s in the same step. Measured: which callers read a query's order without an `orderBy`, and
+so through `orderBy`. Decided in Step 1 from these measurements, with the reasoning recorded here: which callers read a query's order without an `orderBy`, and
 what the sequence costs a create on format 4.
 
 ## Steps: the engine on an ordered key-value seam
@@ -228,7 +226,7 @@ behaviour throughout; a pure re-layout needs no new spec.
 - Today's value index covers declared kinds and roles only; a `where` on any other field filters the walk. The
   development warning for an unindexed `where` over a large type.
 - Each pack's `indexes` chosen from its `where` calls.
-- The open order question measured and decided by its rule under Open: the callers that read a query's order without
+- The open order question measured and decided (under Open): the callers that read a query's order without
   an `orderBy`, and what a sequence costs a create.
 
 **Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
