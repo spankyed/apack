@@ -199,7 +199,7 @@ amplification.
 `seq` in `['i', id]` and in every index key: a sequence per create and a hop per index match. Engine-minted ids are
 time-sortable, so id order is creation order for them; ids given explicitly (an import's, a compiled flow's or node's,
 named after it) are not. Id order would drop the sequence as a contract change, with code that needs an order saying
-so through `orderBy`. Settled by measuring, in Step 1: which callers read a query's order without an `orderBy`, and
+so through `orderBy`. Measured in Step 1 and decided by the lead developer before Step 2: which callers read a query's order without an `orderBy`, and
 what the sequence costs a create on format 4.
 
 ## Steps: the engine on an ordered key-value seam
@@ -208,18 +208,42 @@ Six steps, each one commit, shippable with its own checks; Step 1 lands on today
 less. Engine changes are measured against the baseline under Done. The ears contract suite (`tests/engine/`) pins
 behaviour throughout; a pure re-layout needs no new spec.
 
-### 1. Declared indexes, and the order question settled
+### How to carry out the steps
+
+- **The design is decided.** Implement it; a step that finds the plan wrong stops as blocked (below) rather than
+  redesigning.
+- **One step per goal, in order.** Commit on the current branch: no push, no pull request, no new branch.
+- **Step 1 ends with a decision that isn't the implementer's.** It measures the order question and reports; the lead
+  developer decides insertion order or id order, records it under Open, and only then does Step 2 start.
+- **The contract suite weakens nothing.** No assertion is loosened to pass. A spec that pins something the plan removes
+  (`Sequence` as an entity, the trash as a set) changes with that decision, and the commit says which spec and why.
+- **The chain runs once before a step's commit:** `npm run chain -- --no-native`, and the full `npm run chain` for
+  Step 4. Rerun it at most once, and only for a failure diagnosed and fixed. A failure in code the step didn't touch,
+  or one caused by files someone else changed during the run, is reported, not chased.
+- **A reading is recorded, never tuned for.** Where a check names a tolerance (+10% median against the readings here),
+  a reading past it is recorded and reported with the step, not optimised until it passes.
+- **A missing prerequisite is recorded, not worked around.** Docker for the full chain, `sudo purge` for a cold page
+  cache, the production-size copy (`~/Library/Application Support/abuddy/ears-db`, copied, never opened in place) —
+  without one, record what could not be checked and why, and finish the rest.
+- **A step finishes in exactly one of two states:**
+  - **Done:** its "done when" holds, its readings are recorded under it, the commit is made, and the report says what
+    was measured. The next step is not started.
+  - **Blocked:** after one diagnosis attempt, the blocker, its evidence and the next action are written into this
+    plan's status; any finished part that passes the chain is committed; the report names the blocker. Stopping
+    blocked is a correct finish, not a failure to retry.
+
+### 1. Declared indexes, and the order question measured
 - `indexes` on an entity's manifest entry, written into the row rules and `SDK_ROW_RULES`; codegen refuses a field the
   shape doesn't declare; `apack.schema.json` regenerates.
 - Today's value index covers declared kinds and roles only; a `where` on any other field filters the walk. The
   development warning for an unindexed `where` over a large type.
 - Each pack's `indexes` chosen from its `where` calls.
-- The open order question measured and decided: the callers that read a query's order without an `orderBy`, and what a
-  sequence costs a create.
+- The open order question measured, for the lead developer to decide: the callers that read a query's order without an
+  `orderBy`, and what a sequence costs a create.
 
 **Done when:** a `where` on an undeclared field finds every match and one on a declared field reads the index (a spec
 counting reads); codegen refuses an undeclared field, mutation-checked; the warning fires once per call site; the order
-question is recorded here as decided.
+measurements are recorded under Open for the lead developer's decision.
 
 ### 2. The `OrderedKV` seam and `MemoryKV`
 - `OrderedKV`: `get`, `range` (with `start`, `end`, `reverse`, `limit`, keys only), `put`, `del`, and transactions: a
@@ -238,9 +262,9 @@ question is recorded here as decided.
 - The app still boots by loading the LMDB files into a `MemoryKV`, a bridge this step adds and Step 4 deletes, so the
   cut-over to disk is one change on its own.
 
-**Done when:** the contract suite passes unchanged on `MemoryKV`; the bench is within tolerance of the readings under
-Done;
-a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early and a live query reads no trashed entity.
+**Done when:** the contract suite passes on `MemoryKV`, weakening nothing; the bench is recorded against the readings
+under Done, any case past +10% reported; a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early
+and a live query reads no trashed entity.
 
 ### 4. The app on LMDB
 - The LMDB backend with format 4, and a 3 → 4 step in `scripts/ears-convert.ts`. Only the developers' own data is in an
@@ -253,7 +277,7 @@ a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early and 
 - The development check that freezes returned values in tests.
 
 **Done when:**
-- the contract suite passes unchanged on both backends;
+- the contract suite passes on both backends, weakening nothing;
 - a write survives a child killed with SIGKILL right after it returns;
 - a write a client's message caused is synced without a `durable()` call, a flow's is not synced per commit, and a
   write behind `durable()` is on disk when it resolves (the sync count observed through the backend);
@@ -272,7 +296,7 @@ a spec counting reads shows `first()`, `exists()` and `limit(n)` stop early and 
   thread, warming at boot or moving large reads off it is decided with that number.
 - `getSchemaStats`' key-only walk on the production-size copy.
 
-**Done when:** each reading is recorded here.
+**Done when:** each reading is recorded here, or the prerequisite it lacked is.
 
 ### 6. What the systems keep in their contexts
 An audit: a system that holds entity lists to answer `SEND_STATE` is a second copy of the data in app code. Each one
