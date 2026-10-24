@@ -164,7 +164,8 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
       expect((await receipts()).filter(row=>row.event==='start')).toHaveLength(1)
       steps.push({phase,disabledAdmissionRefused:true});continue
     }
-    for(const button of await appPage.getByRole('button',{name:/^Native tools/}).all())if(await button.getAttribute('aria-expanded')==='false')await button.click()
+    const toolGroup=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="native_lsp_'+phase+'"]');await expect(toolGroup).toBeVisible()
+    const toolToggle=toolGroup.getByRole('button').first();if(await toolToggle.getAttribute('aria-expanded')==='false')await toolToggle.click()
     const result=appPage.locator('[data-native-tool-result="native_lsp_'+phase+'"]')
     await expect(result).toBeVisible()
     if([1,4,7].includes(phase))await expect(result).toContainText('definitions.review')
