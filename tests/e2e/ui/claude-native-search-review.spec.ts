@@ -162,9 +162,33 @@ test('reviews original Glob and Grep results while preserving everyday composing
       const png=await ownedWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
       await writeFile(testInfo.outputPath('native-idle-redraw-'+width+'.png'),Buffer.from(png,'base64'))
     }
+    const statusTransitions=[]
+    const status=card.getByTestId('composer-native-status'),draft=await composer.innerText()
+    const helperExits=async()=>(await readFile(join(workspace!,'prefix-exits.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      for(const mode of ['empty','normal','failure','normal']){
+        const beforeExits=(await helperExits()).length
+        await writeFile(join(workspace!,'status-mode.txt'),mode)
+        await expect.poll(async()=>(await helperExits()).slice(beforeExits).some(row=>row.args?.at(-1)===`/usr/bin/python3 '${join(workspace!,'main.py')}'`&&row.code===(mode==='failure'?7:0)),{timeout:15000}).toBe(true)
+        if(mode==='normal')await expect(status).toContainText('AppNativeMain '+sessionId,{timeout:15000})
+        else await expect(status).toHaveCount(0,{timeout:15000})
+        await expect(card).not.toContainText('Failure output must not become status')
+        expect(await composer.innerText()).toBe(draft)
+        expect((await context()).messages.map((message:any)=>message.id)).toEqual(messageIds)
+        expect((await context()).claude.turns).toBe(initial.claude.turns)
+        expect((await context()).native.state.nativePid).toBe(boundNativePid)
+        await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+        const window=await electronApp.browserWindow(appPage)
+        const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+        const file=`native-status-${mode}-${width}-${statusTransitions.length}.png`
+        await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
+        statusTransitions.push({width,mode,file,helperExits:(await helperExits()).slice(beforeExits),status:(await context()).native.state.mainStatus??null})
+      }
+    }
     const childrenAfter=await readFile(join(workspace!,'native-children.jsonl'),'utf8');expect(childrenAfter).toBe(childrenBefore)
     const receipt=JSON.parse(await readFile(join(workspace!,'native-idle-redraw-receipts.json'),'utf8'));expect(receipt.count).toBe(4)
-    idleProof={messageIds,turnsBefore:initial.claude.turns,turnsAfter:(await context()).claude.turns,childrenBefore,childrenAfter,receipt,draft:await composer.innerText()}
+    idleProof={statusTransitions,messageIds,turnsBefore:initial.claude.turns,turnsAfter:(await context()).claude.turns,childrenBefore,childrenAfter,receipt,draft:await composer.innerText()}
   }
   if(cwdNavigation){
     const draft='Keep this release draft while browsing files.\nSecond line stays unsent.'
