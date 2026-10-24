@@ -116,7 +116,12 @@ test('retains newer parent and Agent drafts when original replies cross API reco
     for (const owner of ['parent', 'agent']) {
       if (owner === 'agent') {
         if (!await row.isVisible()) await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
-        await row.getByRole('button', { name: 'Open Agent', exact: true }).click(); await expect(focused).toBeVisible()
+        await row.getByRole('button', { name: 'Open Agent', exact: true }).click()
+        try { await expect(focused).toBeVisible() } catch(error) {
+          const state=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {nativeTerminalViews:c.nativeTerminalViews,nativeUiViews:c.nativeUiViews,threadId:c.currentThread?.id}})
+          await writeFile(join(workspace!,'native-prompt-reconnect-agent-handoff-failure.json'),JSON.stringify(state))
+          throw error
+        }
       }
       const editor = owner === 'parent' ? composer : agentComposer, container = owner === 'parent' ? card : form
       for (const kind of ['edit', 'completion']) {
