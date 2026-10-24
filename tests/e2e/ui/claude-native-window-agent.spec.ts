@@ -160,13 +160,13 @@ if mode=='failure':
   await expect.poll(async()=>(await reads()).length).toBe(2);expect((await reads())[1]).toMatchObject({result:{isFilled:true},box:{text:'Native focused worker draft.'}})
   await expect(worker).toHaveText('Main Agent draft.');await expect(secondWorker).toHaveText('Native focused worker draft.')
   const statusTransitions=[]
-  const helperExits=async()=>(await readFile(join(workspace!,'prefix-exits.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+  const helperExits=async()=>(await readFile(join(workspace!,'status-startup-posts.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
   for(const width of [1100,680]){
     await popout.setViewportSize({width,height:width===680?600:900})
     for(const mode of ['empty','normal','failure','normal']){
       const before=(await helperExits()).length
       await writeFile(join(workspace!,'agent-status-mode.txt'),mode)
-      await expect.poll(async()=>(await helperExits()).slice(before).some(row=>row.args?.at(-1)===`/usr/bin/python3 '${helperPath}'`&&row.code===(mode==='failure'?7:0)),{timeout:15000}).toBe(true)
+      await expect.poll(async()=>(await helperExits()).slice(before).some(row=>row.kind==='subagent'&&row.parentPid===boundNativePid&&row.sessionId===sessionId&&row.httpStatus===200&&row.code===(mode==='failure'?7:0)),{timeout:15000}).toBe(true)
       const caption=secondForm.getByTestId('composer-native-status')
       if(mode==='normal')await expect(caption).toContainText(agentCaption,{timeout:15000})
       else await expect(caption).toHaveCount(0,{timeout:15000})
