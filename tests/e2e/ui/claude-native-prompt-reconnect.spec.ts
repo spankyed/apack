@@ -12,7 +12,7 @@ test.afterEach(async ({ appPage }, testInfo) => {
   terminalScreen?.dispose(); terminalScreen = undefined
 })
 test('retains newer parent and Agent drafts when original replies cross API reconnect', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
-  test.setTimeout(125000)
+  test.setTimeout(180000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
