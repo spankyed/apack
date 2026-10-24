@@ -86,7 +86,7 @@ test('refuses reset for a live worker and isolates its late response after stopp
 
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[]
   async function capture(stage:string){for(const [width,height] of [[1100,900],[680,600]]){
-    await appPage.setViewportSize({width,height});await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+    await appPage.setViewportSize({width,height});await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1});if(stage==='fresh')await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height});const name='native-reset-task-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
   }}
   async function reset(){await composer.fill('');await composer.pressSequentially('/cc-reset');await appPage.locator('.command-suggestion-popup').getByText('/cc-reset',{exact:true}).click();await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')}
@@ -138,7 +138,19 @@ test('refuses reset for a live worker and isolates its late response after stopp
   await writeFile(join(workspace!,'native-pending-duration-release'),'release the cancelled old provider after replacement')
   await expect.poll(()=>readFile(join(workspace!,'native-reset-task-provider-released.json'),'utf8').then(text=>JSON.parse(text),()=>undefined)).toMatchObject({heldReleased:true,disconnectedWhenReleased:true})
   const after=await context();expect({sessionId:after.sessionId,turns:after.turns,cost:after.claude.totalCostUsd,messageIds:after.messages.map((message:any)=>message.id)}).toEqual(baseline)
-  await composer.fill('Keep the new session draft after old-provider release.');await capture('fresh');expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-reset-task-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,taskId,busyResetRefused:true,taskStoppedBeforeReset:true,priorJournalPreserved:true,newHumanUuid:humans[0].uuid,newHumanText:freshText,nativePrintCost:prints.at(-1).totalCostUsd,baseline,lateResponseIsolated:true,captures}))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResetTask:true,nativeBusyResetRefused:true,nativeResetStateCleared:true,replacementSessionDistinct:true,nativeLateTaskResponseIsolated:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
+  const followUpText='Continue the fresh review after old-provider release.'
+  await composer.fill(followUpText);await capture('fresh')
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=>(await context()).turns).toBe(2)
+  await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
+  const continued=await context();expect(continued.sessionId).toBe(replacement.sessionId)
+  const finalPrints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))
+  expect(continued.claude.totalCostUsd).toBeCloseTo(finalPrints.at(-1).totalCostUsd,10)
+  let continuedHumans:any[]=[]
+  for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{continuedHumans=(await readFile(join(workspace!,'.claude/projects',bucket,replacement.sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true)}catch(error:any){if(error.code!=='ENOENT')throw error}}
+  expect(continuedHumans).toHaveLength(2);expect(continuedHumans[1].message.content).toBe(followUpText)
+  expect(continued.messages.filter((message:any)=>message.sender==='user'&&message.text===followUpText)).toHaveLength(1)
+  expect(errors).toEqual([])
+  await writeFile(join(workspace!,'native-reset-task-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,taskId,busyResetRefused:true,taskStoppedBeforeReset:true,priorJournalPreserved:true,newHumanUuid:humans[0].uuid,newHumanText:freshText,nativePrintCost:prints.at(-1).totalCostUsd,baseline,lateResponseIsolated:true,settledSendAtBothSizes:true,followUpHumanUuid:continuedHumans[1].uuid,followUpText,followUpCost:continued.claude.totalCostUsd,captures}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResetTask:true,nativeBusyResetRefused:true,nativeResetStateCleared:true,replacementSessionDistinct:true,nativeLateTaskResponseIsolated:true,nativeResetComposerContinued:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
 })
