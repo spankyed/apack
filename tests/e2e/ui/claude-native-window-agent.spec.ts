@@ -7,7 +7,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage},testInfo) => { if(testInfo.status!==testInfo.expectedStatus&&!appPage.isClosed())await appPage.screenshot({path:testInfo.outputPath('native-window-agent-failure.png')}).catch(()=>{});terminalScreen?.dispose();terminalScreen=undefined })
 test('preserves independent window and Agent drafts through shared native view switching', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
@@ -103,6 +103,13 @@ test('preserves independent window and Agent drafts through shared native view s
   const old=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;for(const [mountId,view] of Object.entries(c.nativeUiViews) as any){const queue=[view.state];let count=0;while(queue.length&&++count<20000){const n:any=queue.pop();if(!n||typeof n!=='object')continue;if(n.kind==='button'&&n.label==='Fill active composer'&&n.actionId)return{threadId:view.threadId,mountId,actionId:n.actionId};queue.push(...Object.values(n).filter(v=>v&&typeof v==='object'))}}});expect(old).toBeTruthy()
   await card.getByRole('button',{name:'Session tools',exact:true}).click()
   await composer.fill('Review the release notes with a worker.');await card.getByRole('button',{name:'Send',exact:true}).click()
+  const autoNotice=appPage.getByRole('region',{name:'Claude auto mode notice',exact:true})
+  await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed')||await autoNotice.isVisible(),{timeout:20000}).toBe(true)
+  if(await autoNotice.isVisible()){
+    await expect(autoNotice).toContainText("We're changing auto mode")
+    await autoNotice.getByRole('button',{name:'Continue in auto mode',exact:true}).click()
+    await expect(autoNotice).toHaveCount(0)
+  }
   await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.status==='completed'),{timeout:20000}).toBe(true)
   await composer.fill('Main parent draft.')
   const nativeTools=appPage.getByRole('button',{name:/^Native tools/}).first();await nativeTools.scrollIntoViewIfNeeded();await nativeTools.click()
