@@ -1,9 +1,13 @@
+import { createRequire } from 'node:module'
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+type Screen = { rows:number; write(text:string, done:()=>void):void; dispose():void; buffer:{active:{baseY:number;getLine(row:number):{translateToString(trim:boolean):string}|undefined}} }
+let terminalScreen:Screen|undefined
+test.afterEach(()=>{terminalScreen?.dispose();terminalScreen=undefined})
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test('directly resumes unrepresented saved native history with its metadata and accounting baseline', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -39,15 +43,35 @@ test('directly resumes unrepresented saved native history with its metadata and 
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
-  let theme = false, security = false, navigated = false, trusted = false
+  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  ;(globalThis as any).self ??= globalThis
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const event=rows.map(row=>row.meta?.event).filter(event=>event?.type==='CLAUDE_TERMINAL_RESIZE'&&event.ownerId===ownerId).at(-1)
+    return event?{cols:event.columns,rows:event.rows}:undefined
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
+  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
+  terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
+  let lastSequence = 0
+  let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const current = await context(), native = current.native
-    const text = native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
+    const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
+    if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
+    const buffer = terminalScreen!.buffer.active
+    const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
+    if (native?.state?.status === 'live' && native.state.mainStatus?.includes('AppNativeMain ' + sessionId)) return true
     const screen = recognizeOnboardingPrompt(text, workspace)
+    await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
-    else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
-    else if (screen === 'workspace-trust-selected' && navigated && !trusted) { trusted = true; await input.press('Enter') }
+    else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
+    else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
+    else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
     return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
   await expect(card).toBeHidden()
@@ -99,7 +123,14 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect(imported.claude.lastTurnAt).toBeGreaterThanOrEqual(imported.claude.startedAt)
   await expect(appPage.getByText('Model unavailable', { exact: true })).toHaveCount(0)
   await expect(appPage.getByText('2 turns', { exact: true })).toBeVisible()
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-session-import.png') })
+  const resumedDraft='Continue after importing the saved native conversation.'
+  await composer.fill(resumedDraft)
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===680?600:900})
+    await expect(composer).toHaveText(resumedDraft)
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
+    await appPage.screenshot({path:testInfo.outputPath('apack-native-session-import-'+width+'.png')})
+  }
   await composer.fill('Continue after importing the saved native conversation.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.claude.chatState === 'success' && c.messages.filter((m: any) => m.text === 'Fixture completed.').length === 3 }).toBe(true)
