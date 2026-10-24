@@ -292,7 +292,7 @@ it('discovers only source-revision-bound composer placements on the native owner
 describe('print Client projection', () => {
   const frame = { tree: { type: 'Text', children: ['original'] }, props: {}, rewritten: false, hooked: true }
   const request = { client_id: 'print-client', surface: 'desktop' as const, component: 'AbovePrompt', instance_id: 'above', instance_revision: 2, props: {} }
-  const projection = () => ({ project: vi.fn(async (_request, value) => value), action: vi.fn(async () => undefined as unknown), event: vi.fn(async () => ({ handled: false })), release: vi.fn(async () => ({ released: true })), detach: vi.fn(async () => {}) })
+  const projection = () => ({ managedSettingsDiagnostics:vi.fn(async()=>[]), project: vi.fn(async (_request, value) => value), action: vi.fn(async () => undefined as unknown), event: vi.fn(async () => ({ handled: false })), release: vi.fn(async () => ({ released: true })), detach: vi.fn(async () => {}) })
   it('projects only after original public admission and keeps private revisions off the native schema', async () => {
     const bridge = projection(), native = vi.fn(async () => frame)
     const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request: native }, undefined, bridge)
@@ -350,4 +350,11 @@ it('reads original structured managed-settings diagnostics without treating them
   expect(request).toHaveBeenCalledWith({subtype:'apack_ui_managed_settings_diagnostics',client_id:'owned'})
   request.mockResolvedValueOnce({diagnostics:[{...warning,message:'x'.repeat(32769)}]})
   await expect(ui.managedSettingsDiagnostics('owned')).rejects.toThrow()
+})
+
+it('reads print-owner policy diagnostics through its owned projection without terminal lifetime capability', async()=>{
+ const warning={file:'managed settings',path:'',message:'Original unreadable file diagnostic',severity:'fatal' as const}
+ const projection={managedSettingsDiagnostics:vi.fn(async()=>[warning]),project:vi.fn(async(_request,value)=>value),action:vi.fn(async()=>undefined),event:vi.fn(async()=>({handled:false})),release:vi.fn(async()=>({released:true})),detach:vi.fn(async()=>{})}
+ const request=vi.fn();const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request},undefined,projection)
+ await expect(ui.managedSettingsDiagnostics('print-view')).resolves.toEqual([warning]);expect(projection.managedSettingsDiagnostics).toHaveBeenCalledWith('print-view');expect(request).not.toHaveBeenCalled()
 })

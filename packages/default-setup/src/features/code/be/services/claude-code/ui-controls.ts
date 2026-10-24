@@ -148,6 +148,7 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     },
     async managedSettingsDiagnostics(id:string):Promise<ClaudeManagedSettingsDiagnostic[]> {
       const valid=clientId.parse(id)
+      if(printClients){await admit();return z.array(managedSettingsDiagnostic).max(256).parse(await printClients.managedSettingsDiagnostics(valid))}
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({diagnostics:z.array(managedSettingsDiagnostic).max(256)}).strict().parse(await request({subtype:'apack_ui_managed_settings_diagnostics',client_id:valid})).diagnostics
     },

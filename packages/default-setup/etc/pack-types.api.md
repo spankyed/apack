@@ -3508,6 +3508,7 @@ declare const ClaudePlanSchema: z.ZodDiscriminatedUnion<"exists", [z.ZodObject<{
 }, z.ZodTypeAny, "passthrough">>]>;
 
 interface ClaudePrintClientProjection {
+    managedSettingsDiagnostics(clientId: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
     prepareRender?(request: ClaudeUiRender): Promise<void>;
     project(request: ClaudeUiRender, frame: ClaudeUiRenderResult): Promise<ClaudeUiRenderResult>;
     action(request: (ClaudeUiPress | ClaudeUiInput | ClaudeUiSelect) & {

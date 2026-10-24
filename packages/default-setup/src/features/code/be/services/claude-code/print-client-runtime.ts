@@ -1,3 +1,4 @@
+import { claudeManagedSettingsDiagnosticRuntime } from './native-managed-settings-runtime.ts'
 import { claudeNativeToolResultRuntime } from './native-tool-result-runtime.ts'
 import { withClaudeNativePlatformRuntime } from './native-platform-runtime.ts'
 import { claudeNativeThemeRuntime } from './native-theme-runtime.ts'
@@ -10,6 +11,7 @@ const config=${JSON.stringify(config)};
 ${claudeTerminalClientRuntime}
 ${claudeNativeThemeRuntime}
 ${claudeNativeToolResultRuntime}
+${claudeManagedSettingsDiagnosticRuntime}
 ` + String.raw`
 if(createHash('sha256').update(readFileSync(process.execPath)).digest('hex')==='5262ce9de86243fed0d21edc39b271555d56780d0112e2b194439fe1c6662d37'){
 if(config.originalBunOptions===undefined)delete process.env.BUN_OPTIONS;else process.env.BUN_OPTIONS=config.originalBunOptions;
@@ -46,6 +48,7 @@ function initialize(){return initialization??=(async()=>{
 function validSite(value){if(!value||typeof value.client_id!=='string'||!/^[A-Za-z0-9._-]{1,64}$/.test(value.client_id)||typeof value.component!=='string'||typeof value.instance_id!=='string'||value.component.length>256||value.instance_id.length>256)throw Error('Invalid print Client scope');}
 async function operation(body,live){
  await initialize();const value=body.value;
+ if(body.operation==='managed-settings-diagnostics'){if(!value||typeof value.client_id!=='string')throw Error('Invalid print settings diagnostic owner');await gate._Jo('desktop');return readNativeManagedSettingsDiagnostics(()=>live()&&roster.Kw.list().some(client=>client.clientId===value.client_id));}
  if(body.operation==='decorations'){if(!value||typeof value.client_id!=='string'||!roster.Kw.list().some(client=>client.clientId===value.client_id))throw Error('Print prompt owner is unavailable');await gate._Jo('desktop');return nativePaletteDecorations(await palette(),value.decorations);}
  if(body.operation==='prepare-render'){validSite(value);if(value.surface!=='desktop')throw Error('Print render surface is unavailable');return {ready:true};}
  if(body.operation==='project'){
