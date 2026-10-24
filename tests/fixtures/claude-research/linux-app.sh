@@ -8,7 +8,7 @@ if ! command -v xvfb-run >/dev/null || ! command -v xclip >/dev/null; then
 fi
 export APACK_CHAIN_CORES=2
 # test:linux already prepares the published packages and platform-specific default pack.
-npm run chain -- --no-native --cores 2 --only build:runtime
+npm run build:runtime -- --cores 2
 # The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
 if [[ "$(id -u)" == 0 ]]; then
   evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/.claude-research}"
