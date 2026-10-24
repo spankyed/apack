@@ -31,7 +31,7 @@ vi.mock('@apackdev/host/bus', () => ({
  * claimed" cannot exercise it.
  */
 let claimed: string | undefined;
-vi.mock('../../src/runtime/index.ts', () => ({ appStore: undefined,
+vi.mock('../../src/runtime/index.ts', () => ({
   appPacks: {
     getEventValidationMap: () => new Map([['memo-pack/memos', new Set(['ADD_MEMO'])]]),
     getSurfaceEventValidationMap: () => new Map([['memo-pack/memos', new Set(['MEMO_ADDED'])]]),

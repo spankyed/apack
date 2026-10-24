@@ -12,7 +12,7 @@ import { HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
 import { createWindowSettingsRuntime } from '@apackdev/host/fe';
 
 const live = vi.hoisted(() => ({ packs: undefined as unknown as ReturnType<typeof createNativePackTestRegistry>, access: undefined as unknown as ReturnType<typeof createSettingsAccess> }));
-vi.mock('../../src/runtime/index.ts', () => ({ appStore: undefined,
+vi.mock('../../src/runtime/index.ts', () => ({
   get appPacks() { return live.packs; }, get appSettingsAccess() { return live.access; },
   appClaims: { clientFor: () => undefined },
 }));

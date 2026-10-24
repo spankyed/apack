@@ -46,9 +46,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/tests/database/write-lock.spec.ts > waitFor':
     'polls a file lock, which has no event to subscribe to, and already deadlines naming what it waited for — '
     + 'the poll half of the rule, done properly',
-  'packages/apack-ears/tests/lmdb/store.spec.ts > syncs commits in groups: many units, one sync, within the window':
-    'group commit is a timer: the sync arriving within its window, unasked, is the assertion, and nothing else '
-    + 'announces it',
   'packages/repo-checks/tests/decision-mutations.spec.ts > MUTATIONS':
     'a race sentinel: the timer resolves "hung", so the duration is the definition of hung rather than a guess '
     + 'at how long something takes',

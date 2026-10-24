@@ -156,11 +156,10 @@ export function createWebSocketServer() {
   // Safety net: always kill terminal processes before the API process exits
   process.on('exit', () => {
     appPacks?.runShutdownHooks();
-    // The adapter buffers writes and flushes them from a microtask, so whatever is pending at exit only
-    // reaches disk if something closes the store. Nothing did until 2026-10-01.
+    // Every write committed as it returned; closing syncs what the last group commit hadn't, so the machine failing
+    // after exit loses nothing either
     try {
-      const { errorCount, lastError } = appStore?.close() ?? { errorCount: 0, lastError: null };
-      if (errorCount > 0) console.error(`[backend] ${errorCount} write(s) didn't reach the database`, lastError);
+      appStore?.close();
     } catch (error) {
       console.error('[backend] Closing the database failed', error);
     }
