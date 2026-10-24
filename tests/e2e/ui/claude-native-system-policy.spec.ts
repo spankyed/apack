@@ -72,6 +72,7 @@ test('honors real Linux system policy before user settings in the everyday compo
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
     return native?.state?.status === 'live' && (unreadable|| (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Managed OS policy ready')))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
+  if(unreadable)expect(settingsConsent).toBe(true)
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (unreadable) { /* Native helper eligibility is not inferred from an unreadable policy. */ }
