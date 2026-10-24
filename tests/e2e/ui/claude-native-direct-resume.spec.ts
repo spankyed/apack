@@ -117,6 +117,17 @@ test('directly resumes unrepresented saved native history with its metadata and 
   await appPage.getByRole('button',{name:'Review imported checkpoint',exact:true}).click()
   await expect.poll(async()=>(await clientReceipts()).length).toBe(1)
   const retiredClientAction=(await uiPresses()).at(-1).meta.event
+  const {holdOwnedPromptReplies}=await import(pathToFileURL(process.env.CLAUDE_RESEARCH_PROMPT_REPLY_HOLD!).href)
+  const promptReplies=await holdOwnedPromptReplies(appPage)
+  const retiredDraft='Keep this old native read out of the resumed composer.'
+  await composer.fill(retiredDraft)
+  const initialTools=card.getByRole('button',{name:'Session tools',exact:true})
+  if(await initialTools.getAttribute('aria-expanded')!=='true')await initialTools.click()
+  await promptReplies.arm()
+  await card.getByRole('button',{name:'Review resumed draft',exact:true}).click()
+  await expect.poll(async()=>(await promptReplies.receipts()).length).toBe(1)
+  const retiredPromptReply=(await promptReplies.receipts())[0]
+  expect(retiredPromptReply.box.text).toBe(retiredDraft)
   const nativeFacts = (await context()).claude
   const nativeCost = nativeFacts.totalCostUsd
   expect(nativeCost).toBeGreaterThan(0)
@@ -197,6 +208,12 @@ test('directly resumes unrepresented saved native history with its metadata and 
   await expect(composer).toHaveText(resumedDraft)
   const tools=card.getByRole('button',{name:'Session tools',exact:true})
   if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+  const promptResponses=async()=>(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>row.meta?.event?.type==='CLAUDE_PROMPT_HOST_RESPONSE')
+  const beforePromptResponses=(await promptResponses()).length
+  await promptReplies.release(0)
+  await expect.poll(async()=>(await promptResponses()).slice(beforePromptResponses).some(row=>row.meta.from&&row.meta.event.requestId===retiredPromptReply.requestId&&row.meta.event.mountId===retiredPromptReply.mountId&&row.meta.event.threadId===retiredPromptReply.threadId&&row.meta.event.kind==='read')).toBe(true)
+  await expect(composer).toHaveText(resumedDraft)
+  await promptReplies.close()
   await card.getByRole('button',{name:'Review resumed draft',exact:true}).click()
   const resumedReads=async()=>JSON.parse(await readFile(join(workspace!,'native-resume-draft-receipts.json'),'utf8').catch(()=>'[]'))
   await expect.poll(async()=>(await resumedReads()).length).toBe(1)
@@ -233,5 +250,5 @@ test('directly resumes unrepresented saved native history with its metadata and 
   expect(continued.claude.totalCostUsd).toBe(nativeTotal)
   expect(continued.claude.cwd).toBe(workspace)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, nativeImportedClient:true, nativeImportedImage:!!importedImage, addressedRetiredClient, clientReceipts:await clientReceipts(), resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'direct-resume', nativeDirectResume: true, nativeSavedSessionImport: true, importedNativeMetadata: true, nativeImportProjectPreserved: true, nativeImportAccountingBaseline: true, nativeHistoryIdentity: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, nativeCost, continuedCost: continued.claude.totalCostUsd, sourceThreadId, importedThreadId: continued.threadId, boundNativePid, reopenedNativePid, nativeResumedDrawing:true, retiredPromptReply:{...retiredPromptReply,backendDelivered:true,releasedAfterNewNativePid:reopenedNativePid,freshReadVerified:true}, nativeImportedClient:true, nativeImportedImage:!!importedImage, addressedRetiredClient, clientReceipts:await clientReceipts(), resumedDraftRead:(await resumedReads())[0], browserErrors: errors }, null, 2))
 })
