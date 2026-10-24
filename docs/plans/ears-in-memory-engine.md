@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Step 0 is built (`b3dc05d54`); Step 1 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–1 are done; Step 2 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -95,6 +95,14 @@ Storage earns trust by technique, not by examples.
 
 **Done when:** both run in the ears suite (a bounded number of runs, seeds reported on failure) and each fails under a
 mutation of the journal's rollback, the adapter's unit commit and the store's close flush.
+
+Done, 2026-10-24 (`packages/apack-ears/tests/harness/`). `model.ts` is the reference model and `stateOf`, `workload.ts`
+the random workload over six ids (creates, sets, appends, deletes, links, unlinks, destroys, units that return or
+throw, and the store refusing the next commit). `model-based.spec.ts`: 300 runs against the model, every write
+compared, and 60 runs on an LMDB store reopened against memory; `crash.spec.ts`: 6 runs of a 400-write child killed at
+a random acknowledgement. Each fails under a mutation: the journal's rollback removed fails both model-based
+properties; the adapter's commit deferred to a microtask fails the files-against-memory property; deferred by 20 ms,
+the crash property. The suite's cost: about 2 s and 3.5 s.
 
 ### 2. Immutable values
 Deep-freeze a value as it is stored (`place`), so reads return it as it is. Freezing is the write's cost; a reading of
