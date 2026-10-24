@@ -2,10 +2,11 @@
 
 Status: **the cut-over is complete**, 2026-10-24: the app runs on LMDB with no in-memory copy of the data, Steps 1–6
 done (each records how, below). PR #273.
-**One reading is open, for want of its prerequisite:** Step 5's cold-page-cache p99 and `getSchemaStats` at
-production size. No production-size database is on the machine this ran on (the development one is 1.8 MB); with
-one, the next action is to convert a copy (`scripts/ears-convert.ts`), run the bench's query cases against it after
-`sudo purge`, and time `getSchemaStats` on it, recording both under Step 5. Takes up review items 6
+**Blocked, one reading:** Step 5's p99 with a *cold* page cache. Evidence: macOS evicts a file's pages only through
+`purge`, and `sudo -n purge` here asks for a password this session doesn't have; every reading below was taken warm (a
+copy just converted, then read twice). Next action: with the production copy below in place, run `sudo purge`, then
+the production-size readings script (`node --expose-gc <script> <copy>/apack/ears-db`, as in Step 5) once, and record
+its first-run p99s under Step 5. Everything else Step 5 asks for, production size included, is recorded. Takes up review items 6
 (row reads) and 9 (durability) from the EARS API cleanup, and supersedes the open parts of
 [goal-lmdb-only.md](../goals/goal-lmdb-only.md) (PR #261, closed unmerged), which holds the spike's measurements and
 the lock analysis.
@@ -447,11 +448,29 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   store again, creating the engine and counting what it holds (`admin.countEntities()`, the app's boot reading) takes
   **30.6 ms** (30.3–30.9), leaving 0.3 MB of heap; the memory engine's boot was loading the whole graph, 180.9 ms in
   the baseline and growing with the data. 78.9 MB on disk.
-- **`getSchemaStats`**, a keys-only walk of the whole store: 323 ms (320–329) over the bench's graph. The production-size
-  copy this was to be read on is not on this machine (the development data dir holds 2,051 attributes and 325
-  relations, 1.8 MB), so it has not been read at that size.
-- **Cold page cache p99 on the production-size copy: not taken.** The prerequisite is that copy; with it, the reading is
-  the bench's query cases after `sudo purge`, which this session does not run.
+- **`getSchemaStats`**, a keys-only walk of the whole store: 323 ms (320–329) over the bench's graph; **480–492 ms on
+  the production-size copy** below.
+- **On the production-size copy** (2026-10-24, 78% idle): the app's production backup of 2026-10-17
+  (`~/Develop/backups/abuddy-backups/full-db/…T23-06-18…`, 306 MB in format 1), copied and converted by
+  `scripts/ears-convert.ts` in 6.9 s, 1 → 2 → 3 → 4: 22,816 entities in 13 types (19,803 `Message`, 2,033 `Artifact`,
+  343 `Thread`, 280 `Note`), 178,131 attributes, 45,798 relations, 381 valueless rows skipped; 387 MB on disk after,
+  since LMDB keeps the pages the old tables freed (a compacting copy would shrink it). Read with the store open
+  read-only, two runs each, both warm:
+
+  | Reading | Production copy |
+  |---|---|
+  | boot: open the store, create the engine, count every type | 27.7 ms, +0.3 MB of heap |
+  | `getRow`, 2,000 ids across every type | p50 0.016 ms, p99 0.30–0.35 ms |
+  | `findRelations({ source })`, the same ids | p50 0.008 ms, p99 0.05–0.06 ms |
+  | `query('Message').first()`, 200 times | p50 0.006 ms, p99 0.03–0.05 ms |
+  | `query('Message').pickAll()`, 19,803 rows | 533–543 ms |
+  | `query('Artifact').pickAll()`, 2,033 rows | 31–38 ms |
+  | `query('Thread').pickAll()`, 343 rows | 4.8–5.3 ms |
+
+  A read by id or by edge stays under half a millisecond at p99; what costs is a read of a whole large type, 27 µs a
+  message row (messages hold their text), which on the API's thread is half a second. No product path reads every
+  message today (a thread's messages are read by its edges); one that did would want paging rather than a warmer
+  cache. The cold-cache reading is blocked, above.
 - **The bench on LMDB** (mean ms, `npm run bench -w @apackdev/ears`; each case ran twice and the two agree within 5%,
   the first figure given):
 
