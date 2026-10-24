@@ -390,11 +390,12 @@ Done, 2026-10-24.
   `createdAt`, relations under their ids — and keeps format 3's numbering rows (`Sequence-<key>`) as sequences
   (`['s', key]`), so a short code is still never handed out twice; `scripts/ears-convert.ts` runs it, on a copy.
   `scripts/short-codes-convert.ts` now rewrites a format 4 copy through an engine on the store.
-- **Durability as decided:** each unit commits with `NO_SYNC_FLUSH`; a sync runs within `SYNC_INTERVAL_MS` (200 ms)
-  of a commit, off the main thread; `requestSync()` syncs now when a commit is owed; `durable()` resolves once every
+- **Durability:** each unit commits with `NO_SYNC_FLUSH`; a sync runs once writes pause for `SYNC_IDLE_MS` (100 ms),
+  and `SYNC_INTERVAL_MS` (1 s) after the first unsynced commit at the latest, off the main thread; `durable()` resolves once every
   unit before it is on disk; `transact(fn, { durable: true })` commits with the sync (`COMMIT_DURABLE`); `close()`
-  syncs what is owed. The API's `bus.send` requests a sync once what the client's message set off synchronously has
-  committed.
+  syncs what is owed. Nothing asks for a sync on a user's action: the pause after it is the sync's cue, so its
+  writes are durable within 100 ms of the last, which a burst of writes (a stream's 80 ms updates) shares as one
+  sync per pause, or per second while it lasts.
 - **Reset and import are units of the open store:** `reset()` deletes every key and `replaceWith(dir)` puts another
   database's entries in place of every key, each one durable unit, the store open throughout; the record store has
   `replaceWith` too. Nothing closes and reopens files, so nothing holds writes for a store that is briefly gone.
@@ -414,10 +415,10 @@ Done, 2026-10-24.
   so code that mutates a value a read returned fails in tests rather than appearing to work.
 - **Done-when checks:** the contract suite runs twice, `ears` on `MemoryKV` and `ears-on-lmdb` on an LMDB store per
   engine, weakening nothing (359 cases between them); `tests/lmdb/store.spec.ts` holds the child killed with SIGKILL
-  the moment its write returns, a hundred units syncing once within the window, `requestSync` and `durable()` by the
-  sync count, a durable unit owing nothing, and a thousand early-stopping or throwing queries leaving `readers()`
-  where it was; `packages/api/tests/transport/bus-send-sync.spec.ts` holds a client message's write synced with the
-  window set to a minute.
+  the moment its write returns; with the store's timers faked, a burst of units synced once, 100 ms after the last —
+  a client's write or anyone's, with no `durable()` — and a steady stream synced at the 1 s cap rather than per
+  commit; `durable()` by the sync count; a durable unit owing nothing; and a thousand early-stopping or throwing
+  queries leaving `readers()` where it was.
 - Suites: the host pool (12 suites) 5,865 and the pack pool, all passing; typecheck, lint and `check:specifiers`
   clean.
 

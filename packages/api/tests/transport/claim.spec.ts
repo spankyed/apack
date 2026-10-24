@@ -18,7 +18,7 @@ vi.mock('@apackdev/host/bus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@apackdev/host/bus')>();
   return { ...actual, receiveClientEvent: () => {} };
 });
-vi.mock('../../src/runtime/index.ts', () => ({ appStore: undefined, appPacks: {}, appClaims: claims }));
+vi.mock('../../src/runtime/index.ts', () => ({ appPacks: {}, appClaims: claims }));
 vi.mock('../../src/transport/emitter.ts', () => ({ rootEvents: { onOutgoing: () => () => {}, emitConnected: () => {}, emitPackClientConnected: () => {} } }));
 
 const { systemBusRouter } = await import('../../src/transport/bus.ts');

@@ -23,7 +23,7 @@ vi.mock('@apackdev/host/database', async importOriginal => ({
       engine.admin.bulkLoadAttr('Settings-app' as EARS.EntityId, 'entityType' as EARS.AttrKind, 'Settings');
       engine.admin.bulkLoadAttr('Settings-app' as EARS.EntityId, 'data' as EARS.AttrKind, fixture.data);
     });
-    return { engine, store: { requestSync: () => {}, close: () => {} } };
+    return { engine, store: { close: () => {} } };
   },
 }));
 vi.mock('@apackdev/host/packs/runtime', async importOriginal => ({
