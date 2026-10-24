@@ -273,6 +273,31 @@ Done, 2026-10-24.
 
 **Done when:** the contract spec passes on `MemoryKV` and on an LMDB backend opened on a temp directory.
 
+Done, 2026-10-24.
+- `src/kv.ts`: the seam (`OrderedKV`: `read`, a snapshot; `write`, a unit; `KvReader`/`KvWriter` with `get`, `range`,
+  `put`, `del`) over a byte backend (`KvBackend`). The seam encodes keys with `ordered-binary` and values with
+  `msgpackr`, the encodings LMDB uses, so both backends store the same bytes in the same order: LMDB opens its database
+  with binary keys and values, compared byte for byte. Both are pure-JS dependencies of `@apackdev/ears` now (versions
+  shared with `lmdb`'s); only `/lmdb` loads `lmdb`.
+- What is the same on both lives in the seam, over the bytes: prefix ranges (a key's elements are separated by a 0 byte,
+  so a prefix and 0 is the lowest key under it and a prefix and 1 is past them), a unit's reads going through it, and a
+  unit inside another as a savepoint: the first write of a key in it records what the key held, and a throw puts that
+  back, the outer unit taking over what a nested one recorded when it commits.
+- `createMemoryKV()` (`createMemoryKVBackend`): every key as a byte string in one sorted list, each with its committed
+  versions, so a snapshot reads the version it began at while later units commit; a unit holds its writes apart, its
+  ranges merging them with what is committed as two sorted runs read by index, so a range that stops early reads only
+  what it visited. Versions no open snapshot can read are dropped when the last one closes. For tests and tooling —
+  the SDK test runtime, the harness, the CLI's flow compiler — never the app.
+- `src/lmdb/kv-backend.ts` (`createLmdbKVBackend`): a snapshot is one `useReadTransaction()`, released in `finally`; a
+  unit is one `transactionSync` committing without a sync (`ABORTABLE | SYNCHRONOUS_COMMIT | NO_SYNC_FLUSH`). Every range
+  is a `for…of`; a reverse range adjusts LMDB's bounds (its start inclusive, its end exclusive) to the seam's.
+- `tests/lmdb/ordered-kv.spec.ts`, each case run on both backends: key order (null, booleans, numbers, strings, element
+  by element; `['a']` is no prefix of `['ab']`), prefix, bounds, direction, limit and keys-only ranges, values as fresh
+  copies (Dates, nested values and `undefined` fields), snapshot isolation, a unit reading its own writes, abort and
+  nested abort, and a thousand ranges that stop early or throw. On LMDB, `readerList()` holds at most the one shared
+  reader after reads and writes interleave. Each mechanism mutation-checked; leaking a cursor inside a snapshot isn't a
+  failure, since the snapshot's transaction is what holds the slot.
+
 ### 3. The engine over the seam
 - Attribute storage and the relations module become the key layout above, over `OrderedKV`; the trash moves between
   `['e', …]` and `['d', …]`; numbering moves to `['s', key]` and `Sequence` leaves the reserved types.
