@@ -482,7 +482,8 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   cost is, which `transact` already batches. A create read 23 keys to write 12; reading the value a write replaces
   only where its index is built (`306043d52`) makes it 18 reads, and an update 5 rather than 7. The binding's
   crossings are not what dominates, so no native layer is called for.
-- **Test time** is the chain's step readings, recorded with its run on the PR (#273).
+- **Test time:** `npm run chain -- --no-native` passed in 870.4 s on a 10-core budget (Steps 1–3's run: 821.6 s), every
+  step run: `test:unit:host` 69.6 s, `test:unit:pack` 42.1 s, `test:integration` 576.6 s, `test:smoke` 13.0 s.
 
 ### 6. What the systems keep in their contexts
 An audit: a system that holds entity lists to answer `SEND_STATE` is a second copy of the data in app code. Each one
