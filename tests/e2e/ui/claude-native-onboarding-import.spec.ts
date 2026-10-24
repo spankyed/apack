@@ -142,6 +142,10 @@ test('imports native sessions through the actual onboarding project and provider
     const height=width===680?600:900
     await appPage.setViewportSize({width,height})
     await expect(composer).toHaveText(draft)
+    const importedCheckpoint=appPage.getByText('NativeForkCheckpointAlpha: remember this source-only marker.',{exact:true})
+    await expect(importedCheckpoint).toBeVisible()
+    await expect.poll(()=>importedCheckpoint.evaluate(node=>{for(let current:Element|null=node;current;current=current.parentElement){if(Number(getComputedStyle(current).opacity)!==1)return false}return true})).toBe(true)
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     expect(await appPage.evaluate(()=>({width:innerWidth,height:innerHeight}))).toEqual({width,height})
     const window=await electronApp.browserWindow(appPage)
