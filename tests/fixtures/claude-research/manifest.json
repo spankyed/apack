@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "1bd0f30014c53d71de4815d07a7007b550092de9",
+  "researchCommit": "fcc508b34cc7173827ad3254ff640130448cc526",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -223,7 +223,7 @@
     "src/protocol/native-workflow-worker-fixture.mjs": "d3106f741379f61bbcceee2d6aa6aedf28bc3fc2f8dc09c7f7b5537340c82d0a",
     "src/protocol/owned-client-load-delay.mjs": "f0844c9681b772a9c38dfdb7416f1c765888a9d7b791880976b9a02404f9abcd",
     "src/protocol/owned-mcp-oauth-server.mjs": "5f1daabee758df7f11d040dab3fb142e9a94ca1ec78a17a86e99fcb03cb1d4a3",
-    "src/protocol/owned-mcp-url-browser.mjs": "50b1899325b756bec5e25f369058e98227ed372c0c725554249862d2fdfc7328",
+    "src/protocol/owned-mcp-url-browser.mjs": "d10d411a45706d50381c2a108fe3ce751f1700ad1e3b2f7aad38925fc8af2435",
     "src/protocol/owned-playwright-window-focus.mjs": "972cd44bb9c40ca4550b8a0527d30ca3009489af5139b34ebb93789f5f023f7a",
     "src/protocol/owned-turn-control-observer.mjs": "8d86ffc4817c2e8fc1b66db7d6a46dd72cd4bed1f426f8a8065c2d469b7c4814",
     "src/protocol/owned-ui-host-delay.mjs": "450844ddd84a40bc89c37e374653077fe450fac574a64a7c567d4bdac3e25ccb",
@@ -273,5 +273,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "4be2592d267848d730c2f805c5b51b6c837f96fd26f445ff73a34bffec95f216"
+  "archiveSha256": "e12e740e2b09a8abae326118f62ba0610430a1afd9804aebfe0399016a671ec8"
 }
