@@ -45,7 +45,7 @@ function nativeMcpFormPresentation(n,d){
  if(!d.item)return;
  const source=nativeMcpFormSource(n,d);if(!source)return;
  const f=source.fields;
- const facts={id:d.item.id,revision:d.revision,sessionId:d.sessionId,ready:source.ready,serverName:d.payload.serverName,message:d.payload.params.message,schema:d.payload.params.requestedSchema,propertyOrder:f.schemaFields.map(field=>field.name),values:f.formValues,errors:f.validationErrors,resolvingFields:[...f.resolvingFields],currentFieldIndex:f.currentFieldIndex,focusedButton:f.focusedButton,textInputValue:f.textInputValue,textInputCursorOffset:f.textInputCursorOffset};
+ const facts={id:d.item.id,revision:d.revision,sessionId:d.sessionId,ready:source.ready,serverName:d.payload.serverName,message:d.payload.params.message,schema:d.payload.params.requestedSchema,propertyOrder:f.schemaFields.map(field=>field.name),values:f.formValues,errors:f.validationErrors,resolvingFields:[...f.resolvingFields],currentFieldIndex:f.currentFieldIndex,focusedButton:f.focusedButton,expandedAccordion:f.expandedAccordion,textInputValue:f.textInputValue,textInputCursorOffset:f.textInputCursorOffset};
  const encoded=JSON.stringify(facts);if(encoded.length>196608)throw Error('Native MCP form presentation exceeded bound');
  return {...facts,token:createHash('sha256').update(encoded).digest('hex')};
 }
@@ -56,9 +56,13 @@ async function operateNativeMcpForm(n,request,signal){
  const current=()=>{signal.throwIfAborted();const dialog=nativeMcpDialog(n);if(dialog.item!==d.item||dialog.payload!==d.payload||dialog.revision!==d.revision)throw Error('Native MCP form expired');const source=nativeMcpFormSource(n,dialog);if(!source?.ready)throw Error('Native MCP form controls are not ready');return source;};
  const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
  const key=async value=>{current().key({key:value,ctrl:false,meta:false,shift:false,preventDefault(){}});await settle();};
- const focus=async index=>{for(let step=0;step<shown.propertyOrder.length+3;step++){const f=current().fields,at=f.currentFieldIndex??(f.focusedButton==='accept'?f.schemaFields.length:f.focusedButton==='decline'?f.schemaFields.length+1:0);if(at===index)return;await key('down');}throw Error('Original MCP field navigation did not settle');};
- const action=request.action;if(!action||!['edit','cursor','accept','decline','cancel'].includes(action.operation))throw Error('Invalid MCP form operation');
+ const focus=async index=>{for(let step=0;step<shown.propertyOrder.length+3;step++){const f=current().fields,at=f.currentFieldIndex??(f.focusedButton==='accept'?f.schemaFields.length:f.focusedButton==='decline'?f.schemaFields.length+1:0);if(at===index)return;if(f.expandedAccordion!==undefined)await key('left');else await key('down');}throw Error('Original MCP field navigation did not settle');};
+ const action=request.action;if(!action||!['edit','focus','cursor','accept','decline','cancel'].includes(action.operation))throw Error('Invalid MCP form operation');
  if(action.operation==='cancel')current().cancel();
+ else if(action.operation==='focus'){
+  const index=shown.propertyOrder.indexOf(action.field);if(index<0)throw Error('Unknown native MCP field');
+  await focus(index);
+ }
  else if(action.operation==='cursor'){
   const f=current().fields,index=shown.propertyOrder.indexOf(action.field);
   if(index<0||f.currentFieldIndex!==index||f.focusedButton||typeof f.setTextInputCursorOffset!=='function'||!Number.isSafeInteger(action.cursorOffset)||action.cursorOffset<0||action.cursorOffset>f.textInputValue.length)throw Error('Native MCP cursor field changed');

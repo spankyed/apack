@@ -10,7 +10,7 @@ export APACK_CHAIN_CORES=2
 npm run build:runtime -- --cores 2
 # The original CLI refuses bypass-capable sessions as root. Keep its guard intact.
 if [[ "$(id -u)" == 0 ]]; then
-  evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/node_modules/.cache/claude-research-linux}"
+  evidence="${APACK_CLAUDE_RESEARCH_OUTPUT:-/work/.claude-research}"
   mkdir -p "$evidence"
   chown node:node "$evidence"
   mkdir -p /work/.apack/tests /work/tests/results

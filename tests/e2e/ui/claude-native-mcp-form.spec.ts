@@ -123,8 +123,34 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
       for (const [width, height] of [[1100, 900], [680, 600]]) {
         await appPage.setViewportSize({ width, height })
         const title = panel.getByLabel('Release title', { exact: true })
-        await title.fill('A😀BC')
+        await title.focus()
+        const pendingInputBlocked = await title.evaluate(async element => {
+          const field = element as HTMLInputElement; field.value = 'A😀BC'
+          field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'A😀BC' }))
+          // Vue commits its pending-input guard before an async native acknowledgement can arrive.
+          await Promise.resolve()
+          const nativeButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === 'Use native interface')!
+          const disabled = nativeButton.disabled; nativeButton.click(); return disabled
+        })
+        expect(pendingInputBlocked).toBe(true); await expect(panel).toBeVisible()
         await expect.poll(async () => (await frame())?.textInputValue).toBe('A😀BC')
+        const beforeFocus = (await frame()).values, focusedFields: string[] = []
+        for (const [label, field] of [['Include archived notes', 'enabled'], ['Additional reviewers', 'count'], ['Audience', 'audience'], ['compatibility', 'sections'], ['Release title', 'title']]) {
+          await panel.getByLabel(label, { exact: true }).focus()
+          await expect.poll(async () => (await frame())?.currentFieldIndex).toBe(original.propertyOrder.indexOf(field))
+          expect((await frame()).values).toEqual(beforeFocus); focusedFields.push(field)
+        }
+        await panel.getByLabel('Audience', { exact: true }).focus()
+        await expect.poll(async () => (await frame())?.currentFieldIndex).toBe(original.propertyOrder.indexOf('audience'))
+        await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
+        await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+        await input.press('ArrowRight')
+        await expect.poll(async () => (await frame())?.expandedAccordion).toBe('audience')
+        await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
+        await expect(panel).toBeVisible(); await title.focus()
+        await expect.poll(async () => (await frame())?.currentFieldIndex).toBe(original.propertyOrder.indexOf('title'))
+        await expect.poll(async () => (await frame())?.expandedAccordion).toBeUndefined()
+        expect((await frame()).values).toEqual(beforeFocus)
         await title.evaluate(element => { const input = element as HTMLInputElement; input.setSelectionRange(3, 3); input.dispatchEvent(new Event('select', { bubbles: true })) })
         await expect.poll(async () => (await frame())?.textInputCursorOffset).toBe(3)
         await title.press('x')
@@ -145,7 +171,7 @@ test('uses original terminal MCP fields, validation and decisions with cancellat
         expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
         await title.scrollIntoViewIfNeeded()
         await capture('native-mcp-form-' + width + '-cursor-return.png', width, height, true)
-        cursorReturns.push({ width, height, id: original.id, revision: original.revision, nativePid: boundNativePid, value: (await frame()).textInputValue, cursorOffset: (await frame()).textInputCursorOffset, retainedDraft: true, retainedSelection: true })
+        cursorReturns.push({ width, height, id: original.id, revision: original.revision, nativePid: boundNativePid, value: (await frame()).textInputValue, cursorOffset: (await frame()).textInputCursorOffset, retainedDraft: true, retainedSelection: true, pendingInputBlocked, focusedFields, valuesUnchangedByFocus: true, collapsedNativeAccordionOnReturn: true })
       }
       await panel.getByLabel('Release title', { exact: true }).fill('')
       await expect.poll(async () => (await frame())?.values.title).toBe('')

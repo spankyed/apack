@@ -1457,8 +1457,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1474,8 +1474,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1619,11 +1619,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    title: string;
     id: string;
-    question: string;
+    title: string;
     input: Record<string, unknown>;
     sessionId: string;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1651,11 +1651,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     revision: string;
-    title: string;
     id: string;
-    question: string;
+    title: string;
     input: Record<string, unknown>;
     sessionId: string;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1887,6 +1887,15 @@ declare const ClaudeNativeMcpFormOperationSchema: z.ZodDiscriminatedUnion<"opera
     field: string;
     cursorOffset?: number | undefined;
 }>, z.ZodObject<{
+    operation: z.ZodLiteral<"focus">;
+    field: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    operation: "focus";
+    field: string;
+}, {
+    operation: "focus";
+    field: string;
+}>, z.ZodObject<{
     operation: z.ZodLiteral<"cursor">;
     field: z.ZodString;
     cursorOffset: z.ZodNumber;
@@ -1927,15 +1936,16 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     values: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodArray<z.ZodString, "many">]>>;
     errors: z.ZodRecord<z.ZodString, z.ZodString>;
     resolvingFields: z.ZodArray<z.ZodString, "many">;
+    expandedAccordion: z.ZodOptional<z.ZodString>;
     currentFieldIndex: z.ZodOptional<z.ZodNumber>;
     focusedButton: z.ZodNullable<z.ZodEnum<["accept", "decline"]>>;
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1946,13 +1956,14 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     resolvingFields: string[];
     focusedButton: "accept" | "decline" | null;
     textInputValue: string;
+    expandedAccordion?: string | undefined;
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1963,6 +1974,7 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     resolvingFields: string[];
     focusedButton: "accept" | "decline" | null;
     textInputValue: string;
+    expandedAccordion?: string | undefined;
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }>;
@@ -2015,12 +2027,12 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
-    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
     sessionId: string;
     token: string;
     serverName: string;
@@ -2034,12 +2046,12 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }[];
     warnings: string[];
 }, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
-    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
     sessionId: string;
     token: string;
     serverName: string;
@@ -2071,17 +2083,17 @@ declare const ClaudeNativeNoticeSchema: z.ZodObject<{
     helpUrl: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
+    title: string;
     sessionId: string;
     paragraphs: string[];
     helpUrl: string;
 }, {
     revision: string;
-    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
+    title: string;
     sessionId: string;
     paragraphs: string[];
     helpUrl: string;
@@ -10405,12 +10417,12 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
     columns: z.ZodNumber;
     rows: z.ZodNumber;
 }, "strict", z.ZodTypeAny, {
-    rows: number;
     kind: "resize";
+    rows: number;
     columns: number;
 }, {
-    rows: number;
     kind: "resize";
+    rows: number;
     columns: number;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"key">;
@@ -10560,9 +10572,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
-        title: string;
         id: string;
         kind: "confirmation";
+        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     } | {
@@ -10610,9 +10622,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             message: string;
             kind: "blocked";
         } | {
-            title: string;
             id: string;
             kind: "confirmation";
+            title: string;
             confirmLabel: string;
             commandName?: string | undefined;
         } | {
@@ -10654,9 +10666,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
-        title: string;
         id: string;
         kind: "confirmation";
+        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     }>;
@@ -11939,15 +11951,15 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
     confirmLabel: z.ZodString;
     commandName: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
-    title: string;
     id: string;
     kind: "confirmation";
+    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }, {
-    title: string;
     id: string;
     kind: "confirmation";
+    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }>, z.ZodObject<{

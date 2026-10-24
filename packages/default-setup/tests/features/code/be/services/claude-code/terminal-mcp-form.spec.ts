@@ -8,11 +8,15 @@ function fixture() {
   const fields = { schemaFields: [{ name: 'title', schema: { type: 'string' } }, { name: 'enabled', schema: { type: 'boolean' } }, { name: 'audience', schema: { type: 'string', enum: ['internal', 'public'] } }], formValues: { title: 'Original', enabled: false, audience: 'internal' } as Record<string, unknown>, validationErrors: {} as Record<string, string>, resolvingFields: new Set<string>(), currentFieldIndex: 0 as number | undefined, focusedButton: null as string | null, expandedAccordion: undefined as string | undefined, accordionOptionIndex: 0, textInputValue: 'Original', textInputCursorOffset: 8, setTextInputCursorOffset: vi.fn((offset: number) => { fields.textInputCursorOffset = offset }), handleTextInputChange: vi.fn((value: string) => { fields.textInputValue = value; fields.formValues[fields.schemaFields[fields.currentFieldIndex!].name] = value }) }
   const cancel = vi.fn(() => { open = []; return true })
   const key = vi.fn((event: { key: string }) => {
-    const at = fields.currentFieldIndex ?? (fields.focusedButton === 'accept' ? 3 : 4)
+    const count = fields.schemaFields.length, at = fields.currentFieldIndex ?? (fields.focusedButton === 'accept' ? count : count + 1)
     if (event.key === 'down' || event.key === 'up') {
       if (fields.expandedAccordion) { fields.accordionOptionIndex += event.key === 'down' ? 1 : -1; return }
-      const next = (at + (event.key === 'down' ? 1 : 4)) % 5
-      fields.currentFieldIndex = next < 3 ? next : undefined; fields.focusedButton = next === 3 ? 'accept' : next === 4 ? 'decline' : null
+      const next = (at + (event.key === 'down' ? 1 : count + 1)) % (count + 2)
+      fields.currentFieldIndex = next < count ? next : undefined; fields.focusedButton = next === count ? 'accept' : next === count + 1 ? 'decline' : null
+      const field = fields.schemaFields[next]
+      if (field && ['string', 'number', 'integer'].includes(field.schema.type) && !field.schema.enum) {
+        fields.textInputValue = String(fields.formValues[field.name] ?? ''); fields.textInputCursorOffset = fields.textInputValue.length
+      } else if (fields.focusedButton) fields.textInputValue = ''
     } else if (event.key === 'right') { fields.expandedAccordion = fields.schemaFields[at].name; fields.accordionOptionIndex = 0 }
     else if (event.key === 'left') fields.expandedAccordion = undefined
     else if (event.key === ' ') {
@@ -89,4 +93,39 @@ it('moves only the active original cursor without revalidating its text, and ref
   expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
   await expect(f.operate({ operation: 'cursor', field: 'enabled', cursorOffset: 0 })).rejects.toThrow('cursor field changed')
   expect(f.key).not.toHaveBeenCalled()
+})
+
+it('focuses an unedited zero-valued field through native navigation, then moves its original cursor', async () => {
+  const f = fixture(); f.fields.schemaFields.push({ name: 'count', schema: { type: 'integer' } }); f.fields.formValues.count = 0
+  const before = { ...f.fields.formValues }
+  const focused = await f.operate({ operation: 'focus', field: 'count' })
+  expect(focused.form.currentFieldIndex).toBe(3); expect(focused.form.textInputValue).toBe('0')
+  expect(focused.form.textInputCursorOffset).toBe(1); expect(f.fields.formValues).toEqual(before)
+  await f.operate({ operation: 'cursor', field: 'count', cursorOffset: 0 })
+  expect(f.fields.setTextInputCursorOffset).toHaveBeenCalledWith(0)
+  expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
+})
+it('focuses nontext fields without toggling false or selecting an option', async () => {
+  const f = fixture(), before = { ...f.fields.formValues }
+  await f.operate({ operation: 'focus', field: 'enabled' }); expect(f.show().currentFieldIndex).toBe(1)
+  await f.operate({ operation: 'focus', field: 'audience' }); expect(f.show().currentFieldIndex).toBe(2)
+  expect(f.fields.formValues).toEqual(before); expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
+  expect(f.key.mock.calls.every(([event]) => event.key === 'down')).toBe(true)
+})
+it('refuses unknown focus fields before navigation and expires an addressed focus during navigation', async () => {
+  const f = fixture(); await expect(f.operate({ operation: 'focus', field: 'foreign' })).rejects.toThrow('Unknown native MCP field')
+  expect(f.key).not.toHaveBeenCalled()
+  f.key.mockImplementationOnce(() => f.expire())
+  await expect(f.operate({ operation: 'focus', field: 'enabled' })).rejects.toThrow('expired')
+  expect(f.fields.handleTextInputChange).not.toHaveBeenCalled(); expect(f.fields.setTextInputCursorOffset).not.toHaveBeenCalled()
+})
+
+it('leaves a native-expanded option list through its original collapse callback before focusing another field', async () => {
+  const f = fixture(), before = { ...f.fields.formValues }
+  f.fields.currentFieldIndex = 2; f.fields.expandedAccordion = 'audience'
+  expect(f.show().expandedAccordion).toBe('audience')
+  const result = await f.operate({ operation: 'focus', field: 'title' })
+  expect(f.key.mock.calls[0][0].key).toBe('left'); expect(result.form.currentFieldIndex).toBe(0)
+  expect(result.form.expandedAccordion).toBeUndefined(); expect(f.fields.formValues).toEqual(before)
+  expect(f.fields.handleTextInputChange).not.toHaveBeenCalled()
 })

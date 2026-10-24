@@ -10,15 +10,15 @@
         <div class="space-y-1">
           <label :for="ids(field.name)">{{ field.title }}{{ field.required ? ' *' : '' }}</label>
           <p v-if="field.description" class="description">{{ field.description }}</p>
-          <fieldset v-if="field.type === 'array'" :id="ids(field.name)" :aria-label="field.title" :disabled="finishing">
+          <fieldset v-if="field.type === 'array'" :id="ids(field.name)" :aria-label="field.title" :disabled="finishing" @focusin="focusField(field.name, $event)">
             <label v-for="option in field.options" :key="option.value" class="option"><input type="checkbox" :checked="selected(field, option.value)" @change="toggle(field, option.value)" />{{ option.label }}</label>
           </fieldset>
-          <select v-else-if="field.type === 'boolean' || field.options" :id="ids(field.name)" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :value="value(field) === undefined ? '' : String(value(field))" @change="choose(field, ($event.target as HTMLSelectElement).value)">
+          <select v-else-if="field.type === 'boolean' || field.options" :id="ids(field.name)" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :value="value(field) === undefined ? '' : String(value(field))" @focus="focusField(field.name, $event)" @change="choose(field, ($event.target as HTMLSelectElement).value)">
             <option value="">Select…</option>
             <template v-if="field.type === 'boolean'"><option value="true">Yes</option><option value="false">No</option></template>
             <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
-          <input v-else :ref="element => rememberInput(field.name, element)" :id="ids(field.name)" type="text" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @input="input(field.name, $event)" @select="cursor(field.name, $event)" @compositionstart="composingField = field.name" @compositionend="compositionEnd(field.name, $event)" @keydown.backspace="unsetEmpty(field.name, $event)" />
+          <input v-else :ref="element => rememberInput(field.name, element)" :id="ids(field.name)" type="text" :aria-label="field.title" :aria-required="field.required" :disabled="finishing" :inputmode="field.type === 'number' || field.type === 'integer' ? 'decimal' : undefined" :value="value(field) ?? ''" :placeholder="field.format === 'date' || field.format === 'date-time' ? 'Enter a date' : undefined" @focus="focusField(field.name, $event)" @input="input(field.name, $event)" @select="cursor(field.name, $event)" @compositionstart="composingField = field.name" @compositionend="compositionEnd(field.name, $event)" @keydown.backspace="unsetEmpty(field.name, $event)" />
           <p v-if="form.errors[field.name]" role="alert" class="error">{{ form.errors[field.name] }}</p>
           <p v-if="form.resolvingFields.includes(field.name)" role="status" class="description">Checking date…</p>
         </div>
@@ -88,11 +88,20 @@ function input(field: string, event: Event) {
   if (Object.hasOwn(drafts.value, field) && drafts.value[field] === value) return
   edit(field, value, (event.target as HTMLInputElement).selectionEnd ?? undefined)
 }
-function cursor(field: string, event: Event) {
+function focusField(field: string, event: Event) {
+  if (finishing.value || composingField.value) return
+  const planned = [...queue].reverse().find(action => 'field' in action) ?? inFlight
+  const target = planned && 'field' in planned ? planned.field : props.form.focusedButton ? undefined : props.form.propertyOrder[props.form.currentFieldIndex ?? -1]
+  if (target === field) return
+  enqueue({ operation: 'focus', field })
+  // Native has a caret, not a browser range. Mirror its endpoint while keeping the local range intact.
+  if (event.target instanceof HTMLInputElement && event.target.type === 'text') cursor(field, event, true)
+}
+function cursor(field: string, event: Event, allowRange = false) {
   const input = event.target as HTMLInputElement, offset = input.selectionEnd
-  if (offset === null || input.selectionStart !== offset || composingField.value || finishing.value) return
-  if (props.form.currentFieldIndex !== props.form.propertyOrder.indexOf(field) && ![inFlight, ...queue].some(action => action?.operation === 'edit' && action.field === field)) return
-  const latest = [...queue].reverse().find(action => (action.operation === 'edit' || action.operation === 'cursor') && action.field === field) ?? inFlight
+  if (offset === null || (!allowRange && input.selectionStart !== offset) || composingField.value || finishing.value) return
+  if (props.form.currentFieldIndex !== props.form.propertyOrder.indexOf(field) && ![inFlight, ...queue].some(action => (action?.operation === 'edit' || action?.operation === 'focus') && action.field === field)) return
+  const latest = queue.at(-1) ?? inFlight
   if (latest && (latest.operation === 'edit' || latest.operation === 'cursor') && latest.field === field && latest.cursorOffset === offset) return
   if (!latest && props.form.currentFieldIndex === props.form.propertyOrder.indexOf(field) && props.form.textInputCursorOffset === offset) return
   enqueue({ operation: 'cursor', field, cursorOffset: offset })
@@ -111,7 +120,7 @@ watch(() => [props.operation?.sequence, props.operation?.status, props.form.toke
     if (props.operation?.status === 'error') { queue.splice(0); finishing.value = false; cancelling.value = false; drafts.value = {} }
     else {
       if (prior.operation === 'edit' && composingField.value !== prior.field && !queue.some(action => action.operation === 'edit' && action.field === prior.field)) { const next = { ...drafts.value }; delete next[prior.field]; drafts.value = next }
-      if (prior.operation !== 'edit' && prior.operation !== 'cursor') { finishing.value = false; cancelling.value = false }
+      if (prior.operation !== 'edit' && prior.operation !== 'cursor' && prior.operation !== 'focus') { finishing.value = false; cancelling.value = false }
     }
   }
   drain()

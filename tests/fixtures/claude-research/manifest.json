@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "e15e19fb0c3a9313eaf0c897818410ec8c19a931",
+  "researchCommit": "91177a038a22e9acc076203634ed5f63331d8b1c",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -187,7 +187,7 @@
     "src/protocol/native-large-document-fixture.mjs": "c0c05db460c2938c8528ec78825c1071de375977957e053877c5a7588f94d8c6",
     "src/protocol/native-managed-files.mjs": "98ece77fe5a7ac98330991e4d9647c8d3761d26833aa52ca10fe912ef5b170ab",
     "src/protocol/native-managed-media-fixture.mjs": "765e83b1996ef41b2da56f3f2c934fe5394eff125c4f06bc39b63deb81363be2",
-    "src/protocol/native-mcp-form-app-fixture.mjs": "c44ad2e35f5bda429c6fc73be7c52bf1fa25622768fa4ff5e833ff9eeb4dec9e",
+    "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
     "src/protocol/native-mcp-renderer-inspector.mjs": "3f49da84d9b2861412f989b1b0a14c28a2aabbca1ace1af507dc6d6a34a49c29",
     "src/protocol/native-mcp-url-app-fixture.mjs": "acb318379b7d305388cb03eaa811b7eb16dd62a7ffb8681aa3ae9057ce1d6f50",
     "src/protocol/native-module-access.mjs": "1550dd126a3dd1b7130103729aa48d21ea3dc5efcda34d9480b717c98508bc5b",
@@ -272,5 +272,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "2b15b94a63960aefb883ebe2176de0d13c4efce444f7a54408421d6e5288dfc7"
+  "archiveSha256": "941b732ea3e43fdb043cce80c1eadcc8dcc38c3bbdeaf2054c02eeb8fcc731a8"
 }

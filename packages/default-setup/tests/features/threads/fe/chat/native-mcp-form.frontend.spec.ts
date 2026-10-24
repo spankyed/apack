@@ -90,3 +90,45 @@ it('coalesces cursor movement into the queued text edit and avoids a duplicate o
   expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'edit', field: 'title', value: 'ABCD', cursorOffset: 2 }])
   await f.acknowledge(2, 'ABCD'); expect(f.operate).toHaveBeenCalledTimes(2)
 })
+
+it('mirrors focus on another field before its cursor without rewriting zero or false', async () => {
+  const f = fixture(), count = f.root.querySelector<HTMLInputElement>('input[inputmode="decimal"]')!
+  const offset = count.selectionEnd; count.focus(); await nextTick()
+  expect(f.operate.mock.calls).toEqual([[{ operation: 'focus', field: 'count' }]])
+  f.state.form.currentFieldIndex = 2; f.state.form.textInputValue = '0'; f.state.operation = { sequence: 1, status: 'done' }; await nextTick()
+  expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'cursor', field: 'count', cursorOffset: offset }])
+  expect(f.state.form.values).toEqual({ title: 'Original', enabled: false, count: 0 })
+  f.state.operation = { sequence: 2, status: 'done' }; await nextTick(); expect(f.pending).toHaveBeenLastCalledWith(false)
+})
+it('preserves a browser range while focusing its field in the original owner', async () => {
+  const f = fixture(); f.state.form.currentFieldIndex = 2; f.state.form.textInputValue = '0'; await nextTick()
+  f.input.setSelectionRange(1, 4); f.input.focus(); await nextTick()
+  expect(f.operate.mock.calls).toEqual([[{ operation: 'focus', field: 'title' }]])
+  f.state.form.currentFieldIndex = 0; f.state.form.textInputValue = 'Original'; f.state.form.textInputCursorOffset = 8
+  f.state.operation = { sequence: 1, status: 'done' }; await nextTick()
+  expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'cursor', field: 'title', cursorOffset: 4 }])
+  expect([f.input.selectionStart, f.input.selectionEnd]).toEqual([1, 4])
+})
+it('keeps Submit pending across an earlier nontext focus acknowledgement', async () => {
+  const f = fixture(); f.root.querySelector<HTMLSelectElement>('select')!.focus(); await nextTick()
+  expect(f.operate.mock.calls).toEqual([[{ operation: 'focus', field: 'enabled' }]])
+  f.button('Submit').click(); await nextTick()
+  f.state.form.currentFieldIndex = 1; f.state.operation = { sequence: 1, status: 'done' }; await nextTick()
+  expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'accept' }])
+  expect(f.root.querySelector<HTMLButtonElement>('button.accept')!.disabled).toBe(true)
+  expect(f.root.querySelector<HTMLButtonElement>('button.accept')!.textContent).toBe('Sending…')
+})
+
+it('retains a mid-string caret when focus returns behind an earlier edit and another field', async () => {
+  const f = fixture(), count = f.root.querySelector<HTMLInputElement>('input[inputmode="decimal"]')!
+  f.input.value = 'ABCD'; f.input.setSelectionRange(2, 2); f.input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
+  expect(f.operate.mock.calls).toEqual([[{ operation: 'edit', field: 'title', value: 'ABCD', cursorOffset: 2 }]])
+  count.focus(); f.input.focus(); await nextTick()
+  for (let sequence = 1; sequence <= 4; sequence++) {
+    f.state.form.currentFieldIndex = sequence === 1 || sequence === 4 ? 0 : 2
+    f.state.form.textInputValue = sequence === 1 || sequence === 4 ? 'ABCD' : '0'
+    f.state.form.values.title = 'ABCD'; f.state.operation = { sequence, status: 'done' }; await nextTick()
+  }
+  expect(f.operate.mock.calls.map(([action]) => action.operation)).toEqual(['edit', 'focus', 'cursor', 'focus', 'cursor'])
+  expect(f.operate.mock.calls.at(-1)).toEqual([{ operation: 'cursor', field: 'title', cursorOffset: 2 }])
+})

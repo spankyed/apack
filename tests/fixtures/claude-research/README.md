@@ -1,4 +1,4 @@
-# Claude research CI replay tools
+# Claude research replay tools
 
 `runner.tgz` contains only authored research tools from the commit in `manifest.json`.
 It contains no recovered Claude implementation, native binary, private traffic, credentials or
@@ -11,11 +11,24 @@ python3 tools/export-ci-replay.py /absolute/path/to/apack/tests/fixtures/claude-
 ```
 
 The exporter uses committed Git blobs, normalized archive metadata and per-file SHA-256 hashes.
-The CI launcher verifies the archive and every file, downloads the explicitly pinned official
-native package and checks both package and binary hashes before execution. It refuses local or
-non-GitHub-hosted execution. The user's installed CLI and settings are never used.
+The replay launcher verifies the archive and every file, downloads the explicitly pinned official
+native package and checks both package and binary hashes before execution. Local native execution
+uses the Linux container and `linux-arm64.json`; macOS native execution requires a disposable
+GitHub-hosted runner. The user's installed CLI and settings are never used.
 
-Dispatch only the selected journey on the existing PR branch:
+Run the selected local native journey through the isolated checkout's Linux runner:
+
+```sh
+npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-form-app
+```
+
+The launcher installs the display prerequisites when missing and builds the app runtime for the
+current inputs. Research replay uses one locked directory at `/work/.claude-research/current`.
+Copy needed evidence out before the next sync/replay; it replaces this directory. Do not restore
+the old unbounded `node_modules/.cache/claude-research-linux` layout.
+
+Use CI only when Linux cannot cover the selected platform-specific behavior, and dispatch only
+the selected journey on the existing PR branch:
 
 ```sh
 gh workflow run ci.yml --repo spankyed/apack --ref session/claude-code-research \
