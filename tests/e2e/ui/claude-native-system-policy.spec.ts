@@ -48,7 +48,7 @@ test('honors real Linux system policy before user settings in the everyday compo
   await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
-  let lastSequence = 0
+  let lastSequence = 0, settingsConsent=false, settingsChoice=0
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -57,6 +57,12 @@ test('honors real Linux system policy before user settings in the everyday compo
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
     if (native?.state?.status === 'live') return unreadable||native.state.mainStatus?.includes('Managed OS policy ready') === true
+    if(unreadable&&text.includes('Settings Error')&&text.includes('/etc/claude-code/managed-settings.json')&&text.includes('Continue without these settings')){
+      if(/❯\s*1\. Fix with Claude/.test(text)&&settingsChoice===0){settingsChoice=1;await input.press('ArrowDown')}
+      else if(/❯\s*2\. Exit and fix manually/.test(text)&&settingsChoice===1){settingsChoice=2;await input.press('ArrowDown')}
+      else if(/❯\s*3\. Continue without these settings/.test(text)&&!settingsConsent){settingsConsent=true;await input.press('Enter')}
+      return false
+    }
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
@@ -110,7 +116,7 @@ test('honors real Linux system policy before user settings in the everyday compo
   await expect.poll(async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{const rows=(await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));const matches=rows.filter(row=>row.type==='user'&&row.isMeta!==true&&(row.message?.content===sent||row.message?.content?.some?.((block:any)=>block.type==='text'&&block.text===sent)));if(matches.length){expect(matches).toHaveLength(1);original=matches[0];return true}}catch(error:any){if(error.code!=='ENOENT')throw error}}return false}).toBe(true)
   await composer.fill(draft);if(!unreadable)await expect(status).toContainText('Managed OS policy ready')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-system-policy-app-proof.json'),JSON.stringify({sessionId,boundNativePid,captures,draftRetained:true,privateControlsSuppressed:!unreadable,userStatusOverridden:!unreadable,nativeManagedWarning:unreadable,successfulContinuation:unreadable,warningText:unreadable?await warning.innerText():undefined,nativeHumanUuid:original.uuid,sent}))
+  await writeFile(join(workspace!,'native-system-policy-app-proof.json'),JSON.stringify({sessionId,boundNativePid,captures,draftRetained:true,privateControlsSuppressed:!unreadable,userStatusOverridden:!unreadable,nativeManagedWarning:unreadable,originalSettingsConsent:settingsConsent,successfulContinuation:unreadable,warningText:unreadable?await warning.innerText():undefined,nativeHumanUuid:original.uuid,sent}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue this saved policy review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(3);expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
