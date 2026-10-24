@@ -488,16 +488,16 @@ Content sources belong in `content.sources`, independently of lifecycle callback
 
 ```typescript
 // src/hooks.ts
-export const onInit = () => ensureDefaults();     // after EARS hydration, before migrations and content
+export const onInit = () => ensureDefaults();     // after every pack registers, before migrations and content
 export const onShutdown = () => stopProcesses(); // when the pack's backend stops (app exit, pack unload or reload)
 ```
 
 | Export | Runs |
 |---|---|
-| `onInit` | Whenever the pack starts (app boot/reset, installation, enablement or reload), after EARS hydration and before migrations and content. Create rows the pack's systems expect to exist here |
+| `onInit` | Whenever the pack starts (app boot/reset, installation, enablement or reload), after every pack has registered and before migrations and content. Create rows the pack's systems expect to exist here |
 | `onShutdown` | When the pack's backend stops. Release what outlives its actors: processes, timers, listeners |
 
-Every system starts when the bus does, after hydration. There is no way for a feature to ask to start before it.
+Every system starts when the bus does, after content is applied. There is no way for a feature to ask to start before it.
 
 ### ContentSourceConfig
 

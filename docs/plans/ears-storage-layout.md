@@ -382,6 +382,44 @@ Done, 2026-10-24.
 - a thousand queries that break early or throw leave the environment's reader count where it was (lmdb-js
   `readerList()`).
 
+Done, 2026-10-24.
+- **Format 4 is one database, `kv`, holding the engine's keys** (`lmdb/store.ts`, `LMDB_FORMAT_VERSION = 4`), opened
+  only through `openEnvironment`, which checks the stamp and sets `overlappingSync: false` for every process.
+  `convertToFormat4` loads format 3's tables through an engine's `admin.bulkLoad` in one unit — entities by
+  `createdAt`, relations under their ids — and keeps format 3's numbering rows (`Sequence-<key>`) as sequences
+  (`['s', key]`), so a short code is still never handed out twice; `scripts/ears-convert.ts` runs it, on a copy.
+  `scripts/short-codes-convert.ts` now rewrites a format 4 copy through an engine on the store.
+- **Durability as decided:** each unit commits with `NO_SYNC_FLUSH`; a sync runs within `SYNC_INTERVAL_MS` (200 ms)
+  of a commit, off the main thread; `requestSync()` syncs now when a commit is owed; `durable()` resolves once every
+  unit before it is on disk; `transact(fn, { durable: true })` commits with the sync (`COMMIT_DURABLE`); `close()`
+  syncs what is owed. The API's `bus.send` requests a sync once what the client's message set off synchronously has
+  committed.
+- **Reset and import are units of the open store:** `reset()` deletes every key and `replaceWith(dir)` puts another
+  database's entries in place of every key, each one durable unit, the store open throughout; the record store has
+  `replaceWith` too. Nothing closes and reopens files, so nothing holds writes for a store that is briefly gone.
+- **What asks `durable()`, against the plan:** reset and import do (durable units). A backup copies one read
+  transaction of what is committed, so the source's sync is not what makes it whole. The content apply rides group
+  commit: its record (`AppliedContent`) commits with what it wrote, so a sync lost to a power cut loses both, and the
+  next boot applies the content again.
+- **Deleted:** hydration and Step 3's bridge, the persistence sink (`PersistenceSink`, `noopSink`, `persistence`), the
+  LMDB adapter, `envs.ts`, `LmdbReader`, the API's dropped-write report and `apack db`'s failed-close report — a write
+  now commits or throws where it is made, so there is no write to fail later. Boot logs the database's size on disk
+  and the heap in place of hydration's reading.
+- **Two things the cut-over surfaced:** settings admission refused boot's first pack discovery once the engine could
+  read the stored settings before the packs were found, so that discovery takes what is installed and leaves a stored
+  value it makes invalid to recovery (`admitSettings`, `packs/catalog.ts`), as boot did when the engine was still
+  empty at that point; and the backup validator read a stored `null` as no settings, now refused.
+- **The test runtime freezes what it reads:** the SDK's `startTestRuntime` runs on `createMemoryKV({ freeze: true })`,
+  so code that mutates a value a read returned fails in tests rather than appearing to work.
+- **Done-when checks:** the contract suite runs twice, `ears` on `MemoryKV` and `ears-on-lmdb` on an LMDB store per
+  engine, weakening nothing (359 cases between them); `tests/lmdb/store.spec.ts` holds the child killed with SIGKILL
+  the moment its write returns, a hundred units syncing once within the window, `requestSync` and `durable()` by the
+  sync count, a durable unit owing nothing, and a thousand early-stopping or throwing queries leaving `readers()`
+  where it was; `packages/api/tests/transport/bus-send-sync.spec.ts` holds a client message's write synced with the
+  window set to a minute.
+- Suites: the host pool (12 suites) 5,865 and the pack pool, all passing; typecheck, lint and `check:specifiers`
+  clean.
+
 ### 5. Measured
 - Boot, heap, the test run's time and the bench against the readings above and the baseline, the `orderBy`
   regression from attributes by entity included; the bench's `first()`, `limit`, indexed-`where`, traversal and 10k-edge hub cases on

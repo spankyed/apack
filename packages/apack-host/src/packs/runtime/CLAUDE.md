@@ -95,7 +95,7 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 ```
 0. initializeLogCapture()          — console calls become log events, each printed once
    openAppStore()                  — (runtime/index.ts) createPackRegistry(), the app's registered packs; open the LMDB store
-                                     (@apackdev/ears/lmdb) and the run history's, createEarsEngine({ persistence: store.sink }),
+                                     (@apackdev/ears/lmdb) and the run history's, createEarsEngine({ kv: store.kv }),
                                      bindHost(createHostRuntime({ ..., packs })), which binds the engine
                                      and binds the registry for the SDK's lookups; every step below works on it
 1. registerPack(hostRegistration) — the app's own features as the pack `host`: the application and packs systems and surfaces
@@ -106,7 +106,7 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 5. loadAppPacks()                  — discover + reconcile installed packs + load enabled, shipped ids first;
                                      registerPack() each, with where it was found (PackOrigin)
 6. registry.registerShutdownHook() — each pack's onShutdown, keyed by pack id
-7. store.hydrate()                 — EARS policy now sees all entity types
+7. logger.info(bootReading())      — the database's size on disk and the heap: the engine reads the store, so neither grows with the other
 8. startPacks(registry)            — start.ts; services.appData.reset() runs it too, after the shutdown hooks:
    onInit hooks                    — all packs (built-in + external)
    runAppMigrations()              — the host's app migrations, then built-in packs', against the app version (@apackdev/host/migrations); if one fails, nothing below runs
@@ -116,7 +116,7 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 9. start the bus actor             — createAppBus(registry) (@apackdev/host/bus) with systemId `HOST.bus`, which spawns every registered system
 ```
 
-Every pack registers before hydration, so the engine knows its entity types when their rows are loaded.
+The engine reads the store from the moment it opens, so there is no load step to order packs before: an entity type is checked when a write or a query by type names it, which is after every pack has registered.
 
 ## Pack entry contract
 
@@ -179,7 +179,7 @@ checks are `registration.spec.ts`, `replacement.spec.ts`, `registered-lookups.sp
 ## Host resolution for pack runtime code
 
 `withHostResolution(fn)` in `bridge.ts` calls `withModuleBridge()` (`../module-bridge.ts`) with:
-- `SDK_BRIDGE` — the loader's own instances (in the app, the API bundle's, which inlines `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/host`) of the shared-instance packages' subpaths (`sdk-modules.ts`, built from each package's exports map minus `APP_UNBRIDGED` and the app-only `@apackdev/ears/lmdb`). They go into the require cache (under a bridge key and the real resolved path) and `Module._resolveFilename` resolves those specifiers to them, so pack code shares the bundle's bound app (its registered packs and hydrated EARS engine) instead of loading a separate SDK copy. Pack code never requires `@apackdev/host`, so no host module is bridged.
+- `SDK_BRIDGE` — the loader's own instances (in the app, the API bundle's, which inlines `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/host`) of the shared-instance packages' subpaths (`sdk-modules.ts`, built from each package's exports map minus `APP_UNBRIDGED` and the app-only `@apackdev/ears/lmdb`). They go into the require cache (under a bridge key and the real resolved path) and `Module._resolveFilename` resolves those specifiers to them, so pack code shares the bundle's bound app (its registered packs and EARS engine) instead of loading a separate SDK copy. Pack code never requires `@apackdev/host`, so no host module is bridged.
 - `getSharedBeDeps()` (`xstate`, `zod`, and every subpath they export: a bundled dependency may require `zod/v4`) — resolved from `import.meta.url` (the API's `dist/server.js` in the app), since an installed pack has no `node_modules`.
 - `bridgedPackages: SHARED_INSTANCE_PACKAGES` — a pack requiring a shared-instance module the map lacks fails with "isn't provided by this apack: rebuild the pack".
 - `appOnly: APP_ONLY_EXPORTS` — a pack requiring `@apackdev/ears/lmdb` fails saying only the app loads it (`apack pack build` already rejects the import).

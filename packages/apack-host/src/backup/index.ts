@@ -1,7 +1,8 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
-import { closeEnv, openEnvAt, openRecordStore, LmdbReader, LMDB_FORMAT_VERSION, RECORD_STORE_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type Ears } from '@apackdev/ears';
+import { openEnvironment, openLmdbStore, openRecordStore, LMDB_FORMAT_VERSION, RECORD_STORE_FORMAT_VERSION } from '@apackdev/ears/lmdb';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -26,8 +27,8 @@ export interface BackupStore {
   readonly path: string;
   /** LMDB's own copy of one moment of the store into `targetDir` */
   copyTo(targetDir: string): Promise<void>;
-  close(): unknown;
-  reopen(): void;
+  /** Replaces the store's contents with those of the copy at `dir`, in one unit, while it stays open */
+  replaceWith(dir: string): void;
 }
 
 /**
@@ -35,7 +36,7 @@ export interface BackupStore {
  * backup's copy of it is checked — opened read-only, so one in a format this version can't read is refused, and closed
  */
 const DATABASES = {
-  lmdb: { format: LMDB_FORMAT_VERSION, check: (dir: string) => closeEnv(openEnvAt(dir, { readOnly: true })) },
+  lmdb: { format: LMDB_FORMAT_VERSION, check: (dir: string) => openEnvironment(dir, { readOnly: true }).root.close() },
   runHistory: { format: RECORD_STORE_FORMAT_VERSION, check: (dir: string) => openRecordStore({ path: dir, indexes: {}, readOnly: true }).close() },
 } as const;
 
@@ -105,7 +106,7 @@ export async function importDatabase(
   { skipUnknownDatabases = false, entityTypes = [], log = defaultLog, validate, accept, restored, withReplacement = replace => replace() }:
     {
       skipUnknownDatabases?: boolean; entityTypes?: Iterable<string>; log?: BackupLog;
-      validate?: (query: LmdbReader) => void;
+      validate?: (ears: Ears) => void;
       /** Hydrate and accept the installed data before the rollback copy can be removed. */
       accept?: (result: DatabaseImportResult) => Promise<void>;
       /** Reload the previous data after a refused installation has been restored. */
@@ -141,18 +142,15 @@ export async function importDatabase(
       const store = stores[name];
       return store ? [{ name, store }] : [];
     });
-    const closeAll = () => { for (const { store } of restoring) store.close(); };
-    const reopenAll = () => { for (const { store } of restoring) store.reopen(); };
     return await withReplacement(async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
       const hasMedia = await fs.pathExists(candidateMedia);
       if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
       try {
-        closeAll();
+        // Each store takes the backup's contents in one unit, open all the while: a reader sees the old or the new
         for (const { name, store } of restoring) {
-          await fs.remove(store.path);
-          await fs.copy(path.join(candidate, name), store.path);
+          store.replaceWith(path.join(candidate, name));
           log.info(`Imported ${name}`);
         }
         if (hasMedia) {
@@ -160,24 +158,18 @@ export async function importDatabase(
           await fs.copy(candidateMedia, mediaPath);
           log.info('Restored media assets');
         }
-        reopenAll();
         const result = { databases, missingDatabases, unknownEntityTypes };
         await accept?.(result);
         log.info('Import completed');
         return result;
       } catch (error) {
         try {
-          closeAll();
-          for (const { name, store } of restoring) {
-            await fs.remove(store.path);
-            await fs.copy(path.join(rollback, name), store.path);
-          }
+          for (const { name, store } of restoring) store.replaceWith(path.join(rollback, name));
           if (hasMedia) {
             await fs.remove(mediaPath);
             const previousMedia = path.join(rollback, 'media');
             if (await fs.pathExists(previousMedia)) await fs.copy(previousMedia, mediaPath);
           }
-          reopenAll();
           await restored?.();
         } catch (restoreError) {
           preserveRollback = true;
@@ -257,7 +249,7 @@ export interface BackupContents {
  * wrong. `entityTypes` are the types to count, and any type the backup holds that isn't among them comes back as
  * `unknownEntityTypes`.
  */
-export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (query: LmdbReader) => void): BackupContents {
+export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void): BackupContents {
   const metadataFile = path.join(dir, 'metadata.json');
   if (!fs.existsSync(metadataFile)) throw new Error(`${dir} isn't a backup: it has no metadata.json`);
   let metadata: { timestamp?: unknown; databases?: unknown; appVersion?: unknown; storageFormats?: unknown };
@@ -289,13 +281,12 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   // Every database the import would put in place, so one this version can't read is found before anything is
   // replaced, not when the store opens the new files again
   for (const name of databases) refusing(() => DATABASES[name].check(path.join(dir, name)));
-  const env = refusing(() => openEnvAt(path.join(dir, 'lmdb'), { readOnly: true }));
+  const store = refusing(() => openLmdbStore({ path: path.join(dir, 'lmdb'), readOnly: true }));
   try {
-    validate?.(new LmdbReader(env));
-    const perType = new Map<string, number>();
-    for (const { value } of env.entities.getRange() as Iterable<{ value: { type?: string } }>) {
-      if (value.type) perType.set(value.type, (perType.get(value.type) ?? 0) + 1);
-    }
+    // An engine over the backup's files that takes every name, since what a backup holds is what is being asked
+    const engine = createEarsEngine({ kv: store.kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
+    validate?.(engine);
+    const perType = new Map(Object.entries(engine.admin.countEntities()));
     const known = new Set(entityTypes);
     const counts = [...known].sort()
       .flatMap((type) => (perType.has(type) ? [[type, perType.get(type)!] as [string, number]] : []));
@@ -315,7 +306,7 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
       counts,
     };
   } finally {
-    closeEnv(env);
+    store.close();
   }
 }
 

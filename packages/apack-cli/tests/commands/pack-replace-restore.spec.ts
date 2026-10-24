@@ -67,15 +67,14 @@ it('replaces deliberately, survives boot refresh, then restores a removed defaul
   const choices = { app: { personal: { name: 'Keep' } }, packs: { 'default-pack': { assistant: { name: 'Keep override' } } } };
   const paths = _appDataPaths(context.userDataDir);
   const { store, engine } = openDatabaseStore({ path: paths.lmdb,
-    schema: readInstalledSchema(context), log: () => {},
+    schema: readInstalledSchema(context),
   });
   const previousEngine = _bindEars(engine);
   try {
-    await store.hydrate();
     untypedUpsert('Settings', { id: settingsId, data: choices });
   } finally {
     _bindEars(previousEngine);
-    expect(store.close().errorCount).toBe(0);
+    store.close();
   }
   expect(readInstalledPacks(context.installedPacksFile)[0]).toMatchObject({ enabled: true, updatesWith: 'app' });
   const fork = builtPack(path.join(tmp, 'fork'), 'default-pack', '2.0.0');
@@ -92,7 +91,7 @@ it('replaces deliberately, survives boot refresh, then restores a removed defaul
   expect(readPackBuild(path.join(context.packsDir, 'default-pack')).snapshot.manifest.version).toBe('1.0.0');
   expect(readInstalledPacks(context.installedPacksFile)[0]).toMatchObject({ enabled: true, updatesWith: 'app' });
   expect(readInstalledPacks(context.installedPacksFile)[0]).not.toHaveProperty('suppressAppInstall');
-  const reopened = await openAppDatabase({ env: context.env, userDataDir: context.userDataDir, readOnly: true, log: () => {} });
+  const reopened = await openAppDatabase({ env: context.env, userDataDir: context.userDataDir, readOnly: true });
   try { expect(reopened.ears.query.ids(settingsId).pickOne()?.data).toEqual(choices); }
   finally { reopened.close(); }
   expect(findDatabaseWriter(context.userDataDir)).toBeNull();

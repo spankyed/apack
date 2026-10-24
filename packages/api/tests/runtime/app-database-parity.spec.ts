@@ -1,5 +1,5 @@
 import { _declarationRevision } from '@apackdev/sdk/build';
-// The API's boot and a tool opening the data dir (openAppDatabase, which apack db uses) hydrate the same entities,
+// The API's boot and a tool opening the data dir (openAppDatabase, which apack db uses) read the same entities,
 // relations and roles: both open the store through @apackdev/host/database, and the tool reads the installed packs'
 // manifests where the API registers their code. Runs the built-in packs' built runtimes (npm run build:default-setup).
 import * as fs from 'node:fs';
@@ -38,14 +38,13 @@ function snapshot(ears: Ears) {
 }
 
 /**
- * The API's boot up to hydration (`setupBackend`): the packs the app ships installed into the data dir,
+ * The API's boot up to loading the packs (`setupBackend`): the packs the app ships installed into the data dir,
  * then every installed pack loaded. The caller closes the store.
  */
 async function bootApi() {
   const app = openAppStore();
   await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
   loadAppPacks(app.packs);
-  await app.store.hydrate();
   return app;
 }
 
@@ -78,7 +77,7 @@ if (module.exports.registration) module.exports.registration.declarationRevision
 }
 
 describe('a data dir opened by the API and by openAppDatabase', () => {
-  it('hydrates to the same entities, relations and roles', async () => {
+  it('reads the same entities, relations and roles', async () => {
     // A first run applies the app's content; the user adds a note with a role and a relation
     const first = await bootApi();
     startPacks(first.packs);
@@ -91,7 +90,7 @@ describe('a data dir opened by the API and by openAppDatabase', () => {
     const types = api.packs.getRegisteredEntityTypes();
     closeApi(api);
 
-    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir, readOnly: true, log: () => {} });
+    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir, readOnly: true });
     const fromTool = snapshot(db.ears);
     db.close();
 
@@ -112,13 +111,13 @@ describe('what the tool writes', () => {
     const booted = await bootApi();
     closeApi(booted);
 
-    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir, log: () => {} });
+    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir });
     untypedCreate('Note', { id: 'Note-tool' }).set('title', 'from the tool').grant('assistant_birth');
     db.close();
 
     const api = await bootApi();
     try {
-      // The note is in the data the API hydrates, with its role
+      // The note is in the data the API reads, with its role
       expect(api.engine.getRow('Note-tool')?.title).toBe('from the tool');
       expect([...api.engine.getRoles('Note-tool')]).toEqual(['assistant_birth']);
     } finally {
@@ -137,7 +136,7 @@ describe('an installed external pack', () => {
     const types = [...api.packs.getRegisteredEntityTypes()];
     closeApi(api);
 
-    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir, readOnly: true, log: () => {} });
+    const db = await openAppDatabase({ env: 'test', userDataDir: dataDir, readOnly: true });
     try {
       expect(types).toContain('Memo');
       expect(db.schema.getRegisteredEntityTypes()).toEqual(new Set(types));

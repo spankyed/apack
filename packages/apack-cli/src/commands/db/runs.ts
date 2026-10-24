@@ -44,7 +44,7 @@ export async function dbRuns(args: string[], io: DbIo): Promise<void> {
   io.err(`Run history: ${dir} (offline)`);
   if (!fs.existsSync(dir)) throw new Error(`No run history in ${target.userDataDir}: apack hasn't run a flow on it`);
   const running = findRunningApp(target);
-  if (running) io.err(`Warning: apack is running on it (${running.why}); what it hasn't written yet isn't here`);
+  if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed`);
 
   // Read-only: the history is read, never changed, so this works while an app runs and on files it may not write
   const store = openRunHistoryStore(dir, { readOnly: true });

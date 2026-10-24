@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { RecordStore } from '@apackdev/ears';
-import { closeEnv, openEnvAt } from '@apackdev/ears/lmdb';
+import { openEnvironment } from '@apackdev/ears/lmdb';
 import type { RunHistory, RunNode, RunNodeId, RunNodeStart } from '@apackdev/sdk/services';
 import { _memoryRunHistoryStore } from '@apackdev/sdk/testing';
 import { openRunHistoryStore } from '../../src/database/open.ts';
@@ -173,7 +173,7 @@ describe('the app\'s run history', () => {
   it('moves a store it cannot read aside and starts a new one, rather than keeping the app from starting', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
     // Files that aren't a run history: an EARS database where the record store should be
-    closeEnv(openEnvAt(dir));
+    openEnvironment(dir).root.close();
     expect(() => openRunHistoryStore(dir, { readOnly: true })).toThrow('are an EARS database, not a record store');
 
     const store = openRunHistoryStore(dir);
