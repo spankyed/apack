@@ -9,8 +9,20 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(async ({appPage},testInfo) => { if(testInfo.status!==testInfo.expectedStatus&&!appPage.isClosed())await appPage.screenshot({path:testInfo.outputPath('native-window-agent-failure.png')}).catch(()=>{});terminalScreen?.dispose();terminalScreen=undefined })
 test('preserves independent window and Agent drafts through shared native view switching', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(90000)
+  test.setTimeout(140000)
   expect(process.env.HOME).toBe(workspace)
+  const helperPath=join(workspace!,'sub.py')
+  const helper=await readFile(helperPath,'utf8')
+  expect(helper).toContain('p=json.load(sys.stdin)')
+  await writeFile(helperPath,helper.replace('p=json.load(sys.stdin)',`p=json.load(sys.stdin)
+import pathlib
+control=pathlib.Path(${JSON.stringify(join(workspace!,'agent-status-mode.txt'))})
+mode=control.read_text() if control.exists() else 'normal'
+if mode=='empty': sys.exit(0)
+if mode=='failure':
+ print('FailedAgentHelperMustNotBecomeCaption')
+ sys.exit(7)`))
+
   const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -147,6 +159,29 @@ test('preserves independent window and Agent drafts through shared native view s
   await secondForm.getByRole('button',{name:'Fill active composer',exact:true}).click()
   await expect.poll(async()=>(await reads()).length).toBe(2);expect((await reads())[1]).toMatchObject({result:{isFilled:true},box:{text:'Native focused worker draft.'}})
   await expect(worker).toHaveText('Main Agent draft.');await expect(secondWorker).toHaveText('Native focused worker draft.')
+  const statusTransitions=[]
+  const helperExits=async()=>(await readFile(join(workspace!,'prefix-exits.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+  for(const width of [1100,680]){
+    await popout.setViewportSize({width,height:width===680?600:900})
+    for(const mode of ['empty','normal','failure','normal']){
+      const before=(await helperExits()).length
+      await writeFile(join(workspace!,'agent-status-mode.txt'),mode)
+      await expect.poll(async()=>(await helperExits()).slice(before).some(row=>row.args?.at(-1)===`/usr/bin/python3 '${helperPath}'`&&row.code===(mode==='failure'?7:0)),{timeout:15000}).toBe(true)
+      const caption=secondForm.getByTestId('composer-native-status')
+      if(mode==='normal')await expect(caption).toContainText(agentCaption,{timeout:15000})
+      else await expect(caption).toHaveCount(0,{timeout:15000})
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await expect(worker).toHaveText('Main Agent draft.')
+      await expect(secondWorker).toHaveText('Native focused worker draft.')
+      await expect(secondForm).not.toContainText('FailedAgentHelperMustNotBecomeCaption')
+      await expect(secondForm.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
+      const window=await electronApp.browserWindow(popout)
+      const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+      const file=`native-agent-status-${mode}-${width}-${statusTransitions.length}.png`
+      await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
+      statusTransitions.push({width,mode,file,taskId,helperExits:(await helperExits()).slice(before),status:(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.statusText??null})
+    }
+  }
   for(const width of [1100,680]){
     await popout.setViewportSize({width,height:width===680?600:900})
     const tools=secondForm.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
@@ -174,6 +209,6 @@ test('preserves independent window and Agent drafts through shared native view s
   await composer.fill('Resume the Agent review after window cleanup.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-window-agent-proof.json'),JSON.stringify({taskId,old,addressedOldAction,backendDelivered:true,receipts:await reads(),sessionId,boundNativePid}))
+  await writeFile(join(workspace!,'native-window-agent-proof.json'),JSON.stringify({statusTransitions,taskId,old,addressedOldAction,backendDelivered:true,receipts:await reads(),sessionId,boundNativePid}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeWindowAgentSwitch:true,nativeWindowAgentDrafts:true,nativeWindowAgentPrompt:true,nativeWindowAgentParentRefused:true,nativeWindowAgentDetach:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
