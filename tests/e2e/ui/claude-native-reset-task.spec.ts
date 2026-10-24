@@ -108,12 +108,14 @@ test('refuses reset for a live worker and isolates its late response after stopp
   const buckets=await readdir(join(workspace!,'.claude/projects'));let priorJournal='';for(const bucket of buckets){try{priorJournal=await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')}catch(error:any){if(error.code!=='ENOENT')throw error}}expect(priorJournal).toBeTruthy()
   const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect(appPage.getByText('Which project directory should I work in?',{exact:true})).toBeVisible()
-  await electronApp.evaluate(({dialog},directory)=>{
-    const fixture=globalThis as any;fixture.resetTaskOpenDialog=dialog.showOpenDialog
+  const windowId=await nativeWindow.evaluate(window=>window.id)
+  await electronApp.evaluate(({dialog,BrowserWindow},{directory,windowId})=>{
+    const fixture=globalThis as any;fixture.resetTaskOpenDialog=dialog.showOpenDialog;fixture.resetTaskFocusedWindow=BrowserWindow.getFocusedWindow
+    BrowserWindow.getFocusedWindow=()=>BrowserWindow.fromId(windowId)
     dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[directory]})) as typeof dialog.showOpenDialog
-  },workspace!)
+  },{directory:workspace!,windowId})
   try { await appPage.getByRole('button',{name:'Browse Directory',exact:true}).click();await expect.poll(async()=>(await context()).claude?.pendingDirectorySelect).toBeUndefined() }
-  finally { await electronApp.evaluate(({dialog})=>{const fixture=globalThis as any;dialog.showOpenDialog=fixture.resetTaskOpenDialog;delete fixture.resetTaskOpenDialog}) }
+  finally { await electronApp.evaluate(({dialog,BrowserWindow})=>{const fixture=globalThis as any;dialog.showOpenDialog=fixture.resetTaskOpenDialog;BrowserWindow.getFocusedWindow=fixture.resetTaskFocusedWindow;delete fixture.resetTaskOpenDialog;delete fixture.resetTaskFocusedWindow}) }
   try {
     await expect.poll(async()=>(await context()).turns).toBe(1)
     await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
