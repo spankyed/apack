@@ -177,7 +177,7 @@ if mode=='failure':
       await expect(secondForm.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport()
       const window=await electronApp.browserWindow(popout)
       const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
-      const file=`native-agent-status-${mode}-${width}-${statusTransitions.length}.png`
+      const file:string=`native-agent-status-${mode}-${width}-${statusTransitions.length}.png`
       await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
       statusTransitions.push({width,mode,file,taskId,helperExits:(await helperExits()).slice(before),status:(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.statusText??null})
     }

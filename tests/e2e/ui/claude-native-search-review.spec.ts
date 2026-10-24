@@ -181,7 +181,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
         await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
         const window=await electronApp.browserWindow(appPage)
         const png=await window.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
-        const file=`native-status-${mode}-${width}-${statusTransitions.length}.png`
+        const file:string=`native-status-${mode}-${width}-${statusTransitions.length}.png`
         await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
         statusTransitions.push({width,mode,file,helperExits:(await helperExits()).slice(beforeExits),status:(await context()).native.state.mainStatus??null})
       }
