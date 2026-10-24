@@ -118,6 +118,13 @@ test('preserves original generic MCP approval choices, withheld previews and the
     expect(original.toolName).toBe(step.tool)
     expect(original.nativeTerminal.genericTool.ready).toBe(true)
     expect(original.nativeTerminal.genericTool.details.length).toBeGreaterThan(0)
+    if (phase === 1) {
+      const rendered=original.nativeTerminal.genericTool.details.filter((detail:{ansi?:string})=>detail.ansi!==undefined)
+      expect(rendered.length).toBeGreaterThan(0)
+      expect(rendered.some((detail:{ansi:string})=>detail.ansi.includes('\x1b['))).toBe(true)
+      await expect(approval.locator('.native-permission-text [style]').first()).toBeVisible()
+      expect(await approval.locator('.native-permission-text [style]').evaluateAll(elements=>elements.some(element=>{const style=getComputedStyle(element);return style.opacity!=='1'||Number(style.fontWeight)>=600||style.fontStyle==='italic'}))).toBe(true)
+    }
     const details = original.nativeTerminal.genericTool.details.map((row: { value: string }) => row.value).join('\n')
     expect(details.replace(/\s+/g, ' ')).toContain('Return the submitted notes without reading files or contacting a service.')
     if (step.decision === 'withheld-deny') {
