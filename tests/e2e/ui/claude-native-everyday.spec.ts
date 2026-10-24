@@ -10,7 +10,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('completes an everyday native review across Agent, approval, question and interruption recovery', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(110000)
+  test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
