@@ -106,7 +106,15 @@ test('refuses reset for a live worker and isolates its late response after stopp
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
   await reset();await expect.poll(async()=>(await context()).claude).toBeUndefined();await expect.poll(async()=>(await context()).native?.state.status??'exited').toBe('exited');await expect(card.getByTestId('composer-native-status')).toHaveCount(0)
   const buckets=await readdir(join(workspace!,'.claude/projects'));let priorJournal='';for(const bucket of buckets){try{priorJournal=await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')}catch(error:any){if(error.code!=='ENOENT')throw error}}expect(priorJournal).toBeTruthy()
-  const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click();try {
+  const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect(appPage.getByText('Which project directory should I work in?',{exact:true})).toBeVisible()
+  await electronApp.evaluate(({dialog},directory)=>{
+    const fixture=globalThis as any;fixture.resetTaskOpenDialog=dialog.showOpenDialog
+    dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[directory]})) as typeof dialog.showOpenDialog
+  },workspace!)
+  try { await appPage.getByRole('button',{name:'Browse Directory',exact:true}).click();await expect.poll(async()=>(await context()).claude?.pendingDirectorySelect).toBeUndefined() }
+  finally { await electronApp.evaluate(({dialog})=>{const fixture=globalThis as any;dialog.showOpenDialog=fixture.resetTaskOpenDialog;delete fixture.resetTaskOpenDialog}) }
+  try {
     await expect.poll(async()=>(await context()).turns).toBe(1)
     await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   } catch (error) {
