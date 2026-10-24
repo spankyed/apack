@@ -93,8 +93,19 @@ test('preserves original generic MCP approval choices, withheld previews and the
     const result = await Promise.race([nativeWindow.evaluate(async (window, size) => { const image = await window.webContents.capturePage({ x: 0, y: 0, ...size }); return { size: image.getSize(), png: image.toPNG().toString('base64') } }, { width, height }), new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(Error('Owned capture exceeded 30000ms')), 30000) })]).finally(() => { if (timer) clearTimeout(timer) })
     expect(result.size).toEqual({ width, height }); await writeFile(testInfo.outputPath(name), Buffer.from(result.png, 'base64')); captures.push(name)
   }
+  const syntaxPreviews:string[]=[]
   for (const [index, step] of cases.entries()) {
     const phase = index + 1
+    if (phase === 2 || phase === 3) {
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+      const beforeTheme=(await context()).native.output.at(-1)?.sequence??0
+      await input.pressSequentially('/theme');await input.press('Enter')
+      await expect.poll(async()=>stripVTControlCharacters((await context()).native.output.filter((chunk:any)=>chunk.sequence>beforeTheme).map((chunk:any)=>chunk.text).join(''))).toContain('Theme')
+      await input.press('Control+t')
+      await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8')).syntaxHighlightingDisabled).toBe(phase===2)
+      await input.press('Escape')
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+    }
     await appPage.setViewportSize({ width: 1100, height: 900 })
     await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), String(phase))
     await composer.fill(step.prompt)
@@ -124,6 +135,17 @@ test('preserves original generic MCP approval choices, withheld previews and the
       expect(rendered.some((detail:{ansi:string})=>detail.ansi.includes('\x1b['))).toBe(true)
       await expect(approval.locator('.native-permission-text [style]').first()).toBeVisible()
       expect(await approval.locator('.native-permission-text [style]').evaluateAll(elements=>elements.some(element=>{const style=getComputedStyle(element);return style.opacity!=='1'||Number(style.fontWeight)>=600||style.fontStyle==='italic'}))).toBe(true)
+    }
+    if (phase <= 3) {
+      const parameters=original.nativeTerminal.genericTool.details.find((detail:{label:string})=>detail.label==='Parameters')
+      expect(parameters.value).toContain('const release =')
+      syntaxPreviews.push(parameters.ansi)
+      if (phase===2) expect(syntaxPreviews[1]).not.toBe(syntaxPreviews[0])
+      if (phase===3) {
+        const colorCodes=(value:string)=>value.match(/\x1b\[(?:38|48);[^m]*m/g)??[]
+        expect(colorCodes(syntaxPreviews[0]!)).not.toEqual(colorCodes(syntaxPreviews[1]!))
+        expect(colorCodes(syntaxPreviews[2]!)).toEqual(colorCodes(syntaxPreviews[0]!))
+      }
     }
     const details = original.nativeTerminal.genericTool.details.map((row: { value: string }) => row.value).join('\n')
     expect(details.replace(/\s+/g, ' ')).toContain('Return the submitted notes without reading files or contacting a service.')
@@ -195,7 +217,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
     steps.push({ phase, tool: step.tool, decision: step.decision, preview: original.nativeTerminal.genericTool, retainedDraft: true })
   }
   await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), '0')
-  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, sessionId, boundNativePid, retainedDraft: true }))
+  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, syntaxPreviews, originalSyntaxDisabledRestored:true, sessionId, boundNativePid, retainedDraft: true }))
   // Native Escape cancels the request through its original callback, retaining the owner.
   expect(cases.at(-1)?.decision).toBe('cancel')
   expect((await context()).native.state.status).toBe('live')
