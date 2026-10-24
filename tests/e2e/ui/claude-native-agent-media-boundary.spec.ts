@@ -99,6 +99,10 @@ test('observes original selected-Agent terminal image delivery without app media
   const agentComposer=focused.getByRole('form',{name:'Agent message',exact:true}).locator('[contenteditable="true"]'),agentDraft='Keep the independent app Agent draft.';await agentComposer.fill(agentDraft)
   const observed=()=>readFile(join(workspace!,'native-agent-media-observation.json'),'utf8').then(text=>JSON.parse(text),()=>undefined)
   await expect.poll(async()=>(await observed())?.selected).toBe(taskId)
+  // Retire the app prompt host through the ordinary UI before testing original terminal paste.
+  await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+  await expect(focused).toBeHidden()
+  await expect.poll(async()=>(await observed())?.draft.text).toBe('')
   const before=await observed();expect(before.draft.text).toBe('')
   const attachment=await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const entry=(Object.entries(c.nativeTerminalViews) as [string,any][]).filter(([,v])=>v.threadId===c.currentThread?.id&&v.state?.status==='live'&&v.state.view?.kind==='agent').at(-1);if(!entry)return;return {threadId:c.currentThread.id,mountId:entry[0],ownerId:entry[1].state.ownerId}})
   expect(attachment).toBeTruthy()
@@ -111,6 +115,8 @@ test('observes original selected-Agent terminal image delivery without app media
   await expect.poll(async()=>(await observed())?.observed.length,{timeout:20000}).toBeGreaterThan(0)
   const delivered=await observed();expect(delivered.taskId).toBe(taskId)
   await expect.poll(async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)?.status,{timeout:20000}).toBe('completed')
+  await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  await expect(focused).toBeVisible()
   await expect(agentComposer).toHaveText(agentDraft)
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[]
   for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});const png=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-agent-media-boundary-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));captures.push(name)}
