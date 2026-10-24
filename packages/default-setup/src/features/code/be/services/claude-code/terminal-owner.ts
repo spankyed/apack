@@ -14,7 +14,7 @@ import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from '
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import * as pty from 'node-pty'
+import type * as pty from 'node-pty'
 import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
 import { randomUUID } from 'node:crypto'
 import { resolveForService } from '../../utils/resolve-cli.ts'
@@ -101,6 +101,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
   await access(executable, constants.X_OK)
   if (!(await stat(options.cwd)).isDirectory()) throw new Error('Native terminal working directory is unavailable')
+  // Content repositories load outside Electron; load the native driver only for a terminal handoff.
+  const pty = await import('node-pty')
   const env = buildChildEnv(options.env)
   const terminalEnv: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) if (typeof value === 'string') terminalEnv[name] = value
