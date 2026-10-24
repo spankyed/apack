@@ -29,7 +29,7 @@
         <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
       </template>
       <dl v-else-if="tool" class="tool-details">
-        <template v-for="(detail, index) in tool.details" :key="index"><dt>{{ detail.label }}</dt><dd><NativeStatusText :text="detail.value" /></dd></template>
+        <template v-for="(detail, index) in tool.details" :key="index"><dt>{{ detail.label }}</dt><dd><NativePermissionText :text="detail.value" :ansi="detail.ansi" /></dd></template>
       </dl>
       <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
       <section v-if="review" class="change-review" :aria-label="review.notebook ? 'Proposed notebook change' : 'Proposed file change'" data-testid="native-file-review">
@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import type { ClaudeToolPermissionApproval } from '#features/code/common/native-tool-permission.ts'
+import NativePermissionText from './NativePermissionText.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'

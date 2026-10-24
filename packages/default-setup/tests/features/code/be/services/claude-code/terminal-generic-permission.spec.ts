@@ -32,7 +32,7 @@ function fixture(card = false) {
   const fiber = { type: ozr, memoizedProps: { payload, wouldTakeAnswer: () => ready }, updateQueue: { memoCache: { data: [cache] } }, child: { type: root.type, memoizedProps: root.props, child: { type: qJ, memoizedProps: control } } }
   const session = { id: 'original-session' }, render = vi.fn(async (_tree: unknown, _options: unknown) => 'Original rendered parameter table')
   function AppStateProvider() {} function ThemeProvider() {}
-  const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
+  const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render, v6e: render }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (text: string) => createHash('sha256').update(text).digest('hex')
   const fingerprints = new Map([
     ['063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73', hash(ozr.toString())],
@@ -109,7 +109,7 @@ it('renders native parameter elements inside the original session app-state and 
   const f = fixture(), node = { type: 'OriginalParameterTable', props: { original: true } }
   f.cache[129] = node
   const shown = await f.runtime.choices(f.n, f.dialog)
-  expect(shown.details).toContainEqual({ label: 'Parameters', value: 'Original rendered parameter table' })
+  expect(shown.details).toContainEqual({ label: 'Parameters', value: 'Original rendered parameter table', ansi: 'Original rendered parameter table' })
   expect(f.render).toHaveBeenCalledExactlyOnceWith({ type: f.AppStateProvider, props: { session: f.session, keybindings: false, children: { type: f.ThemeProvider, props: { value: { resolvedTheme: {} }, children: node } } } }, { columns: 100 })
 })
 
@@ -152,5 +152,16 @@ it('preserves original cancellation refusal', async () => {
   f.refuse()
   await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token, '', 'cancel'))).rejects.toThrow('refused')
   expect(f.open).toHaveLength(1)
+  expect(f.select).not.toHaveBeenCalled()
+})
+
+it('preserves original styled parameter links and fences answers against presentation changes', async () => {
+  const f = fixture(); f.cache[129] = { type: 'OriginalParameterTable', props: {} }
+  const ansi = '\x1b[2murl: \x1b[22m\x1b]8;;https://example.test/review\x07\x1b[38;2;12;34;56mReview\x1b[39m\x1b]8;;\x07'
+  f.render.mockResolvedValue(ansi)
+  const shown = await f.runtime.choices(f.n, f.dialog)
+  expect(shown.details).toContainEqual({ label: 'Parameters', value: 'url: Review', ansi })
+  f.render.mockResolvedValue('Changed original presentation')
+  await expect(f.runtime.answer(f.n, f.dialog, response(f, shown.token))).rejects.toThrow('changed')
   expect(f.select).not.toHaveBeenCalled()
 })

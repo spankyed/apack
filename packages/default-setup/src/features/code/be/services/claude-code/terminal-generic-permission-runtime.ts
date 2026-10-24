@@ -25,15 +25,22 @@ function nativeGenericPermissionControl(n,d){
  if(matches.length!==1)return;
  if(matches[0].control.options.length>16)throw Error('Native generic permission choice limit');return matches[0];
 }
-async function nativeGenericPermissionText(n,node){
+async function nativeGenericPermissionText(n,node,preserve=false){
  if(node===undefined||node===null||node===false)return '';
  let value=node;if(typeof value!=='string'){
   const theme=nativeThemeProvider(n);
   const tree=n.jsx.e(n.appProvider.d_,{session:n.questionOptions.j(),keybindings:false,children:n.jsx.e(theme.type,{value:theme.value,children:node})});
-  value=await n.staticRender.$bn(tree,{columns:100});
+  const themeKey=JSON.stringify(theme.value.resolvedTheme);
+  value=await (preserve?n.staticRender.v6e:n.staticRender.$bn)(tree,{columns:100});
+  if(JSON.stringify(nativeThemeProvider(n).value.resolvedTheme)!==themeKey)throw Error('Native generic permission theme changed while formatting');
  }
  if(typeof value!=='string')throw Error('Invalid original generic permission preview');
- value=stripVTControlCharacters(value).trim();if(value.length>200000)throw Error('Native generic permission preview exceeded bound');return value;
+ value=(preserve?value:stripVTControlCharacters(value)).trim();if(value.length>200000)throw Error('Native generic permission preview exceeded bound');return value;
+}
+async function nativeGenericPermissionDetail(n,label,node){
+ if(typeof node==='string')return {label,value:await nativeGenericPermissionText(n,node)};
+ const ansi=await nativeGenericPermissionText(n,node,true);
+ return {label,value:stripVTControlCharacters(ansi).trim(),ansi};
 }
 async function nativeGenericPermissionPreview(n,d,source){
  if(!source)return;
@@ -43,11 +50,11 @@ async function nativeGenericPermissionPreview(n,d,source){
  const mounted=element=>element&&root?.type===element.type&&root.memoizedProps===element.props;
  const details=[];let title;
  if(mounted(cache[107])){
-  title=cache[107].props.title;const content=await nativeGenericPermissionText(n,cache[90]);if(content)details.push({label:'Request',value:content});
+  title=cache[107].props.title;const content=await nativeGenericPermissionDetail(n,'Request',cache[90]);if(content.value)details.push(content);
  }else if(mounted(cache[154])){
   title=cache[151]?.props?.title;
-  if(d.payload.isMcp===true){const tool=await nativeGenericPermissionText(n,cache[123]);if(tool)details.push({label:'Tool',value:tool});}
-  const input=await nativeGenericPermissionText(n,cache[129]);if(input)details.push({label:'Parameters',value:input});
+  if(d.payload.isMcp===true){const tool=await nativeGenericPermissionDetail(n,'Tool',cache[123]);if(tool.value)details.push(tool);}
+  const input=await nativeGenericPermissionDetail(n,'Parameters',cache[129]);if(input.value)details.push(input);
   if(typeof cache[65]==='string'&&cache[65])details.push({label:'Description',value:await nativeGenericPermissionText(n,cache[65])});
  }else return;
  if(typeof title!=='string'||!title.length||title.length>4000)return;
