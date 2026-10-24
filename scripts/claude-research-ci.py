@@ -191,6 +191,11 @@ def run(case, linux_container=False):
         binary.chmod(0o700)
         env = {key: value for key, value in os.environ.items() if not key.startswith('CLAUDE_RESEARCH_')}
         env.update(CASES[case])
+        if case == 'system-policy-transition-app':
+            control = Path(os.environ['CLAUDE_RESEARCH_SYSTEM_POLICY_CONTROL'])
+            if control.parent != Path('/work/.claude-research') or not control.name.startswith('policy-transition-') or control.resolve() != control or not (control / 'ready.json').is_file():
+                raise ValueError('Expected the owned real-policy fixture control directory')
+            env['CLAUDE_RESEARCH_SYSTEM_POLICY_CONTROL'] = str(control)
         env['APACK_CHAIN_CORES'] = '2'
         if linux_container:
             env['NODE_OPTIONS'] = (env.get('NODE_OPTIONS', '')+' --import='+str(fixture / 'linux-electron-launch.mjs')).strip()
