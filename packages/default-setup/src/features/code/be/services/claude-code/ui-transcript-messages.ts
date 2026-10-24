@@ -48,7 +48,7 @@ const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'A
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
-  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'diagnostics'>
+  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'diagnostics' | 'managedSettingsDiagnostics'>
   client: { client_id: string; surface: 'desktop' }
   rows(groups: readonly ClaudeUiToolGroup[], composer: readonly (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[]): ClaudeUiTranscriptRow[]
   current(): boolean
@@ -56,6 +56,7 @@ export function createClaudeTranscriptMessageHost(options: {
 }) {
   const entries = new Map<string, Entry>()
   let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
+  let managedSettingsDiagnostics: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
   let diagnostics: import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[] = [], readingDiagnostics=false, diagnosticsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
   let disposal: Promise<void> | undefined
@@ -117,6 +118,10 @@ export function createClaudeTranscriptMessageHost(options: {
       try { next=await options.ui.diagnostics(options.client.client_id,80) } catch { /* An unavailable owner withdraws the old diagnostic presentation. */ }
       if(!current())return
       if(JSON.stringify(next)!==JSON.stringify(diagnostics)){diagnostics=next;publish()}
+      let managed:import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
+      try{managed=await options.ui.managedSettingsDiagnostics(options.client.client_id)}catch{ /* A detached/unavailable source cannot supply fresh warning authority. */ }
+      if(!current())return
+      if(JSON.stringify(managed)!==JSON.stringify(managedSettingsDiagnostics)){managedSettingsDiagnostics=managed;publish()}
     } finally { readingDiagnostics=false;if(diagnosticsAgain){diagnosticsAgain=false;void refreshDiagnostics()} }
   }
   function schedule() {
@@ -190,6 +195,7 @@ export function createClaudeTranscriptMessageHost(options: {
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
     get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
+    get managedSettingsDiagnostics(){return current()?managedSettingsDiagnostics:[]} ,
     get diagnostics() {
       if(!current())return []
       const rows=options.rows(groups,placements)
@@ -215,7 +221,7 @@ export function createClaudeTranscriptMessageHost(options: {
       }
 
     },
-    dispose() { if (disposal) return disposal; disposed = true; diagnostics=[]; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled(releases).then(() => {}); return disposal },
+    dispose() { if (disposal) return disposal; disposed = true; diagnostics=[];managedSettingsDiagnostics=[]; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled(releases).then(() => {}); return disposal },
     layout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) {
       if (!['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(event.component)
         || !Number.isSafeInteger(event.columns) || event.columns < 20 || event.columns > 240) return

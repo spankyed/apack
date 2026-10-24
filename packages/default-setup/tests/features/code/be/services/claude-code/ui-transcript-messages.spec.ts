@@ -5,7 +5,7 @@ function fixture(clientId = 'view') {
   let current = true, handle = 0
   let rowSource: Parameters<typeof createClaudeTranscriptMessageHost>[0]['rows']|undefined
   let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
-  const ui = { diagnostics:vi.fn(async()=>[] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiDiagnosticAttachment[]), terminalPlacements:vi.fn(async()=>[]),composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
+  const ui = { managedSettingsDiagnostics:vi.fn(async()=>[] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeManagedSettingsDiagnostic[]),diagnostics:vi.fn(async()=>[] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiDiagnosticAttachment[]), terminalPlacements:vi.fn(async()=>[]),composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
       { type: 'Input', props: { key: 'draft', value: '', label: 'Draft' }, press: { plugin: 'fixture', handle: ++handle } },
@@ -333,4 +333,16 @@ it('discards a pending diagnostic response after owner retirement', async () => 
   f.ui.diagnostics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));f.host.start();f.replace()
   finish([{id:'late',revision:'b'.repeat(64),anchorIds:['a'],summary:'Old summary',detail:'Old detail'}])
   await vi.advanceTimersByTimeAsync(50);expect(f.host.diagnostics).toEqual([]);f.host.dispose()
+})
+it('shows native managed settings diagnostics without fabricating a transcript anchor and withdraws them on retirement', async () => {
+  const f=fixture(), warning={file:'/etc/claude-code/managed-settings.json',path:'',message:'Settings file could not be read: EACCES',severity:'fatal' as const,errno:'EACCES'}
+  f.setRows([]);f.ui.managedSettingsDiagnostics.mockResolvedValue([warning]);f.host.start();await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.managedSettingsDiagnostics).toEqual([warning]);expect(f.host.state).toEqual([])
+  f.replace();expect(f.host.managedSettingsDiagnostics).toEqual([]);f.host.dispose()
+})
+it('does not publish a managed policy diagnostic reply after its view is disposed', async () => {
+  const f=fixture();let finish!:(rows:Awaited<ReturnType<typeof f.ui.managedSettingsDiagnostics>>)=>void
+  f.ui.managedSettingsDiagnostics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));f.host.start();await vi.advanceTimersByTimeAsync(50)
+  f.host.dispose();finish([{file:'managed settings',path:'',message:'Old warning',severity:'warning'}]);await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.managedSettingsDiagnostics).toEqual([])
 })

@@ -30,6 +30,7 @@
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
         <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" />
+        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
@@ -207,6 +208,7 @@
 import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { readClaudeComposerPhase, commitClaudeComposerPhase } from './native-composer-phase.ts'
 import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
+import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'

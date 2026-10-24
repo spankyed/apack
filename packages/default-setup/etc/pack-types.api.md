@@ -1045,6 +1045,8 @@ declare const ClaudeInterruptReceiptSchema: z.ZodObject<{
     cancelled: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, z.ZodTypeAny, "passthrough">>;
 
+type ClaudeManagedSettingsDiagnostic = z.infer<typeof managedSettingsDiagnostic>;
+
 type ClaudeMcpElicitationAnswer = z.infer<typeof ClaudeMcpElicitationAnswerSchema>;
 
 /** MCP answers are independent of tool permission allow/deny and generic dialog results. */
@@ -1457,8 +1459,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1474,8 +1476,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1949,10 +1951,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1967,10 +1969,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2034,9 +2036,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2053,9 +2055,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }[];
     warnings: string[];
 }, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -4109,6 +4111,7 @@ type ClaudeUiMountState = ({
     panes?: ClaudeUiPanePresentation;
     scroll?: ClaudeUiScrollState;
     notices?: ClaudeUiNotices;
+    managedSettingsDiagnostics?: ClaudeManagedSettingsDiagnostic[];
     diagnostics?: (ClaudeUiDiagnosticAttachment & {
         messageId: string;
     })[];
@@ -10560,6 +10563,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
 declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
     terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
     composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
+    managedSettingsDiagnostics(id: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
     diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]>;
     toolGroups(id: string): Promise<ClaudeUiToolGroup[]>;
     releaseInstance(options: z.infer<typeof instanceRelease>): Promise<{
@@ -11373,6 +11377,35 @@ declare function listAll(opts?: {
  * If a named `id` is provided and already exists, the old listener is replaced.
  */
 declare function listen(eventType: string, callback: BrainEventCallback, options?: ListenOptions): () => void;
+
+declare const managedSettingsDiagnostic: z.ZodObject<{
+    file: z.ZodString;
+    path: z.ZodString;
+    message: z.ZodString;
+    severity: z.ZodOptional<z.ZodEnum<["warning", "fatal"]>>;
+    errorClass: z.ZodOptional<z.ZodString>;
+    errno: z.ZodOptional<z.ZodString>;
+    statusOnly: z.ZodOptional<z.ZodBoolean>;
+    userWritable: z.ZodOptional<z.ZodBoolean>;
+}, "strict", z.ZodTypeAny, {
+    path: string;
+    message: string;
+    file: string;
+    severity?: "warning" | "fatal" | undefined;
+    errorClass?: string | undefined;
+    errno?: string | undefined;
+    statusOnly?: boolean | undefined;
+    userWritable?: boolean | undefined;
+}, {
+    path: string;
+    message: string;
+    file: string;
+    severity?: "warning" | "fatal" | undefined;
+    errorClass?: string | undefined;
+    errno?: string | undefined;
+    statusOnly?: boolean | undefined;
+    userWritable?: boolean | undefined;
+}>;
 
 declare const noteCommands: {
     readonly create: (input: {

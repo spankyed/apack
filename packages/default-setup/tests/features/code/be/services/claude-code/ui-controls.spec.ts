@@ -341,3 +341,13 @@ it('ignores malformed optional key metadata without discarding a valid native dr
   expect(result.tree).toEqual(tree)
   expect(result._apack_action_keys).toBeUndefined()
 })
+
+it('reads original structured managed-settings diagnostics without treating them as permission decisions', async () => {
+  const warning={file:'/etc/claude-code/managed-settings.json',path:'',message:'Settings file could not be read: EACCES',severity:'fatal',errno:'EACCES'}
+  const request=vi.fn(async()=>({diagnostics:[warning]}))
+  const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1','apack_ui_instance_lifetime_v1']}),{request})
+  await expect(ui.managedSettingsDiagnostics('owned')).resolves.toEqual([warning])
+  expect(request).toHaveBeenCalledWith({subtype:'apack_ui_managed_settings_diagnostics',client_id:'owned'})
+  request.mockResolvedValueOnce({diagnostics:[{...warning,message:'x'.repeat(32769)}]})
+  await expect(ui.managedSettingsDiagnostics('owned')).rejects.toThrow()
+})

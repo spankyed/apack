@@ -39,6 +39,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-1pjd7qsk.js": {
       "module": "chunk-x1ap3wr2.js",
       "exports": {
+        "D_": "D_",
         "me": "me",
         "ut": "ut"
       }

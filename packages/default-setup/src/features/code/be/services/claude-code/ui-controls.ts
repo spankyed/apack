@@ -21,6 +21,8 @@ export function readClaudeUiActionKeys(value: unknown): ClaudeUiActionKeyState |
   const parsed = actionKeys.safeParse(value)
   return parsed.success ? parsed.data : undefined
 }
+const managedSettingsDiagnostic=z.object({file:z.string().max(4096),path:z.string().max(4096),message:z.string().max(32768),severity:z.enum(['warning','fatal']).optional(),errorClass:z.string().max(128).optional(),errno:z.string().max(128).optional(),statusOnly:z.boolean().optional(),userWritable:z.boolean().optional()}).strict()
+export type ClaudeManagedSettingsDiagnostic=z.infer<typeof managedSettingsDiagnostic>
 const diagnosticAttachment = z.object({id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/),anchorIds:z.array(z.string().min(1).max(256)).max(256),summary:z.string().max(65536),detail:z.string().max(65536)}).strict()
 export type ClaudeUiDiagnosticAttachment = z.infer<typeof diagnosticAttachment>
 const toolGroup = z.object({id:z.string().min(1).max(256),anchorIds:z.array(z.string().min(1).max(256)).max(256),members:z.array(z.object({toolUseId:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(256),usesEngine:z.boolean(),isActive:z.boolean(),isExpanded:z.boolean(),initialized:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/)}).strict()
@@ -143,6 +145,11 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
     async composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]> {
       if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({placements:z.array(composerPlacement).max(32)}).strict().parse(await request({subtype:'apack_ui_composer',client_id:clientId.parse(id)})).placements
+    },
+    async managedSettingsDiagnostics(id:string):Promise<ClaudeManagedSettingsDiagnostic[]> {
+      const valid=clientId.parse(id)
+      if (!(await initialized).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      return z.object({diagnostics:z.array(managedSettingsDiagnostic).max(256)}).strict().parse(await request({subtype:'apack_ui_managed_settings_diagnostics',client_id:valid})).diagnostics
     },
     async diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]> {
       const valid=clientId.parse(id),width=z.number().int().min(20).max(240).optional().parse(columns)
