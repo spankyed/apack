@@ -4,6 +4,7 @@
       @submit.prevent="handleSubmit"
       @keydown.shift.tab.prevent="cyclePhase"
       @keydown.ctrl.tab.prevent="cycleMode"
+      data-composer-form
       class="@container mx-auto w-full max-w-4xl flex-shrink-0 overflow-visible px-5 pb-4 pt-3"
     >
       <div
@@ -953,6 +954,8 @@ const handleSubmit = async () => {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 @media (max-height: 700px) {
+  :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }
+  .input :global([data-composer-toolbar]) { padding-top: 4px; padding-bottom: 4px; }
   .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
   .input :global([data-testid="composer-editor-area"]), .input :global(.composer-document) { min-height: 40px; }
   .input :global(.composer-document) { padding-top: 8px; padding-bottom: 8px; }
