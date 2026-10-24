@@ -92,7 +92,7 @@ test('honors real Linux system policy before user settings in the everyday compo
     await appPage.setViewportSize({width,height});await expect(composer).toHaveText(draft)
     for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})])await expect(item).toBeInViewport({ratio:1})
     await expect(status).toContainText('Managed OS policy ready');await expect(status).not.toContainText('Session ready')
-    await expect(card.getByRole('button',{name:'Read current draft',exact:true})).toHaveCount(0)
+    await expect(card.getByRole('button',{name:'Session tools',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Read current draft',exact:true})).toHaveCount(0)
     expect((await context()).native.state.nativePid).toBe(boundNativePid);expect((await context()).native.state.status).toBe('live');expect((await context()).turns).toBe(1)
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height})
     const name='native-system-policy-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
