@@ -83,14 +83,15 @@ test('reviews original Glob and Grep results while preserving everyday composing
     const phase=index+1,id='native_search_review_'+phase
     await composer.fill('SearchReviewTurn'+phase+': '+step.purpose)
     await card.getByRole('button',{name:'Send',exact:true}).click()
+    const tools=appPage.getByRole('button',{name:/^Native tools/}).last()
+    await expect(tools).toBeVisible()
+    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
     const receipt=async()=>JSON.parse(await readFile(join(workspace!,id+'-original.json'),'utf8').catch(()=>'{}'))
     await expect.poll(async()=>(await receipt()).props?.tool_use_id,{timeout:15000}).toBe(id)
     await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
     const original=await receipt()
     expect(original.props.tool).toBe(step.tool)
     expect(original.props.isErrored).toBe(phase===4)
-    const tools=appPage.getByRole('button',{name:/^Native tools/}).first()
-    if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
     const result=appPage.locator('[data-native-tool-use-id="'+id+'"]').locator('[data-native-tool-format]').last()
     await expect(result).toBeVisible()
     const draft='Keep my release review after search step '+phase+'.'
