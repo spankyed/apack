@@ -20,6 +20,7 @@ Run the selected local native journey through the isolated checkout's Linux runn
 
 ```sh
 npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-form-app
+npm run test:linux -- bash tests/fixtures/claude-research/linux-app.sh native-mcp-browser-return-app
 ```
 
 The launcher installs missing display prerequisites, then uses the build-chain cache to refresh the

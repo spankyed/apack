@@ -1,3 +1,4 @@
+import { chromium } from '@playwright/test'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -93,6 +94,9 @@ test('uses original terminal URL decisions, waiting and completion with cancella
 
 
   const modern = process.env.CLAUDE_RESEARCH_MCP_MODERN === '1'
+  const realBrowser = process.env.CLAUDE_RESEARCH_NATIVE_MCP_BROWSER === '1'
+  const browserOrigin = realBrowser ? JSON.parse(await readFile(join(workspace!, 'owned-mcp-browser.json'), 'utf8')).origin as string : undefined
+  const browserReturns: unknown[] = [], browserCaptures: string[] = [], browserIds = new Set<string>()
   const retry = process.env.CLAUDE_RESEARCH_NATIVE_MCP_URL_RETRY === '1'
   const draft = 'Keep my release notes while I confirm browser input.'
   const steps: unknown[] = [], captures: string[] = [], geometry: unknown[] = []
@@ -110,6 +114,39 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await expect(composer).toHaveText(draft)
     }
   }
+  async function visitBrowser(phase: number, width: number, height: number, complete: boolean, original: any, savedSelection: unknown) {
+    await expect.poll(async () => {
+      const value = await readFile(join(workspace!, 'owned-mcp-browser-latest.json'), 'utf8').then(text => JSON.parse(text), error => { if (error.code === 'ENOENT') return undefined; throw error })
+      return value?.phase === phase && !browserIds.has(value.id)
+    }, { timeout: 15000 }).toBe(true)
+    const descriptor = JSON.parse(await readFile(join(workspace!, 'owned-mcp-browser-latest.json'), 'utf8')); browserIds.add(descriptor.id)
+    const browser = await chromium.connectOverCDP(descriptor.endpoint)
+    let cleanupError: unknown
+    try {
+      const page = browser.contexts()[0].pages().find(page => page.url() === descriptor.url)!
+      expect(page).toBeTruthy(); await page.setViewportSize({ width, height }); await page.bringToFront()
+      await expect(page).toHaveURL(browserOrigin + '/release-review?phase=' + phase)
+      await expect(page.getByRole('heading', { name: 'Release review', exact: true })).toBeVisible()
+      if (complete) {
+        await page.getByRole('button', { name: 'Finish review', exact: true }).click()
+        await expect(page.getByRole('status')).toContainText('Review complete. Return to apack')
+        const name = 'native-mcp-browser-' + width + '-completed.png'; await page.screenshot({ path: testInfo.outputPath(name) }); browserCaptures.push(name)
+      }
+      await page.close()
+    } finally {
+      if (browser.isConnected()) try { await browser.close() } catch (error) { if (browser.isConnected()) cleanupError = error }
+      await appPage.bringToFront()
+    }
+    if (cleanupError) throw cleanupError
+    await expect(panel).toBeVisible(); await expect(composer).toHaveText(draft)
+    expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
+    expect((await frame()).id).toBe(original.id); expect((await frame()).revision).toBe(original.revision); expect((await frame()).phase).toBe('prompt')
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    const receipts = (await readFile(join(workspace!, 'mcp-elicitation-receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === phase)
+    expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
+    browserReturns.push({ phase, width, height, completed: complete, browserId: descriptor.id, nativePid: boundNativePid, retainedDraft: true, retainedSelection: true, openedWithoutAnswer: true })
+  }
   const cases = (modern ? ['modern-confirm', 'modern-decline', 'modern-cancel', 'modern-open-cancel', 'modern-pause'] : retry ? ['url-retry', 'url-retry-decline', 'url-retry-cancel', 'url-retry-waiting-cancel', 'url-retry-pause'] : ['url-decline', 'url-cancel', 'url-skip', 'url-waiting-cancel', 'url-complete', 'url-pause']).map((scenario, index) => ({ phase: index + (modern ? 19 : retry ? 14 : 8), scenario }))
   for (const step of cases) {
     await appPage.setViewportSize({ width: 1100, height: 900 })
@@ -124,7 +161,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
     const approval = appPage.getByTestId('native-mcp__research__echo-approval')
     await expect(approval).toBeVisible({ timeout: 20000 }); await expect(approval.locator('button.approve')).toBeEnabled(); await approval.locator('button.approve').click(); await expect(approval).toBeHidden()
     await expect(panel).toBeVisible({ timeout: 15000 }); await expect(panel.getByRole('button', { name: modern ? "I'm done, continue" : 'Accept', exact: true })).toBeEnabled()
-    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
+    const original = await frame(); expect(original.serverName).toBe('research'); expect(original.phase).toBe('prompt'); expect(original.userConfirmsCompletion).toBe(modern); await expect(panel.locator('code')).toHaveText(realBrowser ? browserOrigin + '/release-review?phase=' + step.phase : 'https://example.invalid/release-review'); expect(await panel.locator('a').count()).toBe(0)
     if (modern) {
       expect(original.kind).toBe('mcp_elicitation')
       if (step.scenario === 'modern-decline') await panel.getByRole('button', { name: 'Decline', exact: true }).click()
@@ -132,13 +169,17 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       else if (step.scenario === 'modern-pause') await card.getByTitle('Pause agent work', { exact: true }).click()
       else {
         if (step.scenario === 'modern-confirm') await capturePhase('prompt')
+        if (realBrowser) await appPage.setViewportSize({ width: 1100, height: 900 })
         await panel.getByRole('button', { name: 'Open in browser', exact: true }).click()
         await expect(panel.getByRole('button', { name: 'Open again', exact: true })).toBeEnabled()
         await expect.poll(() => readFile(join(workspace!, 'native-mcp-url-browser.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(row => row.phase === step.phase).length)).toBe(1)
         expect((await frame())?.phase).toBe('prompt'); expect((await frame())?.id).toBe(original.id)
+        if (realBrowser) await visitBrowser(step.phase, 1100, 900, step.scenario === 'modern-confirm', original, savedSelection)
         if (step.scenario === 'modern-confirm') {
+          if (realBrowser) await appPage.setViewportSize({ width: 680, height: 600 })
           await panel.getByRole('button', { name: 'Open again', exact: true }).click()
           await expect.poll(() => readFile(join(workspace!, 'native-mcp-url-browser.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(row => row.phase === step.phase).length)).toBe(2)
+          if (realBrowser) await visitBrowser(step.phase, 680, 600, true, original, savedSelection)
           const receipts = (await readFile(join(workspace!, 'mcp-elicitation-receipts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); const pending = receipts.filter(row => row.method === 'tools/call' && row.params.arguments.phase === step.phase)
           expect(pending).toHaveLength(1); expect(pending[0].params.inputResponses).toBeUndefined()
           await expect(panel.getByRole('button', { name: "I'm done, continue", exact: true })).toBeEnabled(); await capturePhase('opened')
@@ -204,6 +245,6 @@ test('uses original terminal URL decisions, waiting and completion with cancella
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
+  await writeFile(join(workspace!, 'native-mcp-url-app-proof.json'), JSON.stringify({ steps, captures, geometry, browserReturns: realBrowser ? browserReturns : undefined, browserCaptures: realBrowser ? browserCaptures : undefined, originalModern: modern, openedWithoutAnswer: modern ? true : undefined, originalRetry: retry, wrongCompletionIgnored: !retry && !modern, sessionId, boundNativePid, retainedDraft: true, originalNativeRecovery: true, recoveredSameSession: true }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeMcpUrlApp: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
