@@ -1,7 +1,11 @@
 # EARS storage: layout, relations, queries and write durability
 
 Status: **the cut-over is complete**, 2026-10-24: the app runs on LMDB with no in-memory copy of the data, Steps 1–6
-done (each records how, below). PR #273. Takes up review items 6
+done (each records how, below). PR #273.
+**One reading is open, for want of its prerequisite:** Step 5's cold-page-cache p99 and `getSchemaStats` at
+production size. No production-size database is on the machine this ran on (the development one is 1.8 MB); with
+one, the next action is to convert a copy (`scripts/ears-convert.ts`), run the bench's query cases against it after
+`sudo purge`, and time `getSchemaStats` on it, recording both under Step 5. Takes up review items 6
 (row reads) and 9 (durability) from the EARS API cleanup, and supersedes the open parts of
 [goal-lmdb-only.md](../goals/goal-lmdb-only.md) (PR #261, closed unmerged), which holds the spike's measurements and
 the lock analysis.
