@@ -1,8 +1,9 @@
+import ToolActivityBlock from '#extensions/blocks/display/ToolActivityBlock.vue'
 import NativeComposerPlacements from '#features/threads/fe/chat/NativeComposerPlacements.vue'
 import NativeToolGroups from '#features/threads/fe/chat/NativeToolGroups.vue'
 import NativeToolDrawing from '#features/threads/fe/chat/NativeToolDrawing.vue'
 import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
-import { createApp, h, nextTick, computed, provide, type App } from 'vue'
+import { createApp, h, nextTick, computed, provide, ref, type App } from 'vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import { claudeNativeMessageParts, claudeThinkingMessageParts } from '#features/threads/fe/chat/native-message-parts.ts'
 import NativeTranscriptMessage from '#features/threads/fe/chat/NativeTranscriptMessage.vue'
@@ -91,7 +92,7 @@ it('reports actual thinking expansion and removes its native slot on collapse', 
 it('renders structured plugin result rewrites as inert text and routes their controls within the owning message', () => {
   const value: ClaudeUiTranscriptFrame = {instanceRevision:1, component: 'ToolResult', messageId: 'app', uuid: 'tool-id', sessionId: 'session', text: 'Original text', start: 0, end: 0, blockIndex: 0, assistantUuid: 'assistant-uuid', resultUuid: 'result', tool: 'Read', isErrored: false, outputRewritten: true, displayText: '{"file":"<script>literal</script>"}', body: { status: 'live', tree: { kind: 'box', children: [{ kind: 'unsupported', component: 'engine' }, { kind: 'button', label: 'Inspect result', actionId: 'action' }] } } }
   const press = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ setup() { provide(claudeToolDrawings, { groups:(ids,fallback)=>fallback(ids), render: (_component, _id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, view() {} }); return () => h(NativeToolDrawing, { component: 'ToolResult', toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
+  app = createApp({ setup() { provide(claudeToolDrawings, { groups:(ids,fallback)=>fallback(ids), render: (_component, _id, fallback) => fallback(), frames: computed(() => [value]), press, field() {}, expanded() { return undefined }, release() {}, view() {} }); return () => h(NativeToolDrawing, { component: 'ToolResult', toolUseId: 'tool-id' }, () => 'Original fallback') } }); app.mount(root)
   expect(root.querySelector('pre')?.textContent).toBe(value.displayText)
   expect(root.querySelector('script')).toBeNull()
   expect(root.textContent).not.toContain('Original fallback')
@@ -105,7 +106,7 @@ it('mounts a canonical group once across block fragments while keeping both nati
  const group:ClaudeUiTranscriptFrame={instanceRevision:1,displayText:'',component:'ToolGroup',uuid:'native-group',messageId:'first-message',blockIndex:0,sessionId:'session',text:'',start:0,end:0,revision:'a'.repeat(64),isExpanded:true,isActive:false,usesEngine:true,tools,artifacts:[],body:{status:'live',tree:{kind:'unsupported',component:'engine'}}}
  const children:ClaudeUiTranscriptFrame[]=tools.map((tool,index)=>({instanceRevision:1,component:'ToolUse',uuid:tool.id,messageId:index?'second-message':'first-message',sessionId:'session',text:'',start:0,end:0,blockIndex:0,assistantUuid:'assistant',activityStatus:'ok',engineOutput:'Native '+tool.id,displayText:'',body:{status:'live',tree:{kind:'unsupported',component:'engine'}}}))
  const root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(component,id,fallback)=>h(NativeToolDrawing,{component,toolUseId:id},fallback),frames:computed(()=>[group,...children]),press(){},field(){},view(){}});return()=>h('div',tools.map(tool=>h(NativeToolGroups,{toolUseIds:[tool.id]},()=>h('span','Raw duplicate '+tool.id))))}});app.mount(root)
+ app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(component,id,fallback)=>h(NativeToolDrawing,{component,toolUseId:id},fallback),frames:computed(()=>[group,...children]),press(){},field(){},expanded(){return undefined},release(){},view(){}});return()=>h('div',tools.map(tool=>h(NativeToolGroups,{toolUseIds:[tool.id]},()=>h('span','Raw duplicate '+tool.id))))}});app.mount(root)
  expect(root.querySelectorAll('[data-native-tool-group]')).toHaveLength(1)
  expect(root.querySelectorAll('[data-native-tool-use]')).toHaveLength(2)
  expect(root.textContent?.match(/Native one/g)).toHaveLength(1);expect(root.textContent?.match(/Native two/g)).toHaveLength(1)
@@ -114,7 +115,7 @@ it('mounts a canonical group once across block fragments while keeping both nati
 it('restores ordinary block fragments when native group rendering is unavailable',()=>{
  const group:ClaudeUiTranscriptFrame={instanceRevision:1,displayText:'',component:'ToolGroup',uuid:'native-group',messageId:'app',blockIndex:0,sessionId:'session',text:'',start:0,end:0,revision:'a'.repeat(64),isExpanded:false,isActive:false,usesEngine:true,tools:[{id:'one',tool:'Read',summary:'file',status:'ok'}],artifacts:[],body:{status:'error'}}
  const root=document.createElement('div');document.body.append(root)
- app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(_component,_id,fallback)=>fallback(),frames:computed(()=>[group]),press(){},field(){},view(){}});return()=>h(NativeToolGroups,{toolUseIds:['one','ungrouped']},{default:({ids}:{ids:string[]})=>h('span',ids.join(','))})}});app.mount(root)
+ app=createApp({setup(){provide(claudeToolDrawings,{groups:(ids,fallback)=>fallback(ids),render:(_component,_id,fallback)=>fallback(),frames:computed(()=>[group]),press(){},field(){},expanded(){return undefined},release(){},view(){}});return()=>h(NativeToolGroups,{toolUseIds:['one','ungrouped']},{default:({ids}:{ids:string[]})=>h('span',ids.join(','))})}});app.mount(root)
  expect(root.querySelector('[data-native-tool-group]')).toBeNull();expect(root.textContent).toBe('one,ungrouped')
 })
 
@@ -150,4 +151,27 @@ it('reports tool columns from its own mounted row and retires queued measurement
     expect(disconnect).toHaveBeenCalled(); expect(cancel).toHaveBeenCalled()
     width = 600; retired?.(0); expect(report).toHaveBeenCalledTimes(count)
   } finally { widthSpy.mockRestore(); bounds.mockRestore(); vi.unstubAllGlobals() }
+})
+
+
+it('retains a reader-opened native task across display remount while releasing native visibility', async () => {
+ const root=document.createElement('div');document.body.append(root)
+ const key=ref(0), expansion=new Map<string,boolean>(), visibility=vi.fn()
+ const entries=[{id:'task-tool',tool:'Agent',status:'ok' as const,summary:'Worker',nativeAgent:{id:'owned-agent',name:'Worker',status:'completed' as const}}]
+ app=createApp({setup(){provide(claudeToolDrawings,{
+  groups:(ids,fallback)=>fallback(ids),render:(_component,_id,fallback)=>fallback(),frames:computed(()=>[]),press(){},field(){},
+  expanded:id=>expansion.get(id),view:(id,open)=>{expansion.set(id,open);visibility(id,open)},release:id=>visibility(id,false,'release'),
+ });return()=>h(ToolActivityBlock,{key:key.value,entries,label:'Native tools',state:'done'})}})
+ app.mount(root);await nextTick()
+ expect(root.querySelector('[data-native-agent-id="owned-agent"]')).toBeNull()
+ ;(root.querySelector('button') as HTMLButtonElement).click();await nextTick()
+ expect(root.querySelector('[data-native-agent-id="owned-agent"]')).not.toBeNull()
+ expect(expansion.get('task-tool')).toBe(true)
+ visibility.mockClear();key.value++;await nextTick()
+ expect(visibility.mock.calls).toContainEqual(['task-tool',false,'release'])
+ expect(expansion.get('task-tool')).toBe(true)
+ expect(root.querySelector('[data-native-agent-id="owned-agent"]')).not.toBeNull()
+ ;(root.querySelector('button') as HTMLButtonElement).click();await nextTick();key.value++;await nextTick()
+ expect(root.querySelector('[data-native-agent-id="owned-agent"]')).toBeNull()
+ expect(expansion.get('task-tool')).toBe(false)
 })

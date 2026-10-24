@@ -291,7 +291,9 @@ provide(claudeToolDrawings, {
   frames: computed(() => (props.nativeFrames ?? []).filter(frame => (frame.component === 'ToolResult' || frame.component === 'ToolUse' || frame.component === 'ToolProgress' || frame.component === 'ToolGroup'))),
   press: (id, href) => emit('native-ui-press', id, href),
   field: event => emit('native-ui-field', event),
-  view: (id, open) => { const index = props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1; if (index >= 0) reportBlockView(index, open) },
+  expanded: id => { const index = toolBlockIndex(id); return index >= 0 ? blockExpansion.get(index) : undefined },
+  release: id => { const index = toolBlockIndex(id); if (index >= 0) emit('native-ui-block-view', { messageId: props.message.id, blockIndex: index, open: false }) },
+  view: (id, open) => { const index = toolBlockIndex(id); if (index >= 0) reportBlockView(index, open) },
 })
 
 
@@ -305,6 +307,7 @@ const groupedSuppressed = computed(() => {
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
 const blockExpansion = new Map<number, boolean>()
+function toolBlockIndex(id: string) { return props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1 }
 function reportBlockView(blockIndex: number, open: boolean) {
   blockExpansion.set(blockIndex, open)
   emit('native-ui-block-view', { messageId: props.message.id, blockIndex, open })

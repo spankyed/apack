@@ -6,5 +6,7 @@ export const claudeToolDrawings: InjectionKey<{
   frames: ComputedRef<ClaudeUiTranscriptFrame[]>
   press(id: string, href?: string): void
   field(event: ClaudeUiFieldEvent): void
+  expanded(toolUseId: string): boolean | undefined
+  release(toolUseId: string): void
   view(toolUseId: string, open: boolean): void
 }> = Symbol('claude-tool-drawings')

@@ -144,6 +144,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   defaultOpen: false,
+  nativeExpansion: undefined,
 })
 
 const nativeDrawings = inject(claudeToolDrawings, undefined)
@@ -157,14 +158,14 @@ const NativeToolDrawing = defineComponent({
   setup(props, { slots }) { return () => nativeDrawings?.render(props.component, props.toolUseId, slots.default ?? (() => [])) ?? slots.default?.() },
 })
 
-onMounted(() => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, isOpen.value) })
-onBeforeUnmount(() => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, false) })
+onMounted(() => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, isOpen.value) })
+onBeforeUnmount(() => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.release(props.entries[0].id) })
 
 // User toggle wins once they interact; we only auto-open on error-state
 // transitions (P3 of the design doc).
-const isOpen = ref(props.nativeExpansion ?? props.defaultOpen)
+const isOpen = ref(props.nativeExpansion ?? (props.entries[0] ? nativeDrawings?.expanded(props.entries[0].id) : undefined) ?? props.defaultOpen)
 watch(() => props.nativeExpansion, open => { if(open !== undefined)isOpen.value=open })
-watch(isOpen, open => { if (!props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, open) })
+watch(isOpen, open => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, open) })
 
 const listEl = ref<HTMLElement | null>(null)
 let userHasToggled = false
