@@ -4,27 +4,56 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkStamp } from './stamp.ts';
 
-/** The databases of one LMDB environment: entity records, attribute rows and relations */
+/**
+ * An entity as format 4 stores it: one record, so a row is one read and a write of the entity one put. Large values
+ * (`isLarge`, `values.ts`) are held apart, in `values`, so loading the rows reads none of them.
+ */
+export interface EntityRecord {
+  /** The entity's type, or null for attributes written to an id no entity was created with, which hydration skips */
+  type: string | null;
+  /** Its small fields as `[kind, value]` pairs, in the order each was first written; pairs keep `__proto__` a field */
+  fields: Array<[string, unknown]>;
+  /** Its large fields, each kept in `values`: `[kind, size, length]`, the length for a list and null otherwise */
+  outOfLine: Array<[string, number, number | null]>;
+}
+
+/** A relation as format 4 stores it: the row a read gives back, and when it was first stored */
+export interface RelationRecord {
+  kind: string;
+  source: string;
+  target: string;
+  /** What the relation carries, null when nothing */
+  info: unknown;
+  /** When it was first stored, in ms */
+  createdAt: number;
+}
+
+/**
+ * The databases of one LMDB environment: each entity's record, the large values held apart from them (keyed
+ * `kind␟id`), and the relations. msgpack throughout, which keeps Dates, nested values and `undefined` as written.
+ */
 export type LmdbDbs = {
-  entities: Database<any>;
-  attrs: Database<any>;
-  relations: Database<any>;
+  rows: Database<EntityRecord, string>;
+  values: Database<unknown, string>;
+  relationRows: Database<RelationRecord, string>;
   root: RootDatabase;
 };
 
-/**
- * How this version of `@apackdev/ears` encodes rows in LMDB (keys, attribute and relation records). An environment
- * records the format it was written in; one in another format is refused rather than misread.
- *
- * Format 3 keeps one record of each fact, and one row per attribute: an entity's row holds only its type, written
- * when it is created; an attribute is one row keyed `kind␟entityId` holding its one value (a list is one array
- * value); a relation is its row in the relations table, with no attribute copy and no entity row; `entityType` is
- * read from the id rather than stored. There is no upgrade in the app: `scripts/ears-convert.ts` converts a copy of
- * an older data dir, once, explicitly (`convertToCurrentFormat`).
- */
-export const LMDB_FORMAT_VERSION = 3;
+/** The data databases, by name: what a reset empties and an import replaces; the environment's own `meta` stays */
+export const DATA_DATABASES = ['rows', 'values', 'relationRows'] as const;
 
-/** Whether any of the environment's data databases holds a row */
+/**
+ * How this version of `@apackdev/ears` encodes its data in LMDB. An environment records the format it was written in;
+ * one in another format is refused rather than misread.
+ *
+ * Format 4 keeps an entity as one record of its small fields (`EntityRecord`), its large values in their own database
+ * so that boot reads none of them, and its relations as records of their own; msgpack throughout. `entityType` is read
+ * from the id and stored nowhere. There is no upgrade in the app: `scripts/ears-convert.ts` converts a copy of an older
+ * data dir, once, explicitly (`convertToCurrentFormat`).
+ */
+export const LMDB_FORMAT_VERSION = 4;
+
+/** Whether the databases format 1 wrote hold a row: files that record no format and do are format 1 */
 function holdsData(root: RootDatabase): boolean {
   for (const name of ['entities', 'attrs', 'relations']) {
     const db = root.openDB({ name, encoding: 'json' }) as Database<unknown> | undefined;
@@ -70,9 +99,9 @@ export function openEnvAt(basePath: string, { readOnly = false }: { readOnly?: b
   }
 
   return {
-    entities: root.openDB({ name: 'entities', encoding: 'json' }),
-    attrs: root.openDB({ name: 'attrs', encoding: 'json' }),
-    relations: root.openDB({ name: 'relations', encoding: 'json' }),
+    rows: root.openDB({ name: 'rows' }) as Database<EntityRecord, string>,
+    values: root.openDB({ name: 'values' }) as Database<unknown, string>,
+    relationRows: root.openDB({ name: 'relationRows' }) as Database<RelationRecord, string>,
     root,
   };
 }
@@ -87,9 +116,9 @@ export const isAlreadyClosed = (error: unknown) =>
  */
 export function closeEnv(dbs: LmdbDbs): void {
   try {
-    dbs.entities?.close();
-    dbs.attrs?.close();
-    dbs.relations?.close();
+    dbs.rows?.close();
+    dbs.values?.close();
+    dbs.relationRows?.close();
     dbs.root?.close();
   } catch (error) {
     if (!isAlreadyClosed(error)) throw error;

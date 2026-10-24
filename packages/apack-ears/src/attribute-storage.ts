@@ -4,6 +4,7 @@ import type { Journal } from './journal.ts';
 import type { PersistenceSink } from './runtime.ts';
 import type { RelationStats } from './relations.ts';
 import { EarsError } from './errors.ts';
+import { OUT_OF_LINE_BYTES, sizeOf } from './values.ts';
 
 /**
  * Creates an id for a new entity of type `t`. A pack's `#generated/ears` exports this
@@ -27,21 +28,11 @@ class OutOfLine {
   constructor(readonly size: number, readonly length: number | undefined) {}
 }
 
-/**
- * How large a value must be, serialized, to be kept out of memory once committed: a few large values (a transcript,
- * an artifact's content) are most of a database's bytes, and none of them is ever matched by the value index
- */
-export const OUT_OF_LINE_BYTES = 2048;
-
 /** How many bytes of out-of-line values stay decoded, the most recently read kept */
 const CACHE_BYTES = 16 * 1024 * 1024;
 
 /** The longest string the value index holds: a longer one is matched by walking, so the index never keeps it in memory */
 export const INDEXED_STRING_MAX = 256;
-
-/** A value's size serialized, as the store holds it; a primitive other than a string counts as small */
-const sizeOf = (value: unknown): number =>
-  typeof value === 'string' ? value.length : value !== null && typeof value === 'object' ? (JSON.stringify(value)?.length ?? 0) : 8;
 
 /** No value: an attribute an entity doesn't hold, which `null`, a value, can't say */
 const ABSENT = Symbol('absent');
@@ -143,6 +134,15 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   const resolve = (id: EARS.EntityId, kind: EARS.AttrKind, held: unknown): EARS.AttributeValue =>
     (held instanceof OutOfLine ? readOutOfLine(id, kind, held) : held) as EARS.AttributeValue;
 
+  /**
+   * Indexes or unindexes a held value. An out-of-line value that is not a list is never read back for it: a string that
+   * large is longer than any the index keeps, and an object is never a key
+   */
+  const indexHeld = (index: Map<unknown, EARS.EntityId | Set<EARS.EntityId>>, id: EARS.EntityId, kind: EARS.AttrKind, held: unknown, add: boolean) => {
+    if (held instanceof OutOfLine && held.length === undefined) return;
+    indexValue(index, id, resolve(id, kind, held), add);
+  };
+
   /** Puts a committed value out of line, unless it has been replaced since */
   const outOfLine = (id: EARS.EntityId, kind: EARS.AttrKind, value: unknown, size: number) => {
     const row = rows.get(id);
@@ -188,7 +188,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
     let index = valueIndex.get(kind);
     if (!index) {
       valueIndex.set(kind, index = new Map());
-      for (const [id, row] of rows) if (owns(row, kind)) indexValue(index, id, resolve(id, kind, row[kind]), true);
+      for (const [id, row] of rows) if (owns(row, kind)) indexHeld(index, id, kind, row[kind], true);
     }
     const held = index.get(value);
     return held === undefined ? none : typeof held === 'string' ? new Set([held]) : held;
@@ -197,14 +197,17 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   /** Where the entity sits in its type's order */
   const orderOf = (id: EARS.EntityId) => entityIndex.get(entityTypeOf(id))?.get(id) ?? Infinity;
 
-  /** Memory's one write of an attribute: `next`, or nothing when it is `ABSENT`. Undo goes through it too */
-  const place = (id: EARS.EntityId, kind: EARS.AttrKind, next: EARS.AttributeValue | typeof ABSENT) => {
+  /**
+   * Memory's one write of an attribute: `next`, or nothing when it is `ABSENT`. Undo goes through it too. `sized` says
+   * whether `next` is already where it belongs, in memory or out of line, as a value loaded from the store is
+   */
+  const place = (id: EARS.EntityId, kind: EARS.AttrKind, next: EARS.AttributeValue | typeof ABSENT, sized = false) => {
     let row = rows.get(id);
     if (valueIndex.size > 0) {
       const index = valueIndex.get(kind);
       if (index) {
-        if (row && owns(row, kind)) indexValue(index, id, resolve(id, kind, row[kind]), false);
-        if (next !== ABSENT) indexValue(index, id, resolve(id, kind, next), true);
+        if (row && owns(row, kind)) indexHeld(index, id, kind, row[kind], false);
+        if (next !== ABSENT) indexHeld(index, id, kind, next, true);
       }
     }
     // A value replaced or removed leaves the cache at once, rather than when it is the oldest
@@ -219,7 +222,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
       // Immutable once stored: a read hands the value back as it is, and nothing can change it in place
       setField(row, kind, deepFreeze(next));
       // A large value leaves memory once the store holds it, so a unit reads its own writes until it commits
-      if (readAttr && !(next instanceof OutOfLine)) {
+      if (readAttr && !sized && !(next instanceof OutOfLine)) {
         const size = sizeOf(next);
         if (size > OUT_OF_LINE_BYTES) journal.afterCommit(() => outOfLine(id, kind, next, size));
       }
@@ -347,9 +350,15 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   /** Removes the attribute */
   const deleteAttr = (id: EARS.EntityId, kind: EARS.AttrKind) => assign(id, kind, ABSENT);
 
-  /** A stored value, loaded without telling persistence */
+  /** A stored value, loaded without telling persistence, and held in memory whatever its size */
   function bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, val: unknown) {
-    place(id, kind, val as EARS.AttributeValue);
+    place(id, kind, val as EARS.AttributeValue, true);
+    indexEntity(id);
+  }
+
+  /** A stored value the store keeps out of line, loaded as its marker: read back when it is first read */
+  function bulkLoadOutOfLine(id: EARS.EntityId, kind: EARS.AttrKind, size: number, length: number | undefined) {
+    place(id, kind, Object.freeze(new OutOfLine(size, length)) as unknown as EARS.AttributeValue, true);
     indexEntity(id);
   }
 
@@ -464,7 +473,7 @@ export function createAttributeStorage({ persistence, journal, readAttr }: {
   }
 
   return {
-    clear, bulkLoadAttr,
+    clear, bulkLoadAttr, bulkLoadOutOfLine,
     putAttr: put, appendAttr: append, mergeAttr: merge, removeAt, removeValue, deleteAttr,
     entityCreated, grantRole, revokeRole,
     getAttr, hasAttr, getRoles, getRow, getAllEntities, getEntitiesOfType, entitiesOfType, hasEntity, isTrashed, isLive, holders, orderOf,

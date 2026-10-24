@@ -132,6 +132,7 @@ export interface Ears {
 export interface EarsAdmin {
     addRelation(source: EARS.EntityId, kind: string, target: EARS.EntityId, info?: unknown): EARS.RelationId;
     bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
+    bulkLoadOutOfLine(id: EARS.EntityId, kind: EARS.AttrKind, size: number, length: number | undefined): void;
     bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown): void;
     clear(): void;
     deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
@@ -280,6 +281,9 @@ E
     [K in keyof ShapeOf<S, E>]-?: {} extends Pick<ShapeOf<S, E>, K> ? K : never;
 }[keyof ShapeOf<S, E>], WritableField<S, E>> : string;
 
+// @public
+export const OUT_OF_LINE_BYTES = 2048;
+
 // @public (undocumented)
 export interface PersistenceSink {
     // (undocumented)
@@ -300,6 +304,7 @@ export interface PersistenceSink {
         target?: string;
         info?: unknown;
     }): void;
+    readAttr?(kind: string, entityId: string): unknown;
 }
 
 // @public

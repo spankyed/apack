@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
+import type { Database } from 'lmdb';
 import type { PersistenceSink } from '../runtime.ts';
 import type { EarsAdmin } from '../engine.ts';
-import { openEnvAt, closeEnv, isAlreadyClosed, type LmdbDbs } from './envs.ts';
+import { openEnvAt, closeEnv, isAlreadyClosed, DATA_DATABASES, type LmdbDbs } from './envs.ts';
 import { makeLmdbAdapter } from './adapter.ts';
 import { hydrate } from './hydrate.ts';
 import { LmdbReader } from './reader.ts';
@@ -13,8 +14,6 @@ import { LmdbReader } from './reader.ts';
  */
 export const SYNC_INTERVAL_MS = 1000;
 
-/** The data databases, which a reset empties and an import replaces; the environment's own `meta` stays */
-const DATA = ['entities', 'attrs', 'relations'] as const;
 
 /** An app's LMDB store: one environment, and the sink that writes the engine's changes to it */
 export interface LmdbStore {
@@ -111,7 +110,7 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
   /** Removes every row of the data databases; keys are read first, since a range is a live cursor */
   const empty = (dbs: LmdbDbs) => {
     // eslint-disable-next-line no-useless-spread -- a range is a live cursor, read whole before it is removed from
-    for (const name of DATA) for (const key of [...dbs[name].getKeys()]) dbs[name].remove(key);
+    for (const name of DATA_DATABASES) for (const key of [...dbs[name].getKeys()]) dbs[name].remove(key);
   };
 
   const sink: Required<PersistenceSink> = {
@@ -176,7 +175,10 @@ export function openLmdbStore({ path, engine, readOnly = false, log = console.lo
         durably(() => {
           const live = openEnv();
           empty(live);
-          for (const name of DATA) for (const { key, value } of source[name].getRange()) live[name].put(key, value);
+          for (const name of DATA_DATABASES) {
+            const into = live[name] as Database<unknown, string>;
+            for (const { key, value } of (source[name] as Database<unknown, string>).getRange()) into.put(key, value);
+          }
         });
       } finally {
         closeEnv(source);

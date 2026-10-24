@@ -1,47 +1,15 @@
 import type { TransactionFlags } from 'lmdb';
-import type { LmdbDbs } from './envs.ts';
-import { decodeAttr, type AttrRecord } from './reader.ts';
+import type { EntityRecord, LmdbDbs } from './envs.ts';
 import type { PersistenceSink } from '../runtime.ts';
+import { isLarge, sizeOf } from '../values.ts';
 
-type Encoded = { t: string; v: any };
-
-function enc(value: unknown): Encoded {
-  if (value instanceof Date) return { t: 'date', v: value.toISOString() };
-  const t = value === null ? 'null'
-    : Array.isArray(value) ? 'array'
-    : typeof value === 'object' ? 'object'
-    : typeof value; // string|number|boolean|undefined
-  return { t, v: value };
-}
-
-// Use same separator throughout for consistency
+/** The key a large value is kept under in `values`: its attribute kind, then its entity */
 const SEP = '\x1F';
-
-/** An attribute's row: one per `(kind, entityId)`, holding its one value */
-function attrKey(kind: string, entityId: string) {
-  validateKey(kind, 'kind');
-  validateKey(entityId, 'entityId');
+export const valueKey = (kind: string, entityId: string) => {
+  if (kind.includes(SEP)) throw new Error('Invalid kind: contains forbidden separator character \\x1F');
+  if (entityId.includes(SEP)) throw new Error('Invalid entityId: contains forbidden separator character \\x1F');
   return `${kind}${SEP}${entityId}`;
-}
-
-function validateKey(value: string, name: string) {
-  if (value.includes(SEP)) {
-    throw new Error(`Invalid ${name}: contains forbidden separator character \\x1F`);
-  }
-}
-
-/** The attribute kinds stored in `attrs`: keys sort by kind, so each lookup skips past the kind before it */
-function* storedKinds(attrs: LmdbDbs['attrs']): Iterable<string> {
-  let start = '';
-  for (;;) {
-    const [key] = attrs.getKeys({ start, limit: 1 }) as Iterable<string>;
-    if (key === undefined) return;
-    const kind = String(key).split(SEP)[0];
-    yield kind;
-    // Past every `kind␟…` key (ids sort below \xFF)
-    start = `${kind}${SEP}\xFF`;
-  }
-}
+};
 
 /**
  * How a unit commits: synchronously, so it is visible to every reader when the call returns and survives the app
@@ -58,20 +26,52 @@ function requireEnd(relId: string, end: string, value: unknown): asserts value i
 }
 
 /**
- * The LMDB sink: each unit (`onUnitStart` to `onUnitEnd`) is one transaction, committed when `onUnitEnd` returns, or
- * a throw, having stored none of it — which the engine answers by undoing the unit in memory. Its writes run in the
- * order they were made, so a unit that destroys an entity and creates its id again stores the second. A call made
+ * The LMDB sink (format 4): each unit (`onUnitStart` to `onUnitEnd`) is one transaction, committed when `onUnitEnd`
+ * returns, or a throw, having stored none of it — which the engine answers by undoing the unit in memory. A unit's
+ * writes edit working copies of the entity records they touch, in the order they were made, and each record is put
+ * once as the unit commits. A large value (`isLarge`) is kept in `values` and marked in its record. A call made
  * outside a unit commits on its own. `onCommit` hears every commit, for the store's background sync.
  */
 export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): Required<PersistenceSink> {
-  const { root, entities, attrs, relations } = dbs;
+  const { root, rows, values, relationRows } = dbs;
   /** The open unit's writes, or none outside one */
   let unit: Array<() => void> | null = null;
+  /** The entity records the running commit has changed, or null for one it removed */
+  let working: Map<string, EntityRecord | null> | null = null;
+
+  /** An entity's record as the running commit has it, a copy to change */
+  const recordOf = (id: string): EntityRecord => {
+    const changed = working!.get(id);
+    if (changed) return changed;
+    const stored = changed === null ? undefined : rows.get(id);
+    const record: EntityRecord = stored
+      ? { type: stored.type, fields: [...stored.fields], outOfLine: [...stored.outOfLine] }
+      // Attributes written to an id no entity was created with: kept, under no type, as format 3 kept them
+      : { type: null, fields: [], outOfLine: [] };
+    working!.set(id, record);
+    return record;
+  };
+  const dropField = (record: EntityRecord, id: string, kind: string) => {
+    record.fields = record.fields.filter(([k]) => k !== kind);
+    if (record.outOfLine.some(([k]) => k === kind)) {
+      record.outOfLine = record.outOfLine.filter(([k]) => k !== kind);
+      values.remove(valueKey(kind, id));
+    }
+  };
 
   const commit = (steps: Array<() => void>) => {
     // Each step has a block body: a step returning lmdb's put promise would turn the transaction asynchronous
     root.transactionSync(() => {
-      for (const step of steps) step();
+      working = new Map();
+      try {
+        for (const step of steps) step();
+        for (const [id, record] of working) {
+          if (record) rows.put(id, record);
+          else rows.remove(id);
+        }
+      } finally {
+        working = null;
+      }
     }, COMMIT_WITHOUT_FLUSH);
     onCommit();
   };
@@ -79,15 +79,6 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
     if (unit) unit.push(step);
     else commit([step]);
   };
-
-  /** An entity's row and its attributes, one row per kind (keys are kind␟id); its relations went before */
-  function removeEntityRows(entityId: string): void {
-    entities.remove(entityId);
-    // `storedKinds` reads the store this loop removes from, so it is materialised first: an lmdb range is a live
-    // cursor the body would invalidate
-    // eslint-disable-next-line no-useless-spread -- a range is a live cursor, read whole before it is removed from
-    for (const kind of [...storedKinds(attrs)]) attrs.remove(attrKey(kind, entityId));
-  }
 
   return {
     onUnitStart() {
@@ -100,27 +91,40 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
       if (steps.length > 0) commit(steps);
     },
     onCreateEntity(entityId: string, type: string) {
-      write(() => { entities.put(entityId, { type }); });
+      write(() => { working!.set(entityId, { type, fields: [], outOfLine: [] }); });
     },
     // Its relations were removed before this, each with onRemoveRelation
     onDestroyEntity(entityId: string) {
-      write(() => { removeEntityRows(entityId); });
+      write(() => {
+        const record = recordOf(entityId);
+        for (const [kind] of record.outOfLine) values.remove(valueKey(kind, entityId));
+        working!.set(entityId, null);
+      });
     },
     onPutAttr(kind: string, entityId: string, value: unknown) {
-      const key = attrKey(kind, entityId);
-      write(() => { attrs.put(key, enc(value)); });
+      const key = valueKey(kind, entityId);
+      write(() => {
+        const record = recordOf(entityId);
+        dropField(record, entityId, kind);
+        if (isLarge(value)) {
+          values.put(key, value);
+          record.outOfLine.push([kind, sizeOf(value), Array.isArray(value) ? value.length : null]);
+        } else {
+          record.fields.push([kind, value]);
+        }
+      });
     },
     onDropAttr(kind: string, entityId: string) {
-      const key = attrKey(kind, entityId);
-      write(() => { attrs.remove(key); });
+      valueKey(kind, entityId);
+      write(() => { dropField(recordOf(entityId), entityId, kind); });
     },
     onAddRelation(relId: string, kind: string, source: string, target: string, info: unknown) {
       requireEnd(relId, 'source', source);
       requireEnd(relId, 'target', target);
       write(() => {
         // A relation written again keeps when it was first stored
-        const createdAt = (relations.get(relId) as { createdAt?: number } | undefined)?.createdAt ?? Date.now();
-        relations.put(relId, { kind, src: source, tgt: target, info: info ?? null, createdAt });
+        const createdAt = relationRows.get(relId)?.createdAt ?? Date.now();
+        relationRows.put(relId, { kind, source, target, info: info ?? null, createdAt });
       });
     },
     onUpdateRelation(relId: string, patch: { source?: string; target?: string; info?: unknown }) {
@@ -128,22 +132,23 @@ export function makeLmdbAdapter(dbs: LmdbDbs, onCommit: () => void = () => {}): 
       if (patch.target !== undefined) requireEnd(relId, 'target', patch.target);
       write(() => {
         // Read inside the transaction, so a relation added earlier in the same unit is found
-        const stored = relations.get(relId) as { src: string; tgt: string; info: unknown } | undefined;
+        const stored = relationRows.get(relId);
         if (!stored) throw new Error(`Relation ${relId}: updated, but no relation has the id`);
-        relations.put(relId, {
+        relationRows.put(relId, {
           ...stored,
-          ...(patch.source !== undefined && { src: patch.source }),
-          ...(patch.target !== undefined && { tgt: patch.target }),
+          ...(patch.source !== undefined && { source: patch.source }),
+          ...(patch.target !== undefined && { target: patch.target }),
           ...('info' in patch && { info: patch.info ?? null }),
         });
       });
     },
     onRemoveRelation(relId: string) {
-      write(() => { relations.remove(relId); });
+      write(() => { relationRows.remove(relId); });
     },
     readAttr(kind: string, entityId: string) {
-      const record = attrs.get(attrKey(kind, entityId)) as AttrRecord | undefined;
-      return record === undefined ? undefined : decodeAttr(record);
+      const large = values.get(valueKey(kind, entityId));
+      if (large !== undefined) return large;
+      return rows.get(entityId)?.fields.find(([k]) => k === kind)?.[1];
     },
     close() {},
   };

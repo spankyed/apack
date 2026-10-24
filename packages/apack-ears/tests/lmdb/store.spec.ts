@@ -77,21 +77,17 @@ describe('openLmdbStore', () => {
     expect(engine.findRelations()).toHaveLength(1);
   });
 
-  it('hydrates only the entities its entity table holds, whatever attribute rows were left without one', async () => {
+  it('hydrates only the entities created, not attributes written to an id no entity was created with', async () => {
     const first = openStore();
     engine.create('Note', { id: id('Note-kept') }).set('title', 'kept');
-    engine.create('Note', { id: id('Note-lost') }).set('title', 'its row was lost');
+    first.sink.onPutAttr('title', 'Note-never-created', 'no entity');
     first.close();
-    // What a flush that fell back to row by row can leave: the attributes stored, the entity's row not
-    const root = openEnv({ path: dbPath, maxDbs: 8, compression: true });
-    root.openDB({ name: 'entities', encoding: 'json' }).removeSync('Note-lost');
-    root.close();
 
     const lines: string[] = [];
     await openStore({ log: (line) => lines.push(line) }).hydrate();
     expect(engine.query('Note').ids()).toEqual([id('Note-kept')]);
-    expect(getAttr(id('Note-lost'), 'title')).toBeUndefined();
-    expect(lines).toContainEqual(expect.stringMatching(/^\[Hydrate\] Skipped \d+ attribute rows of entities with no entity row$/));
+    expect(getAttr(id('Note-never-created'), 'title')).toBeUndefined();
+    expect(lines).toContainEqual('[Hydrate] Skipped the attributes of 1 ids no entity was created with');
   });
 
   it('reads back every value as it was written, a one-element list, a grown list and roles included', async () => {
@@ -175,11 +171,11 @@ describe('openLmdbStore', () => {
     engine.create('Note', { id: id('Note-2') }).set('title', 'b');
     engine.create('Note', { id: id('Note-3') }).set('title', 'c');
     const rel = engine.admin.addRelation(id('Note-1'), 'mentions', id('Note-2'));
-    const { createdAt } = store.env.relations.get(rel);
+    const { createdAt } = store.env.relationRows.get(rel)!;
 
     await new Promise((resolve) => setTimeout(resolve, 5));
     engine.admin.updateRelation(rel, { target: id('Note-3'), info: 'why' });
-    expect(store.env.relations.get(rel)).toEqual({ kind: 'mentions', src: 'Note-1', tgt: 'Note-3', info: 'why', createdAt });
+    expect(store.env.relationRows.get(rel)).toEqual({ kind: 'mentions', source: 'Note-1', target: 'Note-3', info: 'why', createdAt });
   });
 
   it('keeps an entity destroyed right after its writes, and a removed relation, out of the files', async () => {
@@ -187,15 +183,15 @@ describe('openLmdbStore', () => {
     engine.create('Note', { id: id('Note-1') }).set('title', 'kept');
     engine.create('Note', { id: id('Note-2') }).set('title', 'ghost');
     const rel = engine.admin.addRelation(id('Note-1'), 'mentions', id('Note-1'));
-    // A relation is its row in the relations table, and no entity row
-    expect(first.env.relations.get(rel)).toBeTruthy();
+    // A relation is its own record, and no entity record
+    expect(first.env.relationRows.get(rel)).toBeTruthy();
     expect(first.read().getEntityMeta(rel)).toBeNull();
     // In the same synchronous block as its writes
     engine.write(id('Note-2')).set('title', 'ghost again');
     engine.write(id('Note-2')).destroy();
     engine.removeRelation(rel);
     expect(first.read().getEntityMeta('Note-2')).toBeNull();
-    expect(first.env.relations.get(rel)).toBeUndefined();
+    expect(first.env.relationRows.get(rel)).toBeUndefined();
     first.close();
 
     const second = openStore();
@@ -219,7 +215,7 @@ describe('openLmdbStore', () => {
     await readOnly.hydrate();
     expect(getAttr(id('Note-1'), 'title')).toBe('kept');
     expect(engine.findRelations()).toHaveLength(1);
-    expect(lines).toContainEqual(expect.stringMatching(/^\[LMDB\] Hydrated \d+ attributes, 1 relations$/));
+    expect(lines).toContainEqual(expect.stringMatching(/^\[LMDB\] Hydrated 2 entities \(\d+ attributes\), 1 relations$/));
     expect(() => engine.write(id('Note-1')).set('title', 'changed')).toThrow('is open read-only');
     expect(() => readOnly.reset()).toThrow('is open read-only');
     readOnly.close();
@@ -232,8 +228,8 @@ describe('openLmdbStore', () => {
   it('refuses a write it cannot store, and the engine keeps none of it', () => {
     const store = openStore();
     engine.create('Note', { id: id('Note-1') }).set('title', 'kept');
-    // JSON can't encode a BigInt: the unit is refused, so neither of its writes is kept
-    expect(() => engine.write(id('Note-1')).setMany({ title: 'changed', count: 1n })).toThrow();
+    // MessagePack can't encode an integer past 64 bits: the unit is refused, so neither of its writes is kept
+    expect(() => engine.write(id('Note-1')).setMany({ title: 'changed', count: 2n ** 70n })).toThrow('too large');
     expect(engine.getRow(id('Note-1'))).toMatchObject({ title: 'kept' });
     expect(engine.getRow(id('Note-1'))).not.toHaveProperty('count');
     expect(store.read().getAttr('Note-1', 'title')).toBe('kept');
@@ -373,7 +369,7 @@ describe('snapshot', () => {
   function rowsIn(dir: string): Array<{ key: unknown; value: unknown }> {
     const root = openEnv({ path: dir, maxDbs: 8, compression: true, readOnly: true });
     try {
-      return [...root.openDB({ name: 'attrs', encoding: 'json' }).getRange()];
+      return [...root.openDB({ name: 'rows' }).getRange()];
     } finally {
       root.close();
     }

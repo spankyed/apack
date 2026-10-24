@@ -8,7 +8,7 @@ import { importDatabase } from '../../src/backup/index.ts';
 // Exercise filesystem rollback without opening native environments; import.spec covers real LMDB.
 vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
   ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
-  openEnvAt: () => ({ entities: { getRange: () => [] } }),
+  openEnvAt: () => ({ rows: { getRange: () => [] } }),
   closeEnv: () => {},
 }));
 

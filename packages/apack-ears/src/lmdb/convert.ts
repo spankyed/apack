@@ -6,10 +6,17 @@ import * as path from 'node:path';
 import { open, type Database, type RootDatabase } from 'lmdb';
 import { entityTypeOf } from '../attribute-storage.ts';
 import type { EARS } from '../entities.ts';
-import { LMDB_FORMAT_VERSION } from './envs.ts';
-import { decodeAttr, type AttrRecord } from './reader.ts';
+import { valueKey } from './adapter.ts';
+import { LMDB_FORMAT_VERSION, type EntityRecord, type RelationRecord } from './envs.ts';
+import { isLarge, sizeOf } from '../values.ts';
 
 const SEP = '\x1F';
+
+/** An attribute as formats 1 to 3 stored it: JSON, its type beside it so a Date comes back one */
+type AttrRecord = { t: string; v: any };
+
+const decodeAttr = (rec?: AttrRecord | null): unknown =>
+  !rec ? null : rec.t === 'date' && typeof rec.v === 'string' ? new Date(rec.v) : rec.v;
 
 /** What the conversion to format 2 removed and rewrote, per kind of row */
 export interface FormatConversion {
@@ -126,8 +133,77 @@ export function convertToFormat3(basePath: string): Format3Conversion {
   });
 }
 
+/** What the conversion to format 4 wrote */
+export interface Format4Conversion {
+  /** Entity records written, one per entity */
+  entities: number;
+  /** Attributes in them */
+  attributes: number;
+  /** Of those, the large ones, kept in `values` */
+  outOfLine: number;
+  /** Ids holding attributes and no entity row, kept as records of no type */
+  untyped: number;
+  /** Relations rewritten as `RelationRecord`s */
+  relations: number;
+}
+
+/**
+ * Converts the format 3 environment at `basePath` to format 4, in one transaction, and records format 4: each
+ * entity's row and attribute rows become one record (`EntityRecord`), each large value is put in `values`, and each
+ * relation is rewritten as a `RelationRecord`; the databases format 3 wrote are dropped.
+ */
+export function convertToFormat4(basePath: string): Format4Conversion {
+  return withEnv(basePath, 3, ({ root, meta }) => {
+    const entities = root.openDB({ name: 'entities', encoding: 'json' }) as Database<{ type?: string }, string>;
+    const attrs = root.openDB({ name: 'attrs', encoding: 'json' }) as Database<AttrRecord, string>;
+    const relations = root.openDB({ name: 'relations', encoding: 'json' }) as Database<{ kind: string; src: string; tgt: string; info?: unknown; createdAt?: number }, string>;
+    const rows = root.openDB({ name: 'rows' }) as Database<EntityRecord, string>;
+    const values = root.openDB({ name: 'values' }) as Database<unknown, string>;
+    const relationRows = root.openDB({ name: 'relationRows' }) as Database<RelationRecord, string>;
+    const result: Format4Conversion = { entities: 0, attributes: 0, outOfLine: 0, untyped: 0, relations: 0 };
+    root.transactionSync(() => {
+      const records = new Map<string, EntityRecord>();
+      for (const { key, value } of entities.getRange()) {
+        records.set(key, { type: value?.type ?? entityTypeOf(key as EARS.EntityId), fields: [], outOfLine: [] });
+      }
+      for (const { key, value } of attrs.getRange()) {
+        const sep = key.indexOf(SEP);
+        const kind = key.slice(0, sep);
+        const id = key.slice(sep + 1);
+        let record = records.get(id);
+        if (!record) records.set(id, record = { type: null, fields: [], outOfLine: [] });
+        const decoded = decodeAttr(value);
+        if (isLarge(decoded)) {
+          values.put(valueKey(kind, id), decoded);
+          record.outOfLine.push([kind, sizeOf(decoded), Array.isArray(decoded) ? decoded.length : null]);
+          result.outOfLine++;
+        } else {
+          record.fields.push([kind, decoded]);
+        }
+        result.attributes++;
+      }
+      for (const [id, record] of records) {
+        rows.put(id, record);
+        if (record.type === null) result.untyped++;
+        else result.entities++;
+      }
+      for (const { key, value: r } of relations.getRange()) {
+        relationRows.put(key, { kind: r.kind, source: r.src, target: r.tgt, info: r.info ?? null, createdAt: r.createdAt ?? 0 });
+        result.relations++;
+      }
+      entities.dropSync();
+      attrs.dropSync();
+      relations.dropSync();
+      meta.put('format', 4);
+    });
+    return result;
+  });
+}
+
 /** Each step a conversion took, from the format the environment recorded to the current one */
-export type FormatSteps = Array<{ to: 2; result: FormatConversion } | { to: 3; result: Format3Conversion }>;
+export type FormatSteps = Array<
+  { to: 2; result: FormatConversion } | { to: 3; result: Format3Conversion } | { to: 4; result: Format4Conversion }
+>;
 
 /** Converts the environment at `basePath` from the format it records to `LMDB_FORMAT_VERSION`, a step per format */
 export function convertToCurrentFormat(basePath: string): FormatSteps {
@@ -136,6 +212,7 @@ export function convertToCurrentFormat(basePath: string): FormatSteps {
   if (format === LMDB_FORMAT_VERSION) return steps;
   if (format === 1) { steps.push({ to: 2, result: convertToFormat2(basePath) }); format = 2; }
   if (format === 2) { steps.push({ to: 3, result: convertToFormat3(basePath) }); format = 3; }
+  if (format === 3) { steps.push({ to: 4, result: convertToFormat4(basePath) }); format = 4; }
   if (format !== LMDB_FORMAT_VERSION) throw new Error(`The database at ${basePath} records storage format ${JSON.stringify(format)}, which doesn't convert to ${LMDB_FORMAT_VERSION}`);
   return steps;
 }
@@ -193,32 +270,52 @@ export function rewriteAttributes(
   { removeEntities = [] }: { removeEntities?: readonly string[] } = {},
 ): AttributeRewrite {
   return withEnv(basePath, LMDB_FORMAT_VERSION, ({ root }) => {
-    const entities = root.openDB({ name: 'entities', encoding: 'json' }) as Database<unknown>;
-    const attrs = root.openDB({ name: 'attrs', encoding: 'json' }) as Database<AttrRecord>;
+    const rows = root.openDB({ name: 'rows' }) as Database<EntityRecord, string>;
+    const values = root.openDB({ name: 'values' }) as Database<unknown, string>;
     const removing = new Set(removeEntities);
     const result: AttributeRewrite = { rewritten: 0, removed: 0, removedEntities: 0 };
     root.transactionSync(() => {
       // Materialised, since the body writes and removes keys of the range it walks
-      for (const { key, value } of [...attrs.getRange()] as Array<{ key: string; value: AttrRecord }>) {
-        const sep = key.indexOf(SEP);
-        const kind = key.slice(0, sep);
-        const id = key.slice(sep + 1);
-        if (removing.has(id)) { attrs.remove(key); result.removed++; continue; }
-        const next = rewrite(kind, id, decodeAttr(value));
-        if (next === undefined) continue;
-        if (next === REMOVE_ATTRIBUTE) { attrs.remove(key); result.removed++; continue; }
-        attrs.put(key, encode(next));
-        result.rewritten++;
+      // eslint-disable-next-line no-useless-spread -- a range is a live cursor, read whole before it is written to
+      for (const { key: id, value: record } of [...rows.getRange()]) {
+        if (removing.has(id)) {
+          for (const [kind] of record.outOfLine) values.remove(valueKey(kind, id));
+          rows.remove(id);
+          result.removed += record.fields.length + record.outOfLine.length;
+          if (record.type !== null) result.removedEntities++;
+          continue;
+        }
+        const next: EntityRecord = { type: record.type, fields: [], outOfLine: [] };
+        let changed = false;
+        const keep = (kind: string, value: unknown) => {
+          if (isLarge(value)) {
+            values.put(valueKey(kind, id), value);
+            next.outOfLine.push([kind, sizeOf(value), Array.isArray(value) ? value.length : null]);
+          } else {
+            next.fields.push([kind, value]);
+          }
+        };
+        const visit = (kind: string, value: unknown, kept: () => void) => {
+          const answer = rewrite(kind, id, value);
+          if (answer === undefined) { kept(); return; }
+          changed = true;
+          values.remove(valueKey(kind, id));
+          if (answer === REMOVE_ATTRIBUTE) { result.removed++; return; }
+          keep(kind, answer);
+          result.rewritten++;
+        };
+        for (const field of record.fields) visit(field[0], field[1], () => next.fields.push(field));
+        for (const held of record.outOfLine) visit(held[0], values.get(valueKey(held[0], id)), () => next.outOfLine.push(held));
+        if (changed) rows.put(id, next);
       }
-      for (const id of removing) if (entities.get(id) !== undefined) { entities.remove(id); result.removedEntities++; }
     });
     return result;
   });
 }
 
-/** An attribute record, as the adapter writes one */
+/** An attribute record, as formats 1 to 3 wrote one */
 function encode(value: unknown): AttrRecord {
   if (value instanceof Date) return { t: 'date', v: value.toISOString() };
   const t = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : typeof value;
-  return { t: t as AttrRecord['t'], v: value };
+  return { t, v: value };
 }

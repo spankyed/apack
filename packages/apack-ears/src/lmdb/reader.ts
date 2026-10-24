@@ -1,13 +1,13 @@
 /// <reference types="node" />
 // Direct reads of an LMDB environment, without hydrating it (backups, db scripts)
-import type { LmdbDbs } from './envs.ts';
+import type { EntityRecord, LmdbDbs, RelationRecord } from './envs.ts';
+import { valueKey } from './adapter.ts';
 import { isDeepStrictEqual } from 'node:util';
 
 const US = '\x1F';
 
-export type AttrRecord = { t: 'null' | 'string' | 'number' | 'boolean' | 'object' | 'array' | 'date' | 'blob'; v: any };
-export type EntityMeta = { type: string; createdAt: number };
-export type RelationRecord = { kind: string; src: string; tgt: string; info?: any; createdAt: number };
+/** What a read says of an entity besides its attributes */
+export type EntityMeta = { type: string };
 
 /**
  * Validate that a string is safe for use as a key component.
@@ -17,17 +17,6 @@ function assertKeySafe(s: string, label: string) {
   if (typeof s !== 'string' || s.length === 0 || s.includes(US)) {
     throw new Error(`[Query] Invalid ${label}: must be non-empty string without \\x1F character`);
   }
-}
-
-/**
- * Decode attribute record to its runtime value.
- * Handles Date deserialization and blob objects (stored as JSON).
- * Note: blob handling assumes JSON encoding stores objects like {b64:"..."}.
- * Update this when moving to binary encoding.
- */
-export function decodeAttr(rec?: AttrRecord | null): unknown {
-  if (!rec) return null;
-  return rec.t === 'date' && typeof rec.v === 'string' ? new Date(rec.v) : rec.v;
 }
 
 /**
@@ -55,13 +44,8 @@ function eq(a: unknown, b: unknown, deep = false): boolean {
   return a === b;
 }
 
-/** An attribute's row: one per `(kind, entityId)` */
-function attrKey(kind: string, entityId: string) {
-  return `${kind}${US}${entityId}`;
-}
-
 export type FindByAttrOpts = {
-  /** optional: only return entities of this type (uses the entities DB) */
+  /** optional: only return entities of this type */
   entityType?: string;
   /** return at most N unique entityIds */
   limit?: number;
@@ -76,30 +60,46 @@ export type FindByAttrOpts = {
 export class LmdbReader {
   constructor(private dbs: LmdbDbs) { }
 
+  /** Each entity's id and record, in id order; attributes stored under an id no entity was created with are not one */
+  private *entities(): Iterable<[string, EntityRecord]> {
+    for (const { key, value } of this.dbs.rows.getRange()) if (value.type !== null) yield [key, value];
+  }
+
+  /** A value of the record: a small one from it, a large one from `values` */
+  private valueIn(entityId: string, record: EntityRecord, kind: string): unknown {
+    if (record.outOfLine.some(([k]) => k === kind)) return this.dbs.values.get(valueKey(kind, entityId));
+    const field = record.fields.find(([k]) => k === kind);
+    return field ? field[1] : undefined;
+  }
+
+  private holds(record: EntityRecord, kind: string): boolean {
+    return record.fields.some(([k]) => k === kind) || record.outOfLine.some(([k]) => k === kind);
+  }
+
   // ───────────────────────────── Attributes ─────────────────────────────
 
   /** An entity's attribute value as stored, or undefined when it holds none (a stored null reads as null) */
   getAttr(entityId: string, kind: string): unknown {
     assertKeySafe(entityId, 'entityId');
     assertKeySafe(kind, 'kind');
-    const rec = this.dbs.attrs.get(attrKey(kind, entityId)) as AttrRecord | undefined;
-    return rec === undefined ? undefined : decodeAttr(rec);
+    const record = this.dbs.rows.get(entityId);
+    return record && record.type !== null ? this.valueIn(entityId, record, kind) : undefined;
   }
 
-  /** The entityIds holding the attribute, in key order */
+  /** The entityIds holding the attribute, in id order */
   *entitiesHavingAttr(kind: string, limit = Infinity): Iterable<string> {
     assertKeySafe(kind, 'kind');
     let count = 0;
-    const start = `${kind}${US}`, end = start + '\xFF';
-    for (const { key } of this.dbs.attrs.getRange({ start, end })) {
+    for (const [id, record] of this.entities()) {
+      if (!this.holds(record, kind)) continue;
       if (count++ >= limit) break;
-      yield String(key).slice(start.length);
+      yield id;
     }
   }
 
   /**
-   * Finds entityIds by attribute content: scans the kind's rows, filtering by equals/predicate and (optionally)
-   * entityType. O(#rows for kind).
+   * Finds entityIds by attribute content: scans every entity, filtering by equals/predicate and (optionally)
+   * entityType. O(#entities).
    */
   findEntitiesByAttr(kind: string, opts: FindByAttrOpts = {}): string[] {
     return [...this.findEntitiesByAttrIter(kind, opts)];
@@ -109,15 +109,14 @@ export class LmdbReader {
   *findEntitiesByAttrIter(kind: string, opts: FindByAttrOpts = {}): Iterable<string> {
     assertKeySafe(kind, 'kind');
     const { entityType, equals, deepEquals = false, predicate, limit = Infinity } = opts;
-    const start = `${kind}${US}`, end = start + '\xFF';
     let count = 0;
 
-    for (const { key, value } of this.dbs.attrs.getRange({ start, end })) {
+    for (const [entityId, record] of this.entities()) {
       if (count >= limit) break;
-      const entityId = String(key).slice(start.length);
-      if (entityType && (this.dbs.entities.get(entityId) as EntityMeta | undefined)?.type !== entityType) continue;
+      if (entityType && record.type !== entityType) continue;
+      if (!this.holds(record, kind)) continue;
 
-      const val = decodeAttr(value as AttrRecord);
+      const val = this.valueIn(entityId, record, kind);
       const pass = equals !== undefined ? eq(val, equals, deepEquals) || (Array.isArray(val) && val.some((v) => eq(v, equals, deepEquals)))
                  : predicate ? !!predicate(val, entityId)
                  : true;
@@ -131,14 +130,13 @@ export class LmdbReader {
 
   /** Iterate entityIds of a given type */
   *entitiesOfType(type: string): Iterable<string> {
-    for (const { key: entityId, value: meta } of this.dbs.entities.getRange() as Iterable<{ key: string; value: EntityMeta }>) {
-      if (meta.type === type) yield String(entityId);
-    }
+    for (const [entityId, record] of this.entities()) if (record.type === type) yield entityId;
   }
 
-  /** Get entity meta (type, timestamps) */
+  /** The entity's type, or null when no entity has the id */
   getEntityMeta(entityId: string): EntityMeta | null {
-    return (this.dbs.entities.get(entityId) as EntityMeta | undefined) ?? null;
+    const record = this.dbs.rows.get(entityId);
+    return record && record.type !== null ? { type: record.type } : null;
   }
 
   // ───────────────────────────── Relations ─────────────────────────────
@@ -148,17 +146,16 @@ export class LmdbReader {
    * Note: O(R) fallback scan. Future optimization: add secondary indexes (relBySrc, relByTgt)
    * for O(1) prefix scans when neighbors/BFS become hot.
    */
-  *relations(filter?: { kind?: string; src?: string; tgt?: string; limit?: number })
+  *relations(filter?: { kind?: string; source?: string; target?: string; limit?: number })
     : Iterable<{ relId: string; rel: RelationRecord }> {
-    const { kind, src, tgt, limit = Infinity } = filter ?? {};
+    const { kind, source, target, limit = Infinity } = filter ?? {};
     let count = 0;
-    
-    for (const { key, value } of this.dbs.relations.getRange() as Iterable<{ key: string; value: RelationRecord }>) {
-      const rel = value;
+
+    for (const { key, value: rel } of this.dbs.relationRows.getRange()) {
       if (kind && rel.kind !== kind) continue;
-      if (src && rel.src !== src) continue;
-      if (tgt && rel.tgt !== tgt) continue;
-      yield { relId: String(key), rel };
+      if (source && rel.source !== source) continue;
+      if (target && rel.target !== target) continue;
+      yield { relId: key, rel };
       if (++count >= limit) break;
     }
   }
@@ -173,10 +170,10 @@ export class LmdbReader {
     const set = new Set<string>();
 
     if (dir === 'out' || dir === 'both') {
-      for (const { rel } of this.relations({ kind, src: id })) set.add(rel.tgt);
+      for (const { rel } of this.relations({ kind, source: id })) set.add(rel.target);
     }
     if (dir === 'in' || dir === 'both') {
-      for (const { rel } of this.relations({ kind, tgt: id })) set.add(rel.src);
+      for (const { rel } of this.relations({ kind, target: id })) set.add(rel.source);
     }
     return [...set];
   }
@@ -191,13 +188,13 @@ export class LmdbReader {
     const out: Array<{ from: string; to: string; kind: string; info?: any }> = [];
 
     if (dir === 'out' || dir === 'both') {
-      for (const { rel } of this.relations({ kind, src: id })) {
-        out.push({ from: rel.src, to: rel.tgt, kind: rel.kind, info: rel.info });
+      for (const { rel } of this.relations({ kind, source: id })) {
+        out.push({ from: rel.source, to: rel.target, kind: rel.kind, info: rel.info });
       }
     }
     if (dir === 'in' || dir === 'both') {
-      for (const { rel } of this.relations({ kind, tgt: id })) {
-        out.push({ from: rel.src, to: rel.tgt, kind: rel.kind, info: rel.info });
+      for (const { rel } of this.relations({ kind, target: id })) {
+        out.push({ from: rel.source, to: rel.target, kind: rel.kind, info: rel.info });
       }
     }
     return out;
@@ -231,7 +228,7 @@ export class LmdbReader {
 
   /**
    * Scan a raw key range from any DB.
-   * Example: scan every row of the attribute `tags` with prefix "tags␟".
+   * Example: scan the rows of the entities whose ids start "Task-".
    */
   scan(dbName: keyof LmdbDbs, opts: { start: string; end: string; limit?: number; reverse?: boolean }) {
     const db = this.dbs[dbName] as any;

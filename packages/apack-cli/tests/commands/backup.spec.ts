@@ -17,7 +17,7 @@ it('creates an importable backup with media and run history, and refuses overwri
   try {
     const paths = _appDataPaths(source);
     const primary = openEnvAt(paths.lmdb);
-    primary.entities.putSync('Note-a', { type: 'Note' });
+    primary.rows.putSync('Note-a', { type: 'Note', fields: [], outOfLine: [] });
     closeEnv(primary);
     const history = openRunHistoryStore(paths.runHistory);
     history.put({ id: 'RunNode-a', rootId: 'RunNode-a', kind: 'flow', label: 'Run', status: 'completed', startedAt: 0 });
@@ -29,7 +29,7 @@ it('creates an importable backup with media and run history, and refuses overwri
     expect(readBackup(out)).toMatchObject({ databases: ['lmdb', 'runHistory'], hasMedia: true });
     expect(fs.readFileSync(path.join(out, 'media/asset.txt'), 'utf8')).toBe('media');
     const copy = openEnvAt(path.join(out, 'lmdb'), { readOnly: true });
-    expect(copy.entities.get('Note-a')).toEqual({ type: 'Note' });
+    expect(copy.rows.get('Note-a')).toMatchObject({ type: 'Note' });
     closeEnv(copy);
     await db(['backup', 'verify', out, '--json'], io);
     expect(JSON.parse(io.out.mock.lastCall![0])).toMatchObject({ valid: true, path: out });
@@ -42,7 +42,7 @@ it('creates an importable backup with media and run history, and refuses overwri
     const runHistory = openRunHistoryStore(restored.runHistory);
     try {
       await importDatabase({ lmdb: store, runHistory }, out, restored.media, { log: { info: () => {}, warn: () => {} } });
-      expect(store.env.entities.get('Note-a')).toEqual({ type: 'Note' });
+      expect(store.env.rows.get('Note-a')).toMatchObject({ type: 'Note' });
       expect(runHistory.get('RunNode-a')).toMatchObject({ id: 'RunNode-a', status: 'completed' });
       expect(fs.readFileSync(path.join(restored.media, 'asset.txt'), 'utf8')).toBe('media');
     } finally { store.close(); runHistory.close(); }

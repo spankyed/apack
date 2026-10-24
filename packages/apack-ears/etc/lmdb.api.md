@@ -14,12 +14,6 @@ export interface AttributeRewrite {
     rewritten: number;
 }
 
-// @public (undocumented)
-export type AttrRecord = {
-    t: 'null' | 'string' | 'number' | 'boolean' | 'object' | 'array' | 'date' | 'blob';
-    v: any;
-};
-
 // @public
 export function closeEnv(dbs: LmdbDbs): void;
 
@@ -33,13 +27,19 @@ export function convertToFormat2(basePath: string): FormatConversion;
 export function convertToFormat3(basePath: string): Format3Conversion;
 
 // @public
-export function decodeAttr(rec?: AttrRecord | null): unknown;
+export function convertToFormat4(basePath: string): Format4Conversion;
 
-// @public (undocumented)
+// @public
 export type EntityMeta = {
     type: string;
-    createdAt: number;
 };
+
+// @public
+export interface EntityRecord {
+    fields: Array<[string, unknown]>;
+    outOfLine: Array<[string, number, number | null]>;
+    type: string | null;
+}
 
 // @public (undocumented)
 export type FindByAttrOpts = {
@@ -55,6 +55,15 @@ export interface Format3Conversion {
     joinedLists: number;
     singleValues: number;
     trashed: number;
+}
+
+// @public
+export interface Format4Conversion {
+    attributes: number;
+    entities: number;
+    outOfLine: number;
+    relations: number;
+    untyped: number;
 }
 
 // @public
@@ -74,6 +83,9 @@ export type FormatSteps = Array<{
 } | {
     to: 3;
     result: Format3Conversion;
+} | {
+    to: 4;
+    result: Format4Conversion;
 }>;
 
 // @public
@@ -84,13 +96,13 @@ export function hydrate(params: {
 }): Promise<void>;
 
 // @public
-export const LMDB_FORMAT_VERSION = 3;
+export const LMDB_FORMAT_VERSION = 4;
 
 // @public
 export type LmdbDbs = {
-    entities: Database<any>;
-    attrs: Database<any>;
-    relations: Database<any>;
+    rows: Database<EntityRecord, string>;
+    values: Database<unknown, string>;
+    relationRows: Database<RelationRecord, string>;
     root: RootDatabase;
 };
 
@@ -123,8 +135,8 @@ export class LmdbReader {
     }>;
     relations(filter?: {
         kind?: string;
-        src?: string;
-        tgt?: string;
+        source?: string;
+        target?: string;
         limit?: number;
     }): Iterable<{
         relId: string;
@@ -193,14 +205,17 @@ export interface RecordStoreOptions<R extends {
     readOnly?: boolean;
 }
 
-// @public (undocumented)
-export type RelationRecord = {
-    kind: string;
-    src: string;
-    tgt: string;
-    info?: any;
+// @public
+export interface RelationRecord {
     createdAt: number;
-};
+    info: unknown;
+    // (undocumented)
+    kind: string;
+    // (undocumented)
+    source: string;
+    // (undocumented)
+    target: string;
+}
 
 // @public
 export const REMOVE_ATTRIBUTE: unique symbol;

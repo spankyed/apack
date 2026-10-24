@@ -64,7 +64,7 @@ const NOT_CONVERTED_YET: readonly string[] = [
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
   'packages/repo-checks/tests/bounded-spawn.integration.spec.ts > kills the whole group, not the process it started',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
-  "packages/apack-ears/tests/lmdb/store.spec.ts > updates a relation it didn't see written in place, keeping when it was stored",
+  "packages/apack-ears/tests/lmdb/store.spec.ts > updates a relation in place, keeping when it was stored",
 ];
 
 /** Every spec file the unit suites hold — the population a finding can come from */

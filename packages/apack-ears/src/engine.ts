@@ -63,8 +63,13 @@ export interface EarsAdmin {
   getAllEntities(): EARS.EntityId[];
   /** Every id of a type, the engine's own types and those in the trash included: a raw listing */
   getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
-  /** Loads a stored attribute value, without telling persistence */
+  /** Loads a stored attribute value, without telling persistence; it is held in memory, whatever its size */
   bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
+  /**
+   * Loads a stored attribute the store keeps out of line, by its `size` (`sizeOf`) and its `length` when it is a list:
+   * the engine reads it back with `PersistenceSink.readAttr` when it is first read
+   */
+  bulkLoadOutOfLine(id: EARS.EntityId, kind: EARS.AttrKind, size: number, length: number | undefined): void;
   /** Writes an attribute's value, any kind the engine owns included */
   putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
   /** Removes an attribute */
@@ -130,6 +135,7 @@ export function createEarsEngine({ persistence = noopSink, isEntityType, isRelat
     getAllEntities: storage.getAllEntities,
     getEntitiesOfType: storage.getEntitiesOfType,
     bulkLoadAttr: storage.bulkLoadAttr,
+    bulkLoadOutOfLine: storage.bulkLoadOutOfLine,
     putAttr: storage.putAttr,
     deleteAttr: storage.deleteAttr,
     addRelation: relations.add,

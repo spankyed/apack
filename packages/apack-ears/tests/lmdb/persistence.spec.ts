@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
-import { openEnvAt, makeLmdbAdapter, LmdbReader, decodeAttr, type LmdbDbs } from '../../src/lmdb/index.ts';
+import { openEnvAt, closeEnv, makeLmdbAdapter, LmdbReader, type LmdbDbs } from '../../src/lmdb/index.ts';
+import { OUT_OF_LINE_BYTES } from '../../src/index.ts';
 
 function tmpDir(label: string) {
   return path.join(os.tmpdir(), `vitest-persistence-${label}-${crypto.randomBytes(4).toString('hex')}`);
@@ -22,7 +23,7 @@ describe('LMDB Adapter', () => {
   });
 
   afterAll(() => {
-    try { dbs.entities.close(); dbs.attrs.close(); dbs.relations.close(); dbs.root.close(); } catch {}
+    try { closeEnv(dbs); } catch {}
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -30,14 +31,13 @@ describe('LMDB Adapter', () => {
     const commits: number[] = [];
     const adapter = makeLmdbAdapter(dbs, () => commits.push(commits.length));
     adapter.onCreateEntity('Entity-now', 'TestType');
-    expect(dbs.entities.get('Entity-now')).toEqual({ type: 'TestType' });
+    expect(dbs.rows.get('Entity-now')).toEqual({ type: 'TestType', fields: [], outOfLine: [] });
     adapter.onUnitStart();
     adapter.onCreateEntity('Entity-unit', 'TestType');
     adapter.onPutAttr('attr1', 'Entity-unit', ['v1', 'v2']);
-    expect(dbs.entities.get('Entity-unit'), 'not before the unit ends').toBeUndefined();
+    expect(dbs.rows.get('Entity-unit'), 'not before the unit ends').toBeUndefined();
     adapter.onUnitEnd();
-    expect(dbs.entities.get('Entity-unit')).toEqual({ type: 'TestType' });
-    expect(decodeAttr(dbs.attrs.get('attr1\x1FEntity-unit'))).toEqual(['v1', 'v2']);
+    expect(dbs.rows.get('Entity-unit')).toEqual({ type: 'TestType', fields: [['attr1', ['v1', 'v2']]], outOfLine: [] });
     // One commit each: the call on its own, and the unit
     expect(commits).toHaveLength(2);
   });
@@ -49,25 +49,42 @@ describe('LMDB Adapter', () => {
       adapter.onPutAttr('title', id, [`${id} title`]);
       adapter.onPutAttr('tags', id, ['a', 'b']);
     }
-    adapter.onPutAttr('zeta', 'Task-1', 'last kind');
+    adapter.onPutAttr('zeta', 'Task-1', 'z'.repeat(OUT_OF_LINE_BYTES + 1));
+    adapter.onPutAttr('zeta', 'Task-10', 'z'.repeat(OUT_OF_LINE_BYTES + 1));
     adapter.onDestroyEntity('Task-1');
 
-    const keysOf = (id: string) => [...dbs.attrs.getKeys()].map(String).filter((key) => key.split('\x1F')[1] === id);
-    expect(dbs.entities.get('Task-1')).toBeUndefined();
-    expect(keysOf('Task-1')).toEqual([]);
-    expect(keysOf('Task-10')).toEqual(['tags\x1FTask-10', 'title\x1FTask-10']);
-    expect(keysOf('Note-1')).toHaveLength(2);
-    expect(dbs.entities.get('Task-10')).toBeTruthy();
+    const kindsOf = (id: string) => dbs.rows.get(id)?.fields.map(([kind]) => kind);
+    expect(dbs.rows.get('Task-1')).toBeUndefined();
+    expect(dbs.values.get('zeta\x1FTask-1'), 'its value kept out of line').toBeUndefined();
+    expect(kindsOf('Task-10')).toEqual(['title', 'tags']);
+    expect(dbs.values.get('zeta\x1FTask-10')).toHaveLength(OUT_OF_LINE_BYTES + 1);
+    expect(kindsOf('Note-1')).toHaveLength(2);
   });
 
-  it("writes an entity's row, holding only its type, when it is created and never for an attribute or a relation", () => {
+  it("gives an entity a typed record when it is created, an attribute alone a record of no type, and a relation none", () => {
     const adapter = makeLmdbAdapter(dbs);
     adapter.onCreateEntity('Task-typed', 'Task');
-    adapter.onPutAttr('title', 'Task-attr-only', 'no row');
+    adapter.onPutAttr('title', 'Task-attr-only', 'no entity');
     adapter.onAddRelation('Relation-rows', 'refs', 'Task-src-end', 'Task-tgt-end', undefined);
 
-    expect(dbs.entities.get('Task-typed')).toEqual({ type: 'Task' });
-    for (const id of ['Task-attr-only', 'Task-src-end', 'Task-tgt-end', 'Relation-rows']) expect(dbs.entities.get(id), id).toBeUndefined();
+    expect(dbs.rows.get('Task-typed')).toEqual({ type: 'Task', fields: [], outOfLine: [] });
+    expect(dbs.rows.get('Task-attr-only')).toEqual({ type: null, fields: [['title', 'no entity']], outOfLine: [] });
+    for (const id of ['Task-src-end', 'Task-tgt-end', 'Relation-rows']) expect(dbs.rows.get(id), id).toBeUndefined();
+  });
+
+  it('keeps a large value in `values`, its size in the record, and moves it back into the record when it shrinks', () => {
+    const adapter = makeLmdbAdapter(dbs);
+    const large = Array.from({ length: OUT_OF_LINE_BYTES }, (_, i) => i);
+    adapter.onCreateEntity('Task-large', 'Task');
+    adapter.onPutAttr('body', 'Task-large', large);
+    expect(dbs.rows.get('Task-large')).toEqual({ type: 'Task', fields: [], outOfLine: [['body', JSON.stringify(large).length, large.length]] });
+    expect(dbs.values.get('body\x1FTask-large')).toEqual(large);
+    expect(adapter.readAttr('body', 'Task-large')).toEqual(large);
+
+    adapter.onPutAttr('body', 'Task-large', 'short');
+    expect(dbs.rows.get('Task-large')).toEqual({ type: 'Task', fields: [['body', 'short']], outOfLine: [] });
+    expect(dbs.values.get('body\x1FTask-large')).toBeUndefined();
+    expect(adapter.readAttr('body', 'Task-large')).toBe('short');
   });
 
   /**
@@ -88,7 +105,7 @@ describe('LMDB Adapter', () => {
     for (let i = 0; i < 200; i++) {
       expect([...query.entitiesHavingAttr('tags', 1)], `call ${i}`).toEqual(['Doc-readers']);
       // A write transaction between reads, as the app does: it is what makes a leaked slot unrecoverable
-      dbs.entities.transactionSync(() => { dbs.entities.put('Doc-readers-probe', { v: i }); });
+      dbs.root.transactionSync(() => { dbs.values.put('Doc-readers-probe', { v: i }); });
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   });
@@ -110,7 +127,7 @@ describe('LMDB Adapter', () => {
   ])('refuses a relation whose end is no entity id, storing nothing: $label', ({ src, tgt }) => {
     const adapter = makeLmdbAdapter(dbs);
     expect(() => adapter.onAddRelation('Relation-bad', 'TEST', src, tgt, null)).toThrow('is not an entity id');
-    expect(dbs.relations.get('Relation-bad')).toBeUndefined();
+    expect(dbs.relationRows.get('Relation-bad')).toBeUndefined();
   });
 
   it('stores every update made to a stored relation, each on the one before, in one unit or not', () => {
@@ -120,13 +137,13 @@ describe('LMDB Adapter', () => {
     adapter.onUpdateRelation('Relation-moved', { target: 'Doc-c' });
     adapter.onUpdateRelation('Relation-moved', { info: { x: 1 } });
     adapter.onUnitEnd();
-    expect(dbs.relations.get('Relation-moved')).toMatchObject({ src: 'Doc-a', tgt: 'Doc-c', info: { x: 1 } });
+    expect(dbs.relationRows.get('Relation-moved')).toMatchObject({ source: 'Doc-a', target: 'Doc-c', info: { x: 1 } });
     // A relation added and updated in one unit: the update reads the add
     adapter.onUnitStart();
     adapter.onAddRelation('Relation-fresh', 'TEST', 'Doc-a', 'Doc-b', null);
     adapter.onUpdateRelation('Relation-fresh', { info: 'later' });
     adapter.onUnitEnd();
-    expect(dbs.relations.get('Relation-fresh')).toMatchObject({ info: 'later' });
+    expect(dbs.relationRows.get('Relation-fresh')).toMatchObject({ info: 'later' });
   });
 
   it('refuses an update to a relation that is not there, and the unit it is in stores nothing', () => {
@@ -136,7 +153,7 @@ describe('LMDB Adapter', () => {
     adapter.onCreateEntity('Document-with-a-bad-update', 'Document');
     adapter.onUpdateRelation('Relation-nonexistent', { info: 'test' });
     expect(() => adapter.onUnitEnd()).toThrow('no relation has the id');
-    expect(dbs.entities.get('Document-with-a-bad-update')).toBeUndefined();
+    expect(dbs.rows.get('Document-with-a-bad-update')).toBeUndefined();
   });
 
   it.each([
@@ -150,7 +167,7 @@ describe('LMDB Adapter', () => {
     const adapter = makeLmdbAdapter(dbs);
     adapter.onAddRelation('Relation-valid', 'TEST', 'Doc-1', 'Doc-2', null);
     expect(() => adapter.onUpdateRelation('Relation-valid', patch)).toThrow('is not an entity id');
-    expect(dbs.relations.get('Relation-valid')).toMatchObject({ src: 'Doc-1', tgt: 'Doc-2' });
+    expect(dbs.relationRows.get('Relation-valid')).toMatchObject({ source: 'Doc-1', target: 'Doc-2' });
   });
 });
 
@@ -161,15 +178,15 @@ describe('LMDB Adapter, a unit', () => {
     const live = openEnvAt(dir);
     const guarded = {
       ...live,
-      entities: Object.assign(Object.create(Object.getPrototypeOf(live.entities)), live.entities, {
+      rows: Object.assign(Object.create(Object.getPrototypeOf(live.rows)), live.rows, {
         put: (key: string, value: unknown) => {
           if (key === poisoned) throw new Error('refused');
-          return (live.entities as any).put(key, value);
+          return (live.rows as any).put(key, value);
         },
       }),
     } as unknown as LmdbDbs;
     const done = () => {
-      try { live.entities.close(); live.attrs.close(); live.relations.close(); live.root.close(); } catch {}
+      try { closeEnv(live); } catch {}
       fs.rmSync(dir, { recursive: true, force: true });
     };
     return { live, guarded, done };
@@ -185,14 +202,14 @@ describe('LMDB Adapter, a unit', () => {
     adapter.onCreateEntity('Document-poison', 'Document');
     expect(() => adapter.onUnitEnd()).toThrow('refused');
 
-    expect(live.entities.get('Document-before'), 'its own unit, before').toBeTruthy();
-    expect(live.entities.get('Document-ok'), 'part of the unit that was refused').toBeUndefined();
+    expect(live.rows.get('Document-before'), 'its own unit, before').toBeTruthy();
+    expect(live.rows.get('Document-ok'), 'part of the unit that was refused').toBeUndefined();
     // The next unit starts clean: nothing of the refused one is left to commit with it
     adapter.onUnitStart();
     adapter.onCreateEntity('Document-after', 'Document');
     adapter.onUnitEnd();
-    expect(live.entities.get('Document-after')).toBeTruthy();
-    expect(live.entities.get('Document-ok')).toBeUndefined();
+    expect(live.rows.get('Document-after')).toBeTruthy();
+    expect(live.rows.get('Document-ok')).toBeUndefined();
     done();
   });
 
@@ -204,19 +221,18 @@ describe('LMDB Adapter, a unit', () => {
 
     adapter.onUnitStart();
     adapter.onDestroyEntity('Document-1');
-    expect(live.entities.get('Document-1'), 'still there inside the unit').toBeTruthy();
+    expect(live.rows.get('Document-1'), 'still there inside the unit').toBeTruthy();
     adapter.onCreateEntity('Document-1', 'Document');
     adapter.onPutAttr('title', 'Document-1', 'second');
     adapter.onUnitEnd();
-    expect(live.entities.get('Document-1')).toEqual({ type: 'Document' });
-    expect(decodeAttr(live.attrs.get('title\x1FDocument-1'))).toBe('second');
+    expect(live.rows.get('Document-1')).toEqual({ type: 'Document', fields: [['title', 'second']], outOfLine: [] });
     done();
   });
 
   it('throws when the environment refuses a write, as a full disk would, and stores nothing', () => {
     const fail = () => { throw new Error('disk full'); };
     const db = { transactionSync: fail, put: fail, remove: fail, get: () => undefined, doesExist: () => false, getKeys: () => [], getRange: () => [] };
-    const adapter = makeLmdbAdapter({ entities: db, attrs: db, relations: db, root: db } as unknown as LmdbDbs);
+    const adapter = makeLmdbAdapter({ rows: db, values: db, relationRows: db, root: db } as unknown as LmdbDbs);
     expect(() => adapter.onDestroyEntity('Document-1')).toThrow('disk full');
     adapter.onUnitStart();
     adapter.onCreateEntity('Document-1', 'Document');
@@ -237,7 +253,10 @@ describe('Query Layer', () => {
     dbs = openEnvAt(dir);
     const adapter = makeLmdbAdapter(dbs);
 
+    adapter.onCreateEntity('Entity-123', 'TestEntity');
     adapter.onPutAttr('TestKind', 'Entity-123', ['valid1', 'valid2', 'valid3']);
+    // An attribute of an id no entity was created with: no read finds it
+    adapter.onPutAttr('TestKind', 'Entity-untyped', ['valid2']);
 
     // Date attr
     const now = new Date('2025-06-01T00:00:00.000Z');
@@ -266,7 +285,7 @@ describe('Query Layer', () => {
   });
 
   afterAll(() => {
-    try { dbs.entities.close(); dbs.attrs.close(); dbs.relations.close(); dbs.root.close(); } catch {}
+    try { closeEnv(dbs); } catch {}
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -274,6 +293,9 @@ describe('Query Layer', () => {
     expect(query.getAttr('Entity-123', 'TestKind')).toEqual(['valid1', 'valid2', 'valid3']);
     expect(query.getAttr('Page-4', 'Index')).toBe(4);
     expect(query.getAttr('Page-none', 'Index')).toBeUndefined();
+    expect(query.getAttr('Entity-untyped', 'TestKind')).toBeUndefined();
+    expect(query.getEntityMeta('Entity-untyped')).toBeNull();
+    expect(query.getEntityMeta('Page-4')).toEqual({ type: 'Page' });
   });
 
   it('findEntitiesByAttr matches a value or an element of a list, and a predicate sees the whole value', () => {
@@ -316,12 +338,5 @@ describe('Query Layer', () => {
     let relCount = 0;
     for (const _ of query.relations({ limit: 1 })) relCount++;
     expect(relCount).toBeLessThanOrEqual(1);
-  });
-
-  it('decodeAttr() is exported and decodes dates', () => {
-    const dateRec = { t: 'date' as const, v: '2025-01-01T00:00:00.000Z' };
-    const decoded = decodeAttr(dateRec);
-    expect(decoded).toBeInstanceOf(Date);
-    expect((decoded as Date).toISOString()).toBe('2025-01-01T00:00:00.000Z');
   });
 });

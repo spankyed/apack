@@ -285,8 +285,8 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   try {
     validate?.(new LmdbReader(env));
     const perType = new Map<string, number>();
-    for (const { value } of env.entities.getRange() as Iterable<{ value: { type?: string } }>) {
-      if (value.type) perType.set(value.type, (perType.get(value.type) ?? 0) + 1);
+    for (const { value } of env.rows.getRange()) {
+      if (value.type !== null) perType.set(value.type, (perType.get(value.type) ?? 0) + 1);
     }
     const known = new Set(entityTypes);
     const counts = [...known].sort()

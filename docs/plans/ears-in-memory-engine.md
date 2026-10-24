@@ -1,6 +1,6 @@
 # The in-memory engine, done properly: an experiment beside Step 10
 
-Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–3 are done; Step 4 is next.
+Status: active, 2026-10-24, on branch `session/ears-in-memory-path`. Steps 0–4 are done; Step 5 is next.
 
 [ears-storage-layout.md](ears-storage-layout.md)'s Step 10 moves the engine to disk. This plan builds the strongest
 version of the other design — the engine's memory is the database, and disk is how it is made durable and rebuilt —
@@ -149,6 +149,24 @@ gains the 3 → 4 step, run on a copy.
 
 **Done when:** boot on the converted production copy is measured against 1.3–1.5 s (target: a few hundred
 milliseconds); the harness and the contract specs pass on format 4.
+
+Done, 2026-10-24. `rows` holds an `EntityRecord` per id — its type, its small fields as `[kind, value]` pairs, and its
+large ones as `[kind, size, length]`, each value in `values` under `kind␟id` — and `relationRows` a `RelationRecord`
+per relation (`source`/`target`, renamed from `src`/`tgt`); msgpack throughout, so Dates round-trip without the JSON
+`{ t, v }` wrapper. The adapter keeps a working copy of each record a commit touches and puts each once as it commits;
+an attribute written to an id no entity was created with is kept as a record of no type, which hydration skips as
+format 3 skipped attributes with no entity row. Placement is one rule, `isLarge` (`values.ts`), shared by the adapter,
+the converter and the engine; hydration loads a large value as its marker (`admin.bulkLoadOutOfLine`, new) and sizes
+nothing. The value index no longer reads an out-of-line value back to index it unless it is a list, since a string
+that large is past `INDEXED_STRING_MAX` and an object is never a key. `convertToFormat4` converts in one transaction
+and drops format 3's databases; `rewriteAttributes` and `LmdbReader` work on format 4. A BigInt within 64 bits is now
+stored (JSON refused every BigInt); one past them is refused, as the refusal specs now write.
+
+Readings, the production copy converted 3 → 4 (`scripts/ears-convert.ts`, 3.9 s: 22,817 records, 178,539 attributes of
+which 5,613 out of line, 45,798 relations; built engine, a machine at load 30–55): hydrate 1.39–1.42 s → 0.24–0.27 s;
+heap 74.4 → 52.4 MB; the largest thread 2.4–2.8 ms cold, 1.0–1.2 ms warm. A compacted copy of the files 116 → 86 MB.
+The bench (memory engine): bulk load 131 ms, 1,000 creates 8.8 ms mean, a `transact` of 1,000 creates 9.9 ms, read cases
+within noise of Step 3; `bench:heap` 68.7 MB.
 
 ### 5. Group commit and durable points
 A commit returns at once; a sync runs on a short timer, on idle and on close; `await durable()` resolves once

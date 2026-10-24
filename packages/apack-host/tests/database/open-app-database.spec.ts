@@ -200,8 +200,8 @@ describe('openAppDatabase', () => {
     const dir = dataDirWithPacks();
     await writeData(dir, () => { untypedCreate('Note', { id: id('Note-1') }).set('title', 'kept'); });
     const db = await openAppDatabase({ env: 'test', userDataDir: dir, ...quiet });
-    // JSON can't encode a BigInt
-    expect(() => db.ears.write(id('Note-1')).set('count', 1n)).toThrow();
+    // MessagePack can't encode an integer past 64 bits
+    expect(() => db.ears.write(id('Note-1')).set('count', 2n ** 70n)).toThrow('too large');
     expect(db.ears.getRow(id('Note-1'))).not.toHaveProperty('count');
     db.close();
     expect(() => boundEars()).toThrow();
