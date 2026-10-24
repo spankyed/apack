@@ -178,7 +178,7 @@ test('uses original terminal URL decisions, waiting and completion with cancella
       await expect(panel.locator('.warning')).toContainText(viewportReview ? 'extends past this screen' : step.phase === 21 ? 'too long' : 'cannot be shown exactly')
       if (step.phase === 24) await expect(panel.locator('code')).toHaveText('(value cannot be shown in full — approval withheld; one-time options only)')
       else if (step.phase === 20) await expect(panel.locator('code')).not.toContainText('\u202e')
-      else await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review?label=' + 'r'.repeat(viewportReview ? 1800 : 9000))
+      else await expect(panel.locator('code')).toHaveText('https://example.invalid/release-review?label=' + 'r'.repeat(viewportReview ? 6000 : 9000))
       for (const [width, height] of [[1100, 900], [680, 600]]) {
         await appPage.setViewportSize({ width, height })
         await panel.locator('.warning').scrollIntoViewIfNeeded()
