@@ -92,7 +92,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
   await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(true)
   const cwdNavigation=process.env.CLAUDE_RESEARCH_CWD_NAVIGATION==='1'
   const cases=cwdNavigation?[]:JSON.parse(await readFile(join(workspace!,'native-search-review-steps.json'),'utf8'))
-  const results=[]
+  const results=[],navigation=[]
   for(const [index,step] of cases.entries()){
     const phase=index+1,id='native_search_review_'+phase
     await composer.fill('SearchReviewTurn'+phase+': '+step.purpose)
@@ -135,6 +135,7 @@ test('reviews original Glob and Grep results while preserving everyday composing
       await card.getByTitle(workspace!,{exact:true}).click()
       await app.waitForSurface('default-setup/code')
       await expect.poll(()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/code').getSnapshot().context.baseDirectory)).toBe(workspace)
+      const explorerDirectory=await appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/code').getSnapshot().context.baseDirectory)
       await app.navigate('default-setup/threads')
       await expect(composer).toHaveText(draft)
       await expect(status).toContainText('AppNativeMain '+sessionId)
@@ -142,9 +143,10 @@ test('reviews original Glob and Grep results while preserving everyday composing
       await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
       const png=await ownedWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
       await writeFile(testInfo.outputPath('native-cwd-return-'+width+'.png'),Buffer.from(png,'base64'))
+      navigation.push({width,explorerDirectory,draft:await composer.innerText(),nativePid:(await context()).native.state.nativePid,sessionId:(await context()).sessionId})
     }
   }
-  await writeFile(join(workspace!,'native-search-review-proof.json'),JSON.stringify({results,sessionId,boundNativePid}))
+  await writeFile(join(workspace!,'native-search-review-proof.json'),JSON.stringify({results,navigation,sessionId,boundNativePid}))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
