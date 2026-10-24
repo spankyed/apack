@@ -5,7 +5,7 @@ function fixture(clientId = 'view') {
   let current = true, handle = 0
   let rowSource: Parameters<typeof createClaudeTranscriptMessageHost>[0]['rows']|undefined
   let rows: ClaudeUiTranscriptRow[] = ['a', 'b'].map((uuid, index) => ({ component: 'AssistantMessage' as const, uuid, messageId: 'app', sessionId: 'session', text: 'Native text', start: index * 12, end: index * 12 + 11, isFirstOfReply: index === 0 }))
-  const ui = { terminalPlacements:vi.fn(async()=>[]),composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
+  const ui = { diagnostics:vi.fn(async()=>[] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiDiagnosticAttachment[]), terminalPlacements:vi.fn(async()=>[]),composerPlacements: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiComposerPlacement[]), toolGroups: vi.fn(async () => [] as import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiToolGroup[]), releaseInstance: vi.fn(async () => ({ released: true })),
     render: vi.fn(async (_request: ClaudeUiRender): Promise<ClaudeUiRenderResult> => ({ tree: { type: 'Box', children: [
       { type: 'Button', props: { key: 'run', label: 'Run' }, press: { plugin: 'fixture', handle: ++handle } },
       { type: 'Input', props: { key: 'draft', value: '', label: 'Draft' }, press: { plugin: 'fixture', handle: ++handle } },
@@ -317,4 +317,20 @@ it('uses each mounted tool width independently and refuses retired instance meas
   await vi.advanceTimersByTimeAsync(50)
   expect(f.ui.render.mock.calls[0][0].viewport).toEqual({ columns:40, rows:24 })
   await f.host.dispose()
+})
+
+it('anchors diagnostic attachments to selected original rows and withdraws unavailable sources', async () => {
+  const f=fixture(), diagnostic={id:'warning',revision:'a'.repeat(64),anchorIds:['foreign','a'],summary:'Native summary',detail:'Native warning'}
+  f.ui.diagnostics.mockResolvedValue([diagnostic]);f.host.start();await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.diagnostics).toEqual([{...diagnostic,messageId:'app'}])
+  f.setRows([]);expect(f.host.diagnostics).toEqual([])
+  f.setRows(f.rows);f.ui.diagnostics.mockRejectedValueOnce(Error('Detached'))
+  f.host.receive({type:'attachment'});await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.diagnostics).toEqual([]);f.host.dispose()
+})
+it('discards a pending diagnostic response after owner retirement', async () => {
+  const f=fixture();let finish!:(rows:Awaited<ReturnType<typeof f.ui.diagnostics>>)=>void
+  f.ui.diagnostics.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));f.host.start();f.replace()
+  finish([{id:'late',revision:'b'.repeat(64),anchorIds:['a'],summary:'Old summary',detail:'Old detail'}])
+  await vi.advanceTimersByTimeAsync(50);expect(f.host.diagnostics).toEqual([]);f.host.dispose()
 })

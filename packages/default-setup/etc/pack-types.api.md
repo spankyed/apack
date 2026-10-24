@@ -3992,6 +3992,8 @@ type ClaudeUiComposerPlacement = z.infer<typeof composerPlacement>;
 
 type ClaudeUiControls = ReturnType<typeof createClaudeUiControls>;
 
+type ClaudeUiDiagnosticAttachment = z.infer<typeof diagnosticAttachment>;
+
 type ClaudeUiFieldEvent = {
     actionId: string;
     revision: number;
@@ -4107,6 +4109,9 @@ type ClaudeUiMountState = ({
     panes?: ClaudeUiPanePresentation;
     scroll?: ClaudeUiScrollState;
     notices?: ClaudeUiNotices;
+    diagnostics?: (ClaudeUiDiagnosticAttachment & {
+        messageId: string;
+    })[];
     transcriptMessages?: ClaudeUiTranscriptFrame[];
     question?: ClaudeUiQuestionFrame;
 };
@@ -10555,6 +10560,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
 declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
     terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
     composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
+    diagnostics(id: string, columns?: number): Promise<ClaudeUiDiagnosticAttachment[]>;
     toolGroups(id: string): Promise<ClaudeUiToolGroup[]>;
     releaseInstance(options: z.infer<typeof instanceRelease>): Promise<{
         released: boolean;
@@ -10848,6 +10854,26 @@ declare function createThreadAndNotify(options: ThreadCreateData): {
     timestamp: number;
     status: string;
 };
+
+declare const diagnosticAttachment: z.ZodObject<{
+    id: z.ZodString;
+    revision: z.ZodString;
+    anchorIds: z.ZodArray<z.ZodString, "many">;
+    summary: z.ZodString;
+    detail: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    id: string;
+    anchorIds: string[];
+    summary: string;
+    detail: string;
+}, {
+    revision: string;
+    id: string;
+    anchorIds: string[];
+    summary: string;
+    detail: string;
+}>;
 
 declare const featureServices: {
     chat: {

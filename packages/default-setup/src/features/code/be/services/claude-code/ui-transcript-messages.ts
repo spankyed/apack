@@ -48,7 +48,7 @@ const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'A
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
-  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements'>
+  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'diagnostics'>
   client: { client_id: string; surface: 'desktop' }
   rows(groups: readonly ClaudeUiToolGroup[], composer: readonly (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[]): ClaudeUiTranscriptRow[]
   current(): boolean
@@ -56,6 +56,7 @@ export function createClaudeTranscriptMessageHost(options: {
 }) {
   const entries = new Map<string, Entry>()
   let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
+  let diagnostics: import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[] = [], readingDiagnostics=false, diagnosticsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
   let disposal: Promise<void> | undefined
   const releases = new Set<Promise<void>>()
@@ -107,6 +108,16 @@ export function createClaudeTranscriptMessageHost(options: {
       if(!current())return
       if(JSON.stringify(next)!==JSON.stringify(groups)||JSON.stringify(nextPlacements)!==JSON.stringify(placements)){groups=next;placements=nextPlacements;refresh()}
     } finally { readingGroups=false;if(groupsAgain){groupsAgain=false;void refreshGroups()} }
+  }
+  async function refreshDiagnostics() {
+    if(!current()||!started)return
+    if(readingDiagnostics){diagnosticsAgain=true;return}readingDiagnostics=true
+    try {
+      let next:import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[]=[]
+      try { next=await options.ui.diagnostics(options.client.client_id,80) } catch { /* An unavailable owner withdraws the old diagnostic presentation. */ }
+      if(!current())return
+      if(JSON.stringify(next)!==JSON.stringify(diagnostics)){diagnostics=next;publish()}
+    } finally { readingDiagnostics=false;if(diagnosticsAgain){diagnosticsAgain=false;void refreshDiagnostics()} }
   }
   function schedule() {
     if (!started || !current() || rendering || scheduled) return
@@ -179,10 +190,16 @@ export function createClaudeTranscriptMessageHost(options: {
   function invalidate(entry: Entry) { if (present(entry)) { retire(entry); publish(); schedule() } }
   return {
     get state(): ClaudeUiTranscriptFrame[] { return [...entries.values()].map(entry => ({ ...entry.row, instanceRevision: entry.instanceRevision, ...(entry.nativeHint?{nativeHint:true}:{}), ...(entry.groupExpanded!==undefined?{groupExpanded:entry.groupExpanded}:{}), displayText: entry.displayText, ...(entry.engineOutput !== undefined ? { engineOutput: entry.engineOutput } : {}), ...(entry.outputRewritten ? { outputRewritten: true } : {}), body: entry.body })) },
-    start() { started = true; refresh(); void refreshGroups() },
+    get diagnostics() {
+      if(!current())return []
+      const rows=options.rows(groups,placements)
+      return diagnostics.flatMap(diagnostic=>{const anchor=diagnostic.anchorIds.map(id=>rows.find(row=>row.uuid===id||'assistantUuid' in row&&row.assistantUuid===id||'resultUuid' in row&&row.resultUuid===id)).find(Boolean);return anchor?[{...diagnostic,messageId:anchor.messageId}]:[]})
+    },
+    start() { started = true; refresh(); void refreshGroups();void refreshDiagnostics() },
     refresh,
     receive(line: Record<string, unknown>) {
       if (!current()) return
+      if(line.type==='attachment'||line.type==='assistant'||line.type==='user'||line.type==='conversation_reset'||line.type==='system'&&line.subtype==='ui_invalidate')void refreshDiagnostics()
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
         if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}
         const snapshot = line.client_snapshot === true
@@ -198,7 +215,7 @@ export function createClaudeTranscriptMessageHost(options: {
       }
 
     },
-    dispose() { if (disposal) return disposal; disposed = true; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled(releases).then(() => {}); return disposal },
+    dispose() { if (disposal) return disposal; disposed = true; diagnostics=[]; for (const entry of entries.values()) void release(entry); entries.clear(); if (scheduled) clearTimeout(scheduled); scheduled = undefined; disposal = Promise.allSettled(releases).then(() => {}); return disposal },
     layout(event: import('./ui-presentation.ts').ClaudeUiTranscriptLayout) {
       if (!['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(event.component)
         || !Number.isSafeInteger(event.columns) || event.columns < 20 || event.columns > 240) return

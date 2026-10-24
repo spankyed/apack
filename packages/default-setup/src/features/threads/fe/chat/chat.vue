@@ -90,6 +90,7 @@
                   @toggle-compacted="handleToggleCompacted"
                 />
                 <NativeToolGroup v-for="group in (nativeUiDrawing?.transcriptMessages ?? []).filter(frame => frame.component === 'ToolGroup' && !frame.tools.length && frame.messageId === message.id)" :key="group.uuid" :frame="group as Extract<typeof group, {component: 'ToolGroup'}>" @press="pressNativeUi" @field="editNativeUi" />
+                <NativeDiagnosticAttachment v-for="diagnostic in (nativeUiDrawing?.diagnostics ?? []).filter(row => row.messageId === message.id)" :key="diagnostic.id" :diagnostic="diagnostic" />
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="message.id" @press="pressNativeUi" @field="editNativeUi" />
                 </template>
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
@@ -206,6 +207,7 @@
 import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { readClaudeComposerPhase, commitClaudeComposerPhase } from './native-composer-phase.ts'
 import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
+import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 

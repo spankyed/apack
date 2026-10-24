@@ -179,6 +179,19 @@ test('uses original plugin LSP navigation and preserves diagnostics and session 
     await expect.poll(()=>readFile(join(workspace!,'native-lsp-result-native_lsp_'+phase+'.json'),'utf8').then(()=>true,()=>false),{timeout:10000}).toBe(true)
     const receipt=JSON.parse(await readFile(join(workspace!,'native-lsp-result-native_lsp_'+phase+'.json'),'utf8'));expect(receipt.props.tool_use_id).toBe('native_lsp_'+phase)
     steps.push({phase,text,resultText:await result.innerText()});if(lifetime&&phase===7)freshNavigationAfterInterruption=true
+    if(phase===1){
+      const diagnostic=appPage.locator('[data-native-diagnostic]').first()
+      await expect(diagnostic).toBeVisible({timeout:15000});await expect(diagnostic.locator('summary')).toContainText(/diagnostic|issue/i)
+      await diagnostic.locator('summary').click();await expect(diagnostic.locator('[data-native-diagnostic-detail]')).toContainText('OwnedReleaseDiagnostic')
+      await expect(diagnostic).not.toContainText('OwnedStaleDiagnostic')
+      for(const width of [1100,680]){
+        const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
+        await diagnostic.scrollIntoViewIfNeeded();await expect(diagnostic.locator('[data-native-diagnostic-detail]')).toBeInViewport();await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
+        const capture=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+        const name='native-lsp-diagnostic-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(capture,'base64'));captures.push(name)
+      }
+    }
+
     if([1,3,4,6,7].includes(phase))for(const[width,height]of[[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height});await result.scrollIntoViewIfNeeded();await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
       await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))

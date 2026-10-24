@@ -19,7 +19,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -107,7 +107,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
