@@ -5,7 +5,8 @@
         <h2 id="claude-channel-title" class="text-base font-semibold">Claude channels</h2>
         <p class="mt-2 text-sm text-neutral-400">Choose the configured channel servers or approved plugins for this conversation. Claude decides which can connect.</p>
         <label for="claude-channel-selectors" class="mt-4 block text-sm">One server or plugin selector per line</label>
-        <textarea id="claude-channel-selectors" v-model="text" :disabled="locked" rows="5" autofocus class="mt-2 w-full resize-y rounded-md border border-white/15 bg-neutral-950 p-3 font-mono text-sm" placeholder="plugin:name@marketplace" />
+        <textarea id="claude-channel-selectors" v-model="text" :disabled="locked" rows="5" autofocus class="mt-2 w-full resize-y rounded-md border border-white/15 bg-neutral-950 p-3 font-mono text-sm" aria-describedby="claude-channel-help" :aria-invalid="!!problem" placeholder="server:my-server&#10;plugin:name@marketplace" />
+        <p id="claude-channel-help" class="mt-2 text-xs text-neutral-400">Use <code>server:&lt;name&gt;</code> for a configured MCP server or <code>plugin:&lt;name&gt;@&lt;marketplace&gt;</code> for an approved plugin.</p>
         <p v-if="locked" role="status" class="mt-2 text-sm text-amber-300">Stop the native session and wait for current work to finish before changing channels.</p>
         <p v-else class="mt-2 text-xs text-neutral-400">Leave empty to select no channels. Saved selection applies when the conversation starts or resumes.</p>
         <p v-if="problem" role="alert" class="mt-2 text-sm text-red-300">{{ problem }}</p>

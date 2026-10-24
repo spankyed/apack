@@ -34,9 +34,12 @@ test('completes an everyday native review across Agent, approval, question and i
   const openChannels=async()=>{const button=card.getByRole('button',{name:'Claude channels',exact:true});if(await button.isVisible())await button.click();else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude channels',exact:true}).click()}await expect(channelDialog).toBeVisible()}
   const selectedChannels=()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode?.channelSelection)
   const captureChannels=async(label:string,width:number,height:number)=>{await appPage.setViewportSize({width,height});for(const control of [channelDialog.getByRole('textbox'),channelDialog.getByRole('button',{name:'Cancel',exact:true}),channelDialog.getByRole('button',{name:'Save channels',exact:true})])await expect(control).toBeInViewport({ratio:1});const png=await channelWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-channels-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));channelCaptures.push(name)}
-  await openChannels();await channelDialog.getByRole('textbox').fill('plugin:review@owned\nplugin:notes@owned');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click()
-  await expect.poll(selectedChannels).toEqual(['plugin:review@owned','plugin:notes@owned'])
-  for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toHaveValue('plugin:review@owned\nplugin:notes@owned');await captureChannels('saved',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
+  await openChannels();await channelDialog.getByRole('textbox').fill('server:');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click()
+  await expect(channelDialog.getByRole('alert')).toContainText('server:<name>');await expect(channelDialog.getByRole('textbox')).toHaveValue('server:')
+  for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(channelDialog.getByRole('alert')).toBeInViewport({ratio:1});await expect(channelDialog.locator('#claude-channel-help')).toBeInViewport({ratio:1});await captureChannels('invalid',width,height)}
+  await channelDialog.getByRole('textbox').fill('server:review\nplugin:notes@owned');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click()
+  await expect.poll(selectedChannels).toEqual(['server:review','plugin:notes@owned'])
+  for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toHaveValue('server:review\nplugin:notes@owned');await captureChannels('saved',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
   await openChannels();await channelDialog.getByRole('textbox').fill('');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click();await expect.poll(selectedChannels).toEqual([])
   await expect(card.locator('[contenteditable="true"]')).toHaveText('Help me review the release notes and checklist.');await appPage.setViewportSize({width:1100,height:900})
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
@@ -89,7 +92,7 @@ test('completes an everyday native review across Agent, approval, question and i
   else await expect(status).toContainText('Release review')
   const composer = card.locator('[contenteditable="true"]')
   for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toBeDisabled();await expect(channelDialog.getByRole('button',{name:'Save channels',exact:true})).toBeDisabled();await captureChannels('locked',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
-  await writeFile(join(workspace!,'native-channel-settings-app-proof.json'),JSON.stringify({savedSelection:['plugin:review@owned','plugin:notes@owned'],clearedBeforeLaunch:true,liveSelectionLocked:true,draftRetained:true,captures:channelCaptures}))
+  await writeFile(join(workspace!,'native-channel-settings-app-proof.json'),JSON.stringify({savedSelection:['server:review','plugin:notes@owned'],invalidSelectorRefused:true,clearedBeforeLaunch:true,liveSelectionLocked:true,draftRetained:true,captures:channelCaptures}))
   await appPage.setViewportSize({width:1100,height:900})
   const checkpoint = expect.configure({ soft: true })
   const nativeWindow=await electronApp.browserWindow(appPage)

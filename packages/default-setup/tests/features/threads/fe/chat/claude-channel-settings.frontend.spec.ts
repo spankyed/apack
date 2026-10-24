@@ -7,8 +7,12 @@ function mount(locked=false){const save=vi.fn(),close=vi.fn(),root=document.crea
 it('opens a modal, preserves selectors and refuses flag-shaped values before saving',async()=>{
  const f=mount();expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalledOnce();expect(f.field.value).toBe('plugin:review@owned')
  f.field.value='--dangerously-load-development-channels';f.field.dispatchEvent(new Event('input'));await nextTick();(f.root.querySelectorAll('button')[1] as HTMLButtonElement).click();await nextTick();expect(f.save).not.toHaveBeenCalled();expect(f.root.querySelector('[role=alert]')?.textContent).toContain('not CLI flags')
- f.field.value='plugin:notes@owned\nreview';f.field.dispatchEvent(new Event('input'));await nextTick();(f.root.querySelectorAll('button')[1] as HTMLButtonElement).click();expect(f.save).toHaveBeenCalledWith(['plugin:notes@owned','review'])
+ f.field.value='plugin:notes@owned\nserver:review';f.field.dispatchEvent(new Event('input'));await nextTick();(f.root.querySelectorAll('button')[1] as HTMLButtonElement).click();expect(f.save).toHaveBeenCalledWith(['plugin:notes@owned','server:review'])
 })
 it('locks selection during native work but leaves cancellation available',()=>{
  const f=mount(true);expect(f.field.disabled).toBe(true);expect((f.root.querySelectorAll('button')[1] as HTMLButtonElement).disabled).toBe(true);(f.root.querySelectorAll('button')[0] as HTMLButtonElement).click();expect(f.close).toHaveBeenCalledOnce();expect(f.save).not.toHaveBeenCalled()
+})
+
+it.each(['review','server:','plugin:review','plugin:@owned','plugin:review@'])('keeps invalid native selector %s in the dialog for correction',async value=>{
+ const f=mount();f.field.value=value;f.field.dispatchEvent(new Event('input'));await nextTick();(f.root.querySelectorAll('button')[1] as HTMLButtonElement).click();await nextTick();expect(f.save).not.toHaveBeenCalled();expect(f.root.querySelector('[role=alert]')?.textContent).toContain('server:<name>');expect(f.field.getAttribute('aria-invalid')).toBe('true');expect(f.field.value).toBe(value)
 })
