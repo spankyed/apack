@@ -42,10 +42,16 @@ test('mirrors original pending background Agent duration and completion', async 
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
-  await expect.poll(dimensions).toBeGreaterThan(1)
-  const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const resize = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
+    const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const event=rows.map(row=>row.meta?.event).filter(event=>event?.type==='CLAUDE_TERMINAL_RESIZE'&&event.ownerId===ownerId).at(-1)
+    return event?{cols:event.columns,rows:event.rows}:undefined
+  }
+  await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!;
+  expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
+  const terminal = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0, lastScreen = ''
   async function screen() {
     if (await input.isVisible()) { const cols = await dimensions(); if (cols > 1 && cols !== terminal.cols) terminal.resize(cols, 200) }
@@ -82,6 +88,15 @@ test('mirrors original pending background Agent duration and completion', async 
     const journal = async () => (await readFile(await journalPath(), 'utf8')).trim().split(String.fromCharCode(10)).map(line => JSON.parse(line))
     await expect.poll(async () => (await journal()).some(row => row.type === 'system' && row.subtype === 'turn_duration' && row.pendingBackgroundAgentCount === 1)).toBe(true)
     const pendingNativeRows = (await journal()).filter(row => row.type === 'system' && row.subtype === 'turn_duration')
+    const launched=(await journal()).filter(row=>row.type==='user'&&row.toolUseResult?.status==='async_launched')
+    expect(launched).toHaveLength(1)
+    const launch=launched[0],agentId=launch.toolUseResult.agentId
+    expect(typeof agentId).toBe('string')
+    const launchResults=launch.message.content.filter((block:any)=>block.type==='tool_result')
+    expect(launchResults).toHaveLength(1)
+    const toolUseId=launchResults[0].tool_use_id
+    expect((await journal()).some(row=>row.type==='assistant'&&row.message.content.some((block:any)=>block.type==='tool_use'&&block.id===toolUseId&&block.name==='Agent'&&block.input.run_in_background===true))).toBe(true)
+    await expect.poll(async()=>(await context()).native.state.tasks.some((task:any)=>task.id===agentId&&task.status==='running')).toBe(true)
     const draft = 'Keep this release-review draft while the worker finishes.'
     await composer.fill(draft)
     for (const size of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
@@ -97,7 +112,7 @@ test('mirrors original pending background Agent duration and completion', async 
     const completedFrame = (await frames()).findLast((frame: any) => !before.has(frame.uuid) && /for \d/.test(frame.engineOutput ?? '') && !/Waiting for/.test(frame.engineOutput ?? ''))
     await expect(appPage.locator('[data-native-placement="TurnDuration"]').last()).toContainText(/for \d/)
     expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    await writeFile(join(workspace!, 'native-pending-duration-proof.json'), JSON.stringify({ waiting: pendingFrame.engineOutput, completed: completedFrame.engineOutput, pendingFrame, completedFrame, pendingNativeRows }))
+    await writeFile(join(workspace!, 'native-pending-duration-proof.json'), JSON.stringify({ waiting: pendingFrame.engineOutput, completed: completedFrame.engineOutput, pendingFrame, completedFrame, pendingNativeRows, asyncLaunch:{agentId,toolUseId,resultUuid:launch.uuid} }))
     await section.getByRole('button', { name: 'Use native interface', exact: true }).click(); await section.getByRole('button', { name: 'Stop session', exact: true }).click()
     await expect.poll(async () => (await context()).native?.state.status ?? 'exited').toMatch(/^(exited|error)$/)
     const back = section.getByRole('button', { name: 'Back to conversation', exact: true }); if (await back.isVisible()) await back.click()
