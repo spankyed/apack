@@ -106,7 +106,13 @@ test('refuses reset for a live worker and isolates its late response after stopp
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
   await reset();await expect.poll(async()=>(await context()).claude).toBeUndefined();await expect.poll(async()=>(await context()).native?.state.status??'exited').toBe('exited');await expect(card.getByTestId('composer-native-status')).toHaveCount(0)
   const buckets=await readdir(join(workspace!,'.claude/projects'));let priorJournal='';for(const bucket of buckets){try{priorJournal=await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')}catch(error:any){if(error.code!=='ENOENT')throw error}}expect(priorJournal).toBeTruthy()
-  const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(1);await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
+  const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click();try {
+    await expect.poll(async()=>(await context()).turns).toBe(1)
+    await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
+  } catch (error) {
+    await writeFile(join(workspace!,'native-reset-task-restart-failure.json'),JSON.stringify({context:await context(),visibleText:await appPage.locator('body').innerText(),browserErrors:errors},null,2))
+    throw error
+  }
   const replacement=await context();expect(replacement.sessionId).not.toBe(sessionId);expect(replacement.messages.some((message:any)=>message.text==='Review the release notes for this project.')).toBe(true)
   const prints=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));expect(prints.at(-1).sessionId).toBe(replacement.sessionId);expect(replacement.claude.totalCostUsd).toBeCloseTo(prints.at(-1).totalCostUsd,10)
   let freshRows:any[]=[];for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{freshRows=(await readFile(join(workspace!,'.claude/projects',bucket,replacement.sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}catch(error:any){if(error.code!=='ENOENT')throw error}}
