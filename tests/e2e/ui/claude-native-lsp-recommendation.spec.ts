@@ -148,7 +148,19 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     if (decision === 'no') { await appPage.getByRole('dialog', { name: 'About this plugin', exact: true }).getByRole('button', { name: 'Close plugin details', exact: true }).click(); await composer.focus(); await expect(composer).toBeFocused(); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection) }
 
   }
-  if (decision === 'timeout') await expect(notice).toBeHidden({ timeout: 35000 })
+  if (decision === 'timeout') {
+    await notice.getByRole('button', { name: 'About this plugin', exact: true }).click()
+    const details = appPage.getByRole('dialog', { name: 'About this plugin', exact: true })
+    await expect(details).toBeVisible()
+    // Expiration belongs to the original CLI; removing its notice must also retire the portal.
+    await expect(notice).toBeHidden({ timeout: 35000 })
+    await expect(details).toHaveCount(0)
+    await expect(composer).toHaveText(draft)
+    expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
+    await composer.focus()
+    expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection)
+    await writeFile(join(workspace!, 'native-lsp-expired-details-app.json'), JSON.stringify({ originalTimeout: true, portalRetired: true, draftAndSelectionRetained: true, sessionId, boundNativePid }))
+  }
   else { await notice.getByRole('button', { name: labels[decision], exact: true }).click(); await expect(notice).toBeHidden() }
   await expect.poll(async () => (await readFile(join(workspace!, 'native-debug.log'), 'utf8')).includes('User response: ' + decision + ' for recommendation-review')).toBe(true)
   if (decision === 'yes') await expect.poll(async () => (await readFile(join(workspace!, 'native-debug.log'), 'utf8')).includes('Plugin installed: recommendation-review@owned-recommendation'), { timeout: 15000 }).toBe(true)
