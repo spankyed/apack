@@ -24,6 +24,7 @@ import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#gene
 import type { ClaudeUiFocusEvent, ClaudeUiFocusReply } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import { useClaudeSiteScroll } from './native-site-scroll.ts'
 import NativeUiNode from './NativeUiNode.vue'
+import { claudeClientVisible } from './native-client-input.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { pressClaudeUiHotkey } from './native-ui-hotkeys.ts'
 import { useClaudeHoverSurface, claudeHoverSurface } from './native-ui-hover.ts'
@@ -33,6 +34,7 @@ onBeforeUnmount(() => hover.dispose())
 const props = defineProps<{ statusLine?: string; nativeStatus?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: ClaudeUiFocusReply }>()
 watch(() => props.nativeUi, () => hover.invalidate(), { flush: 'post' })
 const toolsOpen = ref(false)
+provide(claudeClientVisible, computed(() => toolsOpen.value))
 const isWorkspacePath = computed(() => !!props.statusLine && (props.statusLine === props.cwd || props.statusLine.startsWith('/') || /^[a-z]:[\\/]/i.test(props.statusLine)))
 const displayPath = computed(() => {
   if (!isWorkspacePath.value) return props.statusLine

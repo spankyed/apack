@@ -5,6 +5,7 @@ import { createApp, defineComponent, h, reactive, ref, computed, nextTick, type 
 import { claudeUiColor, claudeUiBoxPaint } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { prepareClaudeSvg } from '#features/threads/fe/chat/native-svg.ts'
 import { createClaudeHoverSurface, provideClaudeHoverGroups } from '#features/threads/fe/chat/native-ui-hover.ts'
+import { claudeClientInput } from '#features/threads/fe/chat/native-client-input.ts'
 import StatusLine from '#features/threads/fe/chat/StatusLine.vue'
 import type { ClaudeUiMountState, ClaudeUiNode } from '#generated/types.ts'
 
@@ -20,13 +21,13 @@ let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals() })
 async function mount(props: { statusLine?: string; cwd?: string; nativeUi?: ClaudeUiMountState; nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }, expand = true) {
   const state = reactive(props)
-  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn()
+  const cwd = vi.fn(), press = vi.fn(), field = vi.fn(), returnFocus = vi.fn(), submit = vi.fn(), phase = vi.fn(), focusReport = vi.fn(), toolsExpanded = vi.fn(), clientInput = vi.fn()
   const root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h('form', { 'data-onboarding-id': 'agent-chat-input', onKeydown: (event: KeyboardEvent) => { if (event.key === 'Tab' && event.shiftKey) { event.preventDefault(); phase() } }, onSubmit: (event: Event) => { event.preventDefault(); submit() } }, [
     h(StatusLine, { ...state, onClick: cwd, onPress: press, onField: field, onReturnFocus: returnFocus, onFocusReport: focusReport, onToolsExpanded: toolsExpanded }), h('textarea', { 'aria-label': 'Message' }),
-  ]) }); app.mount(root)
+  ]) }); app.provide(claudeClientInput, clientInput); app.mount(root)
   if (expand) { root.querySelector<HTMLButtonElement>('button[aria-label="Session tools"]')?.click(); await nextTick() }
-  return { state, root, cwd, press, field, returnFocus, submit, phase, focusReport, toolsExpanded }
+  return { state, root, cwd, press, field, returnFocus, submit, phase, focusReport, toolsExpanded, clientInput }
 }
 const live: ClaudeUiMountState = { status: 'live', tree: { kind: 'box', plugin: 'fixture', children: [
   { kind: 'text', text: 'First line\nSecond line <script>bad()</script>' },
@@ -909,4 +910,41 @@ it('reserves a complete focused field and feedback row when its compact site is 
   expect(f.field).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled()
   f.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!.focus(); await nextTick()
   expect(strip.style.minHeight).toBe('min(107px, calc(var(--composer-available-height) * 0.5))')
+})
+
+
+it('retires Client composition and hidden keys on collapse while preserving its mounted state',async()=>{
+ const tree={kind:'client' as const,id:'collapse-client',keys:true,pointer:true,children:[{kind:'text' as const,text:'Live native state'}]}
+ const f=await mount({nativeUi:{status:'live',tree}})
+ const region=f.root.querySelector<HTMLElement>('[data-native-client]')!
+ const keyboard=f.root.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ keyboard.focus();keyboard.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ keyboard.dispatchEvent(new CompositionEvent('compositionupdate',{bubbles:true,data:'old'}))
+ f.root.querySelector<HTMLButtonElement>('[aria-label="Session tools"]')!.click();await nextTick()
+ f.clientInput.mockClear()
+ keyboard.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'old'}))
+ keyboard.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'x'}))
+ expect(f.clientInput).not.toHaveBeenCalled()
+ expect(document.activeElement).not.toBe(keyboard)
+ expect(f.root.querySelector('[data-native-client-composition]')).toBeNull()
+ expect(f.root.querySelector('[data-native-client]')).toBe(region)
+ f.root.querySelector<HTMLButtonElement>('[aria-label="Session tools"]')!.click();await nextTick()
+ keyboard.focus();keyboard.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'y'}))
+ expect(f.clientInput).toHaveBeenCalledWith('collapse-client',{kind:'key',key:'y'})
+ expect(f.root.querySelector('[data-native-client]')).toBe(region)
+})
+
+
+it('releases a captured Client pointer on collapse and discards its queued move',async()=>{
+ const tree={kind:'client' as const,id:'pointer-client',keys:false,pointer:true,children:[{kind:'text' as const,text:'Pointer state'}]}
+ const f=await mount({nativeUi:{status:'live',tree}})
+ const region=f.root.querySelector<HTMLElement>('[data-native-client]')!
+ const release=vi.fn();Object.assign(region,{setPointerCapture:vi.fn(),hasPointerCapture:()=>true,releasePointerCapture:release})
+ const pointer=(type:string)=>{const event=new MouseEvent(type,{bubbles:true,clientX:4,clientY:5,buttons:1});Object.defineProperty(event,'pointerId',{value:7});region.dispatchEvent(event)}
+ pointer('pointerdown');pointer('pointermove');f.clientInput.mockClear()
+ f.root.querySelector<HTMLButtonElement>('[aria-label="Session tools"]')!.click();await nextTick()
+ expect(release).toHaveBeenCalledWith(7)
+ expect(f.clientInput).toHaveBeenCalledExactlyOnceWith('pointer-client',expect.objectContaining({kind:'pointer',type:'up'}))
+ f.clientInput.mockClear();pointer('pointermove');pointer('pointerup')
+ expect(f.clientInput).not.toHaveBeenCalled()
 })
