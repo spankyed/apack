@@ -264,7 +264,16 @@ test('edits original Settings through desktop controls and retains composing', a
         await body.hover();for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
         const geometry=await bounds();expect(geometry.visible).toBe(true)
         const text=(await value.innerText()).replace(/\s+/g,' ').trim();expect(text).toMatch(/user settings/i);expect(text).toMatch(/project local settings/i);expect(text).toMatch(/,\s+/)
-        statusSamples.push({width,height,value:text,geometry,realWheel:true})
+        const sample:any={width,height,value:text,geometry,realWheel:true}
+        if(process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1'){
+          const warning=panel.getByRole('region',{name:'System diagnostics',exact:true}),item=warning.locator('li').filter({hasText:/Large CLAUDE\.md will impact performance/})
+          await expect(item).toHaveCount(1)
+          const diagnosticBounds=()=>item.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Status"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Diagnostic exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
+          await body.hover();for(let step=0;step<40;step++){const state=await diagnosticBounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+          const diagnosticGeometry=await diagnosticBounds();expect(diagnosticGeometry.visible).toBe(true)
+          sample.diagnostic={text:await item.innerText(),geometry:diagnosticGeometry,realWheel:true}
+        }
+        statusSamples.push(sample)
       }
       await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport()
       await expect(tabs.getByRole('button',{name:tab,exact:true})).toBeInViewport()
@@ -281,6 +290,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
