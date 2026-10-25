@@ -1,9 +1,12 @@
 # Live queries
 
-Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
-protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain (`d19538a74`), browser (`fab8e242d`) and code done; logs sorted, unchanged. Step 1's readings and the decisions each step made are below. Step 5
-not started.
+Status: Steps 1–5 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property (step 1,
+`517900b52`); elmdb's protocol (step 1a, done: `elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness
+(`e4f65d409`); prompts on views (`cdeb2c846`); step 4, one change per feature: actions (`0a7313f0f`), flows
+(`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain
+(`d19538a74`), browser (`fab8e242d`) and code (`7b80bffb8`), with logs sorted and left alone; step 5, the guide
+rewritten and the pack rule decided against. No feature in default-setup broadcasts row data. Step 1's readings and
+the decisions each step made are below.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
@@ -532,6 +535,20 @@ and `threads`' streaming tokens are notifications.
   against. If it can't be stated precisely it doesn't ship, since a rule that fires on notifications teaches people to
   ignore it.
 
+**Done**, and the decisions:
+
+- **The guide says data is a view, a result is a reply, news is a broadcast** (`packages/default-setup/CLAUDE.md`, "What
+  a system sends a surface"), with the worked views, what is not a view and why (disk, the run history, a walk over the
+  store), `reply` answering only the delivered message, `SURFACE_STARTED` as where a surface asks, and feeds as news.
+  The guard histories it kept are the ones still in the code.
+- **The pack rule doesn't ship: it can't be stated precisely with what a rule can see.** The pack rules read each
+  file's syntax, with no type checker, and "a payload of a type a view serves" is a question about types. Asked of the
+  contract instead, where codegen does have types, it still can't be answered: a contract's `outgoing` holds a
+  feature's answers and its news alike, and an answer carrying a row is right (`NOTE_CREATED` with its summary,
+  `SAVED_SESSION_READ`, `RECEIVE_SURFACE_DATA`) — so the rule would fire on every reply that names a row, and still miss
+  the broadcast an `answer(reply, event)` makes when nobody asked. The condition that would make it precise is a
+  contract that declares its answers apart from its news; until then the guide is the rule. Under Open.
+
 ## Risks
 
 - **Re-run cost on hot writes.** A streaming message is rewritten every 80 ms (`stream-writer.ts`); every view whose
@@ -550,8 +567,12 @@ and `threads`' streaming tokens are notifications.
 - **An answer through a flow.** A surface that asks a flow for something (the database's generated query) hears the
   result by broadcast, since a flow run carries no return address. Carrying the asker's address into the run would
   let a step reply.
-- Whether `whenView` is needed by more than "select what I just created", or whether `useView` should hold back a
-  result older than the window's last reply.
+- **`whenView` wasn't needed, by any feature.** Every surface that selects what it just created takes the id from the
+  write's answer — `NOTE_CREATED`, `THREAD_CREATED`, `COLLECTION_CREATED`, `NODE_CREATED` — and selects it once the
+  view that lists it gives it, which a view does after the write's commit; an editor holds its views behind its own
+  writes (`ViewWrites`) and reads them again once they are answered. The commit sequence on `reply` stays unbuilt.
+- **A contract that declares its answers apart from its news** (`answers` beside `outgoing`): what would make the step 5
+  pack rule statable, and type `reply` against the asker's incoming events rather than the answerer's outgoing.
 - The minimum re-run interval, from Step 1's readings.
 
 ## Out of scope
