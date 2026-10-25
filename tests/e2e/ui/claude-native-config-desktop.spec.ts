@@ -194,7 +194,7 @@ test('edits original Settings through desktop controls and retains composing', a
       const inBody=(target:import('@playwright/test').Locator)=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
       async function readTo(target:import('@playwright/test').Locator){
         await body.hover()
-        for(let step=0;step<40&&!await inBody(target);step++){await appPage.mouse.wheel(0,120);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
+        for(let step=0;step<40&&!await inBody(target);step++){await appPage.mouse.wheel(0,60);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
         expect(await inBody(target)).toBe(true)
       }
       async function statsCapture(label:string,width:number){
@@ -206,7 +206,7 @@ test('edits original Settings through desktop controls and retains composing', a
       }
       for(const width of [1100,680]){
         await appPage.setViewportSize({width,height:width===680?600:900})
-        const longest=statistics.locator('dt').filter({hasText:/^Longest session$/});await readTo(longest);await statsCapture('summary',width)
+        const longest=statistics.locator('dt').filter({hasText:/^Longest session$/}).locator('..');await readTo(longest);await statsCapture('summary',width)
         await readTo(insight);await statsCapture('insight',width)
         const history=statistics.getByText('Activity dates and counts',{exact:true});await readTo(history);await history.click()
         const historicalRow=statistics.locator('details[open] tbody tr').filter({hasText:histories[2].date})
