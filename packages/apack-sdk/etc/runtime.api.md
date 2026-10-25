@@ -46,6 +46,7 @@ export { Ears }
 // @public
 export interface FeClient {
     send(message: Message): void;
+    watchView(request: ViewRequest, observer: (update: ViewUpdate) => void): () => void;
 }
 
 // @public

@@ -1,7 +1,8 @@
 # Live queries
 
-Status: Step 1 implemented, 2026-10-25 (`engine.watch`, the read-set index, the harness property); its readings
-below. Steps 1a–5 not started.
+Status: Steps 1, 1a and 2 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property;
+elmdb's protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness. Step 1's readings and Step 2's
+decisions are below. Steps 3–5 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
@@ -256,6 +257,43 @@ lands before Step 2 so nothing above the engine is built on a contract elmdb can
 **Done when:** a spec with two clients holds that each receives only its own view's results, that two clients on the
 same view and arguments share one engine watch, that an unmount or a socket close ends the watch (the registry is empty
 afterwards), and that a pack reload re-runs the views on the new code.
+
+**Decisions made building it** (2026-10-25):
+
+- **`useView(feature, view, args)` names the feature.** The plan's sketch took it from the component's surface, but a
+  type can't follow a runtime scope, so the name is what makes the view, its arguments and its result checkable; it
+  also lets a component read another of its own pack's features' views, which the scope couldn't.
+- **Typed views are the pack's own features'.** A dependency's go through `untypedUseView`. Typing them would put the
+  views' types in the facade a dependent reads, which changes what a snapshot carries; nothing asks for it yet.
+- **The registry is what a view's code is.** Views ride in the registration (`PackFeature.views`, checked against the
+  manifest like systems and surfaces), and the host resolves a request there each time it starts one. The registry
+  gained `onRegistrationChanged`, told once a registration, replacement or unregistration has committed, and the view
+  host restarts that pack's watches on it — so a reload re-runs them on the new code, a pack gone is an error that a
+  later registration clears, and nothing in the pack runtime has to remember that views exist.
+- **Arguments are data, compared as data.** `viewKey` sorts object keys, so `{ a, b }` and `{ b, a }` are one watch on
+  the host and one subscription in a component; `null` or `undefined` leaves a view idle, and a view that takes no
+  arguments is called with none.
+- **New arguments start from no result; an error keeps the last one.** Holding the previous page while the next loads
+  would show one prompt's data under another's selection. A view that throws, or whose pack is reloading, keeps showing
+  what it showed with `status: 'error'`.
+- **Delivery is always asynchronous on the host too.** A subscriber joining a running watch is handed its last result
+  on a microtask, and an unresolvable request's error likewise, so no caller sees an observer run inside `watch`.
+- **A restarted watch whose result reads the same isn't delivered again**, compared as the JSON it crosses the wire as.
+  The engine's own equality covers commits; this covers the restart, which the engine sees as a new watch.
+- **The commit sequence on `reply`, and `whenView`, are deferred until a feature needs them.** A command's reply is sent
+  after its write committed, and a subscription opened after the reply reads at or past that commit, so "select what I
+  just created" (a `byId` view opened on the reply's id) is read-your-writes by construction. What would need the
+  sequence is a view already open that must include the write before the UI acts on it; Step 3 and Step 4 say whether
+  one exists. Every `ViewUpdate` and `ViewState` carries its commit already, so adding it to `reply` is small.
+- **The renderer re-subscribes its views when the API moves port**, beside the bus subscription. A socket that drops and
+  comes back keeps them, since tRPC's client sends its pending subscriptions again on reconnect.
+
+**Proofs:** `apack-host/tests/views/view-host.spec.ts` (own results per subscriber, one engine watch per request
+whatever the key order, the last to leave stops it, a replaced pack's new code, errors that keep the subscription; two
+mutations — no sharing, no restart — each fail it), `api/tests/transport/views.spec.ts` (two sockets on one view share
+one watch, and each socket closing ends its subscriptions, over a real adapter), `apack-sdk/tests/fe/views.spec.ts`
+(`untypedUseView`'s states, re-subscribing only for different arguments, idle, the scope ending it, a late delivery
+ignored), and the codegen cases in `compiles.spec.ts`. The harness's `watchView` is first used by Step 3's spec.
 
 ### 3. Prompts on views
 

@@ -1,8 +1,10 @@
 // A test app: the pack's registered systems under the app's bus core, with a client the test drives.
 import { createActor, type Actor, type AnyActorRef, type AnyStateMachine } from 'xstate';
 import { createBusMachine, HOST } from '@apackdev/host/bus';
-import { resolveRegistered } from '@apackdev/sdk/ids';
-import type { PackLifecycleHooks } from '@apackdev/sdk/framework';
+import { resolveName, resolveRegistered } from '@apackdev/sdk/ids';
+import type { PackLifecycleHooks, PackRegistration, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
+import { createViewHost } from '@apackdev/host/views';
+import { boundEars } from '@apackdev/sdk/ears';
 import { newCall, type Message } from '@apackdev/sdk/events';
 import { testRootEvents, testRunHistory } from '@apackdev/sdk/testing';
 import type { RunNodeId } from '@apackdev/sdk/services';
@@ -60,6 +62,16 @@ export interface FlowRun {
   eventRunNodeIds: string[];
   /** The steps those tracks ran, in the order they started */
   steps: FlowRunStep[];
+}
+
+/** One subscription to a view, as a window's `useView` holds it */
+export interface TestView<Result = unknown> {
+  /** Every update delivered so far, in order: results, and errors from a view that threw or a pack that isn't running */
+  readonly updates: ReadonlyArray<ViewUpdate<Result>>;
+  /** The next update after those an earlier `next` returned, waiting for it if needed (5 s by default) */
+  next(options?: { timeoutMs?: number }): Promise<ViewUpdate<Result>>;
+  /** Unsubscribes, as a window's component unmounting does; the app stopping does it too */
+  stop(): void;
 }
 
 export interface TestApp {
@@ -127,6 +139,14 @@ export interface TestApp {
   /** A running system's actor */
   system(systemId: string): AnyActorRef;
   /**
+   * Subscribes to a feature's view as a window does (`useView`), the feature named as `sendToSystem` names a
+   * system. Each call is its own subscriber, so two of them stand in for two windows; subscribers asking for the
+   * same view with the same arguments share one watch, as the app's do. Ended when the app stops.
+   */
+  watchView<Result = unknown>(feature: string, view: string, args?: unknown): TestView<Result>;
+  /** How many distinct views are being watched in this test file, and how many subscriptions share them */
+  viewStats(): { views: number; subscriptions: number };
+  /**
    * Stops the systems and ends pending `nextEmit`/`runFlow` waits with an "app stopped" error; later calls (`connect`,
    * `send`, `nextEmit`, `settle`, `runFlow`, `system`) fail with it too. Once no app runs, it runs each registered
    * pack's `lifecycle.onShutdown`, as the app does when it stops a pack, so state its modules keep outside the stopped
@@ -144,17 +164,36 @@ interface AppPacks {
   getSurfaceEventValidationMap(): Map<string, Set<string>>;
   /** And what each system accepts, so a send a system declares no event for is reported rather than ignored */
   getEventValidationMap(): Map<string, Set<string>>;
+  /** What a view's code is, which the view host reads and follows */
+  getPackRegistration(packId: string): PackRegistration | null;
+  onRegistrationChanged(listener: (packId: string) => void): () => void;
 
 }
 
 const running = new Set<TestApp>();
 let registry: AppPacks | undefined;
 let packId: string | undefined;
+/** What the harness uses of the host's view host, in published types: the declarations can't name `@apackdev/host` */
+interface TestViews {
+  watch(request: ViewRequest, observer: (update: ViewUpdate) => void): () => void;
+  stats(): { views: number; subscriptions: number };
+  close(): void;
+}
+let views: TestViews | undefined;
 
 /** @internal The harness sets the registry apps run the systems of, and the pack's id, which its bare system ids map with */
 export function setAppPacks(packs: AppPacks, id?: string): void {
+  views?.close();
   registry = packs;
   packId = id;
+  // The test file's views, on whichever engine is bound when each starts: a test's reset binds a fresh one
+  views = createViewHost({ ears: boundEars, packs });
+}
+
+/** @internal The test file's views, which apps and the harness's shell subscribe to as the app's windows do */
+export function testViews(): TestViews {
+  packs();
+  return views!;
 }
 
 function packs(): AppPacks {
@@ -337,6 +376,8 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   });
 
   const stoppedError = () => new Error('The test app stopped (its test ended, or app.stop() ran) before this finished');
+  /** The view subscriptions this app opened, which its stop ends */
+  const watched = new Set<{ stop(): void }>();
   /** Resolves with what `check` finds once an event makes it find something; rejects when the app stops first */
   const waitForEmitted = <T>(check: () => T | undefined, timeoutMs: number, describe: () => string) => new Promise<T>((resolve, reject) => {
     if (stopped) return reject(stoppedError());
@@ -529,8 +570,33 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       if (!actor) throw new Error(`System "${systemId}" isn't running`);
       return actor;
     },
+    watchView<Result>(feature: string, view: string, args?: unknown): TestView<Result> {
+      if (stopped) throw stoppedError();
+      const updates: Array<ViewUpdate<Result>> = [];
+      let read = 0;
+      const unsubscribe = testViews().watch({ ref: resolveName(feature, packId), view, ...(args === undefined ? {} : { args }) }, (update) => {
+        updates.push(update as ViewUpdate<Result>);
+        wakeWaits();
+      });
+      const subscription: TestView<Result> = {
+        updates,
+        next: ({ timeoutMs = 5000 } = {}) => call(() => waitForEmitted(
+          () => (read < updates.length ? updates[read++] : undefined),
+          timeoutMs,
+          () => `No update from view "${view}" of "${feature}" within ${timeoutMs}ms after the ${read} already read; it delivered: ${JSON.stringify(updates)}`,
+        )),
+        stop: () => {
+          unsubscribe();
+          watched.delete(subscription);
+        },
+      };
+      watched.add(subscription);
+      return subscription;
+    },
+    viewStats: () => testViews().stats(),
     stop() {
       if (!running.delete(app)) return;
+      for (const subscription of watched) subscription.stop();
       stopped = true;
       stopRecording.forEach((unsubscribe) => unsubscribe());
       bus.stop();

@@ -16,6 +16,7 @@ import {
 } from '@apackdev/host/features';
 import { createAppBus, createParticipantClaims, HOST } from '@apackdev/host/bus';
 import { createHostRuntime } from '@apackdev/host/services';
+import { createViewHost, type ViewHost } from '@apackdev/host/views';
 import { _settingsAdmin, type RunNode } from '@apackdev/sdk/services';
 import { compileSettingsCatalog, createSettingsAccess } from '@apackdev/host/settings';
 import { forwardSecretsChanges } from '@apackdev/host/secrets';
@@ -58,6 +59,8 @@ export interface AppStore {
 /** The app's registered packs, which openAppStore creates: the transport's procedures and dev reload work on them */
 export let appPacks: PackRegistry;
 export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
+/** The views windows are subscribed to, run on the app's engine over its registered packs (`views.watch`) */
+export let appViews: ViewHost;
 
 /**
  * The open store, so shutdown can flush it.
@@ -116,6 +119,7 @@ export function openAppStore(): AppStore {
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
+  appViews = createViewHost({ ears: () => engine, packs });
   appStore = store;
   appRunHistory = runHistory;
   return { store, runHistory, engine, packs };

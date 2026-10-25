@@ -13,7 +13,7 @@ function bindWith(browserRole: string | undefined) {
     application: { system: { get: (id: string) => (id === browserRole ? browser : undefined) } } as never,
     secrets: {} as never,
     settings: {} as never,
-    client: { send() {} },
+    client: { send() {}, watchView: () => () => {} },
     packs: { designation: (role: string) => (role === 'browser' ? browserRole : undefined) } as never,
   });
   return { received, openExternal };

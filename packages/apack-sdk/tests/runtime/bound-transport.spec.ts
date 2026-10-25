@@ -124,7 +124,7 @@ describe('with a frontend bound too', () => {
       application: {} as never,
       secrets: {} as never,
     settings: {} as never,
-      client: { send: (message) => sentByFrontend.push(message) },
+      client: { send: (message) => sentByFrontend.push(message), watchView: () => () => {} },
       packs: { designation: (role: string) => (role === 'brain' ? 'brain-surface' : undefined) } as never,
     });
     try {

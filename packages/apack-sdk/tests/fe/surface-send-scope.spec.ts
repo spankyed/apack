@@ -51,7 +51,7 @@ beforeEach(() => {
     application: { system: { get: (ref: string) => running[ref] }, subscribe: () => ({ unsubscribe() {} }) } as never,
     secrets: {} as never,
     settings: {} as never,
-    client: { send() {} },
+    client: { send() {}, watchView: () => () => {} },
     packs: {} as never,
   });
 });
