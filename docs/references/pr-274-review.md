@@ -118,7 +118,7 @@ user's action is durable within 100 ms of its last write.
 ### Compaction on conversion and backup
 
 #274's converted production copy compacts from 116 to 86 MB. On #273 a compacting copy (`root.backup(dir, true)`) takes
-the converted production copy from 369 to 258 MB — most of the rest is 146 MB of large values stored uncompressed — and
+the converted production copy from 387 to 271 MB — most of the rest is 153 MB of large values stored uncompressed — and
 was added to the conversion and to every backup (`c31804a75`). It came back out (`a7a4234ae`): a compacted copy of
 data with values spanning several overflow pages aborts the process when it is emptied, an LMDB assertion in
 `mdb_page_alloc` on lmdb-js 3.5.9, the newest release. It reproduces without this repo's data; the evidence, the
