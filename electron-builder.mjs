@@ -185,6 +185,11 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/**/docs/**',
     '!**/node_modules/**/CHANGELOG*',
     '!**/node_modules/**/.eslintrc*',
+    // elmdb is linked from a checkout of its repository, so its crate sits beside what it publishes (its package.json
+    // `files`: index.js, the protocol and the binding); only what it publishes ships
+    '!**/node_modules/elmdb/{src,target}/**',
+    '!**/node_modules/elmdb/{build.rs,Cargo.toml}',
+    '!**/node_modules/elmdb/protocol/*.js',
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),
