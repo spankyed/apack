@@ -64,6 +64,7 @@ export function mountClaudeUi(options: {
   let agentTimer: ReturnType<typeof setInterval> | undefined
   let panelQueue = Promise.resolve()
   let agentInput: ClaudeUiMountState['agentInput']
+  const cancellingSettingsPanels = new WeakSet<object>()
   async function refreshAgent() {
     if (agentReading || !current() || !owner.readAgent && agentInput?.status !== 'panel') return
     agentReading = true
@@ -317,16 +318,18 @@ export function mountClaudeUi(options: {
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
     },
     async settings(revision: number, panelId: string, requestId: string, action: import('../../../common/native-settings.ts').ClaudeSettingsOperation) {
-      if (!current() || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId || agentInput.settings?.status === 'pending') return
+      const cancelling = action.kind === 'editor' && action.command.action === 'cancel'
+      if (!current() || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId || cancellingSettingsPanels.has(agentInput) || agentInput.settings?.status === 'pending' && !cancelling) return
       const panelState = agentInput
+      if (cancelling) cancellingSettingsPanels.add(panelState)
       panelState.settings = {requestId,status:'pending',...(panelState.settings?.snapshot?{snapshot:panelState.settings.snapshot}:{})}; publish(lastState)
       try {
         const result = await owner.handle.ui.settings({client_id:client.client_id,panel_id:panelId,action})
         if (!current() || agentInput !== panelState || panelState.settings?.requestId !== requestId) return
         panelState.settings = {requestId,status:result.problem?'error':'ready',...result}; publish(lastState)
       } catch (error) {
-        if (current() && agentInput === panelState && panelState.settings?.requestId === requestId) { panelState.settings = {requestId,status:'error',snapshot:panelState.settings.snapshot,problem:error instanceof Error?error.message:'Native Settings could not load'}; publish(lastState) }
-      }
+        if (current() && agentInput === panelState && panelState.settings?.requestId === requestId) { panelState.settings = {requestId,status:'error',snapshot:panelState.settings.snapshot?{...panelState.settings.snapshot,commitPending:false}:undefined,problem:error instanceof Error?error.message:'Native Settings could not load'}; publish(lastState) }
+      } finally { if (cancelling) cancellingSettingsPanels.delete(panelState) }
     },
     agentPanel(revision: number, panelId: string, text?: string) {
       panelQueue = panelQueue.then(async () => {

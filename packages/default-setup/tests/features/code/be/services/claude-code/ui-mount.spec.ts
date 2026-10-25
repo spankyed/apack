@@ -606,3 +606,27 @@ it('discards a held key acknowledgement and queued keys after the mounted view d
   expect(f.ui.key).toHaveBeenCalledOnce()
   expect(f.states.at(-1)?.actionKeys).toBeUndefined()
 })
+
+it('dispatches pending Settings Cancel once and ignores a late Save reply',async()=>{
+ const f=fixture(),panelId='12345678-1234-1234-1234-123456789abc';Object.assign(f.owner,{nativeView:{session_id:'session',revision:2,agent_id:'agent'}})
+ f.ui.submitAgent.mockResolvedValueOnce({kind:'panel',id:panelId,commandName:'config'})
+ const view=f.mount();await view.ready;await view.submitAgent(1,'/config');await view.settings(1,panelId,'read',{kind:'read'})
+ const saved=deferred<Awaited<ReturnType<typeof f.ui.settings>>>(),cancelled=deferred<Awaited<ReturnType<typeof f.ui.settings>>>()
+ f.ui.settings.mockReturnValueOnce(saved.promise).mockReturnValueOnce(cancelled.promise)
+ const saving=view.settings(1,panelId,'save',{kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'save',values:{value:'draft'}}})
+ const cancelling=view.settings(1,panelId,'cancel',{kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
+ await view.settings(1,panelId,'duplicate-cancel',{kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
+ expect(f.ui.settings).toHaveBeenCalledTimes(3)
+ cancelled.resolve({snapshot:{revision:'c'.repeat(64),rows:[]}});await cancelling
+ saved.resolve({snapshot:{revision:'d'.repeat(64),rows:[],commitPending:true}});await saving
+ expect(f.states.at(-1)?.agentInput?.settings).toMatchObject({requestId:'cancel',status:'ready',snapshot:{revision:'c'.repeat(64)}})
+ await view.dispose()
+})
+it('clears a failed native-commit waiting hint so Refresh remains available',async()=>{
+ const f=fixture(),panelId='12345678-1234-1234-1234-123456789abc';Object.assign(f.owner,{nativeView:{session_id:'session',revision:2,agent_id:'agent'}})
+ f.ui.submitAgent.mockResolvedValueOnce({kind:'panel',id:panelId,commandName:'config'});f.ui.settings.mockResolvedValueOnce({snapshot:{revision:'a'.repeat(64),rows:[],commitPending:true}})
+ const view=f.mount();await view.ready;await view.submitAgent(1,'/config');await view.settings(1,panelId,'read',{kind:'read'})
+ f.ui.settings.mockRejectedValueOnce(new Error('Native read failed'));await view.settings(1,panelId,'refresh',{kind:'read'})
+ expect(f.states.at(-1)?.agentInput?.settings).toMatchObject({status:'error',snapshot:{commitPending:false},problem:'Native read failed'})
+ await view.dispose()
+})

@@ -32,10 +32,18 @@ async function readNativeSettings(n,entry,signal){
   else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}}
  }
 
+ let problem;
+ const commit=entry.settingsCommit;
+ if(commit){
+  const row=rows.find(row=>row.key===commit.key);
+  if(!row||!Object.is(row.value,commit.before))delete entry.settingsCommit;
+  else if(Date.now()>=commit.until){delete entry.settingsCommit;problem='Claude Code has not acknowledged the setting change. Refresh to check its current value.';}
+ }
+ const commitPending=!!entry.settingsCommit;
  // Timed copy feedback is presentation state, not authority to change settings or Stats controls.
  const revisionFrame=frame.stats?{...frame,stats:{...frame.stats,copyState:undefined}}:frame;
- const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame,editor})).digest('hex');
- return {snapshot:{revision,rows,frame,...editor?{editor}:{}},handles,api};
+ const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame,editor,commitPending})).digest('hex');
+ return {snapshot:{revision,rows,frame,...editor?{editor}:{},...commitPending?{commitPending:true}:{}},...problem?{problem}:{},handles,api};
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
@@ -49,11 +57,17 @@ async function nativeSettings(n,request,abort){
   }else if(request.operation!=='read')throw Error('A native Settings editor operation is pending');
  }
  const read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
- if(request.operation==='read')return {snapshot:read.snapshot};
+ if(request.operation==='read')return {snapshot:read.snapshot,...read.problem?{problem:read.problem}:{}};
+ if(entry.settingsCommit&&request.operation!=='editor')throw Error('A native setting change is pending');
  if(request.operation==='open'||request.operation==='editor'){
+  if(entry.settingsCommit&&!isEditorCancel)throw Error('A native setting change is pending');
   if(request.revision!==read.snapshot.revision&&!cancelledLease)throw Error('Native Settings changed; refresh before editing');
   if(isEditorCancel){
    const current=await readNativeSettingsEditor(n,entry,abort.signal);nativeSettingsPanel(request);
+   if(!current&&cancelledLease){
+    const config=nativeSettingsConfig(n,entry);if(!sameNativeSettingsFiber(config.owner,cancelledLease.owner))throw Error('Native Settings editor owner changed before cancellation');
+    return {snapshot:read.snapshot};
+   }
    if(!current||cancelledLease&&!sameNativeSettingsFiber(current.owner,cancelledLease.owner))throw Error('Native Settings editor owner changed before cancellation');
    const result=await actNativeSettingsEditor(n,entry,{action:'cancel',revision:cancelledLease?current.revision:request.editor_revision},abort.signal);
    await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
@@ -72,7 +86,7 @@ async function nativeSettings(n,request,abort){
    lease={controller,revision:request.editor_revision,panelRevision:request.revision,owner:native?.owner};entry.settingsEditorLease=lease;
    if(request.operation==='open'){
     const visible=new Set(read.snapshot.rows.filter(row=>row.editorAvailable&&!row.isLocked).map(row=>row.key));
-    entry.settingsEditorLabel=read.snapshot.rows.find(row=>row.key===request.key)?.label;
+    entry.settingsEditorLabel=read.snapshot.rows.find(row=>row.key===request.key)?.label;entry.settingsEditorKey=request.key;
     await activateNativeSettingsEditor(n,entry,request.key,visible,controller.signal);
    }else{
     const command=request.command;
@@ -80,6 +94,10 @@ async function nativeSettings(n,request,abort){
     const result=command.action==='save'?await saveNativeSettingsEditor(n,entry,request.editor_revision,command.values,controller.signal):await actNativeSettingsEditor(n,entry,{...command,revision:request.editor_revision},controller.signal);
     nativeSettingsPanel(request);
     if(result?.problem)return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot,problem:result.problem};
+    const row=read.snapshot.rows.find(row=>row.key===entry.settingsEditorKey);
+    const selected=command.action==='select'?command.value:command.values?.value;
+    const proposed=row?.kind==='number'?Number(selected):selected;
+    if(row&&selected!==undefined&&!Object.is(row.value,proposed))entry.settingsCommit={key:row.key,before:row.value,until:Date.now()+5000};
    }
    controller.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
    return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot};

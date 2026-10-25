@@ -1461,8 +1461,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     cwd: string;
     revision: string;
-    id: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1478,8 +1478,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, {
     cwd: string;
     revision: string;
-    id: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -2133,28 +2133,28 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }, {
     revision: string;
     title: string;
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -11296,6 +11296,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }[];
         description?: string | undefined;
     }>]>>;
+    commitPending: z.ZodOptional<z.ZodBoolean>;
     revision: z.ZodString;
     rows: z.ZodArray<z.ZodObject<{
         key: z.ZodString;
@@ -11310,8 +11311,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, "strict", z.ZodTypeAny, {
         key: string;
         value: string | number | boolean | null;
-        label: string;
         kind: "boolean" | "choice" | "number" | "text";
+        label: string;
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
@@ -11320,8 +11321,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, {
         key: string;
         value: string | number | boolean | null;
-        label: string;
         kind: "boolean" | "choice" | "number" | "text";
+        label: string;
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
@@ -11333,8 +11334,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     rows: {
         key: string;
         value: string | number | boolean | null;
-        label: string;
         kind: "boolean" | "choice" | "number" | "text";
+        label: string;
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
@@ -11447,13 +11448,14 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         diagnostics?: string[] | undefined;
     } | undefined;
+    commitPending?: boolean | undefined;
 }, {
     revision: string;
     rows: {
         key: string;
         value: string | number | boolean | null;
-        label: string;
         kind: "boolean" | "choice" | "number" | "text";
+        label: string;
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
@@ -11566,6 +11568,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         diagnostics?: string[] | undefined;
     } | undefined;
+    commitPending?: boolean | undefined;
 }>;
 
 /**
@@ -11847,8 +11850,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             rows: {
                 key: string;
                 value: string | number | boolean | null;
-                label: string;
                 kind: "boolean" | "choice" | "number" | "text";
+                label: string;
                 isLocked: boolean;
                 options?: string[] | undefined;
                 description?: string | undefined;
@@ -11961,6 +11964,7 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 } | undefined;
                 diagnostics?: string[] | undefined;
             } | undefined;
+            commitPending?: boolean | undefined;
         };
         problem?: string | undefined;
         savedKey?: string | undefined;
@@ -14705,8 +14709,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

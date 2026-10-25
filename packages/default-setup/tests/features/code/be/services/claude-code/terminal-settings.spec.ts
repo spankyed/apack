@@ -89,3 +89,15 @@ it('refuses stale cancellation tokens and never invokes Cancel on a replacement 
  await expect(f.run(f.n,{...request,command:{action:'cancel'}},new AbortController())).rejects.toThrow('owner changed before cancellation')
  await saving;expect(f.editorAction).not.toHaveBeenCalled();expect(heldSignal?.aborted).toBe(true)
 })
+
+it('publishes bounded native commit waiting and settles from original row changes without replaying a writer',async()=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'choice',options:[{value:'true',label:'On',disabled:false}],disabled:false,value:'false'}}
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='tips'
+ const before=await f.read();f.editorAction.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false});return {}})
+ const changed=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'select',value:'true'}},new AbortController())
+ expect(changed.snapshot.commitPending).toBe(true);expect(changed.snapshot.rows[0].value).toBe(false)
+ f.setValue(true);const acknowledged=await f.read();expect(acknowledged.snapshot.commitPending).toBeUndefined();expect(acknowledged.snapshot.rows[0].value).toBe(true)
+ expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled()
+ ;(f.entry as any).settingsCommit={key:'tips',before:true,until:0};const timedOut=await f.read()
+ expect(timedOut.problem).toContain('not acknowledged');expect(timedOut.snapshot.commitPending).toBeUndefined()
+})

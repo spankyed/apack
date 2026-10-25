@@ -82,7 +82,7 @@ function money(value: number) { return new Intl.NumberFormat(undefined,{style:'c
 function operate(action: {kind:'tab';tab:'Status'|'Config'|'Usage'|'Stats'} | {kind:'stats';action:'Overview'|'Models'|'cycleDates'|'copy'}) {
   if (!pending.value && props.state?.snapshot) emit('operate', {...action,revision:props.state.snapshot.revision})
 }
-const pending = computed(() => props.state?.status === 'pending')
+const pending = computed(() => props.state?.status === 'pending' || props.state?.snapshot?.commitPending === true)
 const rows = computed(() => (props.state?.snapshot?.rows ?? []).filter(row => `${row.label} ${row.description ?? ''} ${row.key}`.toLowerCase().includes(search.value.toLowerCase())))
 function openEditor(key: string) {
   if (!pending.value && props.state?.snapshot) emit('operate',{kind:'open',revision:props.state.snapshot.revision,key})
@@ -104,10 +104,10 @@ function save(key: string, value: ClaudeSettingValue) {
   if (!pending.value && props.state?.snapshot) emit('operate', {kind:'write',revision:props.state.snapshot.revision,key,value})
 }
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
-watch(() => [props.state?.status,activeTab.value,frame.value?.stats?.loading,frame.value?.stats?.copyState] as const, ([status,tab,loading,copyState]) => {
+watch(() => [props.state?.status,activeTab.value,frame.value?.stats?.loading,frame.value?.stats?.copyState,props.state?.snapshot?.commitPending] as const, ([status,tab,loading,copyState,commitPending]) => {
   clearTimeout(refreshTimer)
-  if (status === 'ready' && tab === 'Stats' && (loading || copyState && copyState !== 'idle')) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
-})
+  if (status === 'ready' && (commitPending || tab === 'Stats' && (loading || copyState && copyState !== 'idle'))) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
+}, { immediate: true })
 onUnmounted(() => clearTimeout(refreshTimer))
 watch(() => props.state?.savedKey, key => { if (key) delete drafts.value[key] })
 onMounted(() => { searchInput.value?.focus(); emit('operate', {kind:'read'}) })

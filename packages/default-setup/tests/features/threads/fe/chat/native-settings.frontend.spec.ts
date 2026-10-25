@@ -86,3 +86,16 @@ it('routes original editor opening, form Save and pending Cancel through the cur
   expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'cancel'}})
  }finally{app.unmount();root.remove()}
 })
+
+it('refreshes a pending native setting change and stops once its original value is acknowledged',async()=>{
+ vi.useFakeTimers()
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'commit',status:'ready',snapshot:{revision:'a'.repeat(64),commitPending:true,rows:[{key:'tips',label:'Show tips',kind:'boolean',value:false,isLocked:false}],frame:{selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();expect(root.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true)
+  const before=operations.length;await vi.advanceTimersByTimeAsync(250);expect(operations.slice(before)).toEqual([{kind:'read'}])
+  state.state.snapshot!.commitPending=false;state.state.snapshot!.rows[0].value=true;await nextTick()
+  const acknowledged=operations.length;await vi.advanceTimersByTimeAsync(1000);expect(operations.length).toBe(acknowledged);expect(root.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(false)
+ }finally{app.unmount();root.remove();vi.useRealTimers()}
+})
