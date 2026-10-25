@@ -88,12 +88,15 @@ describe('a write to a flow', () => {
     expect(await app.nextEmit('flows', 'FLOW_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.any(String) })
   })
 
-  it('sends the model catalog when asked to publish, and no rows', async () => {
+  it('answers the model catalog to the window that asks, and publishes nothing', async () => {
     flowWithEntry('Any')
     const app = await startApp({ systems: ['flows'] })
     await app.connect()
-    const connected = await app.nextEmit('flows', 'FLOWS_CONNECTED') as unknown as { data: Record<string, unknown> }
-    expect(Object.keys(connected.data)).toEqual(['models'])
-    expect((connected.data.models as unknown[]).length).toBeGreaterThan(0)
+    await app.settle()
+    expect(app.emitted('flows'), 'nothing sent to every window on a connection').toEqual([])
+    const call = await app.send('flows', { type: 'GET_MODEL_CATALOG' }, { sender: 'default-setup/flows', client: 'c-main' })
+    const catalog = await app.nextEmit('flows', 'MODEL_CATALOG_READ', { answering: call }) as unknown as { data: Record<string, unknown> }
+    expect(Object.keys(catalog.data)).toEqual(['models'])
+    expect((catalog.data.models as unknown[]).length).toBeGreaterThan(0)
   })
 })

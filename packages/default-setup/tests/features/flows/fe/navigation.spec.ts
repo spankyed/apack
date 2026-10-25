@@ -195,9 +195,11 @@ it('labels its breadcrumb from what the list view read', () => {
   expect(context(actor)).toMatchObject({ flowLabels: { 'Flow-first': 'Main' }, rootFlowId: 'Flow-first' });
 });
 
-it('takes only the model catalog from what the system publishes', () => {
+it('asks for the model catalog as it starts, and takes what it is answered', () => {
   const actor = start();
-  actor.send({ type: 'FLOWS_CONNECTED', data: { models: [{ id: 'anthropic:claude' }] } } as never);
+  actor.send({ type: 'SURFACE_STARTED' });
+  expect(sendToSystem).toHaveBeenCalledWith('flows', { type: 'GET_MODEL_CATALOG' });
+  actor.send({ type: 'MODEL_CATALOG_READ', data: { models: [{ id: 'anthropic:claude' }] } } as never);
   expect(context(actor).models).toEqual([{ id: 'anthropic:claude' }]);
 });
 

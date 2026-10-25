@@ -155,6 +155,7 @@ type UIEvent =
   | { type: 'CANVAS.CLEAR_ERROR' }
   // Layout events
   | { type: 'SURFACE_DEACTIVATED' }
+  | { type: 'SURFACE_STARTED' }
   | { type: 'LAYOUT_COMPUTED'; graph: FlowsContext['graph']; positions: Record<string, { x: number; y: number }> }
 
 export type FlowsEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent
@@ -176,7 +177,7 @@ const flowsState = setup({
   },
   actions: {
     /* ── bootstrap ─────────────────────────────────────── */
-    setModelCatalog: assign(({ event }) => ({ models: typeOf('FLOWS_CONNECTED', event).data.models })),
+    setModelCatalog: assign(({ event }) => ({ models: typeOf('MODEL_CATALOG_READ', event).data.models })),
 
     takeFlowsRead: assign(({ event }) => {
       const { labels, rootFlowId } = typeOf('FLOWS.READ', event);
@@ -1088,7 +1089,9 @@ const flowsState = setup({
     'FLOW.SELECT': { target: '.view', actions: 'selectFlow' },
     'NODE.REVEAL': { target: '.view', actions: 'selectFlow' },
     SURFACE_DEACTIVATED: { actions: 'cancelFlowSelection' },
-    FLOWS_CONNECTED: { actions: 'setModelCatalog' },
+    // The models the editor offers, asked as the shell starts the surface, in a delivery naming it
+    SURFACE_STARTED: { actions: () => { sendToSystem(id, { type: 'GET_MODEL_CATALOG' }); } },
+    MODEL_CATALOG_READ: { actions: 'setModelCatalog' },
     'FLOWS.READ': { actions: 'takeFlowsRead' },
     'ROOT_FLOW.SET': {
       actions: ({ event }) => sendToSystem(id, { type: 'SET_ROOT_FLOW', flowId: typeOf('ROOT_FLOW.SET', event).flowId }),

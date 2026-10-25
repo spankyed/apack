@@ -93,14 +93,14 @@ function answerWrite(reply: Reply<OutgoingFlowsEvents> | undefined, label: strin
 /**
  * The flows system writes flows: their nodes and edges, their labels, which one is the root. What a window shows of
  * them is the feature's views (`views.ts`) — the list, and the open flow's graph — which run again after each write,
- * so the only thing it sends unasked is the model catalog, which is the app's rather than a row.
+ * so it sends a window only answers: to its writes, and the model catalog it asks for as it starts.
  */
 export const flowsSystem = setup({
   types: flowsSpec.types,
   actors: {},
   actions: flowsSpec.actions({
-    sendModelCatalog: () => {
-      broadcastToSurface('flows', { type: 'FLOWS_CONNECTED', data: { models: availableModels } });
+    sendModelCatalog: ({ reply }) => {
+      reply?.({ type: 'MODEL_CATALOG_READ', data: { models: availableModels } });
     },
 
     createFlow: ({ reply }) => {
@@ -273,7 +273,7 @@ export const flowsSystem = setup({
   states: {
     idle: {
       on: {
-        SEND_STATE: {
+        GET_MODEL_CATALOG: {
           actions: 'sendModelCatalog',
         },
         CREATE_FLOW: {
