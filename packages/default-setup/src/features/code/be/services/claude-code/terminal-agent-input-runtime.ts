@@ -12,7 +12,7 @@ function installAgentCommandObserver(context){
   const dialog=context.dialogStore?.getState?.().open?.find(item=>item.kind==='local_jsx'&&item.payload?.nodeId===handle?.nodeId);
   const panel=matching&&!request.dialog&&!capture&&typeof options?.commandName==='string'&&dialog&&typeof context.dialogStore.dismiss==='function';
   if(capture||panel){
-   const entry={kind:panel?'panel':'confirmation',id:randomUUID(),nodeId:handle.nodeId,dialogId:dialog?.id,store:context.dialogStore,clientId:request.clientId,taskId:request.taskId,sessionId:request.sessionId,sequence:request.sequence,title:props.title,confirmLabel:props.confirmLabel,commandName:options?.commandName,confirm:props.onConfirm,cancel:panel?()=>context.dialogStore.dismiss(dialog.id):props.onCancel,closed:false,current:request.current,restore:request.restore};
+   const entry={context,kind:panel?'panel':'confirmation',id:randomUUID(),nodeId:handle.nodeId,dialogId:dialog?.id,store:context.dialogStore,clientId:request.clientId,taskId:request.taskId,sessionId:request.sessionId,sequence:request.sequence,title:props.title,confirmLabel:props.confirmLabel,commandName:options?.commandName,confirm:props.onConfirm,cancel:panel?()=>context.dialogStore.dismiss(dialog.id):props.onCancel,closed:false,current:request.current,restore:request.restore};
    if(panel&&options.commandName==='workflows'&&request.parentTicket?.workflowResumeTaskId&&typeof props?.onDone==='function')entry.workflowDone=props.onDone;
    request.dialog=entry;agentCommandDialogs.set(entry.id,entry);
    entry.done=Promise.resolve(handle.closed).then(async()=>{await entry.restore();entry.closed=true;if(entry.kind!=='panel')agentCommandDialogs.delete(entry.id);});

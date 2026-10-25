@@ -1,3 +1,4 @@
+import { claudeTerminalSettingsRuntime } from './terminal-settings-runtime.ts'
 import { claudeTerminalLspRecommendationRuntime } from './terminal-lsp-recommendation-runtime.ts'
 import { claudeManagedSettingsDiagnosticRuntime } from './native-managed-settings-runtime.ts'
 import { claudeTerminalMcpUrlRuntime } from './terminal-mcp-url-runtime.ts'
@@ -511,6 +512,7 @@ let mcpControlActive=false;
 ${claudeTerminalMcpFormRuntime}
 ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
+${claudeTerminalSettingsRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
@@ -707,6 +709,7 @@ function restoreNativePlanContext(n,context,sessionId){
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
+ if(request.subtype==='apack_ui_settings')return nativeSettings(n,request,abort);
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');
  if(['ui_press','ui_input','ui_select'].includes(request.subtype)&&request.instance_revision!==undefined&&!instanceLifetimes.active(request,request.instance_revision))return {handled:false};

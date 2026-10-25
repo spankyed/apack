@@ -219,6 +219,11 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_SETTINGS') {
+    if (!view || !validId(event.panelId) || !validId(event.requestId)) return
+    bind(view); void view.mount?.settings(event.revision, event.panelId, event.requestId, event.action)
+    return
+  }
   if (event.type === 'CLAUDE_UI_COMMAND_PANEL') {
     if (!view || !validId(event.panelId) || event.text !== undefined && (typeof event.text !== 'string' || !event.text.length || event.text.length > 4096)) return
     bind(view); void view.mount?.agentPanel(event.revision, event.panelId, event.text)

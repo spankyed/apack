@@ -9,7 +9,8 @@
     </header>
     <details v-show="!panelActive" v-if="state?.agent?.metadata" class="mx-4 mb-2 max-h-[30%] shrink-0 overflow-y-auto overscroll-contain text-xs text-neutral-400"><summary class="sticky top-0 cursor-pointer bg-[#1c1c1c] py-1">Agent details</summary><div class="py-2"><NativeAgentDetails :details="state.agent" :show-handback="false" /></div></details>
     <p v-if="problem || state?.agentProblem || state?.status === 'error'" role="alert" class="mx-4 mb-2 text-xs text-red-300">{{ problem || state?.agentProblem || (state?.status === 'error' ? state.message : '') }}</p>
-    <NativeCommandPanel v-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
+    <NativeSettingsPanel v-if="panelActive && state?.agentInput?.panel?.commandName === 'config'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
+    <NativeCommandPanel v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :output="terminal?.output ?? []" @input="panelInput" @close="panelInput()" @resize="panelResize" />
     <div v-show="!panelActive && !outputActive" class="relative min-h-16 flex-1">
     <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
@@ -63,6 +64,7 @@ import NativeAgentDetails from '#extensions/blocks/display/NativeAgentDetails.vu
 import NativeAgentComposer from './NativeAgentComposer.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import NativeCommandPanel from './NativeCommandPanel.vue'
+import NativeSettingsPanel from './NativeSettingsPanel.vue'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ThreadsState } from '../state.ts'
 import type { ClaudeNativeAgentInputReview, ClaudeNativeAgentUiTarget } from '#features/code/common/native-terminal.ts'
@@ -196,6 +198,10 @@ watch(panelActive, (value, previous) => { if (previous && !value) void nextTick(
 function panelInput(text?: string) {
   const input = state.value?.agentInput
   if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
+}
+function settings(action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation) {
+  const input = state.value?.agentInput
+  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({type:'CLAUDE_UI_SETTINGS',...identity(),revision:input.revision,panelId:input.panel.id,requestId:crypto.randomUUID(),action})
 }
 function panelResize(size: { columns: number; rows: number }) {
   const ownerId = selectedOwner.value?.ownerId

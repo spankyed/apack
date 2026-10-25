@@ -19,7 +19,7 @@ export interface ClaudeUiOwner {
   readonly done: Promise<void>
   readonly sessionId?: string
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -315,6 +315,18 @@ export function mountClaudeUi(options: {
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }
         publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
+    async settings(revision: number, panelId: string, requestId: string, action: import('../../../common/native-settings.ts').ClaudeSettingsOperation) {
+      if (!current() || agentInput?.status !== 'panel' || agentInput.revision !== revision || agentInput.panel?.id !== panelId || agentInput.settings?.status === 'pending') return
+      const panelState = agentInput
+      panelState.settings = {requestId,status:'pending',...(panelState.settings?.snapshot?{snapshot:panelState.settings.snapshot}:{})}; publish(lastState)
+      try {
+        const result = await owner.handle.ui.settings({client_id:client.client_id,panel_id:panelId,action})
+        if (!current() || agentInput !== panelState || panelState.settings?.requestId !== requestId) return
+        panelState.settings = {requestId,status:result.problem?'error':'ready',...result}; publish(lastState)
+      } catch (error) {
+        if (current() && agentInput === panelState && panelState.settings?.requestId === requestId) { panelState.settings = {requestId,status:'error',snapshot:panelState.settings.snapshot,problem:error instanceof Error?error.message:'Native Settings could not load'}; publish(lastState) }
+      }
     },
     agentPanel(revision: number, panelId: string, text?: string) {
       panelQueue = panelQueue.then(async () => {

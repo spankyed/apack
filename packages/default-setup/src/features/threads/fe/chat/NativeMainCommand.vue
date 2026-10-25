@@ -1,5 +1,6 @@
 <template>
-  <NativeCommandPanel v-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
+  <NativeSettingsPanel v-if="state?.status === 'panel' && state.panel?.commandName === 'config'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
+  <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
   <section v-else-if="state?.status === 'command_output' && state.output && !dismissed" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
       <span class="text-xs text-neutral-400">/{{ state.output.commandName }}</span>
@@ -19,8 +20,9 @@ import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import NativeCommandPanel from './NativeCommandPanel.vue'
+import NativeSettingsPanel from './NativeSettingsPanel.vue'
 const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
-const emit = defineEmits<{ press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
+const emit = defineEmits<{ settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 const cancel = ref<HTMLButtonElement>()
 watch(() => props.state?.status, async status => { if (status === 'confirmation') { await nextTick(); cancel.value?.focus({ preventScroll: true }) } })
 </script>

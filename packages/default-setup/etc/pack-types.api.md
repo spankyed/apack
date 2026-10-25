@@ -2079,35 +2079,83 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'continue' | 'interrupt';
+    decision: 'continue' | 'disable' | 'interrupt' | 'never' | 'no' | 'yes';
 };
 
-/** Original classifier-billing notice; native owns acknowledgement and interruption. */
-declare const ClaudeNativeNoticeSchema: z.ZodObject<{
+/** Native owns the dialog, available choices, timeout and acknowledgement. */
+declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
+    kind: z.ZodLiteral<"auto_mode_server_fallback">;
+    helpUrl: z.ZodString;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString, "many">;
     id: z.ZodString;
     revision: z.ZodString;
     sessionId: z.ZodString;
-    kind: z.ZodLiteral<"auto_mode_server_fallback">;
-    title: z.ZodString;
-    paragraphs: z.ZodArray<z.ZodString, "many">;
-    helpUrl: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
     title: string;
     id: string;
     kind: "auto_mode_server_fallback";
     sessionId: string;
-    paragraphs: string[];
     helpUrl: string;
+    paragraphs: string[];
 }, {
     revision: string;
     title: string;
     id: string;
     kind: "auto_mode_server_fallback";
     sessionId: string;
-    paragraphs: string[];
     helpUrl: string;
-}>;
+    paragraphs: string[];
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"lsp_recommendation">;
+    pluginName: z.ZodString;
+    marketplaceName: z.ZodString;
+    fileExtension: z.ZodString;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<["yes", "no", "never", "disable"]>;
+        label: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }, {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }>, "many">;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString, "many">;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    revision: string;
+    title: string;
+    id: string;
+    kind: "lsp_recommendation";
+    sessionId: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
+}, {
+    revision: string;
+    title: string;
+    id: string;
+    kind: "lsp_recommendation";
+    sessionId: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
+}>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
 
@@ -3791,7 +3839,18 @@ interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' 
     cwd: string;
 }
 
+type ClaudeSettingValue = z.infer<typeof claudeSettingValue>;
+
 type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
+
+type ClaudeSettingsOperation = {
+    kind: 'read';
+} | {
+    kind: 'write';
+    revision: string;
+    key: string;
+    value: ClaudeSettingValue;
+};
 
 /** Native merged settings and source attribution; backend-only, never log or publish the values. */
 declare const ClaudeSettingsSchema: z.ZodObject<{
@@ -3834,6 +3893,16 @@ declare const ClaudeSettingsSchema: z.ZodObject<{
     }, z.ZodTypeAny, "passthrough">>, "many">;
     applied: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, z.ZodTypeAny, "passthrough">>;
+
+type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>;
+
+type ClaudeSettingsView = {
+    requestId: string;
+    status: 'error' | 'pending' | 'ready';
+    snapshot?: ClaudeSettingsSnapshot;
+    problem?: string;
+    savedKey?: string;
+};
 
 interface ClaudeTerminalSubmissionState {
     ownerId: string;
@@ -4128,6 +4197,7 @@ type ClaudeUiMountState = ({
             id: string;
             commandName: string;
         };
+        settings?: ClaudeSettingsView;
         output?: {
             messageId: string;
             commandName: string;
@@ -4518,6 +4588,14 @@ type ClaudeUiViewRequest = ({
     mountId: string;
     sequence: number;
 } & ClaudeUiActionKeyRequest) | {
+    type: 'CLAUDE_UI_SETTINGS';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    panelId: string;
+    requestId: string;
+    action: ClaudeSettingsOperation;
+} | {
     type: 'CLAUDE_UI_COMMAND_PANEL';
     threadId: string;
     mountId: string;
@@ -10464,6 +10542,64 @@ declare const chatQueries: {
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
+declare const claudeSettingValue: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
+
+declare const claudeSettingsSnapshot: z.ZodObject<{
+    revision: z.ZodString;
+    rows: z.ZodArray<z.ZodObject<{
+        key: z.ZodString;
+        label: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+        kind: z.ZodEnum<["boolean", "choice", "text", "number"]>;
+        value: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
+        options: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        isLocked: z.ZodBoolean;
+        lockReason: z.ZodOptional<z.ZodString>;
+    }, "strict", z.ZodTypeAny, {
+        key: string;
+        value: string | number | boolean | null;
+        kind: "boolean" | "choice" | "number" | "text";
+        label: string;
+        isLocked: boolean;
+        options?: string[] | undefined;
+        description?: string | undefined;
+        lockReason?: string | undefined;
+    }, {
+        key: string;
+        value: string | number | boolean | null;
+        kind: "boolean" | "choice" | "number" | "text";
+        label: string;
+        isLocked: boolean;
+        options?: string[] | undefined;
+        description?: string | undefined;
+        lockReason?: string | undefined;
+    }>, "many">;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    rows: {
+        key: string;
+        value: string | number | boolean | null;
+        kind: "boolean" | "choice" | "number" | "text";
+        label: string;
+        isLocked: boolean;
+        options?: string[] | undefined;
+        description?: string | undefined;
+        lockReason?: string | undefined;
+    }[];
+}, {
+    revision: string;
+    rows: {
+        key: string;
+        value: string | number | boolean | null;
+        kind: "boolean" | "choice" | "number" | "text";
+        label: string;
+        isLocked: boolean;
+        options?: string[] | undefined;
+        description?: string | undefined;
+        lockReason?: string | undefined;
+    }[];
+}>;
+
 /**
  * Stop and remove all cron jobs. Called on brain kill/restart.
  */
@@ -10732,6 +10868,27 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         kind: "confirmation";
         confirmLabel: string;
         commandName?: string | undefined;
+    }>;
+    settings(options: {
+        client_id: string;
+        panel_id: string;
+        action: ClaudeSettingsOperation;
+    }): Promise<{
+        snapshot: {
+            revision: string;
+            rows: {
+                key: string;
+                value: string | number | boolean | null;
+                kind: "boolean" | "choice" | "number" | "text";
+                label: string;
+                isLocked: boolean;
+                options?: string[] | undefined;
+                description?: string | undefined;
+                lockReason?: string | undefined;
+            }[];
+        };
+        savedKey?: string | undefined;
+        problem?: string | undefined;
     }>;
     agentPanel(options: {
         client_id: string;

@@ -480,6 +480,7 @@ export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; promptFocused: boo
 
 export type ClaudeUiViewRequest =
   | ({ type: 'CLAUDE_UI_KEY'; threadId: string; mountId: string; sequence: number } & import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyRequest)
+  | { type: 'CLAUDE_UI_SETTINGS'; threadId: string; mountId: string; revision: number; panelId: string; requestId: string; action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation }
   | { type: 'CLAUDE_UI_COMMAND_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
   | { type: 'CLAUDE_UI_COMMAND_DECISION'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
   | { type: 'CLAUDE_UI_AGENT_INPUT'; threadId: string; mountId: string; revision: number; text: string }
