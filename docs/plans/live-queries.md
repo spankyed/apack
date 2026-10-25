@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`) and flows done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`) and notes done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -373,6 +373,25 @@ and `threads`' streaming tokens are notifications.
     so the node is in it or it isn't, where the old code asked the backend again.
   - **A write nobody asked for still runs**: `answerWrite` runs the write before answering, because `reply?.(write())`
     skips its argument when there is no `reply`. The views spec caught it (an applier's or a migration's write).
+- **notes** — five views: `tree()`, every note as the tree shows it; `note({ id })`, one note with its text;
+  `recent({ limit })`, what the welcome page lists; `search({ text })`; `trash()`. Sorted: every broadcast was data
+  (`NOTES_CONNECTED`, `NOTE_CREATED` sent to every window, which selected the new note in all of them, `NOTE_UPDATED`,
+  `NOTE_DELETED`, `NOTE_RESTORED`, `TRASHED_NOTES`, `NOTES_SEARCH_RESULTS`) except the import and export outcomes.
+  The writes are answered as the flow editor's are (`NOTE_CREATED` to the asker with the note, `NOTE_WRITTEN`,
+  `NOTE_WRITE_FAILED`). Decisions:
+  - **The tree reads no text, and no time a write moves.** A tree view of whole rows would send every note's body to
+    every window on each save; `summaries()` picks only the fields the tree shows, so typing in a note re-runs the views
+    showing that note and not the tree (with whole rows, the views spec's "the tree heard nothing" fails). The open
+    note's and the selected task's text come from `note({ id })`. The welcome page's lists read `updatedAt` and
+    `lastSeen`, which every save moves, so they are their own view, subscribed only while that page shows — which is
+    why it takes its `limit` as an argument: a view with no arguments can't be left idle.
+  - **The hold behind writes became an SDK primitive, `ViewWrites`** (`@apackdev/sdk/fe`: `viewWrites`, `writeSent`,
+    `viewRead`, `writeAnswered`, `writing`), at its second use. The flows editor moved onto it; the notes surface uses
+    one for its tree and its open notes, and the canvas reads all three views again on each of its `refreshes`.
+  - **A note opens with its title selected when this window created it** (`createdNoteId`), where it used to guess
+    from an empty text the summary no longer carries.
+  - **The surface's settings come from `useSettings('notes')`**, the trash from its view, and the note artifact viewer
+    and the `@`-reference items read the note and tree views, so they work whether or not the notes surface is running.
 
 ### 5. The rule
 

@@ -2,7 +2,7 @@
 //
 // A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears`. `apack.json` names
 // it at `features[].surface.contract`.
-import type { NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
+import type { NavHistory, SurfaceInbox, ViewWrites } from '@apackdev/sdk/fe'
 import type { ModelCatalogEntry } from '@apackdev/sdk/models'
 import type { EARS } from '#generated/ears.ts'
 import type { EdgeEntity, NodeEntity } from '#generated/types.ts'
@@ -29,15 +29,11 @@ export interface FlowsContext {
     positions: Record<string, { x: number; y: number }>;
   };
   /**
-   * The editor's graph writes still unanswered, by call. While any is, a result of the graph's view is held rather
-   * than applied, since it may predate the write and would undo an edit on screen; once the last is answered, a held
-   * result — or a refused write — reads the view again (`graphRefresh`), which by then holds every answered write.
+   * The editor's graph writes, and the graph view's results held behind those still unanswered (`ViewWrites`,
+   * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads the view
+   * again on each of its `refreshes`.
    */
-  pendingWrites: Record<string, true>;
-  /** Whether a result of the graph's view arrived while writes were unanswered, or one of them was refused */
-  graphStale: boolean;
-  /** Counts the times the editor asked to read the graph's view again; the canvas re-reads on each */
-  graphRefresh: number;
+  writes: ViewWrites;
   /** The models a node may name, which the flows system sends when it publishes */
   models: ModelCatalogEntry[];
   // Track temporary IDs during async creation

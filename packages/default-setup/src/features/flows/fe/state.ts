@@ -1,5 +1,4 @@
-import { recordCall, settleCall } from '@apackdev/sdk/events'
-import { entityIs } from '@apackdev/sdk/fe'
+import { entityIs, viewRead, viewWrites, writeAnswered, writeSent, writing } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
 import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
@@ -79,8 +78,8 @@ function reindexEdges(
 const HANDLE_OCCUPIED_ERROR = 'This step already has an outbound connection'
 
 /** A graph write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
-const withWrite = (pending: FlowsContext['pendingWrites'], call: string): { pendingWrites: FlowsContext['pendingWrites'] } =>
-  ({ pendingWrites: recordCall(pending, call, true as const) })
+const withWrite = (writes: FlowsContext['writes'], call: string): { writes: FlowsContext['writes'] } =>
+  ({ writes: writeSent(writes, call) })
 
 /**
  * The fields a new node starts with, onto the node drawn before the backend answers. It reads the same
@@ -223,7 +222,7 @@ const flowsState = setup({
         canvasError: nodeId && !found ? `Node "${nodeId}" is no longer in flow "${ev.flowId}".` : undefined,
         graph: layoutGraph(data, context.selectedFlowId === ev.flowId ? context.graph.positions : {}, event => self.send(event)),
         navHistory: request?.recordHistory ? pushNavHistory(context.navHistory, ev.flowId) : context.navHistory,
-        graphStale: false,
+        writes: viewRead(context.writes).writes,
       };
     }),
 
@@ -245,12 +244,12 @@ const flowsState = setup({
         selectedNodeId: kept(context.selectedNodeId),
         editingNodeId: kept(context.editingNodeId),
         graph: layoutGraph(data, context.graph.positions, event => self.send(event)),
-        graphStale: false,
+        writes: viewRead(context.writes).writes,
       };
     }),
 
     /** A result that may predate a write still unanswered: applying it would undo that edit on screen */
-    holdGraph: assign({ graphStale: true }),
+    holdGraph: assign(({ context }) => ({ writes: viewRead(context.writes).writes })),
 
     /** The shown flow is gone — deleted here or in another window */
     leaveGoneFlow: assign({
@@ -258,22 +257,11 @@ const flowsState = setup({
       selectedNodeId: undefined,
       editingNodeId: undefined,
       graph: { nodes: [], edges: [], positions: {} },
-      pendingWrites: {},
-      graphStale: false,
+      writes: viewWrites(),
     }),
 
-    /**
-     * One of the editor's writes answered. Once the last one is, the graph is read again if a result was held behind
-     * them or one was refused — the view's current result holds every write the backend has answered — and otherwise
-     * the next result, which carries the last write, is applied as it arrives.
-     */
-    settleWrite: assign(({ context, event }) => {
-      const { recorded, pending } = settleCall(context.pendingWrites, event);
-      if (recorded === undefined) return {};
-      const stale = context.graphStale || event.type === 'FLOW_WRITE_FAILED';
-      if (Object.keys(pending).length > 0) return { pendingWrites: pending, graphStale: stale };
-      return { pendingWrites: pending, graphStale: false, ...(stale && { graphRefresh: context.graphRefresh + 1 }) };
-    }),
+    /** One of the editor's writes answered: once the last is, the graph is read again if a result was held or one was refused */
+    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'FLOW_WRITE_FAILED') })),
 
     surfaceWriteError: assign(({ event }) => ({ canvasError: typeOf('FLOW_WRITE_FAILED', event).error })),
 
@@ -374,7 +362,7 @@ const flowsState = setup({
 
       // Only send if both IDs are permanent (not temporary)
       if (!ev.src.startsWith('temp-') && !ev.tgt.startsWith('temp-')) {
-        return withWrite(context.pendingWrites, sendToSystem(id, {
+        return withWrite(context.writes, sendToSystem(id, {
           type: 'CREATE_EDGE',
           flowId: context.selectedFlowId,
           sourceId: ev.src,
@@ -401,7 +389,7 @@ const flowsState = setup({
     sendEdgeDisconnected: assign(({ context, event }) => {
       const ev = typeOf('EDGE.DISCONNECT', event);
       if (!context.selectedFlowId) return {};
-      return withWrite(context.pendingWrites, sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'DELETE_EDGE',
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
@@ -419,7 +407,7 @@ const flowsState = setup({
     sendEdgeReconnected: assign(({ context, event }) => {
       const ev = typeOf('EDGE.RECONNECT', event);
       if (!context.selectedFlowId) return {};
-      return withWrite(context.pendingWrites, sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_EDGE',
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
@@ -462,7 +450,7 @@ const flowsState = setup({
         : ev.nodeId
       if (nodeId.startsWith('temp-')) return {}
 
-      return withWrite(context.pendingWrites, sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'REINDEX_HANDLES',
         flowId: context.selectedFlowId,
         nodeId,
@@ -508,7 +496,7 @@ const flowsState = setup({
 
       // Send to backend (handle is still available here, before we clear it)
       const sent = context.selectedFlowId && !handle.nodeId.startsWith('temp-') && !ev.nodeId.startsWith('temp-')
-        ? withWrite(context.pendingWrites, sendToSystem(id, {
+        ? withWrite(context.writes, sendToSystem(id, {
           type: 'CREATE_EDGE',
           flowId: context.selectedFlowId,
           sourceId: handle.nodeId,
@@ -557,7 +545,7 @@ const flowsState = setup({
     sendNodeDeleted: assign(({ context, event }) => {
       const ev = typeOf('NODE.DELETE', event);
       if (!context.selectedFlowId) return {};
-      return withWrite(context.pendingWrites, sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'DELETE_NODE',
         flowId: context.selectedFlowId,
         nodeId: ev.nodeId,
@@ -572,7 +560,7 @@ const flowsState = setup({
       const nodeConfig = getNodeConfig(ev.nodeType)
       const label = nodeConfig?.defaultLabel || nodeConfig?.label || `New ${ev.nodeType}`
 
-      const sent = withWrite(context.pendingWrites, sendToSystem(id, {
+      const sent = withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NODE',
         flowId: context.selectedFlowId,
         tempId,
@@ -751,7 +739,7 @@ const flowsState = setup({
       } as EdgeEntity
 
       // Send create to backend
-      const sent = withWrite(context.pendingWrites, sendToSystem(id, {
+      const sent = withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NODE',
         flowId: context.selectedFlowId,
         tempId: tempId,
@@ -819,7 +807,7 @@ const flowsState = setup({
       if (!node) return {};
 
       // Send update to backend
-      return withWrite(context.pendingWrites, sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NODE',
         flowId: context.selectedFlowId,
         nodeId: nodeId,
@@ -888,7 +876,7 @@ const flowsState = setup({
       updatedTempIdMap[tempId] = permanentId;
       
       // Send edge creation to backend for any edges with the new permanent ID
-      let pendingWrites = context.pendingWrites;
+      let writes = context.writes;
       if (context.selectedFlowId) {
         updatedEdges.forEach(edge => {
           // If this edge was just updated from temp to permanent, send it
@@ -896,14 +884,14 @@ const flowsState = setup({
             || (edge.target === permanentId && context.graph.edges.find(e => e.id === edge.id)?.target === tempId);
           
           if (wasUpdated && !edge.source.startsWith('temp-') && !edge.target.startsWith('temp-')) {
-            pendingWrites = withWrite(pendingWrites, sendToSystem(id, {
+            writes = withWrite(writes, sendToSystem(id, {
               type: 'CREATE_EDGE',
               flowId: context.selectedFlowId!,
               sourceId: edge.source,
               targetId: edge.target,
               sourceHandle: edge.sourceHandle,
               targetHandle: edge.targetHandle,
-            })).pendingWrites;
+            })).writes;
           }
         });
       }
@@ -917,7 +905,7 @@ const flowsState = setup({
         selectedNodeId: newSelectedNodeId,
         editingNodeId: newEditingNodeId,
         tempIdMap: updatedTempIdMap,
-        pendingWrites,
+        writes,
       };
     }),
     
@@ -1062,7 +1050,7 @@ const flowsState = setup({
     readsShownFlow: ({ context, event }) => event.type === 'FLOW.GRAPH_READ' && !context.pendingFlow && context.selectedFlowId === event.flowId,
     readsNothing: ({ event }) => event.type === 'FLOW.GRAPH_READ' && event.data === null,
     /** Whether any of the editor's writes is unanswered */
-    writing: ({ context }) => Object.keys(context.pendingWrites).length > 0,
+    writing: ({ context }) => writing(context.writes),
     hasSelectedHandle: ({ context }) => !!context.selectedHandle,
   },
 }).createMachine({
@@ -1078,9 +1066,7 @@ const flowsState = setup({
       positions: {},
     },
     models: [],
-    pendingWrites: {},
-    graphStale: false,
-    graphRefresh: 0,
+    writes: viewWrites(),
     flowLabels: {},
     tempIdMap: {},
     dslImport: {

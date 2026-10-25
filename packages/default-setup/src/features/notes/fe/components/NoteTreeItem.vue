@@ -235,7 +235,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { NoteDTO } from '#generated/types.ts'
+import type { NoteSummary } from '#generated/types.ts'
 import { Check, ChevronRight, CircleCheck, Copy, Eye, EyeOff, FileText, FilePlus, ListChecks, MoreHorizontal, Plus, Star, Trash2 } from 'lucide-vue-next'
 import {
   DropdownMenuRoot,
@@ -254,8 +254,8 @@ const BASE_PADDING_PX = 8
 const GUIDE_INDENT_PX = 12
 
 const props = withDefaults(defineProps<{
-  note: NoteDTO
-  allNotes: NoteDTO[]
+  note: NoteSummary
+  allNotes: NoteSummary[]
   currentNoteId: string | null
   expandedNodeIds: string[]
   depth: number

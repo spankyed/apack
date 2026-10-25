@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import type { OpenEntity } from '@apackdev/sdk/events';
-import type { NoteDTO } from '#generated/types.ts';
+import type { NoteSummary } from '#generated/types.ts';
 
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {}; });
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -39,16 +39,16 @@ it.each(destinations)('%s ignores an entity it does not declare as a destination
   } finally { actor.stop(); }
 });
 
-const note = (id: string, parentId: string | null = null): NoteDTO => ({
-  id, parentId, title: id, content: '', icon: null, noteType: 'document', completed: false,
+const note = (id: string, parentId: string | null = null): NoteSummary => ({
+  id, parentId, title: id, icon: null, noteType: 'document', completed: false,
   hideCompletedChildren: false, displayOrder: 0, savedDisplayOrder: null, childCount: 0,
-  createdAt: 1, updatedAt: 1, lastSeen: 1, favorite: false,
+  createdAt: 1, favorite: false,
 });
 
 it('opens a nested note by canonical identity from welcome and another editor', () => {
   const actor = createActor(notes).start();
   try {
-    actor.send({ type: 'NOTES_CONNECTED', data: { notes: [note('Note-parent'), note('Note-child', 'Note-parent')] } });
+    actor.send({ type: 'NOTES.READ', notes: [note('Note-parent'), note('Note-child', 'Note-parent')] });
     actor.send({ type: 'OPEN_ENTITY', id: 'Note-child' });
     expect(actor.getSnapshot().hasTag('editor')).toBe(true);
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-child');
@@ -62,7 +62,7 @@ it('opens a nested note by canonical identity from welcome and another editor', 
 it('opens a note selected in the tree and one reached through a link', () => {
   const actor = createActor(notes).start();
   try {
-    actor.send({ type: 'NOTES_CONNECTED', data: { notes: [note('Note-parent'), note('Note-child', 'Note-parent')] } });
+    actor.send({ type: 'NOTES.READ', notes: [note('Note-parent'), note('Note-child', 'Note-parent')] });
     actor.send({ type: 'NOTE.SELECT', noteId: 'Note-child' });
     expect(actor.getSnapshot().hasTag('editor')).toBe(true);
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-child');

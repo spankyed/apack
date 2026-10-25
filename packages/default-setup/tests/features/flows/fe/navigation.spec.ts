@@ -1,7 +1,7 @@
 // The flows editor over its graph view. The canvas hands the machine each result of the open flow's view
 // (`FLOW.GRAPH_READ`); the machine opens the flow it asked for on the first, follows the shown flow on the rest, and
 // holds a result back while any of its own writes is unanswered — applying it then would undo an edit on screen —
-// asking the canvas to read the view again (`graphRefresh`) once the last is answered.
+// asking the canvas to read the view again (`writes.refreshes`) once the last is answered.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { answerTo, startFeTestRuntime } from '@apackdev/sdk/testing';
@@ -104,9 +104,9 @@ it('holds a read behind an unanswered write, and reads the view again once the w
   actor.send(read('Flow-first', node('Node-first', 'stored')));
   expect(labels(actor)).toEqual(['typed']);
 
-  const before = context(actor).graphRefresh;
+  const before = context(actor).writes.refreshes;
   actor.send(answerTo(write, { type: 'FLOW_WRITTEN' }));
-  expect(context(actor).graphRefresh, 'the held read may predate the write: read again').toBe(before + 1);
+  expect(context(actor).writes.refreshes, 'the held read may predate the write: read again').toBe(before + 1);
   actor.send(read('Flow-first', node('Node-first', 'typed')));
   expect(labels(actor)).toEqual(['typed']);
 });
@@ -114,11 +114,11 @@ it('holds a read behind an unanswered write, and reads the view again once the w
 it('takes the next read as it comes when nothing was held behind an answered write', () => {
   const actor = open('Flow-first', node('Node-first', 'stored'));
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'typed' } });
-  const before = context(actor).graphRefresh;
+  const before = context(actor).writes.refreshes;
   actor.send(answerTo(callOf('UPDATE_NODE'), { type: 'FLOW_WRITTEN' }));
-  expect(context(actor).graphRefresh, 'nothing held, so nothing to read again').toBe(before);
+  expect(context(actor).writes.refreshes, 'nothing held, so nothing to read again').toBe(before);
   actor.send(read('Flow-first', node('Node-first', 'typed')));
-  expect(context(actor).pendingWrites).toEqual({});
+  expect(context(actor).writes.pending).toEqual({});
 });
 
 it('waits for every write to be answered before applying anything', () => {
@@ -129,25 +129,25 @@ it('waits for every write to be answered before applying anything', () => {
   // The first write's result, arriving while the second is still unanswered
   actor.send(read('Flow-first', node('Node-first', 'ty')));
   expect(labels(actor)).toEqual(['typed']);
-  const before = context(actor).graphRefresh;
+  const before = context(actor).writes.refreshes;
   actor.send(answerTo(callOf('UPDATE_NODE', 1), { type: 'FLOW_WRITTEN' }));
-  expect(context(actor).graphRefresh).toBe(before + 1);
+  expect(context(actor).writes.refreshes).toBe(before + 1);
 });
 
 it('shows a refused write\'s reason and reads the flow as stored again', () => {
   const actor = open();
   actor.send({ type: 'EDGE.DISCONNECT', edgeId: 'Edge-1' });
-  const before = context(actor).graphRefresh;
+  const before = context(actor).writes.refreshes;
   actor.send(answerTo(callOf('DELETE_EDGE'), { type: 'FLOW_WRITE_FAILED', error: 'No such edge' }));
   expect(context(actor).canvasError).toBe('No such edge');
-  expect(context(actor).graphRefresh, 'the edit on screen is not what is stored').toBe(before + 1);
+  expect(context(actor).writes.refreshes, 'the edit on screen is not what is stored').toBe(before + 1);
 });
 
 it('ignores an answer to a write it did not make', () => {
   const actor = open();
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'typed' } });
   actor.send(answerTo('c-another-window', { type: 'FLOW_WRITTEN' }));
-  expect(Object.keys(context(actor).pendingWrites)).toHaveLength(1);
+  expect(Object.keys(context(actor).writes.pending)).toHaveLength(1);
 });
 
 it('puts the node the backend made in place of the one drawn, and reads the view again for the rest', () => {

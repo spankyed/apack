@@ -178,15 +178,15 @@ const selectedHandle = useSelector(actor, (s) => s.context.selectedHandle)
 const canvasError = useSelector(actor, (s) => s.context.canvasError)
 
 // The open flow's graph — or the one being opened — as its view reads it, which the machine applies, or holds behind
-// the editor's own writes until they're answered. It reads the view again when the machine asks (`graphRefresh`).
+// the editor's own writes until they're answered. It reads the view again when the machine asks (`writes.refreshes`).
 const graphFlowId = useSelector(actor, (s) => s.context.pendingFlow?.flowId ?? s.context.selectedFlowId)
-const graphRefresh = useSelector(actor, (s) => s.context.graphRefresh)
+const refreshes = useSelector(actor, (s) => s.context.writes.refreshes)
 const graph = useView('flows', 'graph', () => (graphFlowId.value ? { flowId: graphFlowId.value } : null))
 watch(() => [graph.status, graph.data] as const, ([status, data]) => {
   if (status !== 'ready' || !graphFlowId.value) return
   actor.send({ type: 'FLOW.GRAPH_READ', flowId: graphFlowId.value, data: data ?? null })
 })
-watch(graphRefresh, () => graph.refresh())
+watch(refreshes, () => graph.refresh())
 
 const canvasToast = ref<InstanceType<typeof ToastNotification>>()
 
