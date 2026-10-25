@@ -104,7 +104,25 @@ test('refuses reset for a live worker and isolates its late response after stopp
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true});await focused.getByRole('button',{name:'Stop Agent',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.tasks.find((row:any)=>row.id===taskId)?.status,{timeout:10000}).toBe('killed')
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
+  const pendingMediaName='native-app-image.png'
+  const pendingMediaPath=join(workspace!,pendingMediaName)
+  await readFile(pendingMediaPath)
+  const mediaWindowId=await nativeWindow.evaluate(window=>window.id)
+  await electronApp.evaluate(({dialog,BrowserWindow},{file,windowId})=>{
+    const fixture=globalThis as any;fixture.resetMediaDialog=dialog.showOpenDialog;fixture.resetMediaFocus=BrowserWindow.getFocusedWindow
+    BrowserWindow.getFocusedWindow=()=>BrowserWindow.fromId(windowId)
+    dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[file]})) as typeof dialog.showOpenDialog
+  },{file:pendingMediaPath,windowId:mediaWindowId})
+  try{
+    const attach=card.getByRole('button',{name:'Attach file',exact:true})
+    if(await attach.isVisible())await attach.click()
+    else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Attach file',exact:true}).click()}
+    await expect(card.locator('[title="'+pendingMediaName+'"]')).toBeVisible()
+  }finally{
+    await electronApp.evaluate(({dialog,BrowserWindow})=>{const fixture=globalThis as any;dialog.showOpenDialog=fixture.resetMediaDialog;BrowserWindow.getFocusedWindow=fixture.resetMediaFocus;delete fixture.resetMediaDialog;delete fixture.resetMediaFocus})
+  }
   await reset();await expect.poll(async()=>(await context()).claude).toBeUndefined();await expect.poll(async()=>(await context()).native?.state.status??'exited').toBe('exited');await expect(card.getByTestId('composer-native-status')).toHaveCount(0)
+  await expect(card.locator('[title="'+pendingMediaName+'"]')).toHaveCount(0)
   const buckets=await readdir(join(workspace!,'.claude/projects'));let priorJournal='';for(const bucket of buckets){try{priorJournal=await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')}catch(error:any){if(error.code!=='ENOENT')throw error}}expect(priorJournal).toBeTruthy()
   const freshText='Start a fresh review after stopping the prior worker.';await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect(appPage.getByText('Which project directory should I work in?',{exact:true})).toBeVisible()
@@ -132,7 +150,7 @@ test('refuses reset for a live worker and isolates its late response after stopp
   expect(freshPrompt).toContain('Prior thread transcript:')
   expect(freshPrompt).toContain('User:\nReview the release notes in the background.')
   expect(freshPrompt.endsWith('Latest user message:\n'+freshText)).toBe(true)
-  expect(freshPrompt).not.toContain(taskId);expect(freshPrompt).not.toContain(sessionId)
+  expect(freshPrompt).not.toContain(pendingMediaName);expect(freshPrompt).not.toContain(taskId);expect(freshPrompt).not.toContain(sessionId)
   expect(humans[0].parentUuid).toBeNull()
   const baseline={sessionId:replacement.sessionId,turns:replacement.turns,cost:replacement.claude.totalCostUsd,messageIds:replacement.messages.map((message:any)=>message.id)}
   await writeFile(join(workspace!,'native-pending-duration-release'),'release the cancelled old provider after replacement')
@@ -151,6 +169,6 @@ test('refuses reset for a live worker and isolates its late response after stopp
   expect(continuedHumans).toHaveLength(2);expect(continuedHumans[1].message.content).toBe(followUpText)
   expect(continued.messages.filter((message:any)=>message.sender==='user'&&message.text===followUpText)).toHaveLength(1)
   expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-reset-task-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,taskId,busyResetRefused:true,taskStoppedBeforeReset:true,priorJournalPreserved:true,newHumanUuid:humans[0].uuid,newHumanText:freshText,nativePrintCost:prints.at(-1).totalCostUsd,baseline,lateResponseIsolated:true,settledSendAtBothSizes:true,followUpHumanUuid:continuedHumans[1].uuid,followUpText,followUpCost:continued.claude.totalCostUsd,captures}))
+  await writeFile(join(workspace!,'native-reset-task-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,taskId,busyResetRefused:true,taskStoppedBeforeReset:true,pendingMediaAttached:true,pendingMediaCleared:true,pendingMediaExcludedFromReplacement:true,priorJournalPreserved:true,newHumanUuid:humans[0].uuid,newHumanText:freshText,nativePrintCost:prints.at(-1).totalCostUsd,baseline,lateResponseIsolated:true,settledSendAtBothSizes:true,followUpHumanUuid:continuedHumans[1].uuid,followUpText,followUpCost:continued.claude.totalCostUsd,captures}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResetTask:true,nativeBusyResetRefused:true,nativeResetStateCleared:true,replacementSessionDistinct:true,nativeLateTaskResponseIsolated:true,nativeResetComposerContinued:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
 })
