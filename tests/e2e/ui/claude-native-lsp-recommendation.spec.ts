@@ -135,6 +135,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   if (decision === 'timeout') await expect(notice).toBeHidden({ timeout: 35000 })
   else { await notice.getByRole('button', { name: labels[decision], exact: true }).click(); await expect(notice).toBeHidden() }
   await expect.poll(async () => (await readFile(join(workspace!, 'native-debug.log'), 'utf8')).includes('User response: ' + decision + ' for recommendation-review')).toBe(true)
+  if (decision === 'yes') await expect.poll(async () => (await readFile(join(workspace!, 'native-debug.log'), 'utf8')).includes('Plugin installed: recommendation-review@owned-recommendation'), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText(draft)
   expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
