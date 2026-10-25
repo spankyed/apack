@@ -409,7 +409,7 @@ watch(() => props.nativeUi?.agentInput, state => {
 })
 defineExpose({ focus: focusComposer })
 let composerEpoch = 0
-watch([() => props.currentThread?.id, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
+watch([() => props.currentThread?.id, () => props.currentThread?.context?.claudeCode?.sessionId, () => props.currentMode, () => props.currentPhase], () => { composerEpoch++; submissionProblem.value = undefined }, { flush: 'sync' })
 onUnmounted(() => { composerEpoch++ })
 const promptThemeStyle = computed(() => claudePromptThemeStyle(props.nativeUi?.promptPalette))
 // Restore only this native session's parent input before adopting it into a fresh prompt host.

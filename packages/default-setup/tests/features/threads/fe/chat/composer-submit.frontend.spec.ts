@@ -369,3 +369,21 @@ it.each(['Claude settings','Claude tasks','Claude MCP servers'])('retains draft 
   f.root.querySelector<HTMLButtonElement>('[aria-label="'+label+'"]')!.click();f.state.nativePrompt={mountId:'replacement-native-view'}
   await nextTick();await nextTick();expect(f.state.nativeSubmit).not.toHaveBeenCalled();expect(editor.state.doc.textContent).toBe('first newer');expect(f.send).not.toHaveBeenCalled()
 })
+
+it.each(['reset','replacement'] as const)('retires an upload on same-thread Claude session %s', async change => {
+  let finish!: (url: string) => void
+  const upload=vi.fn(()=>new Promise<string>(resolve=>{finish=resolve}))
+  const f=mount(upload)
+  f.state.currentThread.context={claudeCode:{sessionId:'old-native-session'}}
+  await nextTick()
+  attachments.pendingImages.value=[image('pending-reset.png')]
+  f.submit();await vi.waitFor(()=>expect(upload).toHaveBeenCalledOnce())
+  f.state.currentThread.context=change==='reset'?{}:{claudeCode:{sessionId:'replacement-native-session'}}
+  await nextTick()
+  finish('/media/pending-reset.png')
+  await new Promise(resolve=>setTimeout(resolve,20))
+  expect(f.send).not.toHaveBeenCalled()
+  expect(f.command).not.toHaveBeenCalled()
+  expect(editor.state.doc.textContent).toBe('first')
+  expect(attachments.pendingImages.value.map(image=>image.name)).toEqual(['pending-reset.png'])
+})
