@@ -300,7 +300,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async refreshNotice() {
         if (closed || !bridge.ready) return
         const sessionId = bridge.projection.sessionId
-        const result = await bridge.uiTransport.request({ subtype: 'apack_billing_notice' }) as { notice?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return
         const next = result.notice == null ? undefined : ClaudeNativeNoticeSchema.parse(result.notice)
         if (next && next.sessionId !== sessionId) throw new Error('Native notice session changed')
@@ -308,7 +308,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerNotice(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_billing_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
         if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
       },

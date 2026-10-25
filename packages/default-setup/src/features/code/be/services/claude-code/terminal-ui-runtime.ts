@@ -1,3 +1,4 @@
+import { claudeTerminalLspRecommendationRuntime } from './terminal-lsp-recommendation-runtime.ts'
 import { claudeManagedSettingsDiagnosticRuntime } from './native-managed-settings-runtime.ts'
 import { claudeTerminalMcpUrlRuntime } from './terminal-mcp-url-runtime.ts'
 import { claudeTerminalMcpFormRuntime } from './terminal-mcp-form-runtime.ts'
@@ -509,6 +510,7 @@ const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=ne
 let mcpControlActive=false;
 ${claudeTerminalMcpFormRuntime}
 ${claudeTerminalMcpUrlRuntime}
+${claudeTerminalLspRecommendationRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
@@ -760,11 +762,14 @@ async function control(request,abort){
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
- if(request.subtype==='apack_billing_notice'){
+ if(request.subtype==='apack_native_notice'){
+  const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation)};
   const d=nativeBillingNotice(n);return {notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
  }
- if(request.subtype==='apack_answer_billing_notice'){
-  abort.signal.throwIfAborted();const d=nativeBillingNotice(n);
+ if(request.subtype==='apack_answer_native_notice'){
+  abort.signal.throwIfAborted();
+  if(['yes','no','never','disable'].includes(request.decision)){answerNativeLspRecommendation(n,request);return {answered:true};}
+  const d=nativeBillingNotice(n);
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native notice changed or expired');
   if(!['continue','interrupt'].includes(request.decision))throw Error('Invalid native notice decision');
   d.store.answer(d.item.id,request.decision);dialogRevisions.delete('auto_mode_server_fallback');return {answered:true};

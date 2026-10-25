@@ -88,3 +88,21 @@ it('explains unexpected failure beside reopen in ordinary conversation, while pr
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick()
   expect(f.root.querySelector('[role="status"]')).toBeNull()
 })
+
+it('shows all native LSP choices in ordinary chat, retires the card and sends no on Escape', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'lsp', revision: 'revision', sessionId: 'session', kind: 'lsp_recommendation' as const, title: 'LSP plugin recommendation', paragraphs: ['Plugin: <b>Review</b>'], choices: (['yes', 'no', 'never', 'disable'] as const).map(value => ({ value, label: value })) }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude LSP recommendation"]')!
+  expect(card.querySelector('b')).toBeNull()
+  expect([...card.querySelectorAll('button')].map(button => button.textContent)).toEqual(['yes', 'no', 'never', 'disable'])
+  for (const button of card.querySelectorAll('button')) {
+    button.click()
+    expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'lsp', revision: 'revision', sessionId: 'session', decision: button.textContent })
+  }
+  card.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('no')
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude LSP recommendation"]')).toBeNull()
+})

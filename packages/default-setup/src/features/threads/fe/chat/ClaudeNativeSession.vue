@@ -1,15 +1,20 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" aria-label="Claude auto mode notice" class="native-notice">
+    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : 'Claude auto mode notice'" class="native-notice" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'lsp_recommendation' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <h3>{{ view.state.notice.title }}</h3>
         <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
-        <p class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+        <p v-if="view.state.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
       <div class="native-notice__actions">
-        <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>
-        <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice('continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
+        <template v-if="view.state.notice.kind === 'lsp_recommendation'">
+          <button v-for="choice in view.state.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(choice.value)">{{ choice.label }}</button>
+        </template>
+        <template v-else>
+          <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>
+          <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice('continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
+        </template>
       </div>
     </section>
     <div v-if="!active" class="native-launch__actions">
@@ -64,6 +69,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import type { ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { useSurface } from '@apackdev/sdk/fe'
@@ -79,7 +85,7 @@ const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
 const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
-function answerNotice(decision: 'continue' | 'interrupt') {
+function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || noticePending.value) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } })

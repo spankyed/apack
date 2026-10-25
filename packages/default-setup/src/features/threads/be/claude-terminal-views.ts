@@ -1,3 +1,4 @@
+import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 import { randomUUID } from 'node:crypto'
 import type { MessageReferences } from './types.ts'
 import type { ClaudeNativeImage } from '#features/code/be/services/claude-code/terminal-session.ts'
@@ -173,7 +174,7 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (event.type === 'CLAUDE_TERMINAL_NOTICE') {
         const notice = owner.state.notice, response = event.notice
-        if (!notice || !response || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId || !['continue', 'interrupt'].includes(response.decision) || target.noticeAnswer?.status === 'pending') return
+        if (!notice || !response || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId || !isClaudeNativeNoticeDecision(notice, response.decision) || target.noticeAnswer?.status === 'pending') return
         const answer: NonNullable<ClaudeTerminalViewSnapshot['noticeAnswer']> = { id: response.id, revision: response.revision, status: 'pending' }
         target.noticeAnswer = answer; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.noticeAnswer === answer
