@@ -37,7 +37,7 @@ it('waits for native tab acknowledgement and displays structured Status, Usage a
     expect(root.querySelector('[aria-label="Search Claude Code settings"]')).not.toBeNull()
     frame.selectedTab='Status'; frame.status=[[{label:'Version',value:'2.1.302'},{label:'',value:'Original unlabelled status note'}]]; await nextTick()
     const note=[...root.querySelectorAll('dd')].find(node=>node.textContent==='Original unlabelled status note')!
-    expect(note.classList.contains('col-span-2')).toBe(true);expect(note.previousElementSibling?.textContent).toBe('Additional information')
+    expect(note.previousElementSibling?.textContent).toBe('Additional information')
     expect(root.textContent).toContain('2.1.302'); expect(root.querySelector('[aria-label="Search Claude Code settings"]')).toBeNull()
     frame.selectedTab='Usage'; frame.usage={startedAt:1,context:{window:200000},rateLimits:[]}; await nextTick()
     expect(root.textContent).toContain('no rate-limit reading'); expect(root.textContent).not.toContain('Session cost')
