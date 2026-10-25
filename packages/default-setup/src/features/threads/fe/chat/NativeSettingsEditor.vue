@@ -2,7 +2,7 @@
   <section aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
       <h3 class="min-w-0 break-words text-sm font-medium text-neutral-200">{{ editor.title || 'Choose a value' }}</h3>
-      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">Cancel</button>
+      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ editor.kind === 'group' ? 'Close' : 'Cancel' }}</button>
     </header>
     <div v-if="editor.kind === 'choice'" data-native-settings-editor-body class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4" role="group" :aria-label="editor.title || 'Available values'">
       <p v-if="editor.model" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.model.description }}</p>
@@ -21,6 +21,17 @@
       <button v-if="editor.canToggleSyntax" type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('toggle-syntax')">Toggle syntax highlighting</button>
       <p v-if="!editor.options.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available values.</p>
     </div>
+    <div v-else-if="editor.kind === 'group'" data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
+      <p v-if="editor.description" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.description }}</p>
+      <label v-for="row in editor.rows" :key="row.key" :data-native-settings-group-row="row.key" class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm text-neutral-200">
+        <span class="min-w-0 flex-1 break-words">{{ row.label }}</span>
+        <input v-if="row.kind === 'boolean'" type="checkbox" :checked="row.value === true" :disabled="pending || editor.disabled || row.disabled" @change="emit('set-group', row.key, ($event.target as HTMLInputElement).checked)" />
+        <select v-else :value="row.value" :disabled="pending || editor.disabled || row.disabled" class="max-w-full rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-sm" @change="emit('set-group', row.key, ($event.target as HTMLSelectElement).value)">
+          <option v-for="option in row.options" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
+        </select>
+      </label>
+      <p v-if="!editor.rows.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available controls.</p>
+    </div>
     <form v-else data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" @submit.prevent="emit('save', { ...drafts })">
       <p v-if="editor.description" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.description }}</p>
       <label v-for="field in editor.fields" :key="field.key" class="block text-xs text-neutral-300">
@@ -37,7 +48,7 @@ import NativeThemePreview from './NativeThemePreview.vue'
 import NativePermissionText from './NativePermissionText.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
 const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean }>()
-const emit = defineEmits<{ select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
+const emit = defineEmits<{ 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
 const drafts = ref<Record<string, string>>({})
 const modelDetails = ref<HTMLElement>()
 const modelLabel = computed(() => { const editor=props.editor; if(editor.kind!=='choice')return; const focus=editor.model?.focusValue; return editor.options.find(option=>option.value===focus)?.label })

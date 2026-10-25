@@ -1,8 +1,10 @@
+import { claudeTerminalSettingsGroupRuntime } from './terminal-settings-group-runtime.ts'
 import { claudeTerminalSettingsModelRuntime } from './terminal-settings-model-runtime.ts'
 
 /** Project only original Config editor-opening controls from its owned element tree. */
 export const claudeTerminalSettingsEditorRuntime = String.raw`
 ${claudeTerminalSettingsModelRuntime}
+${claudeTerminalSettingsGroupRuntime}
 function nativeSettingsConfig(n,entry){
  const frame=nativeSettingsFrame(n,entry);
  if(frame.panel.selectedTab!=='Config')throw Error('Native Config editor is unavailable');
@@ -94,6 +96,7 @@ async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  return await awaitNativeSettingsReading(candidate.callback(),signal);
 }
 async function readNativeSettingsEditor(n,entry,signal){
+ if(['agentsView','notifChannel'].includes(entry.settingsEditorKey))return readNativeSettingsGroup(n,entry,signal);
  signal?.throwIfAborted();const {frame,owner}=nativeSettingsConfig(n,entry);
  if(!frame.panel.hidden)return;
  const hashes={model:['cc13401c36b04a99e33d816a7f89fa08eaad44657a2933747d41c1b839be8451','c0cf4bcdab4f51bf2da39b356899e179c0a8f40f309822461c09d46c4a0e7040'],theme:['0333a3f408c68ec72bd8c5d0777f46e5e145c460013adb5a0ff665bbf7162ae7','b9f5ab35590945b214b817f84d10a4cb1469872f52ab96cc93f8a47613b31987'],language:['080eee2fde8fe097c91811244a1dc193b139c7df65f12765827c4117230eace6','4251c8f399ee8c6b3dfe922dfa46ef8adfa3e34dc8de1d52aec1b1aaa617b3e9'],choice:['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5','0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3'],form:['7fa52a5f24b4241caf7eca5d99985519e0a485aab0f347cc323ba1a92f3ffa0c','e2474315a210faf7b3cbaab9c4b40793486c2f19ed4b0a997e16fede82b933b4']};
@@ -163,6 +166,7 @@ async function readNativeSettingsEditor(n,entry,signal){
  return {snapshot,revision:createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),owner:current.owner,fiber:currentNativeSettingsFiber(current.owner,match.fiber),props:p,actions:controls,cancelProps,languageInput,themeCache,modelControl};
 }
 async function actNativeSettingsEditor(n,entry,request,signal){
+ if(['agentsView','notifChannel'].includes(entry.settingsEditorKey))return actNativeSettingsGroup(n,entry,request,signal);
  const before=await readNativeSettingsEditor(n,entry,signal);
  if(!before||before.revision!==request.revision)throw Error('Native Settings editor changed; refresh before editing');
  const p=before.props,actions=before.actions;let callback,args=[],validationProblem;

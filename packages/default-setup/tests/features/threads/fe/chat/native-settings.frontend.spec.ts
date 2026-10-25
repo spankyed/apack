@@ -131,3 +131,17 @@ it('routes native Model details and effort while preserving price styling and di
   ;[...root.querySelectorAll('button')].find(button=>button.querySelector('span')?.textContent==='Native Alpha')!.click();expect(operations.at(-1)).toMatchObject({command:{action:'select',value:'alpha'}})
  }finally{app.unmount();root.remove()}
 })
+
+it('renders native grouped rows and sends revision-bound changes without a synthetic Save',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'group',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'group',revision:'b'.repeat(64),title:'Notifications',disabled:false,description:'Original mobile notice',rows:[{key:'channel',label:'Channel',kind:'choice',value:'original',disabled:false,options:[{value:'original',label:'Original channel',disabled:false},{value:'other',label:'Other channel',disabled:false}]},{key:'done',label:'Notify when Claude is done',kind:'boolean',value:true,disabled:false}]}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();expect(root.textContent).toContain('Original mobile notice');expect(root.querySelector('form')).toBeNull()
+  const select=root.querySelector('select')!;select.value='other';select.dispatchEvent(new Event('change'))
+  expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'setGroup',key:'channel',value:'other'}})
+  state.state.status='pending';await nextTick();expect(select.disabled).toBe(true);expect(root.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true)
+  ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Close')!.click()
+  expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
+ }finally{app.unmount();root.remove()}
+})
