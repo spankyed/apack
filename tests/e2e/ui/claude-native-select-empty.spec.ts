@@ -88,7 +88,7 @@ test('preserves native Select none and valid empty values through original callb
   const before=await context(),states:any[]=[]
   const callbacks=async()=>JSON.parse(await readFile(join(workspace!,'native-select-callbacks.json'),'utf8').catch(()=>'[]'))
   const drawing=async()=>JSON.parse(await readFile(join(workspace!,'native-select-drawing.json'),'utf8').catch(()=>'{}'))
-  const label=()=>select.evaluate(element=>(element as HTMLSelectElement).selectedOptions[0]?.textContent)
+  const label=()=>select.locator('span').first().textContent()
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture(stage:string,expected:string){
     await expect.poll(label).toBe(expected)
@@ -113,10 +113,11 @@ test('preserves native Select none and valid empty values through original callb
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
     await select.focus();await expect(select).toBeFocused()
-    // Alt+Down explicitly opens the desktop picker; plain arrows on a closed select commit.
+    // Opening and highlighting are separate from confirming the native choice.
     const steps=[]
-    for(const key of ['Alt+ArrowDown','ArrowDown','Escape']){
-      await select.press(key)
+    for(const key of ['Enter','ArrowDown','Escape']){
+      if(key==='Enter')await select.press(key)
+      else await appPage.keyboard.press(key)
       steps.push({key,label:await label(),callbacks:await callbacks()})
       await writeFile(join(workspace!,'native-select-keyboard-steps.json'),JSON.stringify({width,steps}))
     }
@@ -126,12 +127,12 @@ test('preserves native Select none and valid empty values through original callb
     keyboardCancellation.push({width,callbacks:await callbacks(),label:await label(),focused:await select.evaluate(element=>document.activeElement===element)})
   }
   await capture('unset','none');expect(await callbacks()).toEqual([])
-  await select.selectOption('')
+  await select.click();await appPage.getByRole('option',{name:'No audience filter',exact:true}).click()
   await expect.poll(async()=>(await callbacks()).length).toBe(1)
   expect((await callbacks())[0]).toMatchObject({kind:'select',value:''})
   await expect.poll(async()=>await drawing()).toMatchObject({hasValue:true,value:''})
   await capture('empty','No audience filter')
-  await select.selectOption('developers')
+  await select.click();await appPage.getByRole('option',{name:'Developers',exact:true}).click()
   await expect.poll(async()=>(await callbacks()).length).toBe(2)
   expect((await callbacks())[1]).toMatchObject({kind:'select',value:'developers'})
   await expect.poll(async()=>await drawing()).toMatchObject({hasValue:true,value:'developers'})

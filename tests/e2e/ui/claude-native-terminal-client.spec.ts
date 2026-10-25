@@ -190,7 +190,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   await expect(info).toContainText('count=1 key=k')
   await info.getByRole('textbox',{name:'Terminal note',exact:true}).fill('rewrite')
   await expect(info.getByRole('textbox',{name:'Terminal note',exact:true})).toHaveValue('native-value')
-  await info.getByRole('combobox',{name:'Terminal choice',exact:true}).selectOption('b')
+  await info.getByRole('combobox',{name:'Terminal choice',exact:true}).press('Enter');await appPage.keyboard.press('End');await appPage.keyboard.press('Enter')
   const events=async()=>JSON.parse(await readFile(join(workspace!,'native-terminal-client-events.json'),'utf8'))
   const last=async(kind:string)=>(await events()).filter((event:any)=>event.kind===kind).at(-1)
   await expect.poll(async()=>await last('InfoNotice')).toMatchObject({count:1,key:'k',note:'native-value',choice:'b',surface:'terminal'})

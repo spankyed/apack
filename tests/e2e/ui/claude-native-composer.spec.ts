@@ -195,7 +195,8 @@ test('native extension fields, paint and hover work inside the actual composer',
   await expect(strip.getByText('Context tools · 2 updates', { exact: true })).toBeVisible();
   await strip.getByRole('textbox', { name: 'Context note', exact: true }).fill('Focus on the UI and interaction details.');
   await expect.poll(async () => readFile(join(workspace!, 'native-field.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify('Focus on the UI and interaction details.'));
-  await strip.getByRole('combobox', { name: 'Response style', exact: true }).selectOption('beta');
+  const responseStyle=strip.getByRole('combobox', { name: 'Response style', exact: true });
+  await responseStyle.press('Enter');await appPage.keyboard.press('End');await appPage.keyboard.press('Enter');
   await expect.poll(async () => readFile(join(workspace!, 'native-choice.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })).toBe(JSON.stringify('beta'));
   const diagram = strip.getByRole('img', { name: 'Connection status', exact: true });
   await expect(diagram).toBeVisible();

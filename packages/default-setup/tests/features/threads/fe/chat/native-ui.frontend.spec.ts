@@ -105,9 +105,12 @@ it('keeps field typing across native echoes and submits the field without submit
 it('uses native select values and leaves the message composer untouched', async () => {
   const f = await mount({ nativeUi: { status: 'live', tree: { kind: 'select', revision: 0, actionId: 'select-authority', label: 'Mode', value: 'a',
     autoFocus: false, options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } } })
-  const select = f.root.querySelector('select')!
-  select.value = 'b'; select.dispatchEvent(new Event('change', { bubbles: true }))
-  expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', revision: 1, kind: 'select', value: 'b' })
+  const select = f.root.querySelector<HTMLElement>('[role=combobox]')!
+  select.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))
+  await vi.waitFor(()=>expect(document.querySelector('[role=option]')).not.toBeNull())
+  const option=[...document.querySelectorAll<HTMLElement>('[role=option]')].find(option=>option.textContent==='Beta')!
+  option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))
+  await vi.waitFor(()=>expect(f.field).toHaveBeenCalledWith({ actionId: 'select-authority', revision: 1, kind: 'select', value: 'b' }))
   expect(f.submit).not.toHaveBeenCalled()
 })
 
@@ -535,7 +538,7 @@ it('dispatches native hotkeys to the last visible Button while preserving fields
   for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) {
     const event = new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true, ...init }); site.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
   }
-  for (const field of [f.root.querySelector('textarea[aria-label="Native edit"]')!, f.root.querySelector('select')!]) {
+  for (const field of [f.root.querySelector('textarea[aria-label="Native edit"]')!, f.root.querySelector('[role=combobox]')!]) {
     const event = new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }); field.dispatchEvent(event); expect(event.defaultPrevented).toBe(false)
   }
   const editable = document.createElement('div'); editable.setAttribute('contenteditable', 'true'); site.append(editable)

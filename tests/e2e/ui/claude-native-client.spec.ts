@@ -67,8 +67,9 @@ test('runs native Client state props input and lifetime inside the app', async (
     await expect(a).toHaveValue('LeftDraft');await expect(b).toHaveValue('RightDraft')
     const completed=async()=>JSON.parse(await readFile(join(workspace!,'native-client-field-completed.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return '[]';throw error}))
     await expect.poll(async()=>(await completed()).filter((e:any)=>['LeftDraft','RightDraft'].includes(e.value)&&e.elapsed>=50).length).toBe(2)
-    await left.getByRole('combobox',{name:'A choice',exact:true}).selectOption('b')
-    await expect(left.getByRole('combobox')).toHaveValue('b');await expect(right.getByRole('combobox')).toHaveValue('a')
+    await left.getByRole('combobox',{name:'A choice',exact:true}).press('Enter');await appPage.keyboard.press('End');await appPage.keyboard.press('Enter')
+    await left.getByRole('combobox').press('Enter');await expect(appPage.getByRole('option').last()).toHaveAttribute('aria-selected','true');await appPage.keyboard.press('Escape')
+    await right.getByRole('combobox').press('Enter');await expect(appPage.getByRole('option').first()).toHaveAttribute('aria-selected','true');await appPage.keyboard.press('Escape')
     await a.fill('RewriteField');await expect(a).toHaveValue('NativeRewritten');await expect(b).toHaveValue('RightDraft')
     await a.focus()
     await a.evaluate(element=>{
