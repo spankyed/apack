@@ -231,7 +231,7 @@ def run(case, linux_container=False):
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-onboarding-import')
         if case in ['direct-resume-app', 'imported-image-app']:
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-direct-resume')
-        if case in ['reset-upload-app', 'reset-task-app', 'async-agent-app']:
+        if case in ['resume-upload-app', 'reset-upload-app', 'reset-task-app', 'async-agent-app']:
             script = script.replace('terminal-plan-app-theme', 'terminal-plan-app-task-controls')
         if case in ['policy-held-client-app', 'prompt-timeout-app']:
             script = script.replace('terminal-plan-app-theme', 'terminal-managed-transition-app')
