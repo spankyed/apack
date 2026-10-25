@@ -141,3 +141,11 @@ it('does not wait for a row change when the original choice is selected again',a
  const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'select',value:'native-default'}},new AbortController())
  expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled()
 })
+
+it('does not turn a declined consent into a pending scalar write or bypass its original decision',async()=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'choice',options:[{value:'cancel',label:'No',disabled:false},{value:'confirm',label:'Yes',disabled:false}],disabled:false,consent:{description:'Original warning',cancelLabel:'No',defaultFocusValue:'cancel'}}}
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='tips'
+ const before=await f.read();f.editorAction.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false});return {}})
+ const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'select',value:'cancel'}},new AbortController())
+ expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled();expect(f.commit).not.toHaveBeenCalled()
+})

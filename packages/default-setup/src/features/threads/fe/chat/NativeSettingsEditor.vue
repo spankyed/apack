@@ -1,13 +1,14 @@
 <template>
-  <section aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <section ref="editorRoot" aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
       <h3 class="min-w-0 break-words text-sm font-medium text-neutral-200">{{ editor.title || 'Choose a value' }}</h3>
-      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ editor.kind === 'group' ? 'Close' : 'Cancel' }}</button>
+      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ editor.kind === 'group' ? 'Close' : editor.kind === 'choice' && editor.consent ? editor.consent.cancelLabel : 'Cancel' }}</button>
     </header>
     <div v-if="editor.kind === 'choice'" data-native-settings-editor-body class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4" role="group" :aria-label="editor.title || 'Available values'">
+      <p v-if="editor.consent" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-200">{{ editor.consent.description }}</p>
       <p v-if="editor.model" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.model.description }}</p>
       <div v-for="option in editor.options" :key="option.value" class="flex items-start gap-2">
-      <button type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.value === option.value" class="block min-w-0 flex-1 w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" :class="editor.value === option.value ? 'bg-blue-500/10' : ''" @click="emit('select', option.value)"><span class="block">{{ option.label }}</span><span v-if="option.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativePermissionText :text="option.description" :ansi="option.descriptionAnsi" /></span></button>
+      <button type="button" :disabled="pending || editor.disabled || option.disabled" :data-native-settings-option="option.value" :aria-pressed="editor.value === option.value" class="block min-w-0 flex-1 w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" :class="editor.value === option.value ? 'bg-blue-500/10' : ''" @click="emit('select', option.value)"><span class="block">{{ option.label }}</span><span v-if="option.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativePermissionText :text="option.description" :ansi="option.descriptionAnsi" /></span></button>
         <button v-if="editor.model" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.model.focusValue === option.value" :aria-label="`Details for ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" :class="editor.model.focusValue === option.value ? 'bg-blue-500/10' : ''" @click="showModelDetails(option.value)">Details</button>
         <button v-if="editor.canPreview" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.previewValue === option.value" :aria-label="`Preview ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('preview', option.value)">Preview</button>
       </div>
@@ -50,6 +51,8 @@ import type { ClaudeSettingsEditor } from '#features/code/common/native-settings
 const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean }>()
 const emit = defineEmits<{ 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
 const drafts = ref<Record<string, string>>({})
+const editorRoot = ref<HTMLElement>()
+watch(() => props.editor.kind === 'choice' && props.editor.consent ? props.editor.revision : undefined, revision => { if(revision)void nextTick(() => { editorRoot.value?.querySelector<HTMLButtonElement>('[data-native-settings-option="cancel"]')?.focus({preventScroll:true}) }) }, {immediate:true})
 const modelDetails = ref<HTMLElement>()
 const modelLabel = computed(() => { const editor=props.editor; if(editor.kind!=='choice')return; const focus=editor.model?.focusValue; return editor.options.find(option=>option.value===focus)?.label })
 function showModelDetails(value: string) { emit('focus-model', value); void nextTick(() => { modelDetails.value?.scrollIntoView?.({ block: 'nearest' }); modelDetails.value?.focus({ preventScroll: true }) }) }

@@ -203,3 +203,33 @@ it('refuses changed Model roots, ambiguous effort callbacks and replaced root pr
  f.formatText.mockImplementationOnce(async()=>{model.child.memoizedProps={...model.child.memoizedProps};return 'retired label'})
  await expect(f.editor()).rejects.toThrow('changed while reading')
 })
+
+function consentFixture(){
+ const f=fixture(),Consent=function OriginalExternalConsent(){},Modal=function OriginalDecisionModal(){},Choice=function OriginalConsentChoice(){},onDone=vi.fn(),write=vi.fn(),refuse=vi.fn(()=>false)
+ ;(f.entry as any).settingsEditorKey='showExternalIncludesDialog';f.frame.panel.hidden=true
+ f.setFunctionHash(Consent,'e0661d2d24d7b61a4282eb159eea4b35521c1631d1b6c7a4314348ba21da070c');f.setFunctionHash(Modal,'c7f64fe8a40a3b2d4a2c77c1de6de59efb101099f96aa474307a5802b93dd777');f.setFunctionHash(Choice,'0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3')
+ let decided=false
+ const decide=(value:boolean)=>{if(refuse()||decided)return;decided=true;write(value);onDone()},confirm=()=>decide(true),cancel=()=>decide(false),options=[{value:'cancel',label:'No, disable external imports'},{value:'confirm',label:'Yes, allow external imports'}]
+ const modalProps={cancelFirst:true,focus:'cancel',refuseInput:refuse,openedAt:123,onConfirm:confirm,onCancel:cancel,cancelLabel:'No, disable external imports'},change=(value:string)=>value==='confirm'?confirm():cancel()
+ const picker={type:Choice,props:{options,defaultFocusValue:'cancel',isDisabled:false,onChange:change,onCancel:cancel}},pc=Array(32)
+ pc[21]=options;pc[22]=cancel;pc[23]=confirm;pc[24]=change;pc[31]=picker
+ const modal={type:Modal,props:modalProps},view={props:{title:'Allow external CLAUDE.md file imports?',onCancel:cancel,children:['Original external import warning','Original external path disclosure','Original security note',modal]}},cache=Array(37),externalIncludes=[{path:'/outside/instructions.md',parent:'/project/CLAUDE.md'}]
+ cache[4]=refuse;cache[5]=externalIncludes;cache[11]=onDone;cache[16]=cancel;cache[20]=confirm;cache[21]=cancel;cache[24]=123;cache[27]=modal;cache[36]=view
+ const root:any={type:Consent,memoizedProps:{onDone,externalIncludes},updateQueue:{memoCache:{data:[cache]}},child:{type:Modal,memoizedProps:modalProps,updateQueue:{memoCache:{data:[pc]}},child:{type:Choice,memoizedProps:picker.props}}}
+ f.config.child=root;return {...f,root,cache,pc,write,refuse,onDone}
+}
+it('preserves original external import disclosure, cancel-first choices and guarded decisions',async()=>{
+ const f=consentFixture(),before=await f.editor()
+ expect(before.snapshot.title).toBe('Allow external CLAUDE.md file imports?');expect(before.snapshot.consent.description).toContain('Original external path disclosure');expect(before.snapshot.consent.defaultFocusValue).toBe('cancel');expect(before.snapshot.options.map((option:any)=>option.value)).toEqual(['cancel','confirm'])
+ expect(f.write).not.toHaveBeenCalled();expect(f.refuse).not.toHaveBeenCalled()
+ f.refuse.mockReturnValue(true);await f.act({action:'select',revision:before.revision,value:'confirm'});expect(f.write).not.toHaveBeenCalled()
+ f.refuse.mockReturnValue(false);await f.act({action:'select',revision:before.revision,value:'confirm'});expect(f.write).toHaveBeenCalledExactlyOnceWith(true);expect(f.onDone).toHaveBeenCalledOnce()
+ await f.act({action:'select',revision:before.revision,value:'confirm'});expect(f.write).toHaveBeenCalledOnce()
+ const g=consentFixture();await g.act({action:'cancel',revision:(await g.editor()).revision});expect(g.write).toHaveBeenCalledExactlyOnceWith(false)
+})
+it('rejects standalone consent, changed refusal guards, picker replacement and expired consent owners',async()=>{
+ const f=consentFixture();f.root.memoizedProps.isStandaloneDialog=true;await expect(f.editor()).rejects.toThrow('consent changed')
+ const g=consentFixture();g.cache[27].props.refuseInput=()=>false;await expect(g.editor()).rejects.toThrow('consent changed')
+ const h=consentFixture();h.formatText.mockImplementationOnce(async()=>{h.pc[31]={...h.pc[31]};return 'retired'});await expect(h.editor()).rejects.toThrow('changed while reading')
+ const i=consentFixture();const before=await i.editor();i.entry.closed=true;await expect(i.act({action:'select',revision:before.revision,value:'confirm'})).rejects.toThrow();expect(i.write).not.toHaveBeenCalled()
+})

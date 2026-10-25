@@ -145,3 +145,13 @@ it('renders native grouped rows and sends revision-bound changes without a synth
   expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
  }finally{app.unmount();root.remove()}
 })
+
+it('shows original consent disclosure and initially focuses the native No choice',async()=>{
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp(NativeSettingsPanel,{state:{requestId:'consent',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'choice',revision:'b'.repeat(64),title:'Original consent',disabled:false,consent:{description:'Original warning and external path',cancelLabel:'No, disable external imports',defaultFocusValue:'cancel'},options:[{value:'cancel',label:'No, disable external imports',disabled:false},{value:'confirm',label:'Yes, allow external imports',disabled:false}]}}},onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})
+ app.mount(root)
+ try{
+  await nextTick();expect(root.textContent).toContain('Original warning and external path');expect(document.activeElement).toBe(root.querySelector('[data-native-settings-option="cancel"]'))
+  ;(root.querySelector('[data-native-settings-option="confirm"]') as HTMLButtonElement).click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'select',value:'confirm'}})
+ }finally{app.unmount();root.remove()}
+})
