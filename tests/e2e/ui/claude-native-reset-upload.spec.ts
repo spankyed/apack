@@ -100,14 +100,16 @@ test('retires a held image upload when another window resets the native session'
   await electronApp.evaluate(async(_electron,{threadId,workspace})=>{
     const fs=(await import('node:fs/promises')).default
     const original=fs.writeFile
-    const state={started:false,path:'',release:()=>{},restore:()=>{fs.writeFile=original}}; (globalThis as any).heldResetUpload=state
+    const state={started:false,completed:false,path:'',release:()=>{},restore:()=>{fs.writeFile=original}}; (globalThis as any).heldResetUpload=state
     fs.writeFile=(async(...args:Parameters<typeof fs.writeFile>)=>{
       const path=String(args[0])
       if(!state.started&&path.startsWith(workspace+'/')&&path.includes('/media/'+threadId+'/')){
         state.started=true;state.path=path
         await new Promise<void>(resolve=>{state.release=resolve})
       }
-      return original(...args)
+      const result=await original(...args)
+      if(path===state.path)state.completed=true
+      return result
     }) as typeof fs.writeFile
   },{threadId,workspace:workspace!})
   let popout:import('@playwright/test').Page|undefined
@@ -125,6 +127,7 @@ test('retires a held image upload when another window resets the native session'
     await other.getByRole('button',{name:'Send',exact:true}).click()
     await expect.poll(async()=>(await context()).claude).toBeUndefined()
     await electronApp.evaluate(()=>(globalThis as any).heldResetUpload.release())
+    await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResetUpload.completed)).toBe(true)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
     await expect(composer).toHaveText(heldDraft);await expect(thumbnail).toHaveCount(1)
     expect((await context()).claude).toBeUndefined()
@@ -149,6 +152,6 @@ test('retires a held image upload when another window resets the native session'
   for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{humans=(await readFile(join(workspace!,'.claude/projects',bucket,replacement.sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true)}catch(error:any){if(error.code!=='ENOENT')throw error}}
   expect(humans).toHaveLength(1);expect(typeof humans[0].message.content).toBe('string');expect(humans[0].message.content).not.toContain(heldDraft);expect(humans[0].message.content.endsWith('Latest user message:\n'+freshText)).toBe(true)
   await composer.fill('Keep working in the fresh session.');await capture('fresh')
-  await writeFile(join(workspace!,'native-reset-upload-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,newHumanUuid:humans[0].uuid,uploadHeld:true,resetFromOtherWindow:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
+  await writeFile(join(workspace!,'native-reset-upload-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,newHumanUuid:humans[0].uuid,uploadHeld:true,uploadCompleted:true,resetFromOtherWindow:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResetUpload:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
 })
