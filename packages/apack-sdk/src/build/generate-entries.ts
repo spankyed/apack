@@ -4,7 +4,7 @@ import { dataLiteral, propertyKey } from './code-literals.ts';
 import { findSourceModule, SCRIPT_MODULE_EXTENSIONS, TYPE_MODULE_EXTENSIONS } from './source-module.ts';
 import { resolveTypeModule } from './type-module.ts';
 import { _packModuleTargets, _moduleTargetSource } from './module-targets.ts';
-import { _packEntities, _packEntityTypes, _packRelationTypes, _packRoles, _packShortCodes, type PackDataDeclarations } from '../framework/data-declaration.ts';
+import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, type PackDataDeclarations } from '../framework/data-declaration.ts';
 import { _parseModuleReference } from '../framework/module-reference.ts';
 import { generateSettingsTypes } from './settings-types.ts';
 import { _declarationRevision } from './declaration-revision.ts';
@@ -1062,6 +1062,7 @@ ${manifest.extensions?.settings ? `  settings: ${dataLiteral(manifest.extensions
     relKinds: ${dataLiteral(_packRelationTypes(manifest))},
     roles: ${dataLiteral(_packRoles(manifest))},
     rowRules: ${rowRulesLiteral()},
+    relationRules: ${dataLiteral(_packRelationRules(manifest))},
   },
 ${hookEntries.length ? `  lifecycle: { ${hookEntries.map(({ name, binding }) => `${propertyKey(name, name)}: ${binding}`).join(', ')} },\n` : ''}${migrations.literal ? `  migrations: ${migrations.literal},` : ''}
 };
@@ -1814,6 +1815,7 @@ export const contentRuntime: ContentRuntime = {
   relKinds: ${dataLiteral(_packRelationTypes(manifest))},
   roles: ${dataLiteral(_packRoles(manifest))},
   rowRules: ${rowRulesLiteral()},
+  relationRules: ${dataLiteral(_packRelationRules(manifest))},
   repositories: { ${repositories.map(([name]) => `${propertyKey(name, name)}: __repo_${name}`).join(', ')} },
   contentWriters: { ${hooks.map(([entity], i) => `${propertyKey(entity)}: __contentWriter_${i}`).join(', ')} },
 };

@@ -12,7 +12,7 @@ describe('manifest formatting', () => {
         alpha: { description: 'Alpha purpose.' },
       },
       dependencies: { zeta: '*', alpha: '*' },
-      data: { entities: { Zeta: {}, Alpha: {} }, relations: ['zeta', 'alpha'] },
+      data: { entities: { Zeta: {}, Alpha: {} }, relations: { zeta: {}, alpha: { unique: true } } },
       version: '1.0.0', name: 'Fixture', id: 'fixture',
     };
     const before = structuredClone(manifest);
@@ -27,7 +27,7 @@ describe('manifest formatting', () => {
     expect(Object.keys(formatted.features.zeta.settings.schema.properties)).toEqual(['zeta', 'alpha']);
     expect(Object.keys(formatted.data.entities)).toEqual(['Zeta', 'Alpha']);
     expect(Object.keys(formatted.dependencies)).toEqual(['zeta', 'alpha']);
-    expect(formatted.data.relations).toEqual(['zeta', 'alpha']);
+    expect(Object.keys(formatted.data.relations)).toEqual(['zeta', 'alpha']);
     expect(formatted.checks.allow).toEqual(['backend-console', 'untyped-sends']);
     expect(formatted).toEqual(before);
     expect(manifest).toEqual(before);

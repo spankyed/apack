@@ -3,7 +3,7 @@ import { nativePackDeclarationFixture } from '../../src/testing/index.ts';
 // nodes and edges, step results on RunNodes, and actions and prompts
 import * as os from 'node:os';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import { findRelations, _bindEars, boundEars, untypedCreate, untypedQuery } from '@apackdev/sdk/ears';
 import { actionRepository, flowRepository, promptRepository } from '../../src/repositories/index.ts';
 import { compile as compileFlowDSL } from '../../src/build/compilers/flow-compiler.ts';
@@ -138,7 +138,7 @@ describe('flowRepository', () => {
   // Two edges between the same pair of nodes, one per handle, are two edges: listed apart and removed together
   it('lists two edges between the same two nodes on different handles, and deletes both with the node', () => {
     const sdkTypes = new Set<string>(Object.values(EARS.Entity));
-    _bindEars(createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => sdkTypes.has(name) }));
+    _bindEars(_createTestEngine({ entityTypes: [...sdkTypes] }));
     const flow = flowRepository.createFlow();
     const a = flowRepository.createNode(flow.id, { nodeType: 'action' });
     const b = flowRepository.createNode(flow.id, { nodeType: 'action' });

@@ -228,9 +228,9 @@ describe("the SDK's entities and relation kinds", () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: { TAGGED: 'tagged' }, roles: {} } };
     const withBase = (manifest: object) => generate({ ...manifest, dependencies: { 'base-pack': '*' } }, { 'base-pack': base });
     await expect(withBase({ data: { entities: { Tag: {} } } })).rejects.toThrow('entity "Tag" declared by both "demo-pack" and "base-pack"');
-    await expect(withBase({ data: { relations: ['tagged'] } })).rejects.toThrow('relKind "TAGGED" declared by both "demo-pack" and "base-pack"');
+    await expect(withBase({ data: { relations: { tagged: {} } } })).rejects.toThrow('relKind "TAGGED" declared by both "demo-pack" and "base-pack"');
     const conflictingName = { ...base, types: { entities: { Tag: 'Tag' }, relKinds: { LABELLED: 'tagged' }, roles: {} } };
-    await expect(generate({ data: { relations: ['labelled'] } }, { 'base-pack': conflictingName }))
+    await expect(generate({ data: { relations: { labelled: {} } } }, { 'base-pack': conflictingName }))
       .rejects.toThrow('relKind "LABELLED" declared by both "demo-pack" and "base-pack"');
   });
 
@@ -247,7 +247,7 @@ describe("the SDK's entities and relation kinds", () => {
 
   it("registers only the pack's own entities and relation kinds, not its dependencies' or the SDK's", async () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: { TAGGED: 'tagged' }, roles: {} } };
-    const entry = (await generate({ data: { entities: { Memo: {} }, relations: ['pinned'] }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/pack-entry.ts'];
+    const entry = (await generate({ data: { entities: { Memo: {} }, relations: { pinned: {} } }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/pack-entry.ts'];
     expect(entry).toContain('entities: {"Memo":"Memo"},');
     expect(entry).toContain('relKinds: {"PINNED":"pinned"},');
   });
@@ -255,7 +255,7 @@ describe("the SDK's entities and relation kinds", () => {
   it("rejects a pack's own declaration of the SDK's names", async () => {
     await expect(generate({ data: { entities: { Flow: {} } } })).rejects.toThrow(/entity "Flow" is defined by the SDK/);
     await expect(generate({ data: { entities: { Action: {} } } })).rejects.toThrow(/entity "Action" is defined by the SDK/);
-    await expect(generate({ data: { relations: ['transitions_to'] } })).rejects.toThrow(/relKind "TRANSITIONS_TO": "transitions_to" is defined by the SDK/);
+    await expect(generate({ data: { relations: { transitions_to: {} } } })).rejects.toThrow(/relKind "TRANSITIONS_TO": "transitions_to" is defined by the SDK/);
   });
 });
 

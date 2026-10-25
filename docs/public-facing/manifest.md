@@ -672,7 +672,7 @@ Run `apack pack fetch-deps` to pull dependency snapshots for cross-pack type int
   },
   "data": {
     "entities": { "ImportLog": {} },
-    "relations": ["tagged_with"]
+    "relations": { "tagged_with": {} }
   }
 }
 ```
@@ -686,7 +686,10 @@ Duplicate entity declarations name both owners and fail validation.
 
 Keys become TypeScript constants in generated `ears.ts`. Entity constants equal their keys; a relation
 wire is declared once in `data.relations`, shared across the pack's features. Its constant name is
-uppercase (`tagged_with` → `TAGGED_WITH`). Duplicate and SDK-owned relation wires are refused. Every kind
+uppercase (`tagged_with` → `TAGGED_WITH`). Each maps to the rules its edges are held to, `{}` for none:
+`"acyclic": true` refuses a link that would close a cycle through the kind (`CYCLE`), as a tree or a folder
+hierarchy wants, and `"unique": true` keeps at most one edge of the kind from an entity to another, so linking the
+pair again replaces the edge's info. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
 the pack links with is declared: the generated `EARS.RelKind` is closed over the pack's, its dependencies' and
 the SDK's, and the engine refuses any other at runtime. Roles work the same way: `data.roles` lists every role the
 pack grants (`entry_event` → `ENTRY_EVENT`), `EARS.RoleKind` is closed over them, and an undeclared role is refused.

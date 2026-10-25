@@ -7,6 +7,7 @@
 import type { AnyActorRef } from 'xstate';
 import { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import { z } from 'zod';
 
@@ -721,10 +722,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
         }>>>;
-        relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
+        relations: z.ZodOptional<z.ZodEffects<z.ZodType<Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, z.ZodTypeDef, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
     }, "strict", z.ZodTypeAny, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -732,7 +748,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             indexes?: readonly string[] | undefined;
         }> | undefined;
     }, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1331,7 +1350,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1519,7 +1541,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1693,7 +1718,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1881,7 +1909,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2055,7 +2086,10 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2392,10 +2426,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
         }>>>;
-        relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
+        relations: z.ZodOptional<z.ZodEffects<z.ZodType<Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, z.ZodTypeDef, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
     }, "strict", z.ZodTypeAny, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2403,7 +2452,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             indexes?: readonly string[] | undefined;
         }> | undefined;
     }, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2621,7 +2673,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, "strict", z.ZodTypeAny, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2763,7 +2818,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -2891,7 +2949,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }>, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -3033,7 +3094,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -3161,7 +3225,10 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }>, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -3360,7 +3427,7 @@ export interface PackDataDeclarations {
     // (undocumented)
     data?: {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
-        relations?: readonly string[];
+        relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
     };
     // (undocumented)
@@ -3466,6 +3533,15 @@ export const PackPermissionSchema: z.ZodEnum<["ears", "llm", "filesystem", "netw
 
 // @public
 export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, string>>>;
+
+// @public
+export interface PackRelationDeclaration {
+    readonly acyclic?: boolean;
+    readonly unique?: boolean;
+}
+
+// @internal
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules>;
 
 // @internal
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string>;

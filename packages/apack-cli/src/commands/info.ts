@@ -74,7 +74,8 @@ export async function info(args: string[]) {
   names('Declared pack migrations', manifest.migrations?.pack);
   const entities = _packEntities(manifest);
   if (entities.length) console.log(`Declared entities: ${entities.map(entity => `${entity.name} (${entity.owner})`).join(', ')}`);
-  if (manifest.data?.relations?.length) console.log(`Declared relations: ${manifest.data.relations.join(', ')}`);
+  const relations = Object.keys(manifest.data?.relations ?? {});
+  if (relations.length) console.log(`Declared relations: ${relations.join(', ')}`);
   for (const [kind, declaration] of Object.entries(manifest.content ?? {})) names(`Declared content ${kind}`, declaration);
   console.log(`\nBuild: ${report.build.status}${report.build.revision ? `; revision ${report.build.revision}` : ''}`);
   if (report.build.problem) console.log(`  ${report.build.problem}`);

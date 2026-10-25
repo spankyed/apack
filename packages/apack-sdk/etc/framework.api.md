@@ -12,6 +12,7 @@ import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import { z } from 'zod';
 
@@ -81,6 +82,7 @@ export interface ContentRuntime {
     entities: Record<string, string>;
     // (undocumented)
     id: string;
+    relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
     // (undocumented)
@@ -388,7 +390,7 @@ export interface PackDataDeclarations {
     // (undocumented)
     data?: {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
-        relations?: readonly string[];
+        relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
     };
     // (undocumented)
@@ -405,6 +407,7 @@ export function _packDeclarationProblem(expected: {
 export interface PackEARS {
     // (undocumented)
     entities: Record<string, string>;
+    relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
     // (undocumented)
@@ -512,6 +515,15 @@ export interface PackRegistration {
     // (undocumented)
     steps?: StepDefinition[];
 }
+
+// @public
+export interface PackRelationDeclaration {
+    readonly acyclic?: boolean;
+    readonly unique?: boolean;
+}
+
+// @internal
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules>;
 
 // @internal
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string>;

@@ -6,7 +6,7 @@
   "hostVersion": ">=0.3.0",
   "data": {
     "entities": {},
-    "relations": []
+    "relations": {}
   },
   "features": {
     "scribbles": {

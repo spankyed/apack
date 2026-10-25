@@ -40,7 +40,8 @@ export function syncReferences(sourceId: EARS.EntityId, content: string): void {
   const current = new Set(findRelations({ source: sourceId, kind: EARS.RelKind.REFERENCES }).map((r) => r.target as EARS.EntityId));
 
   for (const targetId of wanted) {
-    if (!current.has(targetId)) write(sourceId).link(EARS.RelKind.REFERENCES, targetId, { replace: true });
+    // `references` is unique: one edge to each target
+    if (!current.has(targetId)) write(sourceId).link(EARS.RelKind.REFERENCES, targetId);
   }
   for (const targetId of current) {
     if (!wanted.has(targetId)) write(sourceId).unlink(EARS.RelKind.REFERENCES, targetId);

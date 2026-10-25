@@ -1,0 +1,33 @@
+# elmdb at the commit apack pins (vendor/elmdb.rev), cloned into vendor/elmdb and its binding built for this runner,
+# before `npm ci` resolves @apackdev/ears' `file:` dependency through it. Locally vendor/elmdb is a link to a checkout
+# (`npm run link:elmdb`); CI can't reach one, so it fetches the pinned commit. Rust is the version elmdb's
+# rust-toolchain.toml pins, which rustup installs on first use, and Cargo's target directory is cached.
+name: elmdb
+description: Clone elmdb at the pinned commit into vendor/elmdb and build its binding
+runs:
+  using: composite
+  steps:
+    - name: Clone elmdb at the pinned commit
+      shell: bash
+      run: |
+        rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+        git init -q vendor/elmdb
+        git -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"
+        git -C vendor/elmdb checkout -q FETCH_HEAD
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: vendor/elmdb
+    - name: Build the binding
+      shell: bash
+      working-directory: vendor/elmdb
+      run: |
+        rustup show active-toolchain
+        npm ci --no-audit --no-fund
+        # On Windows, @napi-rs/cli's build times out on its own filesystem-reconciliation lock (elmdb's own CI does
+        # the same), so cargo builds the binding and it is named as napi's loader expects
+        if [ "$RUNNER_OS" = Windows ]; then
+          cargo build -p elmdb-node --release
+          cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node
+        else
+          npm run build
+        fi

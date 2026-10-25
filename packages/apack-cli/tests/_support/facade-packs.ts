@@ -65,7 +65,7 @@ const BASE_PACK = {
   'tsconfig.json': tsconfig,
   'apack.json': JSON.stringify({
     id: 'base-pack', name: 'Base', version: '1.0.0',
-    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: ['tagged'], roles: ['featured'] },
+    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: {} }, roles: ['featured'] },
 
     features: {
       calendar: { description: 'Feature declaration fixture.',
@@ -129,7 +129,7 @@ const APP_PACK = {
     id: 'app-pack', name: 'App', version: '1.0.0',
     dependencies: { 'base-pack': 'file:../base-pack' },
     consumes: { services: ['base-pack/search'] },
-    data: { entities: { Memo: { shape: "src/types.ts#ItemEntity" } }, relations: ['related'], roles: ['pinned'] },
+    data: { entities: { Memo: { shape: "src/types.ts#ItemEntity" } }, relations: { related: {} }, roles: ['pinned'] },
     // Same type name as the dependency's Item shape
 
     features: { memos: { description: 'Feature declaration fixture.', system: { entry: 'src/system.ts', contract: 'src/system.contract.ts#Contract' }, surface: { label: 'Fixture', state: 'src/surface.ts' } } },

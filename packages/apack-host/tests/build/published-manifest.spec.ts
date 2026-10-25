@@ -79,6 +79,19 @@ describe('publishedManifest', () => {
     };
     expect(publishedManifest(manifest)).toEqual(manifest);
   });
+
+  it('publishes a dependency on a linked directory as the version of the package there, and refuses one it cannot resolve', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'published-manifest-link-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'linked'));
+      fs.writeFileSync(path.join(dir, 'linked', 'package.json'), JSON.stringify({ name: 'linked', version: '2.3.4' }));
+      const manifest = { name: '@fake/pkg', dependencies: { linked: 'file:linked', msgpackr: '^1.11.9' } };
+      expect(publishedManifest(manifest, dir).dependencies).toEqual({ linked: '2.3.4', msgpackr: '^1.11.9' });
+      expect(() => publishedManifest(manifest)).toThrow('dependency linked is file:linked: publishing it needs the directory the path is relative to');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('workspacePackList', () => {

@@ -17,16 +17,16 @@
     ]
   },
   "data": {
-    "relations": [
-      "has",
-      "relates_to",
-      "references",
-      "forked_from",
-      "compacts",
-      "blocks",
-      "blocked_by",
-      "duplicates"
-    ],
+    "relations": {
+      "has": {},
+      "relates_to": {},
+      "references": { "unique": true },
+      "forked_from": {},
+      "compacts": {},
+      "blocks": {},
+      "blocked_by": {},
+      "duplicates": {}
+    },
     "roles": [
       "assistant_birth"
     ]

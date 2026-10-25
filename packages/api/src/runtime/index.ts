@@ -2,9 +2,7 @@ import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
-import type { EarsEngine } from '@apackdev/ears';
-import type { RecordStore } from '@apackdev/ears';
-import type { LmdbStore } from '@apackdev/ears/lmdb';
+import type { EarsDatabase, EarsEngine, RecordStore } from '@apackdev/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistoryStore, storedSettings } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -46,9 +44,9 @@ function logErrors(actor: string) {
   };
 }
 
-/** The app's data: its LMDB store, the engine that persists to it (both faces: the composition keeps `admin`), and its registered packs */
+/** The app's data: its elmdb database, the engine over it (both faces: the composition keeps `admin`), and its registered packs */
 export interface AppStore {
-  store: LmdbStore;
+  database: EarsDatabase;
   /** The run history's store, closed with the app's */
   runHistory: RecordStore<RunNode>;
   engine: EarsEngine;
@@ -59,30 +57,23 @@ export interface AppStore {
 export let appPacks: PackRegistry;
 export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
 
-/**
- * The open store, so shutdown can flush it.
- *
- * Nothing closed it until 2026-10-01: shutdown stopped the actor and closed the servers, so the adapter's
- * final flush never ran in production and whatever sat in its buffers at exit was simply gone — along with
- * `errorCount`, which `openAppDatabase().close()` has always known how to report and which no running app
- * ever read.
- */
-export let appStore: LmdbStore | undefined;
+/** The open database, so shutdown can close it, which syncs what is owed */
+export let appDatabase: EarsDatabase | undefined;
 
 /** The run history's open store, so shutdown can close it */
 export let appRunHistory: RecordStore<RunNode> | undefined;
 
 /**
  * Opens the app's data and binds the app: the registered packs (`createPackRegistry()`, empty until the caller
- * registers them), the LMDB store and the app's engine persisting to it (`openDatabaseStore`, `@apackdev/host/database`,
+ * registers them), the elmdb database and the app's engine over it (`openDatabaseStore`, `@apackdev/host/database`,
  * which `apack db` opens a data dir with too) with their entity types, the run history's store, and
  * `bindHost(createHostRuntime(...))` with the root event bus, whose log events are printed, the app version, the
  * registry (the SDK's lookups read it), the engine (packs get its operations, bound by the bind) and the host
- * services over the store and the engine's admin face.
+ * services over the database and the engine's admin face.
  */
 /**
  * What the app holds at boot, once its packs are registered: the heap, and the database's size on disk. The engine
- * reads the store rather than a copy of it, so neither grows with the other; this is the reading that says so
+ * reads the database rather than a copy of it, so neither grows with the other; this is the reading that says so
  */
 function bootReading(): string {
   const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MB`;
@@ -104,21 +95,21 @@ export function openAppStore(): AppStore {
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),
   });
-  const { store, engine } = openDatabaseStore({
+  const { database, engine } = openDatabaseStore({
     path: _getLmdbPath(),
     schema: packs,
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistoryStore(_getRunHistoryPath());
-  runtime = createHostRuntime({ store, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
+  runtime = createHostRuntime({ database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
-  appStore = store;
+  appDatabase = database;
   appRunHistory = runHistory;
-  return { store, runHistory, engine, packs };
+  return { database, runHistory, engine, packs };
 }
 
 /**

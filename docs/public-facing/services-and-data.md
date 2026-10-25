@@ -267,7 +267,7 @@ The engine is its own package, `@apackdev/ears`, which packs may depend on and i
 {
   "data": {
     "entities": { "Bookmark": {}, "Tag": {} },
-    "relations": ["tagged_with"]
+    "relations": { "tagged_with": {} }
   }
 }
 ```
@@ -343,7 +343,7 @@ What a write builder does:
 | `merge(k, partial)` | Merges into the attribute's object |
 | `delete(k)` | Removes the field |
 | `removeAt(k, index)` / `removeValue(k, v)` | Removes the list's element at `index` / the list's first element equal to `v` |
-| `link(kind, target, { info?, replace?, acyclicIn? })` | Links to `target`. The same edge (kind, target and `info`) again changes nothing; `replace` leaves this as the only edge of the kind to `target`; `acyclicIn` refuses a cycle through those kinds |
+| `link(kind, target, { info? })` | Links to `target`. The same edge (kind, target and `info`) again changes nothing. A kind declared `unique` keeps one edge to `target`, whose `info` linking again replaces; one declared `acyclic` refuses a cycle through it (`CYCLE`) |
 | `unlink(kind, target?)` / `unlinkAll()` | Removes edges of the kind (to `target` only, when given) / every edge from the entity |
 | `grant(role)` / `revoke(role)` / `grantExclusive(role, among)` | See *Roles* |
 | `destroy()` | Deletes the entity and its edges |
@@ -390,7 +390,7 @@ synchronous, and a unit inside another commits into it.
 ```typescript
 transact(() => {
   const id = create(EARS.Entity.Bookmark, { url }).id();
-  write(folderId).link(EARS.RelKind.CONTAINS, id, { acyclicIn: [EARS.RelKind.CONTAINS] });   // throws → nothing above stays
+  write(id).link(EARS.RelKind.TAGGED_WITH, tagId);   // throws (no such tag) → nothing above stays
 });
 ```
 
@@ -454,7 +454,7 @@ and goes only where the query could reach, so a trashed entity ends it unless th
 | `wouldCreateCycle(source, target, kinds)` | `true` when `target` already reaches `source`, or is `source`, so linking `source → target` would close a cycle |
 
 `type` keeps the reached entities of that type and walks through the rest. Check `wouldCreateCycle` before moving an
-entity under a new parent, or link with `{ acyclicIn: [kind] }` to have the link refused instead. A path to the root
+entity under a new parent, or declare the kind `acyclic` in `data.relations` to have the link refused instead. A path to the root
 is `query.ids(id).ancestors(kind).ids().reverse()`.
 
 ### Repository pattern

@@ -265,7 +265,7 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(dependent, 'node_modules'), 'dir');
     fs.writeFileSync(path.join(dependent, 'package.json'), JSON.stringify({ name: id, type: 'module' }));
     fs.writeFileSync(path.join(dependent, 'apack.json'), JSON.stringify({ id, name: 'Settings dependent', version: '1.0.0',
-      hostVersion: '>=0.3.0', data: { entities: {}, relations: [] }, features: {}, dependencies: { 'bundled-ui-fixture': `file:${companion}` } }));
+      hostVersion: '>=0.3.0', data: { entities: {}, relations: {} }, features: {}, dependencies: { 'bundled-ui-fixture': `file:${companion}` } }));
     execFileSync(process.execPath, [path.join(root, 'packages/apack-cli/bin/apack.mjs'), 'pack', 'build'], {
       cwd: dependent, env: { ...process.env, APACK_HOST: root }, stdio: 'pipe', timeout: 180_000,
     });

@@ -94,11 +94,15 @@ const EntityDeclarationSchema = z.object({
 }).strict().describe('One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity).');
 const EntitiesSchema = declarationRecord(z.string().min(1), EntityDeclarationSchema)
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
-const RelationsSchema = z.array(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case relation wire name'))
+const RelationDeclarationSchema = z.object({
+  acyclic: z.boolean().describe('Refuses a link that would close a cycle through this kind (CYCLE): a tree, a folder hierarchy.').optional(),
+  unique: z.boolean().describe('At most one edge of this kind from an entity to another: linking the pair again replaces the edge\'s info.').optional(),
+}).strict().describe('One relation kind: the rules its edges are held to, each off unless declared ({} for a kind with none).');
+const RelationsSchema = declarationRecord(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case relation wire name'), RelationDeclarationSchema)
   .superRefine((relations, ctx) => {
     try { notSdkOwned(SDK_REL_KINDS)(_packRelationTypes({ data: { relations } }), ctx); }
     catch (error) { ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) }); }
-  }).describe('Pack-level relation wire names; generated EARS constants are their uppercase names. Do not repeat or redeclare SDK-owned wires.');
+  }).describe('Pack-level relation wire names, each mapped to its declaration; generated EARS constants are their uppercase names. Do not redeclare SDK-owned wires.');
 const RolesSchema = z.array(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case role name'))
   .superRefine((roles, ctx) => {
     try { notSdkOwned(SDK_ROLES)(_packRoles({ data: { roles } }), ctx); }

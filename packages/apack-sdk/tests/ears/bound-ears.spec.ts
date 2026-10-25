@@ -1,13 +1,14 @@
 // The engine operations pack code calls without holding an engine act on the one this process bound, and with none
 // bound they throw naming how to bind one
 import { afterEach, describe, expect, it } from 'vitest';
-import { createEarsEngine, defineEars, type EARS, type UntypedSchema } from '@apackdev/ears';
+import { defineEars, type EARS, type UntypedSchema } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import {
   _bindEars, boundEars, findRelations, isEntityType, transact, wouldCreateCycle,
   untypedCreate, untypedQuery, untypedUpsert, untypedWrite,
 } from '../../src/ears/index.ts';
 
-const engineWith = (types: ReadonlySet<string>) => createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => types.has(name) });
+const engineWith = (types: ReadonlySet<string>) => _createTestEngine({ entityTypes: [...types] });
 
 afterEach(() => { _bindEars(undefined); });
 

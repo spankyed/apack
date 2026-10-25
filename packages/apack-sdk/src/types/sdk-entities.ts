@@ -7,7 +7,7 @@
  *
  * The shapes here are part of the typed EARS contract (packages/apack-sdk/TYPED-EARS.md).
  */
-import type { BaseEntity, RequiredField, RowRules, ShortCode } from '@apackdev/ears';
+import type { BaseEntity, RelationRules, RequiredField, RowRules, ShortCode } from '@apackdev/ears';
 
 export const SDK_ENTITIES = {
   Flow: 'Flow',
@@ -40,6 +40,11 @@ export const SDK_REL_KINDS = {
   /** A folder's child folders; its documents are `contains` */
   PARENT_OF: 'parent_of',
 } as const;
+
+/** What the SDK's relation kinds hold their edges to: folders nest as a tree, so `parent_of` closes no cycle */
+export const SDK_RELATION_RULES: Readonly<Record<string, RelationRules>> = {
+  [SDK_REL_KINDS.PARENT_OF]: { acyclic: true },
+};
 
 /** The roles the SDK's flow model grants, which every pack has and none declares */
 export const SDK_ROLES = {

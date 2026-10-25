@@ -2,7 +2,7 @@ import { dbBackupVerify, verifyBackup, VERIFY_USAGE } from './backup-verify';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { findRunningApp, holdDatabaseWriteLock, openRunHistoryStore } from '@apackdev/host/database';
-import { exportDatabase } from '@apackdev/host/backup';
+import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
@@ -42,7 +42,7 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistoryStore(db.paths.runHistory, { readOnly: true }) : undefined;
       let backup: string;
       try {
-        backup = await exportDatabase({ lmdb: db.store, ...(runHistory && { runHistory }) }, stage, {
+        backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory }) }, stage, {
           name: 'backup', databases: runHistory ? ['lmdb', 'runHistory'] : ['lmdb'], mediaPath: db.paths.media,
           appVersion: readHostCompatibility(target.userDataDir).version,
           log: { info: message => io.err(message), warn: message => io.err(message) },

@@ -6,6 +6,7 @@
 
 import type { BaseEntity } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { ShortCode } from '@apackdev/ears';
 
@@ -351,6 +352,9 @@ export const SDK_REL_KINDS: {
     readonly INSTANCE_OF: "instance_of";
     readonly PARENT_OF: "parent_of";
 };
+
+// @public
+export const SDK_RELATION_RULES: Readonly<Record<string, RelationRules>>;
 
 // @public
 export const SDK_ROLES: {

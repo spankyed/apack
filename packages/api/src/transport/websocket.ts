@@ -8,7 +8,7 @@ import { createRpcContext } from './context.ts';
 import { jsonSafeEncoder } from './encoder.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/config.ts';
-import { appPacks, appRunHistory, appStore, backendActor } from '../runtime/index.ts';
+import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -159,7 +159,7 @@ export function createWebSocketServer() {
     // Every write committed as it returned; closing syncs what the last group commit hadn't, so the machine failing
     // after exit loses nothing either
     try {
-      appStore?.close();
+      appDatabase?.close();
     } catch (error) {
       console.error('[backend] Closing the database failed', error);
     }
