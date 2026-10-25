@@ -9,6 +9,13 @@ delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage,electronApp},testInfo)=>{
+  if(testInfo.status===testInfo.expectedStatus||!workspace)return
+  await writeFile(join(workspace,'native-config-desktop-failure.txt'),await appPage.locator('body').innerText())
+  const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+  const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+  await writeFile(testInfo.outputPath('native-config-desktop-failure.png'),Buffer.from(image,'base64'))
+})
 test('edits original Settings through desktop controls and retains composing', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
@@ -96,12 +103,14 @@ test('edits original Settings through desktop controls and retains composing', a
   const local = async () => JSON.parse(await readFile(join(workspace!,'.claude/settings.local.json'),'utf8').catch(()=>'{}'))
   const user = async () => JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
   const search = panel.getByRole('textbox',{name:'Search Claude Code settings',exact:true})
-  await panel.getByRole('checkbox',{name:'Show tips',exact:true}).uncheck()
+  await panel.getByRole('checkbox',{name:'Show tips',exact:true}).click()
   await expect.poll(async()=>(await local()).spinnerTipsEnabled).toBe(false)
+  await expect(panel.getByRole('checkbox',{name:'Show tips',exact:true})).not.toBeChecked()
   await expect(panel.getByRole('status')).toHaveText('Saved by Claude Code')
   await search.fill('Reduce motion')
-  await panel.getByRole('checkbox',{name:'Reduce motion',exact:true}).check()
+  await panel.getByRole('checkbox',{name:'Reduce motion',exact:true}).click()
   await expect.poll(async()=>(await local()).prefersReducedMotion).toBe(true)
+  await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format')
   await panel.getByRole('combobox',{name:'Time format',exact:true}).selectOption('24-hour')
   await expect.poll(async()=>(await user()).timeFormat).toBe('24-hour')
