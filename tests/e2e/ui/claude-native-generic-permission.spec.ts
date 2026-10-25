@@ -124,6 +124,11 @@ test('preserves original generic MCP approval choices, withheld previews and the
       await capture('native-generic-permission-failure.png', 1100, 900)
       throw error
     }
+    if(phase===1){
+      const notice=JSON.parse(await readFile(join(workspace!,'native-tool-notice-receipt.json'),'utf8'))
+      expect(notice.accepted).toBe(true);expect(notice.toolUseId).toBe('native_permission_1')
+      await expect(approval.getByText(notice.text,{exact:false})).toBeVisible()
+    }
     await expect(approval.locator('button.approve')).toBeFocused()
     let original = (await context()).claude.pendingControlRequest
     expect(original.toolName).toBe(step.tool)
@@ -208,6 +213,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
     }
     else await approval.locator(['deny', 'withheld-deny'].includes(step.decision) ? 'button.deny' : 'button.approve').click()
     await expect(approval).toBeHidden({ timeout: 10000 })
+    if(phase===1)await expect(appPage.getByText('Release policy reviewed this tool request.',{exact:false})).toHaveCount(0)
     try {
       await expect.poll(async () => (await context()).native.state.busy, { timeout: 30000 }).toBe(false)
     } catch (error) {
@@ -220,7 +226,7 @@ test('preserves original generic MCP approval choices, withheld previews and the
     steps.push({ phase, tool: step.tool, decision: step.decision, preview: original.nativeTerminal.genericTool, retainedDraft: true })
   }
   await writeFile(join(workspace!, 'native-generic-permission-phase.txt'), '0')
-  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, syntaxPreviews, originalSyntaxDisabledRestored:true, sessionId, boundNativePid, retainedDraft: true }))
+  await writeFile(join(workspace!, 'native-generic-permission-app.json'), JSON.stringify({ steps, captures, previewGeometry, syntaxPreviews, toolNoticeVisible:true, toolNoticeRetired:true, originalSyntaxDisabledRestored:true, sessionId, boundNativePid, retainedDraft: true }))
   // Native Escape cancels the request through its original callback, retaining the owner.
   expect(cases.at(-1)?.decision).toBe('cancel')
   expect((await context()).native.state.status).toBe('live')
