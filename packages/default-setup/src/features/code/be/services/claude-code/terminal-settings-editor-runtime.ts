@@ -26,6 +26,21 @@ function nativeSettingsConfig(n,entry){
  if(owners.length!==1)throw Error('Native Config is not uniquely mounted');
  return {frame,owner:owners[0]};
 }
+function nativeSettingsMountedConsentRows(n,entry){
+ const {owner}=nativeSettingsConfig(n,entry),seen=new Set(),matches=[];let hook=owner.memoizedState;
+ while(hook){
+  if(seen.has(hook)||seen.size>=512)throw Error('Native Config descriptors exceeded bound');seen.add(hook);
+  const state=hook.memoizedState,rows=Array.isArray(state)?state[0]:undefined;
+  if(Array.isArray(rows)&&rows.length<=256&&rows.some(row=>row?.id==='showExternalIncludesDialog')&&rows.every(row=>row&&typeof row.id==='string'&&typeof row.label==='string'&&['boolean','enum','managedEnum'].includes(row.type)&&typeof row.onChange==='function'))matches.push(rows);
+  hook=hook.next;
+ }
+ if(matches.length===0)return [];
+ if(matches.length!==1)throw Error('Native Config consent descriptor is ambiguous');
+ const source=matches[0].filter(row=>row.id==='showExternalIncludesDialog');
+ if(source.length!==1)throw Error('Native Config consent descriptor is ambiguous');const row=source[0];
+ if(row.type!=='managedEnum'||typeof row.value!=='string'||row.value.length>16384||row.label.length>16384||row.lock!==undefined&&(typeof row.lock!=='object'||typeof row.lock.reason!=='string'||row.lock.reason.length>16384))throw Error('Native Config consent descriptor changed');
+ return [{key:row.id,label:row.label,kind:'text',value:row.value,isLocked:row.lock!==undefined,...row.lock?{lockReason:row.lock.reason}:{}}];
+}
 function sameNativeSettingsFiber(a,b){
  return a===b||!!(a&&b&&a.type===b.type&&a.key===b.key&&a.alternate===b&&b.alternate===a);
 }

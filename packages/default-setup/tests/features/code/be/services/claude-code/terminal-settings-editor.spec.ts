@@ -9,8 +9,8 @@ function fixture(){
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value)),palette=vi.fn(()=>({text:'#eeeeee',inverseText:'#111111'}))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
-  return {palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  return {mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -232,4 +232,14 @@ it('rejects standalone consent, changed refusal guards, picker replacement and e
  const g=consentFixture();g.cache[27].props.refuseInput=()=>false;await expect(g.editor()).rejects.toThrow('consent changed')
  const h=consentFixture();h.formatText.mockImplementationOnce(async()=>{h.pc[31]={...h.pc[31]};return 'retired'});await expect(h.editor()).rejects.toThrow('changed while reading')
  const i=consentFixture();const before=await i.editor();i.entry.closed=true;await expect(i.act({action:'select',revision:before.revision,value:'confirm'})).rejects.toThrow();expect(i.write).not.toHaveBeenCalled()
+})
+
+it('uses only original mounted Config consent descriptors omitted by the generic row API',()=>{
+ const f=fixture(),row={id:'showExternalIncludesDialog',label:'Original external imports',type:'managedEnum',value:'false',onChange:vi.fn()}
+ expect(f.mountedConsentRows()).toEqual([])
+ f.config.memoizedState={memoizedState:[[row],[]]}
+ expect(f.mountedConsentRows()).toEqual([{key:row.id,label:row.label,kind:'text',value:'false',isLocked:false}]);expect(row.onChange).not.toHaveBeenCalled()
+ row.value='true';(row as any).lock={reason:'Original managed refusal'}
+ expect(f.mountedConsentRows()[0]).toMatchObject({value:'true',isLocked:true,lockReason:'Original managed refusal'})
+ f.config.memoizedState.next={memoizedState:[[row],[]]};expect(()=>f.mountedConsentRows()).toThrow('ambiguous')
 })
