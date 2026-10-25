@@ -90,6 +90,9 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   const draft = 'Keep these release notes while reviewing code intelligence.'
   await composer.fill(draft)
   const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
+  const readApproval = appPage.getByTestId('native-read-approval')
+  await expect(readApproval).toBeVisible({ timeout: 15000 })
+  await readApproval.getByRole('button', { name: 'Approve', exact: true }).click()
   const notice = section.getByRole('region', { name: 'Claude LSP recommendation', exact: true })
   try { await expect(notice).toBeVisible({ timeout: 20000 }) }
   catch (error) {
