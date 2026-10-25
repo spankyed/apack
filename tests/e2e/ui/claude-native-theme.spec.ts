@@ -2,9 +2,12 @@ import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
+let disposeScreen=()=>{}
+test.afterEach(()=>disposeScreen())
 test('renders original theme previews, cancellation, button roles and saved custom reload', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   const nativeWindow=await electronApp.browserWindow(appPage)
@@ -47,6 +50,20 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
+  ;(globalThis as any).self ??= globalThis
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
+  const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
+  await expect.poll(dimensions).toBeGreaterThan(1)
+  const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })
+  disposeScreen=()=>terminal.dispose()
+  let lastSequence=0
+  async function screen(){
+    if(await input.isVisible()){const cols=await dimensions();if(cols>1&&cols!==terminal.cols)terminal.resize(cols,200)}
+    const chunks=(await context()).native?.output?.filter((chunk:any)=>chunk.sequence>lastSequence)??[]
+    if(chunks.length){await new Promise<void>(resolve=>terminal.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
+    const buffer=terminal.buffer.active
+    return Array.from({length:terminal.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+  }
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -160,8 +177,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await input.pressSequentially('/theme'); await input.press('Enter')
   // Read the current native highlight; the picker may reopen at Auto or the saved theme.
   async function highlightedTheme() {
-    const output = stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
-    return output.slice(output.lastIndexOf('Theme')).match(/❯\s*([^\r\n]+)/)?.[1]?.trim().replace(/^✔\s*/, '') ?? ''
+    return (await screen()).split('\n').flatMap(line=>{const match=line.match(/❯\s+(.+)/);return match?[match[1]!.trim().replace(/^✔\s*/, '')]:[]}).at(-1)??''
   }
   await expect.poll(highlightedTheme).not.toBe('')
   for (let index = 0; index < 9 && !(await highlightedTheme()).startsWith('Research'); index++) {
@@ -210,7 +226,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   }
   // Exercise the original custom editor: a valid edit previews without saving; Escape restores it.
   const savedCustomTheme = await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')
-  const nativeText = async () => stripVTControlCharacters((await context()).native.output.map((chunk: any) => chunk.text).join(''))
+  const nativeText = screen
   await composer.fill('Draft retained during custom theme editing')
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.pressSequentially('/theme'); await input.press('Enter')
@@ -243,7 +259,9 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(label).toBeInViewport({ ratio: 0.99 })
   await capture({ path: testInfo.outputPath('apack-native-custom-editor-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  await expect.poll(screen).toContain('Filter color tokens')
   await input.press('Enter')
+  await expect.poll(screen).toContain('Enter to save')
   await input.press('Control+u'); await input.pressSequentially('#c3b2a1'); await input.press('Enter')
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).overrides.success).toBe('#c3b2a1')
   await input.press('Escape')
