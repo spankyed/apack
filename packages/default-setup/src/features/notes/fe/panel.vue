@@ -256,6 +256,8 @@
 </template>
 
 <script setup lang="ts">
+import { useView } from '#generated/fe.ts'
+import { useSettings } from '#generated/settings-fe.ts'
 import { computed, ref, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { type NotesState } from './state.ts'
@@ -293,9 +295,12 @@ const notes = useSelector(actor, (s) => s.context.notes)
 const currentNoteId = useSelector(actor, (s) => s.context.currentNoteId)
 const expandedNodeIds = useSelector(actor, (s) => s.context.expandedNodeIds)
 const selectedNoteIds = useSelector(actor, (s) => s.context.selectedNoteIds)
-const showCollapseIcon = useSelector(actor, (s) => s.context.settings.showCollapseIcon)
+const settings = useSettings('notes')
+const showCollapseIcon = computed(() => settings.value.value?.showCollapseIcon ?? false)
 const showTrash = useSelector(actor, (s) => s.context.showTrash)
-const trashedNotes = useSelector(actor, (s) => s.context.trashedNotes)
+// The trash, which the panel's trash button counts whether or not it is open
+const trash = useView('notes', 'trash')
+const trashedNotes = computed(() => trash.data ?? [])
 
 const rootNotes = computed(() =>
   notes.value

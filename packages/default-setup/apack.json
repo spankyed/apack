@@ -901,6 +901,7 @@
         "noteQueries": "src/features/notes/be/repository/index.ts#noteQueries",
         "noteCommands": "src/features/notes/be/repository/index.ts#noteCommands"
       },
+      "views": "src/features/notes/be/views.ts#noteViews",
       "references": {
         "types": {
           "note": {

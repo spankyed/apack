@@ -41,12 +41,14 @@ export interface NoteDTO {
   trashedAt?: number;
 }
 
-export type OutgoingNotesSearchEvent = { type: 'NOTES_SEARCH_RESULTS'; results: NoteDTO[] }
+/**
+ * A note as the tree shows it: its place and its flags, without its text and without the times every write moves.
+ * What the tree view reads, so typing in a note re-runs the view showing that note and not the one showing every note.
+ */
+export type NoteSummary = Omit<NoteDTO, 'content' | 'updatedAt' | 'lastSeen'>;
 
-export interface NotesConnectedData {
-  notes: NoteDTO[];
-  settings?: NotesSettings;
-}
+/** A note as the welcome page shows it, with when it last changed */
+export type RecentNote = Pick<NoteDTO, 'id' | 'title' | 'icon' | 'noteType' | 'updatedAt'>;
 
 // ── This feature's settings ───────────────────────────────────────────────
 // Its own shape, which the app stores without knowing: the app owns the document, each feature its slice.
@@ -61,21 +63,22 @@ export type IncomingNoteEvents =
   | { type: 'MOVE_NOTE'; ids: string[]; newParentId: string | null }
   | { type: 'REORDER_NOTE'; id: string; newParentId: string | null; newIndex: number }
   | { type: 'VIEW_NOTE'; id: string }
-  | { type: 'SEARCH_NOTES'; query: string }
-  | { type: 'GET_TRASHED_NOTES' }
   | { type: 'PERMANENTLY_DELETE_NOTE'; id: string }
   | { type: 'EMPTY_TRASH' }
   | { type: 'IMPORT_NOTES'; directory: string }
   | { type: 'EXPORT_NOTES'; directory: string; format: 'markdown' | 'json' };
 
+/**
+ * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
+ * themselves are its views.
+ */
 export type OutgoingNotesEvents =
-  | { type: 'NOTES_CONNECTED'; data: NotesConnectedData }
-  | { type: 'NOTE_CREATED'; note: NoteDTO }
-  | { type: 'NOTE_UPDATED'; note: NoteDTO }
-  | { type: 'NOTE_DELETED'; noteId: string }
-  | { type: 'NOTE_RESTORED'; note: NoteDTO }
-  | { type: 'TRASHED_NOTES'; notes: NoteDTO[] }
-  | OutgoingNotesSearchEvent
+  /** The note a `CREATE_NOTE` made, for the window that asked to open */
+  | { type: 'NOTE_CREATED'; note: NoteSummary }
+  /** Any other write landed */
+  | { type: 'NOTE_WRITTEN' }
+  /** A write was refused, and why: the window puts back the notes as stored */
+  | { type: 'NOTE_WRITE_FAILED'; error: string }
   | { type: 'NOTES_IMPORTED'; count: number; errors?: string[] }
   | { type: 'NOTES_IMPORT_FAILED'; errors: string[] }
   | { type: 'NOTES_EXPORTED'; filePath: string; itemCount: number }

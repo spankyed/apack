@@ -10,10 +10,12 @@ export function useNoteFocus(
 ) {
   const currentNote = useSelector(actor, (s) => s.context.currentNote)
   const selectedTask = useSelector(actor, (s) => s.context.selectedTask)
+  // A note this window has just created opens with its title selected, to be named
+  const createdNoteId = useSelector(actor, (s) => s.context.createdNoteId)
 
   watch(currentNote, (note, oldNote) => {
     if (!note || note.id === oldNote?.id) return
-    const isNewNote = note.title === 'Untitled' && !note.content
+    const isNewNote = note.id === createdNoteId.value
     nextTick(() => {
       if (isNewNote) {
         titleRef.value?.focus()
@@ -26,7 +28,7 @@ export function useNoteFocus(
 
   watch(selectedTask, (task, oldTask) => {
     if (!task || task.id === oldTask?.id) return
-    const isNewTask = task.title === 'Untitled' && !task.content
+    const isNewTask = task.id === createdNoteId.value
     if (isNewTask) {
       nextTick(() => {
         titleRef.value?.focus()

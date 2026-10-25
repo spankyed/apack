@@ -1,5 +1,5 @@
 import { ref, computed, type Ref } from 'vue'
-import type { NoteDTO } from '#generated/types.ts'
+import type { NoteSummary } from '#generated/types.ts'
 
 type DropPosition = 'before' | 'after' | 'on'
 
@@ -14,7 +14,7 @@ interface FileDropData {
 }
 
 interface NoteTreeDragDropOptions {
-  notes: Ref<NoteDTO[]>
+  notes: Ref<NoteSummary[]>
   selectedNoteIds: Ref<string[]>
   currentNoteId: Ref<string | null>
   onMove: (noteIds: string[], newParentId: string | null) => void

@@ -177,7 +177,7 @@ import { sendToSystem } from '#generated/events.ts';
 
 // Surface -> System: this pack's systems by feature id, a dependency's as <dependency>/<feature>
 sendToSystem('bookmarks', { type: 'CREATE_BOOKMARK', url, title });
-sendToSystem('default-setup/notes', { type: 'GET_TRASHED_NOTES' });
+sendToSystem('default-setup/notes', { type: 'EMPTY_TRASH' });
 ```
 
 `sendToSystem` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.

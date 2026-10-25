@@ -1,4 +1,4 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { entityIs, viewRead, viewWrites, writeAnswered, writeSent, writing } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
 import { assign, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbList } from '@apackdev/sdk/fe'
@@ -7,9 +7,7 @@ import {
   targetIs,
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
-import type {
-  NoteDTO,
-} from '#generated/types.ts'
+import type { NoteDTO, NoteSummary } from '#generated/types.ts'
 import type { Contract, NotesContext, NotesInboxEvent } from './contract.ts'
 import type { OutgoingNotesEvents } from '#features/notes/be/types.ts'
 import { sendToSystem } from '#generated/events.ts'
@@ -40,7 +38,10 @@ type UIEvent =
   | { type: 'NOTE.TOGGLE_EXPAND'; nodeId: string }
   | { type: 'NOTE.LINK_CLICKED'; noteId: string }
   | { type: 'NOTE.REQUEST_DOCUMENT_INSERT'; parentId: string; cursorPos: number }
-  | { type: 'NOTE.SEARCH'; query: string }
+  /** What the tree view read, which the canvas hands on: every note as the tree shows it */
+  | { type: 'NOTES.READ'; notes: NoteSummary[] }
+  /** What an open note's view read: the note with its text, or `null` once it's gone */
+  | { type: 'NOTE.READ'; noteId: string; note: NoteDTO | null }
   | { type: 'NOTE.TOGGLE_SELECT'; noteId: string }
   | { type: 'NOTE.RANGE_SELECT'; noteIds: string[] }
   | { type: 'NOTE.CLEAR_SELECTION' }
@@ -71,13 +72,10 @@ type UIEvent =
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
 
-type SettingsEvent =
-  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: { tasklistPanelPosition: 'left' | 'right'; showCollapseIcon: boolean } }
-
-export type NotesEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent | SettingsEvent
+export type NotesEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent
 const typeOf = safeEvents<NotesEvents>()
 
-function findNearestTaskList(notes: NoteDTO[], noteId: string): NoteDTO | null {
+function findNearestTaskList(notes: NoteSummary[], noteId: string): NoteSummary | null {
   let currentId: string | null = noteId
   while (currentId) {
     const note = notes.find(n => n.id === currentId)
@@ -90,8 +88,8 @@ function findNearestTaskList(notes: NoteDTO[], noteId: string): NoteDTO | null {
   return null
 }
 
-function getAncestorChain(notes: NoteDTO[], noteId: string): NoteDTO[] {
-  const chain: NoteDTO[] = []
+function getAncestorChain(notes: NoteSummary[], noteId: string): NoteSummary[] {
+  const chain: NoteSummary[] = []
   let currentId: string | null = noteId
 
   while (currentId) {
@@ -106,22 +104,47 @@ function getAncestorChain(notes: NoteDTO[], noteId: string): NoteDTO[] {
   return chain
 }
 
+/** A write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
+const withWrite = (writes: NotesContext['writes'], call: string): { writes: NotesContext['writes'] } =>
+  ({ writes: writeSent(writes, call) })
+
+/** `notes` with `note` in it once, whether or not the tree view has brought it already */
+const withNote = (notes: NoteSummary[], note: NoteSummary): NoteSummary[] =>
+  (notes.some(n => n.id === note.id) ? notes : [...notes, note])
+
+/** The open note and selected task as `notes` now holds them, so the copies follow the tree */
+const followed = (context: NotesContext, notes: NoteSummary[]) => ({
+  notes,
+  currentNote: context.currentNoteId ? notes.find(n => n.id === context.currentNoteId) ?? context.currentNote : null,
+  selectedTask: context.selectedTaskId ? notes.find(n => n.id === context.selectedTaskId) ?? context.selectedTask : null,
+})
+
 const notesState = setup({
   types: {
     context: {} as NotesContext,
     events: {} as NotesEvents,
   },
   actions: {
-    setSurfaceData: assign(({ context, event }) => {
-      const ev = typeOf('NOTES_CONNECTED', event)
-      // The backend sends whatever the repositories hold, and settings are absent until the Settings row
-      // has an entry for this surface. Assigning that over the context blanks the defaults this machine
-      // declares, and every selector and computed reading them throws on the next render.
+    /** The tree as its view read it, which every write — this window's or another's — brings */
+    takeTree: assign(({ context, event }) => ({
+      ...followed(context, typeOf('NOTES.READ', event).notes),
+      writes: viewRead(context.writes).writes,
+    })),
+
+    /** An open note's text as its view read it */
+    takeNote: assign(({ context, event }) => {
+      const { noteId, note } = typeOf('NOTE.READ', event)
       return {
-        notes: ev.data.notes ?? context.notes,
-        settings: ev.data.settings ?? context.settings,
+        writes: viewRead(context.writes).writes,
+        ...(note && { contents: { ...context.contents, [noteId]: note.content } }),
       }
     }),
+
+    /** A result that may predate a write still unanswered: applying it would undo that edit on screen */
+    holdView: assign(({ context }) => ({ writes: viewRead(context.writes).writes })),
+
+    /** One of this window's writes answered: once the last is, the views are read again if a result was held or one was refused */
+    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'NOTE_WRITE_FAILED') })),
 
     selectNote: assign(({ event, context }) => {
       const noteId = typeOf(['NOTE.SELECT', 'NOTE.LINK_CLICKED'], event).noteId
@@ -189,75 +212,62 @@ const notesState = setup({
       }
     },
 
-    sendCreateNote: ({ event }) => {
+    sendCreateNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE.CREATE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NOTE',
         title: ev.title ?? 'Untitled',
         content: ev.content,
         parentId: ev.parentId,
         displayOrder: ev.displayOrder,
-      })
-    },
+      }))
+    }),
 
-    sendDeleteNote: ({ event }) => {
+    sendDeleteNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE.DELETE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'DELETE_NOTE',
         id: ev.noteId,
-      })
-    },
+      }))
+    }),
 
-    sendSoftDeleteTask: ({ event }) => {
+    sendSoftDeleteTask: assign(({ context, event }) => {
       const ev = typeOf('TASK.DELETE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'DELETE_NOTE',
         id: ev.taskId,
-      })
-    },
+      }))
+    }),
 
-    sendSoftDeleteNote: ({ event }) => {
+    sendSoftDeleteNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE.SOFT_DELETE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'SOFT_DELETE_NOTE',
         id: ev.noteId,
-      })
-    },
+      }))
+    }),
 
-    sendRestoreNote: ({ event }) => {
+    sendRestoreNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE.RESTORE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'RESTORE_NOTE',
         id: ev.noteId,
-      })
-    },
-
-    addRestoredNote: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_RESTORED', event)
-      const exists = context.notes.some(n => n.id === ev.note.id)
-      return {
-        notes: exists ? context.notes : [...context.notes, ev.note],
-        trashedNotes: context.trashedNotes.filter(n => n.id !== ev.note.id),
-      }
+      }))
     }),
 
     updateLocalContent: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_CONTENT', event)
-      return {
-        notes: context.notes.map(n =>
-          n.id === ev.noteId ? { ...n, content: ev.content } : n
-        ),
-      }
+      return { contents: { ...context.contents, [ev.noteId]: ev.content } }
     }),
 
-    sendUpdateContent: ({ event }) => {
+    sendUpdateContent: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_CONTENT', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.noteId,
         content: ev.content,
-      })
-    },
+      }))
+    }),
 
     updateLocalTitle: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_TITLE', event)
@@ -273,14 +283,14 @@ const notesState = setup({
       }
     }),
 
-    sendUpdateTitle: ({ event }) => {
+    sendUpdateTitle: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_TITLE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.noteId,
         title: ev.title,
-      })
-    },
+      }))
+    }),
 
     updateLocalIcon: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_ICON', event)
@@ -296,14 +306,14 @@ const notesState = setup({
       }
     }),
 
-    sendUpdateIcon: ({ event }) => {
+    sendUpdateIcon: assign(({ context, event }) => {
       const ev = typeOf('NOTE.UPDATE_ICON', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.noteId,
         icon: ev.icon,
-      })
-    },
+      }))
+    }),
 
     toggleFavoriteLocal: assign(({ context, event }) => {
       const ev = typeOf('NOTE.TOGGLE_FAVORITE', event)
@@ -324,23 +334,25 @@ const notesState = setup({
       }
     }),
 
-    sendToggleFavorite: ({ event, context }) => {
+    sendToggleFavorite: assign(({ context, event }) => {
       const ev = typeOf('NOTE.TOGGLE_FAVORITE', event)
       const note = context.notes.find(n => n.id === ev.noteId)
-      if (!note) return
-      sendToSystem(id, {
+      if (!note) return {}
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.noteId,
         favorite: note.favorite,
-      })
-    },
+      }))
+    }),
 
+    /** The note this window asked to create, which this window opens; every window's tree has it from its view */
     addCreatedNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE_CREATED', event)
-      const updatedNotes = [...context.notes, ev.note]
+      const updatedNotes = withNote(context.notes, ev.note)
       const ancestorIds = getAncestorChain(updatedNotes, ev.note.id).map(n => n.id)
       return {
         notes: updatedNotes,
+        createdNoteId: ev.note.id,
         currentNoteId: ev.note.id,
         currentNote: ev.note,
         selectedTaskId: null,
@@ -360,36 +372,9 @@ const notesState = setup({
       // Clear pending flag and store the created child's ID so the canvas
       // component can insert the link without guessing by timestamp
       return {
-        notes: [...context.notes, ev.note],
+        notes: withNote(context.notes, ev.note),
         pendingSubDocumentInsert: null,
         lastSubDocumentInsertChildId: ev.note.id,
-      }
-    }),
-
-    updateNoteInList: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_UPDATED', event)
-      const updatedNotes = context.notes.map(n =>
-        n.id === ev.note.id ? ev.note : n
-      )
-      return {
-        notes: updatedNotes,
-        currentNote: context.currentNoteId === ev.note.id ? ev.note : context.currentNote,
-        selectedTask: context.selectedTaskId === ev.note.id ? ev.note : context.selectedTask,
-      }
-    }),
-
-    removeDeletedNote: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_DELETED', event)
-      const updatedNotes = context.notes.filter(n => n.id !== ev.noteId)
-      const wasCurrentNote = context.currentNoteId === ev.noteId
-      const wasSelectedTask = context.selectedTaskId === ev.noteId
-      return {
-        notes: updatedNotes,
-        currentNoteId: wasCurrentNote ? null : context.currentNoteId,
-        currentNote: wasCurrentNote ? null : context.currentNote,
-        selectedNoteIds: context.selectedNoteIds.filter(id => id !== ev.noteId),
-        selectedTaskId: wasSelectedTask ? null : context.selectedTaskId,
-        selectedTask: wasSelectedTask ? null : context.selectedTask,
       }
     }),
 
@@ -420,27 +405,14 @@ const notesState = setup({
       }
     }),
 
-    sendCreateChildForSubDocumentInsert: ({ event }) => {
+    sendCreateChildForSubDocumentInsert: assign(({ context, event }) => {
       const ev = typeOf('NOTE.REQUEST_DOCUMENT_INSERT', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NOTE',
         title: 'Untitled',
         parentId: ev.parentId,
         skipContentSync: true,
-      })
-    },
-
-    sendSearchNotes: ({ event }) => {
-      const ev = typeOf('NOTE.SEARCH', event)
-      sendToSystem(id, {
-        type: 'SEARCH_NOTES',
-        query: ev.query,
-      })
-    },
-
-    setSearchResults: assign(({ event }) => {
-      const ev = typeOf('NOTES_SEARCH_RESULTS', event)
-      return { searchResults: ev.results }
+      }))
     }),
 
     toggleSelect: assign(({ context, event }) => {
@@ -461,34 +433,34 @@ const notesState = setup({
 
     clearSelection: assign({ selectedNoteIds: [] }),
 
-    sendMoveNotes: ({ event }) => {
+    sendMoveNotes: assign(({ context, event }) => {
       const ev = typeOf('NOTE.MOVE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'MOVE_NOTE',
         ids: ev.noteIds,
         newParentId: ev.newParentId,
-      })
-    },
+      }))
+    }),
 
-    sendReorderNote: ({ event }) => {
+    sendReorderNote: assign(({ context, event }) => {
       const ev = typeOf('NOTE.REORDER', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'REORDER_NOTE',
         id: ev.noteId,
         newParentId: ev.newParentId,
         newIndex: ev.newIndex,
-      })
-    },
+      }))
+    }),
 
-    sendCreateTaskList: ({ event }) => {
+    sendCreateTaskList: assign(({ context, event }) => {
       const ev = typeOf('NOTE.CREATE_TASKLIST', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NOTE',
         title: 'Untitled',
         noteType: 'tasklist',
         parentId: ev.parentId,
-      })
-    },
+      }))
+    }),
 
     selectTask: assign(({ event, context }) => {
       const ev = typeOf('TASK.SELECT', event)
@@ -504,44 +476,40 @@ const notesState = setup({
       selectedTask: null,
     }),
 
-    sendCreateTask: ({ event }) => {
+    sendCreateTask: assign(({ context, event }) => {
       const ev = typeOf('TASK.CREATE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'CREATE_NOTE',
         title: 'Untitled',
         parentId: ev.parentId,
         skipContentSync: true,
         noteType: 'task',
-      })
-    },
+      }))
+    }),
 
-    sendToggleComplete: ({ event, context }) => {
+    sendToggleComplete: assign(({ context, event }) => {
       const ev = typeOf('TASK.TOGGLE_COMPLETE', event)
       const task = context.notes.find(n => n.id === ev.taskId)
-      if (!task) return
-      sendToSystem(id, {
+      if (!task) return {}
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.taskId,
         completed: !task.completed,
-      })
-    },
+      }))
+    }),
 
-    sendTaskUpdateContent: ({ event }) => {
+    sendTaskUpdateContent: assign(({ context, event }) => {
       const ev = typeOf('TASK.UPDATE_CONTENT', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.taskId,
         content: ev.content,
-      })
-    },
+      }))
+    }),
 
     updateLocalTaskContent: assign(({ context, event }) => {
       const ev = typeOf('TASK.UPDATE_CONTENT', event)
-      return {
-        notes: context.notes.map(n =>
-          n.id === ev.taskId ? { ...n, content: ev.content } : n
-        ),
-      }
+      return { contents: { ...context.contents, [ev.taskId]: ev.content } }
     }),
 
     updateLocalTaskTitle: assign(({ context, event }) => {
@@ -558,44 +526,44 @@ const notesState = setup({
       }
     }),
 
-    sendTaskUpdateTitle: ({ event }) => {
+    sendTaskUpdateTitle: assign(({ context, event }) => {
       const ev = typeOf('TASK.UPDATE_TITLE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.taskId,
         title: ev.title,
-      })
-    },
+      }))
+    }),
 
-    sendDeleteTask: ({ event }) => {
+    sendDeleteTask: assign(({ context, event }) => {
       const ev = typeOf('TASK.DELETE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'DELETE_NOTE',
         id: ev.taskId,
-      })
-    },
+      }))
+    }),
 
-    sendToggleShowCompleted: ({ context }) => {
-      if (!context.currentNoteId) return
+    sendToggleShowCompleted: assign(({ context }) => {
+      if (!context.currentNoteId) return {}
       const note = context.notes.find(n => n.id === context.currentNoteId)
-      if (!note) return
-      sendToSystem(id, {
+      if (!note) return {}
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: context.currentNoteId,
         hideCompletedChildren: !note.hideCompletedChildren,
-      })
-    },
+      }))
+    }),
 
-    sendToggleHideCompletedChildren: ({ event, context }) => {
+    sendToggleHideCompletedChildren: assign(({ context, event }) => {
       const ev = typeOf('TASK.TOGGLE_HIDE_COMPLETED_CHILDREN', event)
       const note = context.notes.find(n => n.id === ev.nodeId)
-      if (!note) return
-      sendToSystem(id, {
+      if (!note) return {}
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'UPDATE_NOTE',
         id: ev.nodeId,
         hideCompletedChildren: !note.hideCompletedChildren,
-      })
-    },
+      }))
+    }),
 
     clearCurrentNote: assign(({ context }) => ({
       currentNoteId: null,
@@ -700,46 +668,23 @@ const notesState = setup({
       notesExport: { status: 'idle' as const, errors: [] as string[], filePath: '', itemCount: 0 },
     }),
 
-    handleSettingsUpdate: assign(({ event }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event)
-      return { settings: ev.settings }
-    }),
+    showTrash: assign({ showTrash: true }),
 
-    showTrash: assign({ showTrash: true, trashedNotes: [] }),
+    hideTrash: assign({ showTrash: false }),
 
-    requestTrashedNotes: () => {
-      sendToSystem(id, {
-        type: 'GET_TRASHED_NOTES',
-      })
-    },
-
-    hideTrash: assign({ showTrash: false, trashedNotes: [] }),
-
-    setTrashedNotes: assign(({ event }) => {
-      const ev = typeOf('TRASHED_NOTES', event)
-      return { trashedNotes: ev.notes }
-    }),
-
-    sendPermanentlyDelete: ({ event }) => {
+    sendPermanentlyDelete: assign(({ context, event }) => {
       const ev = typeOf('NOTE.PERMANENTLY_DELETE', event)
-      sendToSystem(id, {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'PERMANENTLY_DELETE_NOTE',
         id: ev.noteId,
-      })
-    },
-
-    removeTrashedNote: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_DELETED', event)
-      return {
-        trashedNotes: context.trashedNotes.filter(n => n.id !== ev.noteId),
-      }
+      }))
     }),
 
-    sendEmptyTrash: () => {
-      sendToSystem(id, {
+    sendEmptyTrash: assign(({ context }) => {
+      return withWrite(context.writes, sendToSystem(id, {
         type: 'EMPTY_TRASH',
-      })
-    },
+      }))
+    }),
 
     saveScroll: assign(({ context, event }) => {
       const ev = typeOf('NOTE.SAVE_SCROLL', event)
@@ -752,27 +697,33 @@ const notesState = setup({
       panelSearchActive: !context.panelSearchActive,
     })),
   },
-  guards: { entityIs: entityIs<Contract['opens']>, targetIs },
+  guards: { entityIs: entityIs<Contract['opens']>, targetIs,
+    /** Whether any of this window's writes is unanswered */
+    writing: ({ context }) => writing(context.writes),
+    /** Whether a tree read leaves out the note open in the editor */
+    losesCurrentNote: ({ context, event }) => event.type === 'NOTES.READ' && context.currentNoteId !== null
+      && !event.notes.some(n => n.id === context.currentNoteId),
+  },
 }).createMachine({
   id,
   initial: 'welcome',
   context: {
     notes: [],
+    contents: {},
+    writes: viewWrites(),
+    createdNoteId: null,
     currentNoteId: null,
     currentNote: null,
     expandedNodeIds: [],
     taskExpandedNodeIds: [],
     pendingSubDocumentInsert: null,
     lastSubDocumentInsertChildId: null,
-    searchResults: [],
     selectedNoteIds: [],
     selectedTaskId: null,
     selectedTask: null,
-    settings: { tasklistPanelPosition: 'left' as const, showCollapseIcon: false },
     notesImport: { status: 'idle' as const, errors: [], importedCount: 0 },
     notesExport: { status: 'idle' as const, errors: [], filePath: '', itemCount: 0 },
     showTrash: false,
-    trashedNotes: [],
     noteScrollPositions: {},
     panelSearchActive: false,
     navHistory: createNavHistory<string | null>(null),
@@ -780,29 +731,21 @@ const notesState = setup({
   },
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Note' } }, target: '.editor', actions: ['openNote', 'sendViewNote'] },
-    NOTES_CONNECTED: { actions: 'setSurfaceData' },
-    FEATURE_SETTINGS_UPDATED: { actions: 'handleSettingsUpdate' },
-    NOTE_UPDATED: { actions: 'updateNoteInList' },
-    NOTE_RESTORED: { actions: 'addRestoredNote' },
+    'NOTES.READ': [
+      { guard: 'writing', actions: 'holdView' },
+      // The open note is gone — deleted here or in another window
+      { guard: 'losesCurrentNote', target: '.welcome', actions: ['takeTree', 'clearCurrentNote'] },
+      { actions: 'takeTree' },
+    ],
+    'NOTE.READ': [
+      { guard: 'writing', actions: 'holdView' },
+      { actions: 'takeNote' },
+    ],
+    // The answers to this window's writes; a refusal reads the notes as stored again
+    NOTE_WRITTEN: { actions: 'settleWrite' },
+    NOTE_WRITE_FAILED: { actions: 'settleWrite' },
     'NOTE.SOFT_DELETE': { actions: 'sendSoftDeleteNote' },
     'NOTE.RESTORE': { actions: 'sendRestoreNote' },
-    NOTE_DELETED: [
-      {
-        guard: ({ context }) => context.showTrash,
-        actions: 'removeTrashedNote',
-      },
-      {
-        guard: ({ context, event }) => {
-          const ev = typeOf('NOTE_DELETED', event)
-          return context.currentNoteId === ev.noteId
-        },
-        actions: 'removeDeletedNote',
-        target: '.welcome',
-      },
-      {
-        actions: 'removeDeletedNote',
-      },
-    ],
     'NOTE.TOGGLE_EXPAND': { actions: 'toggleExpand' },
     'TASK.TOGGLE_EXPAND': { actions: 'toggleExpandTask' },
     'NOTE.TOGGLE_SELECT': { actions: 'toggleSelect' },
@@ -830,13 +773,12 @@ const notesState = setup({
     'NOTES.RESET_EXPORT_STATUS': { actions: 'resetExportNotesStatus' },
     NOTES_EXPORTED: { actions: 'handleNotesExported' },
     NOTES_EXPORT_FAILED: { actions: 'handleNotesExportFailed' },
-    'NOTE.SHOW_TRASH': { actions: ['showTrash', 'requestTrashedNotes'] },
+    'NOTE.SHOW_TRASH': { actions: 'showTrash' },
     'NOTE.HIDE_TRASH': { actions: 'hideTrash' },
     'NOTE.PERMANENTLY_DELETE': { actions: 'sendPermanentlyDelete' },
     'NOTE.EMPTY_TRASH': { actions: 'sendEmptyTrash' },
     'NOTE.SAVE_SCROLL': { actions: 'saveScroll' },
     'NOTE.TOGGLE_PANEL_SEARCH': { actions: 'togglePanelSearch' },
-    TRASHED_NOTES: { actions: 'setTrashedNotes' },
     NAVIGATE_BACK: [
       {
         guard: ({ context }) => {
@@ -949,7 +891,6 @@ const notesState = setup({
   states: {
     welcome: {
       tags: ['welcome'],
-      entry: assign({ searchResults: [] }),
       meta: { ...breadcrumb('welcome', 'Notes', true) },
       on: {
         'NOTE.CREATE': {
@@ -965,31 +906,33 @@ const notesState = setup({
           {
             guard: ({ event, context }) => {
               const ev = typeOf('NOTE_CREATED', event)
-              const updatedNotes = [...context.notes, ev.note]
+              const updatedNotes = withNote(context.notes, ev.note)
               return findNearestTaskList(updatedNotes, ev.note.id) !== null
             },
             actions: [
               assign(({ context, event }) => {
                 const ev = typeOf('NOTE_CREATED', event)
-                const taskList = findNearestTaskList([...context.notes, ev.note], ev.note.id)
-                if (!taskList) return { notes: [...context.notes, ev.note] }
-                const ancestorIds = getAncestorChain([...context.notes, ev.note], taskList.id).map(n => n.id)
+                const taskList = findNearestTaskList(withNote(context.notes, ev.note), ev.note.id)
+                if (!taskList) return { notes: withNote(context.notes, ev.note) }
+                const ancestorIds = getAncestorChain(withNote(context.notes, ev.note), taskList.id).map(n => n.id)
                 return {
-                  notes: [...context.notes, ev.note],
+                  notes: withNote(context.notes, ev.note),
                   currentNoteId: taskList.id,
                   currentNote: taskList,
                   viewedNoteId: ev.note.id,
+                  createdNoteId: ev.note.id,
                   selectedTaskId: ev.note.id,
                   selectedTask: ev.note,
                   taskExpandedNodeIds: [...new Set([...context.taskExpandedNodeIds, ...ancestorIds, taskList.id])],
                 }
               }),
               'sendViewNote',
+              'settleWrite',
             ],
             target: 'editor',
           },
           {
-            actions: 'addCreatedNote',
+            actions: ['addCreatedNote', 'settleWrite'],
             target: 'editor',
           },
         ],
@@ -1003,12 +946,6 @@ const notesState = setup({
         },
         'NOTE.DELETE': {
           actions: 'sendDeleteNote',
-        },
-        'NOTE.SEARCH': {
-          actions: 'sendSearchNotes',
-        },
-        NOTES_SEARCH_RESULTS: {
-          actions: 'setSearchResults',
         },
       },
     },
@@ -1074,41 +1011,42 @@ const notesState = setup({
         NOTE_CREATED: [
           {
             guard: ({ context }) => context.pendingSubDocumentInsert !== null,
-            actions: 'handleSubDocumentInsertCreated',
+            actions: ['handleSubDocumentInsertCreated', 'settleWrite'],
           },
           {
             // If the new note's parent is the current tasklist, add to list but don't navigate
             guard: ({ context, event }) => {
               const ev = typeOf('NOTE_CREATED', event)
-              const updatedNotes = [...context.notes, ev.note]
+              const updatedNotes = withNote(context.notes, ev.note)
               return context.currentNote?.noteType === 'tasklist'
                 && findNearestTaskList(updatedNotes, ev.note.id)?.id === context.currentNoteId
             },
-            actions: assign(({ context, event }) => {
+            actions: [assign(({ context, event }) => {
               const ev = typeOf('NOTE_CREATED', event)
-              const updatedNotes = [...context.notes, ev.note]
+              const updatedNotes = withNote(context.notes, ev.note)
               const taskAncestors = getAncestorChain(updatedNotes, ev.note.id)
               const taskListIndex = taskAncestors.findIndex(a => a.id === context.currentNoteId)
               const intermediateIds = taskAncestors.slice(taskListIndex + 1).map(a => a.id)
               return {
                 notes: updatedNotes,
+                createdNoteId: ev.note.id,
                 selectedTaskId: ev.note.id,
                 selectedTask: ev.note,
                 taskExpandedNodeIds: [...new Set([...context.taskExpandedNodeIds, ...intermediateIds, ...(context.currentNoteId ? [context.currentNoteId] : [])])],
               }
-            }),
+            }), 'settleWrite'],
           },
           {
             // Note created for a tasklist that isn't currently viewed — navigate to it
             guard: ({ context, event }) => {
               const ev = typeOf('NOTE_CREATED', event)
-              const updatedNotes = [...context.notes, ev.note]
+              const updatedNotes = withNote(context.notes, ev.note)
               return findNearestTaskList(updatedNotes, ev.note.id) !== null
             },
             actions: [
               assign(({ context, event }) => {
                 const ev = typeOf('NOTE_CREATED', event)
-                const updatedNotes = [...context.notes, ev.note]
+                const updatedNotes = withNote(context.notes, ev.note)
                 const taskList = findNearestTaskList(updatedNotes, ev.note.id)
                 if (!taskList) return { notes: updatedNotes }
                 const ancestorIds = getAncestorChain(updatedNotes, taskList.id).map(n => n.id)
@@ -1120,16 +1058,18 @@ const notesState = setup({
                   currentNoteId: taskList.id,
                   currentNote: taskList,
                   viewedNoteId: ev.note.id,
+                  createdNoteId: ev.note.id,
                   selectedTaskId: ev.note.id,
                   selectedTask: ev.note,
                   taskExpandedNodeIds: [...new Set([...context.taskExpandedNodeIds, ...ancestorIds, ...intermediateIds, taskList.id])],
                 }
               }),
               'sendViewNote',
+              'settleWrite',
             ],
           },
           {
-            actions: 'addCreatedNote',
+            actions: ['addCreatedNote', 'settleWrite'],
           },
         ],
         'NOTE.DELETE': {

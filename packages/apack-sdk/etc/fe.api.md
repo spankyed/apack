@@ -1015,6 +1015,12 @@ export interface UseViewOptions {
 }
 
 // @public
+export function viewRead(writes: ViewWrites): {
+    writes: ViewWrites;
+    apply: boolean;
+};
+
+// @public
 export interface ViewRequest {
     args?: unknown;
     ref: string;
@@ -1040,6 +1046,27 @@ export type ViewUpdate<Result = unknown> = {
     error: string;
     commit: number;
 };
+
+// @public
+export interface ViewWrites {
+    readonly pending: Readonly<Record<string, true>>;
+    readonly refreshes: number;
+    readonly stale: boolean;
+}
+
+// @public
+export const viewWrites: () => ViewWrites;
+
+// @public
+export function writeAnswered(writes: ViewWrites, answer: {
+    [key: string]: unknown;
+}, refused?: boolean): ViewWrites;
+
+// @public
+export const writeSent: (writes: ViewWrites, call: string) => ViewWrites;
+
+// @public
+export const writing: (writes: ViewWrites) => boolean;
 
 // (No @packageDocumentation comment for this package)
 

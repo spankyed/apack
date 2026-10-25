@@ -10,7 +10,7 @@ import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS 
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import { HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
-import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup } from '@apackdev/sdk/fe';
+import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { EmbeddingModelId, ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -1486,15 +1486,11 @@ interface FlowsContext {
         }>;
     };
     /**
-     * The editor's graph writes still unanswered, by call. While any is, a result of the graph's view is held rather
-     * than applied, since it may predate the write and would undo an edit on screen; once the last is answered, a held
-     * result — or a refused write — reads the view again (`graphRefresh`), which by then holds every answered write.
+     * The editor's graph writes, and the graph view's results held behind those still unanswered (`ViewWrites`,
+     * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads the view
+     * again on each of its `refreshes`.
      */
-    pendingWrites: Record<string, true>;
-    /** Whether a result of the graph's view arrived while writes were unanswered, or one of them was refused */
-    graphStale: boolean;
-    /** Counts the times the editor asked to read the graph's view again; the canvas re-reads on each */
-    graphRefresh: number;
+    writes: ViewWrites;
     /** The models a node may name, which the flows system sends when it publishes */
     models: ModelCatalogEntry[];
     tempIdMap: Record<string, string>;
@@ -2252,11 +2248,6 @@ type IncomingNoteEvents = {
     type: 'VIEW_NOTE';
     id: string;
 } | {
-    type: 'SEARCH_NOTES';
-    query: string;
-} | {
-    type: 'GET_TRASHED_NOTES';
-} | {
     type: 'PERMANENTLY_DELETE_NOTE';
     id: string;
 } | {
@@ -2908,29 +2899,39 @@ interface NoteEntity extends BaseEntity {
     linkTargets?: string[];
 }
 
-interface NotesConnectedData {
-    notes: NoteDTO[];
-    settings?: NotesSettings;
-}
+/**
+ * A note as the tree shows it: its place and its flags, without its text and without the times every write moves.
+ * What the tree view reads, so typing in a note re-runs the view showing that note and not the one showing every note.
+ */
+type NoteSummary = Omit<NoteDTO, 'content' | 'lastSeen' | 'updatedAt'>;
 
 interface NotesContext {
-    notes: NoteDTO[];
+    /** Every note as the tree shows it: the tree view's last result, with this window's edits on top */
+    notes: NoteSummary[];
+    /**
+     * The text of the notes open in the editor (the open note, the selected task), by id: each one's note view's last
+     * result, with this window's typing on top
+     */
+    contents: Record<string, string>;
+    /**
+     * This window's writes, and the notes views' results held behind those still unanswered (`ViewWrites`,
+     * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads its views
+     * again on each of its `refreshes`.
+     */
+    writes: ViewWrites;
+    /** The note this window last created, which opens with its title selected */
+    createdNoteId: string | null;
     currentNoteId: string | null;
-    currentNote: NoteDTO | null;
+    currentNote: NoteSummary | null;
     expandedNodeIds: string[];
     taskExpandedNodeIds: string[];
     pendingSubDocumentInsert: {
         cursorPos: number;
     } | null;
     lastSubDocumentInsertChildId: string | null;
-    searchResults: NoteDTO[];
     selectedNoteIds: string[];
     selectedTaskId: string | null;
-    selectedTask: NoteDTO | null;
-    settings: {
-        tasklistPanelPosition: 'left' | 'right';
-        showCollapseIcon: boolean;
-    };
+    selectedTask: NoteSummary | null;
     notesImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];
@@ -2943,7 +2944,6 @@ interface NotesContext {
         itemCount: number;
     };
     showTrash: boolean;
-    trashedNotes: NoteDTO[];
     noteScrollPositions: Record<string, number>;
     panelSearchActive: boolean;
     navHistory: NavHistory<string | null>;
@@ -2955,8 +2955,6 @@ type NotesInboxEvent = {
     type: 'NOTE.OPEN';
     noteId: string;
 };
-
-type NotesSettings = SettingsOf<'notes'>;
 
 interface OpenFile {
     path: string;
@@ -3525,25 +3523,25 @@ type OutgoingLogsEvents = {
     type: 'LOGS_CLEARED';
 };
 
-type OutgoingNotesEvents = {
-    type: 'NOTES_CONNECTED';
-    data: NotesConnectedData;
-} | {
+/**
+ * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
+ * themselves are its views.
+ */
+type OutgoingNotesEvents = 
+/** The note a `CREATE_NOTE` made, for the window that asked to open */
+{
     type: 'NOTE_CREATED';
-    note: NoteDTO;
+    note: NoteSummary;
+}
+/** Any other write landed */
+ | {
+    type: 'NOTE_WRITTEN';
+}
+/** A write was refused, and why: the window puts back the notes as stored */
+ | {
+    type: 'NOTE_WRITE_FAILED';
+    error: string;
 } | {
-    type: 'NOTE_UPDATED';
-    note: NoteDTO;
-} | {
-    type: 'NOTE_DELETED';
-    noteId: string;
-} | {
-    type: 'NOTE_RESTORED';
-    note: NoteDTO;
-} | {
-    type: 'TRASHED_NOTES';
-    notes: NoteDTO[];
-} | OutgoingNotesSearchEvent | {
     type: 'NOTES_IMPORTED';
     count: number;
     errors?: string[];
@@ -3557,11 +3555,6 @@ type OutgoingNotesEvents = {
 } | {
     type: 'NOTES_EXPORT_FAILED';
     errors: string[];
-};
-
-type OutgoingNotesSearchEvent = {
-    type: 'NOTES_SEARCH_RESULTS';
-    results: NoteDTO[];
 };
 
 /** What the prompts system answers with: an import's or an export's outcome. The prompts themselves are its views. */
@@ -4489,6 +4482,9 @@ declare const RateLimitLineSchema: z.ZodObject<{
     type: z.ZodLiteral<"rate_limit_event">;
     rate_limit_info: z.ZodObject<{}, "passthrough", z.ZodTypeAny, z.objectOutputType<{}, z.ZodTypeAny, "passthrough">, z.objectInputType<{}, z.ZodTypeAny, "passthrough">>;
 }, z.ZodTypeAny, "passthrough">>;
+
+/** A note as the welcome page shows it, with when it last changed */
+type RecentNote = Pick<NoteDTO, 'icon' | 'id' | 'noteType' | 'title' | 'updatedAt'>;
 
 type RecentThreadRefreshData = {
     recentThreads: Partial<ThreadEntity>[];
@@ -6111,6 +6107,19 @@ declare const noteCommands: {
 };
 
 declare const noteQueries: {
+    /** One note as the tree shows it */
+    readonly summary: (id: EARS.EntityId) => NoteSummary | undefined;
+    /** Every note as the tree shows it */
+    readonly summaries: () => NoteSummary[];
+    /** The notes in the trash, as the trash lists them */
+    readonly trashedSummaries: () => NoteSummary[];
+    /** The notes whose title holds `text`, ignoring case, as a search lists them */
+    readonly search: (text: string) => NoteSummary[];
+    /** What the welcome page lists: the `limit` notes seen last, and the favourites */
+    readonly recent: (limit: number) => {
+        recent: RecentNote[];
+        favorites: RecentNote[];
+    };
     readonly byId: (id: EARS.EntityId) => NoteEntity | undefined;
     readonly byIdDTO: (id: EARS.EntityId) => NoteDTO | undefined;
     readonly all: () => NoteEntity[];
@@ -6121,9 +6130,6 @@ declare const noteQueries: {
     readonly referencedBy: (noteId: EARS.EntityId) => EARS.EntityId[];
     readonly trashedDTOs: () => NoteDTO[];
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
-    readonly connectedData: () => {
-        notes: NoteDTO[];
-    };
 };
 
 /**
@@ -6359,9 +6365,9 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
         status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
