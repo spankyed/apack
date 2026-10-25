@@ -8,8 +8,8 @@ function fixture(){
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??hash})})})
-  return {formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??hash})})})
+  return {formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -84,4 +84,15 @@ it('uses original form validation before submission and original field-change ca
  expect(await f.act({action:'submit',revision})).toEqual({problem:'Original validation refusal'});expect(onSubmit).not.toHaveBeenCalled();expect(validate).toHaveBeenCalledWith('bad')
  await f.act({action:'change',revision,key:'value',value:'new draft'});expect(onChange).toHaveBeenCalledExactlyOnceWith('value','new draft')
  validate.mockReturnValue(null);await f.act({action:'submit',revision});expect(onSubmit).toHaveBeenCalledExactlyOnceWith()
+})
+
+it('saves exact drafts through native changes, awaits acknowledged form values and validates before native submit',async()=>{
+ const f=fixture(),Form=function OriginalForm(){},validate=vi.fn(()=>null),onSubmit=vi.fn(),onCancel=vi.fn()
+ const onChange=vi.fn((key:string,value:string)=>{f.config.child.memoizedProps={...f.config.child.memoizedProps,values:{[key]:value}}})
+ f.frame.panel.hidden=true;f.setFunctionHash(Form,'e2474315a210faf7b3cbaab9c4b40793486c2f19ed4b0a997e16fede82b933b4')
+ f.config.child={type:Form,memoizedProps:{title:'Original form',fields:[{type:'text',key:'value',label:'Value',validate}],values:{value:'old'},onChange,onCancel,onSubmit}}
+ const {revision}=await f.editor()
+ await expect(f.save(revision,{foreign:'bad'})).rejects.toThrow('values changed');expect(onChange).not.toHaveBeenCalled()
+ await f.save(revision,{value:'日本語 exact draft'})
+ expect(onChange).toHaveBeenCalledExactlyOnceWith('value','日本語 exact draft');expect(validate).toHaveBeenCalledExactlyOnceWith('日本語 exact draft');expect(onSubmit).toHaveBeenCalledExactlyOnceWith()
 })

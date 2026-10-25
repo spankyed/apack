@@ -28,7 +28,7 @@ async function readNativeSettings(n,entry,signal){
  let editor;
  if(frame.selectedTab==='Config'){
   if(frame.hidden){const native=await readNativeSettingsEditor(n,entry,signal);if(native)editor={...native.snapshot,revision:native.revision};}
-  else {const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows)if(controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}
+  else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}}
  }
 
  // Timed copy feedback is presentation state, not authority to change settings or Stats controls.
@@ -38,22 +38,54 @@ async function readNativeSettings(n,entry,signal){
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
- const entry=nativeSettingsPanel(request),read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
+ const entry=nativeSettingsPanel(request),isEditorCancel=request.operation==='editor'&&request.command?.action==='cancel';
+ let cancelledLease;
+ if(entry.settingsEditorLease){
+  const lease=entry.settingsEditorLease;
+  if(isEditorCancel){
+   if(lease.revision!==request.editor_revision||lease.panelRevision!==request.revision)throw Error('Native Settings editor changed before cancellation');
+   cancelledLease=lease;lease.controller.abort(Error('Native Settings editor cancelled'));
+  }else if(request.operation!=='read')throw Error('A native Settings editor operation is pending');
+ }
+ const read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
  if(request.operation==='read')return {snapshot:read.snapshot};
  if(request.operation==='open'||request.operation==='editor'){
-  if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before editing');
-  if(request.operation==='open'){
-   const visible=new Set(read.snapshot.rows.filter(row=>row.editorAvailable&&!row.isLocked).map(row=>row.key));
-   await activateNativeSettingsEditor(n,entry,request.key,visible,abort.signal);
-  }else{
-   const command=request.command;
-   if(!command||!['select','save','cancel'].includes(command.action))throw Error('Native Settings editor command changed');
-   const result=command.action==='save'?await saveNativeSettingsEditor(n,entry,request.editor_revision,command.values,abort.signal):await actNativeSettingsEditor(n,entry,{...command,revision:request.editor_revision},abort.signal);
-   nativeSettingsPanel(request);
-   if(result?.problem)return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot,problem:result.problem};
+  if(request.revision!==read.snapshot.revision&&!cancelledLease)throw Error('Native Settings changed; refresh before editing');
+  if(isEditorCancel){
+   const current=await readNativeSettingsEditor(n,entry,abort.signal);nativeSettingsPanel(request);
+   if(!current||cancelledLease&&current.owner!==cancelledLease.owner)throw Error('Native Settings editor owner changed before cancellation');
+   const result=await actNativeSettingsEditor(n,entry,{action:'cancel',revision:cancelledLease?current.revision:request.editor_revision},abort.signal);
+   await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
+   return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot,...result};
   }
-  await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
-  return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
+  if(entry.settingsEditorLease)throw Error('A native Settings editor operation is pending');
+  const controller=new AbortController(),cancel=()=>controller.abort(abort.signal.reason);
+  abort.signal.addEventListener('abort',cancel,{once:true});if(abort.signal.aborted)cancel();
+  if(!entry.settingsEditorLifetime){entry.settingsEditorLifetime=new AbortController();void entry.done.then(()=>entry.settingsEditorLifetime.abort(),()=>entry.settingsEditorLifetime.abort());}
+  const retire=()=>controller.abort();entry.settingsEditorLifetime.signal.addEventListener('abort',retire,{once:true});if(entry.settingsEditorLifetime.signal.aborted)retire();
+  let lease;
+  try{
+   const native=request.operation==='editor'?await readNativeSettingsEditor(n,entry,controller.signal):undefined;
+   if(entry.settingsEditorLease)throw Error('A native Settings editor operation is pending');
+   if(request.operation==='editor'&&(!native||native.revision!==request.editor_revision))throw Error('Native Settings editor changed; refresh before editing');
+   lease={controller,revision:request.editor_revision,panelRevision:request.revision,owner:native?.owner};entry.settingsEditorLease=lease;
+   if(request.operation==='open'){
+    const visible=new Set(read.snapshot.rows.filter(row=>row.editorAvailable&&!row.isLocked).map(row=>row.key));
+    entry.settingsEditorLabel=read.snapshot.rows.find(row=>row.key===request.key)?.label;
+    await activateNativeSettingsEditor(n,entry,request.key,visible,controller.signal);
+   }else{
+    const command=request.command;
+    if(!command||!['select','save'].includes(command.action))throw Error('Native Settings editor command changed');
+    const result=command.action==='save'?await saveNativeSettingsEditor(n,entry,request.editor_revision,command.values,controller.signal):await actNativeSettingsEditor(n,entry,{...command,revision:request.editor_revision},controller.signal);
+    nativeSettingsPanel(request);
+    if(result?.problem)return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot,problem:result.problem};
+   }
+   controller.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
+   return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot};
+  }finally{
+   if(entry.settingsEditorLease===lease)delete entry.settingsEditorLease;
+   abort.signal.removeEventListener('abort',cancel);entry.settingsEditorLifetime.signal.removeEventListener('abort',retire);
+  }
  }
  if(request.operation==='stats'){
   if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before changing Stats');

@@ -86,7 +86,7 @@ async function readNativeSettingsEditor(n,entry,signal){
   }
   const value=p.selectedValue??p.defaultValue;
   if(value!==undefined&&typeof value!=='string')throw Error('Native Settings editor selection changed');
-  snapshot={kind:'choice',options,...typeof value==='string'?{value}:{},disabled:p.isDisabled===true||p.disableSelection===true||!!p.refuseInput};
+  snapshot={kind:'choice',...typeof entry.settingsEditorLabel==='string'?{title:entry.settingsEditorLabel}:{},options,...typeof value==='string'?{value}:{},disabled:p.isDisabled===true||p.disableSelection===true||!!p.refuseInput};
  }else{
   if(!Array.isArray(p.fields)||p.fields.length>64||typeof p.onSubmit!=='function'||!p.values||typeof p.values!=='object')throw Error('Native Settings form changed');
   const fields=[],keys=new Set();
