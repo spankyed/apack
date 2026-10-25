@@ -1,5 +1,3 @@
-import { featureSettings } from '#generated/settings.ts';
-
 import { broadcastToSurface } from '#generated/events.ts';
 import { setup } from 'xstate';
 import type { Reply } from '@apackdev/sdk/events';
@@ -10,6 +8,7 @@ import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
 import { createLogger } from '@apackdev/sdk/logger';
+import { availableModels } from '@apackdev/sdk/models';
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type ValidationError } from '@apackdev/sdk/build';
 
@@ -18,7 +17,7 @@ import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type V
  *
  * An import's or an export's *outcome* belongs to the window that started it — another window showing a
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
- * data the import changed is separate news and stays a broadcast.
+ * flows the import wrote reach every window through the feature's views.
  */
 const answer = (reply: Reply<OutgoingFlowsEvents> | undefined, event: OutgoingFlowsEvents): void =>
   (reply ? reply(event) : broadcastToSurface('flows', event));
@@ -72,214 +71,112 @@ function formatValidationErrors(
 
 export const flowsSpec = defineSystem<Contract>();
 
-/** Sends the surface its flows, the root flow among them (the flow with the root role), and its settings */
-function sendConnectedData(): void {
-  broadcastToSurface('flows', {
-    type: 'FLOWS_CONNECTED',
-    data: {
-      ...repository.flowsQueries.connectedData(),
-      settings: featureSettings.forFeature('flows').get() || {},
-    },
-  });
+/**
+ * One of the graph's writes, answered to whoever asked: with what it made (a node's or an edge's id), or that it
+ * landed, or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its
+ * writes is unanswered, so every write is answered, a refusal included — an unanswered one would hold the view for
+ * good. What the write changed reaches every window through the `graph` view.
+ */
+function answerWrite(reply: Reply<OutgoingFlowsEvents> | undefined, label: string, write: () => OutgoingFlowsEvents | void): void {
+  let answer: OutgoingFlowsEvents;
+  try {
+    // Run before answering: a write nobody asked for (an applier's, a migration's) has no `reply` and still writes
+    answer = write() ?? { type: 'FLOW_WRITTEN' };
+  } catch (error) {
+    logger.warn(`${label} failed`, { error: errorMessage(error) });
+    reply?.({ type: 'FLOW_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
+    return;
+  }
+  reply?.(answer);
 }
 
+/**
+ * The flows system writes flows: their nodes and edges, their labels, which one is the root. What a window shows of
+ * them is the feature's views (`views.ts`) — the list, and the open flow's graph — which run again after each write,
+ * so the only thing it sends unasked is the model catalog, which is the app's rather than a row.
+ */
 export const flowsSystem = setup({
   types: flowsSpec.types,
   actors: {},
   actions: flowsSpec.actions({
-    handleClientConnection: () => {
-      logger.info('Sending flows connected data to client');
-      sendConnectedData();
-    },
-
-    selectFlow: ({ event, reply }) => {
-      const { flowId } = flowsSpec.typeOf('FLOW_SELECT', event);
-      reply?.({ type: 'FLOW_SELECTED', flowId: flowId as EARS.EntityId,
-        data: repository.flowsQueries.extendedData(flowId as EARS.EntityId) });
+    sendModelCatalog: () => {
+      broadcastToSurface('flows', { type: 'FLOWS_CONNECTED', data: { models: availableModels } });
     },
 
     createFlow: ({ reply }) => {
-      const surfaceId = 'flows' as const;
-      
-      logger.info('Creating new flow');
-      
-      const { flow } = repository.flowsCommands.createFlowWithEntryNode();
-      
-      const data = repository.flowsQueries.extendedData(flow.id);
-      
-      // Every window's list grows; only the window that asked opens it
-      broadcastToSurface(surfaceId, { type: 'FLOW_CREATED', flow, flowId: flow.id, data });
-      reply?.({ type: 'FLOW_OPENED', flow, flowId: flow.id, data });
+      answerWrite(reply, 'Creating a flow', () => {
+        const { flow } = repository.flowsCommands.createFlowWithEntryNode();
+        logger.info('Created a flow', { flowId: flow.id });
+        // Only the window that asked opens it; every window's list has it through the list view
+        return { type: 'FLOW_OPENED', flowId: flow.id };
+      });
     },
-    
-    updateFlowLabel: ({ event }) => {
+
+    updateFlowLabel: ({ event, reply }) => {
       const { flowId, label } = flowsSpec.typeOf('UPDATE_FLOW_LABEL', event);
-
-      logger.info('Updating flow label', { flowId, label });
-
-      repository.flowsCommands.updateFlowLabel(flowId as EARS.EntityId, label);
+      answerWrite(reply, 'Renaming a flow', () => { repository.flowsCommands.updateFlowLabel(flowId as EARS.EntityId, label); });
     },
 
-    deleteFlow: ({ event }) => {
+    deleteFlow: ({ event, reply }) => {
       const { flowId } = flowsSpec.typeOf('DELETE_FLOW', event);
-      const surfaceId = 'flows' as const;
-
-      logger.info('Deleting flow', { flowId });
-
-      try {
+      answerWrite(reply, 'Deleting a flow', () => {
         repository.flowsCommands.deleteFlow(flowId as EARS.EntityId);
-
-        broadcastToSurface(surfaceId, {
-          type: 'FLOW_DELETED',
-          flowId: flowId as EARS.EntityId,
-        });
-
-        logger.info('Flow deleted successfully', { flowId });
-      } catch (error) {
-        logger.error('Failed to delete flow', { flowId, error });
-        throw error;
-      }
+        logger.info('Deleted a flow', { flowId });
+      });
     },
-    
-    createNode: ({ event }) => {
+
+    createNode: ({ event, reply }) => {
       const { flowId, tempId, nodeData } = flowsSpec.typeOf('CREATE_NODE', event);
-      const surfaceId = 'flows' as const;
-      
-      logger.info('Creating new node', { flowId, tempId, nodeType: nodeData.nodeType });
-      
-      const node = repository.flowsCommands.createNode(flowId as EARS.EntityId, nodeData);
-      
-      broadcastToSurface(surfaceId, {
-        type: 'NODE_CREATED',
-        tempId,
-        nodeId: node.id,
-        node,
+      answerWrite(reply, 'Creating a node', () => {
+        const node = repository.flowsCommands.createNode(flowId as EARS.EntityId, nodeData);
+        return { type: 'NODE_CREATED', tempId, nodeId: node.id, node };
       });
     },
-    
-    updateNode: ({ event }) => {
-      const { flowId, nodeId, nodeData } = flowsSpec.typeOf('UPDATE_NODE', event);
-      const surfaceId = 'flows' as const;
-      
-      logger.info('Updating node', { flowId, nodeId, updates: nodeData });
-      
-      repository.flowsCommands.updateNode(nodeId as EARS.EntityId, nodeData);
-      
-      const node = repository.flowsQueries.node(nodeId as EARS.EntityId);
-      
-      broadcastToSurface(surfaceId, {
-        type: 'NODE_UPDATED',
-        nodeId: nodeId as EARS.EntityId,
-        node,
+
+    updateNode: ({ event, reply }) => {
+      const { nodeId, nodeData } = flowsSpec.typeOf('UPDATE_NODE', event);
+      answerWrite(reply, 'Updating a node', () => { repository.flowsCommands.updateNode(nodeId as EARS.EntityId, nodeData); });
+    },
+
+    deleteNode: ({ event, reply }) => {
+      const { nodeId } = flowsSpec.typeOf('DELETE_NODE', event);
+      answerWrite(reply, 'Deleting a node', () => { repository.flowsCommands.deleteNode(nodeId as EARS.EntityId); });
+    },
+
+    createEdge: ({ event, reply }) => {
+      const { sourceId, targetId, sourceHandle, targetHandle } = flowsSpec.typeOf('CREATE_EDGE', event);
+      answerWrite(reply, 'Connecting two nodes', () => {
+        const { relId } = repository.flowsCommands.createEdge(sourceId as EARS.EntityId, targetId as EARS.EntityId, { sourceHandle, targetHandle });
+        return { type: 'EDGE_CREATED', sourceId: sourceId as EARS.EntityId, targetId: targetId as EARS.EntityId, relId, sourceHandle, targetHandle };
       });
     },
-    
-    deleteNode: ({ event }) => {
-      const { flowId, nodeId } = flowsSpec.typeOf('DELETE_NODE', event);
-      const surfaceId = 'flows' as const;
-      
-      logger.info('Deleting node', { flowId, nodeId });
-      
-      repository.flowsCommands.deleteNode(nodeId as EARS.EntityId);
-      
-      // Send confirmation back to frontend
-      broadcastToSurface(surfaceId, {
-        type: 'NODE_DELETED',
-        nodeId,
-      });
+
+    deleteEdge: ({ event, reply }) => {
+      const { edgeId } = flowsSpec.typeOf('DELETE_EDGE', event);
+      answerWrite(reply, 'Disconnecting two nodes', () => { repository.flowsCommands.deleteEdge(edgeId as EARS.RelationId); });
     },
-    
-    createEdge: ({ event }) => {
-      const { flowId, sourceId, targetId, sourceHandle, targetHandle } = flowsSpec.typeOf('CREATE_EDGE', event);
-      const surfaceId = 'flows' as const;
 
-      logger.info('Creating edge', { flowId, sourceId, targetId, sourceHandle, targetHandle });
-
-      try {
-        const { relId } = repository.flowsCommands.createEdge(
-          sourceId as EARS.EntityId,
-          targetId as EARS.EntityId,
-          { sourceHandle, targetHandle }
-        );
-
-        broadcastToSurface(surfaceId, {
-          type: 'EDGE_CREATED',
-          sourceId: sourceId as EARS.EntityId,
-          targetId: targetId as EARS.EntityId,
-          relId,
-          sourceHandle,
-          targetHandle,
-        });
-      } catch (err: any) {
-        logger.warn('Edge creation failed', { sourceId, targetId, error: err.message });
-        broadcastToSurface(surfaceId, {
-          type: 'EDGE_CREATE_FAILED',
-          sourceId,
-          targetId,
-          error: err.message || 'Edge creation failed',
-        });
-      }
-    },
-    
-    deleteEdge: ({ event }) => {
-      const { flowId, edgeId } = flowsSpec.typeOf('DELETE_EDGE', event);
-      const surfaceId = 'flows' as const;
-      
-      logger.info('Deleting edge', { flowId, edgeId });
-      
-      repository.flowsCommands.deleteEdge(edgeId as EARS.RelationId);
-      
-      broadcastToSurface(surfaceId, {
-        type: 'EDGE_DELETED',
-        edgeId,
-      });
-    },
-    
-    updateEdge: ({ event }) => {
-      const { flowId, edgeId, source, target, sourceHandle, targetHandle } = flowsSpec.typeOf('UPDATE_EDGE', event);
-      const surfaceId = 'flows' as const;
-
-      logger.info('Updating edge', { flowId, edgeId, source, target, sourceHandle, targetHandle });
-
-      try {
+    updateEdge: ({ event, reply }) => {
+      const { edgeId, source, target, sourceHandle, targetHandle } = flowsSpec.typeOf('UPDATE_EDGE', event);
+      answerWrite(reply, 'Moving an edge', () => {
         repository.flowsCommands.updateEdge(edgeId as EARS.RelationId, {
           source: source as EARS.EntityId,
           target: target as EARS.EntityId,
           sourceHandle,
           targetHandle,
         });
-        broadcastToSurface(surfaceId, {
-          type: 'EDGE_UPDATED',
-          edgeId: edgeId as EARS.RelationId,
-          source: source as EARS.EntityId,
-          target: target as EARS.EntityId,
-          sourceHandle,
-          targetHandle,
-        });
-      } catch (err: any) {
-        logger.warn('Edge update failed', { edgeId, source, target, error: err.message });
-        // The canvas already moved the edge: send the flow as stored, and the reason
-        broadcastToSurface(surfaceId, {
-          type: 'FLOW_REFRESHED',
-          flowId: flowId as EARS.EntityId,
-          data: repository.flowsQueries.extendedData(flowId as EARS.EntityId),
-        });
-        broadcastToSurface(surfaceId, {
-          type: 'EDGE_UPDATE_FAILED',
-          edgeId,
-          error: err.message || 'Edge update failed',
-        });
-      }
+      });
     },
-    
-    setRootFlow: ({ event }) => {
+
+    setRootFlow: ({ event, reply }) => {
       const { flowId } = flowsSpec.typeOf('SET_ROOT_FLOW', event);
-      const previous = repository.flowsQueries.rootFlow();
-      if ((flowId ?? undefined) === previous) return;
-      logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: flowId });
-      if (flowId) repository.flowsCommands.grantRootFlowRole(flowId as EARS.EntityId);
-      else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
-      sendConnectedData();
+      answerWrite(reply, 'Changing the root flow', () => {
+        const previous = repository.flowsQueries.rootFlow();
+        if ((flowId ?? undefined) === previous) return;
+        logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: flowId });
+        if (flowId) repository.flowsCommands.grantRootFlowRole(flowId as EARS.EntityId);
+        else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
+      });
     },
 
     importDSL: ({ event, reply }) => {
@@ -328,15 +225,13 @@ export const flowsSystem = setup({
         type: 'DSL_IMPORTED',
         flowIds,
       });
-      // The flows, and the root flow if the import brought one
-      sendConnectedData();
 
       logger.info('DSL import complete', { flowIds });
     },
 
-    reindexHandles: ({ event }) => {
+    reindexHandles: ({ event, reply }) => {
       const { nodeId, prefix, index, direction } = flowsSpec.typeOf('REINDEX_HANDLES', event);
-      repository.flowsCommands.reindexHandles(nodeId as EARS.EntityId, prefix, index, direction);
+      answerWrite(reply, 'Renumbering handles', () => { repository.flowsCommands.reindexHandles(nodeId as EARS.EntityId, prefix, index, direction); });
     },
 
     exportDSL: ({ event, reply }) => {
@@ -379,10 +274,7 @@ export const flowsSystem = setup({
     idle: {
       on: {
         SEND_STATE: {
-          actions: 'handleClientConnection',
-        },
-        FLOW_SELECT: {
-          actions: 'selectFlow',
+          actions: 'sendModelCatalog',
         },
         CREATE_FLOW: {
           actions: 'createFlow',

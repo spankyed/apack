@@ -25,6 +25,12 @@ export interface ViewState<Result> {
   readonly error: string | undefined;
   /** The last commit the state reflects (`Ears.lastCommit`), or 0 before any */
   readonly commit: number;
+  /**
+   * Reads the view again: subscribes afresh to the same request, which hands back its result as it is now, keeping
+   * what it shows meanwhile (`loading`). For code that held results back behind its own writes and needs the current
+   * one once they're answered; a view otherwise stays current by itself.
+   */
+  refresh(): void;
 }
 
 /** How a view follows its arguments */
@@ -55,7 +61,7 @@ export function untypedUseView<Result = unknown>(
     throw new Error(`useView("${ref}", "${view}") runs in a component's setup or an effect scope: it follows the view until that scope is disposed`)
   }
   const state = shallowReactive<{ -readonly [K in keyof ViewState<Result>]: ViewState<Result>[K] }>({
-    status: 'idle', data: undefined, error: undefined, commit: 0,
+    status: 'idle', data: undefined, error: undefined, commit: 0, refresh: () => subscribe(true),
   })
   const takesArgs = args.length > 0
   let stop: (() => void) | undefined
@@ -67,15 +73,13 @@ export function untypedUseView<Result = unknown>(
     return value === null || value === undefined ? undefined : { ref, view, args: value }
   }
 
-  watch(() => {
-    const request = current()
-    return request ? viewKey(request) : undefined
-  }, () => {
+  /** Subscribes to what the arguments ask for now, starting from no result unless asked to keep what is shown */
+  const subscribe = (keep: boolean) => {
     stop?.()
     stop = undefined
     state.error = undefined
     const request = current()
-    if (!request || !args[1]?.keepPrevious) state.data = undefined
+    if (!request || !keep) state.data = undefined
     if (!request) {
       state.status = 'idle'
       return
@@ -99,7 +103,12 @@ export function untypedUseView<Result = unknown>(
       open = false
       unsubscribe()
     }
-  }, { immediate: true })
+  }
+
+  watch(() => {
+    const request = current()
+    return request ? viewKey(request) : undefined
+  }, () => subscribe(args[1]?.keepPrevious === true), { immediate: true })
 
   onScopeDispose(() => stop?.())
   return shallowReadonly(state)

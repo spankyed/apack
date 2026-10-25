@@ -108,6 +108,7 @@ import '@vue-flow/core/dist/theme-default.css'
 
 import { type FlowsState } from '#features/flows/fe/state.ts'
 import { useView } from '#generated/fe.ts'
+import { useSettings } from '#generated/settings-fe.ts'
 import { useSelector } from '@xstate/vue'
 
 // Import sub-components
@@ -138,17 +139,25 @@ const inListState = useSelector(actor, (s) => s.hasTag('list-flows'))
 const inViewState = useSelector(actor, (s) => s.hasTag('view-flow'))
 const nodes   = useSelector(actor, (s) => s.context.graph.nodes)
 const edges   = useSelector(actor, (s) => s.context.graph.edges)
-const settings = useSelector(actor, (s) => s.context.settings)
-const allFlows = useSelector(actor, (s) => s.context.flows)
-const flows   = useSelector(actor, (s) => {
-  const rootId = s.context.rootFlowId
-  const all = s.context.flows
-  if (!rootId) return all
-  const root = all.find(f => f.id === rootId)
-  const rest = all.filter(f => f.id !== rootId)
+const settings = useSettings('flows')
+// The flows this window lists, the root one first: the list view, kept current by the backend
+const flowList = useView('flows', 'list')
+// Listed with the fields a list and a subflow step's form read (id, label, type, creation), which is what the forms'
+// `FlowEntity` resource is given
+const allFlows = computed(() => (flowList.data?.flows ?? []) as FlowEntity[])
+const rootFlowId = computed(() => flowList.data?.rootFlowId)
+const flows = computed(() => {
+  const rootId = rootFlowId.value
+  if (!rootId) return allFlows.value
+  const root = allFlows.value.find(f => f.id === rootId)
+  const rest = allFlows.value.filter(f => f.id !== rootId)
   return root ? [root, ...rest] : rest
 })
-const rootFlowId = useSelector(actor, (s) => s.context.rootFlowId)
+// What the breadcrumb and the history read of the list
+watch(() => flowList.data, (list) => {
+  if (!list) return
+  actor.send({ type: 'FLOWS.READ', rootFlowId: list.rootFlowId, labels: Object.fromEntries(list.flows.flatMap(f => (f.id ? [[f.id, f.label ?? '']] : []))) })
+}, { immediate: true })
 const positions = useSelector(actor, (s) => s.context.graph.positions)
 const selectedFlowId = useSelector(actor, (s) => s.context.selectedFlowId)
 const selectedNodeId = useSelector(actor, (s) => s.context.selectedNodeId)
@@ -162,9 +171,22 @@ const editingNode = useSelector(actor, (s) =>
 const actionList = useView('actions', 'list', { limit: null, categories: [] })
 const actions = computed(() => actionList.data?.actions ?? [])
 const models = useSelector(actor, (s) => s.context.models)
-const prompts = useSelector(actor, (s) => s.context.prompts)
+// Every prompt, for a prompt node's form: the prompts feature's list, kept current by the backend
+const promptList = useView('prompts', 'list', { limit: null, categories: [] })
+const prompts = computed(() => promptList.data?.prompts ?? [])
 const selectedHandle = useSelector(actor, (s) => s.context.selectedHandle)
 const canvasError = useSelector(actor, (s) => s.context.canvasError)
+
+// The open flow's graph — or the one being opened — as its view reads it, which the machine applies, or holds behind
+// the editor's own writes until they're answered. It reads the view again when the machine asks (`graphRefresh`).
+const graphFlowId = useSelector(actor, (s) => s.context.pendingFlow?.flowId ?? s.context.selectedFlowId)
+const graphRefresh = useSelector(actor, (s) => s.context.graphRefresh)
+const graph = useView('flows', 'graph', () => (graphFlowId.value ? { flowId: graphFlowId.value } : null))
+watch(() => [graph.status, graph.data] as const, ([status, data]) => {
+  if (status !== 'ready' || !graphFlowId.value) return
+  actor.send({ type: 'FLOW.GRAPH_READ', flowId: graphFlowId.value, data: data ?? null })
+})
+watch(graphRefresh, () => graph.refresh())
 
 const canvasToast = ref<InstanceType<typeof ToastNotification>>()
 
@@ -388,7 +410,7 @@ function handleFlowClick(flow: Partial<FlowEntity>, event: MouseEvent) {
   clearMultiSelect()
   shiftAnchorFlowId.value = flow.id
 
-  const enablePreview = settings.value?.enableFlowPreview ?? true
+  const enablePreview = settings.value.value?.enableFlowPreview ?? true
   const isAlreadySelected = selectedFlowId.value === flow.id
   const shouldOpenEditor = !enablePreview || isAlreadySelected
 

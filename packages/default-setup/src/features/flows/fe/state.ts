@@ -1,7 +1,7 @@
-import { answersCall, newCall } from '@apackdev/sdk/events'
+import { recordCall, settleCall } from '@apackdev/sdk/events'
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
+import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 import { Edit, Trash2 } from 'lucide-vue-next'
@@ -16,13 +16,13 @@ import type {
   EdgeEntity,
 } from '#generated/types.ts'
 import type { Contract, FlowsContext, FlowsInboxEvent } from './contract.ts'
-import type { OutgoingFlowsEvents } from '#features/flows/be/types.ts'
+import type { FlowExtendedData, OutgoingFlowsEvents } from '#features/flows/be/types.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { getNodeConfig, isTriggerNode } from '@apackdev/ui/components/node-styles'
 import { getStepDeclaration } from '@apackdev/sdk/fe'
 import { calculateLayoutAsync, allNodesHavePositions, LAYOUT_CONFIG, layoutComponentAroundSource } from './canvas/layout-utils.ts'
 import { computeMaxBottom, type LayoutNodeData } from '@apackdev/ui/components/node-dimensions'
-import type { FlowEntity, EARS } from '@apackdev/sdk'
+import type { EARS } from '@apackdev/sdk'
 
 const randId = () => Math.random().toString(36).slice(2, 8)
 
@@ -78,6 +78,10 @@ function reindexEdges(
 
 const HANDLE_OCCUPIED_ERROR = 'This step already has an outbound connection'
 
+/** A graph write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
+const withWrite = (pending: FlowsContext['pendingWrites'], call: string): { pendingWrites: FlowsContext['pendingWrites'] } =>
+  ({ pendingWrites: recordCall(pending, call, true as const) })
+
 /**
  * The fields a new node starts with, onto the node drawn before the backend answers. It reads the same
  * `node` facet the backend's `createNodeDefaults` does, which is what keeps the node on screen and the one
@@ -97,7 +101,6 @@ export const id = flowsId
 export type FlowsState = ActorRefFrom<typeof flowsState>
 
 type SystemEvent = OutgoingFlowsEvents
-  | { type: 'FLOW_DELETED'; flowId: EARS.EntityId }
   | FlowsInboxEvent
   // DSL Import backend responses
   | { type: 'DSL_IMPORTED'; flowIds: string[] }
@@ -132,7 +135,13 @@ type UIEvent =
   | { type: 'GO.BACK' }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
-  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: any }
+  /**
+   * What the open flow's graph view read, which the canvas hands on: its nodes and edges, or `null` once the flow is
+   * gone. About the UI — whether to show it now or hold it behind the editor's own writes — not the data.
+   */
+  | { type: 'FLOW.GRAPH_READ'; flowId: EARS.EntityId; data: FlowExtendedData | null }
+  /** What the list view read that the breadcrumb and history need: each flow's label, and the root flow */
+  | { type: 'FLOWS.READ'; labels: Record<string, string>; rootFlowId?: EARS.EntityId }
   // DSL Import events
   | { type: 'DSL.IMPORT'; dsl: any; flowNames: string[] }
   | { type: 'DSL.RESET_STATUS' }
@@ -168,44 +177,11 @@ const flowsState = setup({
   },
   actions: {
     /* ── bootstrap ─────────────────────────────────────── */
-    setSurfaceData: enqueueActions(({ context, event, self, enqueue }) => {
-      const ev = typeOf('FLOWS_CONNECTED', event);
-      const flows = (ev.data.flows || []) as FlowEntity[];
-      enqueue.assign({
-        flows,
-        prompts: ev.data.prompts || [],
-        models: ev.data.models || [],
-        rootFlowId: ev.data.rootFlow?.id,
-        settings: ev.data.settings || {},
-      });
-      const exists = (flowId: EARS.EntityId) => flows.some(flow => flow.id === flowId);
-      if (context.pendingFlow) {
-        // A selection under way decides what is shown once it answers, unless its flow is gone
-        if (exists(context.pendingFlow.flowId)) return;
-        enqueue.assign({ pendingFlow: undefined });
-      }
-      const selected = context.selectedFlowId;
-      if (selected && exists(selected)) {
-        // Whatever made the backend publish may have changed this flow, so the graph on screen is asked for again
-        const call = newCall();
-        enqueue.assign({ pendingRefresh: { call, flowId: selected } });
-        enqueue(() => sendToSystem(id, { type: 'FLOW_SELECT', flowId: selected }, { call }));
-        return;
-      }
-      // Nothing selected yet, or the selected flow is gone (a reset or an import): show what the backend sent
-      enqueue.assign({
-        selectedFlowId: ev.data.selectedFlowId,
-        graph: layoutGraph(ev.data.graph, {}, event => self.send(event)),
-        pendingRefresh: undefined,
-        ...(selected && { selectedNodeId: undefined, editingNodeId: undefined }),
-      });
-    }),
-    
-    handleSettingsUpdate: assign(({ event }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event);
-      return {
-        settings: ev.settings || {},
-      };
+    setModelCatalog: assign(({ event }) => ({ models: typeOf('FLOWS_CONNECTED', event).data.models })),
+
+    takeFlowsRead: assign(({ event }) => {
+      const { labels, rootFlowId } = typeOf('FLOWS.READ', event);
+      return { flowLabels: labels, rootFlowId };
     }),
 
     /* ── flow interactions ────────────────────────────── */
@@ -218,54 +194,88 @@ const flowsState = setup({
       if (!flowId) return;
       const nodeId = event.type === 'NODE.REVEAL' ? event.nodeId : undefined;
       const recordHistory = event.type !== 'FLOW.PREVIEW' && event.type !== 'NAVIGATE_BACK' && event.type !== 'NAVIGATE_FORWARD';
-      if (context.selectedFlowId === flowId && (!nodeId || context.graph.nodes.some(node => node.id === nodeId))) {
+      // The flow shown already: its graph is the view's current result, so the node is in it or it isn't
+      if (context.selectedFlowId === flowId) {
+        const found = !nodeId || context.graph.nodes.some(node => node.id === nodeId);
         enqueue.assign({ pendingFlow: undefined,
-          ...(nodeId && { selectedNodeId: nodeId as EARS.EntityId,
-            editingNodeId: nodeId as EARS.EntityId, canvasError: undefined }),
+          ...(nodeId && found && { selectedNodeId: nodeId as EARS.EntityId, editingNodeId: nodeId as EARS.EntityId, canvasError: undefined }),
+          ...(!found && { canvasError: `Node "${nodeId}" is no longer in flow "${flowId}".` }),
           ...(recordHistory && { navHistory: pushNavHistory(context.navHistory, flowId) }),
         });
         return;
       }
-      const call = newCall();
-      enqueue.assign({ pendingFlow: { call, flowId: flowId as EARS.EntityId, nodeId, recordHistory }, canvasError: undefined });
-      enqueue(() => sendToSystem(id, { type: 'FLOW_SELECT', flowId }, { call }));
+      // The canvas reads the flow's graph view for it, and the first result opens it (`loadFlowData`)
+      enqueue.assign({ pendingFlow: { flowId: flowId as EARS.EntityId, nodeId, recordHistory }, canvasError: undefined });
     }),
 
+    /** The flow asked for, opened: its graph view's first result */
     loadFlowData: assign(({ context, event, self }) => {
-      const ev = typeOf('FLOW_SELECTED', event);
+      const ev = typeOf('FLOW.GRAPH_READ', event);
+      const data = ev.data!;
       const request = context.pendingFlow;
       const nodeId = request?.nodeId;
-      const found = nodeId && ev.data.nodes.some(node => node.id === nodeId);
+      const found = nodeId && data.nodes.some(node => node.id === nodeId);
       return {
         pendingFlow: undefined,
-        pendingRefresh: undefined,
         selectedFlowId: ev.flowId,
         selectedNodeId: found ? nodeId as EARS.EntityId : undefined,
         editingNodeId: found ? nodeId as EARS.EntityId : undefined,
         canvasError: nodeId && !found ? `Node "${nodeId}" is no longer in flow "${ev.flowId}".` : undefined,
-        graph: layoutGraph(ev.data, context.selectedFlowId === ev.flowId ? context.graph.positions : {}, event => self.send(event)),
+        graph: layoutGraph(data, context.selectedFlowId === ev.flowId ? context.graph.positions : {}, event => self.send(event)),
         navHistory: request?.recordHistory ? pushNavHistory(context.navHistory, ev.flowId) : context.navHistory,
+        graphStale: false,
       };
     }),
 
+    /** The flow asked for was gone by the time its view read it */
+    dropGoneFlow: assign(({ event }) => {
+      const { flowId } = typeOf('FLOW.GRAPH_READ', event);
+      return { pendingFlow: undefined, canvasError: `Flow "${flowId}" was deleted before it could be opened.` };
+    }),
+
     /**
-     * The shown flow again, as the backend now has it: the node selection and editor stay where their node does,
-     * and a node still being added (its `CREATE_NODE` not yet answered) stays with its edges, for `NODE_CREATED`
-     * to reconcile.
+     * The shown flow again, as its view now reads it, which every write — this window's or another's — brings: the
+     * node selection and editor stay where their node does, and positions stay where the user put them.
      */
     loadRefreshedFlow: assign(({ context, event, self }) => {
-      const ev = typeOf(['FLOW_SELECTED', 'FLOW_REFRESHED'], event);
-      const kept = (node: EARS.EntityId | undefined) => node && ev.data.nodes.some(each => each.id === node) ? node : undefined;
-      const adding = new Set(context.graph.nodes.filter(node => context.tempIdMap[node.id] === node.id).map(node => node.id));
-      const data = { nodes: [...ev.data.nodes, ...context.graph.nodes.filter(node => adding.has(node.id))],
-        edges: [...ev.data.edges, ...context.graph.edges.filter(edge => adding.has(edge.source) || adding.has(edge.target))] };
+      const ev = typeOf('FLOW.GRAPH_READ', event);
+      const data = ev.data!;
+      const kept = (node: EARS.EntityId | undefined) => node && data.nodes.some(each => each.id === node) ? node : undefined;
       return {
-        pendingRefresh: event.type === 'FLOW_SELECTED' ? undefined : context.pendingRefresh,
-        selectedNodeId: kept(context.selectedNodeId) ?? (context.selectedNodeId && adding.has(context.selectedNodeId) ? context.selectedNodeId : undefined),
-        editingNodeId: kept(context.editingNodeId) ?? (context.editingNodeId && adding.has(context.editingNodeId) ? context.editingNodeId : undefined),
+        selectedNodeId: kept(context.selectedNodeId),
+        editingNodeId: kept(context.editingNodeId),
         graph: layoutGraph(data, context.graph.positions, event => self.send(event)),
+        graphStale: false,
       };
     }),
+
+    /** A result that may predate a write still unanswered: applying it would undo that edit on screen */
+    holdGraph: assign({ graphStale: true }),
+
+    /** The shown flow is gone — deleted here or in another window */
+    leaveGoneFlow: assign({
+      selectedFlowId: undefined,
+      selectedNodeId: undefined,
+      editingNodeId: undefined,
+      graph: { nodes: [], edges: [], positions: {} },
+      pendingWrites: {},
+      graphStale: false,
+    }),
+
+    /**
+     * One of the editor's writes answered. Once the last one is, the graph is read again if a result was held behind
+     * them or one was refused — the view's current result holds every write the backend has answered — and otherwise
+     * the next result, which carries the last write, is applied as it arrives.
+     */
+    settleWrite: assign(({ context, event }) => {
+      const { recorded, pending } = settleCall(context.pendingWrites, event);
+      if (recorded === undefined) return {};
+      const stale = context.graphStale || event.type === 'FLOW_WRITE_FAILED';
+      if (Object.keys(pending).length > 0) return { pendingWrites: pending, graphStale: stale };
+      return { pendingWrites: pending, graphStale: false, ...(stale && { graphRefresh: context.graphRefresh + 1 }) };
+    }),
+
+    surfaceWriteError: assign(({ event }) => ({ canvasError: typeOf('FLOW_WRITE_FAILED', event).error })),
 
     sendCreateFlow: ({ event }) => {
       typeOf('FLOW.CREATE', event);
@@ -281,40 +291,12 @@ const flowsState = setup({
       });
     },
 
-    updateFlowLabel: assign(({ context, event }) => {
-      const ev = typeOf('FLOW.UPDATE_LABEL', event);
-      
-      // Update flow in flows list
-      return {
-        flows: context.flows.map(flow => 
-          flow.id === ev.flowId ? { ...flow, label: ev.label } : flow
-        )
-      };
-    }),
-
-    /** The news: a flow exists, so every window's list grows. It selects nothing and navigates nowhere */
-    addCreatedFlow: assign(({ context, event }) => {
-      const ev = typeOf('FLOW_CREATED', event);
-      return { flows: [...context.flows, ev.flow] };
-    }),
-
-    /**
-     * The answer: the flow *this* window asked to create, so this window opens it.
-     *
-     * Only the asker is sent `FLOW_OPENED`. While selecting and navigating hung off the broadcast above,
-     * every open window jumped to a flow someone else had created.
-     */
-    openCreatedFlow: assign(({ event, self }) => {
-      const ev = typeOf('FLOW_OPENED', event);
-
-      return {
-        pendingFlow: undefined,
-        selectedFlowId: ev.flowId,
-        selectedNodeId: undefined,
-        editingNodeId: undefined,
-        graph: layoutGraph(ev.data, {}, event => self.send(event)),
-      };
-    }),
+    /** The flow *this* window asked to create, which this window opens; every window's list has it from its view */
+    openCreatedFlow: assign(({ event }) => ({
+      pendingFlow: { flowId: typeOf('FLOW_OPENED', event).flowId, recordHistory: true },
+      selectedNodeId: undefined,
+      editingNodeId: undefined,
+    })),
 
     sendDeleteFlow: ({ event }) => {
       const ev = event as { type: 'FLOW.DELETE'; flowId: EARS.EntityId };
@@ -325,24 +307,6 @@ const flowsState = setup({
         flowId: ev.flowId as string,
       });
     },
-
-    handleFlowDeleted: assign(({ context, event }) => {
-      const ev = typeOf('FLOW_DELETED', event);
-
-      // Remove the deleted flow from the flows list
-      const updatedFlows = context.flows.filter(flow => flow.id !== ev.flowId);
-
-      // If the deleted flow was selected, clear selection and go back to list
-      const wasSelected = context.selectedFlowId === ev.flowId;
-
-      return {
-        flows: updatedFlows,
-        pendingFlow: context.pendingFlow?.flowId === ev.flowId ? undefined : context.pendingFlow,
-        canvasError: context.pendingFlow?.flowId === ev.flowId ? `Flow "${ev.flowId}" was deleted before it could be opened.` : context.canvasError,
-        selectedFlowId: wasSelected ? undefined : context.selectedFlowId,
-        graph: wasSelected ? { nodes: [], edges: [], positions: {} } : context.graph,
-      };
-    }),
 
     /* ── graph interactions ───────────────────────────────── */
     selectNode: assign({ selectedNodeId: ({ event }) => typeOf('NODE.CLICK', event).nodeId as EARS.EntityId }),
@@ -404,24 +368,24 @@ const flowsState = setup({
       }
     }),
     
-    sendEdgeConnected: ({ context, event }) => {
+    sendEdgeConnected: assign(({ context, event }) => {
       const ev = typeOf('EDGE.CONNECT', event);
-      if (!context.selectedFlowId) return;
+      if (!context.selectedFlowId) return {};
 
       // Only send if both IDs are permanent (not temporary)
       if (!ev.src.startsWith('temp-') && !ev.tgt.startsWith('temp-')) {
-        sendToSystem(id, {
+        return withWrite(context.pendingWrites, sendToSystem(id, {
           type: 'CREATE_EDGE',
           flowId: context.selectedFlowId,
           sourceId: ev.src,
           targetId: ev.tgt,
           sourceHandle: ev.sourceHandle,
           targetHandle: ev.targetHandle,
-        });
-      } else {
-        console.log('Cannot create edge yet - nodes still pending:', { src: ev.src, tgt: ev.tgt });
+        }));
       }
-    },
+      // A node still being added: its answer sends the edge (`reconcileNodeId`)
+      return {};
+    }),
     
     disconnectEdge: assign(({ context, event }) => {
       const ev = typeOf('EDGE.DISCONNECT', event);
@@ -434,16 +398,15 @@ const flowsState = setup({
       }
     }),
     
-    sendEdgeDisconnected: ({ context, event }) => {
+    sendEdgeDisconnected: assign(({ context, event }) => {
       const ev = typeOf('EDGE.DISCONNECT', event);
-      if (!context.selectedFlowId) return;
-      
-      sendToSystem(id, {
+      if (!context.selectedFlowId) return {};
+      return withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'DELETE_EDGE',
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
-      });
-    },
+      }));
+    }),
     
     reconnectEdge: assign(({ context, event }) => {
       const ev = typeOf('EDGE.RECONNECT', event);
@@ -453,10 +416,10 @@ const flowsState = setup({
       return { graph: { ...context.graph, edges } };
     }),
 
-    sendEdgeReconnected: ({ context, event }) => {
+    sendEdgeReconnected: assign(({ context, event }) => {
       const ev = typeOf('EDGE.RECONNECT', event);
-      if (!context.selectedFlowId) return;
-      sendToSystem(id, {
+      if (!context.selectedFlowId) return {};
+      return withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'UPDATE_EDGE',
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
@@ -464,8 +427,8 @@ const flowsState = setup({
         target: ev.target,
         sourceHandle: ev.sourceHandle,
         targetHandle: ev.targetHandle,
-      });
-    },
+      }));
+    }),
     
     deselectNode: assign({ selectedNodeId: undefined, editingNodeId: undefined }),
 
@@ -482,10 +445,6 @@ const flowsState = setup({
 
     deselectHandle: assign({ selectedHandle: undefined }),
     clearCanvasError: assign({ canvasError: undefined }),
-    surfaceEdgeError: assign(({ event }) => {
-      const ev = typeOf(['EDGE_CREATE_FAILED', 'EDGE_UPDATE_FAILED'], event)
-      return { canvasError: ev.error }
-    }),
 
     reindexHandles: assign(({ context, event }) => {
       const ev = typeOf('HANDLE.REINDEX', event)
@@ -495,23 +454,23 @@ const flowsState = setup({
       return { graph: { ...context.graph, edges: updatedEdges } }
     }),
 
-    sendReindexHandles: ({ context, event }) => {
+    sendReindexHandles: assign(({ context, event }) => {
       const ev = typeOf('HANDLE.REINDEX', event)
-      if (!context.selectedFlowId) return
+      if (!context.selectedFlowId) return {}
       const nodeId = ev.nodeId.startsWith('temp-')
         ? context.tempIdMap[ev.nodeId] || ev.nodeId
         : ev.nodeId
-      if (nodeId.startsWith('temp-')) return
+      if (nodeId.startsWith('temp-')) return {}
 
-      sendToSystem(id, {
+      return withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'REINDEX_HANDLES',
         flowId: context.selectedFlowId,
         nodeId,
         prefix: ev.prefix,
         index: ev.index,
         direction: ev.direction,
-      })
-    },
+      }))
+    }),
 
     // Connect from selected handle to clicked node and send to backend
     // Combined into single action to ensure handle is captured before being cleared
@@ -548,19 +507,18 @@ const flowsState = setup({
       } as EdgeEntity;
 
       // Send to backend (handle is still available here, before we clear it)
-      if (context.selectedFlowId &&
-          !handle.nodeId.startsWith('temp-') &&
-          !ev.nodeId.startsWith('temp-')) {
-        sendToSystem(id, {
+      const sent = context.selectedFlowId && !handle.nodeId.startsWith('temp-') && !ev.nodeId.startsWith('temp-')
+        ? withWrite(context.pendingWrites, sendToSystem(id, {
           type: 'CREATE_EDGE',
           flowId: context.selectedFlowId,
           sourceId: handle.nodeId,
           targetId: ev.nodeId,
           sourceHandle: handle.handleId,
-        });
-      }
+        }))
+        : {};
 
       return {
+        ...sent,
         graph: {
           ...context.graph,
           edges: [...context.graph.edges, newEdge],
@@ -596,16 +554,15 @@ const flowsState = setup({
       };
     }),
     
-    sendNodeDeleted: ({ context, event }) => {
+    sendNodeDeleted: assign(({ context, event }) => {
       const ev = typeOf('NODE.DELETE', event);
-      if (!context.selectedFlowId) return;
-      
-      sendToSystem(id, {
+      if (!context.selectedFlowId) return {};
+      return withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'DELETE_NODE',
         flowId: context.selectedFlowId,
         nodeId: ev.nodeId,
-      });
-    },
+      }));
+    }),
 
     createNode: assign(({ context, event, self }) => {
       if (!context.selectedFlowId) return { selectedNodeId: undefined }
@@ -615,12 +572,12 @@ const flowsState = setup({
       const nodeConfig = getNodeConfig(ev.nodeType)
       const label = nodeConfig?.defaultLabel || nodeConfig?.label || `New ${ev.nodeType}`
 
-      sendToSystem(id, {
+      const sent = withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'CREATE_NODE',
         flowId: context.selectedFlowId,
         tempId,
         nodeData: { nodeType: ev.nodeType, label },
-      });
+      }));
 
       // Calculate position based on node type and selection state
       const { newNode: nodeOffset } = LAYOUT_CONFIG
@@ -717,6 +674,7 @@ const flowsState = setup({
       }
 
       return {
+        ...sent,
         graph: {
           ...context.graph,
           nodes: [...context.graph.nodes, tempNodeData],
@@ -793,7 +751,7 @@ const flowsState = setup({
       } as EdgeEntity
 
       // Send create to backend
-      sendToSystem(id, {
+      const sent = withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'CREATE_NODE',
         flowId: context.selectedFlowId,
         tempId: tempId,
@@ -801,7 +759,7 @@ const flowsState = setup({
           nodeType: ev.nodeType,
           label: newNode.label,
         },
-      });
+      }));
 
       // Async ELK layout to snap the new node and reposition siblings in the same component
       layoutComponentAroundSource(
@@ -813,6 +771,7 @@ const flowsState = setup({
       )
 
       return {
+        ...sent,
         graph: {
           ...context.graph,
           nodes: [...context.graph.nodes, newNode],
@@ -841,9 +800,9 @@ const flowsState = setup({
       };
     }),
 
-    sendNodeUpdate: ({ context, event }) => {
+    sendNodeUpdate: assign(({ context, event }) => {
       const ev = typeOf('NODE.UPDATE', event);
-      if (!context.selectedFlowId) return;
+      if (!context.selectedFlowId) return {};
       
       // Check if this is a temporary ID
       const nodeId = ev.nodeId.startsWith('temp-') 
@@ -853,20 +812,20 @@ const flowsState = setup({
       // If it's still temporary (not yet resolved), skip the update
       if (nodeId.startsWith('temp-')) {
         console.warn('Cannot update node with temporary ID:', nodeId);
-        return;
+        return {};
       }
       
       const node = context.graph.nodes.find(n => n.id === nodeId);
-      if (!node) return;
+      if (!node) return {};
 
       // Send update to backend
-      sendToSystem(id, {
+      return withWrite(context.pendingWrites, sendToSystem(id, {
         type: 'UPDATE_NODE',
         flowId: context.selectedFlowId,
         nodeId: nodeId,
         nodeData: { ...node, ...ev.updates },
-      });
-    },
+      }));
+    }),
 
     updateNodePosition: assign(({ context, event }) => {
       const ev = typeOf('NODE.UPDATE_POSITION', event);
@@ -929,6 +888,7 @@ const flowsState = setup({
       updatedTempIdMap[tempId] = permanentId;
       
       // Send edge creation to backend for any edges with the new permanent ID
+      let pendingWrites = context.pendingWrites;
       if (context.selectedFlowId) {
         updatedEdges.forEach(edge => {
           // If this edge was just updated from temp to permanent, send it
@@ -936,14 +896,14 @@ const flowsState = setup({
             || (edge.target === permanentId && context.graph.edges.find(e => e.id === edge.id)?.target === tempId);
           
           if (wasUpdated && !edge.source.startsWith('temp-') && !edge.target.startsWith('temp-')) {
-            sendToSystem(id, {
+            pendingWrites = withWrite(pendingWrites, sendToSystem(id, {
               type: 'CREATE_EDGE',
               flowId: context.selectedFlowId!,
               sourceId: edge.source,
               targetId: edge.target,
               sourceHandle: edge.sourceHandle,
               targetHandle: edge.targetHandle,
-            });
+            })).pendingWrites;
           }
         });
       }
@@ -957,6 +917,7 @@ const flowsState = setup({
         selectedNodeId: newSelectedNodeId,
         editingNodeId: newEditingNodeId,
         tempIdMap: updatedTempIdMap,
+        pendingWrites,
       };
     }),
     
@@ -989,21 +950,6 @@ const flowsState = setup({
       };
     }),
     
-    removeDeletedEdge: assign(({ context, event }) => {
-      const ev = typeOf('EDGE_DELETED', event);
-      const { edgeId } = ev;
-
-      // Remove the edge from the graph
-      const updatedEdges = context.graph.edges.filter(edge => edge.id !== edgeId);
-
-      return {
-        graph: {
-          ...context.graph,
-          edges: updatedEdges,
-        },
-      };
-    }),
-
     /* ── DSL Import actions ────────────────────────────────── */
     setImporting: assign(({ context }) => ({
       dslImport: {
@@ -1110,15 +1056,13 @@ const flowsState = setup({
   },
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
-    answersFlowSelection: ({ context, event }) => event.type === 'FLOW_SELECTED'
-      && context.pendingFlow?.flowId === event.flowId && answersCall(event, context.pendingFlow.call),
-    // Applied only while that flow is still the one shown: a selection answered since has replaced it
-    answersFlowRefresh: ({ context, event }) => event.type === 'FLOW_SELECTED' && context.selectedFlowId === event.flowId
-      && context.pendingRefresh?.flowId === event.flowId && answersCall(event, context.pendingRefresh.call),
-    isDeletedFlowSelected: ({ context, event }) => {
-      const ev = typeOf('FLOW_DELETED', event);
-      return context.selectedFlowId === ev.flowId;
-    },
+    /** Whether a graph read is for the flow the user asked to open */
+    readsPendingFlow: ({ context, event }) => event.type === 'FLOW.GRAPH_READ' && context.pendingFlow?.flowId === event.flowId,
+    /** Whether a graph read is for the flow shown, with no other being opened in its place */
+    readsShownFlow: ({ context, event }) => event.type === 'FLOW.GRAPH_READ' && !context.pendingFlow && context.selectedFlowId === event.flowId,
+    readsNothing: ({ event }) => event.type === 'FLOW.GRAPH_READ' && event.data === null,
+    /** Whether any of the editor's writes is unanswered */
+    writing: ({ context }) => Object.keys(context.pendingWrites).length > 0,
     hasSelectedHandle: ({ context }) => !!context.selectedHandle,
   },
 }).createMachine({
@@ -1133,9 +1077,11 @@ const flowsState = setup({
       edges: [],
       positions: {},
     },
-    flows: [],
-    prompts: [],
     models: [],
+    pendingWrites: {},
+    graphStale: false,
+    graphRefresh: 0,
+    flowLabels: {},
     tempIdMap: {},
     dslImport: {
       status: 'idle',
@@ -1156,21 +1102,18 @@ const flowsState = setup({
     'FLOW.SELECT': { target: '.view', actions: 'selectFlow' },
     'NODE.REVEAL': { target: '.view', actions: 'selectFlow' },
     SURFACE_DEACTIVATED: { actions: 'cancelFlowSelection' },
-    FLOWS_CONNECTED: {
-      actions: 'setSurfaceData',
-      // target: '.view' // Go directly to view since we have the selected flow's data
-    },
-    FEATURE_SETTINGS_UPDATED: {
-      actions: 'handleSettingsUpdate'
-    },
+    FLOWS_CONNECTED: { actions: 'setModelCatalog' },
+    'FLOWS.READ': { actions: 'takeFlowsRead' },
     'ROOT_FLOW.SET': {
       actions: ({ event }) => sendToSystem(id, { type: 'SET_ROOT_FLOW', flowId: typeOf('ROOT_FLOW.SET', event).flowId }),
     },
-    FLOW_SELECTED: [
-      { guard: 'answersFlowSelection', actions: 'loadFlowData' },
-      { guard: 'answersFlowRefresh', actions: 'loadRefreshedFlow' },
+    'FLOW.GRAPH_READ': [
+      { guard: and(['readsPendingFlow', 'readsNothing']), actions: 'dropGoneFlow' },
+      { guard: 'readsPendingFlow', actions: 'loadFlowData' },
+      { guard: and(['readsShownFlow', 'readsNothing']), target: '.list', actions: 'leaveGoneFlow' },
+      { guard: and(['readsShownFlow', 'writing']), actions: 'holdGraph' },
+      { guard: 'readsShownFlow', actions: 'loadRefreshedFlow' },
     ],
-    FLOW_REFRESHED: { guard: ({ context, event }) => !context.pendingFlow && context.selectedFlowId === event.flowId, actions: 'loadRefreshedFlow' },
     LAYOUT_COMPUTED: {
       // Node ids are unique to a flow, so a shared node means the same flow, however often its graph was rebuilt
       // since the layout was asked for; another flow's late layout shares none and is dropped
@@ -1186,49 +1129,19 @@ const flowsState = setup({
         }
       }),
     },
-    // The news, which every window takes
-    FLOW_CREATED: {
-      actions: 'addCreatedFlow',
-    },
     // The answer, which only the window that asked is sent — so only it navigates
     FLOW_OPENED: {
       actions: 'openCreatedFlow',
       target: '.view'
     },
-    FLOW_DELETED: [
-      {
-        guard: 'isDeletedFlowSelected',
-        target: '.list',
-        actions: 'handleFlowDeleted',
-      },
-      {
-        actions: 'handleFlowDeleted',
-      }
-    ],
-    NODE_CREATED: {
-      actions: 'reconcileNodeId'
-    },
-    EDGE_CREATED: {
-      actions: 'reconcileEdgeId'
-    },
-    EDGE_CREATE_FAILED: {
-      actions: 'surfaceEdgeError',
-    },
+    // The answers to the editor's writes
+    NODE_CREATED: { actions: ['reconcileNodeId', 'settleWrite'] },
+    EDGE_CREATED: { actions: ['reconcileEdgeId', 'settleWrite'] },
+    FLOW_WRITTEN: { actions: 'settleWrite' },
+    // A refused write: its reason, and the flow as stored read again once nothing else is unanswered
+    FLOW_WRITE_FAILED: { actions: ['surfaceWriteError', 'settleWrite'] },
     'CANVAS.CLEAR_ERROR': {
       actions: 'clearCanvasError',
-    },
-    EDGE_UPDATED: {
-      // Backend confirmation - edge already moved locally
-    },
-    // A refused move: the stored flow comes back as FLOW_REFRESHED, then the reason
-    EDGE_UPDATE_FAILED: {
-      actions: 'surfaceEdgeError',
-    },
-    EDGE_DELETED: {
-      actions: 'removeDeletedEdge'
-    },
-    NODE_DELETED: {
-      // Backend confirmation - node already removed locally
     },
     // DSL Import events
     'DSL.IMPORT': {
@@ -1272,7 +1185,7 @@ const flowsState = setup({
         guard: ({ context }) => {
           if (!canGoBack(context.navHistory)) return false;
           const target = context.navHistory.stack[context.navHistory.index - 1];
-          return target !== null && context.flows.some(f => f.id === target);
+          return target !== null && target in context.flowLabels;
         },
         target: '.view',
         actions: [assign(({ context }) => ({ navHistory: goBack(context.navHistory)!.history })), 'selectFlow'],
@@ -1294,7 +1207,7 @@ const flowsState = setup({
         guard: ({ context }) => {
           if (!canGoForward(context.navHistory)) return false;
           const target = context.navHistory.stack[context.navHistory.index + 1];
-          return target !== null && context.flows.some(f => f.id === target);
+          return target !== null && target in context.flowLabels;
         },
         target: '.view',
         actions: [assign(({ context }) => ({ navHistory: goForward(context.navHistory)!.history })), 'selectFlow'],
@@ -1333,7 +1246,7 @@ const flowsState = setup({
           actions: 'sendDeleteFlow',
         },
         'FLOW.UPDATE_LABEL': {
-          actions: ['updateFlowLabel', 'sendUpdateLabel'],
+          actions: 'sendUpdateLabel',
         },
       }
     },
@@ -1346,15 +1259,9 @@ const flowsState = setup({
           getLabel: (ctx) => {
             if (!ctx.selectedFlowId) return '';
 
-            // Find in flows array
-            const flow = ctx.flows.find(f => f.id === ctx.selectedFlowId);
-
-            // Check if it's the root flow
-            if (flow && ctx.rootFlowId === flow.id) {
-              return `${flow.label || 'Flow'} (Root)`;
-            }
-
-            return flow?.label || ctx.selectedFlowId;
+            const label = ctx.flowLabels[ctx.selectedFlowId];
+            if (label !== undefined && ctx.rootFlowId === ctx.selectedFlowId) return `${label || 'Flow'} (Root)`;
+            return label || ctx.selectedFlowId;
           }
         }),
         ...contextMenuFn<FlowsContext>((ctx) => {
@@ -1409,7 +1316,7 @@ const flowsState = setup({
           actions: 'sendDeleteFlow',
         },
         'FLOW.UPDATE_LABEL': {
-          actions: ['updateFlowLabel', 'sendUpdateLabel'],
+          actions: 'sendUpdateLabel',
         },
         'FLOW.REQUEST_EDIT_LABEL': { actions: 'requestEditLabel' },
         'FLOW.REQUEST_DELETE': { actions: 'requestDeleteFlow' },

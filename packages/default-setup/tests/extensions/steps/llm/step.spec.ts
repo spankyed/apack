@@ -1,7 +1,6 @@
 // The llm step asks services.inference for the node's model, prompt and settings, and completes with the text
 import { describe, expect, it } from 'vitest';
 import { mockInference, mockService } from '@apackdev/testing/harness';
-import { repository } from '#generated/repository.ts';
 import type { ExecutionContext, StepInput } from '@apackdev/sdk/steps';
 import { handler } from '#extensions/steps/llm/runtime.ts';
 import { DEFAULT_MODEL } from '#extensions/steps/llm/model.ts';
@@ -82,7 +81,8 @@ describe('llm step', () => {
 
 describe('llm step models from the editor', () => {
   it('runs each model the flows editor offers with the id the form stores', async () => {
-    const { models } = repository.flowsQueries.connectedData();
+    // What the flows system sends the editor when it publishes
+    const models = availableModels;
     expect(models.length).toBeGreaterThan(0);
     for (const entry of models) {
       const inference = mockInference('ok');

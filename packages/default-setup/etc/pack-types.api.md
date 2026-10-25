@@ -1454,35 +1454,17 @@ interface FlowRunNodeData {
     }>;
 }
 
+/** What the flows surface starts from that isn't a row: the models a node may name */
 interface FlowsConnectedData {
-    selectedFlowId: EARS.EntityId;
-    graph: {
-        nodes: NodeEntity[];
-        edges: EdgeEntity[];
-    };
-    flows: Partial<FlowEntity>[];
-    rootFlow?: Partial<FlowEntity>;
     models: ModelCatalogEntry[];
-    prompts: PromptEntity[];
-    settings?: any;
 }
 
 interface FlowsContext {
-    /** A flow the user asked to open; what the user does next (open another, edit a node, leave) cancels it */
+    /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
     pendingFlow?: {
-        call: string;
         flowId: EARS.EntityId;
         nodeId?: string;
         recordHistory: boolean;
-    };
-    /**
-     * The shown flow asked for again because the backend published (a reconnect, a pack change, data replaced).
-     * Its own slot, so nothing that cancels a user's selection drops it; its answer keeps the node selection, the
-     * editor and any node still being added.
-     */
-    pendingRefresh?: {
-        call: string;
-        flowId: EARS.EntityId;
     };
     selectedNodeId?: EARS.EntityId;
     editingNodeId?: EARS.EntityId;
@@ -1491,6 +1473,10 @@ interface FlowsContext {
         nodeId: string;
         handleId?: string;
     };
+    /**
+     * The open flow as the editor shows it: its graph view's last result, with the user's edits applied at once on top
+     * of it. Positions are the editor's own layout, never stored.
+     */
     graph: {
         nodes: NodeEntity[];
         edges: EdgeEntity[];
@@ -1499,13 +1485,22 @@ interface FlowsContext {
             y: number;
         }>;
     };
-    flows: FlowEntity[];
-    prompts: PromptEntity[];
+    /**
+     * The editor's graph writes still unanswered, by call. While any is, a result of the graph's view is held rather
+     * than applied, since it may predate the write and would undo an edit on screen; once the last is answered, a held
+     * result — or a refused write — reads the view again (`graphRefresh`), which by then holds every answered write.
+     */
+    pendingWrites: Record<string, true>;
+    /** Whether a result of the graph's view arrived while writes were unanswered, or one of them was refused */
+    graphStale: boolean;
+    /** Counts the times the editor asked to read the graph's view again; the canvas re-reads on each */
+    graphRefresh: number;
+    /** The models a node may name, which the flows system sends when it publishes */
     models: ModelCatalogEntry[];
     tempIdMap: Record<string, string>;
-    /** The root flow the brain runs (the flow with the root role), as the flows system last sent it */
-    rootFlowId?: string;
-    settings?: any;
+    /** The root flow the brain runs and each flow's label, from the list view: what the breadcrumb and history read */
+    rootFlowId?: EARS.EntityId;
+    flowLabels: Record<string, string>;
     showEditLabelDialog?: boolean;
     showDeleteFlowDialog?: boolean;
     canvasError?: string;
@@ -1537,6 +1532,12 @@ type FlowsInboxEvent = {
     flowId: EARS.EntityId;
     nodeId: string;
 };
+
+/** The flows a window lists, newest first, and which of them the brain runs */
+interface FlowsList {
+    flows: Partial<FlowEntity>[];
+    rootFlowId?: EARS.EntityId;
+}
 
 interface FolderContents {
     items: LibraryItem[];
@@ -2067,9 +2068,6 @@ type IncomingExplorerEvents = {
 };
 
 type IncomingFlowsEvents = {
-    type: 'FLOW_SELECT';
-    flowId: string;
-} | {
     type: 'CREATE_FLOW';
 } | {
     type: 'DELETE_FLOW';
@@ -3359,82 +3357,45 @@ type OutgoingExplorerEvents = {
     };
 };
 
+/**
+ * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
+ * flows themselves are its views.
+ */
 type OutgoingFlowsEvents = {
     type: 'FLOWS_CONNECTED';
     data: FlowsConnectedData;
-} | {
-    type: 'FLOW_SELECTED';
-    flowId: EARS.EntityId;
-    data: FlowExtendedData;
-} | {
-    type: 'FLOW_REFRESHED';
-    flowId: EARS.EntityId;
-    data: FlowExtendedData;
-}
-/** A flow exists — news for every window, so every list grows. It opens nothing: see `FLOW_OPENED` */
- | {
-    type: 'FLOW_CREATED';
-    flow: FlowEntity;
-    flowId: EARS.EntityId;
-    data: {
-        nodes: any[];
-        edges: any[];
-    };
 }
 /**
- * The flow *you* asked to create, answered to the window that asked, which then opens it.
- *
- * Its id is minted by the create, so nothing the asker sent could identify it. While the navigation hung
- * off the broadcast above, every open window jumped to a flow it had not created.
+ * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
+ * create, so nothing the asker sent could identify it.
  */
  | {
     type: 'FLOW_OPENED';
-    flow: FlowEntity;
     flowId: EARS.EntityId;
-    data: {
-        nodes: any[];
-        edges: any[];
-    };
-} | {
-    type: 'FLOW_DELETED';
-    flowId: EARS.EntityId;
-} | {
+}
+/** The node a `CREATE_NODE` made, for the editor to put in place of the one it added under `tempId` */
+ | {
     type: 'NODE_CREATED';
     tempId: string;
     nodeId: EARS.EntityId;
-    node: any;
-} | {
-    type: 'NODE_UPDATED';
-    nodeId: EARS.EntityId;
-    node: any;
-} | {
-    type: 'NODE_DELETED';
-    nodeId: string;
-} | {
+    node: NodeEntity;
+}
+/** The relation a `CREATE_EDGE` made, for the editor to give the edge it drew */
+ | {
     type: 'EDGE_CREATED';
     sourceId: EARS.EntityId;
     targetId: EARS.EntityId;
     relId: EARS.RelationId;
     sourceHandle?: string;
     targetHandle?: string;
-} | {
-    type: 'EDGE_CREATE_FAILED';
-    sourceId: string;
-    targetId: string;
-    error: string;
-} | {
-    type: 'EDGE_DELETED';
-    edgeId: string;
-} | {
-    type: 'EDGE_UPDATED';
-    edgeId: EARS.RelationId;
-    source: EARS.EntityId;
-    target: EARS.EntityId;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
-    type: 'EDGE_UPDATE_FAILED';
-    edgeId: string;
+}
+/** Any other write landed */
+ | {
+    type: 'FLOW_WRITTEN';
+}
+/** A write was refused, and why: the editor puts back the flow as stored */
+ | {
+    type: 'FLOW_WRITE_FAILED';
     error: string;
 } | {
     type: 'DSL_IMPORTED';
@@ -6052,7 +6013,10 @@ declare const flowsQueries: {
     readonly node: (nodeId: EARS.EntityId) => NodeEntity | undefined;
     readonly flowNodes: (flowId: EARS.EntityId) => NodeEntity[];
     readonly extendedData: (flowId: EARS.EntityId, include?: keyof FlowExtendedData | (keyof FlowExtendedData)[]) => FlowExtendedData;
-    readonly connectedData: () => FlowsConnectedData;
+    /** Every flow, newest first, and the root flow the brain runs (the flow with the root role) */
+    readonly list: () => FlowsList;
+    /** A flow's nodes and edges, or `null` for a flow that doesn't exist */
+    readonly graph: (flowId: EARS.EntityId) => FlowExtendedData | null;
 };
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;

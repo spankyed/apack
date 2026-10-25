@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`) and flows done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -350,6 +350,29 @@ and `threads`' streaming tokens are notifications.
   replies. The flows editor kept its own copy of the action list from `FLOWS_CONNECTED` and three of those events;
   its palette reads the `list` view instead, so the flows surface's inbox no longer takes action events at all. The
   code surface's actions panel reads the same view with a limit of its own.
+- **flows** — two views, `list()` (every flow, newest first, and the root flow) and `graph({ flowId })` (a flow's
+  nodes and edges, or `null` once it's gone). Sorted: the data was `FLOWS_CONNECTED`'s rows (the flows, the root
+  flow's graph, the prompts and actions for node forms), `FLOW_SELECTED`, `FLOW_REFRESHED`, `FLOW_CREATED`,
+  `FLOW_DELETED` and the node and edge confirmations broadcast to every window; the results are `FLOW_OPENED`,
+  `NODE_CREATED` and `EDGE_CREATED`, now with `FLOW_WRITTEN` and `FLOW_WRITE_FAILED`, all replies. What stays
+  unasked is `FLOWS_CONNECTED` carrying the model catalog, which is the app's rather than a row. Node forms read the
+  prompts and actions views, and the settings come from `useSettings`. Decisions:
+  - **The editor is the one surface that edits its copy of the data at once**, and so the one where applying a view's
+    result can be wrong: a result computed before the editor's own write landed would put the old value back under
+    the user's typing. So **every graph write is answered**, a refusal included (`FLOW_WRITE_FAILED`; an unanswered
+    write would hold the view for good), the machine records each write's call, and **a result that arrives while any
+    is unanswered is held**. When the last is answered, a held result — or a refused write — makes the canvas read the
+    view again (`graphRefresh`), and otherwise the next result, which carries the last write, is applied as it comes.
+    Re-reading gives the host's current result, which by then holds every write the backend answered, so this needs
+    neither the commit sequence on replies nor any ordering between a connection's subscriptions. It is TanStack
+    Query's optimistic-update shape: apply the edit, settle the mutation, read the server's state.
+  - **`useView` gained `refresh()`** for it: subscribe afresh to the same request, keeping what it shows meanwhile.
+  - **The breadcrumb and the history read the list through one UI event, `FLOWS.READ`** (each flow's label, and the
+    root flow), which the canvas sends when the list view reads; the machine keeps no flow rows.
+  - **Revealing a node of the flow already shown answers at once**: the graph on screen is the view's current result,
+    so the node is in it or it isn't, where the old code asked the backend again.
+  - **A write nobody asked for still runs**: `answerWrite` runs the write before answering, because `reply?.(write())`
+    skips its argument when there is no `reply`. The views spec caught it (an applier's or a migration's write).
 
 ### 5. The rule
 
