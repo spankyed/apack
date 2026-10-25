@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`) and brain done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain (`d19538a74`) and browser done; logs sorted, unchanged. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -497,6 +497,14 @@ and `threads`' streaming tokens are notifications.
   - **The surface asks in a delivery, always**: on `SURFACE_STARTED`, on activation, on `BRAIN_STARTED`, and on an
     event's pulse straight away, where it used to ask from a 100 ms timer — an ask from a timer carries no sender, so
     its answer would have gone nowhere. What the pulse's event writes after the ask arrives as the live feed.
+- **browser** — not in the plan's list, but its one broadcast was rows: `BROWSER_CONNECTED`, the saved tabs and
+  bookmarks, sent to every window on every publish. Decision: **a fetch, not a view.** The saved session is a snapshot
+  a window restores once and then owns — each window syncs its own tabs back — so a view would hand every window the
+  tabs another window just synced. The surface asks on `SURFACE_STARTED` (`GET_SAVED_SESSION`), answered to it alone
+  (`SAVED_SESSION_READ`).
+- **logs** — sorted, and left as it is. Its broadcasts carry the system's in-memory log buffer, which is no stored
+  row: `LOG_ADDED` is a feed and `LOGS_CLEARED` news, and `LOGS_CONNECTED`/`LOGS_UPDATE` publish the buffer
+  (filtered by the settings) as a system publishes what its surface starts from. Nothing there is a view's to serve.
 
 ### 5. The rule
 

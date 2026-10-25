@@ -1895,6 +1895,10 @@ type IncomingBrowserEvents = {
 } | {
     type: 'SYNC_BOOKMARKS';
     bookmarks: SavedBookmark[];
+}
+/** The tabs and bookmarks a window restores as it starts: answered with \`SAVED_SESSION_READ\` */
+ | {
+    type: 'GET_SAVED_SESSION';
 };
 
 type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | {
@@ -3071,8 +3075,13 @@ type OutgoingBrainEvents = {
     type: 'BRAIN_RESUMED';
 };
 
+/**
+ * What the browser system sends: the saved session, to the window that asked. It is a snapshot the window takes once
+ * and then owns — each window syncs its own tabs back — so it is fetched rather than followed as a view, where every
+ * window's sync would replace the tabs another window is using.
+ */
 type OutgoingBrowserEvents = {
-    type: 'BROWSER_CONNECTED';
+    type: 'SAVED_SESSION_READ';
     savedTabs: SavedTab[];
     savedBookmarks: SavedBookmark[];
 };
