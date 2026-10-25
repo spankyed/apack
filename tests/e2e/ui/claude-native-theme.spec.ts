@@ -51,18 +51,25 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const dimensions = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
+    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
+    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1)
+    const cols=row?.match(/columns:\s*(\d+)/)?.[1];return cols?Number(cols):undefined
+  }
   await expect.poll(dimensions).toBeGreaterThan(1)
-  const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })
+  const terminal = new Terminal({ cols: (await dimensions())!, rows: 200, allowProposedApi: true })
   disposeScreen=()=>terminal.dispose()
   let lastSequence=0
   async function screen(){
-    if(await input.isVisible()){const cols=await dimensions();if(cols>1&&cols!==terminal.cols)terminal.resize(cols,200)}
+    if(await input.isVisible()){const cols=await dimensions();if(cols&&cols>1&&cols!==terminal.cols)terminal.resize(cols,200)}
     const chunks=(await context()).native?.output?.filter((chunk:any)=>chunk.sequence>lastSequence)??[]
     if(chunks.length){await new Promise<void>(resolve=>terminal.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
     const buffer=terminal.buffer.active
-    return Array.from({length:terminal.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+    const text=Array.from({length:terminal.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+    await writeFile(join(workspace!,'native-theme-current-screen.txt'),text)
+    return text
   }
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
