@@ -94,7 +94,7 @@ own worktree (`npm run session:new -- ears-on-elmdb`), against a local elmdb che
 
 ## What this supersedes
 
-- `docs/plans/ears-value-compression.md`: compression moves into elmdb's value format (`elmdb/docs/format.md`).
+- `docs/plans/ears-value-compression.md`: compression moves into elmdb's value format (`elmdb/docs/architecture/format.md`).
 - kriszyp/lmdb-js#381 stops mattering to apack, though it is still worth landing upstream.
 - `ears-compaction`'s `COMPACT_COPIES`: elmdb's backup is compacted.
 
