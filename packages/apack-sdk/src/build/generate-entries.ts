@@ -4,7 +4,7 @@ import { dataLiteral, propertyKey } from './code-literals.ts';
 import { findSourceModule, SCRIPT_MODULE_EXTENSIONS, TYPE_MODULE_EXTENSIONS } from './source-module.ts';
 import { resolveTypeModule } from './type-module.ts';
 import { _packModuleTargets, _moduleTargetSource } from './module-targets.ts';
-import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, type PackDataDeclarations } from '../framework/data-declaration.ts';
+import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, _FIELD_NAME_PATTERN, type PackDataDeclarations } from '../framework/data-declaration.ts';
 import { _parseModuleReference } from '../framework/module-reference.ts';
 import { generateSettingsTypes } from './settings-types.ts';
 import { _declarationRevision } from './declaration-revision.ts';
@@ -2056,6 +2056,12 @@ export type { ImportMode } from '@apackdev/sdk/utils';
           + (declared === undefined
             ? 'remove it, or number the entity by giving its manifest entry a "shortCode" prefix'
             : `remove it — the manifest entry's "${declared}" types the field, as ShortCodeOf<'${entity}'> from #generated/ears`));
+      }
+      // The database is told of each required field, and holds a field's name lowerCamelCase
+      const unnamed = required.filter((field) => !_FIELD_NAME_PATTERN.test(field));
+      if (unnamed.length > 0) {
+        throw new Error(`Entity "${entity}": ${source}#${exportName} requires ${unnamed.map((field) => `"${field}"`).join(', ')}, `
+          + 'which the database can\'t hold as a required field: name it lowerCamelCase, or make it optional');
       }
       const indexes = indexed.get(entity);
       // An index names a field the shape declares: one it doesn't is a typo, or a field that is gone

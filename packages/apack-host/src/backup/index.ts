@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { createEarsEngine, type Ears, type EarsDatabase } from '@apackdev/ears';
-import { DATABASE_FORMAT, openDatabase, openRecordStore, RECORD_STORE_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -46,10 +46,23 @@ export function databaseBackupStore(database: EarsDatabase): BackupStore {
  */
 const DATABASES = {
   lmdb: { format: DATABASE_FORMAT, check: (dir: string) => openDatabase({ path: dir, readOnly: true }).close() },
-  runHistory: { format: RECORD_STORE_FORMAT_VERSION, check: (dir: string) => openRecordStore({ path: dir, indexes: {}, readOnly: true }).close() },
+  runHistory: { format: DATABASE_FORMAT, check: checkRunHistory },
 } as const;
 
 export type DatabaseName = keyof typeof DATABASES;
+
+/** Opens a backup's run history, refusing a database that holds no run nodes' type: the app's own, copied there */
+function checkRunHistory(dir: string): void {
+  const database = openDatabase({ path: dir, readOnly: true });
+  try {
+    const types = (database.schema as { types?: Record<string, unknown> } | null)?.types ?? {};
+    if (!Object.prototype.hasOwnProperty.call(types, 'RunNode')) {
+      throw new Error(`${dir} is a database, but not a run history: its schema declares no RunNode`);
+    }
+  } finally {
+    database.close();
+  }
+}
 export const isKnownDatabase = (name: string): name is DatabaseName => Object.hasOwn(DATABASES, name);
 
 /** The app's stores, by the backup folder each is copied to: the database always, the run history where there is one */

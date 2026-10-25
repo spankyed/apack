@@ -25,7 +25,7 @@ const settingsAdmin = () => boundHost().services.settings;
 
 afterAll(() => {
   store.close();
-  runHistory.close();
+  runHistory.database.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 

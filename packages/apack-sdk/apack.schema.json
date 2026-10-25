@@ -116,7 +116,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "minLength": 1
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
                 },
                 "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
               }
@@ -125,7 +125,7 @@
             "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
           },
           "propertyNames": {
-            "minLength": 1,
+            "pattern": "^[A-Z][A-Za-z0-9]*$",
             "not": {
               "enum": [
                 "Flow",
@@ -217,7 +217,7 @@
                   "type": "array",
                   "items": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
                   },
                   "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
                 }
@@ -226,7 +226,7 @@
               "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
             },
             "propertyNames": {
-              "minLength": 1,
+              "pattern": "^[A-Z][A-Za-z0-9]*$",
               "not": {
                 "enum": [
                   "Flow",

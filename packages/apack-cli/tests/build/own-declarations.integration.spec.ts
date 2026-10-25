@@ -26,7 +26,7 @@ it('preserves owned names through authoring, compiled snapshots, source-free dis
   const own = <T>(value: T) => Object.fromEntries([['__proto__', value]]);
   packFixture({ at: root, nodeModules: path.join(REPO_ROOT, 'node_modules'),
     manifest: { id: 'own-declarations', name: 'Own declarations', data: { entities: { Untyped: {} } },
-      features: { notes: { description: 'Store notes.', entities: own({ shape: 'src/shape.ts#NoteShape' }), services: own('src/service.ts#service') } },
+      features: { notes: { description: 'Store notes.', entities: { Note: { shape: 'src/shape.ts#NoteShape' } }, services: own('src/service.ts#service') } },
       lifecycle: { onInit: 'src/lifecycle.ts#onInit' },
       extensions: { appExtensions: own('src/View.vue') },
     }, files: {
@@ -40,22 +40,19 @@ it('preserves owned names through authoring, compiled snapshots, source-free dis
   await builder.build({ signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]) });
   await builder.close();
   const built = readPackBuild(path.join(root, 'dist'));
-  expect(Object.hasOwn(built.snapshot.types.entities, '__proto__')).toBe(true);
-  expect(built.snapshot.provenance?.entities?.['__proto__']).toBe('own-declarations');
+  expect(built.snapshot.provenance?.entities?.Note).toBe('own-declarations');
   const packs = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-own-installed-')); roots.push(packs);
   const installed = path.join(packs, 'own-declarations');
   stagePack(root, installed);
   fs.rmSync(path.join(root, 'src'), { recursive: true });
   const report = await inspectPack(installed);
   expect(report.build.status).toBe('verified');
-  expect(report.declared.features?.notes.entities).toEqual(own({ shape: 'src/shape.ts#NoteShape' }));
+  expect(report.declared.features?.notes.services).toEqual(own('src/service.ts#service'));
   expect(report.declared.extensions?.appExtensions).toEqual(own('src/View.vue'));
   expect((globalThis as Record<string, unknown>).__ownDeclarationsLoaded).toBeUndefined();
   const loaded = loadSingleExternalPack(createPackRegistry(), installed);
   if ('problem' in loaded) throw new Error(loaded.problem);
   expect((globalThis as Record<string, unknown>).__ownDeclarationsLoaded).toBe(true);
-  expect(Object.hasOwn(loaded.registration.ears!.entities!, '__proto__')).toBe(true);
-  expect(loaded.registration.ears!.entities!['__proto__']).toBe('__proto__');
   expect(Object.hasOwn(loaded.registration.services!, '__proto__')).toBe(true);
   expect(loaded.registration.services!['__proto__']).toMatchObject({ marker: 'owned service' });
   expect(fs.existsSync(path.join(installed, 'src'))).toBe(false);

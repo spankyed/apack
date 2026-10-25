@@ -7,10 +7,10 @@ import type { PackRegistryView } from '../runtime/packs-view.ts';
 import { testPacksView } from './packs.ts';
 import type { RootEvents } from '../runtime/root-events.ts';
 import type { Message } from '../events/index.ts';
-import type { EarsEngine } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import type { LogEvent, SystemErrorEvent } from '../logger/index.ts';
 import { _createRunHistory, type RunHistory } from '../services/run-history.ts';
-import { _memoryRunHistoryStore } from './memory-run-history.ts';
+import { _openTestRunHistory } from './run-history.ts';
 import type { OnboardingService } from '../services/onboarding.ts';
 import type { SecretMetadata, SecretProvider, SecretsService } from '../services/secrets.ts';
 import { _secretRules } from '../services/secrets-rules.ts';
@@ -77,13 +77,21 @@ const memoryOnboarding: OnboardingService = {
 export function resetTestHostState(): void {
   testSecrets = [];
   onboarded = false;
-  testHistory = _createRunHistory(_memoryRunHistoryStore());
+  testHistory?.database.close();
+  testHistory = undefined;
 }
 
-let testHistory = _createRunHistory(_memoryRunHistoryStore());
+/** The test runtime's run history and its database, opened at its first use */
+let testHistory: { database: EarsDatabase; history: RunHistory } | undefined;
 
-/** The test runtime's run history, in memory: what `services.runHistory` is until `resetTestData` replaces it */
-export const testRunHistory = (): RunHistory => testHistory;
+/** The test runtime's run history, on a temporary database: what `services.runHistory` is until `resetTestData` replaces it */
+export const testRunHistory = (): RunHistory => {
+  if (!testHistory) {
+    const { database, engine } = _openTestRunHistory();
+    testHistory = { database, history: _createRunHistory(engine) };
+  }
+  return testHistory.history;
+};
 
 /** The user's keys in memory, keeping the host's rules */
 const memorySecrets: SecretsService = {
@@ -165,7 +173,7 @@ export function bindTestRuntime({ engine, resetData, packs, appVersion = '0.0.0-
         importBackup: unsupported('importBackup'),
         readBackupSummary: async () => null,
       },
-      get runHistory() { return testHistory; },
+      get runHistory() { return testRunHistory(); },
       // No test reaches a provider: code calling a model fails until the test mocks inference
       inference: {
         generateText: unmockedInference, streamText: unmockedInference, createAgent: unmockedInference,

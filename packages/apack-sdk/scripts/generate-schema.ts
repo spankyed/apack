@@ -30,7 +30,7 @@ for (const defaults of [settingsDefinition.properties.defaults, feature.properti
 }
 const data = properties.data.properties as { entities: Record<string, unknown>; relations: Record<string, unknown>; roles: Record<string, unknown> };
 for (const entities of [data.entities, feature.properties.entities]) {
-  Object.assign(entities, { propertyNames: { minLength: 1, not: { enum: Object.keys(SDK_ENTITIES) } } });
+  Object.assign(entities, { propertyNames: { ...(entities.propertyNames as object), not: { enum: Object.keys(SDK_ENTITIES) } } });
 }
 // A relation is a wire mapped to its rules: the SDK's wires are refused as keys
 Object.assign(data.relations, {

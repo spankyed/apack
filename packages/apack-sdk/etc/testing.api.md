@@ -23,7 +23,6 @@ import type { InferSchema } from 'ai';
 import type { JSONSchema7 } from 'ai';
 import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
-import { RecordStore } from '@apackdev/ears';
 import type { Ref } from 'vue';
 import { RelationRules } from '@apackdev/ears';
 import type { rerank } from 'ai';
@@ -150,9 +149,6 @@ export interface FakeTextCall {
 export interface FeTestRuntimeOptions extends Partial<FeHostRuntime> {
 }
 
-// @internal
-export function _memoryRunHistoryStore(): RecordStore<RunNode>;
-
 // @public
 export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): NativePackDeclaration;
 
@@ -161,6 +157,12 @@ export function nativePackDeclarationFixture(fixture: PackRegistration, metadata
 
 // @internal
 export function _openTestDatabase(input?: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules'>): {
+    database: EarsDatabase;
+    engine: EarsEngine;
+};
+
+// @internal
+export function _openTestRunHistory(): {
     database: EarsDatabase;
     engine: EarsEngine;
 };

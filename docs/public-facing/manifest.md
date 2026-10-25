@@ -53,8 +53,8 @@ order. `init`, `add` and the release version editor share this writer.
 | `features` | `Record<string, PackFeatureEntry>` | no | Feature declarations (system + surface bundles), keyed by feature id |
 | `extensions` | `object` | no | What the pack contributes to the app; see [Extensions](#extensions) |
 | `migrations` | `{ app?, pack? }` | no | Data migrations, by version line; see [Migrations](#migrations) |
-| `data.entities` | `Record<string, { shape?, shortCode? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
-| `data.relations` | `string[]` | no | Pack-level snake_case relation wire names; see [Entities and relations](#entities-and-relations) |
+| `data.entities` | `Record<string, { shape?, shortCode?, indexes? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
+| `data.relations` | `Record<string, { acyclic?, unique? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
 | `data.roles` | `string[]` | no | Pack-level snake_case role names; see [Entities and relations](#entities-and-relations) |
 | `dependencies` | `Record<string, string>` | no | Pack IDs mapped to a nonempty npm semver range, `github:owner/repo [range]`, or `file:path` |
 | `checks` | `{ allow?: string[] }` | no | Development conventions this pack allows; schema completion lists supported rule names. See [source checks](cli.md#apack-pack-validate---json). |
@@ -678,7 +678,9 @@ Run `apack pack fetch-deps` to pull dependency snapshots for cross-pack type int
 ```
 
 Declare each entity once, under its owning feature or `data.entities` when it has no feature owner.
-The key is its unchanged EARS wire name. Placement records ownership, without a feature prefix.
+The key is its unchanged EARS wire name, PascalCase (`^[A-Z][A-Za-z0-9]*$`), as the database holds a type's. A field
+the database is told of is lowerCamelCase (`^[a-z][A-Za-z0-9]*$`): each one an entry `indexes`, and each one its shape
+requires, which the build refuses otherwise. A field the shape leaves optional may be named any way. Placement records ownership, without a feature prefix.
 A string names an exported TypeScript shape; `null` explicitly leaves the entity untyped. Paths are
 relative to the pack root, including those declared inside a feature. The build checks modules and
 exports without executing them; installed discovery reads built declarations without source files.

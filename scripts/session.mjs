@@ -62,7 +62,11 @@ async function npm(dir, args) {
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
   // npm resolves @apackdev/ears' elmdb dependency through the link
-  linkElmdb(dir);
+  try {
+    linkElmdb(dir);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
+  }
   await npm(dir, ['ci', '--no-audit', '--no-fund']);
   await npm(dir, ['run', 'build:default-setup']);
   await npm(dir, ['run', 'build:runtime']);

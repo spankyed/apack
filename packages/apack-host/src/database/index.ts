@@ -1,5 +1,5 @@
 // An app's database opened outside the app (apack db), through the composition the API's boot uses
-export { openAppDatabase, openDatabaseStore, openRunHistoryStore, type AppDatabase, type OpenAppDatabaseOptions, type DatabaseStoreOptions } from './open.ts';
+export { openAppDatabase, openDatabaseStore, openRunHistory, type RunsDatabase, type AppDatabase, type OpenAppDatabaseOptions, type DatabaseStoreOptions } from './open.ts';
 export { readInstalledSchema, type DatabaseSchema, type InstalledSchema, type SchemaContext } from './schema.ts';
 export { findAppDataPaths } from './layout.ts';
 export { findRunningApp, publishRunningApp, appLockFile } from './running.ts';

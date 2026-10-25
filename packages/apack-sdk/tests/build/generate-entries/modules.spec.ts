@@ -185,6 +185,14 @@ describe('generated EARS facade', () => {
       .rejects.toThrow(/number the entity by giving its manifest entry a "shortCode" prefix/);
   });
 
+  it('refuses a shape requiring a field the database holds no name for, and takes it optional', async () => {
+    write('src/memo.ts', 'export interface MemoEntity { text: string; due_at: number }\nexport interface LooseEntity { text: string; due_at?: number }\n');
+    await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity' } } } }))
+      .rejects.toThrow(`Entity "Memo": src/memo.ts#MemoEntity requires "due_at", which the database can't hold as a required field`);
+    const files = await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#LooseEntity' } } } });
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"]}');
+  });
+
   it("indexes the fields an entity's entry declares, and refuses one its shape doesn't", async () => {
     write('src/memo.ts', 'export interface MemoEntity { text: string; status?: string }\n');
     const files = await generate({ data: {
