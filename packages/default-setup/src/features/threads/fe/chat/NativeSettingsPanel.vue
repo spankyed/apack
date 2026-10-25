@@ -1,7 +1,7 @@
 <template>
   <section role="dialog" aria-label="Claude Code settings" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown.esc.stop.prevent="emit('close')">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-      <div><h2 class="text-sm font-medium text-neutral-200">Claude Code settings</h2><p class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
+      <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">Claude Code settings</h2><p class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
       <button type="button" class="rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400" @click="emit('close')">Close settings</button>
     </header>
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
@@ -81,7 +81,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
-const props = defineProps<{ state?: ClaudeSettingsView }>()
+const props = defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string }>()
 const emit = defineEmits<{ operate: [action: ClaudeSettingsOperation]; close: [] }>()
 const search = ref(''), searchInput = ref<HTMLInputElement>(), drafts = ref<Record<string, string>>({})
 const frame = computed(() => props.state?.snapshot?.frame)

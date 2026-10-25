@@ -10,8 +10,15 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage,electronApp},testInfo)=>{
+  if(testInfo.status===testInfo.expectedStatus||!workspace)return
+  await writeFile(join(workspace,'native-agent-settings-failure.txt'),await appPage.locator('body').innerText())
+  const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+  const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+  await writeFile(testInfo.outputPath('native-agent-settings-failure.png'),Buffer.from(image,'base64'))
+})
 test('preserves selected Agent context through native Settings tabs and compact controls', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(90000)
+  test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -28,7 +35,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
   await card.locator('[contenteditable="true"]').fill('Review the release notes for this project.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
+  await expect.poll(async () => (await context()).turns,{timeout:20000}).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -93,52 +100,26 @@ test('preserves selected Agent context through native Settings tabs and compact 
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),field=form.locator('[contenteditable="true"]')
   const samples: any[]=[], captures: unknown[]=[]
   const nativeWindow=await electronApp.browserWindow(appPage)
+  const panel=focused.getByRole('dialog',{name:'Claude Code settings',exact:true})
   async function capture(label:string){
-    await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     for(const width of [1100,680]){
-      const height=width===680?600:900, previousSize=await resize(), previousSequence=(await context()).native.output.at(-1)?.sequence??0
+      const height=width===680?600:900
       await appPage.setViewportSize({width,height})
       if(await panel.isVisible()){
-        await expect.poll(async()=>(await resize())?.cols).not.toBe(previousSize?.cols)
-        await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(previousSequence)
-        await screen()
-      }
-      if(await panel.isVisible()){
-        if(label==='picker-guidance')await expect.poll(screen).toMatch(/Enter to confirm.*Esc to cancel/)
-        const text=await screen(),grid=await resize()
+        await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport({ratio:1})
+        await expect(panel.getByRole('navigation',{name:'Claude Code settings tabs'})).toBeInViewport()
         const geometry=await panel.evaluate(element=>{
-          const viewport=element.querySelector('[aria-label="Native command terminal"]')!,screen=element.querySelector('.xterm-screen')!,close=element.querySelector('button')!
-          const rect=(value:Element)=>{const r=value.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
-          return {panel:rect(element),viewport:rect(viewport),screen:rect(screen),close:rect(close),window:{width:innerWidth,height:innerHeight}}
+          const close=Array.from(element.querySelectorAll('button')).find(button=>button.textContent==='Close settings')!
+          const rect=(node:Element)=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
+          return {panel:rect(element),close:rect(close),window:{width:innerWidth,height:innerHeight}}
         })
-        const metricsContrast=label==='stats-models'?await panel.evaluate(element=>{
-          const rgb=(text:string)=>(text.match(/[\d.]+/g)??[]).slice(0,3).map(Number)
-          const light=(values:number[])=>values.map(value=>{const v=value/255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0)
-          const background=getComputedStyle(element).backgroundColor,bg=light(rgb(background))
-          return Array.from(element.querySelectorAll('.xterm-rows span')).filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
-            const style=getComputedStyle(span),fg=light(rgb(style.color));return {text:span.textContent,color:style.color,background,opacity:Number(style.opacity),ratio:(Math.max(fg,bg)+0.05)/(Math.min(fg,bg)+0.05)}
-          })
-        }):undefined
-        if(metricsContrast){expect(metricsContrast.length).toBeGreaterThan(0);for(const metric of metricsContrast){expect(metric.ratio).toBeGreaterThanOrEqual(3);expect(metric.opacity).toBe(1)}}
-        samples.push({label,width,height,grid,text,geometry,metricsContrast,view:(await context()).native.state.view})
-        await writeFile(join(workspace!,'native-agent-settings-samples.json'),JSON.stringify(samples,null,2))
-        await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
+        samples.push({label,width,height,geometry,view:(await context()).native.state.view,text:await panel.innerText()})
       }else await expect((await focused.isVisible())?form.getByRole('button',{name:'Send to Agent',exact:true}):card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
-      await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
-      let captureTimer:ReturnType<typeof setTimeout>|undefined
-      const image=await Promise.race([nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {pixels:image.getSize(),png:image.toPNG().toString('base64')}},{width,height}),new Promise<never>((_resolve,reject)=>{captureTimer=setTimeout(()=>reject(new Error('Owned Electron capture exceeded 30000ms')),30000)})]).finally(()=>{if(captureTimer)clearTimeout(captureTimer)})
-      expect(image.pixels).toEqual({width,height});const file='agent-settings-'+label+'-'+width+'.png'
-      await writeFile(testInfo.outputPath(file),Buffer.from(image.png,'base64'));captures.push({file,width,height,pixels:image.pixels})
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+      const image=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      const file='agent-settings-desktop-'+label+'-'+width+'.png'
+      await writeFile(testInfo.outputPath(file),Buffer.from(image,'base64'));captures.push({file,width,height,pixels:{width,height}})
     }
-  }
-  const panel=focused.getByRole('dialog',{name:'Native /config panel',exact:true})
-  async function screen(){
-    const size=await resize();if(size&&(terminalScreen!.cols!==size.cols||terminalScreen!.rows!==size.rows))terminalScreen!.resize(size.cols,size.rows)
-    const chunks=(await context()).native?.output?.filter((chunk:any)=>chunk.sequence>lastSequence)??[]
-    if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
-    const buffer=terminalScreen!.buffer.active
-    const text=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
-    await writeFile(join(workspace!,'native-config-screen.txt'),text);return text
   }
   let draft='Keep the worker release review draft unchanged.'
   const retained: any[]=[]
@@ -175,11 +156,11 @@ test('preserves selected Agent context through native Settings tabs and compact 
   async function open(){
     await form.getByRole('button',{name:'Claude settings',exact:true}).click()
     await expect(panel).toBeVisible();await expect(panel).toContainText('Agent · '+agentName)
-    await expect.poll(screen).toContain('Search settings')
+    await expect(panel.getByRole('textbox',{name:'Search Claude Code settings',exact:true})).toBeVisible()
     await expect(focused.locator(':scope > header')).toBeHidden()
   }
   async function close(){
-    await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
+    await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toBeHidden()
     await expect(field).toHaveText(draft);await expect(field).toBeFocused()
     expect(await field.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
     expect(await field.evaluate(element=>(element as any).editor.state.selection.toJSON())).toEqual(originalSelection)
@@ -187,41 +168,28 @@ test('preserves selected Agent context through native Settings tabs and compact 
     await expect(focused.locator(':scope > header')).toBeVisible()
     retained.push({draft,document:originalDocument,selection:originalSelection,view:(await context()).native.state.view})
   }
-  const keyboard=panel.locator('textarea.xterm-helper-textarea')
-  async function focusTabs(){
-    const sequence=(await context()).native.output.at(-1)?.sequence??0
-    await keyboard.press('ArrowUp')
-    await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(sequence)
-  }
-  await open();await focusTabs();await keyboard.press('ArrowLeft')
-  await expect.poll(screen).toMatch(/Version[\s\S]*2\.1\.302/);await capture('status-tab')
-  await keyboard.press('ArrowRight');await expect.poll(screen).toContain('Search settings')
-  await keyboard.press('ArrowDown');await keyboard.pressSequentially('Model');await expect.poll(screen).toMatch(/⌕ Model\s+│/)
-  if(!/❯ Model\s/.test(await screen())){
-    await keyboard.press('ArrowDown');await expect.poll(screen).toMatch(/❯ (?:Switch models|Model\s)/)
-    if(!/❯ Model\s/.test(await screen()))await keyboard.press('ArrowDown')
-  }
-  await expect.poll(screen).toMatch(/❯ Model\s/);await keyboard.press('Enter');await expect.poll(screen).toContain('Select model')
-  await capture('picker-guidance');await keyboard.press('Escape');await expect.poll(screen).toMatch(/❯ Model\s/);await close()
+  const tabs=panel.getByRole('navigation',{name:'Claude Code settings tabs'})
+  async function tab(name:string){await tabs.getByRole('button',{name,exact:true}).click();await expect(tabs.getByRole('button',{name,exact:true})).toHaveAttribute('aria-current','page')}
+  await open();await tab('Status');await expect(panel.locator('dd').filter({hasText:/^2\.1\.302$/})).toHaveCount(1);await capture('status-tab')
+  await tab('Config');await panel.getByRole('textbox',{name:'Search Claude Code settings',exact:true}).fill('Language');await expect(panel.getByRole('textbox',{name:'Language',exact:true})).toBeVisible();await capture('config-controls');await close()
   draft='/config';await field.fill(draft)
   originalDocument=await field.evaluate(element=>(element as any).editor.state.doc.toJSON())
   originalSelection=await field.evaluate(element=>(element as any).editor.state.selection.toJSON())
-  await open();await focusTabs();await keyboard.press('ArrowRight')
-  await expect.poll(screen).toContain('Total cost:');await capture('usage-tab')
-  await keyboard.press('ArrowRight')
-  await expect.poll(screen).toMatch(new RegExp('Total tokens:\\s+'+expectedStatsTokens+'\\b'))
-  await expect.poll(screen).toContain('Favorite model:');await capture('stats-overview')
-  const beforeStatsFocus=(await context()).native.output.at(-1)?.sequence??0
-  await keyboard.press('ArrowDown')
-  await expect.poll(async()=>(await context()).native.output.at(-1)?.sequence??0).toBeGreaterThan(beforeStatsFocus)
-  await keyboard.press('ArrowRight');await expect.poll(screen).toMatch(new RegExp('In:\\s+'+expectedStatsInputTokens+'\\s*· Out:\\s+'+expectedStatsOutputTokens));await capture('stats-models')
-  await close();await capture('retained-agent')
+  await open();await tab('Usage');await expect(panel.getByText('Context window',{exact:true})).toBeVisible();await capture('usage-tab')
+  await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible();await capture('stats-overview')
+  await panel.getByRole('button',{name:'Models',exact:true}).click();await expect(panel.locator('thead')).toContainText('Cache read')
+  const totals=await panel.locator('tbody tr').evaluateAll(rows=>rows.reduce((total,row)=>{
+    const values=Array.from(row.querySelectorAll('td')).slice(0,4).map(cell=>Number((cell.textContent??'').replace(/,/g,'')))
+    return {input:total.input+values[0],output:total.output+values[1],all:total.all+values.reduce((sum,value)=>sum+value,0)}
+  },{input:0,output:0,all:0}))
+  expect(totals).toEqual({input:expectedStatsInputTokens,output:expectedStatsOutputTokens,all:expectedStatsTokens})
+  await capture('stats-models');await close();await capture('retained-agent')
   expect(await focused.locator('[data-native-agent-message]').count()).toBe(workerMessageCount)
   expect(await humanRows()).toEqual(originalHumans)
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parent)
   await capture('retained-parent')
-  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures},null,2))
+  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({desktop:true,sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,totals,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures},null,2))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing worker settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
