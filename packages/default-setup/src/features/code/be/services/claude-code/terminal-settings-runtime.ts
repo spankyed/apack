@@ -23,7 +23,9 @@ async function readNativeSettings(n,entry,signal){
   rows.push(row);
  }
  const frame=await readNativeSettingsFrame(n,entry,signal);
- const revision=createHash('sha256').update(JSON.stringify({rows,frame})).digest('hex');
+ // Timed copy feedback is presentation state, not authority to change settings or Stats controls.
+ const revisionFrame=frame.stats?{...frame,stats:{...frame.stats,copyState:undefined}}:frame;
+ const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame})).digest('hex');
  return {snapshot:{revision,rows,frame},handles,api};
 }
 async function nativeSettings(n,request,abort){

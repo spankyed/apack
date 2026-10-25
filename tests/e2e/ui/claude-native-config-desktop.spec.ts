@@ -1,5 +1,6 @@
-import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readFile, readdir as _readdir, writeFile, utimes } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { randomUUID, createHash } from 'node:crypto'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -17,7 +18,7 @@ test.afterEach(async ({appPage,electronApp},testInfo)=>{
   await writeFile(testInfo.outputPath('native-config-desktop-failure.png'),Buffer.from(image,'base64'))
 })
 test('edits original Settings through desktop controls and retains composing', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(150000)
+  test.setTimeout(210000)
   expect(process.env.HOME).toBe(workspace)
   const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
@@ -80,6 +81,31 @@ test('edits original Settings through desktop controls and retains composing', a
     await expect(main).toContainText('Reviewing release notes')
   }
   const boundNativePid = (await context()).native.state.nativePid
+  // Owned imported histories exercise the original discovery/filter path without changing clocks or gates.
+  const projectRoot=join(workspace!,'.claude/projects')
+  const parentFiles=(await _readdir(projectRoot,{recursive:true})).filter(file=>file.endsWith('/'+sessionId+'.jsonl')||file===sessionId+'.jsonl')
+  expect(parentFiles).toHaveLength(1)
+  const parentFile=join(projectRoot,parentFiles[0]),rows=(await readFile(parentFile,'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+  const nativeUser=rows.find(row=>row.type==='user'&&row.isMeta!==true&&row.message?.role==='user')
+  const nativeAssistant=[...rows].reverse().find(row=>row.type==='assistant'&&row.message?.usage&&row.message?.role==='assistant')
+  expect(nativeUser).toBeTruthy();expect(nativeAssistant).toBeTruthy()
+  const sumTokens=(usage:any)=>['input_tokens','output_tokens','cache_read_input_tokens','cache_creation_input_tokens'].reduce((sum,key)=>sum+(usage[key]??0),0)
+  const baselineTokens=rows.filter(row=>row.type==='assistant'&&row.message?.usage).reduce((sum,row)=>sum+sumTokens(row.message.usage),0)
+  const histories:any[]=[]
+  for(const [index,age]of [2,12,45].entries()){
+    const id=randomUUID(),user=structuredClone(nativeUser),assistant=structuredClone(nativeAssistant),date=new Date()
+    date.setDate(date.getDate()-age);date.setHours(12,0,0,0)
+    user.uuid=randomUUID();user.parentUuid=null;user.sessionId=id;user.isSidechain=false;user.timestamp=date.toISOString()
+    assistant.uuid=randomUUID();assistant.parentUuid=user.uuid;assistant.sessionId=id;assistant.isSidechain=false;assistant.timestamp=new Date(date.getTime()+65000).toISOString();assistant.message.id='msg_'+randomUUID()
+    const scale=2**index
+    Object.assign(assistant.message.usage,{input_tokens:1400*scale,output_tokens:200*scale,cache_read_input_tokens:100*scale,cache_creation_input_tokens:50*scale})
+    if(assistant.message.usage.cache_creation)assistant.message.usage.cache_creation={ephemeral_5m_input_tokens:50*scale,ephemeral_1h_input_tokens:0}
+    const file=join(dirname(parentFile),id+'.jsonl'),body=JSON.stringify(user)+'\n'+JSON.stringify(assistant)+'\n'
+    await writeFile(file,body);await utimes(file,date,date)
+    histories.push({id,age,date:date.toISOString().slice(0,10),tokens:sumTokens(assistant.message.usage),sha256:createHash('sha256').update(body).digest('hex')})
+  }
+  const expectedRange=(days?:number)=>baselineTokens+histories.filter(row=>days===undefined||row.age<days).reduce((sum,row)=>sum+row.tokens,0)
+  const statsCompleteness:any={histories,baselineTokens,ranges:[],exports:[],captures:[],reading:[]}
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   const status = card.getByTestId('composer-native-status')
   if (restriction) await expect(status).toHaveCount(0)
@@ -159,10 +185,52 @@ test('edits original Settings through desktop controls and retains composing', a
     if(tab==='Stats'){
       await expect(panel.getByRole('button',{name:'Models',exact:true})).toBeEnabled()
       await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible()
+      const statistics=panel.getByRole('region',{name:'Claude Code statistics',exact:true})
+      const total=statistics.locator('dt').filter({hasText:/^Total tokens$/}).locator('..').locator('dd')
+      await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange()))
+      statsCompleteness.ranges.push({range:'all',expected:expectedRange(),observed:Number((await total.innerText()).replace(/,/g,''))})
+      const body=panel.locator('[aria-label="Claude Code Stats"]')
+      const inBody=(target:import('@playwright/test').Locator)=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
+      async function readTo(target:import('@playwright/test').Locator){
+        await body.hover()
+        for(let step=0;step<40&&!await inBody(target);step++){await appPage.mouse.wheel(0,120);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
+        expect(await inBody(target)).toBe(true)
+      }
+      async function statsCapture(label:string,width:number){
+        const height=width===680?600:900
+        await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport();await expect(panel.getByRole('button',{name:'Refresh',exact:true})).toBeInViewport()
+        await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+        const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+        const path=testInfo.outputPath('native-rich-stats-'+label+'-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));statsCompleteness.captures.push(path)
+      }
+      for(const width of [1100,680]){
+        await appPage.setViewportSize({width,height:width===680?600:900})
+        const longest=statistics.locator('dt').filter({hasText:/^Longest session$/});await readTo(longest);await statsCapture('summary',width)
+        const history=statistics.getByText('Activity dates and counts',{exact:true});await readTo(history);await history.click()
+        const historicalRow=statistics.locator('details[open] tbody tr').filter({hasText:histories[2].date})
+        await readTo(historicalRow);await statsCapture('history',width);statsCompleteness.reading.push({width,longest:true,historicalDate:histories[2].date,realWheel:true})
+        await history.click()
+        await statistics.getByRole('button',{name:'Copy stats',exact:true}).scrollIntoViewIfNeeded()
+        await electronApp.evaluate(({clipboard})=>clipboard.clear())
+        await statistics.getByRole('button',{name:'Copy stats',exact:true}).click()
+        await expect(statistics.getByText('Copied by Claude Code',{exact:true})).toBeVisible({timeout:15000})
+        await expect.poll(()=>electronApp.evaluate(({clipboard})=>!clipboard.readImage().isEmpty()),{timeout:15000}).toBe(true)
+        const exported=await electronApp.evaluate(({clipboard})=>{const image=clipboard.readImage();return {formats:clipboard.availableFormats(),size:image.getSize(),png:image.toPNG().toString('base64')}})
+        expect(exported.formats).toContain('image/png');expect(exported.size.width).toBeGreaterThan(0);expect(exported.size.height).toBeGreaterThan(0)
+        const bytes=Buffer.from(exported.png,'base64'),file='native-rich-stats-export-'+width+'.png';await writeFile(testInfo.outputPath(file),bytes)
+        statsCompleteness.exports.push({file,width,formats:exported.formats,size:exported.size,sha256:createHash('sha256').update(bytes).digest('hex')})
+      }
       await panel.getByRole('button',{name:'Models',exact:true}).click()
       await expect(panel.locator('thead')).toContainText('Cache read')
       await panel.getByRole('button',{name:/Change dates/}).click()
       await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 7 days')
+      await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange(7)))
+      statsCompleteness.ranges.push({range:'7d',expected:expectedRange(7),observed:Number((await total.innerText()).replace(/,/g,''))})
+      await panel.getByRole('button',{name:/Change dates/}).click();await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 30 days')
+      await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange(30)))
+      statsCompleteness.ranges.push({range:'30d',expected:expectedRange(30),observed:Number((await total.innerText()).replace(/,/g,''))})
+      await panel.getByRole('button',{name:/Change dates/}).click();await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange()))
+      statsCompleteness.ranges.push({range:'all-restored',expected:expectedRange(),observed:Number((await total.innerText()).replace(/,/g,''))})
     }
     for(const [width,height]of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height})
@@ -181,6 +249,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,desktopFrameTabs:true,nativeStatsDates:true,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,statsCompleteness,desktopFrameTabs:true,nativeStatsDates:true,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

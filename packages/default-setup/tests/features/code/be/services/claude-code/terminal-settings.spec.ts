@@ -4,16 +4,17 @@ import { claudeTerminalSettingsRuntime } from '#features/code/be/services/claude
 
 function fixture() {
   let value = false
+  let frame: any = {selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false}
   const writer = vi.fn(async (next: boolean) => { value = next })
   const context = {}, entry = { context, kind: 'panel', commandName: 'config', clientId: 'client', closed: false, answered: false, current: vi.fn(), dialogId: 'dialog', nodeId: 'node', store: { getState: () => ({ open: [{ id: 'dialog', kind: 'local_jsx', payload: { nodeId: 'node' } }] }) }, done: new Promise(() => {}) }
   const handles = () => [{ row: { key: 'tips', label: 'Show tips', kind: 'boolean', value, isLocked: false }, write: writer }, { row: { key: 'hidden', label: 'Hidden', kind: 'boolean', value: false, isLocked: false }, write: vi.fn() }]
   const api = { configRowHandles: vi.fn(handles) }
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
-  const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', "({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false})")
-  const run = vm.runInNewContext(source + ';nativeSettings', { nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
+  const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()')
+  const run = vm.runInNewContext(source + ';nativeSettings', { settingsFrame: () => frame, nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
-  return { setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
+  return { setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }
 it('uses original description visibility and config.set coordinator instead of writing directly', async () => {
   const f = fixture(), before = await f.read()
@@ -48,4 +49,13 @@ it('waits for the original settings cache to observe a queued write before publi
   f.writer.mockImplementationOnce(async next => { setTimeout(() => f.setValue(next), 20) })
   const result = await f.run(f.n, { ...f.request, operation: 'write', revision: before.snapshot.revision, key: 'tips', value: true }, new AbortController())
   expect(result.savedKey).toBe('tips'); expect(result.snapshot.rows[0].value).toBe(true)
+})
+
+it('keeps timed copy feedback out of action authority while retaining selected-tab fences', async () => {
+  const f = fixture(), frame = {selectedTab:'Stats',tabs:['Status','Config','Usage','Stats'],hidden:false,stats:{view:'Overview',range:'all',loading:false,outcome:'success',copyState:'saved'}}
+  f.setFrame(frame); const before = await f.read()
+  f.setFrame({...frame,stats:{...frame.stats,copyState:'idle'}})
+  expect((await f.read()).snapshot.revision).toBe(before.snapshot.revision)
+  f.setFrame({...frame,selectedTab:'Config'})
+  expect((await f.read()).snapshot.revision).not.toBe(before.snapshot.revision)
 })
