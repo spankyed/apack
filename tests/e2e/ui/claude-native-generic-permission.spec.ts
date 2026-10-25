@@ -127,7 +127,17 @@ test('preserves original generic MCP approval choices, withheld previews and the
     if(phase===1){
       const notice=JSON.parse(await readFile(join(workspace!,'native-tool-notice-receipt.json'),'utf8'))
       expect(notice.accepted).toBe(true);expect(notice.toolUseId).toBe('native_permission_1')
-      await expect(approval.getByText(notice.text,{exact:false})).toBeVisible()
+      try { await expect(approval.getByText(notice.text,{exact:false})).toBeVisible() }
+      catch(error){
+        const current=await context(),chunks=current.native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
+        await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve))
+        const buffer=terminalScreen!.buffer.active
+        const screen=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+        await writeFile(join(workspace!,'native-tool-notice-screen.json'),JSON.stringify({receipt:notice,screen,pending:current.claude.pendingControlRequest}))
+        await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+        await capture('native-tool-notice-original-screen.png',1100,900)
+        throw error
+      }
     }
     await expect(approval.locator('button.approve')).toBeFocused()
     let original = (await context()).claude.pendingControlRequest
