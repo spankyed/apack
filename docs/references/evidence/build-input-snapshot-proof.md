@@ -2936,6 +2936,22 @@ The proof reuses the existing native fixture and cleanup ownership. Its fresh No
 declared in the subprocess inventory. CLI types, focused lint and diff checks pass; native behavior
 and any implementation correction await this focused hosted run. No native test was executed locally.
 
+### Electron exit hang in linked worktrees (2026-10-25)
+
+Observed in `test:external-pack:app` (the `bundled-ui-pack` fixture) on the developer's Mac, in linked worktrees
+only. The Electron main process logged `before-quit`, `will-quit` and `quit`, the API child had exited, and the
+process did not exit; Playwright's 60s worker teardown expired. A `DEBUG_E2E=sample` capture showed the main thread in
+`usleep`/`__semwait_signal` under Node and the inspector's socket threads alive. One earlier run failed the same suite
+differently: text Playwright typed into the editor never reached its model.
+
+- It was intermittent and followed the checkout, not the commit. Across two fresh worktrees it hung on four of
+  eleven runs, beside the one lost-input failure; the main checkout's runs, three apps at once included, never hung.
+  In one worktree the same three commits, each rebuilt before its run, hung on the first and passed on the other
+  two; the identical three-app run repeated minutes after a hang exited cleanly.
+- Not established: the mechanism. `log show` for `syspolicyd` and `com.apple.syspolicy` returned no rows for the
+  window without elevated access, so assessment of the fresh files is consistent with what was seen and unproven.
+  The sample file was overwritten by the following run's results directory; capture it before rerunning.
+
 ### Versioned override reproducer and launch admission (2026-10-17)
 
 Run `39079991483` on `99c910914` confirms the library-path omission in 22.13 seconds: ordinary Node
