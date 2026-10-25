@@ -1465,11 +1465,6 @@ interface FlowRunNodeData {
     }>;
 }
 
-/** What the flows surface starts from that isn't a row: the models a node may name */
-interface FlowsConnectedData {
-    models: ModelCatalogEntry[];
-}
-
 interface FlowsContext {
     /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
     pendingFlow?: {
@@ -2080,7 +2075,11 @@ type IncomingExplorerEvents = {
     targetDir: string;
 };
 
-type IncomingFlowsEvents = {
+type IncomingFlowsEvents = 
+/** The models the editor offers: answered with \`MODEL_CATALOG_READ\` */
+{
+    type: 'GET_MODEL_CATALOG';
+} | {
     type: 'CREATE_FLOW';
 } | {
     type: 'DELETE_FLOW';
@@ -2859,6 +2858,11 @@ interface MessageReferences {
     context?: ContextReference[];
 }
 
+/** What the flows surface starts from that isn't a row: the models a node may name */
+interface ModelCatalog {
+    models: ModelCatalogEntry[];
+}
+
 type NodeCreateInput = Partial<NodeEntity> & {
     actionId?: string;
     promptTemplateId?: string;
@@ -3405,9 +3409,11 @@ type OutgoingExplorerEvents = {
  * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
  * flows themselves are its views.
  */
-type OutgoingFlowsEvents = {
-    type: 'FLOWS_CONNECTED';
-    data: FlowsConnectedData;
+type OutgoingFlowsEvents = 
+/** The models the editor offers, answered to the window that asked as its surface starts */
+{
+    type: 'MODEL_CATALOG_READ';
+    data: ModelCatalog;
 }
 /**
  * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the

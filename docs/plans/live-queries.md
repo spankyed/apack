@@ -357,8 +357,9 @@ and `threads`' streaming tokens are notifications.
   nodes and edges, or `null` once it's gone). Sorted: the data was `FLOWS_CONNECTED`'s rows (the flows, the root
   flow's graph, the prompts and actions for node forms), `FLOW_SELECTED`, `FLOW_REFRESHED`, `FLOW_CREATED`,
   `FLOW_DELETED` and the node and edge confirmations broadcast to every window; the results are `FLOW_OPENED`,
-  `NODE_CREATED` and `EDGE_CREATED`, now with `FLOW_WRITTEN` and `FLOW_WRITE_FAILED`, all replies. What stays
-  unasked is `FLOWS_CONNECTED` carrying the model catalog, which is the app's rather than a row. Node forms read the
+  `NODE_CREATED` and `EDGE_CREATED`, now with `FLOW_WRITTEN` and `FLOW_WRITE_FAILED`, all replies. The model catalog
+  is a fetch: `FLOWS_CONNECTED` broadcast it to every window on every publish; the surface asks
+  (`GET_MODEL_CATALOG`, answered `MODEL_CATALOG_READ` to it alone) on `SURFACE_STARTED`. Node forms read the
   prompts and actions views, and the settings come from `useSettings`. Decisions:
   - **The editor is the one surface that edits its copy of the data at once**, and so the one where applying a view's
     result can be wrong: a result computed before the editor's own write landed would put the old value back under

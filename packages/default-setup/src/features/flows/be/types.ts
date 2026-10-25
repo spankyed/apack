@@ -30,7 +30,7 @@ export type NodeCreateInput = Partial<NodeEntity> & {
  *─────────────────────────────────────────────────────────────────*/
 
 /** What the flows surface starts from that isn't a row: the models a node may name */
-export interface FlowsConnectedData {
+export interface ModelCatalog {
   models: ModelCatalogEntry[];
 }
 
@@ -50,6 +50,8 @@ export interface FlowExtendedData {
 export type FlowsSettings = import('#generated/settings.ts').SettingsOf<'flows'>;
 
 export type IncomingFlowsEvents =
+  /** The models the editor offers: answered with \`MODEL_CATALOG_READ\` */
+  | { type: 'GET_MODEL_CATALOG' }
   | { type: 'CREATE_FLOW' }
   | { type: 'DELETE_FLOW'; flowId: string }
   | { type: 'UPDATE_FLOW_LABEL'; flowId: string; label: string }
@@ -70,7 +72,8 @@ export type IncomingFlowsEvents =
  * flows themselves are its views.
  */
 export type OutgoingFlowsEvents =
-  | { type: 'FLOWS_CONNECTED'; data: FlowsConnectedData }
+  /** The models the editor offers, answered to the window that asked as its surface starts */
+  | { type: 'MODEL_CATALOG_READ'; data: ModelCatalog }
   /**
    * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
    * create, so nothing the asker sent could identify it.
