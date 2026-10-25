@@ -98,7 +98,7 @@ test('retires a held image upload when another window resets the native session'
   const thumbnail=card.locator('img[src^="data:image/"]')
   await expect(thumbnail).toHaveCount(1)
   await electronApp.evaluate(async(_electron,{threadId,workspace})=>{
-    const fs=(await import('node:fs/promises')).default
+    const fs=process.getBuiltinModule('node:fs/promises') as typeof import('node:fs/promises')
     const original=fs.writeFile
     const state={started:false,completed:false,path:'',release:()=>{},restore:()=>{fs.writeFile=original}}; (globalThis as any).heldResetUpload=state
     fs.writeFile=(async(...args:Parameters<typeof fs.writeFile>)=>{
