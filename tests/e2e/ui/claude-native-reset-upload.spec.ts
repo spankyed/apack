@@ -96,9 +96,7 @@ test('retires a held image upload when another window resets the native session'
     popout=await opened;await popout.waitForLoadState('domcontentloaded')
     await expect.poll(()=>popout!.evaluate(()=>!!(window as any).applicationState?.system.get('default-setup/threads'))).toBe(true)
     await popout.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId}),threadId)
-  const ownershipBefore=await context()
-  const ownership={threadId:ownershipBefore.threadId,mode:ownershipBefore.mode,phase:ownershipBefore.phase}
-  await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');const tuple=()=>{const c=actor.getSnapshot().context;return{threadId:c.currentThread?.id,mode:c.mode,phase:c.phase}};const state={rows:[tuple()],subscription:undefined as any,editor:document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]')};state.subscription=actor.subscribe(()=>{const row=tuple();if(JSON.stringify(row)!==JSON.stringify(state.rows.at(-1)))state.rows.push(row)});(window as any).__resetUploadOwnership=state})
+  const ownership=await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');const tuple=()=>{const c=actor.getSnapshot().context;return{threadId:c.currentThread?.id,mode:c.mode,phase:c.phase}};const state={rows:[tuple()],subscription:undefined as any,editor:document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]')};state.subscription=actor.subscribe(()=>{const row=tuple();if(JSON.stringify(row)!==JSON.stringify(state.rows.at(-1)))state.rows.push(row)});(window as any).__resetUploadOwnership=state;return state.rows[0]})
   const heldDraft='Keep this image draft until I explicitly send it after reset.'
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await composer.fill(heldDraft);await composer.focus()
