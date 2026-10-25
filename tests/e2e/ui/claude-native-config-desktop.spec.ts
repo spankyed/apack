@@ -85,7 +85,9 @@ test('edits original Settings through desktop controls and retains composing', a
   const saved = await composer.evaluate(element => ({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))
   const panel = appPage.getByRole('dialog',{name:'Claude Code settings',exact:true})
   async function open() {
-    await card.getByRole('button',{name:'Claude settings',exact:true}).click()
+    const direct = card.getByRole('button',{name:'Claude settings',exact:true})
+    if (await direct.isVisible()) await direct.click()
+    else { await card.getByRole('button',{name:'More actions',exact:true}).click(); await appPage.getByRole('menuitem',{name:'Claude settings',exact:true}).click() }
     await expect(panel).toBeVisible()
     await expect(panel.getByRole('checkbox',{name:'Show tips',exact:true})).toBeVisible({timeout:15000})
     await expect(panel.locator('textarea.xterm-helper-textarea')).toHaveCount(0)
