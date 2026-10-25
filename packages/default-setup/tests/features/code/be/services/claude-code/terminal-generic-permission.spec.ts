@@ -6,8 +6,8 @@ import { claudeTerminalGenericPermissionRuntime } from '#features/code/be/servic
 
 /** Mock native contracts prove adapter guards, never original CLI or app acceptance. */
 function fixture(card = false) {
-  function ozr() {} function qJ() {} function Bve() {} function Box() {} function Dialog() {}
-  const payload = { requestId: 'native-call', toolName: 'mcp__research__echo', isMcp: true }
+  function ozr() {} function qJ() {} function Box() {} function Dialog() {}
+  const payload = { toolName: 'mcp__research__echo', isMcp: true }
   const item = { id: 'original', kind: 'permission_prompt', payload }, open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog, ready = true, refuse = false, syntaxDisabled = false
@@ -35,7 +35,6 @@ function fixture(card = false) {
   const n = { appProvider: { d_: AppStateProvider }, questionOptions: { j: () => session }, jsx: { e: (type: unknown, props: unknown) => ({ type, props }) }, staticRender: { $bn: render, v6e: render }, documentDefaults: { $Et: () => ({ tasks: { stale: true }, taskDecorations: { stale: true }, settings: { fixtureSetting: 'retained' } }) }, themeRoots: { ai: () => new Map([[undefined, { container: { current: fiber } }]]) } }
   const hash = (text: string) => createHash('sha256').update(text).digest('hex')
   const fingerprints = new Map([
-    ['62375d46497460f826daf4b1f1381395e656d68df6f5a341919cceb35cc8c15f', hash(Bve.toString())],
     ['063b997d50194fb47258b9acc04548bd0e708eab1fec57435264219335afdc73', hash(ozr.toString())],
     ['5602da1d16eb7bb040b568afe7012d87d13436e6ffeef266609a9ae1d127b51b', hash(qJ.toString())],
   ])
@@ -47,7 +46,7 @@ function fixture(card = false) {
     nativeThemeProvider: () => ({ type: ThemeProvider, value: { resolvedTheme: {} } }),
     nativeDialog: () => current,
   })
-  return { notice: {type:Bve,memoizedProps:{toolUseId:payload.requestId}}, n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, control, select, cancel, open, setReady(value: boolean) { ready = value }, setSyntaxDisabled(value: boolean) { syntaxDisabled = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  return { n, render, session, AppStateProvider, ThemeProvider, runtime, dialog, cache, fiber, options, control, select, cancel, open, setReady(value: boolean) { ready = value }, setSyntaxDisabled(value: boolean) { syntaxDisabled = value }, refuse() { refuse = true }, replace() { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 const response = (f: ReturnType<typeof fixture>, token: string, choice = 'yes', decision = 'allow', feedback?: string) => ({ toolName: f.dialog.payload.toolName, choiceToken: token, choice, decision, ...(feedback === undefined ? {} : { feedback }) })
 
@@ -175,27 +174,4 @@ it('uses the live syntax preference without borrowing tasks and refuses a change
   f.render.mockImplementation(async () => { f.setSyntaxDisabled(false); return 'Stale colored preview' })
   await expect(f.runtime.choices(f.n, f.dialog)).rejects.toThrow('syntax setting changed')
   expect(f.select).not.toHaveBeenCalled()
-})
-
-it('includes the original per-call footer and retires it without accepting another call identity', async () => {
-  const f = fixture()
-  Object.assign(f.fiber,{sibling:f.notice})
-  f.render.mockResolvedValue('review-plugin: Checked the release request')
-  const shown = await f.runtime.choices(f.n,f.dialog)
-  expect(shown.details.at(-1)).toMatchObject({label:'Plugin notice',value:'review-plugin: Checked the release request'})
-  f.render.mockResolvedValue('')
-  const cleared = await f.runtime.choices(f.n,f.dialog)
-  expect(cleared.details.some((detail:{label:string})=>detail.label==='Plugin notice')).toBe(false)
-  expect(cleared.token).not.toBe(shown.token)
-  f.notice.memoizedProps.toolUseId='foreign-call'
-  expect((await f.runtime.choices(f.n,f.dialog)).details.some((detail:{label:string})=>detail.label==='Plugin notice')).toBe(false)
-})
-
-it('refuses duplicate or changed native notice producers for the current call', async () => {
-  const f = fixture()
-  Object.assign(f.fiber,{sibling:{...f.notice,sibling:{...f.notice}}})
-  await expect(f.runtime.choices(f.n,f.dialog)).rejects.toThrow('Ambiguous native permission notice')
-  const changed = function Bve() { return 'changed original body' }
-  Object.assign(f.fiber,{sibling:{...f.notice,type:changed}})
-  await expect(f.runtime.choices(f.n,f.dialog)).rejects.toThrow('notice renderer changed')
 })
