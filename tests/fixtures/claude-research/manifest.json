@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "2d2d0b5018c590885c6497948e57c2ce27541c1e",
+  "researchCommit": "17cbbe1147a50f954dde099d914ac5bad909310f",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -87,7 +87,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "00ccb59fb4ad773dbd065c434284c43939d66241af54535467b4553d6e636634",
+    "src/integration/apack-terminal-owner-app.mjs": "511ac7c695692ad821b270eed647fc28627e55883ae8957ed762f02029650fc4",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -286,7 +286,7 @@
     "src/protocol/verify-prompt-process-replacement.mjs": "d13cf34be1b2d95a302f16d00b153140589123a3c5eb2ed66c11cc11082043ee",
     "src/protocol/native-select-fixture.mjs": "76a0256a5c7688ca52e1c052a281099c2e1d31c4b298e468053608d617a7a845",
     "src/protocol/verify-reset-media.mjs": "8a95cfda62bbca8d2b8e156508e2238f5d8203f55f10bd596a588e719f802bd1",
-    "src/protocol/native-compose-fixture.mjs": "f955a4bdb00a7596e6f3d9004bd09ea0f6318a1ae876fc215fae69161a39dcad"
+    "src/protocol/native-compose-fixture.mjs": "e7532bd09dc3d2179238968804f7e947606df504868d31bff7ca87806c62160d"
   },
-  "archiveSha256": "b605113fb173215e5fc93249362b6fb0e7650bcd69275a5f8e6ebaa9242a2910"
+  "archiveSha256": "15bd8e4c8269d130dedd59683e8d9b3d1ccaed5c2ac8eb8a9790b110badfead6"
 }
