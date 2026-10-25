@@ -361,8 +361,10 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * than a split (Phase 2 of the goal).
  */
 /**
- * The one file every step really does read: the installed toolchain, because a dependency moving changes
- * what any of them do.
+ * The files every step really does read: the installed toolchain, because a dependency moving changes what any of
+ * them do, by the records that pin it — the lockfile, and the elmdb commit `vendor/elmdb` links (`vendor/elmdb.rev`),
+ * which `@apackdev/ears` builds against and loads. Like the lockfile for `node_modules`, the pin stands for what it
+ * names: a change to the elmdb checkout not yet pinned is no input.
  *
  * **`package.json` is not here**, and that is the point. Hashing the whole manifest to key on each step's
  * command would turn an edit to one script into a full chain. A unit carries its own `command`
@@ -372,7 +374,7 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * changes `EVERY_WORKSPACE`, which changes the declared path list, which `fingerprintUnit` hashes. And
  * each workspace's own manifest is already an input through `WORKSPACE_PARTS`.
  */
-const ROOT = ['package-lock.json'];
+const ROOT = ['package-lock.json', 'vendor/elmdb.rev'];
 
 /**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
