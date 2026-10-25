@@ -86,6 +86,8 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'a nested `vitest run`: the harness under test is what launches a run, so it cannot be the run that is launching it' },
   'packages/apack-cli/tests/harness/harness-setup.integration.spec.ts': { calls: 1,
     why: 'a nested `vitest run`, for the same reason — and the one whose spawner reaches the binary through a variable' },
+  'packages/apack-ears/tests/lmdb/close.integration.spec.ts': { calls: 1,
+    why: 'closing a store under a running sync ends its process with SIGSEGV, which in the worker would take the worker with it' },
   'packages/apack-ears/tests/lmdb/crash.integration.spec.ts': { calls: 1,
     why: 'the child is killed (SIGKILL) part way through its writes: what survives a process dying is the subject, and only a process that really dies can show it' },
   'packages/publish-checks/tests/published-exports.integration.spec.ts': { calls: 1,
