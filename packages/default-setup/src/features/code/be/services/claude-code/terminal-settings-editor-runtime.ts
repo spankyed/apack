@@ -128,4 +128,26 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  await awaitNativeSettingsReading(callback(...args),signal);
  return {};
 }
+async function saveNativeSettingsEditor(n,entry,revision,values,signal){
+ let current=await readNativeSettingsEditor(n,entry,signal);
+ if(!current||current.revision!==revision||current.snapshot.kind!=='form')throw Error('Native Settings form changed; refresh before saving');
+ const fields=current.snapshot.fields,keys=new Set(fields.map(field=>field.key)),owner=current.owner;
+ if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).length!==keys.size||Object.keys(values).some(key=>!keys.has(key)))throw Error('Native Settings form values changed');
+ for(const field of fields){
+  const value=values[field.key];if(typeof value!=='string'||value.length>16384)throw Error('Native Settings form value is invalid');
+ }
+ for(const field of fields){
+  const value=values[field.key];if(current.snapshot.fields.find(item=>item.key===field.key)?.value===value)continue;
+  await actNativeSettingsEditor(n,entry,{action:'change',revision:current.revision,key:field.key,value},signal);
+  const until=Date.now()+1500;
+  while(true){
+   signal?.throwIfAborted();entry.current();current=await readNativeSettingsEditor(n,entry,signal);
+   if(!current||current.owner!==owner||current.snapshot.kind!=='form')throw Error('Native Settings form replaced while editing');
+   if(current.snapshot.fields.find(item=>item.key===field.key)?.value===value)break;
+   if(Date.now()>=until)throw Error('Native Settings form did not acknowledge its draft');
+   await new Promise(resolve=>setTimeout(resolve,40));
+  }
+ }
+ return await actNativeSettingsEditor(n,entry,{action:'submit',revision:current.revision},signal);
+}
 `

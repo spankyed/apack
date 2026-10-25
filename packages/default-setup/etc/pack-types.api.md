@@ -1459,12 +1459,12 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    cwd: string;
     revision: string;
-    command: string;
+    cwd: string;
     id: string;
-    sessionId: string;
+    command: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Bash";
     description?: string | undefined;
@@ -1476,12 +1476,12 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    cwd: string;
     revision: string;
-    command: string;
+    cwd: string;
     id: string;
-    sessionId: string;
+    command: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Bash";
     description?: string | undefined;
@@ -1621,11 +1621,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    id: string;
     title: string;
+    id: string;
+    input: Record<string, unknown>;
     sessionId: string;
     question: string;
-    input: Record<string, unknown>;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1653,11 +1653,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     revision: string;
-    id: string;
     title: string;
+    id: string;
+    input: Record<string, unknown>;
     sessionId: string;
     question: string;
-    input: Record<string, unknown>;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1793,8 +1793,8 @@ declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: string;
     presentation: {
@@ -1820,8 +1820,8 @@ declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: string;
     presentation: {
@@ -1952,10 +1952,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1970,10 +1970,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2037,16 +2037,16 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
+    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
-    title: string;
+    url: string;
     sessionId: string;
     token: string;
     serverName: string;
-    url: string;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
@@ -2056,16 +2056,16 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     userConfirmsCompletion: boolean;
     warnings: string[];
 }, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
+    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
-    title: string;
+    url: string;
     sessionId: string;
     token: string;
     serverName: string;
-    url: string;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
@@ -2093,17 +2093,17 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     sessionId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
+    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
-    title: string;
     sessionId: string;
     helpUrl: string;
     paragraphs: string[];
 }, {
     revision: string;
+    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
-    title: string;
     sessionId: string;
     helpUrl: string;
     paragraphs: string[];
@@ -2129,32 +2129,32 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     sessionId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
+    title: string;
     id: string;
     kind: "lsp_recommendation";
-    title: string;
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }, {
     revision: string;
+    title: string;
     id: string;
     kind: "lsp_recommendation";
-    title: string;
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -2275,8 +2275,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "EnterPlanMode" | "ExitPlanMode";
     presentation: {
@@ -2296,8 +2296,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "EnterPlanMode" | "ExitPlanMode";
     presentation: {
@@ -3285,8 +3285,8 @@ declare const ClaudeNativeToolPermissionDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Skill" | "WebFetch";
     presentation: {
@@ -3309,8 +3309,8 @@ declare const ClaudeNativeToolPermissionDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Skill" | "WebFetch";
     presentation: {
@@ -3479,8 +3479,8 @@ declare const ClaudeNativeWorkflowDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Workflow";
     presentation: {
@@ -3509,8 +3509,8 @@ declare const ClaudeNativeWorkflowDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     id: string;
-    sessionId: string;
     input: Record<string, unknown>;
+    sessionId: string;
     requestId: string;
     toolName: "Workflow";
     presentation: {
@@ -3839,26 +3839,9 @@ interface ClaudeSessionResumeTargetOptions extends Pick<QueryOptions, 'cliPath' 
     cwd: string;
 }
 
-type ClaudeSettingValue = z.infer<typeof claudeSettingValue>;
-
 type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
 
-type ClaudeSettingsOperation = {
-    kind: 'read';
-} | {
-    kind: 'stats';
-    revision: string;
-    action: 'Models' | 'Overview' | 'copy' | 'cycleDates';
-} | {
-    kind: 'tab';
-    revision: string;
-    tab: z.infer<typeof claudeSettingsTab>;
-} | {
-    kind: 'write';
-    revision: string;
-    key: string;
-    value: ClaudeSettingValue;
-};
+type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>;
 
 /** Native merged settings and source attribution; backend-only, never log or publish the values. */
 declare const ClaudeSettingsSchema: z.ZodObject<{
@@ -10166,14 +10149,6 @@ declare const actionKeys: z.ZodObject<{
     }>, "many">>;
 }, "strict", z.ZodTypeAny, {
     revision: string;
-    pending: {
-        key: string;
-        ctrl: boolean;
-        alt: boolean;
-        shift: boolean;
-        super: boolean;
-        meta: boolean;
-    }[] | null;
     bindings: {
         key: string;
         ctrl: boolean;
@@ -10190,16 +10165,16 @@ declare const actionKeys: z.ZodObject<{
         super: boolean;
         meta: boolean;
     }[][];
+    pending: {
+        key: string;
+        ctrl: boolean;
+        alt: boolean;
+        shift: boolean;
+        super: boolean;
+        meta: boolean;
+    }[] | null;
 }, {
     revision: string;
-    pending: {
-        key: string;
-        ctrl: boolean;
-        alt: boolean;
-        shift: boolean;
-        super: boolean;
-        meta: boolean;
-    }[] | null;
     bindings: {
         key: string;
         ctrl: boolean;
@@ -10216,6 +10191,14 @@ declare const actionKeys: z.ZodObject<{
         super: boolean;
         meta: boolean;
     }[][];
+    pending: {
+        key: string;
+        ctrl: boolean;
+        alt: boolean;
+        shift: boolean;
+        super: boolean;
+        meta: boolean;
+    }[] | null;
 }>;
 
 /**
@@ -10550,7 +10533,119 @@ declare const chatQueries: {
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
-declare const claudeSettingValue: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
+declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
+    kind: z.ZodLiteral<"read">;
+}, "strict", z.ZodTypeAny, {
+    kind: "read";
+}, {
+    kind: "read";
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"stats">;
+    revision: z.ZodString;
+    action: z.ZodEnum<["Overview", "Models", "cycleDates", "copy"]>;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    kind: "stats";
+    action: "Models" | "Overview" | "copy" | "cycleDates";
+}, {
+    revision: string;
+    kind: "stats";
+    action: "Models" | "Overview" | "copy" | "cycleDates";
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"tab">;
+    revision: z.ZodString;
+    tab: z.ZodEnum<["Status", "Config", "Usage", "Stats"]>;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    kind: "tab";
+    tab: "Config" | "Stats" | "Status" | "Usage";
+}, {
+    revision: string;
+    kind: "tab";
+    tab: "Config" | "Stats" | "Status" | "Usage";
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"write">;
+    revision: z.ZodString;
+    key: z.ZodString;
+    value: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    key: string;
+    value: string | number | boolean | null;
+    kind: "write";
+}, {
+    revision: string;
+    key: string;
+    value: string | number | boolean | null;
+    kind: "write";
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"open">;
+    revision: z.ZodString;
+    key: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    key: string;
+    kind: "open";
+}, {
+    revision: string;
+    key: string;
+    kind: "open";
+}>, z.ZodObject<{
+    kind: z.ZodLiteral<"editor">;
+    revision: z.ZodString;
+    editorRevision: z.ZodString;
+    command: z.ZodDiscriminatedUnion<"action", [z.ZodObject<{
+        action: z.ZodLiteral<"select">;
+        value: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        value: string;
+        action: "select";
+    }, {
+        value: string;
+        action: "select";
+    }>, z.ZodObject<{
+        action: z.ZodLiteral<"save">;
+        values: z.ZodEffects<z.ZodRecord<z.ZodString, z.ZodString>, Record<string, string>, Record<string, string>>;
+    }, "strict", z.ZodTypeAny, {
+        values: Record<string, string>;
+        action: "save";
+    }, {
+        values: Record<string, string>;
+        action: "save";
+    }>, z.ZodObject<{
+        action: z.ZodLiteral<"cancel">;
+    }, "strict", z.ZodTypeAny, {
+        action: "cancel";
+    }, {
+        action: "cancel";
+    }>]>;
+}, "strict", z.ZodTypeAny, {
+    revision: string;
+    command: {
+        value: string;
+        action: "select";
+    } | {
+        values: Record<string, string>;
+        action: "save";
+    } | {
+        action: "cancel";
+    };
+    kind: "editor";
+    editorRevision: string;
+}, {
+    revision: string;
+    command: {
+        value: string;
+        action: "select";
+    } | {
+        values: Record<string, string>;
+        action: "save";
+    } | {
+        action: "cancel";
+    };
+    kind: "editor";
+    editorRevision: string;
+}>]>;
 
 declare const claudeSettingsSnapshot: z.ZodObject<{
     frame: z.ZodOptional<z.ZodObject<{
@@ -10663,13 +10758,13 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                     timestamp: z.ZodString;
                 }, "strict", z.ZodTypeAny, {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 }, {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 }>>>;
                 firstSessionDate: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -10764,8 +10859,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -10809,8 +10904,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -10829,11 +10924,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 }[] | undefined;
             }>>;
         }, "strict", z.ZodTypeAny, {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -10864,8 +10959,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -10884,11 +10979,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 }[] | undefined;
             } | undefined;
         }, {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -10919,8 +11014,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -10958,28 +11053,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
-        usage?: {
-            context: {
-                window: number;
-                tokens?: number | undefined;
-                percent?: number | undefined;
-            };
-            startedAt: number;
-            rateLimits: {
-                kind: string;
-                percentUsed: number;
-                resetsAt?: string | undefined;
-            }[];
-            cost?: {
-                usd: number;
-            } | undefined;
-        } | undefined;
         stats?: {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -11010,8 +11089,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -11028,6 +11107,22 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                     sessionCount: number;
                     toolCallCount: number;
                 }[] | undefined;
+            } | undefined;
+        } | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
             } | undefined;
         } | undefined;
         diagnostics?: string[] | undefined;
@@ -11039,28 +11134,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
-        usage?: {
-            context: {
-                window: number;
-                tokens?: number | undefined;
-                percent?: number | undefined;
-            };
-            startedAt: number;
-            rateLimits: {
-                kind: string;
-                percentUsed: number;
-                resetsAt?: string | undefined;
-            }[];
-            cost?: {
-                usd: number;
-            } | undefined;
-        } | undefined;
         stats?: {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -11091,8 +11170,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -11111,8 +11190,107 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 }[] | undefined;
             } | undefined;
         } | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
         diagnostics?: string[] | undefined;
     }>>;
+    editor: z.ZodOptional<z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
+        kind: z.ZodLiteral<"choice">;
+        revision: z.ZodString;
+        title: z.ZodOptional<z.ZodString>;
+        value: z.ZodOptional<z.ZodString>;
+        disabled: z.ZodBoolean;
+        options: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            disabled: z.ZodBoolean;
+        }, "strict", z.ZodTypeAny, {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }, {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }>, "many">;
+    }, "strict", z.ZodTypeAny, {
+        revision: string;
+        options: {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }[];
+        kind: "choice";
+        disabled: boolean;
+        value?: string | undefined;
+        title?: string | undefined;
+    }, {
+        revision: string;
+        options: {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }[];
+        kind: "choice";
+        disabled: boolean;
+        value?: string | undefined;
+        title?: string | undefined;
+    }>, z.ZodObject<{
+        kind: z.ZodLiteral<"form">;
+        revision: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+        submitLabel: z.ZodString;
+        fields: z.ZodArray<z.ZodObject<{
+            key: z.ZodString;
+            label: z.ZodString;
+            value: z.ZodString;
+        }, "strict", z.ZodTypeAny, {
+            key: string;
+            value: string;
+            label: string;
+        }, {
+            key: string;
+            value: string;
+            label: string;
+        }>, "many">;
+    }, "strict", z.ZodTypeAny, {
+        revision: string;
+        title: string;
+        kind: "form";
+        submitLabel: string;
+        fields: {
+            key: string;
+            value: string;
+            label: string;
+        }[];
+        description?: string | undefined;
+    }, {
+        revision: string;
+        title: string;
+        kind: "form";
+        submitLabel: string;
+        fields: {
+            key: string;
+            value: string;
+            label: string;
+        }[];
+        description?: string | undefined;
+    }>]>>;
     revision: z.ZodString;
     rows: z.ZodArray<z.ZodObject<{
         key: z.ZodString;
@@ -11121,25 +11299,28 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         kind: z.ZodEnum<["boolean", "choice", "text", "number"]>;
         value: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
         options: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        editorAvailable: z.ZodOptional<z.ZodBoolean>;
         isLocked: z.ZodBoolean;
         lockReason: z.ZodOptional<z.ZodString>;
     }, "strict", z.ZodTypeAny, {
         key: string;
         value: string | number | boolean | null;
-        kind: "boolean" | "choice" | "number" | "text";
         label: string;
+        kind: "boolean" | "choice" | "number" | "text";
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
+        editorAvailable?: boolean | undefined;
         lockReason?: string | undefined;
     }, {
         key: string;
         value: string | number | boolean | null;
-        kind: "boolean" | "choice" | "number" | "text";
         label: string;
+        kind: "boolean" | "choice" | "number" | "text";
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
+        editorAvailable?: boolean | undefined;
         lockReason?: string | undefined;
     }>, "many">;
 }, "strict", z.ZodTypeAny, {
@@ -11147,13 +11328,37 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     rows: {
         key: string;
         value: string | number | boolean | null;
-        kind: "boolean" | "choice" | "number" | "text";
         label: string;
+        kind: "boolean" | "choice" | "number" | "text";
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
+        editorAvailable?: boolean | undefined;
         lockReason?: string | undefined;
     }[];
+    editor?: {
+        revision: string;
+        options: {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }[];
+        kind: "choice";
+        disabled: boolean;
+        value?: string | undefined;
+        title?: string | undefined;
+    } | {
+        revision: string;
+        title: string;
+        kind: "form";
+        submitLabel: string;
+        fields: {
+            key: string;
+            value: string;
+            label: string;
+        }[];
+        description?: string | undefined;
+    } | undefined;
     frame?: {
         selectedTab: "Config" | "Stats" | "Status" | "Usage";
         tabs: ("Config" | "Stats" | "Status" | "Usage")[];
@@ -11162,28 +11367,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
-        usage?: {
-            context: {
-                window: number;
-                tokens?: number | undefined;
-                percent?: number | undefined;
-            };
-            startedAt: number;
-            rateLimits: {
-                kind: string;
-                percentUsed: number;
-                resetsAt?: string | undefined;
-            }[];
-            cost?: {
-                usd: number;
-            } | undefined;
-        } | undefined;
         stats?: {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -11214,8 +11403,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -11232,6 +11421,22 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                     sessionCount: number;
                     toolCallCount: number;
                 }[] | undefined;
+            } | undefined;
+        } | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
             } | undefined;
         } | undefined;
         diagnostics?: string[] | undefined;
@@ -11241,13 +11446,37 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     rows: {
         key: string;
         value: string | number | boolean | null;
-        kind: "boolean" | "choice" | "number" | "text";
         label: string;
+        kind: "boolean" | "choice" | "number" | "text";
         isLocked: boolean;
         options?: string[] | undefined;
         description?: string | undefined;
+        editorAvailable?: boolean | undefined;
         lockReason?: string | undefined;
     }[];
+    editor?: {
+        revision: string;
+        options: {
+            value: string;
+            label: string;
+            disabled: boolean;
+        }[];
+        kind: "choice";
+        disabled: boolean;
+        value?: string | undefined;
+        title?: string | undefined;
+    } | {
+        revision: string;
+        title: string;
+        kind: "form";
+        submitLabel: string;
+        fields: {
+            key: string;
+            value: string;
+            label: string;
+        }[];
+        description?: string | undefined;
+    } | undefined;
     frame?: {
         selectedTab: "Config" | "Stats" | "Status" | "Usage";
         tabs: ("Config" | "Stats" | "Status" | "Usage")[];
@@ -11256,28 +11485,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
-        usage?: {
-            context: {
-                window: number;
-                tokens?: number | undefined;
-                percent?: number | undefined;
-            };
-            startedAt: number;
-            rateLimits: {
-                kind: string;
-                percentUsed: number;
-                resetsAt?: string | undefined;
-            }[];
-            cost?: {
-                usd: number;
-            } | undefined;
-        } | undefined;
         stats?: {
-            loading: boolean;
             outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+            loading: boolean;
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
-            copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+            copyState?: "error" | "pending" | "idle" | "saved" | undefined;
             insight?: string | undefined;
             calendar?: string | undefined;
             problem?: string | undefined;
@@ -11308,8 +11521,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 } | undefined;
                 longestSession?: {
                     timestamp: string;
-                    sessionId: string;
                     duration: number;
+                    sessionId: string;
                     messageCount: number;
                 } | null | undefined;
                 firstSessionDate?: string | null | undefined;
@@ -11328,11 +11541,25 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                 }[] | undefined;
             } | undefined;
         } | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
         diagnostics?: string[] | undefined;
     } | undefined;
 }>;
-
-declare const claudeSettingsTab: z.ZodEnum<["Status", "Config", "Usage", "Stats"]>;
 
 /**
  * Stop and remove all cron jobs. Called on brain kill/restart.
@@ -11346,12 +11573,12 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
     columns: z.ZodNumber;
     rows: z.ZodNumber;
 }, "strict", z.ZodTypeAny, {
-    kind: "resize";
     rows: number;
+    kind: "resize";
     columns: number;
 }, {
-    kind: "resize";
     rows: number;
+    kind: "resize";
     columns: number;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"key">;
@@ -11503,17 +11730,17 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
+        title: string;
         id: string;
         kind: "confirmation";
-        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     } | {
         kind: "command_complete";
         commandName: string;
         messageId: string;
-        sessionId?: string | undefined;
         boundaryId?: string | undefined;
+        sessionId?: string | undefined;
         conversationId?: string | undefined;
     }>;
     startParentCommand(options: {
@@ -11553,17 +11780,17 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             message: string;
             kind: "blocked";
         } | {
+            title: string;
             id: string;
             kind: "confirmation";
-            title: string;
             confirmLabel: string;
             commandName?: string | undefined;
         } | {
             kind: "command_complete";
             commandName: string;
             messageId: string;
-            sessionId?: string | undefined;
             boundaryId?: string | undefined;
+            sessionId?: string | undefined;
             conversationId?: string | undefined;
         };
     } | {
@@ -11597,9 +11824,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
+        title: string;
         id: string;
         kind: "confirmation";
-        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     }>;
@@ -11613,13 +11840,37 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             rows: {
                 key: string;
                 value: string | number | boolean | null;
-                kind: "boolean" | "choice" | "number" | "text";
                 label: string;
+                kind: "boolean" | "choice" | "number" | "text";
                 isLocked: boolean;
                 options?: string[] | undefined;
                 description?: string | undefined;
+                editorAvailable?: boolean | undefined;
                 lockReason?: string | undefined;
             }[];
+            editor?: {
+                revision: string;
+                options: {
+                    value: string;
+                    label: string;
+                    disabled: boolean;
+                }[];
+                kind: "choice";
+                disabled: boolean;
+                value?: string | undefined;
+                title?: string | undefined;
+            } | {
+                revision: string;
+                title: string;
+                kind: "form";
+                submitLabel: string;
+                fields: {
+                    key: string;
+                    value: string;
+                    label: string;
+                }[];
+                description?: string | undefined;
+            } | undefined;
             frame?: {
                 selectedTab: "Config" | "Stats" | "Status" | "Usage";
                 tabs: ("Config" | "Stats" | "Status" | "Usage")[];
@@ -11628,28 +11879,12 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     value: string;
                     label: string;
                 }[][] | undefined;
-                usage?: {
-                    context: {
-                        window: number;
-                        tokens?: number | undefined;
-                        percent?: number | undefined;
-                    };
-                    startedAt: number;
-                    rateLimits: {
-                        kind: string;
-                        percentUsed: number;
-                        resetsAt?: string | undefined;
-                    }[];
-                    cost?: {
-                        usd: number;
-                    } | undefined;
-                } | undefined;
                 stats?: {
-                    loading: boolean;
                     outcome: "empty" | "error" | "loading" | "success" | "unavailable";
+                    loading: boolean;
                     view?: "Overview" | "Models" | undefined;
                     range?: "all" | "7d" | "30d" | undefined;
-                    copyState?: "error" | "idle" | "pending" | "saved" | undefined;
+                    copyState?: "error" | "pending" | "idle" | "saved" | undefined;
                     insight?: string | undefined;
                     calendar?: string | undefined;
                     problem?: string | undefined;
@@ -11680,8 +11915,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                         } | undefined;
                         longestSession?: {
                             timestamp: string;
-                            sessionId: string;
                             duration: number;
+                            sessionId: string;
                             messageCount: number;
                         } | null | undefined;
                         firstSessionDate?: string | null | undefined;
@@ -11698,6 +11933,22 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                             sessionCount: number;
                             toolCallCount: number;
                         }[] | undefined;
+                    } | undefined;
+                } | undefined;
+                usage?: {
+                    context: {
+                        window: number;
+                        tokens?: number | undefined;
+                        percent?: number | undefined;
+                    };
+                    startedAt: number;
+                    rateLimits: {
+                        kind: string;
+                        percentUsed: number;
+                        resetsAt?: string | undefined;
+                    }[];
+                    cost?: {
+                        usd: number;
                     } | undefined;
                 } | undefined;
                 diagnostics?: string[] | undefined;
@@ -11777,14 +12028,6 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         handled: boolean;
         action_keys: {
             revision: string;
-            pending: {
-                key: string;
-                ctrl: boolean;
-                alt: boolean;
-                shift: boolean;
-                super: boolean;
-                meta: boolean;
-            }[] | null;
             bindings: {
                 key: string;
                 ctrl: boolean;
@@ -11801,6 +12044,14 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 super: boolean;
                 meta: boolean;
             }[][];
+            pending: {
+                key: string;
+                ctrl: boolean;
+                alt: boolean;
+                shift: boolean;
+                super: boolean;
+                meta: boolean;
+            }[] | null;
         };
     }>;
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
@@ -12600,14 +12851,6 @@ declare const paneRoster: z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12624,16 +12867,16 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12650,6 +12893,14 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
     panes: z.ZodArray<z.ZodObject<{
@@ -12750,14 +13001,6 @@ declare const paneRoster: z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12774,16 +13017,16 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12800,6 +13043,14 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
     panes: z.ZodArray<z.ZodObject<{
@@ -12900,14 +13151,6 @@ declare const paneRoster: z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12924,16 +13167,16 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -12950,6 +13193,14 @@ declare const paneRoster: z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>;
 }, z.ZodTypeAny, "passthrough">>;
 
@@ -13034,15 +13285,15 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
     confirmLabel: z.ZodString;
     commandName: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
+    title: string;
     id: string;
     kind: "confirmation";
-    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }, {
+    title: string;
     id: string;
     kind: "confirmation";
-    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }>, z.ZodObject<{
@@ -13056,15 +13307,15 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
     kind: "command_complete";
     commandName: string;
     messageId: string;
-    sessionId?: string | undefined;
     boundaryId?: string | undefined;
+    sessionId?: string | undefined;
     conversationId?: string | undefined;
 }, {
     kind: "command_complete";
     commandName: string;
     messageId: string;
-    sessionId?: string | undefined;
     boundaryId?: string | undefined;
+    sessionId?: string | undefined;
     conversationId?: string | undefined;
 }>]>;
 
@@ -13582,14 +13833,6 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13606,16 +13849,16 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13632,6 +13875,14 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
@@ -13714,14 +13965,6 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13738,16 +13981,16 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13764,6 +14007,14 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
@@ -13846,14 +14097,6 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13870,16 +14113,16 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -13896,6 +14139,14 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
@@ -13978,14 +14229,6 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -14002,16 +14245,16 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -14028,6 +14271,14 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
@@ -14110,14 +14361,6 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
         }>, "many">>;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -14134,16 +14377,16 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }, {
         revision: string;
-        pending: {
-            key: string;
-            ctrl: boolean;
-            alt: boolean;
-            shift: boolean;
-            super: boolean;
-            meta: boolean;
-        }[] | null;
         bindings: {
             key: string;
             ctrl: boolean;
@@ -14160,6 +14403,14 @@ declare const renderResult: z.ZodEffects<z.ZodObject<{
             super: boolean;
             meta: boolean;
         }[][];
+        pending: {
+            key: string;
+            ctrl: boolean;
+            alt: boolean;
+            shift: boolean;
+            super: boolean;
+            meta: boolean;
+        }[] | null;
     }>>>;
     native_hint: z.ZodOptional<z.ZodBoolean>;
     group_engine: z.ZodOptional<z.ZodBoolean>;
@@ -14446,8 +14697,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        topic: string;
         shortCode: _apackdev_ears.ShortCode<"THR">;
+        topic: string;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

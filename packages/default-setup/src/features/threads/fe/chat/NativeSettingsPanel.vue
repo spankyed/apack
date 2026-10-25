@@ -7,7 +7,8 @@
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
     </nav>
-    <template v-if="activeTab === 'Config'">
+    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="pending" @select="editorCommand({action:'select',value:$event})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
+    <template v-else-if="activeTab === 'Config'">
     <div class="shrink-0 border-b border-white/5 px-4 py-3">
       <input ref="searchInput" v-model="search" aria-label="Search Claude Code settings" placeholder="Search settings…" class="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-400" />
     </div>
@@ -20,7 +21,8 @@
           <span v-if="row.description" class="mt-1 block text-xs leading-relaxed text-neutral-500">{{ row.description }}</span>
           <span v-if="row.isLocked" class="mt-1 block text-xs text-amber-200/80">{{ row.lockReason || 'Managed by Claude Code policy' }}</span>
         </label>
-        <input v-if="row.kind === 'boolean'" :id="controlId(row.key)" type="checkbox" :checked="row.value === true" :disabled="pending || row.isLocked" class="size-4 shrink-0 accent-blue-500 disabled:opacity-40" @change="changeBoolean(row.key, row.value, $event)" />
+        <button v-if="row.editorAvailable" type="button" :disabled="pending || row.isLocked" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @click="openEditor(row.key)">Change…</button>
+        <input v-else-if="row.kind === 'boolean'" :id="controlId(row.key)" type="checkbox" :checked="row.value === true" :disabled="pending || row.isLocked" class="size-4 shrink-0 accent-blue-500 disabled:opacity-40" @change="changeBoolean(row.key, row.value, $event)" />
         <select v-else-if="row.kind === 'choice' && row.options?.length" :id="controlId(row.key)" :value="row.value" :disabled="pending || row.isLocked" class="max-w-full rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @change="changeChoice(row.key, row.value, $event)">
           <option v-if="row.value === null" value="" disabled>Select a value</option>
           <option v-for="option in row.options" :key="option" :value="option">{{ option }}</option>
@@ -68,6 +70,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import NativeSettingsStats from './NativeSettingsStats.vue'
+import NativeSettingsEditor from './NativeSettingsEditor.vue'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
 const props = defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string }>()
 const emit = defineEmits<{ operate: [action: ClaudeSettingsOperation]; close: [] }>()
@@ -81,6 +84,13 @@ function operate(action: {kind:'tab';tab:'Status'|'Config'|'Usage'|'Stats'} | {k
 }
 const pending = computed(() => props.state?.status === 'pending')
 const rows = computed(() => (props.state?.snapshot?.rows ?? []).filter(row => `${row.label} ${row.description ?? ''} ${row.key}`.toLowerCase().includes(search.value.toLowerCase())))
+function openEditor(key: string) {
+  if (!pending.value && props.state?.snapshot) emit('operate',{kind:'open',revision:props.state.snapshot.revision,key})
+}
+function editorCommand(command: Extract<ClaudeSettingsOperation,{kind:'editor'}>['command']) {
+  const snapshot=props.state?.snapshot
+  if (snapshot?.editor && (!pending.value || command.action === 'cancel')) emit('operate',{kind:'editor',revision:snapshot.revision,editorRevision:snapshot.editor.revision,command})
+}
 function controlId(key: string) { return 'claude-setting-' + encodeURIComponent(key) }
 function changeBoolean(key: string, previous: ClaudeSettingValue, event: Event) {
   const control = event.target as HTMLInputElement, value = control.checked

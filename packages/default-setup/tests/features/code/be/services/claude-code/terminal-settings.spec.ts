@@ -11,8 +11,8 @@ function fixture() {
   const api = { configRowHandles: vi.fn(handles) }
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
-  const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()')
-  const run = vm.runInNewContext(source + ';nativeSettings', { settingsFrame: () => frame, nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
+  const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()').replaceAll('await nativeSettingsEditorOpeners(n,entry)','settingsEditors()')
+  const run = vm.runInNewContext(source + ';nativeSettings', { settingsFrame: () => frame, settingsEditors:()=>({openers:new Map()}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
   return { setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }

@@ -36,16 +36,32 @@ export const claudeSettingsEditor = z.discriminatedUnion('kind', [
 export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
 export const claudeSettingsSnapshot = z.object({
   frame: claudeSettingsFrame.optional(),
+  editor: claudeSettingsEditor.optional(),
   revision: z.string().regex(/^[a-f0-9]{64}$/),
   rows: z.array(z.object({
     key: z.string().min(1).max(4096), label: z.string().max(16384), description: z.string().max(16384).optional(),
     kind: z.enum(['boolean', 'choice', 'text', 'number']), value: claudeSettingValue,
     options: z.array(z.string().max(16384)).max(256).optional(),
+    editorAvailable: z.boolean().optional(),
     isLocked: z.boolean(), lockReason: z.string().max(16384).optional(),
   }).strict()).max(256),
 }).strict()
 export type ClaudeSettingsStats = z.infer<typeof claudeSettingsStats>
 export type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>
 export type ClaudeSettingValue = z.infer<typeof claudeSettingValue>
-export type ClaudeSettingsOperation = { kind: 'read' } | { kind: 'stats'; revision: string; action: 'Overview' | 'Models' | 'cycleDates' | 'copy' } | { kind: 'tab'; revision: string; tab: z.infer<typeof claudeSettingsTab> } | { kind: 'write'; revision: string; key: string; value: ClaudeSettingValue }
+export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
+  z.object({action:z.literal('select'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('save'),values:z.record(z.string().max(4096),z.string().max(16384)).refine(values=>Object.keys(values).length<=64)}).strict(),
+  z.object({action:z.literal('cancel')}).strict(),
+])
+export const claudeSettingsOperation = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('read')}).strict(),
+  z.object({kind:z.literal('stats'),revision:z.string().regex(/^[a-f0-9]{64}$/),action:z.enum(['Overview','Models','cycleDates','copy'])}).strict(),
+  z.object({kind:z.literal('tab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeSettingsTab}).strict(),
+  z.object({kind:z.literal('write'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096),value:claudeSettingValue}).strict(),
+  z.object({kind:z.literal('open'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096)}).strict(),
+  z.object({kind:z.literal('editor'),revision:z.string().regex(/^[a-f0-9]{64}$/),editorRevision:z.string().regex(/^[a-f0-9]{64}$/),command:claudeSettingsEditorCommand}).strict(),
+])
+export type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>
+
 export type ClaudeSettingsView = { requestId: string; status: 'pending' | 'ready' | 'error'; snapshot?: ClaudeSettingsSnapshot; problem?: string; savedKey?: string }

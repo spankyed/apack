@@ -1,8 +1,10 @@
+import { claudeTerminalSettingsEditorRuntime } from './terminal-settings-editor-runtime.ts'
 import { claudeTerminalSettingsFrameRuntime } from './terminal-settings-frame-runtime.ts'
 
 /** Desktop settings retain original describe hooks, config.set validation and dialog ownership. */
 export const claudeTerminalSettingsRuntime = String.raw`
 ${claudeTerminalSettingsFrameRuntime}
+${claudeTerminalSettingsEditorRuntime}
 function nativeSettingsPanel(request){
  const entry=agentCommandDialogs.get(request.panel_id);
  if(!entry||entry.kind!=='panel'||entry.commandName!=='config'||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
@@ -23,15 +25,36 @@ async function readNativeSettings(n,entry,signal){
   rows.push(row);
  }
  const frame=await readNativeSettingsFrame(n,entry,signal);
+ let editor;
+ if(frame.selectedTab==='Config'){
+  if(frame.hidden){const native=await readNativeSettingsEditor(n,entry,signal);if(native)editor={...native.snapshot,revision:native.revision};}
+  else {const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows)if(controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}
+ }
+
  // Timed copy feedback is presentation state, not authority to change settings or Stats controls.
  const revisionFrame=frame.stats?{...frame,stats:{...frame.stats,copyState:undefined}}:frame;
- const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame})).digest('hex');
- return {snapshot:{revision,rows,frame},handles,api};
+ const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame,editor})).digest('hex');
+ return {snapshot:{revision,rows,frame,...editor?{editor}:{}},handles,api};
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
  const entry=nativeSettingsPanel(request),read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
  if(request.operation==='read')return {snapshot:read.snapshot};
+ if(request.operation==='open'||request.operation==='editor'){
+  if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before editing');
+  if(request.operation==='open'){
+   const visible=new Set(read.snapshot.rows.filter(row=>row.editorAvailable&&!row.isLocked).map(row=>row.key));
+   await activateNativeSettingsEditor(n,entry,request.key,visible,abort.signal);
+  }else{
+   const command=request.command;
+   if(!command||!['select','save','cancel'].includes(command.action))throw Error('Native Settings editor command changed');
+   const result=command.action==='save'?await saveNativeSettingsEditor(n,entry,request.editor_revision,command.values,abort.signal):await actNativeSettingsEditor(n,entry,{...command,revision:request.editor_revision},abort.signal);
+   nativeSettingsPanel(request);
+   if(result?.problem)return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot,problem:result.problem};
+  }
+  await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
+  return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
+ }
  if(request.operation==='stats'){
   if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before changing Stats');
   await actNativeSettingsStats(n,entry,request.action,abort.signal);nativeSettingsPanel(request);

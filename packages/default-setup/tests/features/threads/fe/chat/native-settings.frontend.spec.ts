@@ -1,4 +1,4 @@
-import { createApp, nextTick, reactive } from 'vue'
+import { createApp, h, nextTick, reactive } from 'vue'
 import NativeSettingsPanel from '#features/threads/fe/chat/NativeSettingsPanel.vue'
 import type { ClaudeSettingsView, ClaudeSettingsOperation } from '#features/code/common/native-settings.ts'
 
@@ -70,4 +70,19 @@ it('refreshes admitted Stats loading and stops on native refusal, another tab or
     await vi.advanceTimersByTimeAsync(500);expect(operations).toHaveLength(settled)
     frame.selectedTab='Stats';await nextTick();app.unmount();await vi.advanceTimersByTimeAsync(500);expect(operations).toHaveLength(settled)
   } finally {app.unmount();root.remove();vi.useRealTimers()}
+})
+
+it('routes original editor opening, form Save and pending Cancel through the current native revisions',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'editor',status:'ready',snapshot:{revision:'d'.repeat(64),rows:[{key:'advanced',label:'Advanced value',kind:'text',value:'original',isLocked:false,editorAvailable:true}],frame:{selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();[...root.querySelectorAll('button')].find(button=>button.textContent==='Change…')!.click()
+  expect(operations.at(-1)).toEqual({kind:'open',revision:'d'.repeat(64),key:'advanced'})
+  state.state.snapshot!.editor={kind:'form',revision:'e'.repeat(64),title:'Original advanced editor',submitLabel:'Save native',fields:[{key:'value',label:'Original field',value:'original'}]};state.state.snapshot!.frame!.hidden=true;await nextTick()
+  const input=root.querySelector<HTMLInputElement>('[aria-label="Claude Code setting editor"] input')!;input.value='edited';input.dispatchEvent(new Event('input'));await nextTick()
+  root.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'save',values:{value:'edited'}}})
+  state.state.status='pending';await nextTick();[...root.querySelectorAll('button')].find(button=>button.textContent==='Cancel')!.click()
+  expect(operations.at(-1)).toEqual({kind:'editor',revision:'d'.repeat(64),editorRevision:'e'.repeat(64),command:{action:'cancel'}})
+ }finally{app.unmount();root.remove()}
 })
