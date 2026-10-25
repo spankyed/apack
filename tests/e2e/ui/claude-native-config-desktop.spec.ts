@@ -191,6 +191,7 @@ test('edits original Settings through desktop controls and retains composing', a
       await search.fill('');const row=panel.locator(`[data-native-setting="${key}"]`)
       if(!await row.count()){groupEditors.push({key,admitted:false,reason:'Original Config did not advertise this row'});continue}
       const change=row.getByRole('button',{name:'Change…',exact:true})
+      if(!await change.count()){groupEditors.push({key,admitted:false,reason:'Original Config advertises the scalar row without a group opener'});continue}
       await expect(change).toBeEnabled()
       await change.click();await expect(editor).toBeVisible()
       const labels=await editor.locator('[data-native-settings-group-row]').allTextContents(),samples:any[]=[],changes:any[]=[]
@@ -225,7 +226,8 @@ test('edits original Settings through desktop controls and retains composing', a
       await editor.getByRole('button',{name:'Close',exact:true}).click();await expect(editor).toHaveCount(0)
       groupEditors.push({key,admitted:true,labels,samples,changes,reopened:true})
     }
-    expect(groupEditors.some((group:any)=>group.admitted&&group.changes.length>0)).toBe(true)
+    await writeFile(join(workspace!,'native-settings-group-admission.json'),JSON.stringify(groupEditors))
+    expect(groupEditors.some((group:any)=>group.admitted&&group.changes.length>0),'No original grouped Settings admitted; preserve native eligibility instead of forcing a feature flag').toBe(true)
     expect((await context()).turns).toBe(initialTurns)
     await search.fill('');await appPage.setViewportSize({width:1100,height:900})
   }
