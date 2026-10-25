@@ -189,7 +189,7 @@ test('edits original Settings through desktop controls and retains composing', a
     const choice=editor.locator('button[aria-pressed="false"]:not([disabled])').last(),chosenLabel=await choice.innerText();await choice.click();await expect(editor).toHaveCount(0)
     await expect.poll(async()=>(await local()).outputStyle).not.toBe(beforeStyle.outputStyle)
     const afterStyle=await local(),unchanged={...afterStyle};if(Object.hasOwn(beforeStyle,'outputStyle'))unchanged.outputStyle=beforeStyle.outputStyle;else delete unchanged.outputStyle;expect(unchanged).toEqual(beforeStyle)
-    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.locator('button[aria-pressed="true"]')).toHaveText(chosenLabel)
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.locator('button[aria-pressed="true"]')).toHaveText(chosenLabel,{useInnerText:true})
     await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
     const formSamples:any[]=[],noteDraft='日本語 – release review note'
     await search.fill('Review note')
