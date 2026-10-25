@@ -1,15 +1,16 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
+import { sendToSystem } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
 import { setup } from 'xstate';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
-import { write, EARS } from '#generated/ears.ts';
+import { write, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import type { MessageEntity, ThreadLinkItem } from './types.ts';
+import type { OutgoingThreadsEvents, ThreadLinkItem } from './types.ts';
+import type { Reply } from '@apackdev/sdk/events';
 import { type ChangeBlock, toMap, toIdentifierSet, mapScalar, mapArray } from '@apackdev/sdk/utils';
 import { exportThreads } from './export-threads.ts';
 import { importThreads } from './import-threads.ts';
@@ -21,6 +22,27 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
+
+/**
+ * One of a window's writes to its threads, answered to whoever asked: with the thread it made, or that it landed, or
+ * why it was refused, since the surface holds its views behind its own unanswered writes. The write runs whether or
+ * not anybody asked. A refusal is also reported, as every thread operation's failure is.
+ */
+function answerWrite(
+  reply: Reply<OutgoingThreadsEvents> | undefined,
+  refused: (error: unknown) => void,
+  write: () => OutgoingThreadsEvents | void,
+): void {
+  let outcome: OutgoingThreadsEvents;
+  try {
+    outcome = write() ?? { type: 'THREAD_WRITTEN' };
+  } catch (error) {
+    refused(error);
+    reply?.({ type: 'THREAD_WRITE_FAILED', error: errorMessage(error) });
+    return;
+  }
+  reply?.(outcome);
+}
 
 function reportThreadOperationError(
   operation: 'create' | 'update' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'status' | 'parent',
@@ -54,133 +76,55 @@ export const threadsSystem = setup({
   },
   actions: threadsSpec.actions({
     // ---- Thread management actions ----
-    sendThreadsConnectedData: () => {
-      const connectedData = repository.threadQueries.connectedData();
-      const threadsSettings = featureSettings.forFeature('threads').get();
-
-      broadcastToSurface('threads', {
-        type: 'THREAD_CONNECTED',
-        data: {
-          ...connectedData,
-          settings: threadsSettings || null
-        }
-      });
-    },
-    sendArchivedThreads: () => {
-      broadcastToSurface('threads', {
-        type: 'ARCHIVED_THREADS_DATA',
-        threads: repository.threadQueries.archivedThreads(),
-      });
-    },
-    createThread: ({ event }) => {
+    createThread: ({ event, reply }) => {
       const thread = threadsSpec.typeOf('CREATE_THREAD', event);
+      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => {
+        const { id: newThreadId } = repository.threadCommands.create({
+          topic: thread.topic,
+          instructions: thread.instructions,
+          tags: thread.tags as string[],
+          linkedThreads: thread.linkedThreads as ThreadLinkItem[],
+        });
 
-      const { id: newThreadId, ...rest } = repository.threadCommands.create({
-        topic: thread.topic,
-        instructions: thread.instructions,
-        tags: thread.tags as string[],
-        linkedThreads: thread.linkedThreads as ThreadLinkItem[],
-      });
-
-      if (thread.parentThreadId) {
-        repository.threadCommands.update(
-          thread.parentThreadId as EARS.EntityId,
-          {
-            linkedThreads: [{
-              id: newThreadId,
-              relation: 'parent_of' as const
-            }]
-          }
-        );
-      }
-
-      broadcastToSurface('threads', {
-        type: 'THREAD_CREATED',
-        id: newThreadId,
-        entityType: EARS.Entity.Thread,
-        ...rest
+        if (thread.parentThreadId) {
+          repository.threadCommands.update(
+            thread.parentThreadId as EARS.EntityId,
+            {
+              linkedThreads: [{
+                id: newThreadId,
+                relation: 'parent_of' as const
+              }]
+            }
+          );
+        }
+        return { type: 'THREAD_CREATED' as const, id: newThreadId };
       });
     },
-    sendViewData: ({ event }) => {
-      const threadId = threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId;
-
-      repository.threadCommands.markAsVisited(threadId);
-
-      broadcastToSurface('threads', {
-        type: 'SET_VIEW_DATA',
-        id: threadId,
-        data: repository.threadQueries.extendedData(threadId),
-      });
+    visitThread: ({ event }) => {
+      repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);
     },
-    updateThreadField: ({ event }) => {
+    updateThreadField: ({ event, reply }) => {
       const { key, value, threadId } = threadsSpec.typeOf('UPDATE_THREAD_FIELD', event);
-      const updates = { [key]: value };
-      try {
-        repository.threadCommands.update(threadId as EARS.EntityId, updates);
-      } catch (error) {
-        const operation =
-          key === 'archived' ? (value ? 'archive' : 'unarchive') :
-          key === 'pinned' ? (value ? 'pin' : 'unpin') :
-          'update';
+      const operation =
+        key === 'archived' ? (value ? 'archive' : 'unarchive') :
+        key === 'pinned' ? (value ? 'pin' : 'unpin') :
+        'update';
+      answerWrite(reply, (error) => {
         logger.warn('Failed to update thread field', { threadId, key, error });
         reportThreadOperationError(operation, error, threadId);
-        return;
-      }
-
-      if (key === 'status') {
-        broadcastToSurface('threads', {
-          type: 'THREAD_UPDATED',
-          threadId,
-          updates: { status: value as string },
-        });
-      }
-
-      if (key === 'archived') {
-        // Refresh thread list and recent threads since thread visibility changed
-        broadcastToSurface('threads', {
-          type: 'THREAD_CONNECTED',
-          data: {
-            ...repository.threadQueries.connectedData(),
-            settings: featureSettings.forFeature('threads').get() ?? null,
-          },
-        });
-        // Also refresh archived threads list so the change is visible immediately
-        broadcastToSurface('threads', {
-          type: 'ARCHIVED_THREADS_DATA',
-          threads: repository.threadQueries.archivedThreads(),
-        });
-        services.chat.sendRecentThreadsRefresh();
-      }
-
-      if (key === 'pinned') {
-        broadcastToSurface('threads', {
-          type: 'THREAD_UPDATED',
-          threadId,
-          updates: { pinned: value as boolean },
-        });
-        services.chat.sendRecentThreadsRefresh();
-      }
-
-      if (key === 'topic') {
-        services.chat.sendRecentThreadsRefresh();
-      }
+      }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
     },
-    updateThreadStatus: ({ event }) => {
+    updateThreadStatus: ({ event, reply }) => {
       const { threadId, status } = threadsSpec.typeOf('UPDATE_THREAD_STATUS', event);
-      const updates = { status };
-      try {
-        repository.threadCommands.update(threadId as EARS.EntityId, updates);
-      } catch (error) {
+      let written = false;
+      answerWrite(reply, (error) => {
         logger.warn('Failed to update thread status', { threadId, status, error });
         reportThreadOperationError('status', error, threadId);
-        return;
-      }
-
-      broadcastToSurface('threads', {
-        type: 'THREAD_UPDATED',
-        threadId,
-        updates: { status },
+      }, () => {
+        repository.threadCommands.update(threadId as EARS.EntityId, { status });
+        written = true;
       });
+      if (!written) return;
 
       // Notify flows — all logic lives in the flow layer
       sendToSystem('brain', {
@@ -209,8 +153,6 @@ export const threadsSystem = setup({
         const tagNeedsWork = tRenames.size || tRemoved.size;
 
         if (statusNeedsWork || tagNeedsWork) {
-          let touched = false;
-
           for (const th of repository.threadQueries.all()) {
             const patch: { status?: string; tags?: string[] } = {};
 
@@ -230,70 +172,30 @@ export const threadsSystem = setup({
 
             if (Object.keys(patch).length) {
               repository.threadCommands.update(th.id, patch);
-              broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId: th.id, updates: patch });
-              touched = true;
             }
-          }
-
-          if (touched) {
-            broadcastToSurface('threads', {
-                type: 'THREAD_CONNECTED',
-                data: {
-                  ...repository.threadQueries.connectedData(),
-                  settings: featureSettings.forFeature('threads').get() ?? null,
-                },
-              });
           }
         }
       }
-
-      // Always refresh recent threads — sort order or limit may have changed
-      services.chat.sendRecentThreadsRefresh();
     },
-    setThreadParent: ({ event }) => {
+    setThreadParent: ({ event, reply }) => {
       const { childIds, parentId } = threadsSpec.typeOf('SET_THREAD_PARENT', event);
-
-      try {
-        repository.threadCommands.setParent(
-          parentId as EARS.EntityId,
-          childIds.map(id => id as EARS.EntityId),
-        );
-      } catch (error) {
+      answerWrite(reply, (error) => {
         logger.warn('Failed to set thread parent', { childIds, parentId, error });
         reportThreadOperationError('parent', error, parentId);
-        return;
-      }
-
-      // Refresh all thread data on the frontend
-      broadcastToSurface('threads', {
-        type: 'THREAD_CONNECTED',
-        data: {
-          ...repository.threadQueries.connectedData(),
-          settings: featureSettings.forFeature('threads').get() ?? null,
-        },
+      }, () => {
+        repository.threadCommands.setParent(parentId as EARS.EntityId, childIds.map(id => id as EARS.EntityId));
       });
     },
-    deleteThread: ({ event }) => {
+    deleteThread: ({ event, reply }) => {
       const { threadId } = threadsSpec.typeOf('DELETE_THREAD', event);
 
       // Stop active processes before hard-deleting the thread.
       runThreadTeardown(threadId);
 
-      try {
-        repository.threadCommands.delete(threadId as EARS.EntityId);
-      } catch (error) {
+      answerWrite(reply, (error) => {
         logger.warn('Failed to delete thread (may already be deleted)', { threadId, error });
         reportThreadOperationError('delete', error, threadId);
-        return;
-      }
-
-      broadcastToSurface('threads', {
-        type: 'THREAD_DELETED',
-        threadId,
-      });
-
-      // Refresh recent threads since active thread may have been deleted
-      services.chat.sendRecentThreadsRefresh();
+      }, () => { repository.threadCommands.delete(threadId as EARS.EntityId); });
     },
     exportThreadsToFile: ({ event, reply }) => {
       const ev = event as { type: 'EXPORT_THREADS'; directory: string };
@@ -333,17 +235,6 @@ export const threadsSystem = setup({
           count: result.created,
           ...(result.errors.length > 0 ? { errors: result.errors } : {}),
         });
-
-        const connectedData = repository.threadQueries.connectedData();
-        const threadsSettings = featureSettings.forFeature('threads').get();
-
-        broadcastToSurface('threads', {
-          type: 'THREAD_CONNECTED',
-          data: {
-            ...connectedData,
-            settings: threadsSettings || null,
-          },
-        });
       } catch (err) {
         const message = errorMessage(err);
         answer(reply, {
@@ -353,49 +244,19 @@ export const threadsSystem = setup({
       }
     },
 
-    sendChatConnectedData: () => {
-      const data = repository.chatQueries.connectedData();
-      broadcastToSurface('threads', {
-        type: 'AGENT_CONNECTED',
-        data,
-      });
+    getChatStart: ({ reply }) => {
+      reply?.({ type: 'CHAT_STARTED', data: repository.chatQueries.chatStart() });
     },
-    sendThreadChatData: ({ event, reply }) => {
+    openThreadChat: ({ event, reply }) => {
       const { threadId, restore } = threadsSpec.typeOf('OPEN_THREAD_CHAT', event);
       try {
-        services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { restore, reply });
+        services.chat.visitThread(threadId as EARS.EntityId, { restore });
       } catch (err) {
         logger.warn('Thread not found for chat open, skipping', { threadId });
-        broadcastToSurface('threads', {
-          type: 'THREAD_CHAT_ERROR',
-          threadId: threadId as string,
-          error: errorMessage(err),
-        });
+        answer(reply, { type: 'THREAD_CHAT_ERROR', threadId: threadId as string, error: errorMessage(err) });
       }
     },
-    loadMoreMessages: ({ event }) => {
-      const { threadId, cursor } = threadsSpec.typeOf('LOAD_MORE_MESSAGES', event);
-      const result = repository.chatQueries.paginatedMessages(threadId as EARS.EntityId, cursor);
-      broadcastToSurface('threads', {
-        type: 'OLDER_MESSAGES_LOADED',
-        threadId,
-        ...result,
-      });
-    },
-    sendThreadTabData: ({ event, reply }) => {
-      const { threadId } = threadsSpec.typeOf('OPEN_THREAD_TAB', event);
-      try {
-        services.chat.openThreadTabAndRefresh(threadId as EARS.EntityId, { reply });
-      } catch (err) {
-        logger.warn('Thread not found for tab open, skipping', { threadId });
-        broadcastToSurface('threads', {
-          type: 'THREAD_CHAT_ERROR',
-          threadId: threadId as string,
-          error: errorMessage(err),
-        });
-      }
-    },
-    forwardUserMessage: ({ event }) => {
+    forwardUserMessage: ({ event, reply }) => {
       try {
         const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = threadsSpec.typeOf('USER_MSG', event);
 
@@ -407,12 +268,12 @@ export const threadsSystem = setup({
         } : undefined;
 
         let threadId: EARS.EntityId;
-        let threadData: any = null;
+        let started = false;
 
         if (!providedThreadId) {
           const result = repository.chatCommands.createThreadFromMessage(text);
           threadId = result.threadId;
-          threadData = result.threadData;
+          started = true;
 
           logger.info('Created new thread for user message', {
             threadId,
@@ -432,44 +293,8 @@ export const threadsSystem = setup({
           ...(mode ? { context: { agent: mode } } : {}),
         });
 
-        if (threadData) {
-          const fullThreadData = repository.threadQueries.byId(threadData.id);
-
-          broadcastToSurface('threads', {
-            type: 'THREAD_CREATED',
-            id: threadData.id,
-            shortCode: threadData.shortCode,
-            entityType: EARS.Entity.Thread,
-            timestamp: threadData.timestamp,
-            topic: fullThreadData?.topic,
-            instructions: fullThreadData?.instructions,
-            status: fullThreadData?.status
-          });
-
-          broadcastToSurface('threads', {
-            type: 'LOAD_CHAT_THREAD',
-            data: repository.chatQueries.threadData(threadId)!
-          });
-        } else {
-          const userMessage: MessageEntity = {
-            id: messageResult.id,
-            entityType: EARS.Entity.Message,
-            text: messageResult.text,
-            sender: messageResult.sender as 'user' | 'assistant' | 'system',
-            timestamp: messageResult.timestamp,
-            createdAt: messageResult.timestamp,
-            updatedAt: messageResult.timestamp,
-            ...(sanitizedRefs && { references: sanitizedRefs }),
-          };
-
-          broadcastToSurface('threads', {
-            type: 'MESSAGE_ADDED',
-            threadId: threadId as string,
-            message: userMessage
-          });
-        }
-
-        services.chat.sendRecentThreadsRefresh();
+        // The window that sent the first message of a thread shows the thread it started
+        if (started) answer(reply, { type: 'SHOW_THREAD', threadId });
 
         sendToSystem('brain', {
           type: 'TRIGGER_BRAIN_EVENT',
@@ -487,14 +312,14 @@ export const threadsSystem = setup({
         });
       } catch (err) {
         logger.error('forwardUserMessage failed', { error: err });
-        broadcastToSurface('threads', {
+        answer(reply, {
           type: 'THREAD_CHAT_ERROR',
           threadId: 'threadId' in event && typeof event.threadId === 'string' ? event.threadId : '',
           error: errorMessage(err),
         });
       }
     },
-    forwardUserCommand: ({ event }) => {
+    forwardUserCommand: ({ event, reply }) => {
       try {
       const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = threadsSpec.typeOf('USER_COMMAND', event);
 
@@ -506,13 +331,13 @@ export const threadsSystem = setup({
       } : undefined;
 
       let threadId: EARS.EntityId;
-      let threadData: any = null;
+      let started = false;
 
       if (!providedThreadId) {
         const topicText = text ? `/${command} ${text}` : `/${command}`;
         const result = repository.chatCommands.createThreadFromMessage(topicText);
         threadId = result.threadId;
-        threadData = result.threadData;
+        started = true;
 
         logger.info('Created new thread for user command', {
           threadId,
@@ -535,46 +360,7 @@ export const threadsSystem = setup({
         ...(mode ? { context: { agent: mode } } : {}),
       });
 
-      if (threadData) {
-        const fullThreadData = repository.threadQueries.byId(threadData.id);
-
-        broadcastToSurface('threads', {
-          type: 'THREAD_CREATED',
-          id: threadData.id,
-          shortCode: threadData.shortCode,
-          entityType: EARS.Entity.Thread,
-          timestamp: threadData.timestamp,
-          topic: fullThreadData?.topic,
-          instructions: fullThreadData?.instructions,
-          status: fullThreadData?.status
-        });
-
-        broadcastToSurface('threads', {
-          type: 'LOAD_CHAT_THREAD',
-          data: repository.chatQueries.threadData(threadId)!
-        });
-      } else {
-        const userMessage: MessageEntity = {
-          id: messageResult.id,
-          entityType: EARS.Entity.Message,
-          text: messageResult.text,
-          sender: messageResult.sender as 'user' | 'assistant' | 'system',
-          timestamp: messageResult.timestamp,
-          createdAt: messageResult.timestamp,
-          updatedAt: messageResult.timestamp,
-          ...(sanitizedRefs && { references: sanitizedRefs }),
-          isCommand: true,
-          command,
-        };
-
-        broadcastToSurface('threads', {
-          type: 'MESSAGE_ADDED',
-          threadId: threadId as string,
-          message: userMessage
-        });
-      }
-
-      services.chat.sendRecentThreadsRefresh();
+      if (started) answer(reply, { type: 'SHOW_THREAD', threadId });
 
       sendToSystem('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
@@ -612,7 +398,7 @@ export const threadsSystem = setup({
         const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
         const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
 
-        result = services.chat.createThreadAndNotify({ topic: forkTopic, instructions: '' });
+        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
         if (!result) throw new Error('Failed to create thread');
 
         repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
@@ -636,7 +422,7 @@ export const threadsSystem = setup({
           repository.threadCommands.update(result.id, { context: forkContext });
         }
 
-        services.chat.openThreadChatAndRefreshRecent(result.id, { reply });
+        services.chat.showThread(result.id, { reply });
 
         sendToSystem('brain', {
           type: 'TRIGGER_BRAIN_EVENT',
@@ -659,7 +445,7 @@ export const threadsSystem = setup({
         }
       }
     },
-    revertThread: ({ event, reply }) => {
+    revertThread: ({ event }) => {
       try {
       const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
       const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
@@ -690,8 +476,6 @@ export const threadsSystem = setup({
         ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
         : 0;
 
-      services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
-
       // Unified `thread.revert` brain event — the `kind` discriminator
       // tells the claude-code flow which variant to run.
       sendToSystem('brain', {
@@ -712,7 +496,7 @@ export const threadsSystem = setup({
         logger.error('revertThread failed', { error: err });
       }
     },
-    summarizeThread: ({ event, reply }) => {
+    summarizeThread: ({ event }) => {
       try {
       const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
       const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
@@ -743,8 +527,6 @@ export const threadsSystem = setup({
         ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
         : 0;
 
-      services.chat.openThreadChatAndRefreshRecent(threadId as EARS.EntityId, { reply });
-
       sendToSystem('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'thread.revert',
@@ -772,7 +554,7 @@ export const threadsSystem = setup({
 
       if (!repository.chatQueries.messageById(messageId as EARS.EntityId)) return;
 
-      const result = repository.chatCommands.updateMessageBlockResponse({
+      repository.chatCommands.updateMessageBlockResponse({
         messageId: messageId as EARS.EntityId,
         response
       });
@@ -790,15 +572,6 @@ export const threadsSystem = setup({
         eventType: 'interactive.message.response',
         payload: { messageId, threadId, response }
       });
-
-      broadcastToSurface('threads', {
-        type: 'UPDATE_MESSAGE_STATE',
-        messageId,
-        responseTimestamp: result.responseTimestamp,
-        blockResponse: response,
-        ...(result.blocks && { blocks: result.blocks }),
-        ...(asideText && { asideText })
-      });
       } catch (err) {
         logger.error('forwardInteractiveMessageResponse failed', { error: err });
       }
@@ -810,17 +583,7 @@ export const threadsSystem = setup({
     },
     toggleCompacted: ({ event }) => {
       const { markerId, compacted } = threadsSpec.typeOf('TOGGLE_COMPACTED', event);
-      const messageIds = repository.chatCommands.toggleMarkerCompacted(
-        markerId as EARS.EntityId,
-        compacted,
-      );
-      for (const msgId of messageIds) {
-        broadcastToSurface('threads', {
-          type: 'UPDATE_MESSAGE_STATE',
-          messageId: msgId as string,
-          compacted,
-        });
-      }
+      repository.chatCommands.toggleMarkerCompacted(markerId as EARS.EntityId, compacted);
     },
   }),
 }).createMachine(
@@ -829,21 +592,15 @@ export const threadsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
-      SEND_STATE: {
-        actions: ['sendThreadsConnectedData', 'sendChatConnectedData'],
-      },
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
       },
       // Chat/agent global events
       OPEN_THREAD_CHAT: {
-        actions: 'sendThreadChatData',
+        actions: 'openThreadChat',
       },
-      LOAD_MORE_MESSAGES: {
-        actions: 'loadMoreMessages',
-      },
-      OPEN_THREAD_TAB: {
-        actions: 'sendThreadTabData',
+      GET_CHAT_START: {
+        actions: 'getChatStart',
       },
       THREAD_DELETED: {
         // Internal notification (e.g., refresh chat if active thread deleted)
@@ -857,7 +614,7 @@ export const threadsSystem = setup({
             actions: 'createThread',
           },
           VIEW_THREAD: {
-            actions: 'sendViewData',
+            actions: 'visitThread',
           },
           UPDATE_THREAD_FIELD: {
             actions: 'updateThreadField',
@@ -907,12 +664,6 @@ export const threadsSystem = setup({
           },
           FORWARD_BRAIN_EVENT: {
             actions: 'forwardBrainEvent',
-          },
-          GET_ARCHIVED_THREADS: {
-            actions: 'sendArchivedThreads',
-          },
-          REFRESH_THREADS: {
-            actions: 'sendThreadsConnectedData',
           },
         },
       },

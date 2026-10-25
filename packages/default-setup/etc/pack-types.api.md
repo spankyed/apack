@@ -117,14 +117,6 @@ interface ActiveTokenInfo {
     prefix: string;
 }
 
-type AgentConnectedData = {
-    currentThread: AgentThreadData | null;
-    threads: Partial<ThreadEntity>[];
-    recentThreads: Partial<ThreadEntity>[];
-    tabs: Tab[];
-    settings?: AgentSettings;
-};
-
 interface AgentMode {
     id: string;
     name: string;
@@ -156,8 +148,6 @@ type AgentThreadData = {
     pinned?: boolean;
     chatState?: string;
     context?: ThreadContext;
-    hasMore?: boolean;
-    nextCursor?: string | null;
 };
 
 type ApprovalDecision = 'accept' | 'acceptForSession' | 'cancel' | 'decline';
@@ -308,7 +298,8 @@ interface BlockConfig {
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
- * mixed and matched to create complex interactions.
+ * mixed and matched to create complex interactions. Every write here reaches a window through the threads views
+ * (`be/views.ts`): the chat page lists the message, and its own view carries what it says.
  */
 interface BlockMessageBase {
     threadId: EARS.EntityId;
@@ -523,6 +514,30 @@ interface CanUseToolRequest {
     title?: string;
     description?: string;
 }
+
+/**
+ * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
+ * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
+ * that view alone and leaves the page, which reads no message's content, where it is.
+ */
+type ChatPage = Omit<AgentThreadData, 'artifacts' | 'id' | 'messages'> & {
+    id: ThreadEntity['id'];
+    messageIds: EARS.EntityId[];
+    /** Whether messages older than the page's first exist */
+    hasMore: boolean;
+};
+
+/** What a window's chat starts from: the thread to open, the tabs every window opens, and the settings */
+type ChatStart = {
+    currentThreadId: ThreadEntity['id'] | null;
+    tabs: Array<{
+        id: ThreadEntity['id'];
+        label: string;
+        pinned?: boolean;
+    }>;
+    /** The threads feature's settings now; each change after reaches the surface as \`FEATURE_SETTINGS_UPDATED\` */
+    settings: ThreadsSettings;
+};
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
@@ -1076,8 +1091,8 @@ declare const ControlResponseLineSchema: z.ZodObject<{
 /**
  * Artifact Service
  *
- * Provides primitives for creating and managing artifacts across the application.
- * Follows a pure vs side-effect pattern similar to chat service.
+ * Creates and updates the artifacts a thread holds. A window sees them through the thread's `tab` view, which runs
+ * again after each of these writes, so nothing here tells a window anything.
  */
 
 interface CreateArtifactOptions {
@@ -2497,11 +2512,6 @@ type IncomingThreadsEvents = {
     threadId: string;
     restore?: boolean;
 } | {
-    type: 'OPEN_THREAD_TAB';
-    threadId: string;
-    label: string;
-    pinned?: boolean;
-} | {
     type: 'PAUSE_TURN';
     threadId: string;
 } | {
@@ -2561,14 +2571,10 @@ type IncomingThreadsEvents = {
     type: 'FORWARD_BRAIN_EVENT';
     eventType: string;
     payload?: any;
-} | {
-    type: 'GET_ARCHIVED_THREADS';
-} | {
-    type: 'REFRESH_THREADS';
-} | {
-    type: 'LOAD_MORE_MESSAGES';
-    threadId: string;
-    cursor: string;
+}
+/** What a window's chat starts from: answered with \`CHAT_STARTED\` */
+ | {
+    type: 'GET_CHAT_START';
 } | {
     type: 'CLIENT_CONNECTED';
 } | {
@@ -3824,29 +3830,40 @@ type OutgoingTerminalEvents =
     data: TerminalInfo;
 };
 
-type OutgoingThreadsEvents = {
-    type: 'THREAD_CONNECTED';
-    data: ThreadConnectedData;
-} | {
-    type: 'SET_VIEW_DATA';
-    id: EARS.EntityId;
-    data: ThreadExtendedData;
-} | {
+/**
+ * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
+ * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
+ */
+type OutgoingThreadsEvents = 
+/** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
+{
     type: 'THREAD_CREATED';
     id: EARS.EntityId;
-    shortCode: string;
-    entityType: EARS.Entity;
-    timestamp: number;
-    topic?: string;
-    instructions?: string;
-    status?: string;
+}
+/** Any other write landed */
+ | {
+    type: 'THREAD_WRITTEN';
+}
+/** A write was refused, and why */
+ | {
+    type: 'THREAD_WRITE_FAILED';
+    error: string;
+}
+/**
+ * Open this thread in the chat: to the window that asked (a message that started a thread, a fork), or, from a flow,
+ * which has no window to answer, to every window. It names the thread; its content is the thread's views.
+ */
+ | {
+    type: 'SHOW_THREAD';
+    threadId: EARS.EntityId;
+    restore?: boolean;
 } | {
-    type: 'THREAD_UPDATED';
-    threadId: string;
-    updates: Partial<Pick<ThreadEntity, 'context' | 'instructions' | 'pinned' | 'status' | 'tags' | 'topic'>>;
+    type: 'CHAT_STARTED';
+    data: ChatStart;
 } | {
-    type: 'THREAD_DELETED';
+    type: 'THREAD_CHAT_ERROR';
     threadId: string;
+    error: string;
 } | {
     type: 'THREADS_EXPORTED';
     filePath: string;
@@ -3862,77 +3879,16 @@ type OutgoingThreadsEvents = {
     type: 'THREADS_IMPORT_FAILED';
     errors: string[];
 } | {
-    type: 'ARCHIVED_THREADS_DATA';
-    threads: Partial<ThreadEntity>[];
-} | {
-    type: 'AGENT_CONNECTED';
-    data: AgentConnectedData;
-} | {
-    type: 'LOAD_CHAT_THREAD';
-    data: AgentThreadData;
-    restore?: boolean;
-} | {
-    type: 'REFRESH_RECENT_THREADS';
-    data: RecentThreadRefreshData;
-} | {
-    type: 'ARTIFACT_ADDED';
-    tabId: string;
-    artifact: any;
-} | {
-    type: 'ARTIFACT_UPDATED';
-    tabId: string;
-    artifact: any;
-} | {
-    type: 'THREAD_TAB_REQUESTED';
-    threadId: string;
-    topic: string;
-    artifacts: any[];
-    pinned?: boolean;
-} | {
-    type: 'AGENT_SETTINGS_UPDATED';
-    settings: AgentSettings;
-} | {
-    type: 'UPDATE_MESSAGE_STATE';
-    messageId: string;
-    text?: string;
-    blocks?: BlockConfig[];
-    responseTimestamp?: number;
-    blockResponse?: BlockResponse;
-    forkable?: boolean;
-    status?: 'cancelled' | 'queued' | null;
-    context?: Record<string, unknown>;
-    asideText?: string;
-    asideContext?: string;
-    compacted?: boolean;
-} | {
-    type: 'MESSAGE_ADDED';
-    threadId: string;
-    message: MessageEntity;
-} | {
     type: 'SET_MODE';
     mode: string;
 } | {
     type: 'SET_PHASE';
     phase: string;
 } | {
-    type: 'SET_CHAT_STATE';
-    threadId: string;
-    chatState: string;
-} | {
     type: 'FLASH_CHAT_STATE';
     threadId: string;
     stateId: string;
     durationMs?: number;
-} | {
-    type: 'THREAD_CHAT_ERROR';
-    threadId: string;
-    error: string;
-} | {
-    type: 'OLDER_MESSAGES_LOADED';
-    threadId: string;
-    messages: Partial<MessageEntity>[];
-    hasMore: boolean;
-    nextCursor: string | null;
 };
 
 /** Entity shapes this pack declares */
@@ -4475,9 +4431,8 @@ declare const RateLimitLineSchema: z.ZodObject<{
 /** A note as the welcome page shows it, with when it last changed */
 type RecentNote = Pick<NoteDTO, 'icon' | 'id' | 'noteType' | 'title' | 'updatedAt'>;
 
-type RecentThreadRefreshData = {
-    recentThreads: Partial<ThreadEntity>[];
-};
+/** How the chat's settings order recent and archived threads */
+type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
@@ -4850,13 +4805,6 @@ type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<["enabled", "adaptive", "disabled"]>;
 
-type ThreadConnectedData = {
-    threads: ThreadExtended[];
-    availableTags: ThreadTagOption[];
-    settings?: ThreadsSettings | null;
-    chatStates?: Record<string, string>;
-};
-
 /**
  * Free-form per-thread scratchpad for features that need to persist small
  * amounts of state alongside a thread. Keys are namespaced by feature name
@@ -4888,6 +4836,12 @@ type ThreadCreateData = Simplify<ThreadEditFields & {
     forcedMode?: string;
     pinned?: boolean;
 }>;
+
+/** A thread as its detail page shows it: its fields, its links, and its messages' ids (the \`detail\` view) */
+type ThreadDetailView = Omit<ThreadExtendedData, 'messages'> & {
+    id: ThreadEntity['id'];
+    messageIds: EARS.EntityId[];
+};
 
 type ThreadEditFields = Simplify<Pick<ThreadEntity, 'instructions' | 'topic'> & {
     status?: ThreadEntity['status'];
@@ -5000,6 +4954,13 @@ interface ThreadTabGroup {
     isPinned?: boolean;
 }
 
+/** An open tab's thread: its label, whether it is pinned, and its artifacts (the \`tab\` view) */
+type ThreadTabView = {
+    topic: string;
+    pinned?: boolean;
+    artifacts: ArtifactItem[];
+};
+
 interface ThreadTagOption {
     name: string;
     color?: string;
@@ -5079,10 +5040,33 @@ interface ThreadsContext {
     navHistory: NavHistory<string>;
     messagePagination: {
         hasMore: boolean;
-        nextCursor: string | null;
         isLoading: boolean;
     };
     sidebarArchivedThreads: ThreadListItem[];
+    lists: {
+        list: ThreadExtended[];
+        recent: Partial<ThreadEntity>[];
+        archived: Partial<ThreadEntity>[];
+    };
+    /** How many of the open thread's messages the chat's view asks for */
+    chatLimit: number;
+    /** The messages the chat and the detail page list, by id, in display order */
+    chatMessageIds: string[];
+    detailMessageIds: string[];
+    /** Each listed message as its own view last gave it */
+    messageContents: Record<string, Partial<MessageEntity>>;
+    /** The messages a view is followed for */
+    messageViews: string[];
+    /** The open tabs a view is followed for */
+    tabViews: string[];
+    /** The open tabs whose view has given a result, so a new artifact in one is selected */
+    tabsRead: string[];
+    /** The thread this window just opened, whose first read applies its forced mode */
+    openedThreadId: string | null;
+    /** The threads this window just created, marked new in the list for its animation */
+    freshThreadIds: string[];
+    /** This window's thread writes, which hold the views back until they are answered */
+    writes: ViewWrites;
 }
 
 interface ThreadsContext$1 {
@@ -5211,8 +5195,6 @@ declare const UnknownLineSchema: z.ZodObject<{
 interface UpdateArtifactOptions {
     title?: string;
     content?: unknown;
-    /** Thread to emit the ARTIFACT_UPDATED event for. If omitted, no event is sent. */
-    threadId?: EARS.EntityId;
 }
 
 interface UpdateNode extends NodeBase {
@@ -5566,10 +5548,7 @@ declare const actionQueries: {
     };
 };
 
-/**
- * Add multiple messages to a thread without emitting per-message frontend events.
- * Caller is responsible for refreshing the frontend afterwards (e.g. via LOAD_CHAT_THREAD).
- */
+/** Add several messages to a thread at once, leaving queued messages where they are (a bulk import) */
 declare function addMessagesToThread(params: {
     threadId: EARS.EntityId;
     messages: Array<{
@@ -5765,10 +5744,22 @@ declare const chatCommands: {
 declare const chatQueries: {
     readonly threadArtifacts: (threadId: EARS.EntityId) => ArtifactItem<unknown>[];
     readonly threadData: (threadId: EARS.EntityId) => AgentThreadData | null;
-    readonly threadDataPaginated: (threadId: EARS.EntityId, cursor?: string | null) => AgentThreadData | null;
-    readonly paginatedMessages: typeof paginatedMessages;
-    readonly refreshThreadsData: () => RecentThreadRefreshData;
-    readonly connectedData: () => AgentConnectedData;
+    /**
+     * A thread as the chat shows it, or `null` once it is gone: its fields and the ids of its last \`limit\` messages
+     * and its queued ones, in display order
+     */
+    readonly chatPage: (threadId: EARS.EntityId, limit: number) => ChatPage | null;
+    /** An open tab's thread, or `null` once it is gone */
+    readonly tab: (threadId: EARS.EntityId) => ThreadTabView | null;
+    /** The recent threads, at most \`limit\`, in \`sortOrder\` */
+    readonly recentThreads: (limit: number, sortOrder: RecentThreadsSortOrder) => Partial<ThreadEntity>[];
+    /** The recent-thread limit and order the settings hold now */
+    readonly configuredRecentThreads: typeof configuredRecentThreads;
+    /**
+     * What a window's chat starts from: the most recent thread, opened; the tabs every window opens — that thread's
+     * and each pinned one's; and the threads settings
+     */
+    readonly chatStart: () => ChatStart;
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
@@ -5779,27 +5770,18 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
+/** The recent-thread limit and order the threads settings hold, read where no view is asking */
+declare function configuredRecentThreads(): {
+    limit: number;
+    sortOrder: RecentThreadsSortOrder;
+};
+
 /**
- * Create a new artifact and notify the frontend (with side effects)
- *
- * This function creates an artifact and automatically sends ARTIFACT_ADDED event
- * to the frontend when a threadId is provided. Use this in flow actions where
- * you want immediate UI updates.
- *
- * @param options - Options for creating the artifact
- * @returns Object containing the created artifact ID
- *
+ * Create an artifact, linked to `threadId` when it names one
  * @example
- * // Create artifact with automatic FE notification
- * const { artifactId } = createAndNotify({
- *   artifactType: 'todo',
- *   title: 'Tasks',
- *   content: { tasks: [...] },
- *   threadId: 'thread-123'
- * });
- * // Frontend automatically receives ARTIFACT_ADDED event
+ * const { artifactId } = create({ artifactType: 'todo', title: 'Tasks', content: { tasks: [...] }, threadId });
  */
-declare function createAndNotify(options: CreateArtifactOptions): {
+declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
 };
 
@@ -5816,21 +5798,17 @@ declare function createMarkerMessage(params: {
 };
 
 /**
- * Create a new thread and notify the frontend
- * Use this in flow actions that need automatic frontend updates
- *
- * @param options - Thread creation options
- * @returns Object with thread id, shortCode, timestamp, and status
+ * Create a new thread
  *
  * @example
- * const { id: threadId, shortCode, timestamp, status } = createThreadAndNotify({
+ * const { id: threadId, shortCode, timestamp, status } = createThread({
  *   topic: 'Assistant Birth',
  *   instructions: 'Welcome!',
  *   role: EARS.RoleKind.ASSISTANT_BIRTH,
  *   forcedMode: 'birth'
  * });
  */
-declare function createThreadAndNotify(options: ThreadCreateData): {
+declare function createThread(options: ThreadCreateData): {
     id: EARS.EntityId;
     shortCode: string;
     timestamp: number;
@@ -5846,15 +5824,14 @@ declare const featureServices: {
         updateMessageState: typeof updateMessageState;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
-        createThreadAndNotify: typeof createThreadAndNotify;
-        openThreadChatAndRefreshRecent: typeof openThreadChatAndRefreshRecent;
-        openThreadTabAndRefresh: typeof openThreadTabAndRefresh;
-        sendRecentThreadsRefresh: typeof sendRecentThreadsRefresh;
+        createThread: typeof createThread;
+        showThread: typeof showThread;
+        visitThread: typeof visitThread;
         resolveReferences: typeof resolveReferences;
     };
     artifact: {
-        createAndNotify: typeof createAndNotify;
-        updateAndNotify: typeof updateAndNotify;
+        create: typeof create;
+        update: typeof update;
         findOrCreateByType: typeof findOrCreateByType;
     };
     threads: {
@@ -6134,37 +6111,6 @@ declare const noteQueries: {
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
 };
 
-/**
- * Open thread chat and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread data for chat
- * - Refresh recent threads list
- */
-declare function openThreadChatAndRefreshRecent(threadId: EARS.EntityId, options?: {
-    restore?: boolean;
-    reply?: Reply<OutgoingThreadsEvents>;
-}): void;
-
-/**
- * Open thread tab and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread tab data with artifacts
- * - Refresh recent threads list
- */
-declare function openThreadTabAndRefresh(threadId: EARS.EntityId, options?: {
-    reply?: Reply<OutgoingThreadsEvents>;
-}): void;
-
-declare function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
-    messages: Partial<MessageEntity>[];
-    hasMore: boolean;
-    nextCursor: string | null;
-};
-
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
@@ -6213,10 +6159,7 @@ declare function resolveReferences(references: MessageReferences | undefined): P
     addDirs: string[];
 }>;
 
-/**
- * Send a message with custom blocks and emit MESSAGE_ADDED event
- * Use this for flow actions that need automatic frontend updates
- */
+/** Send a message with custom blocks */
 declare function sendBlockMessage(options: BlockMessageOptions): {
     messageId: EARS.EntityId;
 };
@@ -6271,25 +6214,22 @@ declare function sendQuestionBlock(options: {
     messageId: EARS.EntityId;
 };
 
-/**
- * Send recent threads refresh to frontend
- *
- * Use this helper after any operation that affects thread ordering:
- * - Thread creation
- * - Message creation (updates lastMessageTimestamp)
- * - Thread visits (updates lastVisitedTimestamp)
- */
-declare function sendRecentThreadsRefresh(): void;
-
-/**
- * Send a system message (non-interactive aside) and emit MESSAGE_ADDED event
- */
+/** Send a system message (non-interactive aside) */
 declare function sendSystemMessage(options: {
     threadId: EARS.EntityId;
     text: string;
 }): {
     messageId: EARS.EntityId;
 };
+
+/**
+ * Open a thread in the chat: visited (`visitThread`), and the chat told to show it — the window that asked, or, from an action, which has no asker, every
+ * window, as `answer` decides.
+ */
+declare function showThread(threadId: EARS.EntityId, options?: {
+    restore?: boolean;
+    reply?: Reply<OutgoingThreadsEvents>;
+}): void;
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
 
@@ -6367,15 +6307,19 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
         status: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
     readonly extendedData: (threadId: EARS.EntityId, include?: keyof ThreadExtendedData | (keyof ThreadExtendedData)[]) => ThreadExtendedData;
-    readonly archivedThreads: () => Partial<ThreadEntity>[];
-    readonly connectedData: () => ThreadConnectedData;
+    /** The archived threads, in the order the chat's settings sort recent threads */
+    readonly archivedThreads: (sortOrder: RecentThreadsSortOrder) => Partial<ThreadEntity>[];
+    /** The threads the list and the board show: every one not archived, newest first, each with its parent's id */
+    readonly listed: () => ThreadExtended[];
+    /** A thread as its detail page shows it, or `null` once it is gone */
+    readonly detail: (threadId: EARS.EntityId) => ThreadDetailView | null;
     /**
      * Compatibility alias for persisted action code compiled before artifact
      * helpers moved under chatCommands.
@@ -6396,35 +6340,30 @@ declare function unlisten(id: string): boolean;
 declare function unregisterByPrefix(prefix: string): void;
 
 /**
- * Patch an existing artifact's title and/or content in place, and notify
- * the frontend so the panel re-renders with the new data.
- *
- * Used for artifacts that mutate across turns (e.g. the Claude Code session
- * card, which tracks live status/cost/turn count). The `ARTIFACT_UPDATED`
- * event mirrors `ARTIFACT_ADDED` but carries only the fields that changed.
+ * Patch an artifact's title and/or content in place: for artifacts that change across turns (the Claude Code session
+ * card, which tracks live status, cost and turn count)
  */
-declare function updateAndNotify(artifactId: EARS.EntityId, options: UpdateArtifactOptions): void;
+declare function update(artifactId: EARS.EntityId, options: UpdateArtifactOptions): void;
 
 /**
  * Threads Service
  *
- * Provides primitives for updating thread-level state with automatic
- * frontend notification, following the same pattern as artifact service.
+ * Thread-level state writes for actions and systems. A window sees each through the threads views.
  */
 
 /**
- * Update a thread's chatState and notify the frontend.
+ * Update a thread's chatState.
  *
  * This is the canonical service-level write for chatState. The DSL helper
  * `updateChatState()` in thread-context.ts handles the thread context side,
- * then delegates here for the thread write + emit.
+ * then delegates here for the thread write.
  */
 declare function updateChatState(threadId: EARS.EntityId, chatState: string): void;
 
 /**
  * Update message state with any mutable fields
- * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp)
- * Automatically emits UPDATE_MESSAGE_STATE event to frontend
+ * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
+ * the message sees it through the message's view, the one view a streamed reply re-runs
  *
  * @example
  * // Re-enable interactive blocks by clearing response
@@ -6446,6 +6385,14 @@ declare function viewByFile(filePath: string, opts?: {
     limit?: number;
     offset?: number;
 }): Promise<any[]>;
+
+/**
+ * What opening a thread writes, for a window that opened it itself: marked visited (unless this restores the window's
+ * chat), and a finished turn's `success` flash cleared. Throws for a thread that is gone.
+ */
+declare function visitThread(threadId: EARS.EntityId, options?: {
+    restore?: boolean;
+}): void;
 
 export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemEvents, Repositories, Services };
 ```

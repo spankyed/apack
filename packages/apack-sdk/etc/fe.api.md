@@ -6,8 +6,10 @@
 
 import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
+import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
+import { CallbackActorLogic } from 'xstate';
 import type { Component } from 'vue';
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
@@ -17,7 +19,7 @@ import { EARS as EARS_2 } from '@apackdev/ears';
 import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
 import { entityTypeOf } from '@apackdev/ears';
-import type { EventObject } from 'xstate';
+import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
 import type { MachineContext } from 'xstate';
@@ -847,6 +849,15 @@ export interface SurfaceInboxAudiences {
 export function surfaceIsRunning(ref: string): boolean;
 
 // @public
+export type SurfaceLifecycleEvent = {
+    type: 'SURFACE_STARTED';
+} | {
+    type: 'SURFACE_ACTIVATED';
+} | {
+    type: 'SURFACE_DEACTIVATED';
+};
+
+// @public
 export const SurfaceScope: DefineComponent<ExtractPropTypes<    {
 surface: {
 type: StringConstructor;
@@ -953,6 +964,9 @@ export type TrailClickEvent<TInfo = unknown> = {
     target: string;
     info?: TInfo;
 };
+
+// @public
+export function untypedFromView<Result, Args, TEvent extends EventObject>(ref: string, view: string, read: (update: ViewUpdate<Result>, args: Args) => TEvent): CallbackActorLogic<AnyEventObject, Args>;
 
 // @public
 export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEvent[]): void;

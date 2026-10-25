@@ -2,6 +2,8 @@
 import type { Surface } from '@apackdev/sdk/fe';
 import { HOST_PACK_ID, splitRef } from '@apackdev/sdk/ids';
 import type { ShellContext } from './types.ts';
+import type { AnyActorRef } from 'xstate';
+import { notifySurfaceActor } from '../../../fe/surface-delivery.ts';
 
 /** `surfaces` with the app's own (the host's: the Packs tab) after every pack's, each group in its order */
 export function withHostLast(surfaces: Surface[]): Surface[] {
@@ -10,16 +12,24 @@ export function withHostLast(surfaces: Surface[]): Surface[] {
 }
 
 /**
- * Spawns a surface's state machine under its own id as well as its system id. The id is the key the shell tracks the
- * child by: without one every surface shares a key, the shell holds only the last one spawned, and stopping it stops
- * that one alone while the rest keep running with their system ids taken.
+ * Spawns a surface's state machine under its own id as well as its system id, and hands it `SURFACE_STARTED` in a
+ * delivery naming it (`SurfaceLifecycleEvent`, `@apackdev/sdk/fe`), where it asks for what it starts from. The id is
+ * the key the shell tracks the child by: without one every surface shares a key, the shell holds only the last one
+ * spawned, and stopping it stops that one alone while the rest keep running with their system ids taken.
  *
  * XState types `id` from the declared children, and surfaces are registered at runtime (built-in and from
  * packs), so the id goes through this one cast rather than at each call site.
  */
 export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
-  const spawner = enqueue as { spawnChild(state: Surface['state'], options: { id: string; systemId: string }): void };
+  const spawner = enqueue as {
+    spawnChild(state: Surface['state'], options: { id: string; systemId: string }): void;
+    (action: (args: { system: { get(id: string): AnyActorRef | undefined } }) => void): void;
+  };
   spawner.spawnChild(surface.state, { id: surface.id, systemId: surface.id });
+  spawner(({ system }) => {
+    const actor = system.get(surface.id);
+    if (actor) notifySurfaceActor(actor, surface.id, { type: 'SURFACE_STARTED' });
+  });
 }
 
 /** The adjacent declared tab, wrapping around; absent when the current tab is hidden. */

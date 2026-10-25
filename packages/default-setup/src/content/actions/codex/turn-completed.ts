@@ -85,7 +85,7 @@ export async function action(params: Record<string, any>, services: Services) {
         const prefix = `[Diff][${parsed.files.length}] `;
         let title = prefix + basenames.join(', ');
         if (title.length > 80) title = prefix + basenames.slice(0, 3).join(', ') + '…';
-        artifactId = services.artifact.createAndNotify({ artifactType: 'diff', title, content: parsed, threadId: threadId as EntityId }).artifactId;
+        artifactId = services.artifact.create({ artifactType: 'diff', title, content: parsed, threadId: threadId as EntityId }).artifactId;
       }
     } catch (e: any) {
       services.logger.warn('[codex] diff failed', { message: e?.message });

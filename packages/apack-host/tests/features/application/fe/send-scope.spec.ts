@@ -101,6 +101,21 @@ describe('a surface handling what the shell gave it', () => {
       w.app.stop();
     }
   });
+
+  /**
+   * And as soon as it starts, shown or not — where a surface asks for what it starts from. Its machine's own entry
+   * runs in no delivery at all, so an ask made there carries no sender and its answer has nowhere to go.
+   */
+  it('names it for the start the shell hands every surface it spawns', async () => {
+    const w = watching();
+    try {
+      await settle();
+      expect(receiverFor(w.seen, 'SURFACE_STARTED')).toBe('default-setup/notes');
+      expect(w.seen.filter((entry) => entry.type === 'SURFACE_STARTED'), 'once').toHaveLength(1);
+    } finally {
+      w.app.stop();
+    }
+  });
 });
 
 describe('how far each send reaches', () => {

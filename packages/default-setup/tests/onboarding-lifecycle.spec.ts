@@ -24,7 +24,7 @@ async function start(withRoot = true) {
 async function initializedOnce(app: TestApp) {
   await expect.poll(() => initialized(app).length).toBe(1);
   expect(progress()).toMatchObject({ step: 'welcome', threadId: thread() });
-  expect(app.emitted('threads').some(event => event.type === 'LOAD_CHAT_THREAD')).toBe(true);
+  expect(app.emitted('threads').some(event => event.type === 'SHOW_THREAD')).toBe(true);
 }
 
 it('starts on readiness without keys, once across connections and preference reset', async () => {
