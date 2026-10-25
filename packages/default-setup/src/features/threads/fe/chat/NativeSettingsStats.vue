@@ -1,6 +1,6 @@
 <template>
   <section aria-label="Claude Code statistics" class="space-y-4">
-    <div class="flex flex-wrap items-center gap-2">
+    <div v-if="stats?.data" class="flex flex-wrap items-center gap-2">
       <button v-for="view in views" :key="view" type="button" :disabled="pending || !stats?.data" :aria-pressed="stats?.view === view" class="rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40" :class="stats?.view === view ? 'bg-white/10' : ''" @click="emit('action',view)">{{ view }}</button>
       <button type="button" :disabled="pending || !stats?.data || stats.loading" class="ml-auto rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('action','cycleDates')">{{ rangeLabel }} · Change dates</button>
       <button type="button" :disabled="pending || !stats?.data || stats.loading || stats.copyState === 'pending'" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('action','copy')">Copy stats</button>

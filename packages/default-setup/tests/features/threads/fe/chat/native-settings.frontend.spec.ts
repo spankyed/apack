@@ -61,6 +61,7 @@ it('refreshes admitted Stats loading and stops on native refusal, another tab or
     await vi.advanceTimersByTimeAsync(250);expect(operations.slice(initial)).toEqual([{kind:'read'}])
     frame.stats={outcome:'unavailable',loading:false,problem:'Original native privacy refusal'};await nextTick()
     expect(root.textContent).toContain('Original native privacy refusal');expect(root.querySelector('[role="alert"]')).toBeNull()
+    expect(root.textContent).not.toContain('Copy stats');expect(root.textContent).not.toContain('Change dates')
     const settled=operations.length;await vi.advanceTimersByTimeAsync(1000);expect(operations).toHaveLength(settled)
     frame.stats={outcome:'loading',loading:true};await nextTick();frame.selectedTab='Usage';await nextTick()
     await vi.advanceTimersByTimeAsync(500);expect(operations).toHaveLength(settled)
