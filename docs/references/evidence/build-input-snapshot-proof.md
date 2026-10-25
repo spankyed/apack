@@ -2966,6 +2966,13 @@ directory took 8.6–9.0s and none hung. So Spotlight indexing a fresh `node_mod
 Chromium blocks exit on. `session:new` and `session:check` create worktrees under `<repository>-worktrees.noindex`
 (`worktreesRoot`, `scripts/session.mjs`). No timeout or assertion was changed.
 
+Two things this does not establish. **The lost input is not explained by it**: on 2026-10-25, after a restart, one
+fresh `.noindex` worktree on a machine `check:idle` called quiet, running one app at a time, lost the typed text on one
+of three tests; no teardown hung. That failure has only been seen in freshly installed worktrees and never in the main
+checkout, and its cause is open. **No same-files test of the indexing was made**: moving a built worktree between an
+indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
+startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
+
 ### Versioned override reproducer and launch admission (2026-10-17)
 
 Run `39079991483` on `99c910914` confirms the library-path omission in 22.13 seconds: ordinary Node
