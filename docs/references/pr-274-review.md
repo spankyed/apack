@@ -6,9 +6,9 @@ branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273
 reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
-**Status, 2026-10-24:** everything worth taking is taken (under Taken already, below): the harness, the durability
-spec, the sync policy, the prompts fix and production-shaped bench data. Compaction is behind a flag until lmdb-js
-ships its fix (under Not taken, below).
+**Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
+already, below). Compaction is behind a flag until lmdb-js ships its fix, and production-shaped bench data is not
+taken (both under Not taken, below).
 
 ## Head to head on the production copy
 
@@ -95,15 +95,6 @@ master in `c427e84fd`, which this branch is based on: the surface changes its se
 names, and a held prompt is replaced rather than added. `tests/features/prompts/fe/page-and-selection.spec.ts` covers
 all three.
 
-### Production-shaped bench data
-
-`bench/production-shape.ts` is #274's profile of the production database, with a loader beside it
-(`loadProductionShape`); `bench/production.bench.ts` reads it: a thread opened through its `contains` edges, messages by
-id, the thread list, a `where` on the threads, and the whole-type read of the messages. A thread opens in 0.7 ms and a
-message reads in 14 µs (the readings are the storage plan's, Step 5). #274's budget gates on heap, which an engine that
-holds no data has none of, so the budget is not taken; the uniform graph in `ears.bench.ts` stays, being what the
-recorded comparisons were taken on.
-
 ### Sync once writes pause
 
 #274 syncs 100 ms after writes pause, and at most a second after the first unsynced commit. #273 adopted the same in
@@ -123,6 +114,15 @@ measurements and a repro to report it with are in
 [lmdb-compacted-copy-crash.md](evidence/lmdb-compacted-copy-crash.md). The cause is in lmdb-js's patched
 `mdb_page_alloc`, fixed by kriszyp/lmdb-js#381. The code is back behind `COMPACT_COPIES` (`@apackdev/ears/lmdb`), which
 is off; turning it on is that flag, once `lmdb` is a release with the fix.
+
+### Production-shaped bench data
+
+#274's `bench/production-shape.ts` is a table of the production database as profiled on 2026-10-24 — counts and sizes
+per type and field, named after default-setup's entities — and its budget generates data from it. Not taken: the
+table is a sample nothing re-derives, so the bench would go on measuring October's shape as the data moved, and it puts
+a pack's entity names into `@apackdev/ears`, which knows none. The production readings in the storage plan (Step 5)
+were taken on the converted production copy itself; a reading of production-shaped data comes from a copy of the
+data, not a description of it.
 
 ## Not needed here
 
