@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`) and threads done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`) and brain done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -484,6 +484,19 @@ and `threads`' streaming tokens are notifications.
   - **The services stopped notifying, and their names say so**: `createThreadAndNotify` is `createThread`,
     `openThreadChatAndRefreshRecent` is `showThread` (and `visitThread`), `sendRecentThreadsRefresh` and
     `openThreadTabAndRefresh` are gone, and `services.artifact` is `create`/`update`.
+- **brain** — no views: a run's tree and its nodes are in the run history's record store, which no read set covers.
+  Sorted: the tree and the run-node answers (`RECEIVE_SURFACE_DATA`, `RUN_NODE_OPENED`, `RUN_NODE_DETAILS`) were
+  broadcast to every window, and are now replied to the window that asked; the brain's state (`BRAIN_STARTED`,
+  `BRAIN_KILLED`, `BRAIN_PAUSED`, `BRAIN_RESUMED`, `INSPECT_TOGGLED`), the event pulse and the run's live feed
+  (`RUN_NODE_SPAWNED`, `RUN_NODE_UPDATED`) are notifications and stay. Decisions:
+  - **The live feed is a notification**, by the plan's own rule for streaming: it patches the tree a window already
+    holds, as tokens patch a message, and carries no stored row of the engine's.
+  - **The brain's state is news; the tree is fetched.** Publishing (`SEND_STATE`) broadcasts the state alone, and a
+    run starting again is announced with `BRAIN_STARTED`, on which each window asks for the new root's tree. An ask is
+    answered with the tree and then the state, so a window just started learns both in that order.
+  - **The surface asks in a delivery, always**: on `SURFACE_STARTED`, on activation, on `BRAIN_STARTED`, and on an
+    event's pulse straight away, where it used to ask from a 100 ms timer — an ask from a timer carries no sender, so
+    its answer would have gone nowhere. What the pulse's event writes after the ask arrives as the live feed.
 
 ### 5. The rule
 
