@@ -75,3 +75,18 @@ it('projects native system command journal rows without turning other system out
     expect(projectClaudeTerminalHistory({ sessionId, row: invalid })).toBeUndefined()
   }
 })
+
+it('projects original informational notice rows as inert system text with native identity', () => {
+  const notice = { sessionId, uuid, type: 'system', subtype: 'informational', level: 'notice', entrypoint: 'cli',
+    content: 'native-plugin: <b>literal review</b>', timestamp: '2026-10-25T02:13:07.922Z' }
+  const value = projectClaudeTerminalHistory({ sessionId, row: notice })!
+  expect(value).toMatchObject({ uuid, sessionId, sender: 'system', text: notice.content, blocks: [],
+    timestamp: Date.parse(notice.timestamp), context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId } } })
+  expect(value.context.claudeNativeUserMessage).toBeUndefined()
+  expect(value.context.claudeNativeMessages).toBeUndefined()
+  for (const changes of [{sessionId:'foreign'}, {entrypoint:'sdk'}, {isSidechain:true}, {agentId:'worker'},
+    {parent_tool_use_id:'parent'}, {isMeta:true}, {uuid:'invalid'}, {content:''}]) {
+    expect(projectClaudeTerminalHistory({sessionId,row:{...notice,...changes}})).toBeUndefined()
+  }
+  expect(projectClaudeTerminalHistory({sessionId,row:{...notice,level:'debug'}})).toBeUndefined()
+})

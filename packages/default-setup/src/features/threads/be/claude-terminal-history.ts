@@ -4,9 +4,21 @@ import type { BlockConfig, MessageReferences } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 /** Project persisted native rows; hidden context and agent conversations never become user bubbles. */
 export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
-  uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
+  uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
   const source = entry.row
+  // Original ui.log persists a transcript-only informational notice, outside model messages.
+  if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {
+    if (source.sessionId !== entry.sessionId || source.entrypoint !== 'cli' || source.isSidechain === true
+      || source.agentId !== undefined || source.parent_tool_use_id || source.isMeta === true
+      || typeof source.content !== 'string' || !source.content || typeof source.uuid !== 'string'
+      || !/^[a-f0-9-]{36}$/i.test(source.uuid)) return
+    const timestamp = typeof source.timestamp === 'string' ? Date.parse(source.timestamp) : Number.NaN
+    return { uuid: source.uuid, sessionId: entry.sessionId, sender: 'system', text: source.content, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: source.uuid, claudeTerminalMessage: { uuid: source.uuid, sessionId: entry.sessionId },
+        claudeNativeNotice: { subtype: source.subtype, level: source.level } } }
+  }
   // Native local and immediate JSX commands persist system rows, with the same command envelopes.
   const commandRow = source.type === 'system' && source.subtype === 'local_command' && typeof source.content === 'string'
     && presentClaudeCommandHistory(source, source.content)

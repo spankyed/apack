@@ -88,9 +88,27 @@ test('shows native transcript logging while excluding debug-only output', async 
   await card.getByRole('button',{name:'Record review',exact:true}).click()
   await expect(card.getByText('Review records 1',{exact:true})).toBeVisible()
   const receipt=JSON.parse(await readFile(join(workspace!,'native-log-native.json'),'utf8'))
-  // Fixture renders only its counter/button, never the expected transcript line.
-  await expect(appPage.getByText(receipt.text,{exact:true})).toBeVisible()
+  let journalNotice: any
+  await expect.poll(async()=>{
+    const root=join(workspace!,'.claude/projects')
+    for(const file of await _readdir(root,{recursive:true})){
+      if(!file.endsWith('.jsonl'))continue
+      for(const line of (await readFile(join(root,file),'utf8')).split('\n')){
+        if(!line.trim())continue
+        const row=JSON.parse(line)
+        if(row.sessionId===sessionId&&row.type==='system'&&row.subtype==='informational'&&row.level==='notice'&&row.content==='native-history-fixture: '+receipt.text)journalNotice=row
+      }
+    }
+    return journalNotice?.uuid
+  }).toBeTruthy()
+  // Match original persisted text, including the native plugin prefix.
+  await expect(appPage.getByText(journalNotice.content,{exact:true})).toBeVisible()
   await expect(appPage.getByText(receipt.debug,{exact:true})).toHaveCount(0)
+  const noticeRows=(await context()).messages.filter((message:any)=>message.context?.cliUuid===journalNotice.uuid)
+  expect(noticeRows).toHaveLength(1)
+  expect(noticeRows[0]).toMatchObject({sender:'system',text:journalNotice.content})
+  expect(noticeRows[0].context.claudeNativeMessages).toBeUndefined()
+  expect(noticeRows[0].context.claudeNativeUserMessage).toBeUndefined()
   await expect(composer).toHaveText(draft)
   expect((await context()).sessionId).toBe(sessionId)
   expect((await context()).claude.turns).toBe(before.claude.turns)
@@ -98,7 +116,7 @@ test('shows native transcript logging while excluding debug-only output', async 
   const nativeWindow=await electronApp.browserWindow(appPage),widths=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
-    await expect(appPage.getByText(receipt.text,{exact:true})).toBeVisible()
+    await expect(appPage.getByText(journalNotice.content,{exact:true})).toBeVisible()
     await expect(composer).toHaveText(draft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
@@ -111,6 +129,6 @@ test('shows native transcript logging while excluding debug-only output', async 
   await composer.fill('Continue after recording the release review.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-log-app-proof.json'),JSON.stringify({receipt,sessionId,boundNativePid,widths,transcriptVisible:true,debugExcluded:true,draftRetained:true,noPhantomTurn:true}))
+  await writeFile(join(workspace!,'native-log-app-proof.json'),JSON.stringify({receipt,journalNotice,sessionId,boundNativePid,widths,transcriptVisible:true,debugExcluded:true,draftRetained:true,noPhantomTurn:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeLog:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
