@@ -224,7 +224,12 @@ test('edits original Settings through desktop controls and retains composing', a
       }
       await panel.getByRole('button',{name:'Models',exact:true}).click()
       await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
-      await expect(panel.getByRole('columnheader',{name:'Cache read',exact:true})).toBeVisible()
+      const modelTable=statistics.locator('table')
+      for(const width of [1100,680]){
+        await appPage.setViewportSize({width,height:width===680?600:900})
+        await readTo(modelTable);await expect(modelTable.locator('thead')).toContainText('Cache read');await statsCapture('models',width)
+        statsCompleteness.reading.find((row:any)=>row.width===width).modelTable=true
+      }
       await panel.getByRole('button',{name:/Change dates/}).click()
       await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 7 days')
       await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange(7)))
