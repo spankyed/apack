@@ -155,3 +155,17 @@ it('shows original consent disclosure and initially focuses the native No choice
   ;(root.querySelector('[data-native-settings-option="confirm"]') as HTMLButtonElement).click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'select',value:'confirm'}})
  }finally{app.unmount();root.remove()}
 })
+
+it('shows original external approval state and distinguishes review from native disable',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'consent-row',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[{key:'showExternalIncludesDialog',label:'External CLAUDE.md includes',kind:'text',value:'false',isLocked:false,editorAvailable:true}]}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();expect(root.textContent).toContain('Not allowed')
+  ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Review external imports…')!.click()
+  expect(operations.at(-1)).toEqual({kind:'open',revision:'a'.repeat(64),key:'showExternalIncludesDialog'})
+  state.state.snapshot!.rows[0].value='true';await nextTick();expect(root.textContent).not.toContain('Not allowed');expect(root.textContent).toContain('Allowed')
+  const disable=[...root.querySelectorAll('button')].find(button=>button.textContent==='Disable external imports')!;disable.click();expect(operations.at(-1)).toEqual({kind:'open',revision:'a'.repeat(64),key:'showExternalIncludesDialog'})
+  state.state.snapshot!.rows[0].isLocked=true;await nextTick();expect(disable.disabled).toBe(true)
+ }finally{app.unmount();root.remove()}
+})

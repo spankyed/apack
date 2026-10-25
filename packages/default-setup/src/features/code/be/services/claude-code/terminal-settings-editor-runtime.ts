@@ -38,7 +38,7 @@ function nativeSettingsMountedConsentRows(n,entry){
  if(matches.length!==1)throw Error('Native Config consent descriptor is ambiguous');
  const source=matches[0].filter(row=>row.id==='showExternalIncludesDialog');
  if(source.length!==1)throw Error('Native Config consent descriptor is ambiguous');const row=source[0];
- if(row.type!=='managedEnum'||typeof row.value!=='string'||row.value.length>16384||row.label.length>16384||row.lock!==undefined&&(typeof row.lock!=='object'||typeof row.lock.reason!=='string'||row.lock.reason.length>16384))throw Error('Native Config consent descriptor changed');
+ if(row.type!=='managedEnum'||!['true','false'].includes(row.value)||row.label.length>16384||row.lock!==undefined&&(typeof row.lock!=='object'||typeof row.lock.reason!=='string'||row.lock.reason.length>16384))throw Error('Native Config consent descriptor changed');
  return [{key:row.id,label:row.label,kind:'text',value:row.value,isLocked:row.lock!==undefined,...row.lock?{lockReason:row.lock.reason}:{}}];
 }
 function sameNativeSettingsFiber(a,b){
@@ -164,7 +164,8 @@ async function readNativeSettingsEditor(n,entry,signal){
    options.push({value:option.value,label:await text(option.label),...(option.description??(themeCache?option.origin:undefined))!=null?{description:await text(option.description??option.origin)}:{},disabled:option.disabled===true,...modelControl&&option.description!=null?{descriptionAnsi:await awaitNativeSettingsReading(nativeGenericPermissionText(n,option.description,true),signal)}:{}});
    if(options.at(-1).descriptionAnsi?.length>65536)throw Error('Native Model description exceeded bound');
   }
-  const value=controls.selectedValue??controls.defaultValue;
+  let value=controls.selectedValue??controls.defaultValue;
+  if(typeof value==='symbol'){const {Fi}=await import('/$bunfs/root/chunk-0d2czwx3.js');if(value!==Fi)throw Error('Native Settings editor selection changed');value=controls.defaultValue;}
   if(value!==undefined&&typeof value!=='string')throw Error('Native Settings editor selection changed');
   snapshot={kind:'choice',...typeof entry.settingsEditorLabel==='string'?{title:entry.settingsEditorLabel}:{},options,...typeof value==='string'?{value}:{},disabled:controls.isDisabled===true||controls.disableSelection===true||!!controls.refuseInput};
   if(modelControl)snapshot.model={...modelControl.focusValue!==undefined?{focusValue:modelControl.focusValue}:{},...modelControl.draftEffort!==undefined?{draftEffort:modelControl.draftEffort}:{},description:await text(modelControl.description),effortText:await text(modelControl.detail),canAdjustEffort:modelControl.canAdjust,...modelControl.fastNotice?{fastModeNotice:await text(modelControl.fastNotice)}:{}};

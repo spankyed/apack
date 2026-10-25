@@ -3,14 +3,15 @@ import { createHash } from 'node:crypto'
 import { claudeTerminalSettingsEditorRuntime } from '#features/code/be/services/claude-code/terminal-settings-editor-runtime.ts'
 
 function fixture(){
+  const noCommitted=Symbol('NO_COMMITTED_ROW')
   const qh={Field:()=>{},Button:()=>{},Link:()=>{}},Config=()=>{},onClose=()=>{},open=vi.fn()
   const field={type:qh.Field,key:'model',props:{label:'Model',children:{type:qh.Button,props:{onPress:open}}}}
   const config:any={type:Config,memoizedProps:{onClose,setTabsHidden:()=>{},children:[field]}}
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value)),palette=vi.fn(()=>({text:'#eeeeee',inverseText:'#111111'}))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
-  return {mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalSelection:{Fi:noCommitted},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  return {noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -211,7 +212,7 @@ function consentFixture(){
  let decided=false
  const decide=(value:boolean)=>{if(refuse()||decided)return;decided=true;write(value);onDone()},confirm=()=>decide(true),cancel=()=>decide(false),options=[{value:'cancel',label:'No, disable external imports'},{value:'confirm',label:'Yes, allow external imports'}]
  const modalProps={cancelFirst:true,focus:'cancel',refuseInput:refuse,openedAt:123,onConfirm:confirm,onCancel:cancel,cancelLabel:'No, disable external imports'},change=(value:string)=>value==='confirm'?confirm():cancel()
- const picker={type:Choice,props:{options,defaultFocusValue:'cancel',isDisabled:false,onChange:change,onCancel:cancel}},pc=Array(32)
+ const picker={type:Choice,props:{options,selectedValue:f.noCommitted,defaultFocusValue:'cancel',isDisabled:false,onChange:change,onCancel:cancel}},pc=Array(32)
  pc[21]=options;pc[22]=cancel;pc[23]=confirm;pc[24]=change;pc[31]=picker
  const modal={type:Modal,props:modalProps},view={props:{title:'Allow external CLAUDE.md file imports?',onCancel:cancel,children:['Original external import warning','Original external path disclosure','Original security note',modal]}},cache=Array(37),externalIncludes=[{path:'/outside/instructions.md',parent:'/project/CLAUDE.md'}]
  cache[4]=refuse;cache[5]=externalIncludes;cache[11]=onDone;cache[16]=cancel;cache[20]=confirm;cache[21]=cancel;cache[24]=123;cache[27]=modal;cache[36]=view
@@ -242,4 +243,9 @@ it('uses only original mounted Config consent descriptors omitted by the generic
  row.value='true';(row as any).lock={reason:'Original managed refusal'}
  expect(f.mountedConsentRows()[0]).toMatchObject({value:'true',isLocked:true,lockReason:'Original managed refusal'})
  f.config.memoizedState.next={memoizedState:[[row],[]]};expect(()=>f.mountedConsentRows()).toThrow('ambiguous')
+})
+
+it('accepts only the exact original uncommitted-row sentinel and preserves native default selection',async()=>{
+ const f=consentFixture();expect((await f.editor()).snapshot.value).toBeUndefined()
+ f.pc[31].props.selectedValue=Symbol('NO_COMMITTED_ROW');await expect(f.editor()).rejects.toThrow('selection changed');expect(f.write).not.toHaveBeenCalled()
 })
