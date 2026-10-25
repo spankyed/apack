@@ -111,6 +111,14 @@ test('retires a held image upload when another window resumes into the same empt
   await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='assistant'&&message.text?.includes('Last reported:'))).toBe(true)
   expect((await context()).messages.filter((message:any)=>message.sender==='user'&&!message.isCommand)).toHaveLength(0)
   expect((await context()).sessionId).toBeUndefined()
+  // The first read-only command consumes pendingThreadCwd without persisting a native session.
+  // Establish the project through its ordinary command before the cross-window race.
+  await composer.fill('');await composer.pressSequentially('/cc-set-dir')
+  await appPage.locator('.command-suggestion-popup').getByText('/cc-set-dir',{exact:true}).click()
+  await composer.pressSequentially(' '+workspace!)
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='assistant'&&message.text===`Working directory set to: ${workspace}`)).toBe(true)
+  expect((await context()).sessionId).toBeUndefined()
   const threadId=(await context()).threadId
   let popout:import('@playwright/test').Page|undefined
     const opened=electronApp.waitForEvent('window')
@@ -153,7 +161,8 @@ test('retires a held image upload when another window resumes into the same empt
     await popout.locator('.command-suggestion-popup').getByText('/cc-resume',{exact:true}).click()
     await otherComposer.pressSequentially(' '+sessionId)
     await other.getByRole('button',{name:'Send',exact:true}).click()
-    await expect.poll(async()=>(await context()).sessionId).toBe(sessionId)
+    try{await expect.poll(async()=>(await context()).sessionId).toBe(sessionId)}
+    catch(error){await writeFile(join(workspace!,'native-resume-command-failure.json'),JSON.stringify({primary:await context(),other:await popout.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return{threadId:c.currentThread?.id,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,pendingThreadCwd:c.pendingThreadCwd}})}));throw error}
     expect((await context()).threadId).toBe(threadId)
     expect((await context()).claude.totalCostUsd).toBe(baselineCost)
     await electronApp.evaluate(()=>(globalThis as any).heldResumeUpload.release())
