@@ -1459,8 +1459,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     id: string;
     command: string;
     input: Record<string, unknown>;
@@ -1476,8 +1476,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     id: string;
     command: string;
     input: Record<string, unknown>;
@@ -1952,10 +1952,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1970,10 +1970,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2037,9 +2037,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2056,9 +2056,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     userConfirmsCompletion: boolean;
     warnings: string[];
 }, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2133,28 +2133,28 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    paragraphs: string[];
-    pluginName: string;
-    marketplaceName: string;
-    fileExtension: string;
     choices: {
         value: "disable" | "never" | "no" | "yes";
         label: string;
     }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
 }, {
     revision: string;
     title: string;
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    paragraphs: string[];
-    pluginName: string;
-    marketplaceName: string;
-    fileExtension: string;
     choices: {
         value: "disable" | "never" | "no" | "yes";
         label: string;
     }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -11217,15 +11217,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         options: z.ZodArray<z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
             disabled: z.ZodBoolean;
         }, "strict", z.ZodTypeAny, {
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }, {
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }>, "many">;
     }, "strict", z.ZodTypeAny, {
         revision: string;
@@ -11233,6 +11236,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
@@ -11244,6 +11248,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
@@ -11342,6 +11347,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
@@ -11460,6 +11466,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
             disabled: boolean;
+            description?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
@@ -11854,6 +11861,7 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     value: string;
                     label: string;
                     disabled: boolean;
+                    description?: string | undefined;
                 }[];
                 kind: "choice";
                 disabled: boolean;

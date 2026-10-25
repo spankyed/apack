@@ -96,3 +96,15 @@ it('saves exact drafts through native changes, awaits acknowledged form values a
  await f.save(revision,{value:'日本語 exact draft'})
  expect(onChange).toHaveBeenCalledExactlyOnceWith('value','日本語 exact draft');expect(validate).toHaveBeenCalledExactlyOnceWith('日本語 exact draft');expect(onSubmit).toHaveBeenCalledExactlyOnceWith()
 })
+
+it('reads original Output Style options before the suspended item picker mounts and retains modal Cancel',async()=>{
+ const f=fixture(),Modal=function OriginalStyleModal(){},onComplete=vi.fn(),onCancel=vi.fn(),promise=Promise.resolve([{value:'default',label:'Default'},{value:'explanatory',label:'Explanatory',description:'Original explanatory description'}])
+ f.frame.panel.hidden=true;f.setFunctionHash(Modal,'5086145442ea1552b1fcb76267a376e9e083bf0056bf30262bba2eda09408bcf')
+ const cache=Array(15).fill(null);cache[7]=promise;cache[9]={props:{children:[null,{props:{children:{props:{styleOptionsPromise:promise,initialStyle:'default',onComplete}}}}]}}
+ const modal:any={type:Modal,memoizedProps:{onCancel,onComplete,initialStyle:'default'},updateQueue:{memoCache:{data:[cache]}},return:f.config};f.config.child=modal
+ const result=await f.editor();expect(result.snapshot.value).toBe('default');expect(result.snapshot.options[1]).toMatchObject({label:'Explanatory',description:'Original explanatory description'})
+ await f.act({action:'select',revision:result.revision,value:'explanatory'});expect(onComplete).toHaveBeenCalledExactlyOnceWith('explanatory')
+ await f.act({action:'cancel',revision:result.revision});expect(onCancel).toHaveBeenCalledExactlyOnceWith()
+ f.formatText.mockImplementationOnce(async()=>{modal.memoizedProps={...modal.memoizedProps,onCancel:()=>{}};return 'retired label'})
+ await expect(f.editor()).rejects.toThrow('changed while reading')
+})
