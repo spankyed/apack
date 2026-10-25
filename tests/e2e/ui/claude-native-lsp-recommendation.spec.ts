@@ -94,6 +94,12 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   await expect(readApproval).toBeVisible({ timeout: 15000 })
   await readApproval.getByRole('button', { name: 'Approve', exact: true }).click()
   const notice = section.getByRole('region', { name: 'Claude LSP recommendation', exact: true })
+  const closeDiff = appPage.getByRole('button', { name: 'Close Diff', exact: true })
+  await expect(closeDiff).toBeVisible({ timeout: 15000 })
+  await expect.poll(async () => (await readFile(join(workspace!, 'native-debug.log'), 'utf8')).includes('Found match: recommendation-review for fixture.txt')).toBe(true)
+  await expect(notice).toHaveCount(0)
+  await closeDiff.click()
+  await expect(closeDiff).toHaveCount(0)
   try { await expect(notice).toBeVisible({ timeout: 20000 }) }
   catch (error) {
     await writeFile(join(workspace!, 'native-lsp-recommendation-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }))
