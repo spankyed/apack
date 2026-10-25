@@ -27,13 +27,19 @@ On the converted production copy (22,816 entities, 5,526 values over 2 KB): comp
 `copyTo`, a `reset()` aborted every time (7 runs); uncompacted, it took 18–34 ms (6 runs). Dropping the old format's
 emptied tables before compacting did not change it, so it is not the conversion's leftovers.
 
-**What it means here.** `copyTo` and `scripts/ears-convert.ts` don't compact (`a7a4234ae` reverted `c31804a75`). A
-compacted file that became a live database could abort the app on a reset, and may on any large delete. What
-compaction saved is space LMDB reuses for later writes anyway. Nothing checks for a compacting copy coming back; the
-ears guide says so beside `copyTo`.
+**Cause.** A compacting copy writes an empty freeDB but keeps the source's txnid. The first transaction that frees
+enough pages to need overflow pages for its free list (dropping a named database of multi-page values does) reaches
+`mdb_page_alloc` while `mdb_freelist_save` has made the freeDB's root an empty leaf. With a txnid above 1, its reverse
+scan of the freeDB lands on that leaf, where a cursor reads no key, and asserts. A fresh uncompacted file still has a
+txnid of 1 or 2, so the scan never starts, and a long-lived one has a non-empty freeDB. Fixed upstream by
+kriszyp/lmdb-js#381: an empty freeDB has nothing to load, so the scan stops before it.
 
-**Next action:** report it to lmdb-js with the repro below, and compact again only once a release no longer aborts on
-it (the repro's 20,000-entry case is the check).
+**What it means here.** Nothing compacts while `COMPACT_COPIES` (`@apackdev/ears/lmdb`) is off: `copyTo` copies
+uncompacted, and `compactEnvironment` refuses. A compacted file that became a live database could abort the app on a
+reset, and may on any large delete. What compaction saves is space LMDB reuses for later writes anyway.
+
+**Next action:** once `lmdb` is a release with #381, run the repro's 20,000-entry case against it, then turn
+`COMPACT_COPIES` on.
 
 ## Repro
 

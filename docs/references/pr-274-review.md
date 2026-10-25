@@ -123,8 +123,9 @@ was added to the conversion and to every backup (`c31804a75`). It came back out 
 data with values spanning several overflow pages aborts the process when it is emptied, an LMDB assertion in
 `mdb_page_alloc` on lmdb-js 3.5.9, the newest release. It reproduces without this repo's data; the evidence, the
 measurements and a repro to report it with are in
-[lmdb-compacted-copy-crash.md](evidence/lmdb-compacted-copy-crash.md). Not before a release that no longer aborts on
-that repro.
+[lmdb-compacted-copy-crash.md](evidence/lmdb-compacted-copy-crash.md). The cause is in lmdb-js's patched
+`mdb_page_alloc`, fixed by kriszyp/lmdb-js#381. The code is back behind `COMPACT_COPIES` (`@apackdev/ears/lmdb`), which
+is off; turning it on is that flag, once `lmdb` is a release with the fix.
 
 ## Not needed here
 

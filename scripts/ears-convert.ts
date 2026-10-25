@@ -13,7 +13,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { compactEnvironment, convertToCurrentFormat } from '@apackdev/ears/lmdb';
+import { COMPACT_COPIES, compactEnvironment, convertToCurrentFormat } from '@apackdev/ears/lmdb';
 
 /** The data dir's database directory, in the app's layout or directly */
 function database(dataDir: string): string {
@@ -32,7 +32,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
   }
   const dir = database(path.resolve(dataDir));
   const steps = convertToCurrentFormat(dir);
-  // A conversion leaves the old format's pages in the file, empty: a copy without them takes its place
-  const compacted = steps.length > 0 ? await compactEnvironment(dir) : undefined;
+  // A conversion leaves the old format's pages in the file, empty: a copy without them takes its place, when copies
+  // are compacted (`COMPACT_COPIES`)
+  const compacted = steps.length > 0 && COMPACT_COPIES ? await compactEnvironment(dir) : undefined;
   console.log(dir, JSON.stringify({ steps, ...(compacted && { compacted }) }));
 }
