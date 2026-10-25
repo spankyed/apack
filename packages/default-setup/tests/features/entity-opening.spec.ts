@@ -1,5 +1,6 @@
-import { expect, it, vi } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { OpenEntity } from '@apackdev/sdk/events';
 import type { NoteSummary } from '#generated/types.ts';
 
@@ -12,6 +13,9 @@ const { default: notes } = await import('#features/notes/fe/state.ts');
 const { default: threads } = await import('#features/threads/fe/state.ts');
 const { default: flows } = await import('#features/flows/fe/state.ts');
 const { librarySystem: library } = await import('#features/library/fe/state.ts');
+
+// The threads surface follows its views itself; here they are subscribed to and never deliver
+afterAll(startFeTestRuntime({ client: { send() {}, watchView: () => () => {} } }));
 
 interface DestinationActor {
   send(event: OpenEntity): void;
@@ -79,13 +83,14 @@ it('opens an unlisted thread and fills only the current target without replaying
     actor.send({ type: 'OPEN_ENTITY', id: 'Thread-first' });
     expect(sendToSystem).toHaveBeenLastCalledWith('threads', { type: 'VIEW_THREAD', threadId: 'Thread-first' });
     actor.send({ type: 'OPEN_ENTITY', id: 'Thread-second' });
-    actor.send({ type: 'SET_VIEW_DATA', id: 'Thread-first', data: { topic: 'Abandoned' } });
+    const detail = (id: string, topic: string) => ({ type: 'DETAIL.READ' as const, id, detail: { id: id as never, topic, messageIds: [] } });
+    actor.send(detail('Thread-first', 'Abandoned'));
     expect(actor.getSnapshot().context.view.id).toBe('Thread-second');
     expect(actor.getSnapshot().context.view.topic).not.toBe('Abandoned');
-    actor.send({ type: 'SET_VIEW_DATA', id: 'Thread-second', data: { topic: 'Current' } });
+    actor.send(detail('Thread-second', 'Current'));
     expect(actor.getSnapshot().context.view.topic).toBe('Current');
     actor.send({ type: 'VIEW_LIST' });
-    actor.send({ type: 'SET_VIEW_DATA', id: 'Thread-second', data: { topic: 'Updated' } });
+    actor.send(detail('Thread-second', 'Updated'));
     expect(actor.getSnapshot().matches('list')).toBe(true);
   } finally { actor.stop(); }
 });

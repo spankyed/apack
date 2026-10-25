@@ -114,7 +114,7 @@ export async function action(
   });
 
   // Refresh UI so the FE sees the synthetic message.
-  services.chat.openThreadChatAndRefreshRecent(threadId as EntityId);
+  services.chat.showThread(threadId as EntityId);
 
   // Hand off to the existing chat action. It reads `revertTo`, applies
   // fork+truncate, and runs `/compact` against the truncated session.

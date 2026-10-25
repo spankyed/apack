@@ -120,11 +120,14 @@ it.each([
   expect(sendToSystem).toHaveBeenCalledWith('database', { type: 'RESET_DATABASE' });
 });
 
-// The schema walks the whole store, so it is fetched rather than watched: once on opening, again whenever the data
-// is replaced in any window, and after a transaction this window ran
-it('asks for the schema when it opens, when the data is replaced, and after its own transaction', () => {
+// The schema walks the whole store, so it is fetched rather than watched: once the shell starts the surface (in a
+// delivery naming it, so the ask can be answered), again whenever the data is replaced in any window, and after a
+// transaction this window ran
+it('asks for the schema when it starts, when the data is replaced, and after its own transaction', () => {
   const actor = createActor(databaseState).start();
   const asks = () => sendToSystem.mock.calls.filter(([, event]) => event.type === 'GET_SCHEMA').length;
+  expect(asks(), 'nothing from the machine\'s own entry, which no delivery names').toBe(0);
+  actor.send({ type: 'SURFACE_STARTED' });
   expect(asks()).toBe(1);
   actor.send({ type: 'SCHEMA_READ', schema: { entities: [{ type: 'Note' }], attributes: [], relations: [] } });
   expect(actor.getSnapshot().context.schema.entities).toEqual([{ type: 'Note' }]);

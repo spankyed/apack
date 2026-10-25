@@ -1,6 +1,6 @@
 import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb from '@apackdev/sdk/fe'
-import { contextMenu } from '@apackdev/sdk/fe'
+import { contextMenu, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import { targetIs, TRAIL_CLICK, type TrailClickEvent } from '@apackdev/sdk/fe'
 import { answersCall, newCall } from '@apackdev/sdk/events'
@@ -40,6 +40,7 @@ type SystemEvent = OutgoingDatabaseEvents |
   { type: 'FEATURE_SETTINGS_UPDATED'; settings: DatabaseSettings }
 
 type UIEvent =
+  | SurfaceLifecycleEvent
   | { type: 'QUERY.EXECUTE'; code: string }
   | { type: 'TRANSACTION.EXECUTE'; code: string }
   | { type: 'SCHEMA.SELECT'; itemType: 'entity' | 'attribute' | 'relation'; value: string }
@@ -501,7 +502,6 @@ const databaseState = setup({
 }).createMachine({
   id,
   initial: 'explorer',
-  entry: 'requestSchema',
   context: () => ({
     ...emptyDatabaseResults(),
     schema: {
@@ -524,6 +524,8 @@ const databaseState = setup({
     ...TRAIL_CLICK([
       ['.explorer', 'explorer'],
     ]),
+    // Where a surface asks for what it starts from: the shell hands it this in a delivery naming the surface
+    SURFACE_STARTED: { actions: 'requestSchema' },
     SCHEMA_READ: { actions: 'setSchema' },
     DATABASE_REPLACED: { actions: ['dropReplacedResults', 'requestSchema'] },
     QUERY_RESULT: { guard: 'answersPendingQuery', actions: 'setQueryResult' },

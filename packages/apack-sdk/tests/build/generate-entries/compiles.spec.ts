@@ -468,7 +468,7 @@ it('typechecks only consumed host APIs and directly owned dependency service mem
 });
 
 describe('generated views compile', () => {
-  it("type useView by each feature's declaration: its names, its arguments and its result", async () => {
+  it("type useView and fromView by each feature's declaration: its names, its arguments and its result", async () => {
     write('src/features/notes/be/views.ts', [
       "import { defineViews } from '@apackdev/sdk/framework';",
       'export const noteViews = defineViews({',
@@ -495,6 +495,10 @@ describe('generated views compile', () => {
       "useView('notes', 'page', { page: 'one' });",
       '// @ts-expect-error a view the feature does not declare',
       "useView('notes', 'missing');",
+      "import { fromView } from './__generated__/fe.ts';",
+      "fromView('notes', 'page', (update, args) => ({ type: 'PAGE.READ', page: args.page, titles: update.ok ? update.value.titles : [] }));",
+      '// @ts-expect-error a machine reads the result the view declares',
+      "fromView('notes', 'all', (update) => ({ type: 'ALL.READ', count: update.ok ? update.value.length + update.value.nope : 0 }));",
       'void all; void page;',
     ].join('\n'));
     expect(typecheck(files, ['src/probe.ts', 'src/__generated__/pack-entry.ts'])).toEqual([]);

@@ -256,7 +256,7 @@ The host `application` feature's surface: the frontend half of the feature whose
 
 Modules, one concern each; a concern that owns a listener or subscription is a child actor:
 
-- `surfaces.ts`: `withHostLast` (the host's surfaces, the Packs tab, after every pack's), `neighbourOf`, spawning a surface's actor with `id` and `systemId` its ref, moving between visible surfaces, and the back/forward history.
+- `surfaces.ts`: `withHostLast` (the host's surfaces, the Packs tab, after every pack's), `neighbourOf`, spawning a surface's actor with `id` and `systemId` its ref and handing it `SURFACE_STARTED` through `notifySurfaceActor` — the delivery a surface's startup asks are made in, since its machine's own entry runs in none (`tests/features/application/fe/send-scope.spec.ts`) — moving between visible surfaces, and the back/forward history.
 - `trail.ts`: `computeCrumbs` reads the breadcrumbs and context menu off the open surface's state `meta.breadcrumb` / `meta.contextMenu`; the `surfaceTrailer` child follows whichever surface is open.
 - `layout.ts`: the panel sizes as pure changes. What the user resizes or toggles is saved through `storage`; the chat onboarding maximizes for the moment isn't.
 - `input.ts`: the `hotkeyListener` (modifier tracking ported from VueUse `useMagicKeys`) and `mouseListener` (back/forward buttons) children, on `target`; with none, neither listens.

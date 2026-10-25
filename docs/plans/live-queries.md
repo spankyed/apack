@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`) and database done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`) and threads done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -437,6 +437,53 @@ and `threads`' streaming tokens are notifications.
   - **The generated query stays a broadcast** (`AI_QUERY_LOADING`, `AI_QUERY_GENERATED`, `AI_QUERY_ERROR`): a flow
     sends it, and a flow run is no delivery, so there is no sender to reply to. It carries a query, never rows.
     Answering through a flow is under Open.
+  - **Its first ask moved to `SURFACE_STARTED`** with the threads change below: as committed, `GET_SCHEMA` went out
+    from the machine's entry, in no delivery, so it carried no sender and its answer went nowhere.
+- **threads** — seven views: `list()`, `archived({ sortOrder })`, `recent({ limit, sortOrder })`, `detail({ id })`,
+  `chat({ threadId, limit })`, `message({ id })` and `tab({ threadId })`. Sorted: every broadcast was data or a refetch
+  cue (`THREAD_CONNECTED`, `SET_VIEW_DATA`, `THREAD_CREATED`/`UPDATED`/`DELETED`, `ARCHIVED_THREADS_DATA`,
+  `AGENT_CONNECTED`, `LOAD_CHAT_THREAD`, `REFRESH_RECENT_THREADS`, `MESSAGE_ADDED`, `UPDATE_MESSAGE_STATE`,
+  `OLDER_MESSAGES_LOADED`, `SET_CHAT_STATE`, `ARTIFACT_ADDED`/`UPDATED`, `THREAD_TAB_REQUESTED`,
+  `AGENT_SETTINGS_UPDATED`), in the system, its services and twelve content actions, except the import and export
+  outcomes and three of a flow's notifications that carry no row (`SET_MODE`, `SET_PHASE`, `FLASH_CHAT_STATE`).
+  Writes are answered (`THREAD_CREATED` with the id, `THREAD_WRITTEN`, `THREAD_WRITE_FAILED`). Decisions:
+  - **A message is its own view, and no list reads a message's content.** The chat page and the detail page are a
+    thread's fields and its messages' ids in display order; `message({ id })` is the whole message. A streamed reply
+    rewrites one message's text per flush, so it re-runs that message's view and nothing else. **Measured** (the views
+    spec's streaming case run against the clock — real 10 ms sleeps between tokens, which the committed spec drives
+    flush by flush instead — 2026-10-25 on the dev machine through the harness, three runs alike): a token every
+    ~10 ms through the Claude Code stream writer (80 ms throttle) made 16 flushes in 1.27 s — about 12.6 a second — and
+    the message's view re-ran 16 times, once per flush; the chat page, detail, list, recent and tab views re-ran 0
+    times. A view of whole messages would have re-sent the page, and re-rendered every message, 12.6 times a second.
+  - **The machine follows the views, through a new SDK primitive, `fromView`.** The threads surface is drawn as four
+    canvas routes and the chat area beside every surface, so no one component is mounted for as long as it runs: a
+    view in one would stop when another area showed, and a view in each would arrive twice. `fromView(feature, view,
+    read)` (`#generated/fe`, `untypedFromView` in `@apackdev/sdk/fe`) is the subscription as XState actor logic; the
+    machine spawns a child per view with its arguments and stops or replaces it when they change — one per open tab
+    and one per listed message.
+  - **A surface asks for what it starts from on `SURFACE_STARTED`.** A send from a machine's entry runs in no delivery,
+    carries no sender, and so cannot be answered — which the database's first ask had already got wrong. The shell
+    now hands every surface it spawns `SURFACE_STARTED` through `notifySurfaceActor`, and the SDK declares the
+    lifecycle events (`SurfaceLifecycleEvent`). Threads asks `GET_CHAT_START`, answered `CHAT_STARTED` with the thread
+    to open, the tabs every window opens and the settings — a reply, where `AGENT_CONNECTED` was a broadcast to every
+    window on every `SEND_STATE`.
+  - **The thread map is derived, not patched.** It is the union of what the list, recent and archived views last gave,
+    rebuilt on each, so a thread deleted anywhere leaves it; a deleted thread's chat, tab and detail views end with
+    `null`, which closes its tab and its page. The recent and archived views take their limit and order as arguments
+    from the settings the surface holds, since a view reading settings would not be re-run when they change.
+  - **Thread writes hold the thread-level views** (`ViewWrites`): pinning, renaming and the detail page's fields are
+    applied on screen at once, so a result from before the write would undo them. Once answered, a held result reads
+    the views again by replacing their children — a fresh subscription's first result is computed after the write.
+    Message views are not held: nothing applies a message edit before its write.
+  - **The chat pages by a growing limit**, not a cursor: `LOAD_MORE_MESSAGES` asks the chat view for 50 more, and the
+    page that comes back holds every message the window shows, so a message arriving while it reads older ones cannot
+    be lost between two pages.
+  - **A thread a window's first message started is shown to that window** (`SHOW_THREAD`, a reply), as is a fork; a
+    thread a flow opens is shown to every window, there being no window to answer. A window that opens a thread itself
+    is answered nothing: it already shows it, and the visit reaches every window's recent list through its view.
+  - **The services stopped notifying, and their names say so**: `createThreadAndNotify` is `createThread`,
+    `openThreadChatAndRefreshRecent` is `showThread` (and `visitThread`), `sendRecentThreadsRefresh` and
+    `openThreadTabAndRefresh` are gone, and `services.artifact` is `create`/`update`.
 
 ### 5. The rule
 

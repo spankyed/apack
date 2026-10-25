@@ -526,6 +526,7 @@
         "chatQueries": "src/features/threads/be/repository/index.ts#chatQueries",
         "chatCommands": "src/features/threads/be/repository/index.ts#chatCommands"
       },
+      "views": "src/features/threads/be/views.ts#threadViews",
       "references": {
         "types": {
           "thread": {

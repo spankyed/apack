@@ -11,7 +11,9 @@ import { safeEvents } from '@apackdev/sdk/fe';
 import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject } from 'xstate';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
-import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse } from '#generated/types.ts';
+import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
+import { viewRead, viewWrites, writeAnswered, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
@@ -28,6 +30,20 @@ import { saveThreadTabGroups, loadThreadTabGroups } from '#features/threads/fe/c
 import type { EARS } from '@apackdev/sdk';
 
 export const id = 'threads' as const;
+
+// The threads surface over its views. It is drawn in several places — the list, the board, a thread's page and the
+// dashboard as canvas routes, and the chat beside every surface — so no one component holds its views: the machine
+// follows each as a child actor (`fromView`), spawned with its arguments and replaced when they change. The list, the
+// recent threads and the archived ones are three views from which the thread map is derived; the open thread's chat,
+// its detail page and each open tab are one view each; and each message either lists is its own view, so a reply
+// streaming into one message re-runs that message's view alone. This window's thread writes hold the thread-level
+// views back until each is answered (`ViewWrites`), so a result from before an edit never undoes it on screen.
+//
+// What it starts from — the thread to open, the tabs every window opens, the settings — is asked for when the shell
+// starts the surface (`SURFACE_STARTED`), in a delivery naming it, which is what lets the system answer.
+
+/** How many messages a page of the chat holds, and how many more each `LOAD_MORE_MESSAGES` asks for */
+const MESSAGE_PAGE_SIZE = 50;
 
 // Module-level mouse position tracker (read when hotkey fires)
 let mouseX = 0;
@@ -129,14 +145,19 @@ const defaultChatThread: AgentThreadData = {
 
 type SystemEvent =
   | OutgoingThreadsEvents
-  | { type: 'THREAD_UPDATED'; threadId: string; updates: Partial<Pick<ThreadEntity, 'status' | 'tags' | 'context' | 'pinned' | 'topic' | 'instructions'>> }
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
-  | { type: 'THREAD_DELETED'; threadId: string }
-  | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }
-  | { type: 'THREADS_EXPORT_FAILED'; errors: string[] }
-  | { type: 'THREADS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'THREADS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'ARCHIVED_THREADS_DATA'; threads: any[] }
+  | SurfaceLifecycleEvent
+
+/** What the views this surface follows hand it: each one's result, or that it failed (kept showing what it showed) */
+type ViewEvent =
+  | { type: 'THREADS.READ'; threads: ThreadExtended[] }
+  | { type: 'ARCHIVED.READ'; threads: Partial<ThreadEntity>[] }
+  | { type: 'RECENT.READ'; threads: Partial<ThreadEntity>[] }
+  | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
+  | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
+  | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
+  | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
+  | { type: 'VIEW.FAILED'; view: string; error: string }
 
 type UIEvent =
   // Thread management events
@@ -185,7 +206,6 @@ type UIEvent =
   | { type: 'NEW_THREAD_IN_PROJECT'; directory: string }
   | { type: 'NEW_THREAD_NO_PROJECT' }
   | { type: 'CREATE_CHILD_THREAD'; parentThreadId: string }
-  | { type: 'SET_CHAT_STATE'; threadId: string; chatState: string }
   | { type: 'CLEAR_CHAT_STATE_OVERRIDE'; threadId: string }
   | { type: 'SELECT_TAB'; tabId: string }
   | { type: 'CLOSE_TAB'; tabId: string }
@@ -194,8 +214,6 @@ type UIEvent =
   | { type: 'SET_MODE'; mode: string }
   | { type: 'SET_PHASE'; phase: string }
   | { type: 'RESPOND_TO_BLOCK_INTERACTION'; messageId: string; response: BlockResponse }
-  | { type: 'UPDATE_MESSAGE_STATE'; messageId: string; responseTimestamp?: number; blockResponse?: BlockResponse; asideText?: string; context?: Record<string, unknown>; compacted?: boolean }
-  | { type: 'MESSAGE_ADDED'; threadId: string; message: MessageEntity }
   | { type: 'HOTKEY_PRESSED'; } & HotkeyEvent
   | { type: 'OPEN_QUICK_PROMPTS' }
   | { type: 'CLOSE_QUICK_PROMPTS' }
@@ -208,8 +226,6 @@ type UIEvent =
   | { type: 'UNQUEUE_MESSAGE'; threadId: string; messageId: string }
   | { type: 'DISMISS_MESSAGE'; messageId: string }
   | { type: 'LOAD_MORE_MESSAGES' }
-  | { type: 'TOKEN_STREAM'; token: string }
-  | { type: 'LLM_DONE' }
   | { type: 'RENAME_THREAD'; threadId: string; topic: string }
   // Tab reorder & group events
   | { type: 'REORDER_TABS'; fromIndex: number; toIndex: number }
@@ -234,6 +250,7 @@ type ThreadEvents =
   | OpenEntity
   | UIEvent
   | SystemEvent
+  | ViewEvent
   | TrailClickEvent;
 
 const typeOf = safeEvents<ThreadEvents>();
@@ -262,31 +279,6 @@ function mergeThreadMap(threadMap: Record<string, ThreadListItem>, threads: Thre
   return next;
 }
 
-function appendThreadIds(threadIds: string[], threads: ThreadLike[]): string[] {
-  const seen = new Set(threadIds);
-  const next = [...threadIds];
-  for (const thread of threads) {
-    if (seen.has(thread.id)) continue;
-    seen.add(thread.id);
-    next.push(thread.id);
-  }
-  return next;
-}
-
-function threadStoreFrom(threads: ThreadLike[]): { threadMap: Record<string, ThreadListItem>; threadIds: string[] } {
-  return {
-    threadMap: mergeThreadMap({}, threads),
-    threadIds: threadIdsFrom(threads),
-  };
-}
-
-function visibleThreadStore(ctx: ThreadsContext, threads: ThreadLike[]): { threadMap: Record<string, ThreadListItem>; threadIds: string[] } {
-  return {
-    threadMap: mergeThreadMap(ctx.threadMap, threads),
-    threadIds: threadIdsFrom(threads),
-  };
-}
-
 /** Update a single thread in the map (no-op if not found) */
 function patchThread(ctx: ThreadsContext, threadId: string, patch: Partial<ThreadListItem>) {
   const existing = ctx.threadMap[threadId];
@@ -301,14 +293,75 @@ function removeThread(ctx: ThreadsContext, threadId: string) {
 }
 
 function optimisticFieldUpdate(context: ThreadsContext, threadId: string, key: string, value: unknown) {
-  sendToSystem(id, { type: 'UPDATE_THREAD_FIELD', threadId, key, value });
+  const call = sendToSystem(id, { type: 'UPDATE_THREAD_FIELD', threadId, key, value });
   return {
+    writes: writeSent(context.writes, call),
     ...patchThread(context, threadId, { [key]: value } as any),
     tabs: context.tabs.map(t => t.id === threadId ? { ...t, [key]: value, ...(key === 'topic' ? { label: value as string } : {}) } : t),
     ...(context.currentThread?.id === threadId ? { currentThread: { ...context.currentThread, [key]: value } } : {}),
     ...(context.view.id === threadId ? { view: { ...context.view, [key]: value } } : {}),
   };
 }
+
+/**
+ * The thread map and the lists the surface shows, derived from what the list, recent and archived views last gave:
+ * a thread deleted anywhere leaves all three, and so the map
+ */
+function threadStore(ctx: ThreadsContext, lists: ThreadsContext['lists']): Partial<ThreadsContext> {
+  const threadMap = mergeThreadMap({}, [...lists.archived, ...lists.recent, ...lists.list] as ThreadLike[]);
+  for (const fresh of ctx.freshThreadIds) {
+    if (threadMap[fresh]) threadMap[fresh] = { ...threadMap[fresh], isNew: true };
+  }
+  const chatStates: Record<string, ChatState> = {};
+  for (const thread of Object.values(threadMap)) {
+    if (typeof thread.chatState === 'string') chatStates[thread.id] = thread.chatState as ChatState;
+  }
+  return {
+    lists,
+    threadMap,
+    chatStates,
+    threadIds: threadIdsFrom((ctx.showArchived ? lists.archived : lists.list) as ThreadLike[]),
+    recentThreadIds: threadIdsFrom(lists.recent as ThreadLike[]),
+    sidebarArchivedThreads: lists.archived as ThreadListItem[],
+  };
+}
+
+/** The messages `ids` name, as their views last gave them */
+function messagesOf(ctx: ThreadsContext, ids: string[]): Partial<MessageEntity>[] {
+  return ids.flatMap((messageId) => (ctx.messageContents[messageId] ? [ctx.messageContents[messageId]] : []));
+}
+
+/** The chat's and the detail page's messages, composed again from their ids and each message's view */
+function composedMessages(ctx: ThreadsContext): Partial<ThreadsContext> {
+  return {
+    currentThread: ctx.currentThread ? { ...ctx.currentThread, messages: messagesOf(ctx, ctx.chatMessageIds) } : ctx.currentThread,
+    view: { ...ctx.view, messages: messagesOf(ctx, ctx.detailMessageIds) },
+  };
+}
+
+/** What the surface's views are spawned as: one id per view, and one per open tab and per listed message */
+const viewChild = {
+  list: 'view.list',
+  archived: 'view.archived',
+  recent: 'view.recent',
+  detail: 'view.detail',
+  chat: 'view.chat',
+  tab: (threadId: string) => `view.tab:${threadId}`,
+  message: (messageId: string) => `view.message:${messageId}`,
+} as const;
+
+/** The recent threads' limit and order, as the settings hold them */
+function recentArgs(settings: ThreadsSettings | null) {
+  const limit = settings?.recentThreadsLimit;
+  const sortOrder = settings?.recentThreadsSortOrder;
+  return {
+    limit: typeof limit === 'number' && limit > 0 ? limit : 7,
+    sortOrder: sortOrder === 'visited' || sortOrder === 'message' ? sortOrder : 'created' as const,
+  };
+}
+
+/** A view's failure: it keeps showing what it showed, and the failure is reported to nothing but the console */
+const failed = (view: string, error: string) => ({ type: 'VIEW.FAILED' as const, view, error });
 
 // ---- State machine ----
 
@@ -333,18 +386,264 @@ const threadsState = setup({
       const timer = setTimeout(() => sendBack({ type: 'CLEAR_CHAT_STATE_OVERRIDE', threadId: input.threadId }), input.durationMs);
       return () => clearTimeout(timer);
     }),
+    listView: fromView('threads', 'list', (update) =>
+      (update.ok ? { type: 'THREADS.READ' as const, threads: update.value } : failed('list', update.error))),
+    archivedView: fromView('threads', 'archived', (update) =>
+      (update.ok ? { type: 'ARCHIVED.READ' as const, threads: update.value } : failed('archived', update.error))),
+    recentView: fromView('threads', 'recent', (update) =>
+      (update.ok ? { type: 'RECENT.READ' as const, threads: update.value } : failed('recent', update.error))),
+    detailView: fromView('threads', 'detail', (update, args) =>
+      (update.ok ? { type: 'DETAIL.READ' as const, id: args.id, detail: update.value } : failed('detail', update.error))),
+    chatView: fromView('threads', 'chat', (update, args) =>
+      (update.ok ? { type: 'CHAT.READ' as const, threadId: args.threadId, chat: update.value } : failed('chat', update.error))),
+    messageView: fromView('threads', 'message', (update, args) =>
+      (update.ok ? { type: 'MESSAGE.READ' as const, id: args.id, message: update.value } : failed('message', update.error))),
+    tabView: fromView('threads', 'tab', (update, args) =>
+      (update.ok ? { type: 'TAB.READ' as const, threadId: args.threadId, tab: update.value } : failed('tab', update.error))),
   },
   actions: {
-    // ---- Thread management actions ----
-    openThreadChat: ({ self, event }) => {
-      const { threadId, restore } = typeOf('OPEN_THREAD_CHAT', event);
-      self.send({ type: 'VIEW_DASHBOARD' });
-      sendToSystem(id, {
-        type: 'OPEN_THREAD_CHAT',
-        threadId,
-        ...(restore && { restore }),
+    // ---- Following the views ----
+    /** Asks for what the chat starts from, and follows the list: the shell's start, in a delivery naming the surface */
+    startSurface: enqueueActions(({ enqueue }) => {
+      enqueue(() => sendToSystem(id, { type: 'GET_CHAT_START' }));
+      enqueue('followList');
+    }),
+    followList: enqueueActions(({ enqueue }) => {
+      enqueue.stopChild(viewChild.list);
+      enqueue.spawnChild('listView', { id: viewChild.list });
+    }),
+    /** The archived and the recent threads, whose order and number the settings hold */
+    followSettingsViews: enqueueActions(({ context, enqueue }) => {
+      enqueue.stopChild(viewChild.archived);
+      enqueue.stopChild(viewChild.recent);
+      if (!context.settings) return;
+      const args = recentArgs(context.settings);
+      enqueue.spawnChild('archivedView', { id: viewChild.archived, input: { sortOrder: args.sortOrder } });
+      enqueue.spawnChild('recentView', { id: viewChild.recent, input: args });
+    }),
+    followDetail: enqueueActions(({ context, enqueue }) => {
+      enqueue.stopChild(viewChild.detail);
+      if (context.view.id) enqueue.spawnChild('detailView', { id: viewChild.detail, input: { id: context.view.id } });
+    }),
+    stopDetail: enqueueActions(({ enqueue }) => {
+      enqueue.stopChild(viewChild.detail);
+      enqueue.assign({ detailMessageIds: [] });
+      enqueue('followMessages');
+    }),
+    followChat: enqueueActions(({ context, enqueue }) => {
+      enqueue.stopChild(viewChild.chat);
+      const threadId = context.currentThread?.id;
+      if (threadId) enqueue.spawnChild('chatView', { id: viewChild.chat, input: { threadId, limit: context.chatLimit } });
+    }),
+    /** A view per open tab: spawned as a tab opens, stopped as it closes */
+    followTabs: enqueueActions(({ context, enqueue }) => {
+      const open = context.tabs.map(tab => tab.id);
+      for (const threadId of context.tabViews) {
+        if (!open.includes(threadId)) enqueue.stopChild(viewChild.tab(threadId));
+      }
+      for (const threadId of open) {
+        if (!context.tabViews.includes(threadId)) enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
+      }
+      enqueue.assign({ tabViews: open, tabsRead: context.tabsRead.filter(threadId => open.includes(threadId)) });
+    }),
+    /** A view per message the chat or the detail page lists, and nothing kept of a message neither lists any more */
+    followMessages: enqueueActions(({ context, enqueue }) => {
+      const listed = [...new Set([...context.chatMessageIds, ...context.detailMessageIds])];
+      for (const messageId of context.messageViews) {
+        if (!listed.includes(messageId)) enqueue.stopChild(viewChild.message(messageId));
+      }
+      for (const messageId of listed) {
+        if (!context.messageViews.includes(messageId)) enqueue.spawnChild('messageView', { id: viewChild.message(messageId), input: { id: messageId } });
+      }
+      enqueue.assign({
+        messageViews: listed,
+        messageContents: Object.fromEntries(listed.flatMap(messageId => (context.messageContents[messageId] ? [[messageId, context.messageContents[messageId]]] : []))),
       });
-    },
+    }),
+    /**
+     * Reads every thread-level view again, once this window's writes are answered and a result was held behind them
+     * or one was refused: a fresh subscription's first result is computed after every answered write
+     */
+    refollowThreadViews: enqueueActions(({ context, enqueue }) => {
+      enqueue('followList');
+      enqueue('followSettingsViews');
+      enqueue('followDetail');
+      enqueue('followChat');
+      for (const threadId of context.tabViews) {
+        enqueue.stopChild(viewChild.tab(threadId));
+        enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
+      }
+    }),
+    /** An answer to one of this window's writes */
+    settleWrite: enqueueActions(({ context, event, enqueue }) => {
+      const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'THREAD_WRITE_FAILED');
+      enqueue.assign({ writes });
+      if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
+    }),
+
+    // ---- What the views gave ----
+    readThreads: enqueueActions(({ context, event, enqueue }) => {
+      const { threads } = typeOf('THREADS.READ', event);
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, list: threads }));
+    }),
+    readArchived: enqueueActions(({ context, event, enqueue }) => {
+      const { threads } = typeOf('ARCHIVED.READ', event);
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, archived: threads }));
+    }),
+    readRecent: enqueueActions(({ context, event, enqueue }) => {
+      const { threads } = typeOf('RECENT.READ', event);
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (apply) enqueue.assign(({ context }) => threadStore(context, { ...context.lists, recent: threads }));
+    }),
+    readDetail: enqueueActions(({ context, event, enqueue }) => {
+      const { id: threadId, detail } = typeOf('DETAIL.READ', event);
+      if (threadId !== context.view.id || !detail) return;
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (!apply) return;
+      const { messageIds, ...fields } = detail;
+      enqueue.assign(({ context }) => ({
+        view: { ...context.view, ...fields, id: detail.id } as ThreadViewData,
+        detailMessageIds: messageIds as string[],
+      }));
+      enqueue('followMessages');
+      enqueue.assign(({ context }) => composedMessages(context));
+    }),
+    readChat: enqueueActions(({ context, event, enqueue }) => {
+      const { threadId, chat } = typeOf('CHAT.READ', event);
+      if (threadId !== context.currentThread?.id || !chat) return;
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (!apply) return;
+      const { messageIds, hasMore, ...header } = chat;
+      enqueue.assign(({ context }) => ({
+        currentThread: { ...context.currentThread!, ...header },
+        chatMessageIds: messageIds as string[],
+        messagePagination: { hasMore, isLoading: false },
+        chatStates: { ...context.chatStates, [threadId]: ((header.chatState as ChatState | undefined) ?? 'idle') },
+      }));
+      // The thread this window just opened takes its forced mode once, as it opens
+      if (context.openedThreadId === threadId) {
+        enqueue.assign(({ context }) => {
+          const forcedMode = header.forcedMode;
+          if (!forcedMode) return { openedThreadId: null };
+          const modeConfig = context.modes.find(m => m.name === forcedMode);
+          const phase = modeConfig?.phases?.length
+            ? (forcedMode in context.phaseByModeName ? context.phaseByModeName[forcedMode] : modeConfig.phases[0].name)
+            : undefined;
+          return { openedThreadId: null, mode: forcedMode, phase: phase ?? '' };
+        });
+      }
+      enqueue('followMessages');
+      enqueue.assign(({ context }) => composedMessages(context));
+    }),
+    readMessage: assign(({ context, event }) => {
+      const { id: messageId, message } = typeOf('MESSAGE.READ', event);
+      if (!context.messageViews.includes(messageId)) return {};
+      const { [messageId]: _gone, ...rest } = context.messageContents;
+      const next = { ...context, messageContents: message ? { ...rest, [messageId]: message } : rest };
+      return { messageContents: next.messageContents, ...composedMessages(next) };
+    }),
+    readTab: enqueueActions(({ context, event, enqueue }) => {
+      const { threadId, tab } = typeOf('TAB.READ', event);
+      if (!tab || !context.tabs.some(t => t.id === threadId)) return;
+      const { writes, apply } = viewRead(context.writes);
+      enqueue.assign({ writes });
+      if (!apply) return;
+      enqueue.assign(({ context }) => {
+        const firstRead = !context.tabsRead.includes(threadId);
+        const tabs = context.tabs.map((existing) => {
+          if (existing.id !== threadId) return existing;
+          const known = new Set(existing.artifacts.map(a => a.id));
+          // An artifact added since the tab was last read is the one to show; otherwise what was selected stays
+          const added = firstRead ? undefined : tab.artifacts.find(a => !known.has(a.id));
+          const kept = tab.artifacts.some(a => a.id === existing.selectedArtifactId) ? existing.selectedArtifactId : tab.artifacts[0]?.id;
+          return {
+            ...existing,
+            label: tab.topic || existing.label,
+            artifacts: tab.artifacts as Tab['artifacts'],
+            selectedArtifactId: added?.id ?? kept,
+            pinned: tab.pinned ?? false,
+          };
+        });
+        return {
+          tabs,
+          tabsRead: firstRead ? [...context.tabsRead, threadId] : context.tabsRead,
+          ...(context.currentThread?.id === threadId
+            ? { currentThread: { ...context.currentThread, artifacts: tab.artifacts as unknown as AgentThreadData['artifacts'] } }
+            : {}),
+        };
+      });
+      enqueue('persistTabs');
+    }),
+    /**
+     * A thread this window shows is gone — deleted here or elsewhere, or it could not be opened: its tab closes, the
+     * chat leaves it, and the next tab opens in its place
+     */
+    dropThread: enqueueActions(({ context, event, enqueue, self }) => {
+      const { threadId } = event as { type: string; threadId: string };
+      const index = context.tabs.findIndex(t => t.id === threadId);
+      const tabs = context.tabs.filter(t => t.id !== threadId);
+      let activeTabId = context.activeTabId;
+      if (context.activeTabId === threadId) {
+        const nextTab = context.tabs[index + 1] ?? context.tabs[index - 1];
+        activeTabId = nextTab && nextTab.id !== threadId ? nextTab.id : '';
+      }
+      enqueue.assign({ tabs, activeTabId });
+      if (context.currentThread?.id === threadId) {
+        enqueue.assign({ currentThread: { ...defaultChatThread, messages: [] }, chatMessageIds: [] });
+        enqueue('followChat');
+        enqueue('followMessages');
+      }
+      if (activeTabId && activeTabId !== context.activeTabId) {
+        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: activeTabId }));
+      }
+      enqueue('cleanupEmptyGroups');
+      enqueue('tabsChanged');
+      enqueue('persistTabGroups');
+    }),
+    /** The detail page's thread is gone, so the page closes */
+    leaveGoneDetail: assign(() => ({
+      view: { ...defaultThread, id: '' as EARS.EntityId, shortCode: '', status: '', timestamp: 0 } as ThreadViewData,
+      selectedThreadCode: undefined,
+    })),
+
+    // ---- Thread management actions ----
+    /**
+     * Opens a thread in the chat: the thread this window asked to open (`OPEN_THREAD_CHAT`, which also tells the
+     * system it was visited), or one the system says to show (`SHOW_THREAD`: the thread a first message started, a
+     * fork, or a flow's). Its tab opens and becomes the active one, and its chat view follows it.
+     */
+    openThread: enqueueActions(({ context, event, enqueue, self }) => {
+      const { threadId, restore } = typeOf(['OPEN_THREAD_CHAT', 'SHOW_THREAD'], event);
+      enqueue(() => self.send({ type: 'VIEW_DASHBOARD' }));
+      if (event.type === 'OPEN_THREAD_CHAT') {
+        enqueue(() => sendToSystem(id, { type: 'OPEN_THREAD_CHAT', threadId, ...(restore && { restore }) }));
+      }
+      const known = context.threadMap[threadId];
+      const label = known?.topic || context.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
+      if (!context.tabs.some(t => t.id === threadId)) {
+        enqueue.assign({ tabs: [...context.tabs, { id: threadId, label, artifacts: [], ...(known?.pinned && { pinned: true }) }] });
+      }
+      enqueue.assign({ activeTabId: threadId });
+      if (context.currentThread?.id !== threadId) {
+        enqueue.assign({
+          currentThread: { ...defaultChatThread, ...(known && { topic: known.topic, shortCode: known.shortCode, status: known.status }), id: threadId as EARS.EntityId, messages: [] },
+          chatLimit: MESSAGE_PAGE_SIZE,
+          chatMessageIds: [],
+          messagePagination: { hasMore: false, isLoading: true },
+          openedThreadId: threadId,
+        });
+        enqueue('followChat');
+        enqueue('followMessages');
+      }
+      enqueue('tabsChanged');
+    }),
     setupParentThread: assign(({ event, context }) => {
       const typedEvent = typeOf('SHOW_CREATE_FORM_AS_CHILD', event);
       const parentThread = context.threadMap[typedEvent.parentThreadId];
@@ -362,43 +661,21 @@ const threadsState = setup({
         }
       };
     }),
-    setSurfaceData: assign(({ event }) => {
-      const typedEvent = typeOf('THREAD_CONNECTED', event);
-
-      return {
-        ...threadStoreFrom(typedEvent.data.threads as ThreadListItem[]),
-        selectedThreadIds: [],
-        availableTags: typedEvent.data.availableTags,
-        settings: typedEvent.data.settings,
-        chatStates: (typedEvent.data.chatStates || {}) as Record<string, ChatState>,
-      };
+    /** The thread this window created: marked new in the list, for its animation, and the form emptied */
+    markCreated: assign(({ context, event }) => {
+      const created = typeOf('THREAD_CREATED', event).id as string;
+      const freshThreadIds = [...context.freshThreadIds, created];
+      return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
     }),
-    addThenResetCreateForm: assign(({ context, event }) => {
-      const typedEvent = typeOf('THREAD_CREATED', event);
-      const newThread: ThreadListItem = {
-        ...context.create,
-        createdAt: typedEvent.timestamp,
-        updatedAt: typedEvent.timestamp,
-        status: '',
-        tags: context.create.tags,
-          isNew: true,
-          ...typedEvent
-      } as ThreadListItem;
-
-      return {
-        threadMap: { ...context.threadMap, [newThread.id]: newThread },
-        threadIds: [newThread.id, ...context.threadIds],
-        create: defaultThread,
-      }
-    }),
-    sendCreateThread: ({ context }) => {
+    sendCreateThread: assign(({ context }) => {
       const { parentThread: _parentThread, ...createData } = context.create;
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'CREATE_THREAD',
         ...createData,
         parentThreadId: context.create.parentThreadId,
       });
-    },
+      return { writes: writeSent(context.writes, call) };
+    }),
     recordThreadNavigation: assign(({ context, event }) => ({
       navHistory: pushNavHistory(context.navHistory, `view:${typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id}`),
     })),
@@ -409,29 +686,18 @@ const threadsState = setup({
         threadId,
       });
     },
-    setViewData: assign(({ event, context }) => {
-      const { id, data } = typeOf('SET_VIEW_DATA', event);
-
-      return {
-        view: {
-          ...context.view,
-          ...data,
-          id,
-        }
-      }
-    }),
     setSelectedThread: assign(({ event, context }) => {
-      const typedEvent = typeOf(['SELECT_THREAD', 'THREAD_CREATED', 'OPEN_ENTITY'], event);
+      const typedEvent = typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event);
       const selectedThread = context.threadMap[typedEvent.id];
       if (!selectedThread) {
         // Thread not in threadMap (e.g. archived, or tab restored from storage).
-        // Reset view to defaults with the target id so SET_VIEW_DATA can populate it.
+        // Reset view to defaults with the target id, for its detail view to fill.
         return {
           selectedThreadCode: undefined,
           view: {
             ...defaultThread,
             id: typedEvent.id as ThreadEntity['id'],
-            shortCode: '',
+            shortCode: '' as const,
             status: '',
             timestamp: 0,
           },
@@ -483,71 +749,58 @@ const threadsState = setup({
     }),
     clearNewThreadFlag: assign(({ context, event }) => {
       const clearId = typeOf('CLEAR_NEW_THREAD_FLAG', event).id;
-      return patchThread(context, clearId, { isNew: false });
+      return { ...patchThread(context, clearId, { isNew: false }), freshThreadIds: context.freshThreadIds.filter(fresh => fresh !== clearId) };
     }),
-    updateThreadStatus: ({ event }) => {
+    updateThreadStatus: assign(({ context, event }) => {
       const typedEvent = typeOf('UPDATE_THREAD_STATUS', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'UPDATE_THREAD_STATUS',
         threadId: typedEvent.id,
         status: typedEvent.status,
       });
-    },
-    updateThreadFromBackend: assign(({ event, context }) => {
-      const typedEvent = typeOf('THREAD_UPDATED', event);
-      const { threadId, updates } = typedEvent;
-
-      return {
-        ...patchThread(context, threadId, updates as Partial<ThreadListItem>),
-        view: context.view.id === threadId
-          ? { ...context.view, ...updates }
-          : context.view,
-        currentThread: context.currentThread?.id === threadId
-          ? { ...context.currentThread, ...updates }
-          : context.currentThread,
-        ...(updates.topic !== undefined ? {
-          tabs: context.tabs.map(t => t.id === threadId ? { ...t, label: updates.topic! } : t),
-        } : {}),
-      };
+      return { writes: writeSent(context.writes, call) };
     }),
-    sendUpdateThreadField: ({ event, context }) => {
+    sendUpdateThreadField: assign(({ event, context }) => {
       const { key, value } = typeOf('UPDATE_THREAD_FIELD', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'UPDATE_THREAD_FIELD',
         threadId: context.view.id,
         key,
         value,
       });
-    },
+      return { writes: writeSent(context.writes, call) };
+    }),
     renameThread: assign(({ event, context }) => {
       const { threadId, topic } = typeOf('RENAME_THREAD', event);
       return optimisticFieldUpdate(context, threadId, 'topic', topic);
     }),
     setThreadsSettings: assign(({ event }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event);
-      const chat = (ev.settings as any)?.chat as AgentSettings | undefined;
+      const settings = event.type === 'CHAT_STARTED' ? event.data.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
+      const chat = (settings as any)?.chat as AgentSettings | undefined;
       return {
-        settings: ev.settings,
-        availableTags: ev.settings?.tags || [],
+        settings,
+        availableTags: settings?.tags || [],
         ...(chat ? extractChatSettings(chat) : {}),
       };
     }),
-    deleteThread: ({ event }) => {
+    deleteThread: assign(({ context, event }) => {
       const { threadId } = typeOf('DELETE_THREAD', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'DELETE_THREAD',
         threadId,
       });
-    },
-    archiveThread: ({ event }) => {
+      return { writes: writeSent(context.writes, call) };
+    }),
+    archiveThread: assign(({ context, event }) => {
       const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'UPDATE_THREAD_FIELD',
         threadId,
         key: 'archived',
         value: true,
       });
-    },
+      return { writes: writeSent(context.writes, call) };
+    }),
     unpinThread: assign(({ event, context }) => {
       const { threadId } = typeOf('UNPIN_THREAD', event);
       return optimisticFieldUpdate(context, threadId, 'pinned', false);
@@ -557,33 +810,19 @@ const threadsState = setup({
       return optimisticFieldUpdate(context, threadId, 'pinned', true);
     }),
     toggleViewArchive: assign(({ context }) => {
-      const newShowArchived = !context.showArchived;
-      if (newShowArchived) {
-        sendToSystem(id, { type: 'GET_ARCHIVED_THREADS' });
-      } else {
-        sendToSystem(id, { type: 'REFRESH_THREADS' });
-      }
-      return {
-        showArchived: newShowArchived,
-        threadIds: [] as string[],
-      };
+      const next = { ...context, showArchived: !context.showArchived };
+      return { showArchived: next.showArchived, ...threadStore(next, context.lists) };
     }),
-    setArchivedThreads: assign(({ context, event }) => {
-      const threads = typeOf('ARCHIVED_THREADS_DATA', event).threads as ThreadListItem[];
-      return {
-        sidebarArchivedThreads: threads,
-        ...(context.showArchived ? visibleThreadStore(context, threads) : {}),
-      };
-    }),
-    unarchiveThread: ({ event }) => {
+    unarchiveThread: assign(({ context, event }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'UPDATE_THREAD_FIELD',
         threadId,
         key: 'archived',
         value: false,
       });
-    },
+      return { writes: writeSent(context.writes, call) };
+    }),
     removeUnarchivedThread: assign(({ event, context }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
       return removeThread(context, threadId);
@@ -603,21 +842,6 @@ const threadsState = setup({
     persistListView: () => { try { storage.set('view-preference', 'list'); } catch {} },
     persistKanbanView: () => { try { storage.set('view-preference', 'kanban'); } catch {} },
     persistDashboardView: () => { try { storage.set('view-preference', 'dashboard'); } catch {} },
-    removeThreadFromList: assign(({ event, context }) => {
-      const { threadId } = typeOf('THREAD_DELETED', event);
-      const tabs = context.tabs.filter(t => t.id !== threadId);
-      const activeTabId = context.activeTabId === threadId
-        ? (tabs[tabs.length - 1]?.id ?? '')
-        : context.activeTabId;
-      return {
-        ...removeThread(context, threadId),
-        tabs,
-        activeTabId,
-        view: context.view.id === threadId ? { ...defaultThread, id: '' as EARS.EntityId, shortCode: '', status: '', timestamp: 0 } as ThreadViewData : context.view,
-        selectedThreadCode: context.view.id === threadId ? undefined : context.selectedThreadCode,
-      };
-    }),
-
     /* ── Threads Import actions ────────────────────────────── */
     setImportingThreads: assign(({ context }) => ({
       threadsImport: { ...context.threadsImport, status: 'importing' as const },
@@ -697,16 +921,6 @@ const threadsState = setup({
       filters: { statuses: [] as string[], tags: [] as string[], chatStates: [] as string[], search: '', showRootOnly: context.filters.showRootOnly },
     })),
 
-    refreshViewIfActive: ({ context }) => {
-      // After a THREAD_CONNECTED refresh, re-fetch view data if we're viewing a thread
-      if (context.view?.id) {
-        sendToSystem(id, {
-          type: 'VIEW_THREAD',
-          threadId: context.view.id,
-        });
-      }
-    },
-
     /* ── Selection & drag-drop actions ─────────────────────── */
     selectThreadItems: assign(({ event }) => ({
       selectedThreadIds: typeOf('SELECT_THREAD_ITEMS', event).itemIds,
@@ -714,27 +928,17 @@ const threadsState = setup({
     toggleRootOnlyFilter: assign(({ context }) => ({
       filters: { ...context.filters, showRootOnly: !context.filters.showRootOnly },
     })),
-    sendSetThreadParent: ({ event }) => {
+    sendSetThreadParent: assign(({ context, event }) => {
       const { childIds, parentId } = typeOf('SET_THREAD_PARENT', event);
-      sendToSystem(id, {
+      const call = sendToSystem(id, {
         type: 'SET_THREAD_PARENT',
         childIds,
         parentId,
       });
-    },
+      return { writes: writeSent(context.writes, call) };
+    }),
 
     // ---- Chat/agent actions ----
-    requestThreadChatData: ({ event }) => {
-      const threadId = typeOf('OPEN_THREAD_CHAT', event).threadId;
-      sendToSystem(id, {
-        type: 'OPEN_THREAD_CHAT',
-        threadId,
-      });
-    },
-    setChatState: assign(({ context, event }) => {
-      const { threadId, chatState } = typeOf('SET_CHAT_STATE', event);
-      return { chatStates: { ...context.chatStates, [threadId]: chatState } as Record<string, ChatState> };
-    }),
     flashChatState: assign(({ context, event }) => {
       const { threadId, stateId, durationMs } = typeOf('FLASH_CHAT_STATE', event);
       const expiresAt = Date.now() + (durationMs ?? 3000);
@@ -802,6 +1006,8 @@ const threadsState = setup({
       );
       return {
         currentThread: { ...defaultChatThread, messages: [] },
+        chatMessageIds: [] as string[],
+        openedThreadId: null,
         mode,
         phase: phase ?? '',
         phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
@@ -816,6 +1022,8 @@ const threadsState = setup({
       );
       return {
         currentThread: { ...defaultChatThread, messages: [] },
+        chatMessageIds: [] as string[],
+        openedThreadId: null,
         mode,
         phase: phase ?? '',
         phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
@@ -829,6 +1037,8 @@ const threadsState = setup({
       );
       return {
         currentThread: { ...defaultChatThread, messages: [] },
+        chatMessageIds: [] as string[],
+        openedThreadId: null,
         mode,
         phase: phase ?? '',
         phaseByModeName: { ...context.phaseByModeName, [mode]: phase },
@@ -836,198 +1046,41 @@ const threadsState = setup({
         pendingForceDirectoryPicker: true,
       };
     }),
-    handleTokenStream: assign(({ context, event }) => {
-      const token = typeOf('TOKEN_STREAM', event).token;
-      const { currentThread, pendingActionId } = context;
-      const messages = currentThread?.messages || [];
-
-      if (pendingActionId) {
-        return {
-          currentThread: {
-            ...currentThread!,
-            messages: messages.map((m: Partial<MessageEntity>) => m.id === pendingActionId ? { ...m, text: m.text + token } : m),
-          }
-        };
-      }
-
-      const newId = Date.now().toString();
-      return {
-        currentThread: {
-          ...currentThread!,
-          messages: [...messages, {
-            id: newId,
-            entityType: 'Message' as const,
-            text: token,
-            sender: 'assistant' as const,
-            timestamp: Date.now(),
-            createdAt: Date.now()
-          } as MessageEntity]
-        },
-        pendingActionId: newId,
-      };
-    }),
-    finishStream: assign(() => ({
-      pendingActionId: undefined,
-    })),
-    setThreadChatData: assign(({ context, event }) => {
-      const thread = typeOf('LOAD_CHAT_THREAD', event).data;
-      const restore = (event as any).restore;
-      const label = thread.topic || `Thread ${thread.shortCode || ''}`;
-
-      if (thread.id && !restore) {
-        sendToSystem(id, {
-          type: 'OPEN_THREAD_TAB',
-          threadId: thread.id,
-          label,
-          ...(thread.pinned && { pinned: true }),
-        });
-      }
-
-      const chatState: ChatState = (thread.chatState as ChatState) ?? 'idle';
-      const base = {
-        currentThread: thread,
-        messagePagination: {
-          hasMore: thread.hasMore ?? false,
-          nextCursor: thread.nextCursor ?? null,
-          isLoading: false,
-        },
-        ...(thread.id ? {
-          threadMap: {
-            ...context.threadMap,
-            [thread.id]: { ...context.threadMap[thread.id], ...thread } as ThreadListItem,
-          },
-        } : {}),
-        chatStates: { ...context.chatStates, [thread.id as string]: chatState },
-      };
-
-      // On restore, create tab locally instead of round-tripping via OPEN_THREAD_TAB
-      if (restore && thread.id) {
-        const artifacts = (thread.artifacts || []) as any as Tab['artifacts'];
-        const existing = context.tabs.find(t => t.id === thread.id);
-        Object.assign(base, {
-          tabs: existing
-            ? context.tabs.map(t => t.id === thread.id ? { ...t, label, artifacts } : t)
-            : [...context.tabs, { id: thread.id, label, artifacts, selectedArtifactId: artifacts[0]?.id, ...(thread.pinned && { pinned: true }) } as Tab],
-          activeTabId: thread.id,
-        });
-      }
-
-      if (thread.forcedMode) {
-        const modeName = thread.forcedMode;
-        const modeConfig = context.modes.find(m => m.name === modeName);
-        const newPhase = modeConfig?.phases?.length
-          ? (modeName in context.phaseByModeName ? context.phaseByModeName[modeName] : modeConfig.phases[0].name)
-          : undefined;
-        return { ...base, mode: modeName, phase: newPhase };
-      }
-
-      return base;
-    }),
-    setRefreshThreadsData: assign(({ context, event }) => {
-      const typedEvent = typeOf('REFRESH_RECENT_THREADS', event);
-      const recentThreads = typedEvent.data.recentThreads as ThreadEntity[];
-      return {
-        threadMap: mergeThreadMap(context.threadMap, recentThreads),
-        recentThreadIds: threadIdsFrom(recentThreads),
-      };
-    }),
-    setStartupData: enqueueActions(({ enqueue, context, event, self }) => {
-      const typedEvent = typeOf('AGENT_CONNECTED', event);
-
-      const currentThreadTab = typedEvent.data.tabs?.find(tab =>
-        tab.id === typedEvent.data.currentThread?.id && tab.artifacts.length > 0
+    /**
+     * What the chat starts from, which the system answered the shell's start with: the settings, the mode, the tabs —
+     * the ones this window kept and the ones every window opens — and the thread to open
+     */
+    startChat: enqueueActions(({ enqueue, context, event, self }) => {
+      const start: ChatStart = typeOf('CHAT_STARTED', event).data;
+      const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
+      const visibleModes = extracted.modes.filter(m => !m.hidden);
+      const { mode, phase } = resolveDefaultModePhase(
+        extracted.chatSettings, extracted.modes, visibleModes[0]?.name ?? context.mode, visibleModes[0]?.phases?.[0]?.name,
       );
 
-      const extracted = extractChatSettings(typedEvent.data.settings || { modes: [], hotkeys: {} });
-
-      const currentThread = typedEvent.data.currentThread;
-      const startupChatState: ChatState = (currentThread as any)?.chatState ?? 'idle';
-      const forcedMode = currentThread?.forcedMode;
-      let modeUpdate = {};
-      if (forcedMode) {
-        const modeName = forcedMode;
-        const modeConfig = extracted.modes.find(m => m.name === modeName);
-        const newPhase = modeConfig?.phases?.length
-          ? (modeName in context.phaseByModeName ? context.phaseByModeName[modeName] : modeConfig.phases[0].name)
-          : undefined;
-        modeUpdate = { mode: modeName, phase: newPhase };
-      } else {
-        const visibleModes = extracted.modes.filter(m => !m.hidden);
-        const fallbackMode = visibleModes[0]?.name ?? context.mode;
-        const fallbackPhase = visibleModes[0]?.phases?.[0]?.name;
-        const { mode, phase } = resolveDefaultModePhase(
-          extracted.chatSettings, extracted.modes, fallbackMode, fallbackPhase,
-        );
-        modeUpdate = { mode, phase };
-      }
-
-      // Restore previously open tabs from this surface's storage
-      const backendTabs: Tab[] = typedEvent.data.tabs || [];
+      // The tabs this window kept in its storage, after the ones every window opens; a thread gone since closes its
+      // tab when the tab's view says so
+      const backendTabs: Tab[] = start.tabs.map(tab => ({ id: tab.id, label: tab.label, artifacts: [], ...(tab.pinned && { pinned: true }) }));
       const stored = loadTabsFromStorage();
-      const backendTabIds = new Set(backendTabs.map(t => t.id));
-
-      const recentThreadsData = (typedEvent.data.recentThreads || []) as ThreadEntity[];
-      const visibleThreadsData = (typedEvent.data.threads || []) as ThreadEntity[];
-      const startupThreadMap = mergeThreadMap(context.threadMap, [...recentThreadsData, ...visibleThreadsData]);
-      const startupThreadIds = appendThreadIds(context.threadIds, visibleThreadsData);
-      const recentThreadIds = threadIdsFrom(recentThreadsData);
-
-      // Build lookup for tab labels from threadMap
-      const threadLabelMap = new Map<string, string>(
-        Object.entries(startupThreadMap).map(([tid, t]) => [tid, t.topic || `Thread ${t.shortCode || ''}`])
-      );
-
-      // Create tab entries for stored tabs not already in backend tabs
-      let allTabs = [...backendTabs];
-      const storedGroupIdMap = new Map<string, string>();
-      if (stored) {
-        for (const storedTab of stored.tabs) {
-          if (storedTab.groupId) storedGroupIdMap.set(storedTab.id, storedTab.groupId);
-          if (!backendTabIds.has(storedTab.id) && startupThreadMap[storedTab.id]) {
-            const label = threadLabelMap.get(storedTab.id) || storedTab.label || 'Thread';
-            allTabs.push({ id: storedTab.id, label, artifacts: [], ...(storedTab.groupId && { groupId: storedTab.groupId }) });
-          }
+      const tabs: Tab[] = [...backendTabs];
+      for (const storedTab of stored?.tabs ?? []) {
+        const backend = tabs.find(t => t.id === storedTab.id);
+        if (backend) {
+          if (storedTab.groupId && !backend.groupId) backend.groupId = storedTab.groupId;
+        } else {
+          tabs.push({ id: storedTab.id, label: storedTab.label || 'Thread', artifacts: [], ...(storedTab.groupId && { groupId: storedTab.groupId }) });
         }
       }
-      // Restore groupId on backend tabs from stored data
-      if (storedGroupIdMap.size > 0) {
-        allTabs = allTabs.map(t => {
-          const gId = storedGroupIdMap.get(t.id);
-          return gId && !t.groupId ? { ...t, groupId: gId } : t;
-        });
-      }
-
-      // Load tab groups from this surface's storage
-      const restoredTabGroups = loadThreadTabGroups();
-
-      const activeTabId = (stored?.activeTabId && allTabs.some(t => t.id === stored.activeTabId))
+      const activeTabId = stored?.activeTabId && tabs.some(t => t.id === stored.activeTabId)
         ? stored.activeTabId
-        : (currentThreadTab?.id || backendTabs[0]?.id || '');
+        : (start.currentThreadId ?? tabs[0]?.id ?? '');
 
-      enqueue(assign({
-        currentThread,
-        threadMap: startupThreadMap,
-        threadIds: startupThreadIds,
-        recentThreadIds,
-        tabs: allTabs,
-        activeTabId,
-        tabGroups: restoredTabGroups,
-        ...extracted,
-        ...modeUpdate,
-        ...(currentThread?.id ? { chatStates: { ...context.chatStates, [currentThread.id as string]: startupChatState } } : {}),
-      }));
-
-      // Fetch messages for the active thread (messages are deferred from startup payload)
-      const threadToLoad = activeTabId || (currentThread?.id as string);
-      if (threadToLoad) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: threadToLoad, restore: true }));
-      }
-
-      saveTabsToStorage(allTabs, activeTabId);
-    }),
-    handleChatSettingsUpdate: assign(({ event }) => {
-      const typedEvent = typeOf('AGENT_SETTINGS_UPDATED', event);
-      return extractChatSettings(typedEvent.settings);
+      enqueue('setThreadsSettings');
+      enqueue.assign({ tabs, activeTabId, tabGroups: loadThreadTabGroups(), mode, phase: phase ?? '' });
+      enqueue('followSettingsViews');
+      enqueue('tabsChanged');
+      const threadToLoad = activeTabId || start.currentThreadId;
+      if (threadToLoad) enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: threadToLoad, restore: true }));
     }),
     sendOpenThreadView: ({ self, event }) => {
       const threadId = typeOf('VIEW_THREAD', event).threadId;
@@ -1075,21 +1128,12 @@ const threadsState = setup({
         enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId }));
       }
     }),
-    removeStaleTab: enqueueActions(({ enqueue, context, self, event }) => {
-      const { threadId } = event as unknown as { type: 'THREAD_CHAT_ERROR'; threadId: string };
-      const newTabs = context.tabs.filter(t => t.id !== threadId);
-      let newActiveTabId = context.activeTabId;
-      if (context.activeTabId === threadId) {
-        const idx = context.tabs.findIndex(t => t.id === threadId);
-        const nextTab = context.tabs[idx + 1] ?? context.tabs[idx - 1];
-        newActiveTabId = nextTab?.id ?? '';
-      }
-      enqueue(assign({ tabs: newTabs, activeTabId: newActiveTabId }));
-      if (newActiveTabId && newActiveTabId !== context.activeTabId) {
-        enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId: newActiveTabId }));
-      }
-    }),
     persistTabs: ({ context }) => saveTabsToStorage(context.tabs, context.activeTabId),
+    /** The open tabs changed: kept in this window's storage, and each open one's view followed */
+    tabsChanged: enqueueActions(({ enqueue }) => {
+      enqueue('persistTabs');
+      enqueue('followTabs');
+    }),
     persistTabGroups: ({ context }) => saveThreadTabGroups(context.tabGroups),
 
     // ---- Tab reorder & group actions ----
@@ -1242,38 +1286,6 @@ const threadsState = setup({
       );
       return { tabs };
     }),
-    addArtifact: assign(({ context, event }) => {
-      const { tabId, artifact } = typeOf('ARTIFACT_ADDED', event);
-      const tabs = context.tabs.map(tab => {
-        if (tab.id !== tabId) return tab;
-        const artifacts = [artifact, ...tab.artifacts];
-        return { ...tab, artifacts, selectedArtifactId: artifact.id };
-      });
-      return { tabs };
-    }),
-    updateArtifact: assign(({ context, event }) => {
-      // ARTIFACT_UPDATED carries a patch on .artifact — merge title/content
-      // into the matching artifact in the target tab. Missing fields are
-      // preserved so partial updates work.
-      const typedEvent = typeOf('ARTIFACT_UPDATED', event) as any;
-      const { tabId, artifact: patch } = typedEvent;
-      const tabs = context.tabs.map(tab => {
-        if (tab.id !== tabId) return tab;
-        return {
-          ...tab,
-          artifacts: tab.artifacts.map(a => {
-            if (a.id !== patch.id) return a;
-            return {
-              ...a,
-              ...(patch.title !== undefined && { title: patch.title }),
-              ...(patch.content !== undefined && { content: patch.content }),
-              metadata: { ...a.metadata, ...patch.metadata },
-            };
-          }),
-        };
-      });
-      return { tabs };
-    }),
     handleHotkey: createHotkeyProcessor({
       quickPrompts: 'TOGGLE_QUICK_PROMPTS',
       closeTab: 'CLOSE_ACTIVE_TAB',
@@ -1297,107 +1309,17 @@ const threadsState = setup({
         response,
       });
     },
-    updateMessageState: assign(({ context, event }) => {
-      const typedEvent = typeOf('UPDATE_MESSAGE_STATE', event) as any;
-      const { messageId } = typedEvent;
-
-      if (!context.currentThread?.messages) return {};
-
-      const updated = context.currentThread.messages.map(msg =>
-        msg.id === messageId
-          ? {
-            ...msg,
-            ...('text' in typedEvent && typedEvent.text !== undefined && { text: typedEvent.text }),
-            ...('blocks' in typedEvent && typedEvent.blocks !== undefined && { blocks: typedEvent.blocks }),
-            ...('responseTimestamp' in typedEvent && typedEvent.responseTimestamp !== undefined && { responseTimestamp: typedEvent.responseTimestamp }),
-            ...('blockResponse' in typedEvent && typedEvent.blockResponse !== undefined && { blockResponse: typedEvent.blockResponse }),
-            ...('status' in typedEvent && typedEvent.status !== undefined && { status: typedEvent.status }),
-            ...('asideText' in typedEvent && typedEvent.asideText !== undefined && { asideText: typedEvent.asideText }),
-            ...('forkable' in typedEvent && typedEvent.forkable !== undefined && { forkable: typedEvent.forkable }),
-            ...('compacted' in typedEvent && typedEvent.compacted !== undefined && { compacted: typedEvent.compacted }),
-            // Shallow-merge context so partial backend updates (e.g.
-            // the stream-consumer writing only `cliUuid`) don't wipe
-            // existing keys. Without this branch, `msg.context.cliUuid`
-            // only ever shows up after a full thread reload — which is
-            // why `chat.vue:doRevert` was reading `undefined` and the
-            // revert+rewind path was bailing with "no CLI UUID".
-            ...('context' in typedEvent && typedEvent.context !== undefined && {
-              context: { ...(msg as any).context, ...typedEvent.context },
-            }),
-          }
-          : msg
-      );
-
-      // When a message becomes queued, move it to the end so it always
-      // appears below the current agent turn in the conversation.
-      if ('status' in typedEvent && typedEvent.status === 'queued') {
-        const idx = updated.findIndex(m => m.id === messageId);
-        if (idx !== -1 && idx < updated.length - 1) {
-          const [queued] = updated.splice(idx, 1);
-          updated.push(queued);
-        }
-      }
-
-      return {
-        currentThread: {
-          ...context.currentThread,
-          messages: updated,
-        }
-      };
-    }),
     dismissMessage: assign(({ context, event }) => {
       const { messageId } = typeOf('DISMISS_MESSAGE', event);
-      if (!context.currentThread?.messages) return {};
-      return {
-        currentThread: {
-          ...context.currentThread,
-          messages: context.currentThread.messages.filter(m => m.id !== messageId),
-        }
-      };
+      const next = { ...context, chatMessageIds: context.chatMessageIds.filter(listed => listed !== messageId) };
+      return { chatMessageIds: next.chatMessageIds, ...composedMessages(next) };
     }),
-    addMessageToThread: assign(({ context, event }) => {
-      const typedEvent = typeOf('MESSAGE_ADDED', event);
-      const { threadId, message } = typedEvent;
-
-      if (context.currentThread?.id !== threadId) return {};
-
-      const messages = context.currentThread.messages ?? [];
-      const firstQueuedIdx = messages.findIndex((m: any) => m.status === 'queued');
-
-      // Insert before queued messages so they always stay at the bottom
-      const updatedMessages = (firstQueuedIdx !== -1 && (message as any).status !== 'queued')
-        ? [...messages.slice(0, firstQueuedIdx), message, ...messages.slice(firstQueuedIdx)]
-        : [...messages, message];
-
-      return {
-        currentThread: {
-          ...context.currentThread,
-          messages: updatedMessages,
-        }
-      };
-    }),
-    requestOlderMessages: ({ context }) => {
-      const { hasMore, nextCursor, isLoading } = context.messagePagination;
-      if (!context.currentThread?.id || !hasMore || !nextCursor || isLoading) return;
-      sendToSystem(id, {
-        type: 'LOAD_MORE_MESSAGES',
-        threadId: context.currentThread.id,
-        cursor: nextCursor,
-      });
-    },
-    setLoadingMore: assign(({ context }) => ({
-      messagePagination: { ...context.messagePagination, isLoading: true },
-    })),
-    prependOlderMessages: assign(({ context, event }) => {
-      const { threadId, messages, hasMore, nextCursor } = typeOf('OLDER_MESSAGES_LOADED', event);
-      if (context.currentThread?.id !== threadId) return {};
-      return {
-        currentThread: {
-          ...context.currentThread,
-          messages: [...messages, ...(context.currentThread.messages ?? [])],
-        },
-        messagePagination: { hasMore, nextCursor, isLoading: false },
-      };
+    /** The chat's view asks for a page more of the open thread's messages */
+    loadMoreMessages: enqueueActions(({ context, enqueue }) => {
+      const { hasMore, isLoading } = context.messagePagination;
+      if (!context.currentThread?.id || !hasMore || isLoading) return;
+      enqueue.assign({ chatLimit: context.chatLimit + MESSAGE_PAGE_SIZE, messagePagination: { hasMore, isLoading: true } });
+      enqueue('followChat');
     }),
     forkThread: ({ event }) => {
       const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
@@ -1433,6 +1355,10 @@ const threadsState = setup({
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
     quickPromptsOpen: ({ context }) => context.quickPromptCursor !== null,
+    /** A read saying a thread this window shows is gone — and nothing of this window's is unanswered that a result was held behind */
+    detailGone: ({ context, event }) => event.type === 'DETAIL.READ' && event.id === context.view.id && event.detail === null && !writing(context.writes),
+    chatGone: ({ context, event }) => event.type === 'CHAT.READ' && event.threadId === context.currentThread?.id && event.chat === null && !writing(context.writes),
+    tabGone: ({ event }) => event.type === 'TAB.READ' && event.tab === null,
   }
 }).createMachine({
   id,
@@ -1461,7 +1387,6 @@ const threadsState = setup({
     currentThread: defaultChatThread,
     recentThreadIds: [] as string[],
     messageInput: "",
-    pendingActionId: undefined,
     chatStates: {} as Record<string, ChatState>,
     chatStateOverrides: {} as Record<string, { id: string; expiresAt: number }>,
     tabs: [],
@@ -1475,11 +1400,45 @@ const threadsState = setup({
     chatSettings: { modes: [], hotkeys: {} },
     quickPromptCursor: null,
     navHistory: createNavHistory(getInitialView()),
-    messagePagination: { hasMore: false, nextCursor: null, isLoading: false },
+    messagePagination: { hasMore: false, isLoading: false },
     sidebarArchivedThreads: [],
+    lists: { list: [], recent: [], archived: [] },
+    chatLimit: MESSAGE_PAGE_SIZE,
+    chatMessageIds: [],
+    detailMessageIds: [],
+    messageContents: {},
+    messageViews: [],
+    tabViews: [],
+    tabsRead: [],
+    openedThreadId: null,
+    freshThreadIds: [],
+    writes: viewWrites(),
   }),
   on: {
-    OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
+    OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
+    SURFACE_STARTED: { actions: 'startSurface' },
+    CHAT_STARTED: { actions: 'startChat' },
+    // What the views gave
+    'THREADS.READ': { actions: 'readThreads' },
+    'ARCHIVED.READ': { actions: 'readArchived' },
+    'RECENT.READ': { actions: 'readRecent' },
+    'DETAIL.READ': [
+      { guard: 'detailGone', target: '.list', actions: 'leaveGoneDetail' },
+      { actions: 'readDetail' },
+    ],
+    'CHAT.READ': [
+      { guard: 'chatGone', actions: 'dropThread' },
+      { actions: 'readChat' },
+    ],
+    'MESSAGE.READ': { actions: 'readMessage' },
+    'TAB.READ': [
+      { guard: 'tabGone', actions: 'dropThread' },
+      { actions: 'readTab' },
+    ],
+    // Answers to this window's writes
+    THREAD_WRITTEN: { actions: 'settleWrite' },
+    THREAD_WRITE_FAILED: { actions: 'settleWrite' },
+    SHOW_THREAD: { actions: 'openThread' },
     // Thread management events
     SHOW_CREATE_FORM: {
       target: '.create',
@@ -1495,14 +1454,15 @@ const threadsState = setup({
     VIEW_KANBAN: { target: '.kanban', actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'kanban') })) },
     VIEW_DASHBOARD: { target: '.dashboard', actions: assign(({ context }) => ({ navHistory: pushNavHistory(context.navHistory, 'dashboard') })) },
     OPEN_THREAD_CHAT: {
-      actions: 'openThreadChat'
+      actions: 'openThread'
     },
     CLEAR_NEW_THREAD_FLAG: {
       actions: ['clearNewThreadFlag', stopChild(({ event }) => newThreadFlagTimer(typeOf('CLEAR_NEW_THREAD_FLAG', event).id))]
     },
     THREAD_CREATED: {
       actions: [
-        'addThenResetCreateForm',
+        'settleWrite',
+        'markCreated',
         stopChild(({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id)),
         spawnChild('clearNewThreadFlag', {
           id: ({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id),
@@ -1510,23 +1470,11 @@ const threadsState = setup({
         })
       ]
     },
-    THREAD_CONNECTED: {
-      guard: ({ context }) => !context.showArchived,
-      actions: ['setSurfaceData', 'refreshViewIfActive']
-    },
-    SET_VIEW_DATA: {
-      // Only apply if the response matches the currently viewed thread (prevents stale out-of-order responses)
-      guard: ({ event, context }) => typeOf('SET_VIEW_DATA', event).id === context.view.id,
-      actions: 'setViewData',
-    },
-    THREAD_UPDATED: {
-      actions: 'updateThreadFromBackend',
-    },
     RENAME_THREAD: {
       actions: 'renameThread',
     },
     FEATURE_SETTINGS_UPDATED: {
-      actions: 'setThreadsSettings',
+      actions: ['setThreadsSettings', 'followSettingsViews'],
     },
     DELETE_THREAD: {
       actions: 'deleteThread',
@@ -1535,11 +1483,8 @@ const threadsState = setup({
       actions: 'toggleViewArchive',
       target: '.list',
     },
-    ARCHIVED_THREADS_DATA: {
-      actions: 'setArchivedThreads',
-    },
     ARCHIVE_THREAD: {
-      actions: ['archiveThread', 'removeArchivedThread', 'cleanupEmptyGroups', 'persistTabs', 'persistTabGroups'],
+      actions: ['archiveThread', 'removeArchivedThread', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'],
     },
     UNARCHIVE_THREAD: {
       actions: ['unarchiveThread', 'removeUnarchivedThread'],
@@ -1549,10 +1494,6 @@ const threadsState = setup({
     },
     PIN_THREAD: {
       actions: 'pinThread',
-    },
-    THREAD_DELETED: {
-      actions: ['removeThreadFromList', 'cleanupEmptyGroups', 'persistTabs', 'persistTabGroups'],
-      target: '.list',
     },
 
     // Import/Export events
@@ -1569,7 +1510,7 @@ const threadsState = setup({
       actions: 'handleThreadsImportFailed',
     },
     THREAD_CHAT_ERROR: {
-      actions: ['removeStaleTab', 'cleanupEmptyGroups', 'persistTabs', 'persistTabGroups'],
+      actions: 'dropThread',
     },
     'THREADS.EXPORT': {
       actions: ['setExportingThreads', 'sendExportThreads'],
@@ -1613,6 +1554,7 @@ const threadsState = setup({
           ({ context }) => {
             sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
+          'followDetail',
         ],
       },
       {
@@ -1655,6 +1597,7 @@ const threadsState = setup({
           ({ context }) => {
             sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
+          'followDetail',
         ],
       },
       {
@@ -1711,6 +1654,7 @@ const threadsState = setup({
         'setSelectedThread',
         'sendViewThread',
         'recordThreadNavigation',
+        'followDetail',
       ],
     },
 
@@ -1723,23 +1667,15 @@ const threadsState = setup({
       { actions: 'openQuickPromptsAtCursor' },
     ],
     VIEW_THREAD: { actions: 'sendOpenThreadView' },
-    LOAD_CHAT_THREAD: { target: '.dashboard', actions: 'setThreadChatData' },
-    REFRESH_RECENT_THREADS: { actions: 'setRefreshThreadsData' },
-    AGENT_CONNECTED: { actions: 'setStartupData' },
-    AGENT_SETTINGS_UPDATED: { actions: 'handleChatSettingsUpdate' },
     NAVIGATE_TO_SECRETS: { actions: 'navigateToSecrets' },
     RESPOND_TO_BLOCK_INTERACTION: {
       actions: [
         'respondToBlockInteraction',
       ],
     },
-    UPDATE_MESSAGE_STATE: { actions: 'updateMessageState' },
-    MESSAGE_ADDED: { actions: 'addMessageToThread' },
-    LOAD_MORE_MESSAGES: { actions: ['setLoadingMore', 'requestOlderMessages'] },
-    OLDER_MESSAGES_LOADED: { actions: 'prependOlderMessages' },
+    LOAD_MORE_MESSAGES: { actions: 'loadMoreMessages' },
     SEND_MESSAGE: { actions: 'sendMessage' },
     SEND_COMMAND: { actions: 'sendCommand' },
-    SET_CHAT_STATE: { actions: 'setChatState' },
     FLASH_CHAT_STATE: {
       actions: [
         'flashChatState',
@@ -1766,9 +1702,9 @@ const threadsState = setup({
     },
     SET_MODE: { actions: 'setMode' },
     SET_PHASE: { actions: 'setPhase' },
-    CLEAR_THREAD: { actions: 'clearThread' },
-    NEW_THREAD_IN_PROJECT: { actions: 'newThreadInProject' },
-    NEW_THREAD_NO_PROJECT: { actions: 'newThreadNoProject' },
+    CLEAR_THREAD: { actions: ['clearThread', 'followChat', 'followMessages'] },
+    NEW_THREAD_IN_PROJECT: { actions: ['newThreadInProject', 'followChat', 'followMessages'] },
+    NEW_THREAD_NO_PROJECT: { actions: ['newThreadNoProject', 'followChat', 'followMessages'] },
     CREATE_CHILD_THREAD: { actions: 'createChildThread' },
     FORK_THREAD: { actions: 'forkThread' },
     REVERT_THREAD: { actions: 'revertThread' },
@@ -1779,14 +1715,10 @@ const threadsState = setup({
     UNQUEUE_MESSAGE: {
       actions: 'unqueueMessage',
     },
-    DISMISS_MESSAGE: { actions: ['dismissMessage', 'persistDismissMessage'] },
-    TOKEN_STREAM: { actions: 'handleTokenStream' },
-    LLM_DONE: {
-      actions: 'finishStream',
-    },
+    DISMISS_MESSAGE: { actions: ['dismissMessage', 'followMessages', 'persistDismissMessage'] },
     SELECT_TAB: { actions: ['selectTab', 'persistTabs'] },
-    CLOSE_TAB: { actions: ['closeTab', 'cleanupEmptyGroups', 'persistTabs', 'persistTabGroups'] },
-    CLOSE_ACTIVE_TAB: { actions: ['closeActiveTab', 'cleanupEmptyGroups', 'persistTabs', 'persistTabGroups'] },
+    CLOSE_TAB: { actions: ['closeTab', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'] },
+    CLOSE_ACTIVE_TAB: { actions: ['closeActiveTab', 'cleanupEmptyGroups', 'tabsChanged', 'persistTabGroups'] },
     // Tab reorder & group events
     REORDER_TABS: { actions: ['reorderTabs', 'persistTabs'] },
     PIN_TAB_AT: { actions: ['pinTabAt', 'persistTabs'] },
@@ -1800,35 +1732,10 @@ const threadsState = setup({
     ADD_TAB_TO_GROUP_AT: { actions: ['addTabToGroupAt', 'persistTabs', 'persistTabGroups'] },
     REMOVE_TAB_FROM_GROUP: { actions: ['removeTabFromGroup', 'persistTabs'] },
     UNGROUP_ALL_IN_GROUP: { actions: ['ungroupAllInGroup', 'persistTabs', 'persistTabGroups'] },
-    CLOSE_ALL_IN_GROUP: { actions: ['closeAllInGroup', 'persistTabs', 'persistTabGroups'] },
+    CLOSE_ALL_IN_GROUP: { actions: ['closeAllInGroup', 'tabsChanged', 'persistTabGroups'] },
     PIN_TAB_GROUP: { actions: ['pinTabGroup', 'persistTabs', 'persistTabGroups'] },
     UNPIN_TAB_GROUP: { actions: ['unpinTabGroup', 'persistTabs', 'persistTabGroups'] },
     SELECT_ARTIFACT: { actions: 'selectArtifact' },
-    ARTIFACT_ADDED: { actions: 'addArtifact' },
-    ARTIFACT_UPDATED: { actions: 'updateArtifact' },
-    THREAD_TAB_REQUESTED: {
-      actions: [
-        assign(({ context, event }) => {
-          const { threadId, topic, artifacts, pinned } = typeOf('THREAD_TAB_REQUESTED', event);
-          const existingTab = context.tabs.find(t => t.id === threadId);
-          const selectedArtifactId =
-            existingTab?.selectedArtifactId && artifacts.some(a => a.id === existingTab.selectedArtifactId)
-              ? existingTab.selectedArtifactId
-              : artifacts[0]?.id;
-          const patch = { label: topic, artifacts, selectedArtifactId };
-
-          return {
-            tabs: existingTab
-              ? context.tabs.map(tab =>
-                  tab.id === threadId ? { ...tab, ...patch, ...(pinned !== undefined && { pinned }) } : tab
-                )
-              : [...context.tabs, { id: threadId, ...patch, ...(pinned && { pinned }) }],
-            activeTabId: threadId,
-          };
-        }),
-        'persistTabs',
-      ]
-    },
   },
   states: {
     'dashboard': {
@@ -1880,6 +1787,7 @@ const threadsState = setup({
       },
     },
     'view': {
+      exit: 'stopDetail',
       meta: {
         ...breadcrumbWithParams<ThreadsContext>({
           target: 'view',

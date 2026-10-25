@@ -1,16 +1,14 @@
-// Opening a thread reaches the window that opened it, and the news beside it reaches all of them.
+// Opening a thread reaches the window that opened it, and only a flow's reaches every window.
 //
-// Both halves were broadcast, so clicking a thread in one window pulled **every** window onto it: each one
-// loaded that thread's chat, set it as current, and then asked for its own tab — and each of those answers
-// went to all the windows again. A window showing thread Y was yanked to thread X by someone else's click.
-//
-// The split is the point, and it is what the last two cases pin. `LOAD_CHAT_THREAD` and
-// `THREAD_TAB_REQUESTED` are the asker's; `REFRESH_RECENT_THREADS` is news — the list changed for everyone,
-// because the thread was marked visited. Put either answer back on a broadcast and a case here fails.
+// A window opening a thread shows it already: what the system does is mark it visited, and every window's recent
+// list follows through its view. So it answers nothing. The thread a window's first message starts, or a fork, is the
+// system's to name, and it names it to that window alone (`SHOW_THREAD`); a thread a flow opens has no window to
+// answer, so every window is told. Put the window's answer back on a broadcast and the first case here fails.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { testRootEvents } from '@apackdev/sdk/testing'
 import { startApp } from '@apackdev/testing/harness'
 import { repository } from '#generated/repository.ts'
+import { chatService } from '#features/threads/be/services/chat.ts'
 
 const THREADS = 'default-setup/threads'
 /** The connection an ask arrived on, which is what makes it a window's rather than an action's */
@@ -36,65 +34,46 @@ beforeEach(() => {
 const clientsFor = (type: string) => sent.filter((m) => m.type === type).map((m) => m.client)
 
 describe('opening a thread', () => {
-  it('loads the chat for the window that asked, and no other', async () => {
+  it('shows the thread a first message started to the window that sent it, and no other', async () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
-    const { id } = repository.threadCommands.create({ topic: 'Asked for', instructions: '' })
 
-    await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: id }, { sender: THREADS, client: MAIN })
-    await app.nextEmit('threads', 'LOAD_CHAT_THREAD')
+    await app.send('threads', { type: 'USER_MSG', text: 'Start something' }, { sender: THREADS, client: MAIN })
+    await app.nextEmit('threads', 'SHOW_THREAD')
     await app.settle()
 
-    expect(clientsFor('LOAD_CHAT_THREAD'), 'one connection, not every window').toEqual([MAIN])
+    expect(clientsFor('SHOW_THREAD'), 'one connection, not every window').toEqual([MAIN])
   })
 
   /**
-   * The fallback, and why it is reply-*or*-broadcast rather than a bare `reply?.()`.
-   *
-   * Ten of the fourteen callers that open a thread chat are action code — onboarding, a session restore, a
-   * summarise — which runs a tick after whatever triggered it and so has no sender to answer. Every window
-   * showing threads should follow those, and this is the case that says so.
+   * The fallback, and why it is reply-*or*-broadcast rather than a bare `reply?.()`: a thread a flow opens —
+   * onboarding, a session restore, a summarise — has no window waiting on it, and every window should follow.
    */
-  it('loads it for every window when nobody asked, which is what an action gets', async () => {
+  it('shows a thread a flow opens to every window', async () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
     const { id } = repository.threadCommands.create({ topic: 'Opened by an action', instructions: '' })
 
-    await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: id })
-    await app.nextEmit('threads', 'LOAD_CHAT_THREAD')
+    chatService.showThread(id)
+    await app.nextEmit('threads', 'SHOW_THREAD')
     await app.settle()
 
-    expect(clientsFor('LOAD_CHAT_THREAD'), 'absent means every connection').toEqual([undefined])
+    expect(clientsFor('SHOW_THREAD'), 'absent means every connection').toEqual([undefined])
   })
 
-  // A tab is one window's: its own list, persisted in its own storage, so there is no news half for it
-  it('opens the tab in the window that asked', async () => {
+  it("answers nothing to a window that opened one itself, and every window's recent list follows the visit", async () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
-    const { id } = repository.threadCommands.create({ topic: 'A tab', instructions: '' })
+    const older = repository.threadCommands.create({ topic: 'Older', instructions: '' }).id
+    repository.threadCommands.create({ topic: 'Newer', instructions: '' })
+    repository.threadCommands.markAsVisited(repository.threadQueries.all().find((t) => t.topic === 'Newer')!.id)
+    const recent = app.watchView<Array<{ topic: string }>>('threads', 'recent', { limit: 7, sortOrder: 'visited' })
+    const topics = (update: { ok: boolean; value?: unknown }) => (update.value as Array<{ topic: string }>).map((t) => t.topic)
+    expect(topics(await recent.next())[0]).toBe('Newer')
 
-    await app.send('threads', { type: 'OPEN_THREAD_TAB', threadId: id, label: 'A tab' }, { sender: THREADS, client: MAIN })
-    await app.nextEmit('threads', 'THREAD_TAB_REQUESTED')
+    await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: older }, { sender: THREADS, client: MAIN })
+    expect(topics(await recent.next())[0], 'the visited thread first, in every window').toBe('Older')
     await app.settle()
-
-    expect(clientsFor('THREAD_TAB_REQUESTED')).toEqual([MAIN])
-  })
-
-  /**
-   * The half that must stay a broadcast, which is what makes this a split rather than a blanket change.
-   *
-   * Opening a thread marks it visited, so the recent list changed for everyone. Answering this one would
-   * leave every other window's list stale — the mirror of the bug the other cases fix.
-   */
-  it('tells every window the recent list changed, even though one window asked', async () => {
-    const app = await startApp({ systems: ['threads'] })
-    await app.connect()
-    const { id } = repository.threadCommands.create({ topic: 'Visited', instructions: '' })
-
-    await app.send('threads', { type: 'OPEN_THREAD_TAB', threadId: id, label: 'Visited' }, { sender: THREADS, client: MAIN })
-    await app.nextEmit('threads', 'REFRESH_RECENT_THREADS')
-    await app.settle()
-
-    expect(clientsFor('REFRESH_RECENT_THREADS'), 'news goes to all of them').toEqual([undefined])
+    expect(sent, 'and nothing sent back').toEqual([])
   })
 })

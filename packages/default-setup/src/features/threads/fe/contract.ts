@@ -4,10 +4,10 @@
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
 import type { Simplify } from '@apackdev/sdk/helpers'
-import type { HotkeysMap, NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
+import type { HotkeysMap, NavHistory, SurfaceInbox, ViewWrites } from '@apackdev/sdk/fe'
 import type {
-  AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
-  ThreadEntity, ThreadTagOption, ThreadViewData, ThreadsSettings,
+  AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, MessageEntity, Tab, ThreadCreateData,
+  ThreadEntity, ThreadExtended, ThreadTagOption, ThreadViewData, ThreadsSettings,
 } from '#generated/types.ts'
 import type { ThreadTabGroup } from './canvas/agent/tabs/types.ts'
 
@@ -64,8 +64,30 @@ export interface ThreadsContext {
   pendingThreadCwd?: string;
   pendingForceDirectoryPicker?: boolean;
   navHistory: NavHistory<string>;
-  messagePagination: { hasMore: boolean; nextCursor: string | null; isLoading: boolean };
+  messagePagination: { hasMore: boolean; isLoading: boolean };
   sidebarArchivedThreads: ThreadListItem[];
+
+  // What the surface's views last gave it, from which the thread map and lists above are derived
+  lists: { list: ThreadExtended[]; recent: Partial<ThreadEntity>[]; archived: Partial<ThreadEntity>[] };
+  /** How many of the open thread's messages the chat's view asks for */
+  chatLimit: number;
+  /** The messages the chat and the detail page list, by id, in display order */
+  chatMessageIds: string[];
+  detailMessageIds: string[];
+  /** Each listed message as its own view last gave it */
+  messageContents: Record<string, Partial<MessageEntity>>;
+  /** The messages a view is followed for */
+  messageViews: string[];
+  /** The open tabs a view is followed for */
+  tabViews: string[];
+  /** The open tabs whose view has given a result, so a new artifact in one is selected */
+  tabsRead: string[];
+  /** The thread this window just opened, whose first read applies its forced mode */
+  openedThreadId: string | null;
+  /** The threads this window just created, marked new in the list for its animation */
+  freshThreadIds: string[];
+  /** This window's thread writes, which hold the views back until they are answered */
+  writes: ViewWrites;
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */

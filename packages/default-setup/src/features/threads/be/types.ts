@@ -281,12 +281,6 @@ export type ThreadEntity = PackShapes['Thread'];
 /** A thread's short code, `THR-<n>`: the engine numbers it with the prefix Thread's apack.json entry declares */
 export type ThreadTypeShortCode = ShortCodeOf<'Thread'>;
 
-export type ThreadConnectedData = {
-  threads: ThreadExtended[];
-  availableTags: ThreadTagOption[];  // Tags from settings
-  settings?: ThreadsSettings | null; // Full thread settings
-  chatStates?: Record<string, string>;
-}
 
 // ---- Chat/Agent types (merged from agent system) ----
 
@@ -303,20 +297,40 @@ export type AgentThreadData = {
   pinned?: boolean;
   chatState?: string;
   context?: ThreadContext;
-  hasMore?: boolean;
-  nextCursor?: string | null;
 }
 
-export type RecentThreadRefreshData = {
-  recentThreads: Partial<ThreadEntity>[];
+
+/**
+ * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
+ * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
+ * that view alone and leaves the page, which reads no message's content, where it is.
+ */
+export type ChatPage = Omit<AgentThreadData, 'id' | 'messages' | 'artifacts'> & {
+  id: ThreadEntity['id'];
+  messageIds: EARS.EntityId[];
+  /** Whether messages older than the page's first exist */
+  hasMore: boolean;
 };
 
-export type AgentConnectedData = {
-  currentThread: AgentThreadData | null;
-  threads: Partial<ThreadEntity>[];
-  recentThreads: Partial<ThreadEntity>[];
-  tabs: Tab[];
-  settings?: AgentSettings;
+/** A thread as its detail page shows it: its fields, its links, and its messages' ids (the \`detail\` view) */
+export type ThreadDetailView = Omit<ThreadExtendedData, 'messages'> & {
+  id: ThreadEntity['id'];
+  messageIds: EARS.EntityId[];
+};
+
+/** An open tab's thread: its label, whether it is pinned, and its artifacts (the \`tab\` view) */
+export type ThreadTabView = {
+  topic: string;
+  pinned?: boolean;
+  artifacts: ArtifactItem[];
+};
+
+/** What a window's chat starts from: the thread to open, the tabs every window opens, and the settings */
+export type ChatStart = {
+  currentThreadId: ThreadEntity['id'] | null;
+  tabs: Array<{ id: ThreadEntity['id']; label: string; pinned?: boolean }>;
+  /** The threads feature's settings now; each change after reaches the surface as \`FEATURE_SETTINGS_UPDATED\` */
+  settings: ThreadsSettings;
 };
 
 
@@ -479,7 +493,6 @@ export type IncomingThreadsEvents =
   // Chat/agent events (merged from agent system)
   | { type: 'USER_MSG'; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string; forceDirectoryPicker?: boolean }
   | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
-  | { type: 'OPEN_THREAD_TAB'; threadId: string; label: string; pinned?: boolean }
   | { type: 'PAUSE_TURN'; threadId: string }
   | { type: 'INTERACTIVE_MSG_RESPONSE'; messageId: string; threadId: string; response: any }
   | { type: 'FORK_THREAD'; messageId: string; threadId?: string; threadTopic?: string }
@@ -489,40 +502,37 @@ export type IncomingThreadsEvents =
   | { type: 'TOGGLE_COMPACTED'; markerId: string; compacted: boolean }
   | { type: 'DELETE_MESSAGE'; messageId: string }
   | { type: 'FORWARD_BRAIN_EVENT'; eventType: string; payload?: any }
-  | { type: 'GET_ARCHIVED_THREADS' }
-  | { type: 'REFRESH_THREADS' }
-  | { type: 'LOAD_MORE_MESSAGES'; threadId: string; cursor: string }
+  /** What a window's chat starts from: answered with \`CHAT_STARTED\` */
+  | { type: 'GET_CHAT_START' }
 
   | { type: 'CLIENT_CONNECTED' }
   | { type: 'THREAD_DELETED'; threadId: string }
 
+/**
+ * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
+ * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
+ */
 export type OutgoingThreadsEvents =
-  // Thread management events
-  | { type: 'THREAD_CONNECTED'; data: ThreadConnectedData }
-  | { type: 'SET_VIEW_DATA', id: EARS.EntityId, data: ThreadExtendedData }
-  | { type: 'THREAD_CREATED', id: EARS.EntityId, shortCode: string, entityType: EARS.Entity, timestamp: number, topic?: string, instructions?: string, status?: string }
-  | { type: 'THREAD_UPDATED', threadId: string, updates: Partial<Pick<ThreadEntity, 'status' | 'tags' | 'context' | 'pinned' | 'topic' | 'instructions'>> }
-  | { type: 'THREAD_DELETED', threadId: string }
+  /** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
+  | { type: 'THREAD_CREATED'; id: EARS.EntityId }
+  /** Any other write landed */
+  | { type: 'THREAD_WRITTEN' }
+  /** A write was refused, and why */
+  | { type: 'THREAD_WRITE_FAILED'; error: string }
+  /**
+   * Open this thread in the chat: to the window that asked (a message that started a thread, a fork), or, from a flow,
+   * which has no window to answer, to every window. It names the thread; its content is the thread's views.
+   */
+  | { type: 'SHOW_THREAD'; threadId: EARS.EntityId; restore?: boolean }
+  | { type: 'CHAT_STARTED'; data: ChatStart }
+  | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
   | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }
   | { type: 'THREADS_EXPORT_FAILED'; errors: string[] }
   | { type: 'THREADS_IMPORTED'; count: number; errors?: string[] }
   | { type: 'THREADS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'ARCHIVED_THREADS_DATA'; threads: Partial<ThreadEntity>[] }
-  // Chat/agent events (merged from agent system)
-  | { type: 'AGENT_CONNECTED'; data: AgentConnectedData }
-  | { type: 'LOAD_CHAT_THREAD', data: AgentThreadData, restore?: boolean }
-  | { type: 'REFRESH_RECENT_THREADS'; data: RecentThreadRefreshData }
-  | { type: 'ARTIFACT_ADDED'; tabId: string; artifact: any }
-  | { type: 'ARTIFACT_UPDATED'; tabId: string; artifact: any }
-  | { type: 'THREAD_TAB_REQUESTED'; threadId: string; topic: string; artifacts: any[]; pinned?: boolean }
-  | { type: 'AGENT_SETTINGS_UPDATED'; settings: AgentSettings }
-  | { type: 'UPDATE_MESSAGE_STATE'; messageId: string; text?: string; blocks?: BlockConfig[]; responseTimestamp?: number; blockResponse?: BlockResponse; forkable?: boolean; status?: 'queued' | 'cancelled' | null; context?: Record<string, unknown>; asideText?: string; asideContext?: string; compacted?: boolean }
-  | { type: 'MESSAGE_ADDED'; threadId: string; message: MessageEntity }
+  // A flow's notifications to every window: what the chat's input offers, and a state flashed beside a thread
   | { type: 'SET_MODE'; mode: string }
   | { type: 'SET_PHASE'; phase: string }
-  | { type: 'SET_CHAT_STATE'; threadId: string; chatState: string }
   | { type: 'FLASH_CHAT_STATE'; threadId: string; stateId: string; durationMs?: number }
-  | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
-  | { type: 'OLDER_MESSAGES_LOADED'; threadId: string; messages: Partial<MessageEntity>[]; hasMore: boolean; nextCursor: string | null }
 
 export interface ThreadsContext {}

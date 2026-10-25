@@ -538,6 +538,30 @@ again, and `null` or `undefined` leaves the view idle. The subscription ends wit
 - `untypedUseView(ref, view, args?)` from `@apackdev/sdk/fe` is the escape hatch, for a view named by data or another
   pack's.
 
+**A surface drawn in more than one place follows its views from its machine.** A component's `useView` lives as long as
+the component, so a surface whose canvas routes and chat area come and go has no one component that holds a view for
+all of them. `fromView` (`#generated/fe`) is the view as actor logic: the machine spawns it with the view's arguments,
+gets the event it builds from each result, and stops or replaces it when it wants something else.
+
+```typescript
+import { fromView } from '#generated/fe.ts';
+
+const surface = setup({
+  actors: {
+    page: fromView('bookmarks', 'page', (update, args) =>
+      (update.ok ? { type: 'PAGE.READ', page: args.page, rows: update.value } : { type: 'PAGE.FAILED', error: update.error })),
+  },
+}).createMachine({ /* spawnChild('page', { id: 'page', input: { page: 0 } }) where the surface wants it */ });
+```
+
+`untypedFromView(ref, view, read)` from `@apackdev/sdk/fe` is its escape hatch.
+
+**What a view cannot read is fetched, and its answer is replied.** A file on disk, the run history and a walk over the
+whole store are not views: the first two are outside the engine, and the third would re-run on every commit anyone
+makes. A surface asks for them and its system answers it with `reply`. A surface asks for what it starts from when the
+shell hands it `SURFACE_STARTED` (`SurfaceLifecycleEvent`, `@apackdev/sdk/fe`), which arrives in a delivery naming the
+surface; a send from the machine's own entry is in none, carries no sender, and so cannot be answered.
+
 ### Trash
 
 The engine has a trash. `write(id).trash()` puts an entity in it: it stays stored, with its edges, marked with when

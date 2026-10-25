@@ -1427,7 +1427,7 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
   function viewsFe(): { imports: string; code: string } | undefined {
     const views = viewEntries();
     if (views.length === 0) return undefined;
-    const imports = `import { untypedUseView, type UseViewOptions, type ViewState } from '@apackdev/sdk/fe';
+    const imports = `import { untypedFromView, untypedUseView, type UseViewOptions, type ViewState, type ViewUpdate } from '@apackdev/sdk/fe';
 import type { ViewArgs, ViewResult } from '@apackdev/sdk/framework';
 import type { MaybeRefOrGetter } from 'vue';
 ${views.map(({ featureId, source, exportName }) => `import type { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n')}`;
@@ -1459,6 +1459,21 @@ export function useView<Feature extends ViewFeatureName, View extends keyof Pack
   ...args: ViewArgsParameter<PackViews[Feature][View]>
 ): ViewState<ViewResult<PackViews[Feature][View]>> {
   return untypedUseView(ref(feature), view, ...args) as ViewState<ViewResult<PackViews[Feature][View]>>;
+}
+
+/**
+ * One of this pack's views, followed by a surface machine: actor logic to spawn with the view's arguments as its
+ * input, which sends the machine \`read(update, args)\` for the view's result and each changed result after it until
+ * it is stopped. For a surface drawn in more than one area, where no one component holds the view for all of them.
+ *
+ * \`untypedFromView\` from \`@apackdev/sdk/fe\` is the escape hatch, for a view named by data or another pack's.
+ */
+export function fromView<Feature extends ViewFeatureName, View extends keyof PackViews[Feature] & string, TEvent extends { type: string }>(
+  feature: Feature,
+  view: View,
+  read: (update: ViewUpdate<ViewResult<PackViews[Feature][View]>>, args: ViewArgs<PackViews[Feature][View]>) => TEvent,
+): ReturnType<typeof untypedFromView<ViewResult<PackViews[Feature][View]>, ViewArgs<PackViews[Feature][View]>, TEvent>> {
+  return untypedFromView(ref(feature), view, read);
 }
 `;
     return { imports, code };

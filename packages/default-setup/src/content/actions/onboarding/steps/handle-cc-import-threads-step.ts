@@ -98,8 +98,6 @@ async function importSelectedSessions(services: Services, providers: { cc: boole
         .filter((s: any) => !existingCodexIds.has(s.id));
       if (codexToImport.length) await importCodexSessions(services, codexToImport);
     }
-
-    services.chat.sendRecentThreadsRefresh();
   } catch {
     // Best-effort
   }
