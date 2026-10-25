@@ -59,6 +59,8 @@ test('edits original Settings through desktop controls and retains composing', a
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0
+  async function settleNativeOnboarding(reset=false){
+    if(reset){terminalScreen!.reset();lastSequence=0;await expect.poll(resize).toBeTruthy();const fit=(await resize())!;terminalScreen!.resize(fit.cols,fit.rows)}
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -77,6 +79,8 @@ test('edits original Settings through desktop controls and retains composing', a
     else if (screen === 'workspace-trust-selected' && navigated && trustAttempts < 3 && Date.now() - trustSelectedAt > 1200) { trusted = true; trustAttempts++; trustSelectedAt = Date.now(); await input.press('Enter') }
     return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('Session ready'))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
+  }
+  await settleNativeOnboarding()
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
@@ -506,8 +510,20 @@ test('edits original Settings through desktop controls and retains composing', a
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await disableExternalConsent();const project=await consentProject();expect(project.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledProject=project;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
-  await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+  const stopNative=async()=>{await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()}
+  if(externalConsentProfile){
+    await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
+    await stopNative()
+    await composer.fill('Continue the same session with approved external instructions.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+    await expect.poll(async()=>{const pid=(await context()).native?.state.nativePid;return pid&&pid!==boundNativePid?pid:undefined}).toBeTruthy()
+    await settleNativeOnboarding(true);externalConsent.restartedNativePid=(await context()).native.state.nativePid
+    await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await open();await search.fill('External');await disableExternalConsent()
+    externalConsent.disabledBeforeResume=true;externalConsent.disabledProject=await consentProject();externalConsent.restartBoundaryVerified=true
+    await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)
+    await stopNative()
+  }else await stopNative()
+
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
