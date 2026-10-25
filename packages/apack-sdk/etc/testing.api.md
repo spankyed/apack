@@ -27,6 +27,7 @@ import type { Ref } from 'vue';
 import { RelationRules } from '@apackdev/ears';
 import type { rerank } from 'ai';
 import { RowRules } from '@apackdev/ears';
+import type { SearchDeclaration } from '@apackdev/ears';
 import type { SnapshotFrom } from 'xstate';
 import type { streamText } from 'ai';
 import type { ToolLoopAgent } from 'ai';

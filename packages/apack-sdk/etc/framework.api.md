@@ -14,6 +14,7 @@ import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
 import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
+import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public
@@ -421,6 +422,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 // @public
 export interface PackEntityDeclaration {
     readonly indexes?: readonly string[];
+    readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
 }
@@ -432,6 +434,7 @@ export interface _PackEntityDeclaration {
     name: string;
     // (undocumented)
     owner: string;
+    search?: SearchDeclaration;
     // (undocumented)
     shape: string | null;
     shortCode?: string;
@@ -530,6 +533,11 @@ export function _packRelationTypes(declaration: PackDataDeclarations): Record<st
 
 // @internal
 export function _packRoles(declaration: PackDataDeclarations): Record<string, string>;
+
+// @public
+export interface PackSearchDeclaration extends SearchDeclaration {
+    readonly stem?: SearchStemLanguage;
+}
 
 // @internal
 export interface _PackServiceDeclaration {
@@ -654,6 +662,9 @@ export interface ReferenceTypeDeclaration {
     // (undocumented)
     svgElements: readonly ReferenceSvgElement[];
 }
+
+// @public
+export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
 
 // @internal
 export function _serviceProviderProblem(pack: Pick<_PackServiceDeclarations, 'id' | 'dependencies'>, ref: string): string | undefined;

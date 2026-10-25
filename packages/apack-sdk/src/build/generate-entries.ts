@@ -2033,6 +2033,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const entities = _packEntities(manifest);
     const prefixes = new Map(entities.flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
     const indexed = new Map(entities.flatMap(({ name, indexes }) => (indexes ? [[name, indexes] as const] : [])));
+    const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2069,11 +2070,17 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       if (unknown.length > 0) {
         throw new Error(`Entity "${entity}": its indexes name ${unknown.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
       }
-      rules[entity] = { required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }) };
+      // A text index reads fields the shape declares, as an index does
+      const search = searched.get(entity);
+      const unread = Object.keys(search?.fields ?? {}).filter((field) => !fields.includes(field));
+      if (unread.length > 0) {
+        throw new Error(`Entity "${entity}": its search names ${unread.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
+      }
+      rules[entity] = { required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }) };
     }
-    for (const { name: entity, shortCode, indexes } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined)) continue;
-      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }) };
+    for (const { name: entity, shortCode, indexes, search } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined)) continue;
+      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }) };
     }
     return dataLiteral(rules);
   }

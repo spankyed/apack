@@ -6,7 +6,7 @@
 import type { Simplify } from '@apackdev/sdk/helpers'
 import type { HotkeysMap, NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
 import type {
-  AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, Tab, ThreadCreateData,
+  AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, MessageSearchResult, Tab, ThreadCreateData,
   ThreadEntity, ThreadTagOption, ThreadViewData, ThreadsSettings,
 } from '#generated/types.ts'
 import type { ThreadTabGroup } from './canvas/agent/tabs/types.ts'
@@ -66,6 +66,10 @@ export interface ThreadsContext {
   navHistory: NavHistory<string>;
   messagePagination: { hasMore: boolean; nextCursor: string | null; isLoading: boolean };
   sidebarArchivedThreads: ThreadListItem[];
+  /** The panel's message search: the query typed, and the results answering it once they arrive */
+  messageSearch: { query: string; results: MessageSearchResult[]; searching: boolean };
+  /** A message the chat brings into view once its thread has loaded it, older pages included */
+  focusMessageId: string | null;
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */

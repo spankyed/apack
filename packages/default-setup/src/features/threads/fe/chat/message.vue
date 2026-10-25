@@ -1,5 +1,6 @@
 <template>
   <div
+    :data-message-id="message.id"
     :class="[
       'flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'

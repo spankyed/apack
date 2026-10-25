@@ -5,7 +5,7 @@ import { hasOwn } from '../utils/shared.ts';
 import { _eventContractsProblem } from './event-contracts.ts';
 import type { PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 export { LIFECYCLE_HOOK_NAMES } from './lifecycle-declaration.ts';
-import { _packEntities, _packEntityTypes, _packRelationTypes, _packRoles, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN, _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, type PackDataDeclarations } from './data-declaration.ts';
+import { _packEntities, _packEntityTypes, _packRelationTypes, _packRoles, _SHORT_CODE_PATTERN, _WIRE_NAME_PATTERN, _ENTITY_NAME_PATTERN, _FIELD_NAME_PATTERN, _SEARCH_STEM_LANGUAGES, type PackDataDeclarations } from './data-declaration.ts';
 import { _MODULE_REFERENCE_PATTERN, _MODULE_PATH_PATTERN } from './module-reference.ts';
 import { z } from 'zod';
 import { _PACK_VERSION_PATTERN, _validPackVersion, _validPackRange, parsePackDependency } from './dependency-source.ts';
@@ -91,7 +91,14 @@ const EntityDeclarationSchema = z.object({
     .describe('The prefix create numbers each row\'s short code with, <prefix>-<n>: three uppercase letters, unique across every pack. The shape declares no shortCode: #generated/ears types the field from this prefix (ShortCodeOf<E>). Leave it out for an entity that isn\'t numbered.').optional(),
   indexes: z.array(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name')).refine((fields) => new Set(fields).size === fields.length, 'Must not repeat a field').readonly()
     .describe('The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type\'s rows. A shaped entity\'s indexes must be fields its shape declares; role, shortCode and contentKey are always indexed.').optional(),
-}).strict().describe('One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity).');
+  search: z.object({
+    fields: declarationRecord(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name'), z.number().positive().finite())
+      .refine((fields) => Object.keys(fields).length > 0, 'Must name a field')
+      .describe('Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times.'),
+    stem: z.enum(_SEARCH_STEM_LANGUAGES).describe('The language whose stems match a word\'s other forms (`en`: "running" matches "runs").').optional(),
+  }).strict()
+    .describe('A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
+}).strict().describe('One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity).');
 const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 'Must be a PascalCase entity wire name'), EntityDeclarationSchema)
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({

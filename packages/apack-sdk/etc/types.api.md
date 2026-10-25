@@ -385,6 +385,12 @@ export const SDK_ROW_RULES: {
         readonly required: readonly ["name", "content"];
         readonly shortCode: "DOC";
         readonly indexes: readonly ["name"];
+        readonly search: {
+            readonly fields: {
+                readonly name: 3;
+                readonly tags: 1;
+            };
+        };
     };
     readonly Collection: {
         readonly required: readonly ["name"];
