@@ -37,3 +37,7 @@ tests/authoring-handoff/
 *.bundled_*.mjs
 *.bundled_*.cjs
 
+
+# The elmdb checkout @apackdev/ears builds against, linked by `npm run link:elmdb` (scripts/link-elmdb.mjs); the
+# commit it is pinned to is vendor/elmdb.rev
+vendor/elmdb
