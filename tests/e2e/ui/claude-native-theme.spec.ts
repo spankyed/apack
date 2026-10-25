@@ -5,8 +5,16 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('renders original theme previews, cancellation, button roles and saved custom reload', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
+test('renders original theme previews, cancellation, button roles and saved custom reload', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capture({path}:{path:string}){
+    const size=appPage.viewportSize()!
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
+    expect(result.size).toEqual(size)
+    await writeFile(path,Buffer.from(result.png,'base64'))
+  }
   expect(process.env.HOME).toBe(workspace)
   const { planScenario, documentTheme } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
@@ -56,7 +64,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await input.press('Enter')
   await expect.poll(async () => (await context()).native.output.map((chunk: any) => chunk.text).join('')).toContain('Research')
   await writeFile(join(workspace!, 'native-theme-picker-output.txt'), (await context()).native.output.map((chunk: any) => chunk.text).join(''))
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-picker.png') })
+  await capture({ path: testInfo.outputPath('apack-native-theme-picker.png') })
   const savedTheme = JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme
   await input.press('ArrowDown')
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
@@ -111,7 +119,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await action.scrollIntoViewIfNeeded()
     try { await expect(action).toBeInViewport({ ratio: 0.99 }) }
     catch (error) {
-      await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-control-visibility-failure.png') })
+      await capture({ path: testInfo.outputPath('apack-native-theme-control-visibility-failure.png') })
       throw error
     }
     // Layout can move the action under the old pointer; inspect base paint outside the site.
@@ -134,7 +142,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect.poll(async () => readFile(join(workspace!, 'native-theme-choice.txt'), 'utf8').catch(() => '')).toBe('b')
   expect(JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe(savedTheme)
   await action.scrollIntoViewIfNeeded()
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-preview.png') })
+  await capture({ path: testInfo.outputPath('apack-native-theme-preview.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.press('Escape')
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
@@ -147,7 +155,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(composer).toHaveText('Draft retained during native theme preview')
   if (documentTheme) await verifyDocuments(await note.evaluate(el => getComputedStyle(el).color), 'preview-cancelled')
   expect(JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe(savedTheme)
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-preview-cancelled.png') })
+  await capture({ path: testInfo.outputPath('apack-native-theme-preview-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.pressSequentially('/theme'); await input.press('Enter')
   // Read the current native highlight; the picker may reopen at Auto or the saved theme.
@@ -162,7 +170,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await expect.poll(highlightedTheme).not.toBe(before)
   }
   expect(await highlightedTheme()).toMatch(/^Research(?:\s*custom)?$/)
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-theme-picker-selected.png') })
+  await capture({ path: testInfo.outputPath('apack-native-theme-picker-selected.png') })
   await writeFile(join(workspace!, 'native-theme-selected-output.txt'), (await context()).native.output.map((chunk: any) => chunk.text).join(''))
   await input.press('Enter')
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, '.claude/settings.json'), 'utf8')).theme).toBe('custom:research')
@@ -214,7 +222,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await input.press('Enter')
   await expect.poll(nativeText).toContain('Enter to save')
   await input.press('Control+u'); await input.pressSequentially('#a1b2c3')
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme-editor.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-theme-editor.png') })
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await showTools()
   await expect(label).toHaveCSS('color', 'rgb(161, 178, 195)')
@@ -224,7 +232,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   expect(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).toBe(savedCustomTheme)
   await label.scrollIntoViewIfNeeded()
   await expect(label).toBeInViewport({ ratio: 0.99 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-preview.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-editor-preview.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.press('Escape')
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
@@ -233,7 +241,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   expect(await readFile(join(workspace!, '.claude/themes/research.json'), 'utf8')).toBe(savedCustomTheme)
   await label.scrollIntoViewIfNeeded()
   await expect(label).toBeInViewport({ ratio: 0.99 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-cancelled.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-editor-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await input.press('Enter')
   await input.press('Control+u'); await input.pressSequentially('#c3b2a1'); await input.press('Enter')
@@ -246,10 +254,10 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(composer).toHaveText('Draft retained during custom theme editing')
   await label.scrollIntoViewIfNeeded()
   await expect(label).toBeInViewport({ ratio: 0.99 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-editor-saved.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-editor-saved.png') })
   await composer.fill('Draft retained during native theme reload')
   await expect(action).toHaveCSS('color', 'rgb(68, 85, 102)')
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-theme.png') })
   await note.focus()
   await writeFile(join(workspace!, '.claude/themes/research.json'), JSON.stringify({ name: 'Research', base: 'dark', overrides: { text: '#abcdef', success: '#998877', warning: '#123456', suggestion: '#334455' } }))
   await expect(label).toHaveCSS('color', 'rgb(153, 136, 119)', { timeout: 10000 })
@@ -265,11 +273,11 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await note.focus()
     const fieldLabel = note.locator('..').locator('.native-field-label')
     await expect(fieldLabel).toBeInViewport({ ratio: 0.99 }).catch(async error => {
-      await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-label-failure-' + height + '.png') })
+      await capture({ path: testInfo.outputPath('apack-native-field-label-failure-' + height + '.png') })
       throw error
     })
     await expect(note).toBeInViewport({ ratio: 0.99 }).catch(async error => {
-      await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-bounds-failure-' + height + '.png') })
+      await capture({ path: testInfo.outputPath('apack-native-field-bounds-failure-' + height + '.png') })
       await writeFile(join(workspace!, 'native-field-bounds-failure.json'), JSON.stringify({ height, context: await context(), ui: await appPage.evaluate(() => { const c = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { views: c.nativeUiViews, focus: c.nativeUiFocus } }), geometry: await card.evaluate(card => {
         const note = card.querySelector('textarea[aria-label="Theme note"]')!
         const nodes = [note, note.parentElement!, ...(() => { const result: Element[] = []; for(let p: Element | null = note.parentElement; p && p !== card; p = p.parentElement) result.push(p); return result })(), card]
@@ -282,7 +290,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
       return selectors.flatMap(selector => [...element.querySelectorAll<HTMLElement>(selector)].map(node => { const r = node.getBoundingClientRect(), s = getComputedStyle(node); return { selector, rect: { x:r.x, y:r.y, width:r.width, height:r.height }, scrollHeight:node.scrollHeight, clientHeight:node.clientHeight, minHeight:s.minHeight, padding:s.padding, flex:s.flex, overflow:s.overflow } }))
     })))
     await expect(composer).toBeInViewport({ ratio: 0.99 }).catch(async error => {
-      await appPage.screenshot({ path: testInfo.outputPath('apack-native-composer-visibility-failure-' + height + '.png') })
+      await capture({ path: testInfo.outputPath('apack-native-composer-visibility-failure-' + height + '.png') })
       throw error
     })
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
@@ -294,7 +302,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
     expect(sizes.card.scrollHeight).toBeLessThanOrEqual(sizes.card.height + 1)
     expect(sizes.strip.scrollHeight).toBeLessThanOrEqual(sizes.strip.height + 1)
     composerGeometry.push({ height, ...sizes })
-    await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-composer-' + height + '.png') })
+    await capture({ path: testInfo.outputPath('apack-native-field-composer-' + height + '.png') })
   }
   if (documentTheme) {
     await appPage.setViewportSize({ width: 680, height: 900 })
@@ -315,7 +323,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
         await expect(target).toBeInViewport({ ratio: name === 'markdown' ? 0.2 : 0.99 })
         await expect(composer).toBeInViewport({ ratio: 0.99 })
         await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 0.99 })
-        await appPage.screenshot({ path: testInfo.outputPath('apack-native-document-' + name + '-' + height + '.png') })
+        await capture({ path: testInfo.outputPath('apack-native-document-' + name + '-' + height + '.png') })
       }
     }
     await card.getByRole('link', { name: 'native callback', exact: true }).click()
@@ -324,19 +332,19 @@ test('renders original theme previews, cancellation, button roles and saved cust
     await writeFile(join(workspace!, 'native-document-app-evidence.json'), JSON.stringify({ receipts: documentReceipts, callback: JSON.parse(await readFile(join(workspace!, 'native-document-link.json'), 'utf8')), sourceAndDiffNormalCompact: true }, null, 2))
   }
   await appPage.setViewportSize({ width: 680, height: 900 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-field-theme-reloaded.png') })
+  await capture({ path: testInfo.outputPath('apack-native-field-theme-reloaded.png') })
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(18, 52, 86)')
   await expect(composer).toHaveText('Draft retained during native theme reload')
   await expect(action).toHaveCSS('color', 'rgb(51, 68, 85)')
   await action.scrollIntoViewIfNeeded()
   await action.hover()
   await expect(action).toHaveCSS('color', 'rgb(18, 52, 86)')
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme-hover.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-theme-hover.png') })
   await action.click()
   await expect.poll(async () => readFile(join(workspace!, 'native-theme-action.txt'), 'utf8').catch(() => '')).toBe('pressed')
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   expect((await context()).sessionId).toBe(sessionId)
-  await appPage.screenshot({ path: testInfo.outputPath('apack-native-custom-theme-reloaded.png') })
+  await capture({ path: testInfo.outputPath('apack-native-custom-theme-reloaded.png') })
   await composer.fill('Continue after native theme verification.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => { const c = await context(); return c.native?.state.busy === false && c.messages.some((m: any) => m.context?.claudeTerminalMessage && m.text === 'Fixture completed.') }).toBe(true)
