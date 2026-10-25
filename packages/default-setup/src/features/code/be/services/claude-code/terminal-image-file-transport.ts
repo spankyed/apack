@@ -11,6 +11,20 @@ export function createClaudeTerminalImageFileTransport(options: {
 }) {
   const read = options.read ?? readClaudeTerminalImageFile
   let pending = Promise.resolve(), queuedBytes = 0, closed = false
+  let reading = false, cancelRead: (() => void) | undefined
+  async function readImage(path: string, image: ClaudeTerminalImageFileFormat) {
+    if (reading) throw new Error('Previous terminal image read is still pending')
+    reading = true
+    const source = Promise.resolve().then(() => read(path, image))
+    void source.then(() => { reading = false }, () => { reading = false })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stopped = new Promise<never>((_resolve, reject) => {
+      cancelRead = () => reject(new Error('Terminal image owner closed'))
+      timer = setTimeout(() => reject(new Error('Terminal image read timed out')), 4000)
+      timer.unref?.()
+    })
+    try { return await Promise.race([source, stopped]) } finally { clearTimeout(timer); cancelRead = undefined }
+  }
   let held = '', state: 'text' | 'escape' | 'apc' | 'apcEscape' | 'passthrough' | 'passthroughEscape' = 'text'
   let ready = ''
   const flush = () => { if (!closed && ready) { const text = ready; ready = ''; options.emit(text) } }
@@ -43,7 +57,7 @@ export function createClaudeTerminalImageFileTransport(options: {
     try {
       const path = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(payload, 'base64'))
       const image: ClaudeTerminalImageFileFormat = format === '100' ? { format: 'png' } : { format: format === '24' ? 'rgb' : 'rgba', width: Number(fields.get('s')), height: Number(fields.get('v')) }
-      const pixels = await read(path, image)
+      const pixels = await readImage(path, image)
       if (closed) return
       if (fields.get('a') === 'q') { answer('OK'); return }
       options.image?.({ id: Number(id), image, pixels })
@@ -89,6 +103,6 @@ export function createClaudeTerminalImageFileTransport(options: {
       return result
     },
     drain() { return pending },
-    close() { closed = true; held = ''; ready = '' },
+    close() { closed = true; held = ''; ready = ''; cancelRead?.() },
   }
 }

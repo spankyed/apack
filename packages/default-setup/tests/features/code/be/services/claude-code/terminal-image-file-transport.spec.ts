@@ -41,7 +41,7 @@ it('withdraws an in-flight read on owner close', async () => {
   const f = fixture(vi.fn(() => new Promise<Buffer>(resolve => { release = resolve })))
   const pending = f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=7'))
   await vi.waitFor(() => expect(f.read).toHaveBeenCalledOnce())
-  f.close(); release(Buffer.alloc(4)); await pending
+  f.close(); await pending; release(Buffer.alloc(4)); await Promise.resolve()
   expect(f.output()).toBe(''); expect(f.reply).not.toHaveBeenCalled()
 })
 it('rejects duplicate header authority without opening a file', async () => {
@@ -60,4 +60,22 @@ it('chunks larger pixels into one ordered direct transmission', async () => {
   const encoded = frames.map(value => value.slice(value.indexOf(';') + 1, -2)).join('')
   expect(Buffer.from(encoded, 'base64')).toEqual(bytes)
   expect(f.reply).not.toHaveBeenCalled()
+})
+
+it('bounds a stalled read without accumulating reads or publishing its late pixels', async () => {
+  vi.useFakeTimers()
+  let release!: (pixels: Buffer) => void
+  const read=vi.fn().mockImplementationOnce(()=>new Promise<Buffer>(resolve=>{release=resolve})).mockResolvedValue(Buffer.from([4,5,6,255]))
+  const f=fixture(read)
+  try {
+    const first=f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=7'))
+    await vi.advanceTimersByTimeAsync(4001);await first
+    expect(f.reply).toHaveBeenCalledExactlyOnceWith('\x1b_Gi=7;EIO:terminal image file could not be read\x1b\\')
+    await f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=8'))
+    expect(read).toHaveBeenCalledOnce();expect(f.output()).toBe('')
+    release(Buffer.from([1,2,3,255]));await Promise.resolve();await Promise.resolve()
+    expect(f.output()).toBe('')
+    await f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=9'))
+    expect(read).toHaveBeenCalledTimes(2);expect(f.output()).toContain('i=9');expect(f.output()).not.toContain('i=7')
+  } finally { f.close();vi.useRealTimers() }
 })
