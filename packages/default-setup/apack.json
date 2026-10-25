@@ -1346,7 +1346,8 @@
       "repositories": {
         "actionQueries": "src/features/actions/be/repository/index.ts#actionQueries",
         "actionCommands": "src/features/actions/be/repository/index.ts#actionCommands"
-      }
+      },
+      "views": "src/features/actions/be/views.ts#actionViews"
     },
     "prompts": {
       "description": "Manage reusable prompt templates.",

@@ -7,7 +7,7 @@ import type { FlowEdge } from '@apackdev/sdk/repositories';
  * Flow & Edge entities
  *─────────────────────────────────────────────────────────────────*/
 
-import type { FlowEntity, ActionEntity, PromptEntity } from '@apackdev/sdk';
+import type { FlowEntity, PromptEntity } from '@apackdev/sdk';
 
 /** A transition between two nodes, as the SDK's flow repository returns it */
 export type EdgeEntity = FlowEdge;
@@ -39,7 +39,6 @@ export interface FlowsConnectedData {
   rootFlow?: Partial<FlowEntity>;
   models: ModelCatalogEntry[];
   prompts: PromptEntity[];
-  actions: ActionEntity[];
   settings?: any;
 }
 
@@ -91,9 +90,6 @@ export type OutgoingFlowsEvents =
   | { type: 'EDGE_DELETED'; edgeId: string }
   | { type: 'EDGE_UPDATED'; edgeId: EARS.RelationId; source: EARS.EntityId; target: EARS.EntityId; sourceHandle?: string; targetHandle?: string }
   | { type: 'EDGE_UPDATE_FAILED'; edgeId: string; error: string }
-  | { type: 'ACTION_CREATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_UPDATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_DELETED'; actionId: EARS.EntityId }
   | { type: 'DSL_IMPORTED'; flowIds: EARS.EntityId[]; errors?: string[] }
   | { type: 'DSL_IMPORT_FAILED'; errors: string[] }
   | { type: 'DSL_EXPORTED'; filePath: string; flowCount: number; skipped: string[] }

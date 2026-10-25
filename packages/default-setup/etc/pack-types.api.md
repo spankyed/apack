@@ -54,27 +54,14 @@ interface ActionTab {
 }
 
 interface ActionsContext {
+    /** The action open in the detail view */
     selectedActionId?: EARS.EntityId;
-    /**
-     * The call the outstanding `ACTION_SELECT` was asked under, or absent when nothing is outstanding.
-     *
-     * `selectedActionId` cannot do this job: it is written *from* the answer, so until one lands there is
-     * nothing to compare an arriving one against, and two quick selections are decided by whichever answer
-     * arrives last.
-     *
-     * **A domain id cannot do this job, for two independent reasons.** It does not distinguish windows, so
-     * another window's answer for the same action satisfies it; and it does not distinguish asks, so a slot
-     * holding one is only ever overwritten, never emptied — which names the last ask for the life of the
-     * surface. A call is per ask and per window, and the slot is cleared when its answer lands.
-     */
-    pendingActionCall: string | null;
-    actions: ActionEntity[];
-    selectedAction?: ActionEntity;
-    totalCount: number;
-    page: number;
-    totalPages: number;
-    loadingMore: boolean;
-    categories: Category[];
+    /** The open action's label, for the breadcrumb, as its view last read it */
+    selectedLabel?: string;
+    /** The action the form was filled from, so its view changing doesn't overwrite what the user has typed */
+    formFor?: EARS.EntityId;
+    /** How many actions the list shows: a page more each time the user scrolls to its end */
+    listLimit: number;
     selectedCategories: string[];
     actionsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
@@ -100,41 +87,29 @@ interface ActionsContext {
     };
 }
 
-/** Paging and editing, which the code surface's actions panel asks of it */
+/** Opening and editing, which the code surface's actions panel and the action step's form ask of it */
 type ActionsInboxEvent = {
-    type: 'ACTION.SELECT';
-    actionId: EARS.EntityId;
-} | {
     type: 'ACTION.CREATE';
-} | {
-    type: 'ACTION.DELETE';
-    actionId: EARS.EntityId;
 } | {
     type: 'ACTION.UPDATE_INPUT';
     actionId: string;
-    input: Record<string, any>;
-} | {
-    type: 'ACTION.CREATE_INLINE';
-    label: string;
-    actionFn: string;
     input: Record<string, any>;
 } | {
     type: 'ACTION.UPDATE_LABEL';
     actionId: string;
     label: string;
 } | {
-    type: 'ACTIONS.LOAD_MORE';
+    type: 'ACTION.DELETE';
+    actionId: EARS.EntityId;
 } | {
-    type: 'ACTIONS.LOAD_ALL';
+    type: 'ACTION.CREATE_INLINE';
+    label: string;
+    actionFn: string;
+    input: Record<string, any>;
+} | {
+    type: 'ACTION.SELECT';
+    actionId: EARS.EntityId;
 };
-
-interface ActionsStartupData {
-    actions: ActionEntity[];
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    categories?: Category[];
-}
 
 interface ActiveTokenInfo {
     source: TokenSource;
@@ -547,11 +522,6 @@ interface CanUseToolRequest {
     decision_reason?: string;
     title?: string;
     description?: string;
-}
-
-interface Category {
-    name: string;
-    color: string;
 }
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
@@ -1494,7 +1464,6 @@ interface FlowsConnectedData {
     rootFlow?: Partial<FlowEntity>;
     models: ModelCatalogEntry[];
     prompts: PromptEntity[];
-    actions: ActionEntity[];
     settings?: any;
 }
 
@@ -1533,7 +1502,6 @@ interface FlowsContext {
     flows: FlowEntity[];
     prompts: PromptEntity[];
     models: ModelCatalogEntry[];
-    actions: ActionEntity[];
     tempIdMap: Record<string, string>;
     /** The root flow the brain runs (the flow with the root role), as the flows system last sent it */
     rootFlowId?: string;
@@ -1557,19 +1525,8 @@ interface FlowsContext {
     navHistory: NavHistory<string | null>;
 }
 
-/** The actions system keeps the flows editor's action list current, and the brain opens a flow or a node in it */
+/** What the brain asks of the flows editor: to open a flow, or a node in it */
 type FlowsInboxEvent = {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
-} | {
     type: 'FLOW.SELECT';
     flowId: EARS.EntityId;
 } | {
@@ -1852,9 +1809,6 @@ interface ImageReference {
 }
 
 type IncomingActionEvents = {
-    type: 'ACTION_SELECT';
-    actionId: string;
-} | {
     type: 'CREATE_ACTION';
     label: string;
     input: Record<string, any>;
@@ -1874,11 +1828,6 @@ type IncomingActionEvents = {
 } | {
     type: 'DELETE_ACTION';
     actionId: string;
-} | {
-    type: 'FETCH_ACTIONS_PAGE';
-    page?: number;
-} | {
-    type: 'FETCH_ALL_ACTIONS';
 } | {
     type: 'IMPORT_ACTIONS';
     actions: any;
@@ -3033,37 +2982,8 @@ interface OpenFile {
     isPreview?: boolean;
 }
 
+/** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
 type OutgoingActionEvents = {
-    type: 'ACTIONS_LISTED';
-    data: ActionsStartupData;
-} | {
-    type: 'ACTION_SELECTED';
-    actionId: EARS.EntityId;
-    data: ActionEntity;
-} | {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTIONS_PAGE_LOADED';
-    data: {
-        actions: ActionEntity[];
-        page: number;
-        totalPages: number;
-    };
-} | {
-    type: 'ACTIONS_ALL_LOADED';
-    data: {
-        actions: ActionEntity[];
-    };
-} | {
     type: 'ACTIONS_IMPORTED';
     count: number;
     errors?: string[];
@@ -3516,17 +3436,6 @@ type OutgoingFlowsEvents = {
     type: 'EDGE_UPDATE_FAILED';
     edgeId: string;
     error: string;
-} | {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
 } | {
     type: 'DSL_IMPORTED';
     flowIds: EARS.EntityId[];
@@ -5695,24 +5604,18 @@ declare const actionCommands: {
 
 /**
  * Action Repository: the SDK's action repository (`actionRepository`), which owns their reads and writes, as the
- * actions surface uses it, and the surface's views. The SDK's methods are taken as they are, not wrapped.
+ * actions surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
  */
 declare const actionQueries: {
     readonly byId: (id: _apackdev_sdk.EARS.EntityId) => ActionEntity | undefined;
     readonly all: () => ActionEntity[];
     readonly byLabel: (label: string) => ActionEntity | undefined;
-    readonly byCategory: (category: string) => ActionEntity[];
-    readonly paginated: (page?: number, pageSize?: number) => {
-        items: ActionEntity[];
-        page: number;
-        pageSize: number;
-        totalCount: number;
-        totalPages: number;
-    };
-    readonly connectedData: (page?: number) => {
+    /**
+     * The first `limit` actions in `categories` (every category when it's empty), or all of them without a limit, and
+     * how many there are. An action without a category is in none, so a filter leaves it out.
+     */
+    readonly list: (limit: number | null, categories: readonly string[]) => {
         actions: ActionEntity[];
-        page: number;
-        totalPages: number;
         totalCount: number;
     };
 };
@@ -6492,9 +6395,9 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
         status: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

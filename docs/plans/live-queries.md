@@ -1,8 +1,9 @@
 # Live queries
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
-protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views.
-Step 1's readings and the decisions Steps 2 and 3 made are below. Steps 4–5 not started.
+protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
+(`cdeb2c846`). Step 4 in progress: actions done. Step 1's readings and the decisions each step made are below. Step 5
+not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
@@ -340,6 +341,15 @@ One change per feature, each deleting its data broadcasts and their handlers: `a
 `database`, `threads`, `brain`, `code`. Each starts by sorting its broadcasts into data (becomes a view),
 notification (stays) and result (becomes `reply`), and records the sorting in the change. `code`'s terminal output
 and `threads`' streaming tokens are notifications.
+
+**Progress, one change per feature:**
+
+- **actions** — the same two views as prompts (`list`, `byId`) and the same machine, which holds the open action, the
+  list's limit, the filter and the form. Sorted: every broadcast was data (`ACTIONS_LISTED`, `ACTION_SELECTED`,
+  `ACTION_CREATED/UPDATED/DELETED`, the two page events) except the four import and export outcomes, which stay
+  replies. The flows editor kept its own copy of the action list from `FLOWS_CONNECTED` and three of those events;
+  its palette reads the `list` view instead, so the flows surface's inbox no longer takes action events at all. The
+  code surface's actions panel reads the same view with a limit of its own.
 
 ### 5. The rule
 

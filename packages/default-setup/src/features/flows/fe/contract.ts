@@ -1,11 +1,9 @@
 // The flows surface's contract: the state it publishes and what other surfaces may send it.
 //
-// A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears`. Its inbox used to
-// be `OutgoingActionEvents` — eleven events from the actions feature's `be/system`, where this surface handles
-// three. Spelling those three out is what lets the contract live in a leaf at all: a leaf may not import another
-// feature. `apack.json` names it at `features[].surface.contract`.
+// A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears`. `apack.json` names
+// it at `features[].surface.contract`.
 import type { NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
-import type { ActionEntity, FlowEntity, PromptEntity } from '@apackdev/sdk'
+import type { FlowEntity, PromptEntity } from '@apackdev/sdk'
 import type { ModelCatalogEntry } from '@apackdev/sdk/models'
 import type { EARS } from '#generated/ears.ts'
 import type { EdgeEntity, NodeEntity } from '#generated/types.ts'
@@ -38,7 +36,6 @@ export interface FlowsContext {
   // Resources available for node configuration
   prompts: PromptEntity[];
   models: ModelCatalogEntry[];
-  actions: ActionEntity[];
   // Track temporary IDs during async creation
   tempIdMap: Record<string, string>; // tempId -> permanentId
   /** The root flow the brain runs (the flow with the root role), as the flows system last sent it */
@@ -67,11 +64,8 @@ export interface FlowsContext {
   navHistory: NavHistory<string | null>;
 }
 
-/** The actions system keeps the flows editor's action list current, and the brain opens a flow or a node in it */
+/** What the brain asks of the flows editor: to open a flow, or a node in it */
 export type FlowsInboxEvent =
-  | { type: 'ACTION_CREATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_UPDATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_DELETED'; actionId: EARS.EntityId }
   | { type: 'FLOW.SELECT'; flowId: EARS.EntityId }
   | { type: 'NODE.DOUBLE_CLICK'; nodeId: string }
   | { type: 'NODE.REVEAL'; flowId: EARS.EntityId; nodeId: string }

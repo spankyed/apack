@@ -175,7 +175,6 @@ const flowsState = setup({
         flows,
         prompts: ev.data.prompts || [],
         models: ev.data.models || [],
-        actions: ev.data.actions || [],
         rootFlowId: ev.data.rootFlow?.id,
         settings: ev.data.settings || {},
       });
@@ -344,22 +343,6 @@ const flowsState = setup({
         graph: wasSelected ? { nodes: [], edges: [], positions: {} } : context.graph,
       };
     }),
-
-    /* ── action interactions ──────────────────────────────── */
-    addCreatedAction: assign(({ context, event }) => ({
-      actions: [...context.actions, typeOf('ACTION_CREATED', event).action],
-    })),
-
-    updateActionInList: assign(({ context, event }) => {
-      const ev = typeOf('ACTION_UPDATED', event);
-      return {
-        actions: context.actions.map(a => a.id === ev.actionId ? ev.action : a),
-      };
-    }),
-
-    removeDeletedAction: assign(({ context, event }) => ({
-      actions: context.actions.filter(a => a.id !== typeOf('ACTION_DELETED', event).actionId),
-    })),
 
     /* ── graph interactions ───────────────────────────────── */
     selectNode: assign({ selectedNodeId: ({ event }) => typeOf('NODE.CLICK', event).nodeId as EARS.EntityId }),
@@ -1153,7 +1136,6 @@ const flowsState = setup({
     flows: [],
     prompts: [],
     models: [],
-    actions: [],
     tempIdMap: {},
     dslImport: {
       status: 'idle',
@@ -1247,15 +1229,6 @@ const flowsState = setup({
     },
     NODE_DELETED: {
       // Backend confirmation - node already removed locally
-    },
-    ACTION_CREATED: {
-      actions: 'addCreatedAction'
-    },
-    ACTION_UPDATED: {
-      actions: 'updateActionInList'
-    },
-    ACTION_DELETED: {
-      actions: 'removeDeletedAction'
     },
     // DSL Import events
     'DSL.IMPORT': {
