@@ -18,6 +18,7 @@ import { FEATURE_ID_PATTERN, PACK_ID_PATTERN } from '../ids/refs.ts';
 import { _compileSettingsDefinition, _SettingsDefaultsError, _settingsJsonProblems } from './settings-validation.ts';
 import type { SettingsDefinition } from './settings-definition.ts';
 import type { PackMigrations } from './pack-registration.ts';
+import { providerCapabilities, type EmbeddingModelId } from '../services/models.ts';
 import type { ReferenceDeclarations } from './reference-declaration.ts';
 import { _entityDestinationsProblem, type SurfaceDeclaration } from './surface-declaration.ts';
 import type { FrontendDeclaration, TextEditorExtensionsDeclaration } from './frontend-declaration.ts';
@@ -85,6 +86,10 @@ const ModulePathSchema = z.string().regex(_MODULE_PATH_PATTERN, 'Must name a mod
 /** A named export of a pack source file. */
 const ExportTargetSchema = z.string().regex(_MODULE_REFERENCE_PATTERN, 'Must be "path#exportName"');
 
+/** `provider:model` for a provider `services.inference` embeds with */
+const _EMBEDDING_MODEL_PATTERN = new RegExp(`^(${Object.entries(providerCapabilities)
+  .filter(([, kinds]) => (kinds as readonly string[]).includes('embedding')).map(([provider]) => provider).join('|')}):.+$`);
+
 const EntityDeclarationSchema = z.object({
   shape: ExportTargetSchema.describe('The pack-root-relative TypeScript export of the row\'s shape (path#exportName). Leave it out for an untyped entity, whose fields read as unknown values.').optional(),
   shortCode: z.string().regex(_SHORT_CODE_PATTERN, 'Must be three uppercase letters, e.g. "THR"')
@@ -98,7 +103,18 @@ const EntityDeclarationSchema = z.object({
     stem: z.enum(_SEARCH_STEM_LANGUAGES).describe('The language whose stems match a word\'s other forms (`en`: "running" matches "runs").').optional(),
   }).strict()
     .describe('A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
-}).strict().describe('One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity).');
+  embed: z.object({
+    from: z.array(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name')).min(1).readonly()
+      .describe('The fields whose text is embedded, in this order.'),
+    chunk: z.enum(['whole', 'paragraph', 'heading']).describe('How the text is split, each part embedded on its own: whole (the default), at blank lines, or at Markdown headings.').optional(),
+    // The pattern is what the JSON schema states; the guard types the id
+    model: z.string().regex(_EMBEDDING_MODEL_PATTERN, 'Must be provider:model, from a provider that embeds')
+      .refine((model): model is EmbeddingModelId => _EMBEDDING_MODEL_PATTERN.test(model))
+      .describe('The embedding model, as provider:model: services.inference runs it with the user\'s key for its provider.'),
+    dims: z.number().int().positive().describe('The numbers in each of the model\'s embeddings.'),
+  }).strict()
+    .describe('A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity\'s chunks pending until embedPending embeds them. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
+}).strict().describe('One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity).');
 const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 'Must be a PascalCase entity wire name'), EntityDeclarationSchema)
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({

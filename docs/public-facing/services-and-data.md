@@ -224,6 +224,10 @@ const { text: heard } = await services.inference.transcribe({ model: 'groq:whisp
 const { rerankedDocuments } = await services.inference.rerank({ model: 'cohere:rerank-v3.5', query: 'groceries', documents: ['Buy milk', 'Call Sam'] });
 ```
 
+- **Embeddings a vector index holds are embedded for you.** An entity type whose manifest entry declares `embed`
+  (see the manifest guide) keeps each changed chunk pending; `embedPending()` from `@apackdev/sdk/services` embeds them
+  with the index's model through `embedMany`, and `embedSearchText(type, text)` makes the vector `near` and `hybrid`
+  take.
 - **`output` takes data or an `Output`.** The data forms mirror `ai`'s `Output` helpers, and `output` in the result is typed from them:
 
   | `output` | Same as | Result |

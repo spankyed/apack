@@ -53,7 +53,7 @@ order. `init`, `add` and the release version editor share this writer.
 | `features` | `Record<string, PackFeatureEntry>` | no | Feature declarations (system + surface bundles), keyed by feature id |
 | `extensions` | `object` | no | What the pack contributes to the app; see [Extensions](#extensions) |
 | `migrations` | `{ app?, pack? }` | no | Data migrations, by version line; see [Migrations](#migrations) |
-| `data.entities` | `Record<string, { shape?, shortCode?, indexes?, search? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
+| `data.entities` | `Record<string, { shape?, shortCode?, indexes?, search?, embed? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
 | `data.relations` | `Record<string, { acyclic?, unique? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
 | `data.roles` | `string[]` | no | Pack-level snake_case role names; see [Entities and relations](#entities-and-relations) |
 | `dependencies` | `Record<string, string>` | no | Pack IDs mapped to a nonempty npm semver range, `github:owner/repo [range]`, or `file:path` |
@@ -688,7 +688,18 @@ list of strings, and its weight counts each of its words that many times; `stem`
 word's other forms. A search ranks by relevance, takes `"a phrase"`, `-word`, `field:word` and `a OR b`, and its
 options match the last word as a prefix while it is typed (`prefix`), forgive a typo in a longer word (on unless
 `fuzzy: false`) and rank newer first (`recency: { field, halfLife }`). `hits()` answers each match's score and
-highlights. Placement records ownership, without a feature prefix.
+highlights.
+
+An entry's `embed` declares the type's vector index, which `near`, `like` and `hybrid` rank by:
+`{ "from": ["text"], "chunk": "paragraph", "model": "openai:text-embedding-3-small", "dims": 1536 }`. `from` names the
+fields whose text is embedded, as `search`'s do; `chunk` splits it (`whole`, the default, `paragraph` or `heading`),
+each part embedded on its own; `model` is a `provider:model` that embeds, and `dims` its embeddings' size. A write to
+one of its fields leaves the entity's changed chunks pending, and a search doesn't find a pending chunk, until
+`embedPending()` (`@apackdev/sdk/services`) embeds them through `services.inference` with the user's key for the
+model's provider; whoever writes the text runs it after. `query(type).near(vector, { k })` ranks by cosine similarity,
+`like(id)` by an entity's own embedding, and `hybrid(text, vector)` merges a text search with `near`;
+`embedSearchText(type, text)` makes a search's vector with the index's model. Placement records ownership, without a
+feature prefix.
 A string names an exported TypeScript shape; `null` explicitly leaves the entity untyped. Paths are
 relative to the pack root, including those declared inside a feature. The build checks modules and
 exports without executing them; installed discovery reads built declarations without source files.

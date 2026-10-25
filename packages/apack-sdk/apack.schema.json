@@ -164,10 +164,50 @@
                 ],
                 "additionalProperties": false,
                 "description": "A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+              },
+              "embed": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "minItems": 1,
+                    "description": "The fields whose text is embedded, in this order."
+                  },
+                  "chunk": {
+                    "type": "string",
+                    "enum": [
+                      "whole",
+                      "paragraph",
+                      "heading"
+                    ],
+                    "description": "How the text is split, each part embedded on its own: whole (the default), at blank lines, or at Markdown headings."
+                  },
+                  "model": {
+                    "type": "string",
+                    "pattern": "^(openai|google|mistral|cohere):.+$",
+                    "description": "The embedding model, as provider:model: services.inference runs it with the user's key for its provider."
+                  },
+                  "dims": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "description": "The numbers in each of the model's embeddings."
+                  }
+                },
+                "required": [
+                  "from",
+                  "model",
+                  "dims"
+                ],
+                "additionalProperties": false,
+                "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
               }
             },
             "additionalProperties": false,
-            "description": "One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity)."
+            "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
           },
           "propertyNames": {
             "pattern": "^[A-Z][A-Za-z0-9]*$",
@@ -310,10 +350,50 @@
                   ],
                   "additionalProperties": false,
                   "description": "A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+                },
+                "embed": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][A-Za-z0-9]*$"
+                      },
+                      "minItems": 1,
+                      "description": "The fields whose text is embedded, in this order."
+                    },
+                    "chunk": {
+                      "type": "string",
+                      "enum": [
+                        "whole",
+                        "paragraph",
+                        "heading"
+                      ],
+                      "description": "How the text is split, each part embedded on its own: whole (the default), at blank lines, or at Markdown headings."
+                    },
+                    "model": {
+                      "type": "string",
+                      "pattern": "^(openai|google|mistral|cohere):.+$",
+                      "description": "The embedding model, as provider:model: services.inference runs it with the user's key for its provider."
+                    },
+                    "dims": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "description": "The numbers in each of the model's embeddings."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "model",
+                    "dims"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
                 }
               },
               "additionalProperties": false,
-              "description": "One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity)."
+              "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
             },
             "propertyNames": {
               "pattern": "^[A-Z][A-Za-z0-9]*$",

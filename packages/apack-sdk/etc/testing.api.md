@@ -14,6 +14,7 @@ import { EarsDatabase } from '@apackdev/ears';
 import { EarsEngine } from '@apackdev/ears';
 import type { EditorState } from '@tiptap/pm/state';
 import type { embed } from 'ai';
+import type { EmbedDeclaration } from '@apackdev/ears';
 import type { embedMany } from 'ai';
 import type { FlexibleSchema } from 'ai';
 import type { generateImage } from 'ai';

@@ -115,17 +115,12 @@ export interface BreadcrumbItem {
 export interface LibrarySystemContext {}
 
 // Library-internal re-exports from search-index subsystem
-export type { SearchEmbeddingModel, SearchEmbeddingModelId, LocalEmbeddingModel, InferenceEmbeddingModel } from '../embedding-models.ts'
 export type {
-  EmbeddingModel,
-  IndexMetric,
   Occurrence,
   SegmentRule,
   SearchIndexConfig,
   SearchIndex,
-  IndexedDocument,
   IndexSearchResult,
-  EmbeddingResult
 } from './search-index/types/search-index.ts'
 
 export type IncomingLibraryEvents =

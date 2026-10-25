@@ -247,7 +247,6 @@ import { computed, ref } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { FieldContent, ListContent, MarkdownContent, TextContent } from '#features/library/be/types.ts'
 import type { LibraryActor } from './state.ts'
-// [SEARCH_INDEX_FF] import { getModelConfig } from '../embedding-models'
 
 const actor = useSurface<LibraryActor>()
 
@@ -408,15 +407,6 @@ function formatDate(dateString: string) {
 }
 
 // [SEARCH_INDEX_FF] Search index panel functions — commented out
-// function getModelLabel(modelId: string): string {
-//   const config = getModelConfig(modelId)
-//   if (config) {
-//     return `${config.displayName} (${config.dimensions}d)`
-//   }
-//   // Fallback for unknown models
-//   return modelId
-// }
-//
 // function getIndexedItemsLabel(index: any): string {
 //   // Check if this index uses multi-indexing (separate mode for lists/fields)
 //   const hasMultiIndexing = index.enableSectionIndexing &&

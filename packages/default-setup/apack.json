@@ -1082,7 +1082,10 @@
       "description": "Organize documents, collections and indexed content.",
       "entities": {
         "SearchIndex": { "indexes": ["folderId"] },
-        "IndexedDoc": { "indexes": ["indexId", "chunkKey"] }
+        "IndexedDoc": {
+          "indexes": ["indexId", "chunkKey", "documentId"],
+          "embed": { "from": ["text"], "model": "openai:text-embedding-3-small", "dims": 1536 }
+        }
       },
       "settings": {
         "schema": {
