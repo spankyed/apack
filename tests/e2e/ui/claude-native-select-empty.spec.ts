@@ -113,7 +113,13 @@ test('preserves native Select none and valid empty values through original callb
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
     await select.focus();await expect(select).toBeFocused()
-    await select.press('Enter');await select.press('ArrowDown');await select.press('Escape')
+    // Alt+Down explicitly opens the desktop picker; plain arrows on a closed select commit.
+    const steps=[]
+    for(const key of ['Alt+ArrowDown','ArrowDown','Escape']){
+      await select.press(key)
+      steps.push({key,label:await label(),callbacks:await callbacks()})
+      await writeFile(join(workspace!,'native-select-keyboard-steps.json'),JSON.stringify({width,steps}))
+    }
     await expect(select).toBeFocused();await expect.poll(label).toBe('none')
     expect(await callbacks()).toEqual([])
     await expect(composer).toHaveText(draft)
