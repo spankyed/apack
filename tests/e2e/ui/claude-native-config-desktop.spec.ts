@@ -186,6 +186,15 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any
+  const disableExternalConsent=async()=>{
+    await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
+    const editor=panel.getByLabel('Claude Code setting editor',{exact:true})
+    let outcome='pending'
+    await expect.poll(async()=>{if((await consentProject()).hasClaudeMdExternalIncludesApproved===false)outcome='disabled';else if(await editor.count())outcome='confirmation';return outcome}).not.toBe('pending')
+    if(outcome==='confirmation')await editor.locator('[data-native-settings-option="cancel"]').click()
+    await expect(editor).toHaveCount(0);await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false)
+  }
+
   if(externalConsentProfile){
     const originalTurns=(await context()).turns,editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="showExternalIncludesDialog"]'),projectConfig=consentProject
     const begin=async()=>{await search.fill('External');await expect(row.getByRole('button',{name:'Review external imports…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Review external imports…',exact:true}).click();await expect(editor).toBeVisible();await expect(editor.getByRole('heading',{name:'Allow external CLAUDE.md file imports?',exact:true})).toBeVisible()}
@@ -207,7 +216,7 @@ test('edits original Settings through desktop controls and retains composing', a
       samples.push({width,height,readings,declined:true,project:await projectConfig()})
     }
     await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
-    await row.getByRole('button',{name:'Disable external imports',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(false)
+    await disableExternalConsent()
     await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
     externalConsent={samples,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
@@ -495,7 +504,7 @@ test('edits original Settings through desktop controls and retains composing', a
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click();await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false);const project=await consentProject();expect(project.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledProject=project;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
+  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await disableExternalConsent();const project=await consentProject();expect(project.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledProject=project;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
