@@ -113,10 +113,13 @@ test('shows native transcript logging while excluding debug-only output', async 
   expect((await context()).sessionId).toBe(sessionId)
   expect((await context()).claude.turns).toBe(before.claude.turns)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  // Review ordinary composing with the fixture controls collapsed.
+  if(await tools.getAttribute('aria-expanded')==='true')await tools.click()
   const nativeWindow=await electronApp.browserWindow(appPage),widths=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
-    await expect(appPage.getByText(journalNotice.content,{exact:true})).toBeVisible()
+    await appPage.getByText(journalNotice.content,{exact:true}).scrollIntoViewIfNeeded()
+    await expect(appPage.getByText(journalNotice.content,{exact:true})).toBeInViewport()
     await expect(composer).toHaveText(draft)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
