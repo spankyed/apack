@@ -15,7 +15,7 @@ export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surfac
 export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
 export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } from './surface-state.ts'
-export { untypedUseView, type ViewState } from './views.ts'
+export { untypedUseView, type UseViewOptions, type ViewState } from './views.ts'
 export type { ViewRequest, ViewUpdate } from '../framework/views.ts'
 export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type ShellPanelSizes } from './shell.ts'
 export { isAnyMenuOpen, onMenuOpenChange, useTrackedMenuOpen } from './menu-state.ts'

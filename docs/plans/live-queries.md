@@ -1,8 +1,8 @@
 # Live queries
 
-Status: Steps 1, 1a and 2 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property;
-elmdb's protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness. Step 1's readings and Step 2's
-decisions are below. Steps 3–5 not started.
+Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
+protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views.
+Step 1's readings and the decisions Steps 2 and 3 made are below. Steps 4–5 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
@@ -273,9 +273,11 @@ afterwards), and that a pack reload re-runs the views on the new code.
 - **Arguments are data, compared as data.** `viewKey` sorts object keys, so `{ a, b }` and `{ b, a }` are one watch on
   the host and one subscription in a component; `null` or `undefined` leaves a view idle, and a view that takes no
   arguments is called with none.
-- **New arguments start from no result; an error keeps the last one.** Holding the previous page while the next loads
-  would show one prompt's data under another's selection. A view that throws, or whose pack is reloading, keeps showing
-  what it showed with `status: 'error'`.
+- **New arguments start from no result, unless the caller keeps the previous one; an error keeps the last one.**
+  Holding the previous result by default would show one prompt's data under another's selection. A pager is the
+  opposite case — blanking the list between pages is wrong — so `useView` takes `{ keepPrevious: true }` (Step 3 added
+  it, for the prompts list; React Query's `placeholderData: keepPreviousData` is the same choice). A view that throws,
+  or whose pack is reloading, keeps showing what it showed with `status: 'error'`.
 - **Delivery is always asynchronous on the host too.** A subscriber joining a running watch is handed its last result
   on a microtask, and an unresolvable request's error likewise, so no caller sees an observer run inside `watch`.
 - **A restarted watch whose result reads the same isn't delivered again**, compared as the JSON it crosses the wire as.
@@ -305,6 +307,32 @@ ignored), and the codegen cases in `compiles.spec.ts`. The harness's `watchView`
   each prompt once.
 
 **Done when:** the prompts feature has no data broadcast left, and the two-client spec passes.
+
+**Decisions made building it** (2026-10-25):
+
+- **Two views: `list({ limit, categories })` and `byId({ id })`.** "Load more" raises the window's `limit` rather than
+  appending pages it has to dedupe, so the page guard and the two-clicks case are gone with it; the code panel's
+  prompts list holds its own limit and reads the same view, instead of reading the prompts surface's state.
+- **The category filter moved to the view.** It filtered the loaded page in the window, so "the first 20 Creative
+  prompts" was "the Creative ones among the first 20". The list reads every prompt either way, since its count does,
+  which is what a re-run costs: a few hundred rows.
+- **Categories come from the settings, read where they're shown** (`useSettings('prompts')`). `PROMPTS_CONNECTED`
+  existed to carry them beside the rows, and with the rows gone the system answers no `SEND_STATE` at all.
+- **The machine hears a view through one UI event, `PROMPT.LOADED`.** The canvas sends it when the open prompt's view
+  reads something: it fills the form once per opening (so another window's edit doesn't overwrite what the user is
+  typing), keeps the breadcrumb's label, and `null` — the prompt deleted here or anywhere — returns to the list. Only
+  for the prompt open now, so a slow result for one the user left is ignored. The call correlation for
+  `PROMPT_SELECT` went with the ask: there is no ask.
+- **`whenView` wasn't needed.** Nothing here selects a prompt it just created: a save returns to the list, and a new
+  `byId` subscription reads after the write that preceded it.
+- **What's left on the wire is the outcomes** — `PROMPTS_IMPORTED`, `PROMPTS_EXPORTED` and their failures — replied to
+  whoever asked.
+
+**Proofs:** `tests/features/prompts/be/views.spec.ts`, two windows over the harness: an edit or a delete reaches the
+window with that prompt open and not the other, one window reading further down the list moves nobody else's page
+(with the list's limit ignored, this case fails), an import of three prompts arrives as one change listing each once,
+and the category filter. `tests/features/prompts/fe/page-and-selection.spec.ts` holds the machine to UI state: opening asks the backend
+nothing, the form fills once, a stale result is ignored, a deleted prompt returns to the list.
 
 ### 4. The other features
 

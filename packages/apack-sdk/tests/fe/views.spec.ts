@@ -68,6 +68,20 @@ describe('untypedUseView', () => {
     scope.stop();
   });
 
+  it('keeps the last result while new arguments load, when asked to, as a pager does', async () => {
+    const limit = ref(20)
+    const scope = effectScope()
+    const view = scope.run(() => untypedUseView('notes/notes', 'list', () => ({ limit: limit.value }), { keepPrevious: true }))!
+    open()[0].deliver({ ok: true, value: ['first page'], commit: 1 })
+
+    limit.value = 40
+    await nextTick()
+    expect(view, 'still showing the first page while the longer one loads').toMatchObject({ status: 'loading', data: ['first page'] })
+    open()[0].deliver({ ok: true, value: ['first page', 'second page'], commit: 2 })
+    expect(view.data).toEqual(['first page', 'second page'])
+    scope.stop()
+  })
+
   it('is idle while its arguments are absent, and unsubscribes with its scope', async () => {
     const id = ref<string | null>(null);
     const scope = effectScope();

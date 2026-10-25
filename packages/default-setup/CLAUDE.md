@@ -184,13 +184,13 @@ that page replace the whole list. The answer carries its offset now; `loadMoreEv
 flight, which the correlation requires rather than prefers.
 
 **And a guard's invariant is not "who writes this" but "what else could satisfy it".** Counting setters is
-the wrong check: `pendingActionCall` and `pendingPromptCall` have exactly one each, which says nothing about
+the wrong check: `pendingActionCall` has exactly one, which says nothing about
 whether anything other than their own answer matches. Two things do, for a slot holding a domain id under a
 broadcast — every other window's answer for the same row, and, with no clear, every later answer at all.
 Both are set before the ask and cleared on the answer now, the answer is replied, and `answersCall` refuses
 an empty slot, so "nothing outstanding" cannot match either.
 
-The page guards in `features/{actions,prompts}` are correct and stay: they admit `page + 1` where `page`
+The page guard in `features/actions` is correct and stays: they admit `page + 1` where `page`
 advances only on an answer, so two clicks ask for the same page and the dedupe is the intent.
 
 And one that was worse than a guard: `code/be/features/pull-request.ts` stamped a module-scoped counter on

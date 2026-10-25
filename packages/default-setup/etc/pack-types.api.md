@@ -2324,9 +2324,6 @@ type IncomingNoteEvents = {
 };
 
 type IncomingPromptEvents = {
-    type: 'PROMPT_SELECT';
-    promptId: string;
-} | {
     type: 'CREATE_PROMPT';
     label: string;
     inputs: Record<string, any>;
@@ -2346,11 +2343,6 @@ type IncomingPromptEvents = {
 } | {
     type: 'DELETE_PROMPT';
     promptId: string;
-} | {
-    type: 'FETCH_PROMPTS_PAGE';
-    page?: number;
-} | {
-    type: 'FETCH_ALL_PROMPTS';
 } | {
     type: 'IMPORT_PROMPTS';
     prompts: any;
@@ -3702,37 +3694,8 @@ type OutgoingNotesSearchEvent = {
     results: NoteDTO[];
 };
 
+/** What the prompts system answers with: an import's or an export's outcome. The prompts themselves are its views. */
 type OutgoingPromptEvents = {
-    type: 'PROMPTS_CONNECTED';
-    data: PromptsConnectedData;
-} | {
-    type: 'PROMPT_SELECTED';
-    promptId: EARS.EntityId;
-    data: PromptEntity;
-} | {
-    type: 'PROMPT_CREATED';
-    prompt: PromptEntity;
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPT_UPDATED';
-    prompt: PromptEntity;
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPT_DELETED';
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPTS_PAGE_LOADED';
-    data: {
-        prompts: PromptEntity[];
-        page: number;
-        totalPages: number;
-    };
-} | {
-    type: 'PROMPTS_ALL_LOADED';
-    data: {
-        prompts: PromptEntity[];
-    };
-} | {
     type: 'PROMPTS_IMPORTED';
     count: number;
     errors?: string[];
@@ -4385,38 +4348,15 @@ interface PromptTab {
     isPreview?: boolean;
 }
 
-/**
- * Data sent on prompts system connection
- */
-interface PromptsConnectedData {
-    prompts: PromptEntity[];
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    categories?: Category[];
-}
-
 interface PromptsContext {
+    /** The prompt open in the detail view */
     selectedPromptId?: EARS.EntityId;
-    /**
-     * The call the outstanding `PROMPT_SELECT` was asked under, or absent when nothing is outstanding.
-     *
-     * `selectedPromptId` cannot do this job: it is written *from* the answer, so two quick selections are
-     * otherwise decided by whichever answer arrives last.
-     *
-     * **A domain id cannot do this job, for two independent reasons.** It does not distinguish windows, so
-     * another window's answer for the same prompt satisfies it; and it does not distinguish asks, so a slot
-     * holding one is only ever overwritten, never emptied — which names the last ask for the life of the
-     * surface. A call is per ask and per window, and the slot is cleared when its answer lands.
-     */
-    pendingPromptCall: string | null;
-    prompts: PromptEntity[];
-    selectedPrompt?: PromptEntity;
-    totalCount: number;
-    page: number;
-    totalPages: number;
-    loadingMore: boolean;
-    categories: Category[];
+    /** The open prompt's label, for the breadcrumb, as its view last read it */
+    selectedLabel?: string;
+    /** The prompt the form was filled from, so its view changing doesn't overwrite what the user has typed */
+    formFor?: EARS.EntityId;
+    /** How many prompts the list shows: a page more each time the user scrolls to its end */
+    listLimit: number;
     selectedCategories: string[];
     promptsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
@@ -4442,12 +4382,8 @@ interface PromptsContext {
     };
 }
 
-/** Paging and editing, which the code surface's prompts panel asks of it */
+/** Editing, which the code surface's prompts panel asks of it */
 type PromptsInboxEvent = {
-    type: 'PROMPTS.LOAD_ALL';
-} | {
-    type: 'PROMPTS.LOAD_MORE';
-} | {
     type: 'PROMPT.UPDATE_INPUTS';
     promptId: string;
     inputs: Record<string, any>;
@@ -6358,7 +6294,7 @@ declare function paginatedMessages(threadId: EARS.EntityId, cursor?: string | nu
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
 declare const promptCommands: {
-    create: (data: _apackdev_sdk_repositories.PromptInput) => _apackdev_sdk.PromptEntity;
+    create: (data: _apackdev_sdk_repositories.PromptInput) => PromptEntity;
     update: (id: _apackdev_sdk.EARS.EntityId, updates: Partial<_apackdev_sdk_repositories.PromptInput>) => void;
     /** Marks the prompt deleted */
     delete: (id: _apackdev_sdk.EARS.EntityId) => void;
@@ -6366,16 +6302,18 @@ declare const promptCommands: {
 
 /**
  * Prompts Repository: the SDK's prompt repository (`promptRepository`), which owns their reads and writes, as the
- * prompts surface uses it, and the surface's views. The SDK's methods are taken as they are, not wrapped.
+ * prompts surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
  */
 declare const promptQueries: {
-    byId: (id: _apackdev_sdk.EARS.EntityId) => _apackdev_sdk.PromptEntity | undefined;
-    all: () => _apackdev_sdk.PromptEntity[];
-    byLabel: (label: string) => _apackdev_sdk.PromptEntity | undefined;
-    connectedData: (page?: number, pageSize?: number) => {
-        prompts: _apackdev_sdk.PromptEntity[];
-        page: number;
-        totalPages: number;
+    byId: (id: _apackdev_sdk.EARS.EntityId) => PromptEntity | undefined;
+    all: () => PromptEntity[];
+    byLabel: (label: string) => PromptEntity | undefined;
+    /**
+     * The first `limit` prompts in `categories` (every category when it's empty), or all of them without a limit, and
+     * how many there are. A prompt without a category is in none, so a filter leaves it out.
+     */
+    list: (limit: number | null, categories: readonly string[]) => {
+        prompts: PromptEntity[];
         totalCount: number;
     };
 };
@@ -6554,9 +6492,9 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
         status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
