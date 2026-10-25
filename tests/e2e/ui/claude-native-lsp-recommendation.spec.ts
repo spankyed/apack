@@ -168,7 +168,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     await expect(appPage.getByText('Owned LSP review phase 1 complete.', { exact: true })).toBeVisible()
     expect(JSON.stringify((await context()).messages)).toContain('definitions.review')
     const toolGroup = appPage.locator('[data-native-tool-activity][data-native-tool-ids~="native_lsp_1"]')
-    const navigation = appPage.locator('[data-native-tool-result="native_lsp_1"]')
+    const navigation = toolGroup.getByText('Defined in definitions.review:1:14', { exact: true })
     try {
       await expect(toolGroup).toBeVisible()
       const toggle = toolGroup.getByRole('button').first()
