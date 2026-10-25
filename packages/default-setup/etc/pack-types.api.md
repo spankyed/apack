@@ -1459,10 +1459,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    cwd: string;
     revision: string;
-    id: string;
+    cwd: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1476,10 +1476,10 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    cwd: string;
     revision: string;
-    id: string;
+    cwd: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1952,10 +1952,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1970,10 +1970,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2037,9 +2037,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2056,9 +2056,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }[];
     warnings: string[];
 }, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -4240,7 +4240,7 @@ type ClaudeUiNode = {
     actionId: string;
     revision: number;
     label?: string;
-    value: string;
+    value?: string;
     options: {
         value: string;
         label: string;
@@ -13439,8 +13439,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
