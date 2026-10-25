@@ -1,12 +1,10 @@
-import { broadcastToSurface } from '#generated/events.ts';
+import { answer } from '../answer.ts'
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup } from 'xstate'
 
 import { repository } from '#generated/repository.ts';
 import { EARS } from '#generated/ears.ts'
 import type { PromptEntity } from '@apackdev/sdk'
-
-const surfaceId = 'code' as const
 
 // Incoming events from frontend
 
@@ -29,7 +27,7 @@ export const promptsSystem = setup({
     events: {} as Event,
   },
   actions: handlers.actions({
-    openPrompt: ({ event }) => {
+    openPrompt: ({ event, reply }) => {
       const ev = event as { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
       const prompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId)
 
@@ -40,13 +38,13 @@ export const promptsSystem = setup({
           templateFnContent: prompt.templateFn
         }
 
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codePrompts.PROMPT_SELECTED',
           promptId: ev.promptId as EARS.EntityId,
           data: promptWithContent
         })
       } else {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codePrompts.CODE_ERROR',
           data: {
             message: `Prompt ${ev.promptId} not found`
@@ -55,7 +53,7 @@ export const promptsSystem = setup({
       }
     },
 
-    savePrompt: ({ event }) => {
+    savePrompt: ({ event, reply }) => {
       const ev = event as { type: 'codePrompts.SAVE_PROMPT'; promptId: string; templateFn: string }
 
       // Update the prompt with new templateFn
@@ -65,7 +63,7 @@ export const promptsSystem = setup({
 
       const updatedPrompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId)
       if (updatedPrompt) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codePrompts.PROMPT_UPDATED',
           prompt: updatedPrompt,
           promptId: updatedPrompt.id

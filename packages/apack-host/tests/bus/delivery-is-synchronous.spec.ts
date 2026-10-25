@@ -40,13 +40,13 @@ const onATimer = (run: () => void) => new Promise<void>((done) => { setTimeout((
 
 describe('a send made while handling a message', () => {
   it('carries the handler as its sender', () => {
-    deliverAs(ASKED, () => { send(); });
+    deliverAs(ASKED, { type: 'ASKED' }, () => { send(); });
 
     expect(sent).toEqual(['pack/feature']);
   });
 
   it('carries none once the delivery has returned', () => {
-    deliverAs(ASKED, () => {});
+    deliverAs(ASKED, { type: 'ASKED' }, () => {});
     send();
 
     expect(sent, 'nothing is being handled out here').toEqual([undefined]);
@@ -60,7 +60,7 @@ describe('a send made while handling a message', () => {
    * stopped waiting long before it fired.
    */
   it('carries none after an await, because the handling has ended', async () => {
-    await deliverAs(ASKED, async () => {
+    await deliverAs(ASKED, { type: 'ASKED' }, async () => {
       await Promise.resolve();
       send();
     });
@@ -70,7 +70,7 @@ describe('a send made while handling a message', () => {
 
   it('carries none from a timer the handler scheduled', async () => {
     let fired!: Promise<void>;
-    deliverAs(ASKED, () => { fired = onATimer(send); });
+    deliverAs(ASKED, { type: 'ASKED' }, () => { fired = onATimer(send); });
     await fired;
 
     expect(sent).toEqual([undefined]);
@@ -78,8 +78,8 @@ describe('a send made while handling a message', () => {
 
   // Two deliveries nested or in sequence each restore what was being handled before them
   it('restores the message that was being handled around it', () => {
-    deliverAs(ASKED, () => {
-      deliverAs({ to: 'pack/inner', sender: 'pack/outer-asker' }, () => { send(); });
+    deliverAs(ASKED, { type: 'ASKED' }, () => {
+      deliverAs({ to: 'pack/inner', sender: 'pack/outer-asker' }, { type: 'ASKED' }, () => { send(); });
       send();
     });
 

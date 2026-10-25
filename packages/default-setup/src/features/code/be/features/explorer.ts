@@ -1,3 +1,6 @@
+import type { Reply } from '@apackdev/sdk/events'
+import type { OutgoingCodeEvents } from '../contract.ts'
+import { answer } from '../answer.ts'
 import { broadcastToSurface } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup } from 'xstate'
@@ -8,9 +11,9 @@ import type { FileChangeInfo } from '../services/gitwatcher.ts'
 
 const surfaceId = 'code' as const
 
-function requireRepository(context: CodeExplorerSystemContext, path: string): context is CodeExplorerSystemContext & { repository: FileSystemRepository } {
+function requireRepository(context: CodeExplorerSystemContext, path: string, reply: Reply<OutgoingCodeEvents> | undefined): context is CodeExplorerSystemContext & { repository: FileSystemRepository } {
   if (!context.repository) {
-    broadcastToSurface(surfaceId, {
+    answer(reply, {
       type: 'explorer.CODE_ERROR',
       data: {
         code: 'INVALID_PATH',
@@ -72,18 +75,18 @@ export const explorerSystem = setup({
 
     handleFileChange: ({ event }) => {
       const ev = event as { type: 'explorer.FILE_CHANGE_CALLBACK'; change: FileChangeInfo }
-      
+
       broadcastToSurface(surfaceId, {
         type: 'explorer.FILE_CHANGED_EXTERNALLY',
         data: ev.change
       })
     },
 
-    sendBaseDirectoryInfo: ({ context }) => {
+    sendBaseDirectoryInfo: ({ context, reply }) => {
       // Send base directory listing on connect
       if (context.baseDirectory && context.repository) {
         context.repository.listDirectory(context.baseDirectory).then(content => {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'explorer.FILES_LISTED',
             data: content,
           })
@@ -93,20 +96,20 @@ export const explorerSystem = setup({
       }
     },
 
-    listFiles: async ({ event, context }) => {
+    listFiles: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.LIST_FILES'; path: string }
 
-      if (!requireRepository(context, ev.path)) return
+      if (!requireRepository(context, ev.path, reply)) return
 
       try {
         const path = ev.path || context.baseDirectory || ''
         const content = await context.repository.listDirectory(path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILES_LISTED',
           data: content,
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -117,14 +120,14 @@ export const explorerSystem = setup({
       }
     },
 
-    readFile: async ({ event, context }) => {
+    readFile: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.READ_FILE'; path: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         const content = await context.repository.readFile(ev.path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_CONTENT',
           data: content,
         })
@@ -134,7 +137,7 @@ export const explorerSystem = setup({
           context.gitWatcher.registerOpenFile(ev.path)
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -145,19 +148,19 @@ export const explorerSystem = setup({
       }
     },
 
-    writeFile: async ({ event, context }) => {
+    writeFile: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.WRITE_FILE'; path: string; content: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         await context.repository.writeFile(ev.path, ev.content)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_SAVED',
           data: { path: ev.path },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -168,19 +171,19 @@ export const explorerSystem = setup({
       }
     },
 
-    createFile: async ({ event, context }) => {
+    createFile: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.CREATE_FILE'; path: string; content?: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         await context.repository.writeFile(ev.path, ev.content || '')
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_CREATED',
           data: { path: ev.path },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -191,19 +194,19 @@ export const explorerSystem = setup({
       }
     },
 
-    deleteFile: async ({ event, context }) => {
+    deleteFile: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.DELETE_FILE'; path: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         await context.repository.deleteFile(ev.path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_DELETED',
           data: { path: ev.path },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -214,19 +217,19 @@ export const explorerSystem = setup({
       }
     },
 
-    renameFile: async ({ event, context }) => {
+    renameFile: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.RENAME_FILE'; oldPath: string; newPath: string }
-      
-      if (!requireRepository(context, ev.oldPath)) return
-      
+
+      if (!requireRepository(context, ev.oldPath, reply)) return
+
       try {
         await context.repository.renameFile(ev.oldPath, ev.newPath)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_RENAMED',
           data: { oldPath: ev.oldPath, newPath: ev.newPath },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -237,19 +240,19 @@ export const explorerSystem = setup({
       }
     },
 
-    createDirectory: async ({ event, context }) => {
+    createDirectory: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.CREATE_DIRECTORY'; path: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         await context.repository.createDirectory(ev.path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.DIRECTORY_CREATED',
           data: { path: ev.path },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -260,19 +263,19 @@ export const explorerSystem = setup({
       }
     },
 
-    getFileInfo: async ({ event, context }) => {
+    getFileInfo: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.GET_FILE_INFO'; path: string }
-      
-      if (!requireRepository(context, ev.path)) return
-      
+
+      if (!requireRepository(context, ev.path, reply)) return
+
       try {
         const info = await context.repository.getFileInfo(ev.path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILE_INFO',
           data: info,
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -321,19 +324,19 @@ export const explorerSystem = setup({
       }
     },
 
-    quickOpenSearch: async ({ event, context }) => {
+    quickOpenSearch: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
 
-      if (!requireRepository(context, ev.baseDirectory)) return
-      
+      if (!requireRepository(context, ev.baseDirectory, reply)) return
+
       try {
         const files = await context.repository.getAllFiles(ev.baseDirectory)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.QUICK_OPEN_RESULTS',
           data: files,
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -344,10 +347,10 @@ export const explorerSystem = setup({
       }
     },
 
-    moveFiles: async ({ event, context }) => {
+    moveFiles: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
 
-      if (!requireRepository(context, ev.targetDir)) return
+      if (!requireRepository(context, ev.targetDir, reply)) return
 
       try {
         const movedPaths: string[] = []
@@ -360,12 +363,12 @@ export const explorerSystem = setup({
           }
         }
 
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILES_MOVED',
           data: { sourcePaths: ev.sourcePaths, targetDir: ev.targetDir, movedPaths },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -376,10 +379,10 @@ export const explorerSystem = setup({
       }
     },
 
-    copyFiles: async ({ event, context }) => {
+    copyFiles: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
 
-      if (!requireRepository(context, ev.targetDir)) return
+      if (!requireRepository(context, ev.targetDir, reply)) return
 
       try {
         const copiedPaths: string[] = []
@@ -388,12 +391,12 @@ export const explorerSystem = setup({
           copiedPaths.push(destPath)
         }
 
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILES_COPIED',
           data: { targetDir: ev.targetDir, copiedPaths },
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',
@@ -404,18 +407,18 @@ export const explorerSystem = setup({
       }
     },
 
-    listBaseFiles: async ({ context }) => {
-      if (!requireRepository(context, context.baseDirectory || '')) return
+    listBaseFiles: async ({ context, reply }) => {
+      if (!requireRepository(context, context.baseDirectory || '', reply)) return
 
       try {
         const path = context.baseDirectory || ''
         const content = await context.repository.listDirectory(path)
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.FILES_LISTED',
           data: content,
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'explorer.CODE_ERROR',
           data: {
             code: error.code || 'IO_ERROR',

@@ -203,10 +203,13 @@ export const systemMachine = setup({
      * Resolves a CLI and records where it was found, in this feature's own settings. It lives here because
      * `resolve-cli` and the stored paths are this feature's; the Settings view asks for it and is told the result.
      */
-    testCliProvider: ({ event }) => {
+    testCliProvider: ({ event, reply }) => {
       const { provider } = event as { type: 'TEST_CLI_PROVIDER'; provider: string };
-      const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) =>
-        broadcastToSurface('host/settings', { type: 'CLI_TEST_RESULT', provider, ...result });
+      // The Settings view that asked; with nobody to answer, the Settings view in every window
+      const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) => {
+        const tested = { type: 'CLI_TEST_RESULT' as const, provider, ...result };
+        if (reply) reply(tested); else broadcastToSurface('host/settings', tested);
+      };
 
       if (!isCliName(provider)) return answer({ success: false, error: `Unknown CLI provider: ${provider}` });
 
