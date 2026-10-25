@@ -21,7 +21,7 @@ test('edits original Settings through desktop controls and retains composing', a
   test.setTimeout(260000)
   expect(process.env.HOME).toBe(workspace)
   const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
-  const restriction = false
+  const restriction = false, statusOnly=process.env.CLAUDE_RESEARCH_STATUS_ROWS==='1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -175,9 +175,9 @@ test('edits original Settings through desktop controls and retains composing', a
     const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
     const path=testInfo.outputPath('native-config-desktop-list-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));captures.push(path)
   }
-  const frameCaptures:string[]=[]
+  const frameCaptures:string[]=[],statusSamples:any[]=[]
   const tabs=panel.getByRole('navigation',{name:'Claude Code settings tabs'})
-  for(const tab of ['Status','Usage','Stats']){
+  for(const tab of statusOnly?['Status']:['Status','Usage','Stats']){
     await tabs.getByRole('button',{name:tab,exact:true}).click()
     await expect(tabs.getByRole('button',{name:tab,exact:true})).toHaveAttribute('aria-current','page')
     if(tab==='Status'){await expect(panel.locator('dt').filter({hasText:/^Version$/})).toHaveText('Version');await expect(panel.locator('dd').filter({hasText:/^2\.1\.302$/})).toHaveCount(1)}
@@ -258,6 +258,14 @@ test('edits original Settings through desktop controls and retains composing', a
     }
     for(const [width,height]of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height})
+      if(statusOnly){
+        const row=panel.locator('dt').filter({hasText:/^Setting sources$/}).locator('..'),value=row.locator('dd'),body=panel.getByLabel('Claude Code Status',{exact:true})
+        const bounds=()=>row.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Status"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Status row exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}},undefined,{timeout:5000})
+        await body.hover();for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+        const geometry=await bounds();expect(geometry.visible).toBe(true)
+        const text=(await value.innerText()).replace(/\s+/g,' ').trim();expect(text).toMatch(/user settings/i);expect(text).toMatch(/project local settings/i);expect(text).toMatch(/,\s+/)
+        statusSamples.push({width,height,value:text,geometry,realWheel:true})
+      }
       await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport()
       await expect(tabs.getByRole('button',{name:tab,exact:true})).toBeInViewport()
       await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
@@ -273,6 +281,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,statsCompleteness,desktopFrameTabs:true,nativeStatsDates:true,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

@@ -53,6 +53,21 @@ async function awaitNativeSettingsReading(promise,signal){
   Promise.resolve(promise).then(resolve,reject);
  });}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
 }
+function nativeSettingsStatusValueType(status){
+ const pending=[status.child],seen=new Set(),types=new Set();
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
+  if(seen.size>=4096)throw Error('Native Settings Status value traversal exceeded bound');seen.add(fiber);
+  if(typeof fiber.type==='function'&&fiber.memoizedProps&&Object.hasOwn(fiber.memoizedProps,'value')){
+   let hash=composerFunctionHashes.get(fiber.type);
+   if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
+   if(hash==='c7db9d28eca30e04bb29e4b504addbc85d8a97302c8a8399ae72a58728f4535e')types.add(fiber.type);
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ if(types.size!==1)throw Error('Native Settings Status value renderer changed');
+ return [...types][0];
+}
 async function readNativeSettingsFrameOnce(n,entry,signal){
  signal?.throwIfAborted();
  const source=nativeSettingsFrame(n,entry),panel=source.panel;
@@ -61,16 +76,18 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
   const caches=source.status.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===17);
   if(caches?.length!==1||!Array.isArray(caches[0][10]))throw Error('Native Settings Status rows are not ready');
   const groups=caches[0][10];if(groups.length>16)throw Error('Native Settings Status group limit exceeded');
-  result.status=[];
+  result.status=[];let valueType;
   for(const group of groups){
    if(!Array.isArray(group)||group.length>128)throw Error('Native Settings Status row limit exceeded');
    const rows=[];
    for(const row of group){
     signal?.throwIfAborted();entry.current();
-    if(typeof row.label!=='string'||row.label.length>16384)throw Error('Native Settings Status label changed');
-    const value=await nativeGenericPermissionText(n,typeof row.value==='string'?row.value:n.jsx.e(n.terminalComponents.n,{children:row.value}));
+    if(row.label!==undefined&&(typeof row.label!=='string'||row.label.length>16384))throw Error('Native Settings Status label changed');
+    let node=row.value;
+    if(typeof node!=='string'){valueType??=nativeSettingsStatusValueType(source.status);node=n.jsx.e(valueType,{value:row.value});}
+    const value=await awaitNativeSettingsReading(nativeGenericPermissionText(n,node),signal);
     if(value.length>65536)throw Error('Native Settings Status value exceeded bound');
-    rows.push({label:row.label,value});
+    rows.push({label:row.label??'',value});
    }
    result.status.push(rows);
   }

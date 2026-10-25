@@ -36,7 +36,7 @@
       <template v-if="activeTab === 'Status'">
         <dl v-for="(group, index) in frame?.status" :key="index" class="mb-4 divide-y divide-white/5 rounded-lg border border-white/10 px-3">
           <div v-for="(row, rowIndex) in group" :key="rowIndex" class="grid grid-cols-[minmax(100px,1fr)_minmax(0,2fr)] gap-3 py-3 text-xs">
-            <dt class="text-neutral-500">{{ row.label }}</dt><dd class="whitespace-pre-wrap break-words text-neutral-200">{{ row.value }}</dd>
+            <dt :class="row.label ? 'text-neutral-500' : 'sr-only'">{{ row.label || 'Additional information' }}</dt><dd class="whitespace-pre-wrap break-words text-neutral-200" :class="!row.label ? 'col-span-2' : ''">{{ row.value }}</dd>
           </div>
         </dl>
         <p v-if="!frame?.status" role="status" class="text-sm text-neutral-400">Waiting for Claude Code Status…</p>

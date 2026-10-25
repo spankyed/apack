@@ -12,9 +12,10 @@ function fixture() {
   const hashes = new WeakMap<Function, string>([[Frame, '8a56a17e7c83ad4879b026f7d8498fb45fea80c549f97547bcfdb4ef3b9725ee'], [Status, '8c89bb757b28a8a05a69fdc7d3beebb9b5bd02e74fc0bf54a238dc7b1921cf29']])
   const root: any = { child: owner }
   const entry = { originalProps, current: vi.fn(), closed: false, answered: false }
-  const api = vm.runInNewContext(claudeTerminalSettingsFrameRuntime + ';({nativeSettingsFrame,readNativeSettingsFrame,selectNativeSettingsTab,actNativeSettingsStats})', { process, createHash, stripVTControlCharacters, composerFunctionHashes: hashes, setTimeout, clearTimeout, nativeGenericPermissionText: async (_n: unknown, value: unknown) => String(value) })
+  const formatText=vi.fn(async (_n:unknown,value:unknown)=>String(value))
+  const api = vm.runInNewContext(claudeTerminalSettingsFrameRuntime + ';({nativeSettingsFrame,readNativeSettingsFrame,selectNativeSettingsTab,actNativeSettingsStats})', { process, createHash, stripVTControlCharacters, composerFunctionHashes: hashes, setTimeout, clearTimeout, nativeGenericPermissionText: formatText })
   const n = { themeRoots: { ai: () => new Map([[process.stdout, { container: { current: root } }]]) } }
-  return { run: () => api.nativeSettingsFrame(n, entry), read: (signal?: AbortSignal) => api.readNativeSettingsFrame(n, entry, signal), select: (tab: string, signal?: AbortSignal) => api.selectNativeSettingsTab(n, entry, tab, signal), statsAction: (action: string) => api.actNativeSettingsStats(n, entry, action), n, root, owner, rows, panel, entry, hashes, Status }
+  return { formatText, run: () => api.nativeSettingsFrame(n, entry), read: (signal?: AbortSignal) => api.readNativeSettingsFrame(n, entry, signal), select: (tab: string, signal?: AbortSignal) => api.selectNativeSettingsTab(n, entry, tab, signal), statsAction: (action: string) => api.actNativeSettingsStats(n, entry, action), n, root, owner, rows, panel, entry, hashes, Status }
 }
 it('correlates the owned dialog and excludes a sibling dialog from its data', () => {
   const f = fixture()
@@ -103,4 +104,24 @@ it('projects the original cached calendar without recomputing dates or trimming 
   expect((await f.read()).stats.calendar).toBe(stripVTControlCharacters(nativeCalendar))
   overviewCache[26].props.children.props.children={unexpected:true}
   await expect(f.read()).rejects.toThrow('calendar producer changed')
+})
+
+it('uses the original owned Status value renderer for arrays/rich cells and preserves unlabeled notes', async () => {
+  const f=fixture(),Value=()=>{},cache=Array(17).fill(null),sources=['User settings','Project settings'],rich={type:'original-rich-value'}
+  cache[10]=[[{label:'Setting sources',value:sources},{value:'AWS auth skipped'},{label:'Rich',value:rich}]]
+  ;(f.rows as any).updateQueue={memoCache:{data:[cache]}}
+  ;(f.rows as any).child={type:Value,memoizedProps:{value:sources}}
+  f.hashes.set(Value,'c7db9d28eca30e04bb29e4b504addbc85d8a97302c8a8399ae72a58728f4535e')
+  const jsx=vi.fn((type,props)=>({type,props}));(f.n as any).jsx={e:jsx}
+  f.formatText.mockImplementation(async(_n,node:any)=>typeof node==='string'?node:'original formatted value')
+  expect((await f.read()).status).toEqual([[{label:'Setting sources',value:'original formatted value'},{label:'',value:'AWS auth skipped'},{label:'Rich',value:'original formatted value'}]])
+  expect(jsx).toHaveBeenCalledTimes(2);expect(jsx.mock.calls[0]).toEqual([Value,{value:sources}]);expect(jsx.mock.calls[1]).toEqual([Value,{value:rich}])
+  f.hashes.set(Value,'changed');await expect(f.read()).rejects.toThrow('value renderer changed')
+})
+it('cancels a held Status formatter and still refuses malformed labels', async () => {
+  const f=fixture(),cache=Array(17).fill(null),controller=new AbortController()
+  cache[10]=[[{label:'Version',value:'2.1.302'}]];(f.rows as any).updateQueue={memoCache:{data:[cache]}}
+  let release!:(value:string)=>void;f.formatText.mockImplementationOnce(()=>new Promise<string>(resolve=>{release=resolve}))
+  const reading=f.read(controller.signal);controller.abort();await expect(reading).rejects.toThrow();release('late retired value')
+  cache[10][0][0].label=42;await expect(f.read()).rejects.toThrow('label changed')
 })
