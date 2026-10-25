@@ -266,7 +266,7 @@ test('edits original Settings through desktop controls and retains composing', a
         const text=(await value.innerText()).replace(/\s+/g,' ').trim();expect(text).toMatch(/user settings/i);expect(text).toMatch(/project local settings/i);expect(text).toMatch(/,\s+/)
         const sample:any={width,height,value:text,geometry,realWheel:true}
         if(process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1'){
-          const warning=panel.getByRole('region',{name:'System diagnostics',exact:true}),item=warning.locator('li').filter({hasText:/Large CLAUDE\.md will impact performance/})
+          const warning=panel.getByRole('region',{name:'System diagnostics',exact:true}),item=warning.locator('li').filter({hasText:/^Native installation exists but ~\/\.local\/bin is not in your PATH$/})
           await expect(item).toHaveCount(1)
           const diagnosticBounds=()=>item.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Status"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Diagnostic exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
           await body.hover();for(let step=0;step<40;step++){const state=await diagnosticBounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
