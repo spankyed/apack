@@ -149,6 +149,43 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await capture({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
     await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(1);expect((await receipts())[0].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
+    if(process.env.CLAUDE_RESEARCH_IMAGE_FILE_LIFETIME==='1'){
+      const files=JSON.parse(await readFile(join(workspace!,'native-image-files.json'),'utf8'))
+      const held=async(id:string)=>JSON.parse(await readFile(join(workspace!,'native-image-read-'+id+'.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return 'null';throw error}))
+      await appPage.setViewportSize({width:1100,height:900})
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await expect.poll(terminalPixels).toContainEqual([0,136,255,255])
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+      await writeFile(join(workspace!,'native-image-read.arm.json'),JSON.stringify({id:'timeout'}))
+      await info.focus();await info.press('b');await expect.poll(async()=>!!(await held('timeout'))?.startedAt).toBe(true)
+      await info.press('u');await expect(info).toContainText('key=u',{timeout:6500})
+      const timeoutRead=await held('timeout'),timeoutObservedAt=Date.now()
+      expect(timeoutRead.releasedAt).toBeUndefined();expect(timeoutObservedAt-timeoutRead.startedAt).toBeGreaterThanOrEqual(3500)
+      expect(timeoutObservedAt-timeoutRead.startedAt).toBeLessThan(9000)
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-read-timeout-'+size.width+'.png')})}
+      await writeFile(join(workspace!,'native-image-read-timeout.release'),'release')
+      await expect.poll(async()=>!!(await held('timeout'))?.closedAt).toBe(true)
+      expect((await held('timeout')).reason).toBe('explicit')
+      await writeFile(files.raw,Buffer.from([0,200,80,255,0,200,80,255,0,200,80,255,0,200,80,255]))
+      await info.focus();await info.press('b');await expect.poll(pixel).toEqual([0,200,80,255])
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await writeFile(files.raw,Buffer.from([255,136,0,255,255,136,0,255,255,136,0,255,255,136,0,255]))
+      await writeFile(join(workspace!,'native-image-read.arm.json'),JSON.stringify({id:'close'}))
+      await info.focus();await info.press('b');await expect.poll(async()=>!!(await held('close'))?.startedAt).toBe(true)
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+      const closeRequestedAt=Date.now();expect(closeRequestedAt-(await held('close')).startedAt).toBeLessThan(4000)
+      await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
+      expect((await held('close')).releasedAt).toBeUndefined()
+      await writeFile(join(workspace!,'native-image-read-close.release'),'release');await expect.poll(async()=>!!(await held('close'))?.closedAt).toBe(true)
+      expect((await held('close')).reason).toBe('explicit')
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(image).toHaveCount(0)
+      await expect(composer).toHaveText(draft);await composer.fill('Continue after a held native image read.')
+      await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
+      expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-read-recovered-'+size.width+'.png')})}
+      await expect.poll(async()=>(await receipts()).length).toBe(4)
+      await writeFile(join(workspace!,'native-image-read-lifetime-proof.json'),JSON.stringify({timeoutRead:await held('timeout'),timeoutObservedAt,closeRead:await held('close'),closeRequestedAt,freshPixel:[0,200,80,255],latePixelRetired:true,receipts:await receipts(),draft,sessionId,boundNativePid},null,2))
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImagePixels:true,nativeImageSwap:true,nativeTerminalImagePixels:true,nativeImageFileTimeout:true,nativeImageFileClose:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    }
     let fileGeneration: number[] | undefined
     if(process.env.CLAUDE_RESEARCH_IMAGE_FILES==='1'){
       const files=JSON.parse(await readFile(join(workspace!,'native-image-files.json'),'utf8'))
