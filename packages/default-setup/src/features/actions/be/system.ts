@@ -13,6 +13,10 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { toMap, toIdentifierSet, mapScalar } from '@apackdev/sdk/utils';
 import { exportActions } from './repository/export-actions.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'ACTIONS_EXPORT_FAILED' | 'ACTIONS_EXPORTED' | 'ACTIONS_IMPORT_FAILED' | 'ACTIONS_IMPORTED'
+type Outcome = Extract<OutgoingActionEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
@@ -20,7 +24,7 @@ import { exportActions } from './repository/export-actions.ts';
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
  * actions the import wrote reach every window through its views.
  */
-const answer = (reply: Reply<OutgoingActionEvents> | undefined, event: OutgoingActionEvents): void =>
+const answer = (reply: Reply<OutgoingActionEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('actions', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 

@@ -51,11 +51,15 @@ function stopWithoutRootFlow({ clientConnected }: BrainContext): Partial<BrainCo
   return { brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, startError, startErrorReported: clientConnected };
 }
 
+/** The brain's state, which every window may hear: what it is doing, never a run's data */
+type BrainStateNewsType = 'BRAIN_STARTED' | 'BRAIN_KILLED' | 'BRAIN_PAUSED' | 'INSPECT_TOGGLED'
+type BrainStateNews = Extract<OutgoingBrainEvents, { type: BrainStateNewsType }>
+
 /**
  * The brain's state as a window shows it: running or stopped (and why), paused, and whether its steps are inspected.
  * Inspection is restored from the settings, on by default in development so steps are visible out of the box.
  */
-function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; startError?: Error }, paused: boolean): OutgoingBrainEvents[] {
+function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; startError?: Error }, paused: boolean): BrainStateNews[] {
   const brainSettings = featureSettings.forFeature('brain').get();
   const inspectEnabled = brainSettings?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
   setDebugEnabled('brain', inspectEnabled);

@@ -54,11 +54,15 @@ async function transactionAnswer(code: string) {
 
 export const databaseSpec = defineSystem<Contract>();
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'AI_QUERY_ERROR' | 'EXPORT_DATABASE_ERROR' | 'EXPORT_DATABASE_SUCCESS' | 'IMPORT_DATABASE_ERROR' | 'IMPORT_DATABASE_SUCCESS' | 'RESET_DATABASE_ERROR' | 'RESET_DATABASE_SUCCESS'
+type Outcome = Extract<OutgoingDatabaseEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked, and tells every window when nobody did: an outcome sent from the backend still has to reach
  * a window, which is the case `reply` is absent for
  */
-const answer = (reply: Reply<OutgoingDatabaseEvents> | undefined, event: OutgoingDatabaseEvents): void =>
+const answer = (reply: Reply<OutgoingDatabaseEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('database', event));
 
 /** The data was replaced: every window drops what it showed, and the asker hears its own outcome besides */

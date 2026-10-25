@@ -59,7 +59,7 @@ function humanizeBranchName(branch: string): string {
     .trim()
 }
 
-/** How a handler answers: to the window that asked, or every window when nobody did (\`answering\`) */
+/** How a handler answers: to the window that asked, and nowhere when nobody did (`answering`) */
 type Emit = (event: OutgoingPullRequestEvents) => void
 
 function emitError(emit: Emit, message: string) {
