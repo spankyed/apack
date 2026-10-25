@@ -207,9 +207,23 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
       await expect(composer).toHaveText(continuedDraft); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
       const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
       const path = testInfo.outputPath('native-lsp-installed-result-' + width + '.png'); await writeFile(path, Buffer.from(image, 'base64')); captures.push(path)
+      // Reading a previous tool may leave the final reply below the scrollport.
+      // Exercise real wheel input, then measure the complete reply against that scrollport.
+      const transcript = appPage.getByTestId('chat-transcript').locator(':scope > div').first()
+      const reply = appPage.getByText('Owned LSP review phase 1 complete.', { exact: true })
+      const retained = await composer.evaluate(element => ({ doc: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON() }))
+      await transcript.hover(); await appPage.mouse.wheel(0, 600)
+      await expect.poll(async () => {
+        const text = await reply.boundingBox(), viewport = await transcript.boundingBox(), composing = await card.boundingBox()
+        return !!text && !!viewport && !!composing && text.y >= viewport.y && text.y + text.height <= Math.min(viewport.y + viewport.height, composing.y)
+      }).toBe(true)
+      expect(await composer.evaluate(element => ({ doc: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON() }))).toEqual(retained)
+      await appPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+      const latestImage = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
+      const latestPath = testInfo.outputPath('native-lsp-installed-latest-' + width + '.png'); await writeFile(latestPath, Buffer.from(latestImage, 'base64')); captures.push(latestPath)
     }
 
-    await writeFile(join(workspace!, 'native-lsp-installed-app.json'), JSON.stringify({ sameSession: true, sessionId, originalNavigationResultInHistory: true }))
+    await writeFile(join(workspace!, 'native-lsp-installed-app.json'), JSON.stringify({ sameSession: true, sessionId, originalNavigationResultInHistory: true, latestReplyFullyVisibleAfterWheel: true, draftAndSelectionRetained: true }))
   }
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeLspRecommendation: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
