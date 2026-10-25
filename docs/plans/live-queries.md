@@ -4,8 +4,8 @@ Status: Steps 1–5 implemented, 2026-10-25: `engine.watch`, the read-set index 
 `517900b52`); elmdb's protocol (step 1a, done: `elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness
 (`e4f65d409`); prompts on views (`cdeb2c846`); step 4, one change per feature: actions (`0a7313f0f`), flows
 (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain
-(`d19538a74`), browser (`fab8e242d`) and code (`7b80bffb8`), with logs sorted and left alone; step 5, the guide
-rewritten and the pack rule decided against. No feature in default-setup broadcasts row data. Step 1's readings and
+(`d19538a74`), browser (`fab8e242d`), code (`7b80bffb8`) and logs (`97812929a`), with the run-history fetches answered
+to their asker alone; step 5, the guide rewritten and the pack rule decided against (`b9d9be8bb`). No feature in default-setup broadcasts row data. Step 1's readings and
 the decisions each step made are below.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -523,9 +523,23 @@ and `threads`' streaming tokens are notifications.
     only when the event it handles is that object — which a system forwarding the event to a child still is.
   - **Terminals stay process state.** The running terminals are the service's processes, mirrored to the engine only
     to restore them, so their lifecycle is news and the list (\`TERMINALS_LISTED\`) an answer.
-- **logs** — sorted, and left as it is. Its broadcasts carry the system's in-memory log buffer, which is no stored
-  row: `LOG_ADDED` is a feed and `LOGS_CLEARED` news, and `LOGS_CONNECTED`/`LOGS_UPDATE` publish the buffer
-  (filtered by the settings) as a system publishes what its surface starts from. Nothing there is a view's to serve.
+- **logs** — the buffer is a fetch. `LOGS_CONNECTED` and `LOGS_UPDATE` sent the whole log list to every window, on
+  every publish and every settings change; the list is data a window shows, whether or not a stored row backs it, and
+  it lives in the system's memory, so no view can serve it. The surface asks (`GET_LOGS`, answered `LOGS_READ` to it
+  alone) on `SURFACE_STARTED` and again when the settings that filter it change. Each entry as it is logged
+  (`LOG_ADDED`) is a feed and a clear (`LOGS_CLEARED`) is news; both stay.
+- **A fetch nobody asked for is answered to nobody.** The database's run-history fetches and the backup summary went
+  through `answer(reply, …)`, whose fallback broadcasts when there is no asker — right for a command's outcome, which
+  someone must hear, and wrong for a fetch, which would then send run data to every window. They reply only. The
+  code feature's "no repository" error (`requireGitRepository`) is answered to the asker like the rest of its results.
+- **What still broadcasts, by feature**, read from every call site: brain — its state, the event pulse, the run's feed;
+  code — a file changed on disk, the repository changed, a terminal's lifecycle and output, and the connection's base
+  directory and settings; database — `DATABASE_REPLACED`; flows — `FLOWS_CONNECTED`, the models the editor offers;
+  library — `FOLDER_CHANGED` (its search-index sends are commented out with the feature); logs — the feed and the
+  clear; content actions — a flow's notifications to the chat (`SET_MODE`, `SET_PHASE`, `FLASH_CHAT_STATE`), the
+  generated query or commit message a flow sends the window that asked (no return address through a flow, under
+  Open), `ONBOARDING_COMPLETE`. The `answer` helpers' fallbacks carry import and export outcomes, `SHOW_THREAD`, and
+  results no window asked for. None is a row.
 
 ### 5. The rule
 

@@ -136,7 +136,9 @@ reach someone when nobody asked — an action opening a thread, the git watcher 
 (`DATABASE_REPLACED`), a flow's notifications to the chat (`SET_MODE`, `FLASH_CHAT_STATE`). Nobody asked for it, so
 there is no request it could fail to match. A **feed** is news too: a terminal's output and a brain run's
 `RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would. What a system
-holds in memory and no stored row backs — the logs buffer — it publishes on `SEND_STATE`.
+holds in memory and a window shows — the logs buffer — is fetched like what is on disk. **A fetch nobody asked for is
+answered to nobody**: it replies with `reply?.()`, and only a command's outcome, which someone must hear, falls back to
+a broadcast through `answer`.
 
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you

@@ -86,7 +86,7 @@ export const commitSystem = setup({
     }),
 
     getGitStatus: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.isGitRepository().then((isGitRepo) => {
         if (!isGitRepo) {
@@ -126,7 +126,7 @@ export const commitSystem = setup({
     getGitDiff: ({ event, context, reply }) => {
       const ev = event as { type: 'commit.GET_GIT_DIFF'; path?: string; staged?: boolean }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       const isImage = ev.path ? context.gitRepository!.isImageFile(ev.path) : false
       const getContent = isImage
@@ -198,7 +198,7 @@ export const commitSystem = setup({
     stageFiles: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STAGE_FILES'; paths: string[] }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stageFiles(ev.paths).then(() => {
         answer(reply, {
@@ -217,7 +217,7 @@ export const commitSystem = setup({
     unstageFiles: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.UNSTAGE_FILES'; paths: string[] }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getStatus().then((status) => {
         const allPaths = new Set(ev.paths)
@@ -245,7 +245,7 @@ export const commitSystem = setup({
     revertFile: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.REVERT_FILE'; path: string }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.revertFile(ev.path).then(() => {
         answer(reply, {
@@ -272,7 +272,7 @@ export const commitSystem = setup({
     revertFiles: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.REVERT_FILES'; paths: string[] }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.revertFiles(ev.paths).then(() => {
         answer(reply, {
@@ -300,7 +300,7 @@ export const commitSystem = setup({
 
     resolveConflict: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.RESOLVE_CONFLICT'; path: string; strategy: 'ours' | 'theirs' }
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.resolveConflict(ev.path, ev.strategy).then(() => {
         answer(reply, {
@@ -318,7 +318,7 @@ export const commitSystem = setup({
 
     markResolved: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.MARK_RESOLVED'; path: string }
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stageFiles([ev.path]).then(() => {
         answer(reply, {
@@ -336,7 +336,7 @@ export const commitSystem = setup({
 
     resolveAllConflicts: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getStatus().then(async (status) => {
         const unmerged = status.filter(f => f.status === 'unmerged')
@@ -356,7 +356,7 @@ export const commitSystem = setup({
     commit: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.COMMIT'; message: string }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getStagedFiles().then((stagedFiles) => {
         if (stagedFiles.length === 0) {
@@ -390,7 +390,7 @@ export const commitSystem = setup({
     },
 
     getCurrentBranch: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getCurrentBranch().then((branch) => {
         answer(reply, {
@@ -406,7 +406,7 @@ export const commitSystem = setup({
     },
 
     getAllBranches: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getAllBranches().then((branches) => {
         answer(reply, {
@@ -424,7 +424,7 @@ export const commitSystem = setup({
     checkoutBranch: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.checkoutBranch(ev.branchName).then(() => {
         context.gitRepository!.clearCache()
@@ -446,7 +446,7 @@ export const commitSystem = setup({
     },
 
     pushBranch: ({ context, self, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       let branchName: string
       context.gitRepository.getCurrentBranch().then((currentBranch) => {
@@ -467,7 +467,7 @@ export const commitSystem = setup({
     },
 
     generateCommitMessage: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getStagedFiles().then((stagedFiles) => {
         const staged = stagedFiles.length > 0
@@ -503,7 +503,7 @@ export const commitSystem = setup({
     },
 
     pullBranch: ({ context, self, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       let branchName: string
       context.gitRepository.getCurrentBranch().then((currentBranch) => {
@@ -543,7 +543,7 @@ export const commitSystem = setup({
     stashPush: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashPush(ev.message, ev.stagedOnly).then((result) => {
         answer(reply, {
@@ -561,7 +561,7 @@ export const commitSystem = setup({
     },
 
     stashList: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashList().then((stashes) => {
         answer(reply, {
@@ -579,7 +579,7 @@ export const commitSystem = setup({
     stashApply: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_APPLY'; index: number }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashApply(ev.index).then(() => {
         answer(reply, {
@@ -606,7 +606,7 @@ export const commitSystem = setup({
     stashPop: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_POP'; index: number }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashPop(ev.index).then(() => {
         answer(reply, {
@@ -635,7 +635,7 @@ export const commitSystem = setup({
     stashDrop: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_DROP'; index: number }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashDrop(ev.index).then(() => {
         self.send({ type: 'commit.STASH_LIST' })
@@ -648,7 +648,7 @@ export const commitSystem = setup({
     },
 
     stashClear: ({ context, self, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashClear().then(() => {
         self.send({ type: 'commit.STASH_LIST' })
@@ -661,7 +661,7 @@ export const commitSystem = setup({
     },
 
     logList: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.gitLog().then((commits) => {
         answer(reply, {
@@ -679,7 +679,7 @@ export const commitSystem = setup({
     revertCommit: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.REVERT_COMMIT'; hash: string }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.revertCommit(ev.hash).then(() => {
         answer(reply, {
@@ -699,7 +699,7 @@ export const commitSystem = setup({
     resetToCommit: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.RESET_TO_COMMIT'; hash: string }
 
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.resetToCommit(ev.hash).then(() => {
         answer(reply, {
@@ -717,7 +717,7 @@ export const commitSystem = setup({
     },
 
     worktreeList: ({ context, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.worktreeList().then((worktrees) => {
         answer(reply, {
@@ -733,7 +733,7 @@ export const commitSystem = setup({
     },
 
     worktreeAdd: ({ event, context, self, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
       const ev = event as { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
 
       context.gitRepository.worktreeAdd(ev.path, ev.branch, ev.createBranch).then(() => {
@@ -751,7 +751,7 @@ export const commitSystem = setup({
     },
 
     worktreeRemove: ({ event, context, self, reply }) => {
-      if (!requireGitRepository(context)) return
+      if (!requireGitRepository(context, reply)) return
       const ev = event as { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
 
       context.gitRepository.worktreeRemove(ev.path, ev.force).then(() => {
