@@ -1,3 +1,4 @@
+import type { ClaudeTerminalImagePixels } from './terminal-image-cache.ts'
 import { readClaudeTerminalImageFile, type ClaudeTerminalImageFileFormat } from './terminal-image-file.ts'
 
 /** Ordered terminal-side conversion; the browser receives pixels, never filesystem names. */
@@ -5,15 +6,23 @@ export function createClaudeTerminalImageFileTransport(options: {
   emit: (text: string) => void
   reply: (text: string) => void
   read?: typeof readClaudeTerminalImageFile
+  image?: (value: ClaudeTerminalImagePixels) => void
+  remove?: (id: number) => void
 }) {
   const read = options.read ?? readClaudeTerminalImageFile
   let pending = Promise.resolve(), queuedBytes = 0, closed = false
   let held = '', state: 'text' | 'escape' | 'apc' | 'apcEscape' | 'passthrough' | 'passthroughEscape' = 'text'
-  const emit = (text: string) => { if (!closed && text) options.emit(text) }
+  let ready = ''
+  const flush = () => { if (!closed && ready) { const text = ready; ready = ''; options.emit(text) } }
+  const emit = (text: string) => { if (!closed && text) { ready += text; if (ready.length >= 16384) flush() } }
   async function frame(text: string) {
     if (!text.startsWith('\x1b_G')) { emit(text); return }
     const body = text.slice(3, -2), split = body.indexOf(';'), header = split < 0 ? body : body.slice(0, split)
-    if (!/(?:^|,)t=[fs](?:,|$)/.test(header)) { emit(text); return }
+    if (!/(?:^|,)t=[fs](?:,|$)/.test(header)) {
+      const deletion = /(?:^|,)a=d(?:,|$)/.test(header) && /(?:^|,)d=I(?:,|$)/.test(header) ? /(?:^|,)i=([1-9][0-9]*)(?:,|$)/.exec(header) : null
+      if (deletion) options.remove?.(Number(deletion[1]))
+      emit(text); return
+    }
     const fields = new Map<string, string>()
     let valid = header.length <= 512
     for (const part of header.split(',')) {
@@ -37,6 +46,7 @@ export function createClaudeTerminalImageFileTransport(options: {
       const pixels = await read(path, image)
       if (closed) return
       if (fields.get('a') === 'q') { answer('OK'); return }
+      options.image?.({ id: Number(id), image, pixels })
       fields.set('t', 'd'); fields.set('q', '2')
       const encoded = pixels.toString('base64'), first = [...fields].map(([key, value]) => `${key}=${value}`).join(',')
       for (let offset = 0; offset < encoded.length; offset += 4096) {
@@ -62,11 +72,11 @@ export function createClaudeTerminalImageFileTransport(options: {
         continue
       }
       held += char
-      if (state === 'apcEscape' && char === '\\') { const complete = held; held = ''; state = 'text'; await frame(complete) }
+      if (state === 'apcEscape' && char === '\\') { const complete = held; held = ''; state = 'text'; flush(); await frame(complete) }
       else if (held.length > 8192) { emit(held); held = ''; state = char === '\x1b' ? 'passthroughEscape' : 'passthrough' }
       else state = char === '\x1b' ? 'apcEscape' : 'apc'
     }
-    emit(plain)
+    emit(plain); flush()
   }
   return {
     write(text: string) {
@@ -78,6 +88,7 @@ export function createClaudeTerminalImageFileTransport(options: {
       pending = result.catch(() => {})
       return result
     },
-    close() { closed = true; held = '' },
+    drain() { return pending },
+    close() { closed = true; held = ''; ready = '' },
   }
 }

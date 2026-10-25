@@ -53,8 +53,8 @@ it('rejects duplicate header authority without opening a file', async () => {
 it('chunks larger pixels into one ordered direct transmission', async () => {
   const bytes = Buffer.alloc(4096, 127), f = fixture(vi.fn(async () => bytes))
   await f.write(frame('a=T,U=1,q=1,f=32,s=32,v=32,t=f,i=7,c=8,r=4'))
-  expect(f.emit).toHaveBeenCalledTimes(2)
-  const frames = f.emit.mock.calls.map(call => call[0] as string)
+  const frames = f.output().split('\x1b\\').filter(Boolean).map(value => value + '\x1b\\')
+  expect(frames).toHaveLength(2)
   expect(frames[0]).toContain('t=d,i=7,c=8,r=4,m=1;')
   expect(frames[1]!.startsWith('\x1b_Gq=2,m=0;')).toBe(true)
   const encoded = frames.map(value => value.slice(value.indexOf(';') + 1, -2)).join('')

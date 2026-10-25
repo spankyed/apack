@@ -16,6 +16,8 @@ import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeN
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import type * as pty from 'node-pty'
+import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
+import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
 import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
 import { randomUUID } from 'node:crypto'
 import { resolveForService } from '../../utils/resolve-cli.ts'
@@ -129,10 +131,51 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\x1b[200~' + path + '\x1b[201~') },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
+  const imageCache = createClaudeTerminalImageCache()
+  const imageListeners = new Set<(event: Record<string, unknown>) => void>()
+  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) terminal?.write(text) })
+  const imageTransport = createClaudeTerminalImageFileTransport({
+    reply(text) { if (!closed) terminal?.write(text) },
+    image(value) {
+      imageCache.put(value)
+      for (const listener of imageListeners) { try { listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true }) } catch { /* isolate mounted views */ } }
+    },
+    remove(id) { imageCache.remove(id) },
+    emit(text) {
+      if (closed) return
+      graphicsQuery(text)
+      const bytes = Buffer.from(text)
+      if (bytes.length > 262144) {
+        let from = bytes.length - 262144
+        while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) from++
+        text = bytes.subarray(from).toString()
+      }
+      output.push({ sequence: ++sequence, text }); outputSize += Buffer.byteLength(text)
+      while (output.length > 1 && outputSize > 262144) outputSize -= Buffer.byteLength(output.shift()!.text)
+      changed()
+    },
+  })
+  const uiTransport: ClaudeNativeTerminalOwner['uiTransport'] = {
+    get promptHosts() { return bridge.uiTransport.promptHosts },
+    async request(value) {
+      const result = await bridge.uiTransport.request(value)
+      if (value.subtype !== 'ui_render' && value.subtype !== 'apack_render_question_dialog') return result
+      await imageTransport.drain()
+      if (closed) throw new Error('Native image owner closed before rendering')
+      return imageCache.project(result)
+    },
+    subscribe(listener) {
+      imageListeners.add(listener)
+      const detach = bridge.uiTransport.subscribe(listener)
+      return () => { imageListeners.delete(listener); detach() }
+    },
+  }
+  let outputFailed = false, pendingOutput = 0
   let hardStop: ReturnType<typeof setTimeout> | undefined
   async function finish(code: number, signal?: number) {
     if (closed) return
-    closed = true; clearTimeout(hardStop); status = stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code
+    imageTransport.close(); imageCache.close(); imageListeners.clear()
+    closed = true; clearTimeout(hardStop); status = outputFailed ? 'error' : stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code
     try { await bridge.close() } finally {
       releasing = true
       try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
@@ -141,6 +184,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   function kill() {
     if (closed || stopping || !terminal) return
     stopping = true
+    imageTransport.close()
     const pid = terminal.pid, nativePid = bridge.nativePid
     const stopGroup = () => {
       if (closed || terminal?.pid !== pid) return
@@ -177,19 +221,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       for (const directory of options.addDir ?? []) args.push('--add-dir', directory)
       if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
       terminal = pty.spawn(executable, args, { cwd: options.cwd, env: terminalEnv, name: 'xterm-256color', cols: options.columns ?? 100, rows: options.rows ?? 30 })
-      const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed) terminal?.write(text) })
       terminal.onData(text => {
-        if (closed) return
-        graphicsQuery(text)
-        const bytes = Buffer.from(text)
-        if (bytes.length > 262144) {
-          let from = bytes.length - 262144
-          while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) from++
-          text = bytes.subarray(from).toString()
-        }
-        output.push({ sequence: ++sequence, text }); outputSize += Buffer.byteLength(text)
-        while (output.length > 1 && outputSize > 262144) outputSize -= Buffer.byteLength(output.shift()!.text)
-        changed()
+        if (closed || stopping) return
+        pendingOutput++; terminal?.pause?.()
+        void imageTransport.write(text).catch(() => { outputFailed = true; kill() }).finally(() => {
+          pendingOutput--
+          if (!closed && !stopping && pendingOutput === 0) terminal?.resume?.()
+        })
       })
       terminal.onExit(({ exitCode, signal }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode, signal).catch(() => {}) })
       options.signal?.addEventListener('abort', kill, { once: true })
@@ -228,7 +266,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
-      uiTransport: bridge.uiTransport,
+      uiTransport,
       async refreshMcpInput() {
         if (closed || operatingMcpForm) return
         const epoch = mcpFormEpoch
@@ -306,7 +344,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async renderQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_render_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, viewport: request.viewport })
+        const result = await uiTransport.request({ subtype: 'apack_render_question_dialog', id: request.id, revision: request.revision, session_id: request.sessionId, client_id: request.clientId, viewport: request.viewport })
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session changed while rendering')
         return ClaudeNativeQuestionRenderSchema.parse(result)
       },
