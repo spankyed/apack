@@ -59,6 +59,12 @@ async function nativeGenericPermissionPreview(n,d,source){
   if(typeof cache[65]==='string'&&cache[65])details.push({label:'Description',value:await nativeGenericPermissionText(n,cache[65])});
  }else return;
  if(typeof title!=='string'||!title.length||title.length>4000)return;
+ // The original per-call footer is a sibling of the permission body, not an input parameter.
+ const notice=cache[139];
+ if(notice!==undefined){
+  if(typeof notice?.type!=='function'||notice.type.name!==nativeFunctionName('Bve')||notice.props?.toolUseId!==d.payload.requestId)throw Error('Native permission notice identity changed');
+  const detail=await nativeGenericPermissionDetail(n,'Plugin notice',notice);if(detail.value)details.push(detail);
+ }
  return {title,details};
 }
 async function nativeGenericPermissionChoices(n,d){

@@ -7,7 +7,7 @@ import { claudeTerminalGenericPermissionRuntime } from '#features/code/be/servic
 /** Mock native contracts prove adapter guards, never original CLI or app acceptance. */
 function fixture(card = false) {
   function ozr() {} function qJ() {} function Box() {} function Dialog() {}
-  const payload = { toolName: 'mcp__research__echo', isMcp: true }
+  const payload = { requestId: 'native-call', toolName: 'mcp__research__echo', isMcp: true }
   const item = { id: 'original', kind: 'permission_prompt', payload }, open = [item]
   const dialog = { item, payload, revision: randomUUID(), sessionId: randomUUID(), store: { getState: () => ({ open }) } }
   let current = dialog, ready = true, refuse = false, syntaxDisabled = false
@@ -174,4 +174,19 @@ it('uses the live syntax preference without borrowing tasks and refuses a change
   f.render.mockImplementation(async () => { f.setSyntaxDisabled(false); return 'Stale colored preview' })
   await expect(f.runtime.choices(f.n, f.dialog)).rejects.toThrow('syntax setting changed')
   expect(f.select).not.toHaveBeenCalled()
+})
+
+it('includes the original per-call footer and retires it without accepting another call identity', async () => {
+  const f = fixture()
+  function Bve() {}
+  f.cache[139] = {type:Bve,props:{toolUseId:f.dialog.payload.requestId}}
+  f.render.mockResolvedValue('review-plugin: Checked the release request')
+  const shown = await f.runtime.choices(f.n,f.dialog)
+  expect(shown.details.at(-1)).toMatchObject({label:'Plugin notice',value:'review-plugin: Checked the release request'})
+  f.render.mockResolvedValue('')
+  const cleared = await f.runtime.choices(f.n,f.dialog)
+  expect(cleared.details.some((detail:{label:string})=>detail.label==='Plugin notice')).toBe(false)
+  expect(cleared.token).not.toBe(shown.token)
+  f.cache[139].props.toolUseId='foreign-call'
+  await expect(f.runtime.choices(f.n,f.dialog)).rejects.toThrow('notice identity changed')
 })
