@@ -164,6 +164,11 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   await composer.fill('Continue reviewing the same release session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
+  if (decision === 'yes') {
+    await expect(appPage.getByText('Owned LSP review phase 1 complete.', { exact: true })).toBeVisible()
+    expect(JSON.stringify((await context()).messages)).toContain('definitions.review')
+    await writeFile(join(workspace!, 'native-lsp-installed-app.json'), JSON.stringify({ sameSession: true, sessionId, originalNavigationResultInHistory: true }))
+  }
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeLspRecommendation: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
