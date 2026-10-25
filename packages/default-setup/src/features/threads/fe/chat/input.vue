@@ -372,8 +372,9 @@ function isNativeField(target: EventTarget | null): boolean {
 const nativeHistoryReserve = computed(() => {
   const expanded = 'clamp(6rem, calc(var(--composer-available-height) * 0.25), 10rem)'
   if (nativeToolsExpanded.value) {
-    if (nativeFieldFocused.value) return `var(--composer-field-history-reserve, ${expanded})`
-    return nativeToolsRequiredHeight.value ? `min(${expanded}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : expanded
+    const preferred = nativeFieldFocused.value ? `var(--composer-field-history-reserve, ${expanded})` : expanded
+    // Focused fields still need room for the draft, native hint and Send toolbar.
+    return nativeToolsRequiredHeight.value ? `min(${preferred}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : preferred
   }
   return nativeComposerHeight.value ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
 })
