@@ -141,7 +141,7 @@ async function readNativeSettingsEditor(n,entry,signal){
   const value=controls.selectedValue??controls.defaultValue;
   if(value!==undefined&&typeof value!=='string')throw Error('Native Settings editor selection changed');
   snapshot={kind:'choice',...typeof entry.settingsEditorLabel==='string'?{title:entry.settingsEditorLabel}:{},options,...typeof value==='string'?{value}:{},disabled:controls.isDisabled===true||controls.disableSelection===true||!!controls.refuseInput};
-  if(themeCache){const detail=await awaitNativeSettingsReading(nativeGenericPermissionDetail(n,'Theme preview',themeCache.sample),signal);snapshot.preview={text:detail.value,...detail.ansi!==undefined?{ansi:detail.ansi}:{}};snapshot.previewValue=themeCache.preview;snapshot.canPreview=true;snapshot.canToggleSyntax=typeof controls.onToggle==='function';}
+  if(themeCache){const lines=themeCache.cache[77]?.lines;if(!Array.isArray(lines)||lines.length>256||lines.some(line=>typeof line!=='string'||line.length>16384||line.includes('\n')||![' ','+','-'].includes(line[0])))throw Error('Native Theme sample changed');const detail=await awaitNativeSettingsReading(nativeGenericPermissionDetail(n,'Theme preview',themeCache.sample),signal);snapshot.preview={text:detail.value,...detail.ansi!==undefined?{ansi:detail.ansi}:{},lines:[...lines],caption:await text(themeCache.cache[81])};snapshot.previewValue=themeCache.preview;snapshot.canPreview=true;snapshot.canToggleSyntax=typeof controls.onToggle==='function';}
  }else{
   if(!Array.isArray(controls.fields)||controls.fields.length>64||typeof controls.onSubmit!=='function'||!controls.values||typeof controls.values!=='object')throw Error('Native Settings form changed');
   const fields=[],keys=new Set();

@@ -101,11 +101,11 @@ it('refreshes a pending native setting change and stops once its original value 
 })
 
 it('separates Theme preview, syntax toggle and commit under exact native editor revisions',async()=>{
- const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'theme',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],frame:{selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true},editor:{kind:'choice',revision:'b'.repeat(64),title:'Theme',disabled:false,value:'dark',previewValue:'light',canPreview:true,canToggleSyntax:true,preview:{text:'Original code sample',ansi:'\u001b[32mOriginal code sample\u001b[0m'},options:[{value:'light',label:'Light mode',disabled:false}]}}}})
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'theme',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],frame:{selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true},editor:{kind:'choice',revision:'b'.repeat(64),title:'Theme',disabled:false,value:'dark',previewValue:'light',canPreview:true,canToggleSyntax:true,preview:{text:'1  Original code sample',ansi:'1  \u001b[32mOriginal code sample\u001b[0m',lines:[' Original code sample'],caption:'Native syntax caption'},options:[{value:'light',label:'Light mode',disabled:false}]}}}})
  const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
  const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
  try{
-  await nextTick();expect(root.querySelector('[aria-label="Native Theme preview"]')?.textContent).toBe('Original code sample')
+  await nextTick();expect(root.querySelector('[aria-label="Native Theme preview"]')?.textContent).toContain('Original code sample')
   const preview=root.querySelector<HTMLButtonElement>('[aria-label="Preview Light mode"]')!;expect(preview.getAttribute('aria-pressed')).toBe('true');preview.click()
   expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'preview',value:'light'}})
   ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Toggle syntax highlighting')!.click()

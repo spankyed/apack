@@ -156,7 +156,7 @@ it('projects original Theme choices, preview, syntax toggle, commit and preview-
  const f=fixture(),Theme=function OriginalTheme(){},onThemeSelect=vi.fn(),onCancel=vi.fn(),preview=vi.fn(),select=vi.fn(),cancel=vi.fn(),toggle=vi.fn()
  f.frame.panel.hidden=true;f.setFunctionHash(Theme,'b9f5ab35590945b214b817f84d10a4cb1469872f52ab96cc93f8a47613b31987')
  const cache:any[]=Array(109).fill(null),options=[{value:'dark',label:'Dark mode'},{value:'light',label:'Light mode',origin:'Original origin'}]
- cache[0]=null;cache[11]=toggle;cache[14]=onCancel;cache[15]=cancel;cache[30]=options;cache[56]=options;cache[62]=options;cache[54]='light';cache[65]='dark';cache[57]=preview;cache[63]=select;cache[61]=onThemeSelect;cache[72]={props:{onFocus:preview,onSelect:select}};cache[84]={original:'sample'}
+ cache[0]=null;cache[11]=toggle;cache[14]=onCancel;cache[15]=cancel;cache[30]=options;cache[56]=options;cache[62]=options;cache[54]='light';cache[65]='dark';cache[57]=preview;cache[63]=select;cache[61]=onThemeSelect;cache[72]={props:{onFocus:preview,onSelect:select}};cache[84]={original:'sample'};cache[77]={lines:[' Original code preview']};cache[81]='Original syntax caption'
  f.config.child={type:Theme,memoizedProps:{onThemeSelect,onCancel,skipExitHandling:true},updateQueue:{memoCache:{data:[cache]}}}
  const result=await f.editor();expect(result.snapshot).toMatchObject({kind:'choice',value:'dark',previewValue:'light',canPreview:true,canToggleSyntax:true,preview:{text:'Original code preview'},options:[{value:'dark',label:'Dark mode'},{value:'light',label:'Light mode',description:'Original origin'}]})
  await f.act({action:'preview',revision:result.revision,value:'light'});expect(preview).toHaveBeenCalledExactlyOnceWith(1);expect(select).not.toHaveBeenCalled()

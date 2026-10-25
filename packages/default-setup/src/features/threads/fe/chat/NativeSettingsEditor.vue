@@ -9,7 +9,7 @@
       <button type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.value === option.value" class="block min-w-0 flex-1 w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" :class="editor.value === option.value ? 'bg-blue-500/10' : ''" @click="emit('select', option.value)"><span class="block">{{ option.label }}</span><span v-if="option.description" class="mt-1 block text-xs leading-relaxed text-neutral-400">{{ option.description }}</span></button>
         <button v-if="editor.canPreview" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.previewValue === option.value" :aria-label="`Preview ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('preview', option.value)">Preview</button>
       </div>
-      <section v-if="editor.preview" aria-label="Native Theme preview" class="rounded-lg border border-white/10 p-3 text-xs"><NativePermissionText :text="editor.preview.text" :ansi="editor.preview.ansi" /></section>
+      <section v-if="editor.preview" aria-label="Native Theme preview" class="rounded-lg border border-white/10 p-3 text-xs"><NativeThemePreview :preview="editor.preview" /></section>
       <button v-if="editor.canToggleSyntax" type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('toggle-syntax')">Toggle syntax highlighting</button>
       <p v-if="!editor.options.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available values.</p>
     </div>
@@ -25,7 +25,7 @@
 </template>
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import NativePermissionText from './NativePermissionText.vue'
+import NativeThemePreview from './NativeThemePreview.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
 const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean }>()
 const emit = defineEmits<{ select: [value: string]; preview: [value: string]; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()

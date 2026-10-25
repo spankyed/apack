@@ -192,14 +192,14 @@ test('edits original Settings through desktop controls and retains composing', a
       await appPage.setViewportSize({width,height});await openTheme()
       const preview=editor.getByRole('region',{name:'Native Theme preview',exact:true}),before=await user(),dark=await preview.innerHTML()
       await editor.getByRole('button',{name:'Preview Light mode',exact:true}).click()
-      await expect.poll(()=>preview.innerHTML()).not.toBe(dark);expect(await user()).toEqual(before)
+      await expect.poll(()=>preview.innerHTML()).not.toBe(dark);await expect(preview.locator('[data-native-theme-row]')).toHaveCount(4);expect(await user()).toEqual(before)
       await expect(editor.getByRole('button',{name:'Preview Light mode',exact:true})).toHaveAttribute('aria-pressed','true')
       const bounds=()=>preview.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Theme sample exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
       await editor.locator('[data-native-settings-editor-body]').hover();for(let step=0;step<50;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
       const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport()
       await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
       const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
-      const capture=testInfo.outputPath(`native-settings-theme-preview-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'));themeSamples.push({width,height,geometry,realWheel:true,capture,previewChanges:true})
+      const capture=testInfo.outputPath(`native-settings-theme-preview-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'));themeSamples.push({width,height,geometry,realWheel:true,capture,previewChanges:true,structuredRows:4})
       await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect(await user()).toEqual(before)
       await openTheme();await expect(preview).toHaveJSProperty('innerHTML',dark);await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
     }
