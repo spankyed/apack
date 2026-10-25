@@ -3020,6 +3020,12 @@ type OutgoingActionsEvents = {
     };
 };
 
+/**
+ * What the brain system sends the Brain surface. A run's tree and a run node's details are in the run history, which no
+ * view can watch, so they are answers to the window that asked (\`REQUEST_SURFACE_DATA\`, \`OPEN_RUN_NODE\`,
+ * \`GO_BACK_RUN_NODE\`, \`GET_RUN_NODE_DETAILS\`). The rest is news for every window: the brain's state, an event's
+ * pulse, and the run's live feed, which patches the tree a window holds as streaming tokens patch a message.
+ */
 type OutgoingBrainEvents = {
     type: 'RECEIVE_SURFACE_DATA';
     data: FlowRunNodeData;
