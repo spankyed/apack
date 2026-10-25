@@ -27,7 +27,7 @@ test('retires a held image upload when another window resets the native session'
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Review the release notes for this project.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
-  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { mode:state.mode,phase:state.phase,threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns, { timeout: 15000 }).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const statusLabel='AppNativeMain '+sessionId
@@ -90,6 +90,15 @@ test('retires a held image upload when another window resets the native session'
     const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height});const name='native-reset-task-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
   }}
   const threadId=(await context()).threadId
+  let popout:import('@playwright/test').Page|undefined
+    const opened=electronApp.waitForEvent('window')
+    await appPage.evaluate(()=>(window as any).electronAPI.surfaces.popout('default-setup/threads','Threads'))
+    popout=await opened;await popout.waitForLoadState('domcontentloaded')
+    await expect.poll(()=>popout!.evaluate(()=>!!(window as any).applicationState?.system.get('default-setup/threads'))).toBe(true)
+    await popout.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId}),threadId)
+  const ownershipBefore=await context()
+  const ownership={threadId:ownershipBefore.threadId,mode:ownershipBefore.mode,phase:ownershipBefore.phase}
+  await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');const tuple=()=>{const c=actor.getSnapshot().context;return{threadId:c.currentThread?.id,mode:c.mode,phase:c.phase}};const state={rows:[tuple()],subscription:undefined as any,editor:document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]')};state.subscription=actor.subscribe(()=>{const row=tuple();if(JSON.stringify(row)!==JSON.stringify(state.rows.at(-1)))state.rows.push(row)});(window as any).__resetUploadOwnership=state})
   const heldDraft='Keep this image draft until I explicitly send it after reset.'
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await composer.fill(heldDraft);await composer.focus()
@@ -112,15 +121,9 @@ test('retires a held image upload when another window resets the native session'
       return result
     }) as typeof fs.writeFile
   },{threadId,workspace:workspace!})
-  let popout:import('@playwright/test').Page|undefined
   try{
     await card.getByRole('button',{name:'Send',exact:true}).click()
     await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResetUpload.started)).toBe(true)
-    const opened=electronApp.waitForEvent('window')
-    await appPage.evaluate(()=>(window as any).electronAPI.surfaces.popout('default-setup/threads','Threads'))
-    popout=await opened;await popout.waitForLoadState('domcontentloaded')
-    await expect.poll(()=>popout!.evaluate(()=>!!(window as any).applicationState?.system.get('default-setup/threads'))).toBe(true)
-    await popout.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId}),threadId)
     const other=popout.locator('[data-onboarding-id="agent-chat-input"]'),otherComposer=other.locator('[contenteditable="true"]')
     await otherComposer.fill('');await otherComposer.pressSequentially('/cc-reset')
     await popout.locator('.command-suggestion-popup').getByText('/cc-reset',{exact:true}).click()
@@ -131,11 +134,16 @@ test('retires a held image upload when another window resets the native session'
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
     await expect(composer).toHaveText(heldDraft);await expect(thumbnail).toHaveCount(1)
     expect((await context()).claude).toBeUndefined()
+    const ownershipTransitions=await appPage.evaluate(()=>(window as any).__resetUploadOwnership.rows)
+    expect(ownershipTransitions).toEqual([ownership])
+    expect(await composer.evaluate(element=>element===(window as any).__resetUploadOwnership.editor)).toBe(true)
+    await writeFile(join(workspace!,'native-reset-upload-ownership.json'),JSON.stringify({ownershipTransitions,sameEditor:true}))
     await capture('held-upload-retired')
     await thumbnail.locator('..').hover();await thumbnail.locator('..').getByRole('button').click()
     await expect(thumbnail).toHaveCount(0)
   }finally{
     await electronApp.evaluate(()=>{const state=(globalThis as any).heldResetUpload;if(state){state.release();state.restore();delete (globalThis as any).heldResetUpload}})
+    await appPage.evaluate(()=>{const state=(window as any).__resetUploadOwnership;state?.subscription.unsubscribe();delete (window as any).__resetUploadOwnership})
     if(popout&&!popout.isClosed())await popout.close()
   }
   const freshText='Start a fresh review after cancelling the old image upload.'
@@ -152,6 +160,6 @@ test('retires a held image upload when another window resets the native session'
   for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{humans=(await readFile(join(workspace!,'.claude/projects',bucket,replacement.sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true)}catch(error:any){if(error.code!=='ENOENT')throw error}}
   expect(humans).toHaveLength(1);expect(typeof humans[0].message.content).toBe('string');expect(humans[0].message.content).not.toContain(heldDraft);expect(humans[0].message.content.endsWith('Latest user message:\n'+freshText)).toBe(true)
   await composer.fill('Keep working in the fresh session.');await capture('fresh')
-  await writeFile(join(workspace!,'native-reset-upload-proof.json'),JSON.stringify({sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,newHumanUuid:humans[0].uuid,uploadHeld:true,uploadCompleted:true,resetFromOtherWindow:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
+  await writeFile(join(workspace!,'native-reset-upload-proof.json'),JSON.stringify({threadId,sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,newHumanUuid:humans[0].uuid,uploadHeld:true,uploadCompleted:true,resetFromOtherWindow:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResetUpload:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
 })
