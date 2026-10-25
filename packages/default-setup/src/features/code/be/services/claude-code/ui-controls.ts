@@ -1,4 +1,4 @@
-import { claudeSettingsSnapshot, claudeSettingValue, type ClaudeSettingsOperation } from '../../../common/native-settings.ts'
+import { claudeSettingsSnapshot, claudeSettingsTab, claudeSettingValue, type ClaudeSettingsOperation } from '../../../common/native-settings.ts'
 import type { ClaudePrintClientProjection } from './print-client-bridge.ts'
 import { z } from 'zod'
 import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host.ts'
@@ -198,9 +198,9 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
       ]).parse(await request({ subtype: 'apack_ui_agent_dispatch', ...valid }))
     },
     async settings(options: { client_id: string; panel_id: string; action: ClaudeSettingsOperation }) {
-      const valid = z.object({ client_id: clientId, panel_id: z.string().uuid(), action: z.discriminatedUnion('kind', [z.object({kind:z.literal('read')}).strict(),z.object({kind:z.literal('write'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096),value:claudeSettingValue}).strict()]) }).strict().parse(options)
+      const valid = z.object({ client_id: clientId, panel_id: z.string().uuid(), action: z.discriminatedUnion('kind', [z.object({kind:z.literal('read')}).strict(),z.object({kind:z.literal('tab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeSettingsTab}).strict(),z.object({kind:z.literal('write'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096),value:claudeSettingValue}).strict()]) }).strict().parse(options)
       const { action, ...identity } = valid
-      return z.object({ snapshot: claudeSettingsSnapshot, savedKey: z.string().optional(), problem: z.string().optional() }).strict().parse(await request({subtype:'apack_ui_settings',...identity,operation:action.kind,...(action.kind==='write'?{revision:action.revision,key:action.key,value:action.value}:{})}))
+      return z.object({ snapshot: claudeSettingsSnapshot, savedKey: z.string().optional(), problem: z.string().optional() }).strict().parse(await request({subtype:'apack_ui_settings',...identity,operation:action.kind,...(action.kind==='tab'?{revision:action.revision,tab:action.tab}:{}),...(action.kind==='write'?{revision:action.revision,key:action.key,value:action.value}:{})}))
     },
     async agentPanel(options: { client_id: string; panel_id: string } & ({ operation: 'read' | 'close' } | { operation: 'input'; text: string })) {
       const valid = z.discriminatedUnion('operation', [

@@ -22,13 +22,19 @@ async function readNativeSettings(n,entry,signal){
   const row={key:described.key,label:described.label,...(described.description!==undefined?{description:described.description}:{}),kind:described.kind,value:described.value??null,...(described.options?{options:described.options}:{}),isLocked:described.isLocked===true,...(handle.lockReason?{lockReason:handle.lockReason}:{})};
   rows.push(row);
  }
- const revision=createHash('sha256').update(JSON.stringify(rows)).digest('hex');
- return {snapshot:{revision,rows},handles,api};
+ const frame=await readNativeSettingsFrame(n,entry,signal);
+ const revision=createHash('sha256').update(JSON.stringify({rows,frame})).digest('hex');
+ return {snapshot:{revision,rows,frame},handles,api};
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
  const entry=nativeSettingsPanel(request),read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
  if(request.operation==='read')return {snapshot:read.snapshot};
+ if(request.operation==='tab'){
+  if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before switching tabs');
+  await selectNativeSettingsTab(n,entry,request.tab,abort.signal);nativeSettingsPanel(request);
+  return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
+ }
  if(request.operation!=='write'||typeof request.key!=='string'||request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before saving');
  const visible=read.snapshot.rows.find(row=>row.key===request.key),handle=read.handles.find(handle=>handle.row.key===request.key);
  if(!visible||!handle)throw Error('Native setting is no longer visible');

@@ -43,4 +43,42 @@ function nativeSettingsFrame(n,entry){
  entry.current();if(entry.closed||entry.answered)throw Error('Native Settings frame expired');
  return {owner:owners[0],panel,status:status[0],loader:loaders[0],stats:stats[0]};
 }
+async function readNativeSettingsFrame(n,entry,signal){
+ signal?.throwIfAborted();
+ const source=nativeSettingsFrame(n,entry),panel=source.panel;
+ const result={selectedTab:panel.selectedTab,tabs:panel.children.map(child=>child.props.title),hidden:panel.hidden};
+ if(source.status){
+  const caches=source.status.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===17);
+  if(caches?.length!==1||!Array.isArray(caches[0][10]))throw Error('Native Settings Status rows are not ready');
+  const groups=caches[0][10];if(groups.length>16)throw Error('Native Settings Status group limit exceeded');
+  result.status=[];
+  for(const group of groups){
+   if(!Array.isArray(group)||group.length>128)throw Error('Native Settings Status row limit exceeded');
+   const rows=[];
+   for(const row of group){
+    signal?.throwIfAborted();entry.current();
+    if(typeof row.label!=='string'||row.label.length>16384)throw Error('Native Settings Status label changed');
+    const value=await nativeGenericPermissionText(n,row.value);
+    if(value.length>65536)throw Error('Native Settings Status value exceeded bound');
+    rows.push({label:row.label,value});
+   }
+   result.status.push(rows);
+  }
+ }
+ signal?.throwIfAborted();const current=nativeSettingsFrame(n,entry);
+ if(current.owner!==source.owner||current.panel!==source.panel||current.status!==source.status)throw Error('Native Settings frame changed while reading');
+ return result;
+}
+async function selectNativeSettingsTab(n,entry,tab,signal){
+ const source=nativeSettingsFrame(n,entry);
+ if(source.panel.hidden||!['Status','Config','Usage','Stats'].includes(tab))throw Error('Native Settings tab is unavailable');
+ signal?.throwIfAborted();entry.current();source.panel.onTabChange(tab);
+ const until=Date.now()+1500;
+ while(true){
+  signal?.throwIfAborted();const current=nativeSettingsFrame(n,entry);
+  if(current.panel.selectedTab===tab)return;
+  if(Date.now()>=until)throw Error('Claude Code has not acknowledged the selected Settings tab');
+  await new Promise(resolve=>setTimeout(resolve,40));
+ }
+}
 `
