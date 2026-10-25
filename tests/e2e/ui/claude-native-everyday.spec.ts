@@ -220,24 +220,52 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect(composer).toBeHidden(); await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
   const toolNotice=process.env.CLAUDE_RESEARCH_QUESTION_TOOL_NOTICE==='1'
   let questionNoticeReceipt: any
+  const questionNoticeLiveUpdates: any[]=[]
+  async function readQuestionNoticeScreen(){
+    const native=(await context()).native,chunks=native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
+    if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
+    const buffer=terminalScreen!.buffer.active
+    const screen=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+    await writeFile(join(workspace!,'native-question-tool-notice-screen.json'),JSON.stringify({receipt:questionNoticeReceipt,screen}))
+    return screen
+  }
   if(toolNotice){
     questionNoticeReceipt=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-native.json'),'utf8'))
     expect(questionNoticeReceipt.accepted).toBe(true)
     await expect.poll(async()=>{
-      const native=(await context()).native,chunks=native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
-      if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
-      const buffer=terminalScreen!.buffer.active
-      const screen=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
-      await writeFile(join(workspace!,'native-question-tool-notice-screen.json'),JSON.stringify({receipt:questionNoticeReceipt,screen}))
+      const screen=await readQuestionNoticeScreen()
       return screen.includes(questionNoticeReceipt.text)
     }).toBe(true)
     await expect(question.getByText(questionNoticeReceipt.text,{exact:false})).toBeVisible()
   }
   await capture(toolNotice?'question-notice':'question', toolNotice?question.getByText(questionNoticeReceipt.text,{exact:false}):question.locator('h2'), [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
+  if(toolNotice){
+    const answer=question.locator('.answer textarea')
+    await answer.fill('Developers')
+    const before=await context()
+    for(const [index,action] of ['update','clear','restore'].entries()){
+      await writeFile(join(workspace!,'native-question-tool-notice-command.json'),JSON.stringify({sequence:index+1,action}))
+      await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-command-result.json'),'utf8').catch(()=>'{}')).sequence).toBe(index+1)
+      const receipt=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-command-result.json'),'utf8'))
+      expect(receipt.accepted).toBe(true);expect(receipt.toolUseId).toBe(questionNoticeReceipt.toolUseId)
+      const updated='Release policy updated this question.'
+      await expect.poll(async()=>{const screen=await readQuestionNoticeScreen();return action==='clear'?!screen.includes(updated)&&!screen.includes(questionNoticeReceipt.text):screen.includes(action==='restore'?questionNoticeReceipt.text:updated)}).toBe(true)
+      const notice=question.getByRole('note')
+      if(action==='clear')await expect(notice).toHaveCount(0)
+      else await expect(notice).toContainText(action==='restore'?questionNoticeReceipt.text:updated)
+      await expect(answer).toHaveValue('Developers')
+      expect((await context()).claude.turns).toBe(before.claude.turns)
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await capture('question-notice-'+action,action==='clear'?question.locator('h2'):notice,[question.getByRole('button',{name:'Submit answers',exact:true})],question.getByLabel('Question details',{exact:true}))
+      await expect(answer).toHaveValue('Developers')
+      questionNoticeLiveUpdates.push({action,receipt,nativePaint:true,answerRetained:true,widths:[1100,680]})
+      await writeFile(join(workspace!,'native-question-tool-notice-live-progress.json'),JSON.stringify(questionNoticeLiveUpdates))
+    }
+  }
   await question.getByRole('radio', { name: 'Developers People integrating the updated behavior', exact: true }).check()
   await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
   await expect(question).toBeHidden()
-  if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
+  if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,liveUpdates:questionNoticeLiveUpdates,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('for developers.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
   await composer.fill('Draft the release summary while I review the checklist.')
