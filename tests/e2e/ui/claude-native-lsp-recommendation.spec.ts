@@ -103,6 +103,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     throw error
   }
   await composer.fill(draft)
+  const savedSelection = await composer.evaluate(element => (element as any).editor.state.selection.toJSON())
   const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
   await expect(notice).toBeVisible()
   const shown = (await context()).native.state.notice
@@ -114,6 +115,16 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     await appPage.setViewportSize({ width, height })
     for (const label of Object.values(labels)) await expect(notice.getByRole('button', { name: label, exact: true })).toBeInViewport()
     await expect(composer).toHaveText(draft)
+    if (decision === 'no') {
+      const details = notice.locator('details')
+      await details.locator('summary').click()
+      await expect(details).toHaveAttribute('open', '')
+      for (const paragraph of await details.locator('p').all()) { await paragraph.scrollIntoViewIfNeeded(); await expect(paragraph).toBeInViewport() }
+    }
+    await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
+    const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
+    const path = testInfo.outputPath('native-lsp-recommendation-' + (decision === 'no' ? 'details' : decision) + '-' + width + '.png')
+    await writeFile(path, Buffer.from(image, 'base64')); captures.push(path)
     const draftVisibility = await composer.evaluate(element => {
       const area = element.closest('[data-testid="composer-editor-area"]')!.getBoundingClientRect()
       const card = element.closest('[data-onboarding-id="agent-chat-input"]')!, bounds = card.getBoundingClientRect()
@@ -127,10 +138,8 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     for (const rect of draftVisibility.rects) { expect(rect.top).toBeGreaterThanOrEqual(draftVisibility.top - 1); expect(rect.bottom).toBeLessThanOrEqual(draftVisibility.bottom + 1); expect(rect.left).toBeGreaterThanOrEqual(draftVisibility.left - 1); expect(rect.right).toBeLessThanOrEqual(draftVisibility.right + 1) }
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
     expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
-    await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
-    const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
-    const path = testInfo.outputPath('native-lsp-recommendation-' + decision + '-' + width + '.png')
-    await writeFile(path, Buffer.from(image, 'base64')); captures.push(path)
+    if (decision === 'no') { await notice.locator('summary').click(); await composer.focus(); await expect(composer).toBeFocused(); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection) }
+
   }
   if (decision === 'timeout') await expect(notice).toBeHidden({ timeout: 35000 })
   else { await notice.getByRole('button', { name: labels[decision], exact: true }).click(); await expect(notice).toBeHidden() }
@@ -140,7 +149,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   expect((await context()).sessionId).toBe(sessionId)
-  await writeFile(join(workspace!, 'native-lsp-recommendation-app.json'), JSON.stringify({ decision, shown, captures, draftRetained: true, sessionId, boundNativePid }))
+  await writeFile(join(workspace!, 'native-lsp-recommendation-app.json'), JSON.stringify({ decision, shown, captures, ...(decision === 'no' ? { expandedDetails: true, selectionRetained: true } : {}), draftRetained: true, sessionId, boundNativePid }))
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status, { timeout: 15000 }).toMatch(/^(exited|error)$/)
