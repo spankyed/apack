@@ -257,7 +257,7 @@ import Button from '@apackdev/ui/design/button'
 import uFuzzy from '@leeoniya/ufuzzy'
 import { codeChild } from '../children.ts';
 
-// Get actors - use main prompts surface for state, codePrompts for tab management
+// The code surface's actor, and its codePrompts child for tab management
 const codeActor: CodeState = useSurface()
 const codePromptsActor = codeChild(codeActor, 'codePrompts')!
 

@@ -107,6 +107,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
 import { type FlowsState } from '#features/flows/fe/state.ts'
+import { useView } from '#generated/fe.ts'
 import { useSelector } from '@xstate/vue'
 
 // Import sub-components
@@ -157,7 +158,9 @@ const selected = useSelector(actor, (s) =>
 const editingNode = useSelector(actor, (s) =>
   s.context.graph.nodes.find(node => node.id === s.context.editingNodeId)
 ) as Ref<NodeEntity | undefined>
-const actions = useSelector(actor, (s) => s.context.actions)
+// Every action, for the node palette: the actions feature's list, kept current by the backend
+const actionList = useView('actions', 'list', { limit: null, categories: [] })
+const actions = computed(() => actionList.data?.actions ?? [])
 const models = useSelector(actor, (s) => s.context.models)
 const prompts = useSelector(actor, (s) => s.context.prompts)
 const selectedHandle = useSelector(actor, (s) => s.context.selectedHandle)

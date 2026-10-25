@@ -79,7 +79,6 @@ export const flowsQueries = {
       selectedFlowId: flowId,
       models: availableModels,
       prompts: repository.promptQueries.all(),
-      actions: repository.actionQueries.all(),
     };
   },
 } as const;
