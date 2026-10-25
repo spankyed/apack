@@ -87,7 +87,7 @@ test('retires a held image upload when another window resumes into the same empt
   const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[]
   async function capture(stage:string){for(const [width,height] of [[1100,900],[680,600]]){
     await appPage.setViewportSize({width,height});await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1});if(stage==='fresh')await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
-    const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height});const name='native-reset-task-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
+    const captured=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},{width,height});expect(captured.size).toEqual({width,height});const name='native-resume-upload-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(captured.png,'base64'));captures.push(name)
   }}
   // Prepare an unrepresented real source before the observed upload window begins.
   await composer.fill('');await composer.pressSequentially('/cc-reset')
@@ -97,7 +97,11 @@ test('retires a held image upload when another window resumes into the same empt
   const originalRows=async()=>{for(const bucket of await readdir(join(workspace!,'.claude/projects'))){try{return (await readFile(join(workspace!,'.claude/projects',bucket,sessionId+'.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}catch(error:any){if(error.code!=='ENOENT')throw error}}throw Error('Original source journal missing')}
   const baselineRows=await originalRows(),baselineHumans=baselineRows.filter((row:any)=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true)
   expect(baselineHumans.length).toBeGreaterThan(0)
+  const sourceThreadId=(await context()).threadId
+  const baselineCost=baselineRows.filter((row:any)=>row.type==='cost-state').at(-1)?.totalCostUSD
+  expect(Number.isFinite(baselineCost)).toBe(true)
   await appPage.evaluate(cwd=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'NEW_THREAD_IN_PROJECT',directory:cwd});actor.send({type:'VIEW_DASHBOARD'});actor.send({type:'SET_MODE',mode:'Claude Code'});actor.send({type:'SET_PHASE',phase:'Plan'})},workspace!)
+  await expect.poll(async()=>(await context()).threadId).not.toBe(sourceThreadId)
   await expect(composer).toBeVisible()
   expect((await context()).messages.filter((message:any)=>message.sender==='user'&&!message.isCommand)).toHaveLength(0)
   expect((await context()).sessionId).toBeUndefined()
@@ -108,7 +112,7 @@ test('retires a held image upload when another window resumes into the same empt
     popout=await opened;await popout.waitForLoadState('domcontentloaded')
     await expect.poll(()=>popout!.evaluate(()=>!!(window as any).applicationState?.system.get('default-setup/threads'))).toBe(true)
     await popout.evaluate(threadId=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId}),threadId)
-  const ownership=await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');const tuple=()=>{const c=actor.getSnapshot().context;return{threadId:c.currentThread?.id,mode:c.mode,phase:c.phase}};const state={rows:[tuple()],subscription:undefined as any,editor:document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]')};state.subscription=actor.subscribe(()=>{const row=tuple();if(JSON.stringify(row)!==JSON.stringify(state.rows.at(-1)))state.rows.push(row)});(window as any).__resetUploadOwnership=state;return state.rows[0]})
+  const ownership=await appPage.evaluate(()=>{const actor=(window as any).applicationState.system.get('default-setup/threads');const tuple=()=>{const c=actor.getSnapshot().context;return{threadId:c.currentThread?.id,mode:c.mode,phase:c.phase}};const state={rows:[tuple()],subscription:undefined as any,editor:document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]')};state.subscription=actor.subscribe(()=>{const row=tuple();if(JSON.stringify(row)!==JSON.stringify(state.rows.at(-1)))state.rows.push(row)});(window as any).__resumeUploadOwnership=state;return state.rows[0]})
   const heldDraft='Keep this image draft until I explicitly send it after resume.'
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await composer.fill(heldDraft);await composer.focus()
@@ -119,7 +123,7 @@ test('retires a held image upload when another window resumes into the same empt
   await electronApp.evaluate(async(_electron,{threadId,workspace})=>{
     const fs=process.getBuiltinModule('node:fs/promises') as typeof import('node:fs/promises')
     const original=fs.writeFile
-    const state={started:false,completed:false,path:'',release:()=>{},restore:()=>{fs.writeFile=original}}; (globalThis as any).heldResetUpload=state
+    const state={started:false,completed:false,path:'',release:()=>{},restore:()=>{fs.writeFile=original}}; (globalThis as any).heldResumeUpload=state
     fs.writeFile=(async(...args:Parameters<typeof fs.writeFile>)=>{
       const path=String(args[0])
       if(!state.started&&path.startsWith(workspace+'/')&&path.includes('/media/'+threadId+'/')){
@@ -133,7 +137,7 @@ test('retires a held image upload when another window resumes into the same empt
   },{threadId,workspace:workspace!})
   try{
     await card.getByRole('button',{name:'Send',exact:true}).click()
-    await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResetUpload.started)).toBe(true)
+    await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResumeUpload.started)).toBe(true)
     const other=popout.locator('[data-onboarding-id="agent-chat-input"]'),otherComposer=other.locator('[contenteditable="true"]')
     await otherComposer.fill('');await otherComposer.pressSequentially('/cc-resume')
     await popout.locator('.command-suggestion-popup').getByText('/cc-resume',{exact:true}).click()
@@ -141,22 +145,23 @@ test('retires a held image upload when another window resumes into the same empt
     await other.getByRole('button',{name:'Send',exact:true}).click()
     await expect.poll(async()=>(await context()).sessionId).toBe(sessionId)
     expect((await context()).threadId).toBe(threadId)
-    await electronApp.evaluate(()=>(globalThis as any).heldResetUpload.release())
-    await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResetUpload.completed)).toBe(true)
+    expect((await context()).claude.totalCostUsd).toBe(baselineCost)
+    await electronApp.evaluate(()=>(globalThis as any).heldResumeUpload.release())
+    await expect.poll(()=>electronApp.evaluate(()=>(globalThis as any).heldResumeUpload.completed)).toBe(true)
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
     await expect(composer).toHaveText(heldDraft);await expect(thumbnail).toHaveCount(1)
     expect((await context()).sessionId).toBe(sessionId)
     expect((await originalRows()).filter((row:any)=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true).map((row:any)=>row.uuid)).toEqual(baselineHumans.map((row:any)=>row.uuid))
-    const ownershipTransitions=await appPage.evaluate(()=>(window as any).__resetUploadOwnership.rows)
+    const ownershipTransitions=await appPage.evaluate(()=>(window as any).__resumeUploadOwnership.rows)
     expect(ownershipTransitions).toEqual([ownership])
-    expect(await composer.evaluate(element=>element===(window as any).__resetUploadOwnership.editor)).toBe(true)
-    await writeFile(join(workspace!,'native-reset-upload-ownership.json'),JSON.stringify({ownershipTransitions,sameEditor:true}))
+    expect(await composer.evaluate(element=>element===(window as any).__resumeUploadOwnership.editor)).toBe(true)
+    await writeFile(join(workspace!,'native-resume-upload-ownership.json'),JSON.stringify({ownershipTransitions,sameEditor:true}))
     await capture('held-upload-retired')
     await thumbnail.locator('..').hover();await thumbnail.locator('..').getByRole('button').click()
     await expect(thumbnail).toHaveCount(0)
   }finally{
-    await electronApp.evaluate(()=>{const state=(globalThis as any).heldResetUpload;if(state){state.release();state.restore();delete (globalThis as any).heldResetUpload}})
-    await appPage.evaluate(()=>{const state=(window as any).__resetUploadOwnership;state?.subscription.unsubscribe();delete (window as any).__resetUploadOwnership})
+    await electronApp.evaluate(()=>{const state=(globalThis as any).heldResumeUpload;if(state){state.release();state.restore();delete (globalThis as any).heldResumeUpload}})
+    await appPage.evaluate(()=>{const state=(window as any).__resumeUploadOwnership;state?.subscription.unsubscribe();delete (window as any).__resumeUploadOwnership})
     if(popout&&!popout.isClosed())await popout.close()
   }
   const freshText='Continue the imported review after cancelling the old image upload.'
@@ -167,7 +172,9 @@ test('retires a held image upload when another window resumes into the same empt
   const baselineIds=new Set(baselineHumans.map((row:any)=>row.uuid)),fresh=humans.filter((row:any)=>!baselineIds.has(row.uuid))
   expect(fresh).toHaveLength(1);expect(typeof fresh[0].message.content).toBe('string');expect(fresh[0].message.content).not.toContain(heldDraft);expect(fresh[0].message.content).toContain(freshText)
   expect(humans).toHaveLength(baselineHumans.length+1)
+  await expect.poll(async()=>(await originalRows()).filter((row:any)=>row.type==='cost-state').at(-1)?.totalCostUSD).toBe(replacement.claude.totalCostUsd)
+  expect(replacement.claude.totalCostUsd).toBeGreaterThanOrEqual(baselineCost)
   await composer.fill('Keep working in the resumed session.');await capture('fresh')
-  await writeFile(join(workspace!,'native-resume-upload-proof.json'),JSON.stringify({threadId,sourceSessionId:sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,baselineHumanUuids:baselineHumans.map((row:any)=>row.uuid),newHumanUuid:fresh[0].uuid,uploadHeld:true,uploadCompleted:true,resumeFromOtherWindow:true,sameEmptyThread:true,noResetDuringUpload:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
+  await writeFile(join(workspace!,'native-resume-upload-proof.json'),JSON.stringify({threadId,sourceSessionId:sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,baselineCost,finalCost:replacement.claude.totalCostUsd,baselineHumanUuids:baselineHumans.map((row:any)=>row.uuid),newHumanUuid:fresh[0].uuid,uploadHeld:true,uploadCompleted:true,resumeFromOtherWindow:true,sameEmptyThread:true,noResetDuringUpload:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeResumeUpload:true,nativeRetainedDraft:true,sessionId,finalSessionId:replacement.sessionId,boundNativePid,browserErrors:errors}))
 })
