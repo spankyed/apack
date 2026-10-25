@@ -158,7 +158,7 @@ test('edits original Settings through desktop controls and retains composing', a
     if(tab==='Usage')await expect(panel.getByText('Context window',{exact:true})).toBeVisible()
     if(tab==='Stats'){
       await expect(panel.getByRole('button',{name:'Models',exact:true})).toBeEnabled()
-      await expect(panel.getByText('Sessions',{exact:true})).toBeVisible()
+      await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible()
       await panel.getByRole('button',{name:'Models',exact:true}).click()
       await expect(panel.locator('thead')).toContainText('Cache read')
       await panel.getByRole('button',{name:/Change dates/}).click()
