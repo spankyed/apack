@@ -29,6 +29,11 @@ export const claudeSettingsFrame = z.object({
   diagnostics: z.array(z.string().max(65536)).max(128).optional(),
   status: z.array(z.array(z.object({ label: z.string().max(16384), value: z.string().max(65536) }).strict()).max(128)).max(16).optional(),
 }).strict()
+export const claudeSettingsEditor = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('choice'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536).optional(),value:z.string().max(16384).optional(),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),disabled:z.boolean()}).strict()).max(256)}).strict(),
+  z.object({kind:z.literal('form'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536).optional(),submitLabel:z.string().max(65536),fields:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),value:z.string().max(16384)}).strict()).max(64)}).strict(),
+])
+export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
 export const claudeSettingsSnapshot = z.object({
   frame: claudeSettingsFrame.optional(),
   revision: z.string().regex(/^[a-f0-9]{64}$/),
