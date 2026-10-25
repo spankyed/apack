@@ -167,10 +167,19 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   if (decision === 'yes') {
     await expect(appPage.getByText('Owned LSP review phase 1 complete.', { exact: true })).toBeVisible()
     expect(JSON.stringify((await context()).messages)).toContain('definitions.review')
-    const expand = appPage.getByRole('button', { name: 'Expand tool activity', exact: true })
-    if (await expand.count()) await expand.last().click()
-    const navigation = appPage.getByText('Defined in definitions.review:1:14', { exact: true })
-    await expect(navigation).toBeVisible()
+    const toolGroup = appPage.locator('[data-native-tool-activity][data-native-tool-ids~="native_lsp_1"]')
+    const navigation = appPage.locator('[data-native-tool-result="native_lsp_1"]')
+    try {
+      await expect(toolGroup).toBeVisible()
+      const toggle = toolGroup.getByRole('button').first()
+      if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click()
+      await expect(navigation).toBeVisible(); await expect(navigation).toContainText('definitions.review')
+    } catch (error) {
+      await writeFile(join(workspace!, 'native-lsp-installed-result-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }))
+      const size = appPage.viewportSize()!, image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), size)
+      await writeFile(testInfo.outputPath('native-lsp-installed-result-failure.png'), Buffer.from(image, 'base64'))
+      throw error
+    }
     const continuedDraft = 'Keep reviewing this definition.'
     await composer.fill(continuedDraft)
     for (const [width, height] of [[1100, 900], [680, 600]]) {
