@@ -4,7 +4,7 @@
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
 import type { NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
-import type { BreadcrumbItem, DocumentDTO, LibraryIndex, LibraryItem, SearchIndex } from '#generated/types.ts'
+import type { BreadcrumbItem, DocumentDTO, LibraryItem, SearchIndex } from '#generated/types.ts'
 
 export interface LibraryContext {
   // Core view state
@@ -30,8 +30,8 @@ export interface LibraryContext {
   expandedFolderChildren: Record<string, LibraryItem[]>
   loadingFolderIds: string[]
 
-  // Every document and folder by name: the panel's stats and the reference picker read it
-  index: LibraryIndex
+  // The folders shown whose contents are on disk, which are fetched rather than watched
+  diskFolderIds: (string | null)[]
 
   // Search index fields
   searchIndices: SearchIndex[]
@@ -52,8 +52,8 @@ export interface LibraryContext {
   isBroken: boolean
   lastKnownPath: string | null
 
-  // Settings
-  settings?: any
+  // Why the last of this window's writes was refused, until the user dismisses it
+  writeError: string | null
 
   // Import/Export
   libraryImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number }

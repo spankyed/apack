@@ -130,15 +130,46 @@ export const libraryQueries = {
     return buildTree(rootCollections)
   },
 
+  /** Whether a document is a file on disk under a symlinked folder, rather than one the library stores */
+  isDiskDocument(id: string): boolean {
+    return isSymlinkId(id)
+  },
+
+  /** Whether a folder's contents are on disk: a symlinked collection, or a folder inside one */
+  isDiskFolder(folderId: string | null): boolean {
+    return folderId !== null && (isSymlinkId(folderId) || isSymlinkCollection(folderId))
+  },
+
+  /** A folder's contents wherever they are: on disk for a symlinked folder, else in the library */
   async getFolderContents(folderId: EARS.EntityId | null): Promise<FolderContents> {
-    // Check if this is a symlink folder
-    if (folderId) {
-      if (isSymlinkId(folderId) || isSymlinkCollection(folderId)) {
-        const symlinkContents = await getSymlinkFolderContents(folderId)
-        if (symlinkContents) return symlinkContents
+    if (folderId && this.isDiskFolder(folderId)) {
+      const symlinkContents = await getSymlinkFolderContents(folderId)
+      if (symlinkContents) return symlinkContents
+    }
+    return this.engineFolderContents(folderId)
+  },
+
+  /** The symlinked collections among `ids` whose folder on disk is gone */
+  async brokenSymlinks(ids: readonly string[]): Promise<string[]> {
+    const broken: string[] = []
+    for (const id of ids) {
+      const target = query.ids(id as EARS.EntityId).pickOne(['symlinkPath'])?.symlinkPath as string | undefined
+      if (!target) continue
+      try {
+        await fs.access(target)
+      } catch {
+        broken.push(id)
       }
     }
+    return broken
+  },
 
+  /**
+   * A folder's contents as the library stores them: its folders and documents, its path and breadcrumbs. It reads the
+   * engine and nothing else, so a view can watch it; whether a symlinked folder still reaches its disk is
+   * `brokenSymlinks`', and a symlinked folder's own contents are `getFolderContents`'.
+   */
+  engineFolderContents(folderId: EARS.EntityId | null): FolderContents {
     const items: LibraryItem[] = []
 
     // Get folders (collections) in this directory
@@ -188,11 +219,6 @@ export const libraryQueries = {
         folderItem.isSymlink = true
         folderItem.symlinkPath = folderSymlinkPath
         folderItem.size = '--'
-        try {
-          await fs.access(folderSymlinkPath)
-        } catch {
-          folderItem.isBroken = true
-        }
       }
 
       items.push(folderItem)

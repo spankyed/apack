@@ -1167,6 +1167,7 @@
         "libraryQueries": "src/features/library/be/repository/index.ts#libraryQueries",
         "libraryCommands": "src/features/library/be/repository/index.ts#libraryCommands"
       },
+      "views": "src/features/library/be/views.ts#libraryViews",
       "references": {
         "types": {
           "document": {
