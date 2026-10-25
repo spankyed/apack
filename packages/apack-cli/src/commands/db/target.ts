@@ -99,12 +99,11 @@ export async function openTarget(target: DbTarget, { write, command }: OpenOptio
       const clear = running.marker ? ` If it isn't running, delete ${running.marker} and try again.` : '';
       throw new Error(`apack is running on ${target.userDataDir} (${running.why}): quit it first, this command changes its database.${clear}`);
     }
-    if (running) io.err(`Warning: apack is running on it (${running.why}); what it hasn't written yet isn't here`);
+    if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed, as of each query`);
     const db = await openAppDatabase({
       env: target.env,
       userDataDir: target.userDataDir,
       readOnly: !write,
-      log: () => {},
       ...(target.schemaFrom !== undefined && { schemaFrom: target.schemaFrom }),
     });
     // On stderr, before the command answers: a read against an incomplete schema answers a query that names
@@ -132,9 +131,8 @@ export async function openTarget(target: DbTarget, { write, command }: OpenOptio
 const reason = (error: unknown) => (errorMessage(error));
 
 /**
- * Runs `use` with the database and closes it after, whatever happens. Closing flushes what the command wrote and
- * fails when a write didn't reach the files, so a failure there is reported — but never in place of what the command
- * hit first.
+ * Runs `use` with the database and closes it after, whatever happens. Closing syncs what the command committed to
+ * disk, so a failure there is reported — but never in place of what the command hit first.
  */
 export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
   let result: T;
@@ -159,8 +157,8 @@ export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T
  *
  * Rows outlive the pack that declared their types — uninstalling deletes a pack's directory, not its rows — so a
  * data dir can hold types its schema knows nothing about, which `InstalledSchema.degraded` says it cannot detect
- * (its condition is "no pack was read", not "the rows are accounted for"). The types are only knowable after
- * hydration, which is why this is asked of the open database rather than of the schema.
+ * (its condition is "no pack was read", not "the rows are accounted for"). The types are only knowable from the
+ * data, which is why this is asked of the open database rather than of the schema.
  */
 export function undeclaredEntityTypes(db: AppDatabase): Array<{ type: string; rows: number }> {
   const declared = db.schema.getRegisteredEntityTypes();
@@ -177,7 +175,7 @@ export function undeclaredEntityTypes(db: AppDatabase): Array<{ type: string; ro
  * **Declared wins on a collision**, so a pack's name keeps the value it declared and an observed type only ever
  * adds a name that stood for nothing. That ordering is the whole of what keeps this a widening of the console
  * rather than of the schema: `db.schema` still means *declared*. The engine's entity-type check is wider —
- * `openAppDatabase` adds the types hydration found, so a write naming an observed type goes through, unchecked
+ * `openAppDatabase` adds the types the data holds, so a write naming an observed type goes through, unchecked
  * by any pack.
  *
  * **`relKinds` and `roles` are deliberately not widened.** `EARS.RelKind.RELATES_TO` is `'relates_to'` and the data

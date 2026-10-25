@@ -75,7 +75,7 @@ Frontend components don't render untrusted text as markup: script injected into 
 
 ## Systems
 
-Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `packSystem()` from the SDK. Each system file default-exports a `SystemEntry` (the manifest names only the path, not an export name). The logs system is the bus's like any other: what the in-app viewer shows is what `onLog` delivers from the moment the bus starts it, so the boot lines before that — hydration, each `onInit`, the migrations, the content — reach stdout and the log file only.
+Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `packSystem()` from the SDK. Each system file default-exports a `SystemEntry` (the manifest names only the path, not an export name). The logs system is the bus's like any other: what the in-app viewer shows is what `onLog` delivers from the moment the bus starts it, so the boot lines before that — the boot reading, each `onInit`, the migrations, the content — reach stdout and the log file only.
 
 Code names a system by feature id, and reaches another system with the typed `sendToSystem(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
 

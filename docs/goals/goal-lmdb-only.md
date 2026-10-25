@@ -1,15 +1,15 @@
 # Goal: EARS reads from disk — the engine's data only in LMDB
 
-Status: started, 2026-10-23 — Step 10 of [ears-storage-layout.md](../plans/ears-storage-layout.md), which has the
+Status: started, 2026-10-23 — the cut-over in [ears-storage-layout.md](../plans/ears-storage-layout.md), which has the
 decision and the readings behind it. The spike (PR #261, closed unmerged) is recorded below; its code is not reused.
 
 ## Where it starts
 
 - **Run history is not in the engine** ([run-history-store.md](../plans/run-history-store.md)): no trace partition,
   no router, one environment.
-- **Attributes are stored by entity** (plan Step 6), the disk layout's `['v', id, kind]` order.
-- **Relations are not entities** (Step 9): a relation is a row of its own, which the contract suite pins.
-- **Queries are lazy** (Step 7), so `first`, `exists`, `count` and `limit` stop reading early.
+- **Attributes are stored by entity** (done in the plan), the disk layout's `['v', id, kind]` order.
+- **Relations are not entities** (done in the plan): a relation is a row of its own, which the contract suite pins.
+- **Queries are lazy** (done in the plan), so `first`, `exists`, `count` and `limit` stop reading early.
 - **Durability is decided** (2026-10-24, [ears-storage-layout.md](../plans/ears-storage-layout.md)): every commit is
   synchronous without a sync (`transactionSync` without a flush, `overlappingSync: false`), so it survives an app crash;
   a group-commit sync on a short timer, on idle and on close; and `durable()` / `transact(fn, { durable: true })` for a
@@ -40,7 +40,7 @@ The read-path spike ran the whole ears contract suite on a disk-only engine, unc
 - **Other configurations:** the suite also passes with lmdb-js `cache: true`, with the value index off, with `noSync`, and with every filter forced through the index.
 - **Seams it needed:** the two in Design, plus `QueryStorage.idsWithValue(kind, value)` (the value index for
   `where(k, v)` and `withRole` past 64 ids) and `admin.relationIndex` as a getter. Its `orderBy` decorate-sort is
-  done in memory (plan Step 3). Its key layout is the one in Design, with relation rows and per-type counts added.
+  done in memory (the plan's `orderBy` rework). Its key layout is the one in Design, with relation rows and per-type counts added.
 - **Benchmark.** Median of 3 runs, ms, 50k entities / 200k attributes / 100k relations. "no fsync" is `noSync` (see the write path).
 
   | Case | Memory | Disk | Disk, no fsync | No fsync, no value index |
@@ -101,7 +101,7 @@ the kernel — so two processes writing *through* LMDB serialise correctly today
 the app's second copy: a tool changes the store, the app's memory is stale, and the app's next write puts
 the stale version back. Reading from disk deletes that copy, and with it the reason.
 
-**Reset and import stop closing the store before this goal starts**: plan Step 8 runs reset as one transaction
+**Reset and import stop closing the store before this goal starts**: the plan's Step 4 runs reset as one transaction
 clearing the databases and import as one transaction copying a backup's rows, so neither replaces files under a
 live environment. With both changes in, every `apack db` write is an ordinary transaction LMDB serialises
 against the app's:
@@ -109,7 +109,7 @@ against the app's:
 | `apack db` command | After this goal |
 |---|---|
 | `exec`, `repl --write`, `clear-settings --force` | **No lock needed.** Ordinary transactions |
-| `import --force`, `reset --force` | **No lock needed**, once they run as transactions (Step 8) |
+| `import --force`, `reset --force` | **No lock needed**, once they run as transactions (the plan's Step 4) |
 
 What `db-write.lock` and `app.lock` still guard then is settled with this goal; the measurements below rule out
 LMDB's own mechanisms as a replacement for `app.lock`'s other job, saying whether an app is using the data dir.

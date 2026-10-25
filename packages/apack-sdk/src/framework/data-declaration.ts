@@ -7,6 +7,8 @@ export interface PackEntityDeclaration {
   readonly shape?: string;
   /** The prefix `create` numbers its rows' short codes with, `<prefix>-<n>`; none for an entity that isn't numbered */
   readonly shortCode?: string;
+  /** The fields a `where` on its rows reads an index for; any other field is found by filtering the type */
+  readonly indexes?: readonly string[];
 }
 
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
@@ -26,6 +28,8 @@ export interface _PackEntityDeclaration {
   shape: string | null;
   /** The prefix its short codes are numbered with, when its entry names one */
   shortCode?: string;
+  /** The fields it declares an index for, when its entry names any */
+  indexes?: readonly string[];
 }
 
 /**
@@ -49,14 +53,14 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode } = entry ?? {};
+      const { shape, shortCode, indexes } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
         if (taken) throw new Error(`The short code prefix "${shortCode}" is declared for both "${taken}" and "${name}"`);
         prefixOwners.set(shortCode, name);
       }
-      result.set(name, { name, owner, shape: shape ?? null, ...(shortCode !== undefined && { shortCode }) });
+      result.set(name, { name, owner, shape: shape ?? null, ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }) });
     }
   }
   return [...result.values()];

@@ -500,9 +500,11 @@ export const FeatureEntrySchema: z.ZodObject<{
     entities: z.ZodOptional<z.ZodType<Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
+        indexes?: readonly string[] | undefined;
     }>, z.ZodTypeDef, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
+        indexes?: readonly string[] | undefined;
     }>>>;
     designation: z.ZodOptional<z.ZodString>;
     settings: z.ZodOptional<z.ZodEffects<z.ZodObject<{
@@ -571,6 +573,7 @@ export const FeatureEntrySchema: z.ZodObject<{
     entities?: Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
+        indexes?: readonly string[] | undefined;
     }> | undefined;
     designation?: string | undefined;
     settings?: {
@@ -598,6 +601,7 @@ export const FeatureEntrySchema: z.ZodObject<{
     entities?: Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
+        indexes?: readonly string[] | undefined;
     }> | undefined;
     designation?: string | undefined;
     settings?: unknown;
@@ -711,9 +715,11 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities: z.ZodOptional<z.ZodType<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }>, z.ZodTypeDef, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }>>>;
         relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
@@ -723,6 +729,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     }, {
         relations?: string[] | undefined;
@@ -730,6 +737,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     }>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
@@ -741,6 +749,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -768,6 +777,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1326,6 +1336,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1374,6 +1385,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1512,6 +1524,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1560,6 +1573,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1684,6 +1698,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1732,6 +1747,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1870,6 +1886,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1918,6 +1935,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2042,6 +2060,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -2090,6 +2109,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2366,9 +2386,11 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities: z.ZodOptional<z.ZodType<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }>, z.ZodTypeDef, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }>>>;
         relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
@@ -2378,6 +2400,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     }, {
         relations?: string[] | undefined;
@@ -2385,6 +2408,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     }>>;
     lifecycle: z.ZodOptional<z.ZodLazy<z.ZodObject<{
@@ -2568,6 +2592,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2587,6 +2612,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2600,6 +2626,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2623,6 +2650,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2740,6 +2768,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2763,6 +2792,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2866,6 +2896,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2889,6 +2920,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -3006,6 +3038,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -3029,6 +3062,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -3132,6 +3166,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -3155,6 +3190,7 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
+            indexes?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -3370,12 +3406,14 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly indexes?: readonly string[];
     readonly shape?: string;
     readonly shortCode?: string;
 }
 
 // @internal
 export interface _PackEntityDeclaration {
+    indexes?: readonly string[];
     // (undocumented)
     name: string;
     // (undocumented)

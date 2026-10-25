@@ -65,11 +65,9 @@ export async function writeData(userDataDir: string, write: () => void): Promise
   const { store, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(context(userDataDir)),
-    log: () => {},
   });
   const previous = _bindEars(engine);
   try {
-    await store.hydrate();
     write();
   } finally {
     _bindEars(previous);

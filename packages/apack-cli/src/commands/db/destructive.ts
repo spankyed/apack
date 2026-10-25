@@ -25,7 +25,7 @@ const backupLog = (io: DbIo): BackupLog => ({
   warn: (message, detail) => io.err(`Warning: ${message}${detail ? `: ${Object.values(detail).flat().join(', ')}` : ''}`),
 });
 
-/** Entities per type in the hydrated database, for the types that have some */
+/** Entities per type in the database, for the types that have some */
 function entityCounts(db: AppDatabase): Array<[string, number]> {
   return [...db.schema.getRegisteredEntityTypes()].sort()
     .map((type) => [type, db.admin.getEntitiesOfType(type as EARS.Entity).length] as [string, number])

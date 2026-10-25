@@ -1,6 +1,6 @@
 # An ordering-only sync for LMDB commits on macOS
 
-Status: deferred, 2026-10-24. An option for Step 10's durability ([ears-storage-layout.md](../ears-storage-layout.md));
+Status: deferred, 2026-10-24. An option for the cut-over's durability ([ears-storage-layout.md](../ears-storage-layout.md));
 nothing measured or built yet.
 
 ## The cost it targets
@@ -20,7 +20,7 @@ The full sync is LMDB's own choice on Apple. The LMDB that lmdb-js vendors defin
 `F_FULLFSYNC` makes the drive write its whole cache to the medium before returning. That flush is the 3.5–8 ms, and
 it runs on the API's main thread.
 
-Step 10's current answer is not to sync per commit, syncing in the background instead, which loses up to the
+the cut-over's current answer is not to sync per commit, syncing in the background instead, which loses up to the
 background interval on an OS crash or power loss. This plan is the middle option between that and a full sync per
 commit.
 
@@ -38,7 +38,7 @@ out.
 
 What it would buy: every commit ordered on disk at a cost expected well under a full sync, and with it no
 background-sync window for the common case. A full sync (`F_FULLFSYNC`) stays available for the writes that must
-survive power loss. Step 10's explicit durable point (`durable()`, or a unit marked durable) would issue it.
+survive power loss. the cut-over's explicit durable point (`durable()`, or a unit marked durable) would issue it.
 
 ## What has to be found out first
 
@@ -71,8 +71,8 @@ survive power loss. Step 10's explicit durable point (`durable()`, or a unit mar
 ## Decision
 
 Take it if the measured cost per commit is low enough to sync every commit, and Apple's guarantee is what is
-written above. Then Step 10's default becomes a barrier sync per commit, with a full sync at explicit durable
-points. Otherwise Step 10 keeps commits without a sync, group-committed by a background sync, with the same
+written above. Then the cut-over's default becomes a barrier sync per commit, with a full sync at explicit durable
+points. Otherwise the cut-over keeps commits without a sync, group-committed by a background sync, with the same
 explicit durable points. That is the fallback, and it needs no native work.
 
 ## Risks

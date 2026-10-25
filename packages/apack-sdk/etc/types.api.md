@@ -6,6 +6,7 @@
 
 import type { BaseEntity } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { RowRules } from '@apackdev/ears';
 import type { ShortCode } from '@apackdev/ears';
 
 // @public (undocumented)
@@ -340,6 +341,9 @@ export const SDK_ENTITIES: {
     readonly Collection: "Collection";
 };
 
+// @public
+export const SDK_INDEXES: readonly ["contentKey"];
+
 // @public (undocumented)
 export const SDK_REL_KINDS: {
     readonly CONTAINS: "contains";
@@ -366,17 +370,21 @@ export const SDK_ROW_RULES: {
     readonly Action: {
         readonly required: readonly ["label", "input", "actionFn"];
         readonly shortCode: "ACT";
+        readonly indexes: readonly ["label", "category"];
     };
     readonly Prompt: {
         readonly required: readonly ["label", "inputs", "templateFn"];
         readonly shortCode: "PRM";
+        readonly indexes: readonly ["label"];
     };
     readonly Document: {
         readonly required: readonly ["name", "content"];
         readonly shortCode: "DOC";
+        readonly indexes: readonly ["name"];
     };
     readonly Collection: {
         readonly required: readonly ["name"];
+        readonly indexes: readonly ["name"];
     };
 };
 
@@ -550,6 +558,9 @@ export interface TextContent {
     // (undocumented)
     type: 'text';
 }
+
+// @internal
+export function _withSdkIndexes(rules: RowRules | undefined): RowRules;
 
 // (No @packageDocumentation comment for this package)
 

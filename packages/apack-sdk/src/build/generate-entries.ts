@@ -2023,11 +2023,14 @@ export type { ImportMode } from '@apackdev/sdk/utils';
    * What each of this pack's own entities holds a created row to: the fields the engine refuses a created row without,
    * read off its shape, and the prefix it numbers a short code with, which its manifest entry declares (`shortCode`).
    * The shape declares no `shortCode`: the engine writes it, and `#generated/ears` types it from that same prefix, so
-   * the type and the numbering have one source. An entity with neither a shape nor a prefix is held to nothing, and a
-   * dependency's register their own.
+   * the type and the numbering have one source. Its `indexes` are its manifest entry's, each a field its shape
+   * declares. An entity with neither a shape, a prefix nor an index is held to nothing, and a dependency's register
+   * their own.
    */
   function rowRulesLiteral(): string {
-    const prefixes = new Map(_packEntities(manifest).flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
+    const entities = _packEntities(manifest);
+    const prefixes = new Map(entities.flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
+    const indexed = new Map(entities.flatMap(({ name, indexes }) => (indexes ? [[name, indexes] as const] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2042,7 +2045,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const rules: Record<string, RowRules> = {};
     for (const { entity, exportName, source, file } of packShapes()) {
       shaped.add(entity);
-      const { required, declaresShortCode } = moduleReader().rowRulesOf(file, exportName);
+      const { required, declaresShortCode, fields } = moduleReader().rowRulesOf(file, exportName);
       const declared = prefixes.get(entity);
       // The engine writes a short code and #generated/ears types it, from the prefix the entry declares: a shape
       // declaring the field would be a second account of it, which could disagree with the first
@@ -2052,9 +2055,18 @@ export type { ImportMode } from '@apackdev/sdk/utils';
             ? 'remove it, or number the entity by giving its manifest entry a "shortCode" prefix'
             : `remove it — the manifest entry's "${declared}" types the field, as ShortCodeOf<'${entity}'> from #generated/ears`));
       }
-      rules[entity] = { required, ...(declared !== undefined && { shortCode: declared }) };
+      const indexes = indexed.get(entity);
+      // An index names a field the shape declares: one it doesn't is a typo, or a field that is gone
+      const unknown = indexes?.filter((field) => !fields.includes(field) && field !== 'shortCode') ?? [];
+      if (unknown.length > 0) {
+        throw new Error(`Entity "${entity}": its indexes name ${unknown.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
+      }
+      rules[entity] = { required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }) };
     }
-    for (const [entity, shortCode] of prefixes) if (!shaped.has(entity)) rules[entity] = { required: [], shortCode };
+    for (const { name: entity, shortCode, indexes } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined)) continue;
+      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }) };
+    }
     return dataLiteral(rules);
   }
 

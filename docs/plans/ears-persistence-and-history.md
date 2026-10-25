@@ -23,16 +23,16 @@ and pagination over that data. SQLite WAL would still need deliberate batching a
 
 | Concern | Source | Finding |
 |---|---|---|
-| Attributes and entity membership | [attribute-storage.ts](../../packages/apack-ears/src/attribute-storage.ts) | Attribute-kind maps contain entity value lists; entity-type sets provide candidate IDs. Writes update memory and call the persistence sink. |
-| Query evaluation | [query.ts](../../packages/apack-ears/src/query.ts) | `where()` filters candidate IDs in memory. Multiple predicates do not cause database reads. |
-| Relation lookup | [relations.ts](../../packages/apack-ears/src/relations.ts) | Relation-kind indexes map source and target IDs to relation IDs. Normal graph queries use these in-memory indexes. |
-| Mutation lifecycle | [write.ts](../../packages/apack-ears/src/write.ts), [journal.ts](../../packages/apack-ears/src/journal.ts) | Builder methods mutate immediately. `transact(fn)` undoes a unit in memory when it throws and hands persistence a committed unit whole, which the LMDB adapter stores in one transaction; it gives no durable commit acknowledgment. |
-| Persistence scheduling | [adapter.ts](../../packages/apack-ears/src/lmdb/adapter.ts) | Keyed buffers coalesce final values and flush in a microtask through `transactionSync()`. Entity destruction takes a separate synchronous transaction. Failed batches retry individual steps, allowing partial persistence. |
-| Boot | [hydrate.ts](../../packages/apack-ears/src/lmdb/hydrate.ts) | The database's attributes and relations hydrate into memory. Hydration cost and heap usage grow with the data. |
+| Attributes and entity membership | [attribute-storage.ts](../../packages/apack-ears/src/attribute-storage.ts) | Entities and attributes are keys in the store (`['v', id, kind]`, a type's ranges, declared indexes); a read reads the store, and no copy of the data is kept in memory. |
+| Query evaluation | [query.ts](../../packages/apack-ears/src/query.ts) | `where()` reads a declared index, or filters the type's rows from the store; each terminal reads one snapshot. |
+| Relation lookup | [relations.ts](../../packages/apack-ears/src/relations.ts) | Each relation is a row and edge keys (`['o'\|'n', entity, kind, seq]`, `['b', source, kind, target, seq]`) in the store. |
+| Mutation lifecycle | [write.ts](../../packages/apack-ears/src/write.ts), [journal.ts](../../packages/apack-ears/src/journal.ts) | A write is its own unit, or joins the open `transact(fn)` unit, which commits as one LMDB transaction or keeps nothing when it throws; `transact(fn, { durable: true })` commits with a sync. |
+| Persistence scheduling | [kv-backend.ts](../../packages/apack-ears/src/lmdb/kv-backend.ts), [store.ts](../../packages/apack-ears/src/lmdb/store.ts) | A unit commits without a sync and is visible at once; group commit syncs within `SYNC_INTERVAL_MS`, a client's action asks for a sync at once (`requestSync`), and `durable()` waits for one. |
+| Boot | [store.ts](../../packages/apack-ears/src/lmdb/store.ts) | Opening the store is the boot: there is no hydration, so boot cost and heap do not grow with the data. |
 | Run history | [record-store.ts](../../packages/apack-ears/src/lmdb/record-store.ts), [run-history.ts](../../packages/apack-sdk/src/services/run-history.ts) | Flow runs are not in the engine: they are whole records in a record store of their own (`run-history`), found through indexed fields, one transaction per write without a sync. |
 | Streaming writes | [stream-writer.ts](../../packages/default-setup/src/content/actions/claude-code/_helpers/stream-writer.ts) | Text updates are throttled to 80 ms by default and replace accumulated text. Microtask coalescing does not merge separate timer events. |
 | Process ownership | [ApiServer.ts](../../packages/main/src/modules/api-server/ApiServer.ts), [config.ts](../../packages/main/src/modules/api-server/config.ts) | Electron Main starts the API child process. The child owns EARS and persistence; packaged execution uses Electron as Node. |
-| Backup | [store.ts](../../packages/apack-ears/src/lmdb/store.ts) | `copyTo()` uses LMDB snapshot backup but does not itself establish a pending-write flush barrier. |
+| Backup | [store.ts](../../packages/apack-ears/src/lmdb/store.ts) | `copyTo()` is LMDB's copy of one read transaction: every unit committed before it, with no buffer of pending writes left to flush. |
 
 Notes use in-memory `CONTAINS` and `REFERENCES` traversal. Chat commands update message attributes,
 timestamps and thread relations. Brain execution writes `TNode` lifecycle records to the run history, outside the engine. These are the

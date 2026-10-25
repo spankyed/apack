@@ -1,5 +1,7 @@
 // `apack pack add step|artifact|block|migration` scaffold what the host uses: flow helpers generate valid names
 // and types for a kebab-case step, and components declare the props and emits the host passes
+//
+// @slow: scaffolded packs run through generate-entries and type-checked with tsc, as an author would
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';

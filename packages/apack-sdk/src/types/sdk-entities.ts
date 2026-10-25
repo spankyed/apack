@@ -216,16 +216,29 @@ type ShortCodePrefix<T> = T extends { shortCode: ShortCode<infer P> } ? P : neve
 export const SDK_ROW_RULES = {
   Flow: { required: ['label', 'flowType'], shortCode: SDK_SHORT_CODES.Flow },
   Node: { required: ['nodeType', 'label'] },
-  Action: { required: ['label', 'input', 'actionFn'], shortCode: SDK_SHORT_CODES.Action },
-  Prompt: { required: ['label', 'inputs', 'templateFn'], shortCode: SDK_SHORT_CODES.Prompt },
-  Document: { required: ['name', 'content'], shortCode: SDK_SHORT_CODES.Document },
-  Collection: { required: ['name'] },
+  Action: { required: ['label', 'input', 'actionFn'], shortCode: SDK_SHORT_CODES.Action, indexes: ['label', 'category'] },
+  Prompt: { required: ['label', 'inputs', 'templateFn'], shortCode: SDK_SHORT_CODES.Prompt, indexes: ['label'] },
+  Document: { required: ['name', 'content'], shortCode: SDK_SHORT_CODES.Document, indexes: ['name'] },
+  Collection: { required: ['name'], indexes: ['name'] },
 } as const satisfies {
   [E in keyof SdkEntityShapes]: RowRules & {
     required: readonly RequiredField<SdkEntityShapes, E>[];
     shortCode?: ShortCodePrefix<SdkEntityShapes[E]>;
+    indexes?: readonly (keyof SdkEntityShapes[E] & string)[];
   }
 };
+
+/**
+ * The fields every entity type is indexed on, beside its own: `contentKey`, which the content applier finds a
+ * written item by, on whatever type wrote it. A row holding no such field adds no index entry, so this costs a type
+ * that never holds one nothing.
+ */
+export const SDK_INDEXES = ['contentKey'] as const;
+
+/** @internal A type's row rules with the SDK's indexes added: what every engine the SDK or the app creates is given */
+export function _withSdkIndexes(rules: RowRules | undefined): RowRules {
+  return { required: [], ...rules, indexes: [...(rules?.indexes ?? []), ...SDK_INDEXES] };
+}
 
 type UnlistedRequired = {
   [E in keyof SdkEntityShapes]: Exclude<RequiredField<SdkEntityShapes, E>, (typeof SDK_ROW_RULES)[E]['required'][number]>

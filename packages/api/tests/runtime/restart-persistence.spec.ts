@@ -1,5 +1,5 @@
 // The app's data survives a restart: the store the API's composition opens (openAppStore) persists the
-// engine's writes, and a store opened again hydrates them back
+// engine's writes, and a store opened again reads them
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -15,24 +15,19 @@ const { unbindHost } = await import('@apackdev/sdk/runtime/internals');
 
 afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 
-/** The adapter flushes in a microtask */
-const flushed = () => new Promise<void>((resolve) => setImmediate(resolve));
-
 describe('the API store across a restart', () => {
-  it('hydrates what the previous run wrote', async () => {
+  it('reads what the previous run committed', async () => {
     const first = openAppStore();
     expect(_getLmdbPath().startsWith(dataDir)).toBe(true);
     untypedCreate('Prompt', { id: 'Prompt-restart', label: 'written before the restart', inputs: {}, templateFn: 'return ""' });
-    await flushed();
     first.store.close();
-    // A new process starts with nothing bound, and a new, empty engine
+    // A new process starts with nothing bound, and a new engine
     unbindHost();
 
     const second = openAppStore();
     try {
       expect(second.engine).not.toBe(first.engine);
-      expect(untypedQuery.withTrashed('Prompt').ids()).toEqual([]);
-      await second.store.hydrate();
+      // The engine reads the files, so what the first run committed is there as the store opens
       expect(untypedQuery.withTrashed('Prompt').ids()).toEqual(['Prompt-restart']);
       expect(second.engine.getRow('Prompt-restart')?.label).toBe('written before the restart');
     } finally {

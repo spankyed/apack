@@ -125,11 +125,10 @@ describe('parseManifest', () => {
     expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: ['pinned'] }, })).toEqual([]);
   });
 
-  it("rejects an entity type the engine's own ids are written with: a relation's and a numbering sequence's", () => {
+  it("rejects an entity type the engine's own ids are written with: a relation's", () => {
     const errorsOf = (entities: object) => messagesOf(parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities } }));
     expect(errorsOf({ Relation: {}, Sequence: {}, Memo: {} })).toEqual([
       'apack.json "data.entities": "Relation" is the engine\'s own, which its ids are written with (Relation-…): name the entity type something else',
-      'apack.json "data.entities": "Sequence" is the engine\'s own, which its ids are written with (Sequence-…): name the entity type something else',
     ]);
   });
 

@@ -2,12 +2,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { openEnvAt, closeEnv } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type EARS } from '@apackdev/ears';
+import { openLmdbStore } from '@apackdev/ears/lmdb';
 import { readBackup, importDatabase } from '@apackdev/host/backup';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { findDatabaseWriter, publishRunningApp, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
 import { db } from '../../src/commands/db';
+
+/** An engine over a store's entries that takes any type, for the note these cases write and look for */
+const notes = (kv: Parameters<typeof createEarsEngine>[0]['kv']) =>
+  createEarsEngine({ kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
 
 it('creates an importable backup with media and run history, and refuses overwrite and nested destinations', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-backup-'));
@@ -16,9 +21,9 @@ it('creates an importable backup with media and run history, and refuses overwri
   const io = { out: vi.fn(), err: vi.fn() };
   try {
     const paths = _appDataPaths(source);
-    const primary = openEnvAt(paths.lmdb);
-    primary.entities.putSync('Note-a', { type: 'Note' });
-    closeEnv(primary);
+    const primary = openLmdbStore({ path: paths.lmdb });
+    notes(primary.kv).create('Note', { id: 'Note-a' as EARS.EntityId });
+    primary.close();
     const history = openRunHistoryStore(paths.runHistory);
     history.put({ id: 'RunNode-a', rootId: 'RunNode-a', kind: 'flow', label: 'Run', status: 'completed', startedAt: 0 });
     history.close();
@@ -28,21 +33,21 @@ it('creates an importable backup with media and run history, and refuses overwri
     expect(fs.statSync(out).mode & 0o777).toBe(0o700);
     expect(readBackup(out)).toMatchObject({ databases: ['lmdb', 'runHistory'], hasMedia: true });
     expect(fs.readFileSync(path.join(out, 'media/asset.txt'), 'utf8')).toBe('media');
-    const copy = openEnvAt(path.join(out, 'lmdb'), { readOnly: true });
-    expect(copy.entities.get('Note-a')).toEqual({ type: 'Note' });
-    closeEnv(copy);
+    const copy = openLmdbStore({ path: path.join(out, 'lmdb'), readOnly: true });
+    expect(notes(copy.kv).query('Note').ids()).toEqual(['Note-a']);
+    copy.close();
     await db(['backup', 'verify', out, '--json'], io);
     expect(JSON.parse(io.out.mock.lastCall![0])).toMatchObject({ valid: true, path: out });
     const restoreContext = resolveAppEnvironment({ env: 'production', userDataDir: path.join(root, 'restored') });
     const restored = _appDataPaths(restoreContext.userDataDir);
     const { store } = openDatabaseStore({
       path: restored.lmdb,
-      schema: readInstalledSchema(restoreContext), log: () => {},
+      schema: readInstalledSchema(restoreContext),
     });
     const runHistory = openRunHistoryStore(restored.runHistory);
     try {
       await importDatabase({ lmdb: store, runHistory }, out, restored.media, { log: { info: () => {}, warn: () => {} } });
-      expect(store.env.entities.get('Note-a')).toEqual({ type: 'Note' });
+      expect(notes(store.kv).query('Note').ids()).toEqual(['Note-a']);
       expect(runHistory.get('RunNode-a')).toMatchObject({ id: 'RunNode-a', status: 'completed' });
       expect(fs.readFileSync(path.join(restored.media, 'asset.txt'), 'utf8')).toBe('media');
     } finally { store.close(); runHistory.close(); }

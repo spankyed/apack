@@ -1,3 +1,4 @@
+// @slow: each case captures a compiler input view over a real pack and compiles through it
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

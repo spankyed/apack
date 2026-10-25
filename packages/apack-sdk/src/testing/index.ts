@@ -2,11 +2,11 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // The runtime a pack's unit tests run against: the EARS engine in memory, without the app.
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
-import { createEarsEngine, type EarsEngine, type RowRules } from '@apackdev/ears';
+import { createEarsEngine, createMemoryKV, type EarsEngine, type RowRules } from '@apackdev/ears';
 import { _bindEars } from '../ears/index.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
 export { nativePackDeclarationFixture } from './pack-declaration.ts';
-import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROW_RULES, SDK_ROLES } from '../types/sdk-entities.ts';
+import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROW_RULES, SDK_ROLES, _withSdkIndexes } from '../types/sdk-entities.ts';
 import type { EARS } from '../types/entities.ts';
 import type { PackRegistryView } from '../runtime/packs-view.ts';
 import { _isHostBound } from '../runtime/host-runtime.ts';
@@ -66,10 +66,13 @@ let engine: EarsEngine | undefined;
 /** A new in-memory engine checking entity types, relation kinds and roles against the test runtime's, and installed */
 function installFreshEngine(): EarsEngine {
   engine = createEarsEngine({
+    // Every value a read gives back is frozen: code that changes one, expecting the store to change, throws here
+    // rather than silently not persisting in the app
+    kv: createMemoryKV({ freeze: true }),
     isEntityType: (value: string) => entityTypes.has(value),
     isRelationKind: (value: string) => relationKinds.has(value),
     isRole: (value: string) => roles.has(value),
-    rowRules: (type: string) => rowRules.get(type),
+    rowRules: (type: string) => _withSdkIndexes(rowRules.get(type)),
   });
   _bindEars(engine);
   return engine;

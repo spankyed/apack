@@ -185,6 +185,18 @@ describe('generated EARS facade', () => {
       .rejects.toThrow(/number the entity by giving its manifest entry a "shortCode" prefix/);
   });
 
+  it("indexes the fields an entity's entry declares, and refuses one its shape doesn't", async () => {
+    write('src/memo.ts', 'export interface MemoEntity { text: string; status?: string }\n');
+    const files = await generate({ data: {
+      entities: { Memo: { shape: 'src/memo.ts#MemoEntity', indexes: ['status'] }, Chunk: { indexes: ['indexId'] } },
+    } });
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"indexes":["status"]}');
+    // An unshaped entity has no fields to check its indexes against
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Chunk":{"required":[],"indexes":["indexId"]}');
+    await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', indexes: ['status', 'staus'] } } } }))
+      .rejects.toThrow(`Entity "Memo": its indexes name "staus", which src/memo.ts#MemoEntity doesn't declare`);
+  });
+
   it('names the declared entities and passes them to the typed helpers, with the writes', async () => {
     write('src/memo.ts', 'export interface MemoEntity { text: string }\n');
     const ears = (await generate({ data: { entities: { Memo: { shape: "src/memo.ts#MemoEntity" }, Tag: {} } }, }))['src/__generated__/ears.ts'];
