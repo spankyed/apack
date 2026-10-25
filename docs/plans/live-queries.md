@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`) and notes done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`) and library done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -392,6 +392,35 @@ and `threads`' streaming tokens are notifications.
     from an empty text the summary no longer carries.
   - **The surface's settings come from `useSettings('notes')`**, the trash from its view, and the note artifact viewer
     and the `@`-reference items read the note and tree views, so they work whether or not the notes surface is running.
+- **library** — three views: `index()`, every document and folder by name; `folder({ folderId })`, one folder's
+  contents; `document({ id })`, one document. Sorted: every broadcast was data or a refetch cue (`LIBRARY_CONNECTED`,
+  `LIBRARY_INDEX_LOADED`, `NAVIGATION_CHANGED`, `DOCUMENT_CREATED`/`UPDATED`/`DELETED`, `COLLECTION_*`, `ITEM_RENAMED`,
+  `ITEMS_DELETED`, `ITEMS_MOVED`, `SYMLINK_UPDATED`) except the import and export outcomes. Writes are answered
+  (`COLLECTION_CREATED` to the asker with the folder, `LIBRARY_WRITTEN`, `LIBRARY_WRITE_FAILED`). Decisions:
+  - **What is on disk is not a view, and a view says so.** A symlinked folder and its files live on disk, which a read
+    set can't cover, and a view that read disk would be a view that is silently stale. So a view reads the engine and
+    nothing else: `folder` and `document` answer `{ onDisk: true }` for what is on disk, and the window fetches it by
+    request and reply (`GET_FOLDER_CONTENTS`, `GET_DOCUMENT`). A write the library makes there is announced with one
+    notification, `FOLDER_CHANGED { folderId }` (`null` when the folder can't be named), and a window refetches the disk
+    folders it shows. Changes made to those folders outside the app are not seen until the user refreshes, as before;
+    watching the filesystem is a separate feature.
+  - **Whether a symlink still reaches its disk is a fetch too** (`CHECK_SYMLINKS` → `SYMLINKS_CHECKED`), taken out of
+    the folder read it used to sit in, which is what let `engineFolderContents` become synchronous and so a view.
+  - **The tree watches each folder it shows.** The canvas renders one renderless `FolderReader` per folder shown (the
+    one open, and each expanded), each holding that folder's view, and every result lands in the slot its folder
+    names, so a late result for a folder the user has left writes nothing shown. A re-run keeps the user's selection
+    where its items still exist (the old handler cleared it on every reload, which a view re-running on another
+    window's commit would make constant).
+  - **No `ViewWrites` here.** The library applies no edit before its write lands: the editor leaves on save, and a
+    rename shows once the folder view re-runs. Holding results behind writes guards an optimistic edit, and there is
+    none to guard.
+  - **The editor mounts once its document has arrived.** `DocumentEditor` hydrates its form once, on mount, so it is
+    rendered only when `editingDocument` is set, and keyed by the document; a document opened from a link used to
+    open an empty form when its fetch lost that race. A document deleted while open returns to the browser.
+  - **A refused write is shown** (`writeError`, a dismissible line above the canvas). Every failure used to be
+    swallowed.
+  - **Settings come from `useSettings('library')` and the index from its view**, in the editor, the panel and the
+    `@`-reference items, so the surface publishes neither.
 
 ### 5. The rule
 

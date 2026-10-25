@@ -90,17 +90,15 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, reactive, watch, onMounted, nextTick } from 'vue'
 import { ChevronRight, Plus } from 'lucide-vue-next'
 import NameSaveHeader from '@apackdev/ui/design/NameSaveHeader'
 import ContentSectionEditor from './content-sections/ContentSectionEditor.vue'
 import TagInput from '@apackdev/ui/design/tag-input'
-import { useSelector } from '@xstate/vue'
+import { useSettings } from '#generated/settings-fe.ts'
 import type { DocumentDTO } from '#generated/types.ts'
 import type { ContentSection } from '#features/library/be/types.ts'
-import type { LibraryActor } from '../state.ts'
 
 const props = defineProps<{
   selectedCollectionId?: string
@@ -116,9 +114,7 @@ const isEditMode = computed(() => !!props.document)
 const isSymlink = computed(() => props.document?.id?.startsWith('symlink:') ?? false)
 const mediaEntityId = crypto.randomUUID()
 
-// Get settings from state
-const actor: LibraryActor = useSurface()
-const settings = useSelector(actor, (state) => state.context.settings)
+const settings = useSettings('library')
 
 const formData = reactive({
   name: '',
@@ -150,7 +146,7 @@ const isValid = computed(() => {
 })
 
 const availableTags = computed(() => {
-  return settings.value?.tags || []
+  return settings.value.value?.tags || []
 })
 
 function updateTags(newTags: string[]) {

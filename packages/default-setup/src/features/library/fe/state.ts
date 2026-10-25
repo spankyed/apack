@@ -1,7 +1,7 @@
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { setup, assign, type ActorRefFrom } from 'xstate'
-import type { DocumentDTO, CollectionDTO, LibraryItem, DocumentItem } from '#generated/types.ts'
+import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
+import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
 import type { OutgoingLibraryEvents } from '#features/library/be/types.ts'
 import type { SearchIndexFormData } from './types/search-index.ts'
@@ -12,6 +12,13 @@ import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { targetIs, TRAIL_CLICK } from '@apackdev/sdk/fe'
 import { tagStorage } from './services/tagStorage.ts'
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe'
+
+// The library surface over its views. The canvas holds a `folder` view for the folder shown and for each one expanded
+// in the tree, the `document` view for the document open, and the `index` view, and hands each result here
+// (`FOLDER.READ`, `DOCUMENT.READ`, `INDEX.READ`). What is on disk under a symlinked folder no view can see, so a
+// result saying so (`onDisk`) is fetched instead (`GET_FOLDER_CONTENTS`, `GET_DOCUMENT`), and fetched again when the
+// system says a folder on disk changed (`FOLDER_CHANGED`). Every answer lands in the slot its folder or document
+// names, so a late answer for a folder left behind writes nothing that is shown.
 
 // Helper function to convert DocumentItem to DocumentDTO
 function documentItemToDTO(item: DocumentItem): DocumentDTO {
@@ -49,6 +56,100 @@ function findItemById(context: LibraryContext, id: string): LibraryItem | undefi
 }
 
 export const id = 'library' as const;
+
+/** The folders this window shows: the one open, and each one expanded in the tree */
+function shownFolders(context: LibraryContext): (string | null)[] {
+  return [context.currentFolderId, ...context.expandedFolderIds.filter(each => each !== context.currentFolderId)]
+}
+
+/**
+ * A folder's contents arrived, from its view or fetched from disk: the context with them in the slot their folder
+ * names — the folder open, or one expanded in the tree — and nothing changed for a folder this window no longer shows
+ */
+function folderShown(context: LibraryContext, data: FolderContents): Partial<LibraryContext> {
+  const items = data.items || []
+  const folderId = data.currentFolderId || null
+  const shown: Partial<LibraryContext> = {}
+
+  if (folderId && context.expandedFolderIds.includes(folderId)) {
+    shown.expandedFolderChildren = { ...context.expandedFolderChildren, [folderId]: items }
+    shown.loadingFolderIds = context.loadingFolderIds.filter(each => each !== folderId)
+  }
+  if (folderId !== context.currentFolderId) return shown
+
+  const documents = items
+    .filter((item): item is DocumentItem => item.type === 'document')
+    .map(documentItemToDTO)
+  tagStorage.updateTagsFromDocuments(documents)
+
+  // Detect broken symlink state
+  const isBroken = data.isBroken ?? false
+  const lastKnownPath = data.lastKnownPath ?? null
+
+  // Detect symlink context
+  const hasSymlinkedItems = items.some(item => (item as any).isSymlinked)
+  const isInSymlinkContext = isBroken || hasSymlinkedItems || (folderId?.startsWith('symlink:') ?? false)
+
+  // Find the symlink root ID
+  let currentSymlinkRootId: string | null = null
+  if (isInSymlinkContext && folderId) {
+    const parsed = parseSymlinkId(folderId)
+    currentSymlinkRootId = parsed ? parsed.rootId : folderId
+  }
+
+  // Derive symlinkBasePath from symlinked items
+  let symlinkBasePath: string | null = null
+  if (isInSymlinkContext && items.length > 0) {
+    const symlinkItem = items.find(i => (i as any).isSymlinked)
+    if (symlinkItem) {
+      const fullPath = (symlinkItem as any).symlinkPath || (symlinkItem as any).filePath
+      if (fullPath && symlinkItem.name) {
+        const parsed = parseSymlinkId(symlinkItem.id)
+        if (parsed) {
+          if (parsed.relPath) {
+            const idx = fullPath.lastIndexOf(parsed.relPath)
+            if (idx > 0) symlinkBasePath = fullPath.slice(0, idx - 1)
+          } else {
+            symlinkBasePath = fullPath.slice(0, fullPath.length - symlinkItem.name.length - 1)
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    ...shown,
+    items,
+    currentFolderId: folderId,
+    currentPath: data.currentPath || [],
+    breadcrumbs: data.breadcrumbs || [],
+    searchIndices: data.searchIndices || [],
+    isInSymlinkContext,
+    currentSymlinkRootId,
+    symlinkBasePath,
+    isBroken,
+    lastKnownPath,
+    ...selectionAfter({ ...context, ...shown, items }),
+  }
+}
+
+/**
+ * The selection once a folder's contents changed under it: the folder this window just made, once it is shown, or
+ * what was selected and is still there — a commit elsewhere re-runs the view, and must not drop what the user picked
+ */
+function selectionAfter(context: LibraryContext): Pick<LibraryContext, 'selectedItems' | 'selectedDocument'> {
+  const selectedItems = context.newItemId && findItemById(context, context.newItemId)
+    ? [context.newItemId]
+    : context.selectedItems.filter(each => findItemById(context, each))
+  const only = selectedItems.length === 1 ? findItemById(context, selectedItems[0]) : undefined
+  return { selectedItems, selectedDocument: only?.type === 'document' ? documentItemToDTO(only) : null }
+}
+
+/** Asks whether the symlinked folders among a folder's contents still reach their folder on disk, which no view can see */
+function checkSymlinks(data: FolderContents): void {
+  const ids = (data.items || []).filter(item => item.type === 'folder' && item.isSymlink).map(item => item.id)
+  if (ids.length > 0) sendToSystem(id, { type: 'CHECK_SYMLINKS', ids })
+}
 import type { ContentSection } from '#features/library/be/types.ts';
 
 /** The library surface's actor, as its own components reach it with `useSurface<LibraryActor>()` */
@@ -106,8 +207,11 @@ export type LibraryEvents =
   | { type: 'REFRESH_FOLDER'; folderId: string }
   | { type: 'RELINK_SYMLINK'; collectionId: string; newPath: string }
   | { type: 'REMOVE_BROKEN_SYMLINK'; collectionId: string }
-  // Symlink update event (from backend, after re-link)
-  | { type: 'SYMLINK_UPDATED'; data: { collection: CollectionDTO } }
+  // View results, from the canvas
+  | { type: 'FOLDER.READ'; folderId: string | null; folder: FolderView }
+  | { type: 'DOCUMENT.READ'; documentId: string; document: DocumentView }
+  | { type: 'INDEX.READ'; index: LibraryIndex }
+  | { type: 'CLEAR_WRITE_ERROR' }
   // Import/Export events
   | { type: 'LIBRARY.IMPORT'; directory: string }
   | { type: 'LIBRARY.RESET_IMPORT_STATUS' }
@@ -128,34 +232,50 @@ export const librarySystem = setup({
   },
   actions: {
     // File browser actions
-    requestFolderContents: ({ context }) => {
-      sendToSystem(id, {
-        type: 'GET_FOLDER_CONTENTS',
-        folderId: context.currentFolderId,
-      })
-    },
-    selectFolder: assign(({ event }) => {
-      if (event.type === 'OPEN_ENTITY' || event.type === 'NAVIGATE_TO_FOLDER' || event.type === 'BREADCRUMB_CLICK')
-        return { currentFolderId: event.type === 'OPEN_ENTITY' ? event.id : event.folderId, newItemId: null };
-      return {};
+    navigate: assign(({ context, event }) => {
+      if (event.type !== 'OPEN_ENTITY' && event.type !== 'NAVIGATE_TO_FOLDER' && event.type !== 'BREADCRUMB_CLICK' && event.type !== 'DOUBLE_CLICK_ITEM') return {}
+      const folderId = event.type === 'OPEN_ENTITY' ? event.id : event.type === 'DOUBLE_CLICK_ITEM' ? event.item.id : event.folderId
+      if (folderId === context.currentFolderId) return { newItemId: null }
+      return { currentFolderId: folderId, newItemId: null, navHistory: pushNavHistory(context.navHistory, folderId) }
     }),
-    navigateToFolder: ({ event }) => {
-      if (event.type === 'OPEN_ENTITY' || event.type === 'NAVIGATE_TO_FOLDER' || event.type === 'BREADCRUMB_CLICK') {
-        sendToSystem(id, {
-          type: 'NAVIGATE_TO_FOLDER',
-          folderId: event.type === 'OPEN_ENTITY' ? event.id : event.folderId,
-        })
+    readFolder: enqueueActions(({ context, event, enqueue }) => {
+      if (event.type !== 'FOLDER.READ') return
+      const { folderId, folder } = event
+      if (folder.onDisk) {
+        if (!context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: [...context.diskFolderIds, folderId] })
+        enqueue(() => sendToSystem(id, { type: 'GET_FOLDER_CONTENTS', folderId }))
+        return
+      }
+      if (context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: context.diskFolderIds.filter(each => each !== folderId) })
+      enqueue.assign(({ context }) => folderShown(context, folder.contents))
+      enqueue(() => checkSymlinks(folder.contents))
+    }),
+    folderFetched: enqueueActions(({ event, enqueue }) => {
+      if (event.type !== 'FOLDER_CONTENTS_LOADED') return
+      enqueue.assign(({ context }) => folderShown(context, event.data))
+      enqueue(() => checkSymlinks(event.data))
+    }),
+    fetchChangedFolders: ({ context, event }) => {
+      if (event.type !== 'FOLDER_CHANGED') return
+      for (const folderId of shownFolders(context)) {
+        if (!context.diskFolderIds.includes(folderId)) continue
+        if (event.folderId === null || event.folderId === folderId) sendToSystem(id, { type: 'GET_FOLDER_CONTENTS', folderId })
       }
     },
-    handleDoubleClick: ({ event, self }) => {
+    markBrokenSymlinks: assign(({ context, event }) => {
+      if (event.type !== 'SYMLINKS_CHECKED') return {}
+      const mark = (items: LibraryItem[]) => items.map(item => (item.type === 'folder' && event.ids.includes(item.id)
+        ? { ...item, isBroken: event.broken.includes(item.id) }
+        : item))
+      return {
+        items: mark(context.items),
+        expandedFolderChildren: Object.fromEntries(Object.entries(context.expandedFolderChildren).map(([folderId, items]) => [folderId, mark(items)])),
+      }
+    }),
+    openDocument: ({ event, self }) => {
       if (event.type === 'DOUBLE_CLICK_ITEM') {
-        if (event.item.type === 'folder') {
-          sendToSystem(id, {
-            type: 'NAVIGATE_TO_FOLDER',
-            folderId: event.item.id,
-          })
-        } else if (event.item.type === 'document') {
-          // A symlinked document's content comes from the backend, which setEditingDocument leaves it to fetch
+        if (event.item.type === 'document') {
+          // A symlinked document's content is on disk, which its view says and the editor then fetches
           self.send({ type: 'EDIT_DOCUMENT', documentId: event.item.id })
         }
       }
@@ -214,14 +334,6 @@ export const librarySystem = setup({
           : [...context.loadingFolderIds, folderId],
       }
     }),
-    requestTreeChildren: ({ context, event }) => {
-      const folderId = (event as any).folderId as string
-      if (folderId in context.expandedFolderChildren) return
-      sendToSystem(id, {
-        type: 'GET_FOLDER_CONTENTS',
-        folderId,
-      })
-    },
     collapseFolder: assign(({ context, event }) => {
       const folderId = (event as any).folderId as string
       return {
@@ -229,27 +341,10 @@ export const librarySystem = setup({
         loadingFolderIds: context.loadingFolderIds.filter(id => id !== folderId),
       }
     }),
-    clearTreeCache: assign({
-      expandedFolderIds: [],
-      expandedFolderChildren: {},
-      loadingFolderIds: [],
-    }),
-    invalidateTreeCache: assign(({ context }) => ({
-      expandedFolderChildren: {},
-      loadingFolderIds: [...context.expandedFolderIds],
-    })),
-    refetchExpandedFolders: ({ context }) => {
-      for (const folderId of context.expandedFolderIds) {
-        sendToSystem(id, {
-          type: 'GET_FOLDER_CONTENTS',
-          folderId,
-        })
-      }
-    },
 
     renameItem: ({ context, event }) => {
       if (event.type === 'RENAME_ITEM') {
-        const item = context.items.find(i => i.id === event.itemId)
+        const item = findItemById(context, event.itemId)
         const itemType = item?.type === 'folder' ? 'folder' : 'document'
 
         sendToSystem(id, {
@@ -262,88 +357,6 @@ export const librarySystem = setup({
     },
 
     // State update actions
-    setFolderContents: assign(({ context, event }) => {
-      if (event.type !== 'FOLDER_CONTENTS_LOADED') {
-        return {}
-      }
-      const { data } = event
-      const items = data.items || []
-      const responseFolderId = data.currentFolderId || null
-
-      // Check if this is a tree expansion response
-      if (responseFolderId && context.loadingFolderIds.includes(responseFolderId)) {
-        return {
-          expandedFolderChildren: {
-            ...context.expandedFolderChildren,
-            [responseFolderId]: items,
-          },
-          loadingFolderIds: context.loadingFolderIds.filter(id => id !== responseFolderId),
-        }
-      }
-
-      // Normal navigation response
-      const documents = items
-        .filter((item): item is DocumentItem => item.type === 'document')
-        .map(documentItemToDTO)
-      tagStorage.updateTagsFromDocuments(documents)
-
-      // Detect broken symlink state
-      const isBroken = data.isBroken ?? false
-      const lastKnownPath = data.lastKnownPath ?? null
-
-      // Detect symlink context
-      const hasSymlinkedItems = items.some(item => (item as any).isSymlinked)
-      const isInSymlinkContext = isBroken || hasSymlinkedItems || (responseFolderId?.startsWith('symlink:') ?? false)
-
-      // Find the symlink root ID
-      let currentSymlinkRootId: string | null = null
-      if (isInSymlinkContext && responseFolderId) {
-        const parsed = parseSymlinkId(responseFolderId)
-        currentSymlinkRootId = parsed ? parsed.rootId : responseFolderId
-      }
-
-      // Derive symlinkBasePath from symlinked items
-      let symlinkBasePath: string | null = null
-      if (isInSymlinkContext && items.length > 0) {
-        const symlinkItem = items.find(i => (i as any).isSymlinked)
-        if (symlinkItem) {
-          const fullPath = (symlinkItem as any).symlinkPath || (symlinkItem as any).filePath
-          if (fullPath && symlinkItem.name) {
-            const parsed = parseSymlinkId(symlinkItem.id)
-            if (parsed) {
-              if (parsed.relPath) {
-                const idx = fullPath.lastIndexOf(parsed.relPath)
-                if (idx > 0) symlinkBasePath = fullPath.slice(0, idx - 1)
-              } else {
-                symlinkBasePath = fullPath.slice(0, fullPath.length - symlinkItem.name.length - 1)
-              }
-            }
-          }
-        }
-      }
-
-      return {
-        items,
-        documents,
-        currentFolderId: responseFolderId,
-        currentPath: data.currentPath || [],
-        breadcrumbs: data.breadcrumbs || [],
-        searchIndices: data.searchIndices || [],
-        isInSymlinkContext,
-        currentSymlinkRootId,
-        symlinkBasePath,
-        isBroken,
-        lastKnownPath,
-      }
-    }),
-    updateNavigation: assign(({ event, context }) => {
-      const folderId = (event as any).data.folderId || null;
-      return {
-        currentFolderId: folderId,
-        currentPath: (event as any).data.path || [],
-        navHistory: pushNavHistory(context.navHistory, folderId),
-      };
-    }),
     selectItems: assign({
       selectedItems: ({ event }) => event.type === 'SELECT_ITEMS' ? event.itemIds || [] : [],
       selectedDocument: ({ event, context }) => {
@@ -366,16 +379,17 @@ export const librarySystem = setup({
       selectedItems: [],
       selectedDocument: null,
     }),
-    selectNewItemOrClear: assign({
-      selectedItems: ({ context }) =>
-        context.newItemId ? [context.newItemId] : [],
-      selectedDocument: null,
+    readDocument: enqueueActions(({ context, event, enqueue }) => {
+      if (event.type !== 'DOCUMENT.READ' || event.documentId !== context.editingDocumentId) return
+      const { document } = event
+      if (document.onDisk) {
+        if (!context.editingDocument) enqueue(() => sendToSystem(id, { type: 'GET_DOCUMENT', id: event.documentId }))
+        return
+      }
+      if (document.document) enqueue.assign({ editingDocument: document.document })
     }),
-
-    requestIndex: () => {
-      sendToSystem(id, {
-        type: 'GET_LIBRARY_INDEX',
-      })
+    takeIndex: ({ event }) => {
+      if (event.type === 'INDEX.READ') tagStorage.updateTagsFromDocuments(event.index.documents)
     },
     updateDocument: ({ context, event }) => {
       if (event.type === 'SAVE_DOCUMENT' && context.editingDocument) {
@@ -409,14 +423,10 @@ export const librarySystem = setup({
       return { editingDocumentId: documentId,
         editingDocument: item?.type === 'document' && !symlinked ? documentItemToDTO(item) : undefined };
     }),
-    /** Fill the current editor from the backend only when its document is not already cached. */
-    requestEditingDocument: ({ context }) => {
-      if (context.editingDocumentId && !context.editingDocument)
-        sendToSystem(id, { type: 'GET_DOCUMENT', id: context.editingDocumentId });
-    },
     clearEditingDocument: assign({
       editingDocument: undefined,
     }),
+    takeWriteError: assign(({ event }) => (event.type === 'LIBRARY_WRITE_FAILED' ? { writeError: event.error } : {})),
     sendDeleteDocument: ({ event }) => {
       const ev = event as { type: 'DELETE_DOCUMENT'; documentId: string };
       sendToSystem(id, {
@@ -424,15 +434,6 @@ export const librarySystem = setup({
         ids: [ev.documentId],
       });
     },
-    updateEditingDocument: assign({
-      editingDocument: ({ context, event }) => {
-        if (event.type === 'DOCUMENT_UPDATED' && context.editingDocument?.id === event.data.document.id) {
-          return event.data.document
-        }
-        return context.editingDocument
-      },
-    }),
-
     // [SEARCH_INDEX_FF] Search index actions — commented out
     // requestSearchIndices: ({ context }) => {
     //   sendToSystem(id, {
@@ -548,21 +549,9 @@ export const librarySystem = setup({
     //   testResults: [],
     //   isSearching: false,
     // }),
-    // Refresh folder (invalidate cache and re-fetch)
-    refreshFolder: assign(({ context, event }) => {
-      const folderId = (event as any).folderId as string
-      const { [folderId]: _, ...rest } = context.expandedFolderChildren
-      return {
-        expandedFolderChildren: rest,
-        loadingFolderIds: [...context.loadingFolderIds, folderId],
-      }
-    }),
-    requestRefreshFolder: ({ event }) => {
-      const folderId = (event as any).folderId as string
-      sendToSystem(id, {
-        type: 'GET_FOLDER_CONTENTS',
-        folderId,
-      })
+    // A folder on disk, fetched again at the user's ask; a stored one is a view, and already current
+    refreshFolder: ({ event }) => {
+      if (event.type === 'REFRESH_FOLDER') sendToSystem(id, { type: 'GET_FOLDER_CONTENTS', folderId: event.folderId })
     },
 
     // Symlink actions
@@ -692,34 +681,12 @@ export const librarySystem = setup({
       libraryExport: { status: 'idle' as const, errors: [] as string[], filePath: '', itemCount: 0 },
     }),
 
-    setIndex: assign({
-      index: ({ context, event }) => {
-        if (event.type === 'LIBRARY_INDEX_LOADED') {
-          tagStorage.updateTagsFromDocuments(event.data.index.documents)
-          return event.data.index
-        }
-        return context.index
-      },
-    }),
-
-    setConnectedData: assign({
-      index: ({ context, event }) => {
-        if (event.type === 'LIBRARY_CONNECTED') {
-          tagStorage.updateTagsFromDocuments(event.data.index.documents)
-          return event.data.index
-        }
-        return context.index
-      },
-      settings: ({ event }) => {
-        if (event.type === 'LIBRARY_CONNECTED') {
-          return event.data.settings
-        }
-        return undefined
-      },
-    }),
   },
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
+    /** The document open is gone: deleted here or in another window */
+    documentGone: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
+      && !event.document.onDisk && event.document.document === null,
   },
 }).createMachine({
   id: 'library',
@@ -747,7 +714,7 @@ export const librarySystem = setup({
     expandedFolderChildren: {},
     loadingFolderIds: [],
 
-    index: { documents: [], folders: [] },
+    diskFolderIds: [],
 
     // Search index fields
     searchIndices: [],
@@ -768,8 +735,7 @@ export const librarySystem = setup({
     isBroken: false,
     lastKnownPath: null,
 
-    // Settings
-    settings: undefined,
+    writeError: null,
 
     // Import/Export
     libraryImport: { status: 'idle' as const, errors: [], importedCount: 0 },
@@ -778,15 +744,21 @@ export const librarySystem = setup({
   },
   on: {
     OPEN_ENTITY: [
-      { guard: { type: 'entityIs', params: { entity: 'Document' } }, target: '.edit', actions: ['setEditingDocument', 'requestEditingDocument', 'clearSelection'] },
-      { guard: { type: 'entityIs', params: { entity: 'Collection' } }, target: '.browser', actions: ['navigateToFolder', 'clearSelection', 'selectFolder'] },
+      { guard: { type: 'entityIs', params: { entity: 'Document' } }, target: '.edit', actions: ['setEditingDocument', 'clearSelection'] },
+      { guard: { type: 'entityIs', params: { entity: 'Collection' } }, target: '.browser', actions: ['navigate', 'clearSelection'] },
     ],
-    EDIT_DOCUMENT: { target: '.edit', actions: ['setEditingDocument', 'requestEditingDocument', 'clearSelection'] },
-    SURFACE_ACTIVATED: {
-      actions: ['requestFolderContents', 'requestIndex'],
+    EDIT_DOCUMENT: { target: '.edit', actions: ['setEditingDocument', 'clearSelection'] },
+    'FOLDER.READ': {
+      actions: 'readFolder',
     },
-    LIBRARY_CONNECTED: {
-      actions: ['setConnectedData'],
+    'INDEX.READ': {
+      actions: 'takeIndex',
+    },
+    FOLDER_CHANGED: {
+      actions: 'fetchChangedFolders',
+    },
+    SYMLINKS_CHECKED: {
+      actions: 'markBrokenSymlinks',
     },
     VIEW_BROWSER: {
       target: '.browser',
@@ -795,17 +767,14 @@ export const librarySystem = setup({
     // File browser events
     FOLDER_CONTENTS_LOADED: {
       // actions: ['setFolderContents', 'clearSelection', 'requestSearchIndices'], // [SEARCH_INDEX_FF] removed 'requestSearchIndices'
-      actions: ['setFolderContents', 'selectNewItemOrClear'],
-    },
-    NAVIGATION_CHANGED: {
-      actions: 'updateNavigation',
+      actions: 'folderFetched',
     },
     NAVIGATE_TO_FOLDER: {
       target: '.browser',
-      actions: ['navigateToFolder', 'clearSelection', 'selectFolder'],
+      actions: ['navigate', 'clearSelection'],
     },
     BREADCRUMB_CLICK: {
-      actions: ['navigateToFolder', 'clearSelection', 'selectFolder'],
+      actions: ['navigate', 'clearSelection'],
     },
     NAVIGATE_BACK: {
       guard: ({ context }) => canGoBack(context.navHistory),
@@ -814,9 +783,6 @@ export const librarySystem = setup({
           const result = goBack(context.navHistory)!;
           return { navHistory: result.history, currentFolderId: result.entry };
         }),
-        ({ context }) => {
-          sendToSystem(id, { type: 'NAVIGATE_TO_FOLDER', folderId: context.currentFolderId });
-        },
         'clearSelection',
       ],
     },
@@ -827,15 +793,13 @@ export const librarySystem = setup({
           const result = goForward(context.navHistory)!;
           return { navHistory: result.history, currentFolderId: result.entry };
         }),
-        ({ context }) => {
-          sendToSystem(id, { type: 'NAVIGATE_TO_FOLDER', folderId: context.currentFolderId });
-        },
         'clearSelection',
       ],
     },
-    DOUBLE_CLICK_ITEM: {
-      actions: ['handleDoubleClick', 'clearSelection', assign({ newItemId: null })],
-    },
+    DOUBLE_CLICK_ITEM: [
+      { guard: ({ event }) => event.item.type === 'folder', target: '.browser', actions: ['navigate', 'clearSelection'] },
+      { actions: ['openDocument', 'clearSelection', assign({ newItemId: null })] },
+    ],
     SELECT_ITEMS: {
       actions: ['selectItems', assign({ newItemId: null })],
     },
@@ -862,7 +826,7 @@ export const librarySystem = setup({
 
     // Tree view events
     EXPAND_FOLDER: {
-      actions: ['expandFolder', 'requestTreeChildren'],
+      actions: 'expandFolder',
     },
     COLLAPSE_FOLDER: {
       actions: 'collapseFolder',
@@ -872,16 +836,13 @@ export const librarySystem = setup({
       actions: 'createSymlink',
     },
     REFRESH_FOLDER: {
-      actions: ['refreshFolder', 'requestRefreshFolder'],
+      actions: 'refreshFolder',
     },
     RELINK_SYMLINK: {
       actions: ['relinkSymlink'],
     },
     REMOVE_BROKEN_SYMLINK: {
       actions: ['removeBrokenSymlink', assign({ isBroken: false, lastKnownPath: null })],
-    },
-    SYMLINK_UPDATED: {
-      actions: ['requestFolderContents', 'requestIndex'],
     },
 
     // Import/Export events
@@ -892,7 +853,7 @@ export const librarySystem = setup({
       actions: 'resetImportLibraryStatus',
     },
     LIBRARY_IMPORTED: {
-      actions: ['handleLibraryImported', 'requestFolderContents', 'requestIndex'],
+      actions: 'handleLibraryImported',
     },
     LIBRARY_IMPORT_FAILED: {
       actions: 'handleLibraryImportFailed',
@@ -910,46 +871,17 @@ export const librarySystem = setup({
       actions: 'handleLibraryExportFailed',
     },
 
-    // Document/collection response events
-    DOCUMENT_CREATED: {
-      actions: ['requestFolderContents', 'requestIndex', 'invalidateTreeCache', 'refetchExpandedFolders'],
-    },
-    DOCUMENT_UPDATED: {
-      // A save can change the document's name and tags, both of which the index carries
-      actions: ['requestFolderContents', 'requestIndex', 'updateEditingDocument'],
-    },
+    // Answers to this window's writes. What a write changed reaches every window through the views
     COLLECTION_CREATED: {
-      actions: [
-        'requestFolderContents',
-        'requestIndex',
-        'invalidateTreeCache',
-        'refetchExpandedFolders',
-        assign({
-          itemToEdit: ({ event }) => {
-            // Set the new folder to be edited
-            const createdEvent = event as OutgoingLibraryEvents & { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
-            return createdEvent.data?.collection?.id || null
-          },
-          newItemId: ({ event }) => {
-            const createdEvent = event as OutgoingLibraryEvents & { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
-            return createdEvent.data?.collection?.id || null
-          }
-        })
-      ],
+      // The folder this window made opens for naming here, and nowhere else
+      actions: assign(({ event }) => ({ itemToEdit: event.data.collection.id, newItemId: event.data.collection.id })),
     },
-    ITEM_RENAMED: {
-      actions: ['requestFolderContents', 'requestIndex', 'invalidateTreeCache', 'refetchExpandedFolders'],
+    LIBRARY_WRITE_FAILED: {
+      actions: 'takeWriteError',
     },
-    ITEMS_DELETED: {
-      actions: ['requestFolderContents', 'requestIndex', 'invalidateTreeCache', 'refetchExpandedFolders'],
+    CLEAR_WRITE_ERROR: {
+      actions: assign({ writeError: null }),
     },
-    ITEMS_MOVED: {
-      actions: ['requestFolderContents', 'requestIndex', 'invalidateTreeCache', 'refetchExpandedFolders'],
-    },
-    LIBRARY_INDEX_LOADED: {
-      actions: 'setIndex',
-    },
-
     // [SEARCH_INDEX_FF] Search index events — commented out
     // SEARCH_INDICES_LOADED: { actions: 'setSearchIndices' },
     // SEARCH_INDEX_CREATED: { actions: 'requestSearchIndices' },
@@ -1021,6 +953,10 @@ export const librarySystem = setup({
         }),
       },
       on: {
+        'DOCUMENT.READ': [
+          { guard: 'documentGone', target: 'browser', actions: 'clearEditingDocument' },
+          { actions: 'readDocument' },
+        ],
         DOCUMENT_LOADED: {
           guard: ({ context, event }) => context.editingDocumentId === event.data.document.id,
           actions: assign({ editingDocument: ({ event }) => event.data.document }),

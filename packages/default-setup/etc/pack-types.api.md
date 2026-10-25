@@ -2143,11 +2143,11 @@ type IncomingLibraryEvents = {
 } | {
     type: 'DELETE_DOCUMENT';
     id: string;
-} | {
+}
+/** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
+ | {
     type: 'GET_DOCUMENT';
     id: string;
-} | {
-    type: 'GET_LIBRARY_INDEX';
 } | {
     type: 'CREATE_COLLECTION';
     name: string;
@@ -2165,12 +2165,16 @@ type IncomingLibraryEvents = {
     type: 'MOVE_DOCUMENT';
     documentId: string;
     collectionId?: string;
-} | {
+}
+/** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
+ | {
     type: 'GET_FOLDER_CONTENTS';
     folderId: string | null;
-} | {
-    type: 'NAVIGATE_TO_FOLDER';
-    folderId: string | null;
+}
+/** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
+ | {
+    type: 'CHECK_SYMLINKS';
+    ids: string[];
 } | {
     type: 'RENAME_ITEM';
     id: string;
@@ -2641,7 +2645,7 @@ interface LibraryContext {
     expandedFolderIds: string[];
     expandedFolderChildren: Record<string, LibraryItem[]>;
     loadingFolderIds: string[];
-    index: LibraryIndex;
+    diskFolderIds: (string | null)[];
     searchIndices: SearchIndex[];
     editingIndexId?: string;
     editingIndex?: SearchIndex;
@@ -2655,7 +2659,7 @@ interface LibraryContext {
     symlinkBasePath: string | null;
     isBroken: boolean;
     lastKnownPath: string | null;
-    settings?: any;
+    writeError: string | null;
     libraryImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];
@@ -3412,87 +3416,53 @@ type OutgoingFlowsEvents = {
     errors: string[];
 };
 
-type OutgoingLibraryEvents = {
-    type: 'LIBRARY_CONNECTED';
-    data: {
-        index: LibraryIndex;
-        settings: any;
-    };
-} | {
-    type: 'DOCUMENT_CREATED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
-    type: 'DOCUMENT_UPDATED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
-    type: 'DOCUMENT_DELETED';
-    data: {
-        documentId: string;
-    };
-} | {
-    type: 'DOCUMENT_LOADED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
+/**
+ * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
+ * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
+ * on disk is fetched, since a view watches the engine and nothing else.
+ */
+type OutgoingLibraryEvents = 
+/** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
+{
     type: 'COLLECTION_CREATED';
     data: {
         collection: CollectionDTO;
     };
-} | {
-    type: 'COLLECTION_UPDATED';
-    data: {
-        collection: CollectionDTO;
-    };
-} | {
-    type: 'COLLECTION_DELETED';
-    data: {
-        collectionId: string;
-    };
-} | {
-    type: 'LIBRARY_INDEX_LOADED';
-    data: {
-        index: LibraryIndex;
-    };
-} | {
-    type: 'LIBRARY_ERROR';
-    data: {
-        error: string;
-    };
-} | {
-    type: 'SYMLINK_UPDATED';
-    data: {
-        collection: CollectionDTO;
-    };
-} | {
+}
+/** Any other write landed */
+ | {
+    type: 'LIBRARY_WRITTEN';
+}
+/** A write or a fetch was refused, and why */
+ | {
+    type: 'LIBRARY_WRITE_FAILED';
+    error: string;
+}
+/** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
+ | {
     type: 'FOLDER_CONTENTS_LOADED';
     data: FolderContents;
-} | {
-    type: 'NAVIGATION_CHANGED';
+}
+/** A document on disk, as `GET_DOCUMENT` asked */
+ | {
+    type: 'DOCUMENT_LOADED';
     data: {
-        folderId: string | null;
-        path: string[];
+        document: DocumentDTO;
     };
-} | {
-    type: 'ITEM_RENAMED';
-    data: {
-        item: LibraryItem;
-    };
-} | {
-    type: 'ITEMS_DELETED';
-    data: {
-        ids: string[];
-    };
-} | {
-    type: 'ITEMS_MOVED';
-    data: {
-        ids: string[];
-        targetFolderId: string | null;
-    };
+}
+/** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
+ | {
+    type: 'SYMLINKS_CHECKED';
+    ids: string[];
+    broken: string[];
+}
+/**
+ * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
+ * for every window showing such a folder to fetch it again. A notification: no window asked for it.
+ */
+ | {
+    type: 'FOLDER_CHANGED';
+    folderId: string | null;
 } | {
     type: 'LIBRARY_IMPORTED';
     count: number;
@@ -6044,7 +6014,20 @@ declare const libraryQueries: {
     /** Every document and folder by name, for the reference picker and the panel's stats */
     readonly getIndex: () => LibraryIndex;
     readonly getCollections: () => CollectionDTO[];
+    /** Whether a document is a file on disk under a symlinked folder, rather than one the library stores */
+    readonly isDiskDocument: (id: string) => boolean;
+    /** Whether a folder's contents are on disk: a symlinked collection, or a folder inside one */
+    readonly isDiskFolder: (folderId: string | null) => boolean;
+    /** A folder's contents wherever they are: on disk for a symlinked folder, else in the library */
     readonly getFolderContents: (folderId: EARS.EntityId | null) => Promise<FolderContents>;
+    /** The symlinked collections among `ids` whose folder on disk is gone */
+    readonly brokenSymlinks: (ids: readonly string[]) => Promise<string[]>;
+    /**
+     * A folder's contents as the library stores them: its folders and documents, its path and breadcrumbs. It reads the
+     * engine and nothing else, so a view can watch it; whether a symlinked folder still reaches its disk is
+     * `brokenSymlinks`', and a symlinked folder's own contents are `getFolderContents`'.
+     */
+    readonly engineFolderContents: (folderId: EARS.EntityId | null) => FolderContents;
     readonly getFolderPath: (folderId: EARS.EntityId | null) => BreadcrumbItem[];
     readonly getParentFolderId: (folderId: EARS.EntityId) => EARS.EntityId | null;
     readonly getDocumentsInCollection: (collectionId: EARS.EntityId) => DocumentDTO[];
@@ -6365,9 +6348,9 @@ declare const threadQueries: {
         id: `${string}-${string}` & {
             readonly __entity?: "Thread" | undefined;
         };
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
         status: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
