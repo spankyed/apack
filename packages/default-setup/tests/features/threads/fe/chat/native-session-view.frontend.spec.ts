@@ -101,6 +101,7 @@ it('shows all native LSP choices in ordinary chat, retires the card and sends no
   about.click(); await nextTick()
   await vi.waitFor(() => expect(document.body.querySelector('[aria-label="LSP plugin details"]')).not.toBeNull())
   const details = document.body.querySelector('[aria-label="LSP plugin details"]')!
+  expect(details.getAttribute('aria-labelledby')).toBe(about.id)
   expect(details.textContent).toContain('<b>Review</b>'); expect(details.querySelector('b')).toBeNull()
   details.querySelector<HTMLButtonElement>('button[aria-label="Close plugin details"]')!.click(); await nextTick()
   expect(actor.send.mock.calls.filter(([event]) => event.type === 'CLAUDE_TERMINAL_NOTICE')).toHaveLength(0)
