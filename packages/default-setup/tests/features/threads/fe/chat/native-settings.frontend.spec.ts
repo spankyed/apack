@@ -39,6 +39,9 @@ it('waits for native tab acknowledgement and displays structured Status, Usage a
     const note=[...root.querySelectorAll('dd')].find(node=>node.textContent==='Original unlabelled status note')!
     expect(note.previousElementSibling?.textContent).toBe('Additional information')
     expect(root.textContent).toContain('2.1.302'); expect(root.querySelector('[aria-label="Search Claude Code settings"]')).toBeNull()
+    frame.diagnostics=['Original settings warning\nOriginal detail']; await nextTick()
+    expect(root.querySelector('[aria-label="System diagnostics"]')?.textContent).toContain('Original settings warning\nOriginal detail')
+    frame.diagnostics=[]; await nextTick(); expect(root.querySelector('[aria-label="System diagnostics"]')).toBeNull()
     frame.selectedTab='Usage'; frame.usage={startedAt:1,context:{window:200000},rateLimits:[]}; await nextTick()
     expect(root.textContent).toContain('no rate-limit reading'); expect(root.textContent).not.toContain('Session cost')
     frame.selectedTab='Stats'; frame.stats={outcome:'success',loading:false,view:'Models',range:'7d',data:{totalSessions:1,totalMessages:2,totalDays:1,activeDays:1,dailyActivity:[],modelUsage:{'native-model':{inputTokens:10,outputTokens:5,cacheReadInputTokens:0,cacheCreationInputTokens:0,costUSD:0.02}}}}; await nextTick()

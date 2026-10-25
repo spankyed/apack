@@ -137,3 +137,23 @@ it('keeps admitted suspended Stats loading and original refusal distinct before 
   expect((await f.read()).stats).toEqual({outcome:'unavailable',loading:false,problem:'Original native privacy refusal'})
   expect(cache[1]).toBe(false)
 })
+
+it('reads owned original diagnostic strings and rich warnings without rerunning producers', async () => {
+  const f=fixture(),Diagnostic=()=>{},cache=Array(17).fill(null),rich={type:'original-rich-warning'}
+  cache[10]=[];(f.rows as any).updateQueue={memoCache:{data:[cache]}}
+  f.hashes.set(Diagnostic,'85c95b778f8430896f1c224c9c85a2c01c322c5da2422ae81ea312126925f243')
+  ;(f.rows as any).sibling={type:Diagnostic,memoizedProps:{diagnosticsPromise:Promise.resolve(['Original settings warning',rich])}}
+  expect((await f.read()).diagnostics).toEqual(['Original settings warning','[object Object]'])
+  expect(f.formatText.mock.calls.at(-1)?.[1]).toBe(rich)
+  ;(f.rows as any).sibling.memoizedProps.diagnosticsPromise=Promise.resolve([])
+  expect((await f.read()).diagnostics).toEqual([])
+})
+it('cancels held diagnostics and refuses duplicate owned consumers', async () => {
+  const f=fixture(),Diagnostic=()=>{},cache=Array(17).fill(null),cancelled=new AbortController()
+  cache[10]=[];(f.rows as any).updateQueue={memoCache:{data:[cache]}}
+  f.hashes.set(Diagnostic,'85c95b778f8430896f1c224c9c85a2c01c322c5da2422ae81ea312126925f243')
+  const diagnostic={type:Diagnostic,memoizedProps:{diagnosticsPromise:new Promise(()=>{})}}
+  ;(f.rows as any).sibling=diagnostic
+  const reading=f.read(cancelled.signal);cancelled.abort();await expect(reading).rejects.toThrow()
+  ;(diagnostic as any).sibling={...diagnostic};expect(f.run).toThrow('ambiguous')
+})

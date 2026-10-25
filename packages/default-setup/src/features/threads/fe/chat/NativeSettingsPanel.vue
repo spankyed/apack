@@ -39,6 +39,10 @@
             <dt :class="row.label ? 'text-neutral-500' : 'sr-only'">{{ row.label || 'Additional information' }}</dt><dd class="whitespace-pre-wrap break-words text-neutral-200" :class="!row.label ? 'col-span-2' : ''">{{ row.value }}</dd>
           </div>
         </dl>
+        <section v-if="frame?.diagnostics?.length" aria-label="System diagnostics" class="space-y-3 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+          <h3 class="text-sm font-medium text-neutral-200">System diagnostics</h3>
+          <ul class="space-y-3 text-xs text-amber-200"><li v-for="(warning, index) in frame.diagnostics" :key="index" class="whitespace-pre-wrap break-words">{{ warning }}</li></ul>
+        </section>
         <p v-if="!frame?.status" role="status" class="text-sm text-neutral-400">Waiting for Claude Code Status…</p>
       </template>
       <template v-else-if="activeTab === 'Usage'">

@@ -26,6 +26,7 @@ export const claudeSettingsFrame = z.object({
   hidden: z.boolean(),
   usage: z.object({startedAt:nativeReading,context:z.object({window:nativeReading,tokens:nativeReading.optional(),percent:nativeReading.optional()}).strict(),cost:z.object({usd:nativeReading}).strict().optional(),rateLimits:z.array(z.object({kind:z.string().max(1024),percentUsed:nativeReading,resetsAt:z.string().max(128).optional()}).strict()).max(128)}).strict().optional(),
   stats: claudeSettingsStats.optional(),
+  diagnostics: z.array(z.string().max(65536)).max(128).optional(),
   status: z.array(z.array(z.object({ label: z.string().max(16384), value: z.string().max(65536) }).strict()).max(128)).max(16).optional(),
 }).strict()
 export const claudeSettingsSnapshot = z.object({

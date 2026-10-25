@@ -6,6 +6,7 @@ function nativeSettingsFrame(n,entry){
  const hashes={
   frame:['50d817c838179e7eb8d6ce44d64db75544aa713210f62fc5892691a00f498615','8a56a17e7c83ad4879b026f7d8498fb45fea80c549f97547bcfdb4ef3b9725ee'],
   status:['7b371fd2243d1b95fd31ce55c7de6550de8b106f8067fd92cde73dff232a6c6b','8c89bb757b28a8a05a69fdc7d3beebb9b5bd02e74fc0bf54a238dc7b1921cf29'],
+  diagnostics:['45a185ead46cdb817a1b6cb6db742a9c8bfaa6117a7aed2848f7d6a40c2144d7','85c95b778f8430896f1c224c9c85a2c01c322c5da2422ae81ea312126925f243'],
   statsGate:['bbb7e071da0bd00acb00c09d8d5b689f3660debacd6b0d9cff0a0dbaf721922c','c11f2107b5a2af92dc0ef980612f16d3ad6472be64af9d5dc19150dd3f8acaba'],
   loader:['e54f96f2b6cd3713f3f20e9bade68a31bf107725441bc42aaa2dfd4b13d8b021','dea182e69c551bbf30ca8dc15dbbd4ce008db3150028451a40b64fff5d53282a'],
   overview:['33a5a00834bcbb04d57467449df7d6714daad5bc891700b415a029d0bca890ef','c5b3f64e5af1267c75634025ba8c60e8b06fe422e02a157926deb0dc9af555d6'],
@@ -24,7 +25,7 @@ function nativeSettingsFrame(n,entry){
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
  if(owners.length!==1)throw Error('Native Settings frame is not uniquely mounted');
- const children=[owners[0].child],visited=new Set(),tabs=[],status=[],loaders=[],stats=[],statsTabs=[],statsGates=[];
+ const children=[owners[0].child],visited=new Set(),tabs=[],status=[],loaders=[],stats=[],statsTabs=[],statsGates=[],diagnostics=[];
  while(children.length){
   const fiber=children.pop();if(!fiber||visited.has(fiber))continue;
   if(visited.size>=4096)throw Error('Native Settings frame exceeded bound');visited.add(fiber);
@@ -33,6 +34,11 @@ function nativeSettingsFrame(n,entry){
    if(p.title===null&&typeof p.onTabChange==='function'&&['Overview','Models'].includes(p.selectedTab))statsTabs.push(p);
    if(p.title==='Settings'&&typeof p.onTabChange==='function')tabs.push(p);
    if(Object.hasOwn(p,'accountStatusRead')&&Object.hasOwn(p,'machineStatusRead')){checked(fiber,'status');status.push(fiber);}
+   if(Object.hasOwn(p,'diagnosticsPromise')){
+    checked(fiber,'diagnostics');
+    if(!p.diagnosticsPromise||typeof p.diagnosticsPromise.then!=='function')throw Error('Native Settings diagnostic promise changed');
+    diagnostics.push(fiber);
+   }
    if(p.allTimePromise&&p.activeTimePromise){checked(fiber,'loader');loaders.push(fiber);}
    if(p.onClose===entry.originalProps.onClose){
     let hash=composerFunctionHashes.get(fiber.type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
@@ -43,11 +49,11 @@ function nativeSettingsFrame(n,entry){
   // Do not visit the owner's siblings: a second dialog must never supply this frame's data.
   if(fiber.sibling)children.push(fiber.sibling);if(fiber.child)children.push(fiber.child);
  }
- if(tabs.length!==1||status.length>1||loaders.length>1||stats.length>1||statsTabs.length>1||statsGates.length>1)throw Error('Native Settings controls are ambiguous');
+ if(tabs.length!==1||status.length>1||loaders.length>1||stats.length>1||statsTabs.length>1||statsGates.length>1||diagnostics.length>1)throw Error('Native Settings controls are ambiguous');
  const panel=tabs[0],titles=(Array.isArray(panel.children)?panel.children:[panel.children]).map(child=>child?.props?.title);
  if(JSON.stringify(titles)!==JSON.stringify(['Status','Config','Usage','Stats'])||!titles.includes(panel.selectedTab)||typeof panel.hidden!=='boolean')throw Error('Native Settings tab contract changed');
  entry.current();if(entry.closed||entry.answered)throw Error('Native Settings frame expired');
- return {owner:owners[0],panel,status:status[0],loader:loaders[0],stats:stats[0],statsTabs:statsTabs[0],statsGate:statsGates[0]};
+ return {owner:owners[0],panel,status:status[0],loader:loaders[0],stats:stats[0],statsTabs:statsTabs[0],statsGate:statsGates[0],diagnostics:diagnostics[0],diagnosticsPromise:diagnostics[0]?.memoizedProps.diagnosticsPromise};
 }
 async function awaitNativeSettingsReading(promise,signal){
  signal?.throwIfAborted();let timer,cancel;
@@ -97,6 +103,17 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
    result.status.push(rows);
   }
  }
+ if(panel.selectedTab==='Status'&&source.diagnostics){
+  const warnings=await awaitNativeSettingsReading(source.diagnosticsPromise,signal);
+  if(!Array.isArray(warnings)||warnings.length>128)throw Error('Native Settings diagnostics contract changed');
+  result.diagnostics=[];
+  for(const warning of warnings){
+   signal?.throwIfAborted();entry.current();
+   const text=await awaitNativeSettingsReading(nativeGenericPermissionText(n,warning),signal);
+   if(text.length>65536)throw Error('Native Settings diagnostic exceeded bound');
+   result.diagnostics.push(text);
+  }
+ }
  if(panel.selectedTab==='Usage'){
   // No breakdown argument: the original API only reads its existing ledger, without token-count requests.
   const usage=await awaitNativeSettingsReading(n.runtime.Hco({},'apack native Settings'),signal);
@@ -143,7 +160,7 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
   }
  }
  signal?.throwIfAborted();const current=nativeSettingsFrame(n,entry);
- if(current.owner!==source.owner||current.panel!==source.panel||current.status!==source.status||current.stats!==source.stats||current.loader!==source.loader||current.statsGate!==source.statsGate)throw Error('Native Settings frame changed while reading');
+ if(current.owner!==source.owner||current.panel!==source.panel||current.status!==source.status||current.stats!==source.stats||current.loader!==source.loader||current.statsGate!==source.statsGate||current.diagnostics!==source.diagnostics||current.diagnosticsPromise!==source.diagnosticsPromise)throw Error('Native Settings frame changed while reading');
  return result;
 }
 async function readNativeSettingsFrame(n,entry,signal){
