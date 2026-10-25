@@ -3,13 +3,15 @@ import { test, expect } from '@apackdev/testing';
 test('the running brain gives an external step its own service scope', async ({ app, appPage }) => {
   await app.waitForSurface('memos');
   await app.navigate('default-setup/flows');
-  await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-    .get('default-setup/flows').getSnapshot().context.flows.some((flow: { label: string }) => flow.label === 'Stamp Flow'))).toBe(true);
-  const { flow, originalRoot } = await appPage.evaluate(() => {
-    const { flows, rootFlowId } = (window as any).applicationState.system.get('default-setup/flows').getSnapshot().context;
-    return { flow: flows.find((flow: { label: string }) => flow.label === 'Stamp Flow'), originalRoot: rootFlowId };
+  // The flows surface's labels and root flow, which its canvas reads from the flows list view
+  await expect.poll(() => appPage.evaluate(() => Object.values((window as any).applicationState.system
+    .get('default-setup/flows').getSnapshot().context.flowLabels as Record<string, string>).includes('Stamp Flow'))).toBe(true);
+  const { flowId, originalRoot } = await appPage.evaluate(() => {
+    const { flowLabels, rootFlowId } = (window as any).applicationState.system.get('default-setup/flows').getSnapshot().context;
+    return { flowId: Object.entries(flowLabels as Record<string, string>).find(([, label]) => label === 'Stamp Flow')?.[0], originalRoot: rootFlowId };
   });
-  expect(flow?.id).toBeTruthy();
+  if (!flowId) throw new Error('The flows list has no "Stamp Flow"');
+  const flow = { id: flowId };
   try {
     await appPage.evaluate(id => (window as any).__sendToSystem('default-setup/flows', { type: 'SET_ROOT_FLOW', flowId: id }), flow.id);
     await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system

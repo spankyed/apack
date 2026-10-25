@@ -7,7 +7,7 @@ import type { FlowEdge } from '@apackdev/sdk/repositories';
  * Flow & Edge entities
  *─────────────────────────────────────────────────────────────────*/
 
-import type { FlowEntity, PromptEntity } from '@apackdev/sdk';
+import type { FlowEntity } from '@apackdev/sdk';
 
 /** A transition between two nodes, as the SDK's flow repository returns it */
 export type EdgeEntity = FlowEdge;
@@ -29,17 +29,15 @@ export type NodeCreateInput = Partial<NodeEntity> & {
  * Connected data / UI types
  *─────────────────────────────────────────────────────────────────*/
 
+/** What the flows surface starts from that isn't a row: the models a node may name */
 export interface FlowsConnectedData {
-  selectedFlowId: EARS.EntityId;
-  graph: {
-    nodes: NodeEntity[];
-    edges: EdgeEntity[];
-  };
-  flows: Partial<FlowEntity>[];
-  rootFlow?: Partial<FlowEntity>;
   models: ModelCatalogEntry[];
-  prompts: PromptEntity[];
-  settings?: any;
+}
+
+/** The flows a window lists, newest first, and which of them the brain runs */
+export interface FlowsList {
+  flows: Partial<FlowEntity>[];
+  rootFlowId?: EARS.EntityId;
 }
 
 export interface FlowExtendedData {
@@ -52,7 +50,6 @@ export interface FlowExtendedData {
 export type FlowsSettings = import('#generated/settings.ts').SettingsOf<'flows'>;
 
 export type IncomingFlowsEvents =
-  | { type: 'FLOW_SELECT'; flowId: string }
   | { type: 'CREATE_FLOW' }
   | { type: 'DELETE_FLOW'; flowId: string }
   | { type: 'UPDATE_FLOW_LABEL'; flowId: string; label: string }
@@ -68,28 +65,25 @@ export type IncomingFlowsEvents =
   /** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
   | { type: 'SET_ROOT_FLOW'; flowId: string | null }
 
+/**
+ * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
+ * flows themselves are its views.
+ */
 export type OutgoingFlowsEvents =
   | { type: 'FLOWS_CONNECTED'; data: FlowsConnectedData }
-  | { type: 'FLOW_SELECTED'; flowId: EARS.EntityId; data: FlowExtendedData }
-  | { type: 'FLOW_REFRESHED'; flowId: EARS.EntityId; data: FlowExtendedData }
-  /** A flow exists — news for every window, so every list grows. It opens nothing: see `FLOW_OPENED` */
-  | { type: 'FLOW_CREATED'; flow: FlowEntity; flowId: EARS.EntityId; data: { nodes: any[]; edges: any[] } }
   /**
-   * The flow *you* asked to create, answered to the window that asked, which then opens it.
-   *
-   * Its id is minted by the create, so nothing the asker sent could identify it. While the navigation hung
-   * off the broadcast above, every open window jumped to a flow it had not created.
+   * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
+   * create, so nothing the asker sent could identify it.
    */
-  | { type: 'FLOW_OPENED'; flow: FlowEntity; flowId: EARS.EntityId; data: { nodes: any[]; edges: any[] } }
-  | { type: 'FLOW_DELETED'; flowId: EARS.EntityId }
-  | { type: 'NODE_CREATED'; tempId: string; nodeId: EARS.EntityId; node: any }
-  | { type: 'NODE_UPDATED'; nodeId: EARS.EntityId; node: any }
-  | { type: 'NODE_DELETED'; nodeId: string }
+  | { type: 'FLOW_OPENED'; flowId: EARS.EntityId }
+  /** The node a `CREATE_NODE` made, for the editor to put in place of the one it added under `tempId` */
+  | { type: 'NODE_CREATED'; tempId: string; nodeId: EARS.EntityId; node: NodeEntity }
+  /** The relation a `CREATE_EDGE` made, for the editor to give the edge it drew */
   | { type: 'EDGE_CREATED'; sourceId: EARS.EntityId; targetId: EARS.EntityId; relId: EARS.RelationId; sourceHandle?: string; targetHandle?: string }
-  | { type: 'EDGE_CREATE_FAILED'; sourceId: string; targetId: string; error: string }
-  | { type: 'EDGE_DELETED'; edgeId: string }
-  | { type: 'EDGE_UPDATED'; edgeId: EARS.RelationId; source: EARS.EntityId; target: EARS.EntityId; sourceHandle?: string; targetHandle?: string }
-  | { type: 'EDGE_UPDATE_FAILED'; edgeId: string; error: string }
+  /** Any other write landed */
+  | { type: 'FLOW_WRITTEN' }
+  /** A write was refused, and why: the editor puts back the flow as stored */
+  | { type: 'FLOW_WRITE_FAILED'; error: string }
   | { type: 'DSL_IMPORTED'; flowIds: EARS.EntityId[]; errors?: string[] }
   | { type: 'DSL_IMPORT_FAILED'; errors: string[] }
   | { type: 'DSL_EXPORTED'; filePath: string; flowCount: number; skipped: string[] }

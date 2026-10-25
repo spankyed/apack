@@ -1026,6 +1026,7 @@ export interface ViewState<Result> {
     readonly commit: number;
     readonly data: Result | undefined;
     readonly error: string | undefined;
+    refresh(): void;
     readonly status: 'idle' | 'loading' | 'ready' | 'error';
 }
 

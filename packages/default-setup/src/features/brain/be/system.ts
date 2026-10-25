@@ -29,7 +29,7 @@ const rootFlowToRun = (): EARS.EntityId | undefined => repository.flowsQueries.r
 /** The error the brain can't start with: flows exist but none has the root role. Undefined with a root flow or no flows */
 function noRootFlowError(): Error | undefined {
   if (repository.flowsQueries.rootFlow()) return undefined;
-  const flowCount = repository.flowsQueries.connectedData().flows.length;
+  const flowCount = repository.flowsQueries.list().flows.length;
   if (flowCount === 0) return undefined;
   return new Error(`No flow has the root role (${flowCount} flows exist): mark one \`root: true\` in its flow source, or make one the root flow in Flows`);
 }

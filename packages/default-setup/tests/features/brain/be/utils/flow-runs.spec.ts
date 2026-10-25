@@ -192,7 +192,7 @@ describe('brain start', () => {
     await app.connect()
     expect(takeSystemErrors()).toEqual([])
 
-    const [flow] = repository.flowsQueries.connectedData().flows
+    const [flow] = repository.flowsQueries.list().flows
     repository.flowsCommands.grantRootFlowRole(flow.id!)
     await app.connect()
     expect(takeSystemErrors()).toEqual([])

@@ -1264,7 +1264,8 @@
       "repositories": {
         "flowsQueries": "src/features/flows/be/repository/index.ts#flowsQueries",
         "flowsCommands": "src/features/flows/be/repository/index.ts#flowsCommands"
-      }
+      },
+      "views": "src/features/flows/be/views.ts#flowViews"
     },
     "actions": {
       "description": "Manage reusable executable actions.",

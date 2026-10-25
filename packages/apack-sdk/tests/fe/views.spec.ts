@@ -104,6 +104,20 @@ describe('untypedUseView', () => {
     expect(open(), 'the scope ending ends the subscription').toHaveLength(0);
   });
 
+  it('reads the view again on refresh, keeping what it shows until the new result arrives', () => {
+    const scope = effectScope()
+    const view = scope.run(() => untypedUseView('flows/flows', 'graph', { flowId: 'Flow-1' }))!
+    open()[0].deliver({ ok: true, value: 'as held', commit: 1 })
+
+    view.refresh()
+    expect(subscriptions[0].open, 'the old subscription is ended').toBe(false)
+    expect(open().map((subscription) => subscription.request)).toEqual([{ ref: 'flows/flows', view: 'graph', args: { flowId: 'Flow-1' } }])
+    expect(view).toMatchObject({ status: 'loading', data: 'as held' })
+    open()[0].deliver({ ok: true, value: 'as stored', commit: 2 })
+    expect(view).toMatchObject({ status: 'ready', data: 'as stored' })
+    scope.stop()
+  })
+
   it('refuses to run outside a scope, which is what would end it', () => {
     expect(() => untypedUseView('notes/notes', 'titles')).toThrow(/setup or an effect scope/);
   });

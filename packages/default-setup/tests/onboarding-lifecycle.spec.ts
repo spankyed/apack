@@ -53,7 +53,7 @@ it('waits for a usable root when the client arrives first', async () => {
   await app.connect();
   expect(thread()).toBeUndefined();
   expect(takeSystemErrors()).toHaveLength(1);
-  const flow = repository.flowsQueries.connectedData().flows.find(flow => flow.label === 'Root Flow');
+  const flow = repository.flowsQueries.list().flows.find(flow => flow.label === 'Root Flow');
   expect(flow).toBeDefined();
   repository.flowsCommands.grantRootFlowRole(flow!.id!);
   await app.send('brain', { type: 'START_BRAIN' });
