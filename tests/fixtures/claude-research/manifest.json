@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "872300140d52281c1cc5230841ae66d16c33a8d0",
+  "researchCommit": "9419b1c4a167062de0669723ab9119e739d783f8",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -284,7 +284,7 @@
     "src/protocol/native-search-review-fixture.mjs": "22660edad17753efe230367057253a985b5b8d17b4e9327fbed461bd7ae3021a",
     "src/protocol/verify-agent-status-recovery.mjs": "8ccca9daf95ab81b95d0b468c8e8f4b676c93cb3bbb1c3e6d8ed3a3c22d12997",
     "src/protocol/verify-prompt-process-replacement.mjs": "d13cf34be1b2d95a302f16d00b153140589123a3c5eb2ed66c11cc11082043ee",
-    "src/protocol/native-select-fixture.mjs": "83ee0f24ee3b2e12618e382537d9d8262f28047d1b7925f01bfcf2c20dfbf5b6"
+    "src/protocol/native-select-fixture.mjs": "76a0256a5c7688ca52e1c052a281099c2e1d31c4b298e468053608d617a7a845"
   },
-  "archiveSha256": "f088d95fe773f454b4a6a2365eb16d3c9614dcdd97c6d0a75ca7802722d88743"
+  "archiveSha256": "5b381ce2b68166374285a54e78883ff23151015f69a81266d63e05b8a734d711"
 }
