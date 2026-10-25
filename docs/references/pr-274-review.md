@@ -6,9 +6,9 @@ branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273
 reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
-**Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
-already, below); production-shaped bench data is still to take. Compaction was taken and then taken back out (under
-Not taken, below).
+**Status, 2026-10-24:** everything worth taking is taken (under Taken already, below): the harness, the durability
+spec, the sync policy, the prompts fix and production-shaped bench data. Compaction is behind a flag until lmdb-js
+ships its fix (under Not taken, below).
 
 ## Head to head on the production copy
 
@@ -26,18 +26,6 @@ Both engines were read on the same production backup (2026-10-17, 306 MB in form
 
 #274's readings are its plan's "Judging it against Step 10" table; #273's are `docs/plans/ears-storage-layout.md`,
 Step 5.
-
-## Take
-
-### 1. Production-shaped bench data
-
-`bench/production-shape.ts` and `bench/budget.ts` in #274 generate data shaped like the production database (its
-types, field sizes and relation counts, profiled 2026-10-24) at 1× and 2×. #273's bench is a uniform graph of three
-types and four small fields, which understates large values (a message's text) and the type mix.
-
-**Cost:** take `production-shape.ts`; point #273's read cases at it. #274's gate is on heap, which says nothing for an
-engine that holds no data; the readings worth gating here are read latency and boot, and by the repo's rule only as
-readings ("measured slower" is a report, never a failure).
 
 ## Consider as later steps
 
@@ -107,6 +95,15 @@ master in `c427e84fd`, which this branch is based on: the surface changes its se
 names, and a held prompt is replaced rather than added. `tests/features/prompts/fe/page-and-selection.spec.ts` covers
 all three.
 
+### Production-shaped bench data
+
+`bench/production-shape.ts` is #274's profile of the production database, with a loader beside it
+(`loadProductionShape`); `bench/production.bench.ts` reads it: a thread opened through its `contains` edges, messages by
+id, the thread list, a `where` on the threads, and the whole-type read of the messages. A thread opens in 0.7 ms and a
+message reads in 14 µs (the readings are the storage plan's, Step 5). #274's budget gates on heap, which an engine that
+holds no data has none of, so the budget is not taken; the uniform graph in `ears.bench.ts` stays, being what the
+recorded comparisons were taken on.
+
 ### Sync once writes pause
 
 #274 syncs 100 ms after writes pause, and at most a second after the first unsynced commit. #273 adopted the same in
@@ -144,4 +141,4 @@ is off; turning it on is that flag, once `lmdb` is a release with the fix.
 
 ## Order
 
-The bench data is small and improves the readings. Live queries and the served database are designs to plan, after #273 lands.
+Live queries and the served database are designs to plan, after #273 lands.

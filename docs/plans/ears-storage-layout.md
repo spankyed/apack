@@ -513,6 +513,22 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   range of keys, read through a cursor and decoded, where the memory engine handed out the object it held. The
   `first()` and hub cases, which the memory engine walked or copied in full, are 720x and 7x faster. A bulk load is
   16x slower and is now a conversion's cost, not a boot's.
+- **Production-shaped reads** (`bench/production.bench.ts`, 2026-10-24, 76% idle; data generated from the production
+  copy's profile, `bench/production-shape.ts`: 22,816 entities in 13 types, 5,535 large values, 45,798 relations, a
+  thread `contains` its ~58 messages; mean ms, two runs agreeing within 5%, the first given):
+
+  | Case | LMDB |
+  |---|---|
+  | 100 threads opened (their messages, picked) | 70.0 |
+  | 1,000 `getRow` on messages | 14.1 |
+  | 1,000 `query('Message').first()` | 5.1 |
+  | `pickAll` over the 343 threads | 4.2 |
+  | 100 unindexed `where` lookups on the threads | 11.1 |
+  | 1,000 `findRelations` from a thread, `contains` | 182.5 |
+  | `pickAll` over the 19,803 messages | 285.6 |
+
+  Opening a thread costs 0.7 ms, which is the read the app makes most; a message by id 14 µs. The whole-type read of
+  the messages is the costly one, and no product path makes it.
 - **The write path** (`node --cpu-prof`, 5,000 creates of four fields, then 5,000 updates of one, each its own unit,
   self time per package): a create 79 µs and an update 32 µs. lmdb-js is 58% of the time — the commit itself
   (`finishTxn`, LMDB writing the transaction's pages) 32%, and its per-write instruction buffer 11% — the engine 18%,
