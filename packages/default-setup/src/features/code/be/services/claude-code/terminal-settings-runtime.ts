@@ -1,5 +1,8 @@
+import { claudeTerminalSettingsFrameRuntime } from './terminal-settings-frame-runtime.ts'
+
 /** Desktop settings retain original describe hooks, config.set validation and dialog ownership. */
 export const claudeTerminalSettingsRuntime = String.raw`
+${claudeTerminalSettingsFrameRuntime}
 function nativeSettingsPanel(request){
  const entry=agentCommandDialogs.get(request.panel_id);
  if(!entry||entry.kind!=='panel'||entry.commandName!=='config'||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
