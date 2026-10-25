@@ -29,10 +29,6 @@ export interface DatabaseSchemaInfo {
   }>;
 }
 
-export interface DatabaseStartupData {
-  schema: DatabaseSchemaInfo;
-}
-
 // ── This feature's settings ───────────────────────────────────────────────
 // Its own shape, which the app stores without knowing: the app owns the document, each feature its slice.
 export type DatabaseSettings = import('#generated/settings.ts').SettingsOf<'database'>;
@@ -41,7 +37,8 @@ export type IncomingDatabaseEvents =
   | { type: 'EXECUTE_QUERY'; code: string }
   | { type: 'EXECUTE_TRANSACTION'; code: string }
   | { type: 'GENERATE_AI_QUERY'; prompt: string; mode?: 'query' | 'transaction' }
-  | { type: 'REFRESH_SCHEMA' }
+  /** The schema as the data is now: answered with `SCHEMA_READ` */
+  | { type: 'GET_SCHEMA' }
   | { type: 'GET_FLOW_RUNS' }
   | { type: 'GET_FLOW_EVENTS'; flowId: string; offset?: number; limit?: number }
   | { type: 'GET_NODE_DETAILS'; nodeId: string }
@@ -50,8 +47,22 @@ export type IncomingDatabaseEvents =
   | { type: 'GET_BACKUP_INFO'; path: string }
   | { type: 'RESET_DATABASE' };
 
-export type OutgoingDatabaseEvents = 
-  | { type: 'DATABASE_REFRESH'; data: DatabaseStartupData }
+/**
+ * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
+ * news for every window, and the generated query, which a flow sends.
+ *
+ * **The schema is fetched, not a view.** It is a walk over the whole store (`getSchemaStats`), so a view of it would
+ * re-run that walk after every commit anyone makes; a window asks for it when it opens, when the user refreshes, and
+ * after its own transaction or a replacement.
+ */
+export type OutgoingDatabaseEvents =
+  | { type: 'SCHEMA_READ'; schema: DatabaseSchemaInfo }
+  /**
+   * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
+   * history it holds, which name rows that may be gone, and asks for the schema again. A notification; the window that
+   * asked has its own outcome too.
+   */
+  | { type: 'DATABASE_REPLACED' }
   /**
    * The four replies to `EXECUTE_QUERY`/`EXECUTE_TRANSACTION`.
    *
@@ -69,7 +80,11 @@ export type OutgoingDatabaseEvents =
   | { type: 'QUERY_ERROR'; error: string }
   | { type: 'TRANSACTION_RESULT'; result: any; executionTime: number }
   | { type: 'TRANSACTION_ERROR'; error: string }
-  |{ type: 'AI_QUERY_LOADING' }
+  /**
+   * The three a flow sends (`db-query`, `db-transaction`), broadcast to every window: a flow run is no delivery, so it
+   * has no sender to reply to. They carry a query, never rows.
+   */
+  | { type: 'AI_QUERY_LOADING' }
   | { type: 'AI_QUERY_GENERATED'; query: string }
   /**
    * Generating a query from a prompt failed, which is not a query failing.

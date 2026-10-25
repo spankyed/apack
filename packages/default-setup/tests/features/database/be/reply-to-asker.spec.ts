@@ -14,6 +14,7 @@
 // have nowhere to go. The one case that deliberately does not is the last.
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
+import { repository } from '#generated/repository.ts'
 
 const DATABASE = 'default-setup/database'
 /**
@@ -94,26 +95,23 @@ describe('a query run by a surface', () => {
   })
 
   /**
-   * The schema change stays a broadcast, and that is the point of the case.
+   * The schema is fetched, and only the window that ran a transaction asks for it again.
    *
-   * A transaction produces two things: an answer for whoever ran it, and news every window's schema view wants.
-   * Converting the second to a reply would have narrowed it to the asker, so it is asserted to still be there
-   * beside the reply rather than left to a reader to notice.
+   * It walks the whole store, so it is no view a commit should re-run, and a transaction tells nobody else: another
+   * window shows the schema it last asked for until it asks again.
    */
-  it('answers a transaction and still tells every window the schema changed', async () => {
+  it('answers a transaction to its asker alone, and the schema to whoever asks for it', async () => {
     const app = await startApp({ systems: ['database'] })
     await app.connect()
 
-    await app.send(
-      'database',
-      { type: 'EXECUTE_TRANSACTION', code: 'return 1' },
-      { sender: DATABASE, client: WINDOW },
-    )
-    await app.nextEmit('database', 'TRANSACTION_RESULT')
+    const ran = await app.send('database', { type: 'EXECUTE_TRANSACTION', code: 'return 1' }, { sender: DATABASE, client: WINDOW })
+    await app.nextEmit('database', 'TRANSACTION_RESULT', { answering: ran })
     await app.settle()
+    expect(app.emitted('database').map((event) => event.type), 'nothing broadcast beside the answer').toEqual(['TRANSACTION_RESULT'])
 
-    const types = app.emitted('database').map((event) => event.type)
-    expect(types, 'the answer and the notification, in that order').toContain('TRANSACTION_RESULT')
-    expect(types, 'the schema change is not an answer, so it is still broadcast').toContain('DATABASE_REFRESH')
+    repository.noteCommands.create({ title: 'Fresh', content: '' })
+    const asked = await app.send('database', { type: 'GET_SCHEMA' }, { sender: DATABASE, client: WINDOW })
+    const read = await app.nextEmit('database', 'SCHEMA_READ', { answering: asked }) as unknown as { schema: { entities: Array<{ type: string }> } }
+    expect(read.schema.entities.map((entity) => entity.type)).toContain('Note')
   })
 })

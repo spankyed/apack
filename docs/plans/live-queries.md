@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`) and library done. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`) and database done. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -421,6 +421,22 @@ and `threads`' streaming tokens are notifications.
     swallowed.
   - **Settings come from `useSettings('library')` and the index from its view**, in the editor, the panel and the
     `@`-reference items, so the surface publishes neither.
+- **database** — no views. Sorted: the schema (`DATABASE_REFRESH`), the run history (`FLOW_RUNS_RESULT`,
+  `FLOW_EVENTS_RESULT`, `NODE_DETAILS_RESULT`), the backup summary and the export, import and reset outcomes were all
+  broadcast; every one is now replied to its asker. Decisions:
+  - **The schema is fetched, not watched.** `getSchemaStats` walks the whole store (`r.range({ prefix: ['v'] })`), so
+    its read set is every attribute key and a view of it would re-run that walk after every commit anyone makes —
+    a full scan every 80 ms while a thread streams. The window asks for it (`GET_SCHEMA` → `SCHEMA_READ`) when it
+    opens, on refresh, after its own transaction and after any replacement; another window's write shows on its next
+    ask. Watching it needs counts the engine keeps as it writes, which is under Open.
+  - **The run history is not the engine's**: it lives in its record store (`services.runHistory`), which no read set
+    covers, so it stays request and reply, its answers keyed as before (the node-details map, the page's offset).
+  - **A replacement is one notification, `DATABASE_REPLACED`**, broadcast after an import or a reset from any window,
+    with no data: every window drops the results and run history it holds, which name rows that may be gone, and asks
+    for the schema again. The window that asked hears its own outcome besides.
+  - **The generated query stays a broadcast** (`AI_QUERY_LOADING`, `AI_QUERY_GENERATED`, `AI_QUERY_ERROR`): a flow
+    sends it, and a flow run is no delivery, so there is no sender to reply to. It carries a query, never rows.
+    Answering through a flow is under Open.
 
 ### 5. The rule
 
@@ -443,6 +459,11 @@ and `threads`' streaming tokens are notifications.
 
 ## Open
 
+- **Schema counts the engine keeps.** A watchable schema needs per-type, per-kind counts written beside the data,
+  so a view reads a few keys instead of walking the store (the database feature's step-4 decision).
+- **An answer through a flow.** A surface that asks a flow for something (the database's generated query) hears the
+  result by broadcast, since a flow run carries no return address. Carrying the asker's address into the run would
+  let a step reply.
 - Whether `whenView` is needed by more than "select what I just created", or whether `useView` should hold back a
   result older than the window's last reply.
 - The minimum re-run interval, from Step 1's readings.
