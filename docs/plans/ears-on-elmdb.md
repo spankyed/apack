@@ -81,10 +81,16 @@ Each follows elmdb's roadmap (`elmdb/docs/roadmap.md`).
 
 ## Developing across two repositories
 
-During parity the protocol is still taking shape, so a change often spans both repositories. apack develops against a
-local elmdb checkout (`file:../elmdb/crates/elmdb-node`, built from source), and moves to a pinned elmdb release once
-parity lands. The Linux test container builds the local checkout too, which needs a Rust toolchain in its image until
-then.
+During parity the protocol is still taking shape, so a change often spans both repositories. The work happens in its
+own worktree (`npm run session:new -- ears-on-elmdb`), against a local elmdb checkout linked in:
+
+- each apack checkout holds a gitignored symlink, `vendor/elmdb`, pointing at the elmdb checkout, and the dependency is
+  `"elmdb": "file:vendor/elmdb/crates/elmdb-node"`, which npm links. The path is the same in every checkout, so the
+  lockfile is too, and an elmdb rebuild takes effect at once;
+- the Linux test container mounts the checkout `vendor/elmdb` points at, read-only, and builds the binding for Linux
+  (Rust in its image), since the Mac's `.node` doesn't load there;
+- CI can't reach a local checkout, so the strict CI chain waits until elmdb is somewhere CI can fetch and build it, or
+  is published. A pinned release replaces the link then.
 
 ## What this supersedes
 
