@@ -4,8 +4,15 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('uses original terminal Client drawings, controls and lifetimes in the app', async ({ app, appPage }, testInfo) => {
-  test.setTimeout(90000)
+test('uses original terminal Client drawings, controls and lifetimes in the app', async ({ app, appPage, electronApp }, testInfo) => {
+  test.setTimeout(120000)
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capture({path}:{path:string}){
+    const size=appPage.viewportSize()!
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
+    expect(result.size).toEqual(size);await writeFile(path,Buffer.from(result.png,'base64'))
+  }
   expect(process.env.HOME).toBe(workspace)
   const { planScenario, terminalClients } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   test.skip(!terminalClients, 'Explicit private terminal Client fixture required')
@@ -64,10 +71,10 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('AppNativeMain ' + sessionId)
   await appPage.setViewportSize({ width: 680, height: 600 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
+  await capture({ path: testInfo.outputPath('apack-managed-composer-status.png') })
   const composer = card.locator('[contenteditable="true"]')
   const info=appPage.locator('[data-native-placement="InfoNotice"] [data-native-client]').filter({hasText:'InfoNotice Client'}).first()
-  try{await expect(info).toContainText('InfoNotice Client count=0 key=none',{timeout:10000})}catch(error){if(process.env.CLAUDE_RESEARCH_RASTER==='1'||process.env.CLAUDE_RESEARCH_IMAGE==='1'){await writeFile(join(workspace!,'native-raster-failure.json'),JSON.stringify(await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})));await appPage.screenshot({path:testInfo.outputPath('native-raster-failure.png')})}throw error}
+  try{await expect(info).toContainText('InfoNotice Client count=0 key=none',{timeout:10000})}catch(error){if(process.env.CLAUDE_RESEARCH_RASTER==='1'||process.env.CLAUDE_RESEARCH_IMAGE==='1'){await writeFile(join(workspace!,'native-raster-failure.json'),JSON.stringify(await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})));await capture({path:testInfo.outputPath('native-raster-failure.png')})}throw error}
   if(process.env.CLAUDE_RESEARCH_CLIENT_RETURN==='1'){
     const stages: any[] = [], keys: any[] = [];
     const draft = 'Keep my review notes when returning from the native interface.';
@@ -115,7 +122,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
           await expect(target).toBeInViewport();
           expect(await target.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)); })).toBe(true);
         }
-        if(index<2)await appPage.screenshot({ path: testInfo.outputPath('native-client-return-'+width+'.png') });
+        if(index<2)await capture({ path: testInfo.outputPath('native-client-return-'+width+'.png') });
       }
       keys.push(...await appPage.evaluate(() => (window as any).__clientReturnKeys));
       await writeFile(join(workspace!, 'native-client-return-proof.json'), JSON.stringify({ stages, keys, draft }, null, 2));
@@ -129,7 +136,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
       expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);
       await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui:true,nativePlanScenario:'composer-layout',nativeClientReturnKeys:true,nativeClientReturnActions:true,nativeClientRetiredToken:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors }));
     } catch(error) {
-      await appPage.screenshot({path:testInfo.outputPath('native-client-return-failure.png')});
+      await capture({path:testInfo.outputPath('native-client-return-failure.png')});
       await writeFile(join(workspace!,'native-client-return-failure.json'),JSON.stringify({stages,keys:await appPage.evaluate(()=>(window as any).__clientReturnKeys),latest:await latest(),state:await context(),focus:await info.evaluate(node=>({id:node.getAttribute('data-native-client'),keys:node.innerHTML,active:document.activeElement?.outerHTML}))},null,2));
       throw error;
     }
@@ -139,15 +146,22 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     const image=appPage.locator('[data-native-placement="InfoNotice"] [data-native-image]').first(),receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-image-blits.json'),'utf8').catch(()=>'[]'))
     const pixel=()=>image.evaluate(element=>{const source=element.querySelector('img,canvas') as HTMLImageElement|HTMLCanvasElement;if(!source)return [];if(source instanceof HTMLImageElement&&!source.complete)return [];const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;const c=canvas.getContext('2d')!;try{c.drawImage(source,0,0,2,2);return Array.from(c.getImageData(0,0,1,1).data)}catch{return []}})
     const terminalPixels=()=>section.locator('.webterm-kitty-overlay').evaluateAll(elements=>elements.flatMap(element=>Array.from(element.querySelectorAll('canvas')).filter(canvas=>canvas.getBoundingClientRect().width>0).map(canvas=>{try{return Array.from(canvas.getContext('2d')!.getImageData(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1).data)}catch{return []}})))
-    try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await appPage.screenshot({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
+    try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await capture({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
     await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(1);expect((await receipts())[0].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
-    await info.focus();await info.press('h');await expect(image).toHaveCount(0);await info.focus();await info.press('s');await expect.poll(pixel).toEqual([255,136,0,255]);await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(2);expect((await receipts())[1].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
-    await appPage.setViewportSize({width:1100,height:900});await section.getByRole('button',{name:'Use native interface',exact:true}).click();for(const size of [{width:1100,height:900},{width:680,height:600},{width:1100,height:900}]){await appPage.setViewportSize(size);if(size.width===1100)await expect.poll(terminalPixels).toContainEqual([0,136,255,255]);await appPage.screenshot({path:testInfo.outputPath('native-image-terminal-'+size.width+'.png')})}expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    await writeFile(join(workspace!,'native-image-app-proof.json'),JSON.stringify({initial:[255,136,0,255],swapped:await terminalPixels(),receipts:await receipts(),draft,sameNativeOwner:true}))
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
+    let fileGeneration: number[] | undefined
+    if(process.env.CLAUDE_RESEARCH_IMAGE_FILES==='1'){
+      const files=JSON.parse(await readFile(join(workspace!,'native-image-files.json'),'utf8'))
+      await writeFile(files.initial,await readFile(files.updated))
+      await info.focus();await info.press('r');await expect.poll(pixel).toEqual([0,200,80,255]);fileGeneration=await pixel()
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-file-generation-'+size.width+'.png')})}
+    }
+    await info.focus();await info.press('h');await expect(image).toHaveCount(0);await info.focus();await info.press('s');await expect.poll(pixel).toEqual(fileGeneration??[255,136,0,255]);await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(2);expect((await receipts())[1].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
+    await appPage.setViewportSize({width:1100,height:900});await section.getByRole('button',{name:'Use native interface',exact:true}).click();for(const size of [{width:1100,height:900},{width:680,height:600},{width:1100,height:900}]){await appPage.setViewportSize(size);if(size.width===1100)await expect.poll(terminalPixels).toContainEqual([0,136,255,255]);await capture({path:testInfo.outputPath('native-image-terminal-'+size.width+'.png')})}expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    await writeFile(join(workspace!,'native-image-app-proof.json'),JSON.stringify({initial:[255,136,0,255],swapped:await terminalPixels(),receipts:await receipts(),draft,sameNativeOwner:true,...(fileGeneration?{fileGeneration,namedFiles:true}:{})}))
     await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after inspecting the native image.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
     expect(errors).toEqual([])
-    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImagePixels:true,nativeImageSwap:true,nativeTerminalImagePixels:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImagePixels:true,nativeImageSwap:true,nativeTerminalImagePixels:true,...(fileGeneration?{nativeImageFiles:true,nativeImageFileGeneration:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
   }
   if(process.env.CLAUDE_RESEARCH_IMAGE==='1'){
     const image=appPage.locator('[data-native-placement="InfoNotice"]').getByText(/^Release cover (preview|updated)$/).first(),receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-image-blits.json'),'utf8').catch(()=>'[]'))
@@ -156,7 +170,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     await info.focus();await info.press('r');await expect(image).toHaveText('Release cover updated')
     await info.focus();await info.press('h');await expect(image).toHaveCount(0);await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(2);expect((await receipts())[1].result.deny).toContain('no Image')
     await info.focus();await info.press('s');await expect(image).toHaveText('Release cover updated');await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(3);expect((await receipts())[2].result.deny).toMatch(/draws its alt|not drawn under a terminal root/)
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-image-fallback-'+size.width+'.png')})}
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-fallback-'+size.width+'.png')})}
     await writeFile(join(workspace!,'native-image-app-proof.json'),JSON.stringify({text:await image.innerText(),receipts:await receipts(),draft,sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after inspecting native image admission.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImageFallback:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
@@ -176,7 +190,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
       await info.focus();await info.press('s');await expect(raster).toHaveText('Release \nready   ');await info.focus();await info.press('b');await expect(raster).toHaveText('Release \nblitted ');expect((await receipts()).at(-1).result).toEqual({})
     }else{await info.focus();await info.press('r');await expect(raster).toHaveText('Release \nupdated ')}
     const frames=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews).flatMap((view:any)=>view.state?.frames??[]))
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await raster.scrollIntoViewIfNeeded();await expect(raster).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await appPage.screenshot({path:testInfo.outputPath('native-raster-'+size.width+'.png')})}
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await raster.scrollIntoViewIfNeeded();await expect(raster).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-raster-'+size.width+'.png')})}
     await writeFile(join(workspace!,'native-raster-app-proof.json'),JSON.stringify({text:await raster.innerText(),columns:8,rows:2,frames,...(blit?{blit:true,sourceBefore,receipts:await receipts()}:{}),draft,sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after inspecting the terminal drawing.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeRaster:true,...(blit?{nativeRasterBlit:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
@@ -200,7 +214,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     await expect(info.getByRole('textbox',{name:'Terminal note',exact:true})).toBeInViewport({ratio:0.99})
     await expect(composer).toBeInViewport({ratio:0.99});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:0.99})
     await expect(composer).toHaveText('Draft retained while using native terminal Clients')
-    await appPage.screenshot({path:testInfo.outputPath('apack-terminal-client-info-'+height+'.png')})
+    await capture({path:testInfo.outputPath('apack-terminal-client-info-'+height+'.png')})
   }
   const fields=JSON.parse(await readFile(join(workspace!,'native-terminal-client-fields.json'),'utf8'));expect(fields.some((field:any)=>field.surface==='terminal'&&field.value==='rewrite')).toBe(true)
   expect((await context()).turns).toBe(1)
@@ -214,7 +228,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   await expect(duration).toContainText('count=1 key=d')
   await expect.poll(async()=>await last('TurnDuration')).toMatchObject({count:1,key:'d',surface:'terminal'})
   await expect.poll(async()=>await last('InfoNotice')).toMatchObject({count:1,key:'k',note:'native-value',choice:'b'})
-  await appPage.screenshot({path:testInfo.outputPath('apack-terminal-client-duration-600.png')})
+  await capture({path:testInfo.outputPath('apack-terminal-client-duration-600.png')})
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await expect(info).toContainText('count=1 key=k',{timeout:10000})
