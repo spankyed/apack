@@ -167,6 +167,19 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   if (decision === 'yes') {
     await expect(appPage.getByText('Owned LSP review phase 1 complete.', { exact: true })).toBeVisible()
     expect(JSON.stringify((await context()).messages)).toContain('definitions.review')
+    const expand = appPage.getByRole('button', { name: 'Expand tool activity', exact: true })
+    if (await expand.count()) await expand.last().click()
+    const navigation = appPage.getByText('Defined in definitions.review:1:14', { exact: true })
+    await expect(navigation).toBeVisible()
+    const continuedDraft = 'Keep reviewing this definition.'
+    await composer.fill(continuedDraft)
+    for (const [width, height] of [[1100, 900], [680, 600]]) {
+      await appPage.setViewportSize({ width, height }); await navigation.scrollIntoViewIfNeeded(); await expect(navigation).toBeInViewport()
+      await expect(composer).toHaveText(continuedDraft); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
+      const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
+      const path = testInfo.outputPath('native-lsp-installed-result-' + width + '.png'); await writeFile(path, Buffer.from(image, 'base64')); captures.push(path)
+    }
+
     await writeFile(join(workspace!, 'native-lsp-installed-app.json'), JSON.stringify({ sameSession: true, sessionId, originalNavigationResultInHistory: true }))
   }
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
