@@ -74,7 +74,8 @@ test('keeps safe-mode native startup and composer usable without private hooks',
     await writeFile(testInfo.outputPath('native-safe-mode-startup-failure.png'),Buffer.from(png,'base64'));throw error
   }
   expect(currentScreen).toContain('Safe mode: all customizations are disabled')
-  expect(await readFile(join(workspace!,'native-select-drawing.json'),'utf8').then(()=>true, error=>{if(error.code==='ENOENT')return false;throw error})).toBe(false)
+  const privateDrawing=JSON.parse(await readFile(join(workspace!,'native-select-drawing.json'),'utf8'))
+  expect(privateDrawing.requestId).toBeTruthy();expect(privateDrawing.safeMode).toBeNull()
   const boundNativePid=(await context()).native.state.nativePid
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   const composer=card.locator('[contenteditable="true"]')
