@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
+import { linkElmdb } from './link-elmdb.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 /** @param {string} root @param {string[]} args */
@@ -60,6 +61,8 @@ async function npm(dir, args) {
 
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
+  // npm resolves @apackdev/ears' elmdb dependency through the link
+  linkElmdb(dir);
   await npm(dir, ['ci', '--no-audit', '--no-fund']);
   await npm(dir, ['run', 'build:default-setup']);
   await npm(dir, ['run', 'build:runtime']);
