@@ -2938,19 +2938,27 @@ and any implementation correction await this focused hosted run. No native test 
 
 ### Electron exit hang in linked worktrees (2026-10-25)
 
-Observed in `test:external-pack:app` (the `bundled-ui-pack` fixture) on the developer's Mac, in linked worktrees
-only. The Electron main process logged `before-quit`, `will-quit` and `quit`, the API child had exited, and the
-process did not exit; Playwright's 60s worker teardown expired. A `DEBUG_E2E=sample` capture showed the main thread in
-`usleep`/`__semwait_signal` under Node and the inspector's socket threads alive. One earlier run failed the same suite
-differently: text Playwright typed into the editor never reached its model.
+Observed in `test:external-pack:app` (the `bundled-ui-pack` fixture) on the developer's Mac, in freshly installed
+linked worktrees only. Electron logged `before-quit`, `will-quit` and `quit`, the API child had exited, and the process
+did not exit before Playwright's 60s worker teardown expired. The same fixture also failed, in the same worktrees, with
+text Playwright typed into the editor never reaching its model.
 
-- It was intermittent and followed the checkout, not the commit. Across two fresh worktrees it hung on four of
-  eleven runs, beside the one lost-input failure; the main checkout's runs, three apps at once included, never hung.
-  In one worktree the same three commits, each rebuilt before its run, hung on the first and passed on the other
-  two; the identical three-app run repeated minutes after a hang exited cleanly.
-- Not established: the mechanism. `log show` for `syspolicyd` and `com.apple.syspolicy` returned no rows for the
-  window without elevated access, so assessment of the fresh files is consistent with what was seen and unproven.
-  The sample file was overwritten by the following run's results directory; capture it before rerunning.
+Where the time goes, from `DEBUG_E2E=sample` captures symbolicated against Electron 37.2.4's published dSYM (the
+binary's UUID matched): the browser process's main thread is in Chromium's own shutdown, nowhere in this repo's code.
+
+- 5s into teardown: `BrowserMainLoop::ShutdownThreadsAndCleanUp` → `BrowserProcessIOThread::ProcessHostCleanUp` →
+  `Process::WaitForExitWithTimeout`, which waits up to 10s for the network service process to exit so cookies and
+  cache are flushed (`content/browser/browser_process_io_thread.cc`).
+- 22s into teardown, after that: `TaskTracker::CompleteShutdown` → `WaitableEvent::Wait`, which waits without a timeout
+  for every `BLOCK_SHUTDOWN` task — the profile's must-land file writes. Every thread-pool worker was idle at that
+  instant and the processes were niced (`ps` `RNs`), and they exited after 22–60s: slow, not deadlocked.
+
+Conditions: it hung on four of eleven runs across two fresh worktrees and on six of six in one run with
+`--trace retain-on-failure`, and never in the main checkout, three apps at once included. Repeated minutes later in
+the same worktree, the identical run exited cleanly. Spotlight's `mdworker_shared` processes were busy over a fresh
+worktree's `node_modules`, and a suite there took 23.3s against 8.9s for the same run in a `.noindex` worktree, where
+neither hung. That is consistent with I/O pressure on a fresh install slowing the writes Chromium blocks exit on;
+it is not proven. No timeout or assertion was changed.
 
 ### Versioned override reproducer and launch admission (2026-10-17)
 
