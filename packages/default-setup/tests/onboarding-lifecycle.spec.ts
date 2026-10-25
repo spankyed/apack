@@ -1,3 +1,4 @@
+// @slow: each case starts the app on default-setup's flows and content and runs the onboarding flow through
 import { expect, it } from 'vitest';
 import { getTestSettings, importContent, importFlows, startApp, takeSystemErrors, type TestApp } from '@apackdev/testing/harness';
 import { entry, keepAlive } from '#generated/flow-helpers.ts';

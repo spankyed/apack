@@ -1,3 +1,4 @@
+// @slow: real `apack pack build`s, most cases one or two, a refused build each retaining the one before it
 import * as content from '@apackdev/sdk/build';
 import * as frontend from '../../src/build/fe-bundler.ts';
 import { buildStagingDir } from '../../src/build/build-publication.ts';

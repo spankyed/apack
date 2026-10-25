@@ -1,3 +1,4 @@
+// @slow: one pack builder taken through 25 real builds: reuse, refusal and recovery
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

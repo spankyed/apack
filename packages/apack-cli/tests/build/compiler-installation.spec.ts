@@ -1,3 +1,4 @@
+// @slow: each case copies the selected Node runtime and a compiler into an installation and runs it
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

@@ -1,3 +1,4 @@
+// @slow: each case bundles a real pack runtime through esbuild over a captured input view
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
