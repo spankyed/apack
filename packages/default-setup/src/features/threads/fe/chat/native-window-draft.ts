@@ -42,8 +42,37 @@ export function bindClaudeWindowDraft(editor: Editor, owner: string): () => void
     }
     ready = true; save()
   }
+  const dom = editor.view.dom
+  let pointerFocus = false, active = true
+  const pointer = () => { pointerFocus = dom.ownerDocument.activeElement !== dom }
+  const blur = () => { pointerFocus = false }
+  const focus = () => {
+    const fromPointer = pointerFocus; pointerFocus = false
+    if (fromPointer || editor.isDestroyed || editor.view.composing) return
+    const retained = editor.state
+    // Chromium may install a default DOM caret after programmatic focus on a previously hidden input.
+    queueMicrotask(() => {
+      if (!active || editor.isDestroyed || editor.view.composing || dom.ownerDocument.activeElement !== dom || editor.state.doc !== retained.doc) return
+      if (!editor.state.selection.eq(retained.selection) || editor.state.storedMarks !== retained.storedMarks) {
+        editor.view.dispatch(editor.state.tr.setSelection(retained.selection).setStoredMarks(retained.storedMarks)
+          .setMeta('claude-prompt-by', 'app').setMeta('addToHistory', false))
+      }
+      editor.view.focus()
+    })
+  }
+  dom.addEventListener('pointerdown', pointer, true)
+  dom.addEventListener('pointercancel', blur)
+  dom.addEventListener('blur', blur)
+  dom.addEventListener('focus', focus, true)
   editor.on('transaction', save)
   if (editor.isInitialized) adopt()
   else editor.on('create', adopt)
-  return () => { save(); editor.off('create', adopt); editor.off('transaction', save) }
+  return () => {
+    active = false
+    dom.removeEventListener('pointerdown', pointer, true)
+    dom.removeEventListener('pointercancel', blur)
+    dom.removeEventListener('blur', blur)
+    dom.removeEventListener('focus', focus, true)
+    save(); editor.off('create', adopt); editor.off('transaction', save)
+  }
 }

@@ -154,3 +154,21 @@ it('preserves newer typing instead of applying an initial literal snapshot after
   expect(restoreClaudeAgentDraft(next, snapshot, snapshot.text, initialDocument)).toBe(false)
   expect(next.getJSON()).toEqual(newer)
 })
+
+it('retains parent selection and typing marks after programmatic focus installs a default caret',async()=>{
+ const editor=create('retained parent draft');document.body.append(editor.view.dom);editor.view.dom.tabIndex=0
+ editor.commands.setTextSelection(8);editor.view.dispatch(editor.state.tr.setStoredMarks([editor.schema.marks.bold!.create()]))
+ const selection=editor.state.selection.toJSON(),stop=bindClaudeWindowDraft(editor,'focus-parent-programmatic')
+ editor.view.dom.addEventListener('focus',()=>{editor.commands.setTextSelection(1)},{once:true})
+ editor.view.dom.focus();await Promise.resolve()
+ expect(editor.state.selection.toJSON()).toEqual(selection);expect(editor.state.storedMarks?.map(mark=>mark.type.name)).toEqual(['bold'])
+ stop();editor.view.dom.remove()
+})
+it('leaves pointer-selected parent positions and disposed focus work untouched',async()=>{
+ const editor=create('retained parent draft');document.body.append(editor.view.dom);editor.view.dom.tabIndex=0
+ editor.commands.setTextSelection(8);const stop=bindClaudeWindowDraft(editor,'focus-parent-pointer')
+ editor.view.dom.dispatchEvent(new Event('pointerdown',{bubbles:true}));editor.view.dom.focus();editor.commands.setTextSelection(2);await Promise.resolve()
+ expect(editor.state.selection.from).toBe(2)
+ editor.view.dom.blur();editor.commands.setTextSelection(9);editor.view.dom.focus();stop();editor.commands.setTextSelection(4);await Promise.resolve()
+ expect(editor.state.selection.from).toBe(4);editor.view.dom.remove()
+})
