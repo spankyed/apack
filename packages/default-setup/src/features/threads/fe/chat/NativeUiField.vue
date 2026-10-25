@@ -97,7 +97,7 @@ watch(() => [props.node.value, props.node.revision, props.node.kind === 'select'
   nativeValue = value
   if (!composing && completed >= revision && replacement !== undefined) {
     draft.value = replacement.value
-    lastChangeValue = replacement
+    lastChangeValue = replacement.value
     replacement = undefined
     problem.value = undefined
   }
@@ -117,7 +117,7 @@ function compositionStart() { composing = true }
 function compositionEnd(event: CompositionEvent) {
   composing = false
   change(event)
-  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement.value; lastChangeValue = replacement; replacement = undefined; problem.value = undefined }
+  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement.value; lastChangeValue = replacement.value; replacement = undefined; problem.value = undefined }
 }
 function pick(event: Event) {
   const value = (event.target as HTMLSelectElement).value
