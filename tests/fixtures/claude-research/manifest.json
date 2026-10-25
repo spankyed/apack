@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "42d517d6a1399562e7afb00fe8534db0b0b7371d",
+  "researchCommit": "aaac0ddb6ee4b514924fc5081b5c0b111dc24182",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -287,7 +287,7 @@
     "src/protocol/native-select-fixture.mjs": "76a0256a5c7688ca52e1c052a281099c2e1d31c4b298e468053608d617a7a845",
     "src/protocol/verify-reset-media.mjs": "8a95cfda62bbca8d2b8e156508e2238f5d8203f55f10bd596a588e719f802bd1",
     "src/protocol/native-compose-fixture.mjs": "e7532bd09dc3d2179238968804f7e947606df504868d31bff7ca87806c62160d",
-    "src/protocol/native-notify-fixture.mjs": "467ef4ad093116da1c02d050fdda94a104e801cdd7160facea649be8a7365057"
+    "src/protocol/native-notify-fixture.mjs": "5b271ac8bffc13856593d2d34e2ead696425fb572369933dfdab2ac261007c01"
   },
-  "archiveSha256": "8a2796858232ae0fa7b94f28cefc11cfb94d8fda46df9ed86778687cd74d7a55"
+  "archiveSha256": "3716e5cd4c67d1fd9df3ac7c08115585bc91dd5cf595d233d72039d71a156c41"
 }
