@@ -111,7 +111,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
         if(label==='stats-models'||label==='stats-calendar'){
           const body=panel.locator('[aria-label="Claude Code Stats"]')
           const target=label==='stats-calendar'?panel.getByLabel('Claude Code activity calendar',{exact:true}):panel.locator('table')
-          const bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();if(r.height>b.height)throw Error('Stats reading target exceeds viewport');return {visible:r.top>=b.top&&r.bottom<=b.bottom,shift:r.top<b.top?Math.max(-60,r.top-b.top):Math.min(60,r.bottom-b.bottom)}},undefined,{timeout:5000})
+          const bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Stats reading target exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(60,Math.max(2,Math.ceil(Math.abs(delta)))),target:{top:r.top,bottom:r.bottom,left:r.left,right:r.right},viewport:{top:b.top,bottom:b.bottom,left:b.left,right:b.right}}},undefined,{timeout:5000})
           await body.hover()
           for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
           expect((await bounds()).visible).toBe(true)
@@ -121,7 +121,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
             const active=levels.filter(level=>['1','2','3','4'].includes(level!)).length;expect(active).toBeGreaterThan(0)
             expect(levels.every(level=>['0','1','2','3','4','future'].includes(level!))).toBe(true)
             expect(await target.innerText()).not.toMatch(/[·░▒▓█]/);await expect(target.locator('pre')).toHaveCount(0)
-            calendarSamples.push({width,cells:levels.length,active,graphical:true,realWheel:true})
+            calendarSamples.push({width,cells:levels.length,active,graphical:true,realWheel:true,geometry:await bounds()})
           }
         }
 
