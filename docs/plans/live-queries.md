@@ -438,9 +438,8 @@ and `threads`' streaming tokens are notifications.
   - **A replacement is one notification, `DATABASE_REPLACED`**, broadcast after an import or a reset from any window,
     with no data: every window drops the results and run history it holds, which name rows that may be gone, and asks
     for the schema again. The window that asked hears its own outcome besides.
-  - **The generated query stays a broadcast** (`AI_QUERY_LOADING`, `AI_QUERY_GENERATED`, `AI_QUERY_ERROR`): a flow
-    sends it, and a flow run is no delivery, so there is no sender to reply to. It carries a query, never rows.
-    Answering through a flow is under Open.
+  - **The generated query is answered to the window that asked, through the flow** (`AI_QUERY_LOADING`,
+    `AI_QUERY_GENERATED`, `AI_QUERY_ERROR`); see *Answering through a flow* below.
   - **Its first ask moved to `SURFACE_STARTED`** with the threads change below: as committed, `GET_SCHEMA` went out
     from the machine's entry, in no delivery, so it carried no sender and its answer went nowhere.
 - **threads** — seven views: `list()`, `archived({ sortOrder })`, `recent({ limit, sortOrder })`, `detail({ id })`,
@@ -546,14 +545,19 @@ and `threads`' streaming tokens are notifications.
   through `answer(reply, …)`, whose fallback broadcasts when there is no asker — right for a command's outcome, which
   someone must hear, and wrong for a fetch, which would then send run data to every window. They reply only. The
   code feature's "no repository" error (`requireGitRepository`) is answered to the asker like the rest of its results.
+- **Answering through a flow.** A surface that asks a flow for something — the database's generated query, the
+  commit panel's generated message — heard the result by broadcast, in every window, since a flow run is no delivery
+  and has no sender to reply to. The asking system's handler is a delivery, so it is handed the asker's `client` and
+  puts it in the brain event's payload; the flow maps it into the action's params (`client:
+  "$.event.data.payload.client"`), and the action answers that window alone with `services.emitter.sendToWindow`. An
+  action run with no `client` has nobody to answer and fails saying so, rather than broadcasting. The connection is
+  the return address, not the sender: the run is not a reply, and `sendToWindow` names the surface itself.
 - **What still broadcasts, by feature**, read from every call site: brain — its state, the event pulse, the run's feed;
-  code — a file changed on disk, the repository changed, a terminal's lifecycle and output, and the connection's base
-  directory and settings; database — `DATABASE_REPLACED`; flows — `FLOWS_CONNECTED`, the models the editor offers;
-  library — `FOLDER_CHANGED` (its search-index sends are commented out with the feature); logs — the feed and the
-  clear; content actions — a flow's notifications to the chat (`SET_MODE`, `SET_PHASE`, `FLASH_CHAT_STATE`), the
-  generated query or commit message a flow sends the window that asked (no return address through a flow, under
-  Open), `ONBOARDING_COMPLETE`. The `answer` helpers' fallbacks carry import and export outcomes, `SHOW_THREAD`, and
-  results no window asked for. None is a row.
+  code — a file changed on disk, `commit.REPOSITORY_CHANGED`, `BASE_DIRECTORY_CHANGED`, a terminal's lifecycle and
+  output; database — `DATABASE_REPLACED`; library — `FOLDER_CHANGED` (its search-index sends are commented out with
+  the feature); logs — the feed and the clear; content actions — a flow's notifications to the chat (`SET_MODE`,
+  `SET_PHASE`, `FLASH_CHAT_STATE`) and `ONBOARDING_COMPLETE`. The `answer` helpers' fallbacks carry a command's outcome
+  when nobody asked — import and export outcomes, `SHOW_THREAD`. Each is news; none carries data a window shows.
 
 ### 5. The rule
 
@@ -592,9 +596,6 @@ and `threads`' streaming tokens are notifications.
 
 - **Schema counts the engine keeps.** A watchable schema needs per-type, per-kind counts written beside the data,
   so a view reads a few keys instead of walking the store (the database feature's step-4 decision).
-- **An answer through a flow.** A surface that asks a flow for something (the database's generated query) hears the
-  result by broadcast, since a flow run carries no return address. Carrying the asker's address into the run would
-  let a step reply.
 - **`whenView` wasn't needed, by any feature.** Every surface that selects what it just created takes the id from the
   write's answer — `NOTE_CREATED`, `THREAD_CREATED`, `COLLECTION_CREATED`, `NODE_CREATED` — and selects it once the
   view that lists it gives it, which a view does after the write's commit; an editor holds its views behind its own

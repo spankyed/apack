@@ -465,7 +465,7 @@ export const commitSystem = setup({
       })
     },
 
-    generateCommitMessage: ({ context, reply }) => {
+    generateCommitMessage: ({ context, reply, client }) => {
       if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.getStagedFiles().then((stagedFiles) => {
@@ -491,7 +491,8 @@ export const commitSystem = setup({
 
         sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT',
           eventType: 'commit.generate',
-          payload: { diff: truncatedDiff, branch, repoName, provider },
+          // A flow run has no return address, so the ask carries the asking window's connection for the action to answer
+          payload: { diff: truncatedDiff, branch, repoName, provider, ...(client && { client }) },
         })
       }).catch((error: any) => {
         answer(reply, {

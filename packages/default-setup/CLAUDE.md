@@ -130,10 +130,16 @@ broadcasts, never both (`threads/be/answer.ts`, `code/be/answer.ts`).
 - **A spec that drives a machine directly builds the answer with `answerTo(call, event)`** (`@apackdev/sdk/testing`);
   one driving a whole system through `startApp` passes `nextEmit`'s `answering`. The `reserved-event-keys` pack rule
   refuses the reserved key in `tests` as well as `src`.
+- **A flow answers by the window's connection.** A flow run is no delivery, so an action has no sender to reply to.
+  The system that starts the flow is handling a delivery, so it puts the asker's `client` in the brain event's
+  payload, the flow maps it into the action's params, and the action answers that window alone with
+  `services.emitter.sendToWindow(client, surface, event)` — the database's generated query, the commit panel's
+  generated message. An action with no `client` fails saying nobody asked; it never broadcasts.
 
 **News is a broadcast, and carries what happened rather than the rows it touched.** The brain's state
-(`BRAIN_STARTED`, `BRAIN_PAUSED`), a file changed on disk (`explorer.FILE_CHANGED_EXTERNALLY`), the data replaced
-(`DATABASE_REPLACED`), a flow's notifications to the chat (`SET_MODE`, `FLASH_CHAT_STATE`). Nobody asked for it, so
+(`BRAIN_STARTED`, `BRAIN_PAUSED`), a file changed on disk (`explorer.FILE_CHANGED_EXTERNALLY`), the repository changed
+(`commit.REPOSITORY_CHANGED`, on the watcher and on a write alike), the code surface's directory moved
+(`BASE_DIRECTORY_CHANGED`), the data replaced (`DATABASE_REPLACED`), a flow's notifications to the chat (`SET_MODE`, `FLASH_CHAT_STATE`). Nobody asked for it, so
 there is no request it could fail to match. A **feed** is news too: a terminal's output and a brain run's
 `RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would. What a system
 holds in memory and a window shows — the logs buffer — is fetched like what is on disk. **A fetch nobody asked for is

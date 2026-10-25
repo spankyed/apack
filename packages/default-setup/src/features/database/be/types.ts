@@ -49,7 +49,7 @@ export type IncomingDatabaseEvents =
 
 /**
  * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
- * news for every window, and the generated query, which a flow sends.
+ * news for every window, and the generated query, which a flow sends to the asking window by its connection.
  *
  * **The schema is fetched, not a view.** It is a walk over the whole store (`getSchemaStats`), so a view of it would
  * re-run that walk after every commit anyone makes; a window asks for it when it opens, when the user refreshes, and
@@ -81,8 +81,8 @@ export type OutgoingDatabaseEvents =
   | { type: 'TRANSACTION_RESULT'; result: any; executionTime: number }
   | { type: 'TRANSACTION_ERROR'; error: string }
   /**
-   * The three a flow sends (`db-query`, `db-transaction`), broadcast to every window: a flow run is no delivery, so it
-   * has no sender to reply to. They carry a query, never rows.
+   * The three a flow sends (`db-query`, `db-transaction`) to the window that asked: a flow run is no delivery, so it
+   * has no sender to reply to, and the ask carries the window's connection for the action to answer instead.
    */
   | { type: 'AI_QUERY_LOADING' }
   | { type: 'AI_QUERY_GENERATED'; query: string }
