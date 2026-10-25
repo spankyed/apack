@@ -15,8 +15,40 @@ function nativeSettingsConfig(n,entry){
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
+ if(owners.length===0)throw Error('Native Config is not ready');
  if(owners.length!==1)throw Error('Native Config is not uniquely mounted');
  return {frame,owner:owners[0]};
+}
+function sameNativeSettingsFiber(a,b){
+ return a===b||!!(a&&b&&a.type===b.type&&a.key===b.key&&a.alternate===b&&b.alternate===a);
+}
+function currentNativeSettingsFiber(owner,target){
+ const pending=[owner],seen=new Set(),matches=[];
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
+  if(seen.size>=4096)throw Error('Native Settings live editor traversal exceeded bound');seen.add(fiber);
+  if(sameNativeSettingsFiber(fiber,target))matches.push(fiber);
+  if(fiber!==owner&&fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ if(matches.length!==1)throw Error('Native Settings editor changed while reading');return matches[0];
+}
+async function waitForNativeSettingsConfig(n,entry,signal){
+ const until=Date.now()+1500;
+ while(true){
+  signal?.throwIfAborted();entry.current();if(entry.closed||entry.answered)throw Error('Native Config owner expired');
+  if(nativeSettingsFrame(n,entry).panel.selectedTab!=='Config')return;
+  try{nativeSettingsConfig(n,entry);return;}
+  catch(error){if(error.message!=='Native Config is not ready'||Date.now()>=until)throw error;}
+  await new Promise(resolve=>setTimeout(resolve,40));
+ }
+}
+async function waitForNativeSettingsEditor(n,entry,signal){
+ const until=Date.now()+1500;
+ while(true){
+  try{return await readNativeSettingsEditor(n,entry,signal);}
+  catch(error){if(!['Native Config is not ready','Native Settings editor is not ready'].includes(error.message)||Date.now()>=until)throw error;}
+  signal?.throwIfAborted();entry.current();await new Promise(resolve=>setTimeout(resolve,40));
+ }
 }
 async function nativeSettingsEditorOpeners(n,entry){
  const {qh}=await import('/$bunfs/root/chunk-07y7va8x.js');
@@ -44,7 +76,7 @@ async function nativeSettingsEditorOpeners(n,entry){
   nodes.push(item.props?.children);
  }
  entry.current();const current=nativeSettingsFrame(n,entry);
- if(entry.closed||entry.answered||current.owner!==frame.owner||current.panel!==frame.panel)throw Error('Native Config owner changed');
+ if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,frame.owner)||current.panel!==frame.panel)throw Error('Native Config owner changed');
  return {owner:owners[0],openers};
 }
 async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
@@ -54,7 +86,7 @@ async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  if(!candidate)throw Error('Native setting has no available editor');
  const current=await nativeSettingsEditorOpeners(n,entry);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||current.owner!==before.owner||current.openers.get(key)?.callback!==candidate.callback)throw Error('Native Config editor changed before opening');
+ if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,before.owner)||current.openers.get(key)?.callback!==candidate.callback)throw Error('Native Config editor changed before opening');
  // The original row callback owns locks, consent and editor selection. Never call a row writer here.
  return await awaitNativeSettingsReading(candidate.callback(),signal);
 }
@@ -72,6 +104,7 @@ async function readNativeSettingsEditor(n,entry,signal){
   }
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
+ if(matches.length===0)throw Error('Native Settings editor is not ready');
  if(matches.length!==1)throw Error('Native Settings editor is not uniquely supported');
  const match=matches[0],p=match.props;let controls=p,cancelFiber,cancelProps;
  if(match.kind==='outputStyle'){
@@ -104,8 +137,8 @@ async function readNativeSettingsEditor(n,entry,signal){
   snapshot={kind:'form',title:await text(p.title),...p.subtitle?{description:await text(p.subtitle)}:{},submitLabel:await text(p.submitLabel??'Save'),fields};
  }
  signal?.throwIfAborted();entry.current();const current=nativeSettingsConfig(n,entry);
- if(entry.closed||entry.answered||current.owner!==owner||current.frame.panel!==frame.panel||match.fiber.memoizedProps!==p||cancelFiber&&cancelFiber.memoizedProps!==cancelProps)throw Error('Native Settings editor changed while reading');
- return {snapshot,revision:createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),owner,fiber:match.fiber,props:p,actions:controls,cancelProps};
+ if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,owner)||current.frame.panel!==frame.panel||currentNativeSettingsFiber(current.owner,match.fiber).memoizedProps!==p||cancelFiber&&currentNativeSettingsFiber(current.owner,cancelFiber).memoizedProps!==cancelProps)throw Error('Native Settings editor changed while reading');
+ return {snapshot,revision:createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),owner:current.owner,fiber:currentNativeSettingsFiber(current.owner,match.fiber),props:p,actions:controls,cancelProps};
 }
 async function actNativeSettingsEditor(n,entry,request,signal){
  const before=await readNativeSettingsEditor(n,entry,signal);
@@ -130,7 +163,7 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  }else throw Error('Native Settings editor action is unavailable');
  const current=await readNativeSettingsEditor(n,entry,signal);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||!current||current.owner!==before.owner||current.fiber!==before.fiber||current.props!==p||current.cancelProps!==before.cancelProps||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
+ if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
  if(validationProblem!==undefined)return {problem:validationProblem};
  await awaitNativeSettingsReading(callback(...args),signal);
  return {};
@@ -149,7 +182,7 @@ async function saveNativeSettingsEditor(n,entry,revision,values,signal){
   const until=Date.now()+1500;
   while(true){
    signal?.throwIfAborted();entry.current();current=await readNativeSettingsEditor(n,entry,signal);
-   if(!current||current.owner!==owner||current.snapshot.kind!=='form')throw Error('Native Settings form replaced while editing');
+   if(!current||!sameNativeSettingsFiber(current.owner,owner)||current.snapshot.kind!=='form')throw Error('Native Settings form replaced while editing');
    if(current.snapshot.fields.find(item=>item.key===field.key)?.value===value)break;
    if(Date.now()>=until)throw Error('Native Settings form did not acknowledge its draft');
    await new Promise(resolve=>setTimeout(resolve,40));

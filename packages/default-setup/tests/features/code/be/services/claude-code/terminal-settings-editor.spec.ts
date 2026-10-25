@@ -1,4 +1,5 @@
 import vm from 'node:vm'
+import { createHash } from 'node:crypto'
 import { claudeTerminalSettingsEditorRuntime } from '#features/code/be/services/claude-code/terminal-settings-editor-runtime.ts'
 
 function fixture(){
@@ -8,8 +9,8 @@ function fixture(){
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??hash})})})
-  return {formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  return {wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -88,7 +89,10 @@ it('uses original form validation before submission and original field-change ca
 
 it('saves exact drafts through native changes, awaits acknowledged form values and validates before native submit',async()=>{
  const f=fixture(),Form=function OriginalForm(){},validate=vi.fn(()=>null),onSubmit=vi.fn(),onCancel=vi.fn()
- const onChange=vi.fn((key:string,value:string)=>{f.config.child.memoizedProps={...f.config.child.memoizedProps,values:{[key]:value}}})
+ const onChange=vi.fn((key:string,value:string)=>{
+  const previous=f.frame.owner.child as any,oldForm=previous.child,nextForm={...oldForm,memoizedProps:{...oldForm.memoizedProps,values:{[key]:value}},alternate:oldForm};oldForm.alternate=nextForm
+  const next={...previous,child:nextForm,alternate:previous};previous.alternate=next;nextForm.return=next;f.frame.owner.child=next
+ })
  f.frame.panel.hidden=true;f.setFunctionHash(Form,'e2474315a210faf7b3cbaab9c4b40793486c2f19ed4b0a997e16fede82b933b4')
  f.config.child={type:Form,memoizedProps:{title:'Original form',fields:[{type:'text',key:'value',label:'Value',validate}],values:{value:'old'},onChange,onCancel,onSubmit}}
  const {revision}=await f.editor()
@@ -107,4 +111,13 @@ it('reads original Output Style options before the suspended item picker mounts 
  await f.act({action:'cancel',revision:result.revision});expect(onCancel).toHaveBeenCalledExactlyOnceWith()
  f.formatText.mockImplementationOnce(async()=>{modal.memoizedProps={...modal.memoizedProps,onCancel:()=>{}};return 'retired label'})
  await expect(f.editor()).rejects.toThrow('changed while reading')
+})
+
+it('waits for an unmounted original Config root but refuses duplicate owners and cancellation',async()=>{
+ vi.useFakeTimers()
+ try{
+  const f=fixture();(f.frame.owner as any).child=null;const mounted=f.wait();f.frame.owner.child=f.config;await vi.advanceTimersByTimeAsync(40);await mounted
+  const g=fixture();g.config.sibling={...g.config};await expect(g.wait()).rejects.toThrow('not uniquely mounted')
+  const cancelled=new AbortController();cancelled.abort();await expect(f.wait(cancelled.signal)).rejects.toThrow()
+ }finally{vi.useRealTimers()}
 })

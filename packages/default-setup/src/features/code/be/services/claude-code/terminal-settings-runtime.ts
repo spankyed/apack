@@ -13,6 +13,7 @@ function nativeSettingsPanel(request){
  return entry;
 }
 async function readNativeSettings(n,entry,signal){
+ await waitForNativeSettingsConfig(n,entry,signal);
  const api=await import('/$bunfs/root/chunk-1ghyy712.js');
  const context=entry.context,handles=api.configRowHandles(context);
  if(!Array.isArray(handles)||handles.length>256)throw Error('Native Settings row limit exceeded');
@@ -27,7 +28,7 @@ async function readNativeSettings(n,entry,signal){
  const frame=await readNativeSettingsFrame(n,entry,signal);
  let editor;
  if(frame.selectedTab==='Config'){
-  if(frame.hidden){const native=await readNativeSettingsEditor(n,entry,signal);if(native)editor={...native.snapshot,revision:native.revision};}
+  if(frame.hidden){const native=await waitForNativeSettingsEditor(n,entry,signal);if(native)editor={...native.snapshot,revision:native.revision};}
   else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}}
  }
 
@@ -53,7 +54,7 @@ async function nativeSettings(n,request,abort){
   if(request.revision!==read.snapshot.revision&&!cancelledLease)throw Error('Native Settings changed; refresh before editing');
   if(isEditorCancel){
    const current=await readNativeSettingsEditor(n,entry,abort.signal);nativeSettingsPanel(request);
-   if(!current||cancelledLease&&current.owner!==cancelledLease.owner)throw Error('Native Settings editor owner changed before cancellation');
+   if(!current||cancelledLease&&!sameNativeSettingsFiber(current.owner,cancelledLease.owner))throw Error('Native Settings editor owner changed before cancellation');
    const result=await actNativeSettingsEditor(n,entry,{action:'cancel',revision:cancelledLease?current.revision:request.editor_revision},abort.signal);
    await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
    return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot,...result};
