@@ -97,7 +97,7 @@ test('edits original Settings through desktop controls and retains composing', a
     date.setDate(date.getDate()-age);date.setHours(12,0,0,0)
     user.uuid=randomUUID();user.parentUuid=null;user.sessionId=id;user.isSidechain=false;user.timestamp=date.toISOString()
     assistant.uuid=randomUUID();assistant.parentUuid=user.uuid;assistant.sessionId=id;assistant.isSidechain=false;assistant.timestamp=new Date(date.getTime()+65000).toISOString();assistant.message.id='msg_'+randomUUID()
-    const scale=2**index
+    const scale=2**(index+1)
     Object.assign(assistant.message.usage,{input_tokens:1400*scale,output_tokens:200*scale,cache_read_input_tokens:100*scale,cache_creation_input_tokens:50*scale})
     if(assistant.message.usage.cache_creation)assistant.message.usage.cache_creation={ephemeral_5m_input_tokens:50*scale,ephemeral_1h_input_tokens:0}
     const file=join(dirname(parentFile),id+'.jsonl'),body=JSON.stringify(user)+'\n'+JSON.stringify(assistant)+'\n'
@@ -189,6 +189,7 @@ test('edits original Settings through desktop controls and retains composing', a
       const total=statistics.locator('dt').filter({hasText:/^Total tokens$/}).locator('..').locator('dd')
       await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange()))
       statsCompleteness.ranges.push({range:'all',expected:expectedRange(),observed:Number((await total.innerText()).replace(/,/g,''))})
+      const insight=statistics.getByText(/Your input and output/);await expect(insight).toBeVisible()
       const body=panel.locator('[aria-label="Claude Code Stats"]')
       const inBody=(target:import('@playwright/test').Locator)=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
       async function readTo(target:import('@playwright/test').Locator){
@@ -206,6 +207,7 @@ test('edits original Settings through desktop controls and retains composing', a
       for(const width of [1100,680]){
         await appPage.setViewportSize({width,height:width===680?600:900})
         const longest=statistics.locator('dt').filter({hasText:/^Longest session$/});await readTo(longest);await statsCapture('summary',width)
+        await readTo(insight);await statsCapture('insight',width)
         const history=statistics.getByText('Activity dates and counts',{exact:true});await readTo(history);await history.click()
         const historicalRow=statistics.locator('details[open] tbody tr').filter({hasText:histories[2].date})
         await readTo(historicalRow);await statsCapture('history',width);statsCompleteness.reading.push({width,longest:true,historicalDate:histories[2].date,realWheel:true})
