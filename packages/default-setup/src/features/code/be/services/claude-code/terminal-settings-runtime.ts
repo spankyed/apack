@@ -42,9 +42,22 @@ async function nativeSettings(n,request,abort){
    return fresh.write(value);
   }});
   controller.signal.throwIfAborted();nativeSettingsPanel(request);
-  const after=await readNativeSettings(n,entry,controller.signal);nativeSettingsPanel(request);
   const acknowledged=result&&result.deny===undefined&&Object.hasOwn(result,'value');
-  return {snapshot:after.snapshot,...(acknowledged?{savedKey:request.key}:{problem:typeof result?.deny==='string'?result.deny:'Claude Code did not acknowledge this setting'})};
+  let pending=false;
+  if(acknowledged&&!Object.is(result.value,handle.row.value)){
+   // Original toggle callbacks may return before their queued atomic write invalidates merged settings.
+   const until=Date.now()+1500;
+   while(true){
+    controller.signal.throwIfAborted();nativeSettingsPanel(request);
+    const fresh=read.api.configRowHandles(entry.context).find(item=>item.row.key===request.key);
+    pending=!!fresh&&Object.is(fresh.row.value,handle.row.value);
+    if(!pending||Date.now()>=until)break;
+    await new Promise(resolve=>setTimeout(resolve,40));
+   }
+  }
+  const after=await readNativeSettings(n,entry,controller.signal);nativeSettingsPanel(request);
+  const waiting=pending&&['boolean','choice','number'].includes(handle.row.kind);
+  return {snapshot:after.snapshot,...(acknowledged&&!waiting?{savedKey:request.key}:{problem:waiting?'Claude Code acknowledged the write, but its current value has not updated. Refresh to check it.':typeof result?.deny==='string'?result.deny:'Claude Code did not acknowledge this setting'})};
  }finally{entry.settingsBusy=false;abort.signal.removeEventListener('abort',cancel);}
 }
 `

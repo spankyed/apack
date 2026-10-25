@@ -11,9 +11,9 @@ function fixture() {
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
   const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi')
-  const run = vm.runInNewContext(source + ';nativeSettings', { nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController })
+  const run = vm.runInNewContext(source + ';nativeSettings', { nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
-  return { n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
+  return { setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }
 it('uses original description visibility and config.set coordinator instead of writing directly', async () => {
   const f = fixture(), before = await f.read()
@@ -41,4 +41,11 @@ it('refuses a native hook-held write after its panel closes', async () => {
   await vi.waitFor(() => expect(f.commit).toHaveBeenCalledOnce())
   f.entry.closed = true; release()
   await expect(result).rejects.toThrow('expired'); expect(f.writer).not.toHaveBeenCalled()
+})
+
+it('waits for the original settings cache to observe a queued write before publishing saved state', async () => {
+  const f = fixture(), before = await f.read()
+  f.writer.mockImplementationOnce(async next => { setTimeout(() => f.setValue(next), 20) })
+  const result = await f.run(f.n, { ...f.request, operation: 'write', revision: before.snapshot.revision, key: 'tips', value: true }, new AbortController())
+  expect(result.savedKey).toBe('tips'); expect(result.snapshot.rows[0].value).toBe(true)
 })
