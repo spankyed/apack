@@ -88,8 +88,6 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(composer).toHaveText('')
   const draft = 'Keep these release notes while reviewing code intelligence.'
-  await composer.fill(draft)
-  const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
   const readApproval = appPage.getByTestId('native-read-approval')
   await expect(readApproval).toBeVisible({ timeout: 15000 })
   await readApproval.getByRole('button', { name: 'Approve', exact: true }).click()
@@ -104,6 +102,9 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     await writeFile(join(workspace!, 'native-lsp-recommendation-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }))
     throw error
   }
+  await composer.fill(draft)
+  const savedDocument = await composer.evaluate(element => (element as any).editor.state.doc.toJSON())
+  await expect(notice).toBeVisible()
   const shown = (await context()).native.state.notice
   expect(shown.kind).toBe('lsp_recommendation')
   const labels: Record<string, string> = { yes: 'Yes, install', no: 'No, not now', never: 'Never for this plugin', disable: 'Disable all LSP recommendations' }
