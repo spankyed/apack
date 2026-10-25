@@ -147,13 +147,15 @@ test('edits original Settings through desktop controls and retains composing', a
   const beforeLanguage=await user()
   await openLanguage();await languageInput.fill('Cancelled language');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click()
   await expect(languageEditor).toHaveCount(0);expect(await user()).toEqual(beforeLanguage)
-  await openLanguage();await languageInput.fill('   ');await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
+  await openLanguage();await languageInput.fill('Spanish');await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
+  await expect.poll(async()=>(await user()).language).toBe('Spanish');await expect(languageEditor).toHaveCount(0);await expect(languageRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
+  await openLanguage();await expect(languageInput).toHaveValue('Spanish');await languageInput.fill('   ');await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
   await expect.poll(async()=>(await user()).language).toBeUndefined();await expect(languageEditor).toHaveCount(0)
-  await expect(panel.getByRole('status')).toHaveText('Saved by Claude Code')
+  await expect(languageRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
   await openLanguage();await expect(languageInput).toHaveValue('');await languageInput.fill('  French  ')
   await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
   await expect.poll(async()=>(await user()).language).toBe('French');await expect(languageEditor).toHaveCount(0)
-  await expect(panel.getByRole('status')).toHaveText('Saved by Claude Code')
+  await expect(languageRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
   await openLanguage();await expect(languageInput).toHaveValue('French')
   const nativeWindow = await electronApp.browserWindow(appPage), captures:string[]=[]
   for (const [width,height] of [[1100,900],[680,600]]) {
