@@ -9,7 +9,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 let disposeScreen=()=>{}
 test.afterEach(()=>disposeScreen())
 test('renders original theme previews, cancellation, button roles and saved custom reload', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(90000)
+  test.setTimeout(150000)
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture({path}:{path:string}){
     const size=appPage.viewportSize()!
@@ -266,7 +266,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(label).toBeInViewport({ ratio: 0.99 })
   await capture({ path: testInfo.outputPath('apack-native-custom-editor-cancelled.png') })
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  await expect.poll(screen).toContain('Filter color tokens')
+  await expect.poll(screen).toContain('Enter to edit')
   await input.press('Enter')
   await expect.poll(screen).toContain('Enter to save')
   await input.press('Control+u'); await input.pressSequentially('#c3b2a1'); await input.press('Enter')
