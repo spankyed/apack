@@ -223,7 +223,8 @@ test('edits original Settings through desktop controls and retains composing', a
         statsCompleteness.exports.push({file,width,formats:exported.formats,size:exported.size,sha256:createHash('sha256').update(bytes).digest('hex')})
       }
       await panel.getByRole('button',{name:'Models',exact:true}).click()
-      await expect(panel.locator('thead')).toContainText('Cache read')
+      await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
+      await expect(panel.getByRole('columnheader',{name:'Cache read',exact:true})).toBeVisible()
       await panel.getByRole('button',{name:/Change dates/}).click()
       await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 7 days')
       await expect(total).toHaveText(new Intl.NumberFormat().format(expectedRange(7)))
