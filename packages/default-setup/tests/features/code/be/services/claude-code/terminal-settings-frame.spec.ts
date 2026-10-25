@@ -62,7 +62,7 @@ it('uses the guarded original Stats date callback and preserves native empty out
   f.panel.selectedTab = 'Stats'; cache[3] = cycle
   f.hashes.set(Loader, 'dea182e69c551bbf30ca8dc15dbbd4ce008db3150028451a40b64fff5d53282a')
   ;(f.owner.child as any).child = {type:Loader,memoizedProps:{allTimePromise:Promise.resolve({type:'empty'}),activeTimePromise:Promise.resolve({})},updateQueue:{memoCache:{data:[cache]}}}
-  expect((await f.read()).stats).toEqual({outcome:'empty',loading:false})
+  expect((await f.read()).stats).toEqual({outcome:'empty',loading:false,copyState:'idle'})
   await f.statsAction('cycleDates'); expect(cycle).toHaveBeenCalledOnce()
   cache[3] = null
   await expect(f.statsAction('cycleDates')).rejects.toThrow('date control changed')
@@ -74,4 +74,18 @@ it('cancels a pending Usage reading without inventing zero values', async () => 
   const reading = f.read(cancelled.signal); cancelled.abort()
   await expect(reading).rejects.toThrow()
   expect((f.n as any).runtime.Hco).toHaveBeenCalledWith({},'apack native Settings')
+})
+
+it('uses the original Stats export handler and refuses copying outside a mounted Stats view', async () => {
+  const f = fixture(), Loader = () => {}, Models = () => {}, copy = vi.fn(), dates = vi.fn(), cache = Array(50).fill(null)
+  f.panel.selectedTab = 'Stats'; cache[3] = dates; cache[13] = copy
+  f.hashes.set(Loader, 'dea182e69c551bbf30ca8dc15dbbd4ce008db3150028451a40b64fff5d53282a')
+  f.hashes.set(Models, '81b82bfee5a2b4a365261e1814815ed043c073b29370102ddbf1522a8bdcd1d1')
+  ;(f.owner.child as any).child = {type:Loader,memoizedProps:{allTimePromise:Promise.resolve({type:'empty'}),activeTimePromise:Promise.resolve({})},updateQueue:{memoCache:{data:[cache]}},child:{type:Models,memoizedProps:{stats:{modelUsage:{}}}}}
+  await f.statsAction('copy')
+  expect(copy).toHaveBeenCalledOnce(); expect(copy.mock.calls[0][0]).toMatchObject({key:'s',ctrl:true,meta:false})
+  expect(dates).not.toHaveBeenCalled()
+  f.panel.selectedTab='Config'
+  await expect(f.statsAction('copy')).rejects.toThrow('unavailable')
+  expect(copy).toHaveBeenCalledOnce()
 })

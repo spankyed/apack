@@ -85,9 +85,25 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
   const props=source.stats?.memoizedProps;
   if(outcome.type==='success'&&!props)throw Error('Native Settings frame is not ready');
   result.stats={outcome:outcome.type,loading:props?.isLoading===true,...(outcome.type==='error'?{problem:String(outcome.message)}:{}),...(source.statsTabs?{view:source.statsTabs.selectedTab}:{}),...(props?{range:props.selectorRange??props.dateRange??'all'}:{})};
+  const loaderCaches=source.loader.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===50);
+  if(loaderCaches?.length!==1)throw Error('Native Stats controls changed');
+  const copyText=loaderCaches[0][44];
+  result.stats.copyState=copyText===' · copying…'?'pending':copyText===' · copied!'?'saved':copyText===' · copy failed'?'error':'idle';
   if(props){
    const data=props.stats;
    result.stats.data={totalSessions:data.totalSessions,totalMessages:data.totalMessages,totalDays:data.totalDays,activeDays:data.activeDays,dailyActivity:data.dailyActivity.map(row=>({date:row.date,messageCount:row.messageCount,sessionCount:row.sessionCount,toolCallCount:row.toolCallCount})),modelUsage:Object.fromEntries(Object.entries(data.modelUsage).map(([model,row])=>[model,{inputTokens:row.inputTokens,outputTokens:row.outputTokens,cacheReadInputTokens:row.cacheReadInputTokens,cacheCreationInputTokens:row.cacheCreationInputTokens,costUSD:row.costUSD}]))};
+   const extra=result.stats.data;
+   for(const key of ['firstSessionDate','lastSessionDate','peakActivityDay','peakActivityHour'])if(data[key]!==undefined)extra[key]=data[key];
+   if(data.streaks)extra.streaks={currentStreak:data.streaks.currentStreak,longestStreak:data.streaks.longestStreak,...Object.fromEntries(['currentStreakStart','longestStreakStart','longestStreakEnd'].filter(key=>data.streaks[key]!==undefined).map(key=>[key,data.streaks[key]]))};
+   if(data.longestSession!==undefined)extra.longestSession=data.longestSession===null?null:{sessionId:data.longestSession.sessionId,duration:data.longestSession.duration,messageCount:data.longestSession.messageCount,timestamp:data.longestSession.timestamp};
+   if(data.dailyModelTokens)extra.dailyModelTokens=data.dailyModelTokens.map(row=>({date:row.date,tokensByModel:{...row.tokensByModel}}));
+   if(outcome.type==='success')extra.allTimeActivity=outcome.data.dailyActivity.map(row=>({date:row.date,messageCount:row.messageCount,sessionCount:row.sessionCount,toolCallCount:row.toolCallCount}));
+   if(Object.hasOwn(props,'allTimeStats')){
+    const caches=source.stats.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===102);
+    if(caches?.length!==1)throw Error('Native Stats Overview producer changed');
+    if(typeof caches[0][23]==='string')result.stats.insight=caches[0][23];
+   }
+
   }
  }
  signal?.throwIfAborted();const current=nativeSettingsFrame(n,entry);
@@ -126,6 +142,11 @@ async function actNativeSettingsStats(n,entry,action,signal){
   const caches=source.loader.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===50);
   if(caches?.length!==1||typeof caches[0][3]!=='function')throw Error('Native Stats date control changed');
   caches[0][3]();
+ }else if(action==='copy'){
+  const caches=source.loader.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===50);
+  if(caches?.length!==1||typeof caches[0][13]!=='function'||!source.stats)throw Error('Native Stats copy control changed');
+  // Invoke the original Ctrl+S handler; original formatting, clipboard export and feedback remain native.
+  caches[0][13]({key:'s',ctrl:true,meta:false,shift:false,alt:false,preventDefault(){},stopPropagation(){}});
  }else throw Error('Invalid native Stats action');
  // Let the original React state update; the following read still validates dialog identity.
  await new Promise(resolve=>setTimeout(resolve,40));signal?.throwIfAborted();entry.current();

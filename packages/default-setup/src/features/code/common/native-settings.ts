@@ -5,9 +5,16 @@ export const claudeSettingsTab = z.enum(['Status', 'Config', 'Usage', 'Stats'])
 const nativeReading = z.number().finite()
 export const claudeSettingsStats = z.object({
   view: z.enum(['Overview', 'Models']).optional(), range: z.enum(['all', '7d', '30d']).optional(), loading: z.boolean(),
+  copyState: z.enum(['idle','pending','saved','error']).optional(),
+  insight: z.string().max(16384).optional(),
   outcome: z.enum(['success', 'empty', 'error', 'loading']), problem: z.string().max(16384).optional(),
   data: z.object({
     totalSessions: nativeReading, totalMessages: nativeReading, totalDays: nativeReading, activeDays: nativeReading,
+    streaks: z.object({currentStreak:nativeReading,longestStreak:nativeReading,currentStreakStart:z.string().max(128).nullable().optional(),longestStreakStart:z.string().max(128).nullable().optional(),longestStreakEnd:z.string().max(128).nullable().optional()}).strict().optional(),
+    longestSession: z.object({sessionId:z.string().max(1024),duration:nativeReading,messageCount:nativeReading,timestamp:z.string().max(128)}).strict().nullable().optional(),
+    firstSessionDate:z.string().max(128).nullable().optional(),lastSessionDate:z.string().max(128).nullable().optional(),peakActivityDay:z.string().max(128).nullable().optional(),peakActivityHour:nativeReading.nullable().optional(),
+    dailyModelTokens:z.array(z.object({date:z.string().max(128),tokensByModel:z.record(z.string().max(1024),nativeReading)}).strict()).max(10000).optional(),
+    allTimeActivity:z.array(z.object({date:z.string().max(128),messageCount:nativeReading,sessionCount:nativeReading,toolCallCount:nativeReading}).strict()).max(10000).optional(),
     modelUsage: z.record(z.string().max(1024), z.object({inputTokens:nativeReading,outputTokens:nativeReading,cacheReadInputTokens:nativeReading,cacheCreationInputTokens:nativeReading,costUSD:nativeReading}).strict()),
     dailyActivity: z.array(z.object({date:z.string().max(64),messageCount:nativeReading,sessionCount:nativeReading,toolCallCount:nativeReading}).strict()).max(10000),
   }).strict().optional(),
@@ -30,7 +37,8 @@ export const claudeSettingsSnapshot = z.object({
     isLocked: z.boolean(), lockReason: z.string().max(16384).optional(),
   }).strict()).max(256),
 }).strict()
+export type ClaudeSettingsStats = z.infer<typeof claudeSettingsStats>
 export type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>
 export type ClaudeSettingValue = z.infer<typeof claudeSettingValue>
-export type ClaudeSettingsOperation = { kind: 'read' } | { kind: 'stats'; revision: string; action: 'Overview' | 'Models' | 'cycleDates' } | { kind: 'tab'; revision: string; tab: z.infer<typeof claudeSettingsTab> } | { kind: 'write'; revision: string; key: string; value: ClaudeSettingValue }
+export type ClaudeSettingsOperation = { kind: 'read' } | { kind: 'stats'; revision: string; action: 'Overview' | 'Models' | 'cycleDates' | 'copy' } | { kind: 'tab'; revision: string; tab: z.infer<typeof claudeSettingsTab> } | { kind: 'write'; revision: string; key: string; value: ClaudeSettingValue }
 export type ClaudeSettingsView = { requestId: string; status: 'pending' | 'ready' | 'error'; snapshot?: ClaudeSettingsSnapshot; problem?: string; savedKey?: string }
