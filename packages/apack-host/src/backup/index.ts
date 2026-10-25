@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
-import { createEarsEngine, type Ears, type EarsDatabase } from '@apackdev/ears';
+import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
 import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
@@ -31,12 +31,15 @@ export interface BackupStore {
   replaceWith(dir: string): void;
 }
 
-/** The database as a backup copies it: elmdb's compacted copy, and its replacement from another database's data */
-export function databaseBackupStore(database: EarsDatabase): BackupStore {
+/**
+ * The database as a backup copies it: elmdb's compacted copy, and its replacement from another database's data —
+ * through the engine reading it when there is one, so the engine's watches hear of it
+ */
+export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine): BackupStore {
   return {
     path: database.path,
     copyTo: async (targetDir) => database.backup(targetDir),
-    replaceWith: (dir) => database.replaceWith(dir),
+    replaceWith: (dir) => (engine ? engine.admin.replaceWith(dir) : database.replaceWith(dir)),
   };
 }
 

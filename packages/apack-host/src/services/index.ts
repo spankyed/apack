@@ -51,7 +51,7 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     services: {
       onboarding: createOnboarding(engine),
       // The service replaces the data; naming what the app is told about it belongs here, with the wiring
-      appData: createAppData({ database, history: { service: runHistoryService, database: runHistory.database },
+      appData: createAppData({ database, engine, history: { service: runHistoryService, database: runHistory.database },
         registry: packs, settings,
         onReplaced: () => transport.rootEvents.emitIncoming({ to: HOST.bus, event: { type: 'DATA_REPLACED' } }),
       }),

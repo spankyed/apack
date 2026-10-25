@@ -40,12 +40,6 @@ afterAll(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 const entityTypes = new Set([...HOST_ENTITY_TYPES, 'Memo']);
 const newEngine = () => _createTestEngine({ entityTypes: [...entityTypes] });
 
-/** A member of a napi object, a method bound to it, since the binding checks what it is called on */
-const bound = (target: object, key: string | symbol): unknown => {
-  const value = Reflect.get(target, key, target) as unknown;
-  return typeof value === 'function' ? value.bind(target) : value;
-};
-
 /** A test run history whose database reset is watched */
 function blockedHistory() {
   const runHistory = _openTestRunHistory();
@@ -64,7 +58,10 @@ describe('createHostRuntime', () => {
   it('refuses overlapping resets and imports before either can touch the store', async () => {
     const { runHistory, reset, finish } = blockedHistory();
     const store = { reset: vi.fn() } as unknown as EarsDatabase;
-    const runtime = createHostRuntime({ runHistory, database: store, engine: newEngine(), transport: { rootEvents: testRootEvents },
+    const engine = newEngine();
+    // The app's database is emptied through the engine reading it, so the engine's watches hear of it
+    const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
+    const runtime = createHostRuntime({ runHistory, database: store, engine, transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry() });
     // Each started while the first is under way, which it is until its promise settles
     const first = runtime.services.appData.reset();
@@ -75,15 +72,17 @@ describe('createHostRuntime', () => {
       await expect(importing).rejects.toThrow('already being replaced');
     } finally { finish(); await first; }
     expect(reset).toHaveBeenCalledOnce();
-    expect(store.reset).toHaveBeenCalledOnce();
+    expect(clear).toHaveBeenCalledOnce();
     order.length = 0;
   });
 
   it('excludes pack operations while app data is replaced, and refuses to replace it under one', async () => {
     const { runHistory, finish } = blockedHistory();
     const store = { reset: vi.fn() } as unknown as EarsDatabase;
+    const engine = newEngine();
+    const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory, database: store, engine: newEngine(), transport: { rootEvents: testRootEvents },
+    const runtime = createHostRuntime({ runHistory, database: store, engine, transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs });
     const resetting = runtime.services.appData.reset();
     try {
@@ -94,7 +93,7 @@ describe('createHostRuntime', () => {
     expect(packs.claimPackOperation('any-pack')).toBe(true);
     try {
       await expect(runtime.services.appData.reset()).rejects.toThrow('A pack is being installed or changed');
-      expect(store.reset).toHaveBeenCalledOnce();
+      expect(clear).toHaveBeenCalledOnce();
     } finally { packs.releasePackOperation('any-pack'); }
     order.length = 0;
   });
@@ -151,14 +150,11 @@ describe('createHostRuntime', () => {
   it("stops the packs, empties the stores and keys, then starts the packs as a boot does", async () => {
     // The engine reads the database, so emptying the database is what empties the engine
     const { database, engine } = _openTestDatabase({ entityTypes: [...entityTypes] });
-    const store = new Proxy(database, {
-      get: (target, key) => (key === 'reset'
-        ? () => { order.push('store reset'); target.reset(); }
-        : bound(target, key)),
-    });
+    const clear = engine.admin.clear;
+    vi.spyOn(engine.admin, 'clear').mockImplementation(() => { order.push('store reset'); clear(); });
     const id = engine.create('Memo', { id: 'Memo-1' as EARS.EntityId }).set('title', 'kept?').id();
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database: store, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
+    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
     secretsStore.add('openai', 'Work', 'sk-proj-resetspec1234567890');
     // An external pack the app loaded, holding something open between its onInit and onShutdown
     const boot = { onInit: () => order.push(`onInit (${secretsStore.list().length} keys)`), onShutdown: () => order.push('onShutdown') };

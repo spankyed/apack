@@ -1,6 +1,6 @@
 // services.appData: reset, back up and restore the app's stored data
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
-import type { EarsDatabase } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
 import { secretsStore } from '../secrets/index.ts';
 import { _getMediaPath } from '@apackdev/sdk/utils';
@@ -15,13 +15,15 @@ import { createSettingsBackupValidator } from '../features/settings/be/backup.ts
  * already put back what was there. What it does with that is the caller's — replacing the data is this service's
  * job, and telling the app is not.
  */
-export function createAppData({ database, history, registry, settings, onReplaced }: {
+export function createAppData({ database, engine, history, registry, settings, onReplaced }: {
   database: EarsDatabase;
+  /** The engine reading `database`, through which it is emptied and replaced, so the engine's watches hear of it */
+  engine: EarsEngine;
   /** The run history and its database, which a backup copies and a reset empties with the app's */
   history: { service: RunHistory; database: EarsDatabase };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
 }): AppDataService {
-  const stores: BackupStores = { lmdb: databaseBackupStore(database), runHistory: databaseBackupStore(history.database) };
+  const stores: BackupStores = { lmdb: databaseBackupStore(database, engine), runHistory: databaseBackupStore(history.database) };
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -47,7 +49,7 @@ export function createAppData({ database, history, registry, settings, onReplace
       await exclusive(() => replaceData(async () => {
         registry.runShutdownHooks();
         // The engine reads the database, so emptying the database empties the engine, in one unit; its schema stays
-        database.reset();
+        engine.admin.clear();
         history.database.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
