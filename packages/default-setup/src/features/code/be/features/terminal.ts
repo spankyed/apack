@@ -38,7 +38,7 @@ export type Event =
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
-  | { type: 'CODE_CONNECTED' };
+  | { type: 'GET_CODE_START' };
 
 /** Emit an event to the frontend code surface */
 const emitToFrontend = (event: OutgoingTerminalEvents) => {
@@ -111,8 +111,9 @@ export const terminalSystem = setup({
     })
   },
   actions: handlers.actions({
-    sendConnectedData: () => {
-      emitToFrontend({ type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
+    /** The running terminals, answered to the window that asked as it starts */
+    sendConnectedData: ({ reply }) => {
+      answer(reply, { type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
     },
 
     createTerminal: ({ event, context, reply }) => {
@@ -138,7 +139,7 @@ export const terminalSystem = setup({
 
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
-        emitToFrontend({ type: 'terminal.CREATED', data: terminalInfo })
+        emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
         reply?.({ type: 'terminal.OPENED', data: terminalInfo })
       } catch (error: any) {
         // A failure to create is the asker's to see; with nobody to answer it is still worth reporting
@@ -321,7 +322,7 @@ export const terminalSystem = setup({
     },
     idle: {
       on: {
-        'CODE_CONNECTED': {
+        'GET_CODE_START': {
           actions: 'sendConnectedData'
         },
         'terminal.CREATE_TERMINAL': {

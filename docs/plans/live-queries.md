@@ -518,12 +518,25 @@ and `threads`' streaming tokens are notifications.
     live would replace what the user is typing with another window's save. They reach the window that opened them.
   - **`reply` answers the delivered message only** (`_Delivery.event`, `@apackdev/sdk/events`). The code system tells
     its children what to do with events of its own making — a new base directory, a connection — while handling
-    another system's message; the settings system's \`FEATURE_SETTINGS_UPDATED\` was handing those children's handlers
-    a \`reply\` addressed to host/settings, so the explorer's listing and the worktree list were answered to the
-    settings system. Each door now records the event object it hands the receiver, and a handler is handed \`reply\`
+    another system's message; the settings system's `FEATURE_SETTINGS_UPDATED` was handing those children's handlers
+    a `reply` addressed to host/settings, so the explorer's listing and the worktree list were answered to the
+    settings system. Each door now records the event object it hands the receiver, and a handler is handed `reply`
     only when the event it handles is that object — which a system forwarding the event to a child still is.
   - **Terminals stay process state.** The running terminals are the service's processes, mirrored to the engine only
-    to restore them, so their lifecycle is news and the list (\`TERMINALS_LISTED\`) an answer.
+    to restore them, so their lifecycle is news and the list (`TERMINALS_LISTED`) an answer. `terminal.CREATED`
+    names the terminal and no more; each window asks for the list again on it.
+  - **What a window starts from is a fetch.** `CODE_CONNECTED` broadcast the base directory, the settings and the
+    providers to every window on every publish, and each child sent its own startup data with it. The surface asks
+    on `SURFACE_STARTED` (`GET_CODE_START`); the system answers `CODE_STARTED` to the asker and hands the same ask
+    to the explorer and the terminals, whose answers reach the same window. The panels listened for a
+    `CODE_STARTUP` nothing sent; they take `CODE_STARTED`, as the explorer did.
+  - **A moved directory and a changed repository are news without data.** The base directory moving is
+    `BASE_DIRECTORY_CHANGED { baseDirectory }`, on which every window asks again for what it starts from; the git
+    watcher's refresh broadcast the status and log listing to every window, and now broadcasts
+    `commit.REPOSITORY_CHANGED`, on which each commit panel asks for its status, history, stashes and worktrees. A
+    write is the same news: a stash, commit or worktree change re-sent itself the listing it touched after its
+    `await`, outside any delivery, so `answer` broadcast that listing to every window; it now announces the repository
+    changed (coalesced with the watcher's), and the window that wrote hears its outcome by reply.
 - **logs** — the buffer is a fetch. `LOGS_CONNECTED` and `LOGS_UPDATE` sent the whole log list to every window, on
   every publish and every settings change; the list is data a window shows, whether or not a stored row backs it, and
   it lives in the system's memory, so no view can serve it. The surface asks (`GET_LOGS`, answered `LOGS_READ` to it

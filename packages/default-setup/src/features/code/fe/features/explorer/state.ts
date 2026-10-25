@@ -105,7 +105,7 @@ export type Event =
   | { type: 'explorer.CLEAR_REVEAL' }
   | { type: 'explorer.REFRESH_TREE' }
   // Broadcast events from parent
-  | { type: 'CODE_CONNECTED'; data: { baseDirectory: string | null } };
+  | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } };
 
 export const explorerState = setup({
   types: {
@@ -296,7 +296,7 @@ export const explorerState = setup({
     },
 
     handleCodeConnected: assign(({ event, self }) => {
-      const ev = event as { type: 'CODE_CONNECTED'; data: { baseDirectory: string | null } }
+      const ev = event as { type: 'CODE_STARTED'; data: { baseDirectory: string | null } }
       updateParentState(self, { baseDirectory: ev.data.baseDirectory })
       if (ev.data.baseDirectory) {
         sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.baseDirectory })
@@ -566,7 +566,7 @@ export const explorerState = setup({
   states: {
     idle: {
       on: {
-        'CODE_CONNECTED': {
+        'CODE_STARTED': {
           actions: 'handleCodeConnected'
         },
         'explorer.REFRESH_TREE': {

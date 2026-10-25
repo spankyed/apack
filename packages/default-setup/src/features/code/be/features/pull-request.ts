@@ -474,14 +474,6 @@ export const pullRequestSystem = setup({
       }
     }),
 
-    selfRefreshPrStatus: ({ self, reply }) => {
-      const emit = answering(reply)
-      // Notify frontend to show "Checking..." before backend checks resolve (prevents UI flash on directory switch)
-      emit({ type: 'pr.STATUS_CHANGED', data: { timestamp: new Date() } })
-      self.send({ type: 'pr.CHECK_GH_AUTH' })
-      self.send({ type: 'pr.LIST_OPEN_PRS' })
-      self.send({ type: 'pr.CHECK_BRANCH_PR' })
-    }
   })
 }).createMachine({
   id: 'pull-request',
@@ -519,7 +511,7 @@ export const pullRequestSystem = setup({
         'pr.CHECK_GH_AUTH': { actions: 'checkGhAuth' },
         'pr.GET_PR_AUTOFILL': { actions: 'getPRAutofill' },
         'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
-        'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory', 'selfRefreshPrStatus'] }
+        'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory'] }
       }
     }
   }

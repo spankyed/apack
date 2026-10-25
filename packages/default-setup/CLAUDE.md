@@ -114,8 +114,8 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
 
 **A result is a reply.** A handler is handed `reply` (`spec.actions({ … })`), absent when the message named no sender,
 and answering is the handler's whole job: the window that asked hears it, and no other. Where a result must still
-reach someone when nobody asked — an action opening a thread, the git watcher refreshing the status — a feature's
-`answer(reply, event)` replies or broadcasts, never both (`threads/be/answer.ts`, `code/be/answer.ts`).
+reach someone when nobody asked — an action opening a thread — a feature's `answer(reply, event)` replies or
+broadcasts, never both (`threads/be/answer.ts`, `code/be/answer.ts`).
 
 - **`reply` answers the message being delivered, and only that one.** An event a machine makes while handling a
   message — a system telling its children something of its own — is not that message, and its handler is handed no

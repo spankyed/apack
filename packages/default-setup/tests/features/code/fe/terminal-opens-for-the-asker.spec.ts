@@ -48,7 +48,11 @@ beforeEach(() => {
   sendToSystem.mockReset();
   parent.updateParentState.mockReset();
   parent.addTabToParent.mockReset();
+  parent.getParentContext.mockReset().mockReturnValue(null);
 });
+
+/** The code surface already showing `id` in its panel, so the list has no panel of its own to pick */
+const showing = (id: string) => parent.getParentContext.mockReturnValue({ panelTerminalId: id } as never);
 
 /** A window that has asked for a terminal, so its intent is recorded under that ask's call */
 function asked() {
@@ -57,13 +61,16 @@ function asked() {
   return actor;
 }
 
-it('grows every window\'s list on the news, and opens nothing', () => {
+it('asks for the list again on the news, and opens nothing', () => {
   // This window never asked — it is any other window, which the broadcast also reaches
   const other = createActor(terminalState).start();
+  showing('t-0');
 
-  other.send({ type: 'terminal.CREATED', data: aTerminal('t-1') });
+  other.send({ type: 'terminal.CREATED', data: { terminalId: 't-1' } });
+  expect(sendToSystem, 'the news names the terminal; the list is an answer').toHaveBeenCalledWith('code', { type: 'terminal.REFRESH_LIST' });
+  other.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-0'), aTerminal('t-1')] });
 
-  expect(terminals(other), 'the list is what every window takes from it').toEqual(['t-1']);
+  expect(terminals(other)).toEqual(['t-0', 't-1']);
   expect(parent.updateParentState, 'and nothing is routed into a panel nobody asked about').not.toHaveBeenCalled();
   expect(parent.addTabToParent).not.toHaveBeenCalled();
 });
@@ -97,8 +104,10 @@ it('opens it as a tab when that is what was asked for', () => {
 it('leaves the asker with one entry and one open', () => {
   const actor = asked();
 
-  actor.send({ type: 'terminal.CREATED', data: aTerminal('t-3') });
+  actor.send({ type: 'terminal.CREATED', data: { terminalId: 't-3' } });
   actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-3') }));
+  showing('t-3');
+  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-3')] });
 
   expect(terminals(actor)).toEqual(['t-3']);
   expect(parent.updateParentState).toHaveBeenCalledTimes(1);

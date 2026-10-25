@@ -54,7 +54,7 @@ export type Event =
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository; gitWatcher: GitWatcherService }
   | { type: 'commit.GIT_STATUS_CHANGED' }
-  | { type: 'CODE_CONNECTED' };
+  | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' };
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodeCommitSystemContext, Event>();
@@ -72,8 +72,7 @@ export const commitSystem = setup({
         clearTimeout(timer);
         timer = setTimeout(() => {
           timer = undefined;
-          sendBack({ type: 'commit.GET_GIT_STATUS' });
-          sendBack({ type: 'commit.LOG_LIST' });
+          sendBack({ type: 'commit.ANNOUNCE_REPOSITORY_CHANGED' });
         }, 150);
       });
       return () => clearTimeout(timer);
@@ -536,8 +535,9 @@ export const commitSystem = setup({
       }
     }),
 
-    selfRefreshGitStatus: ({ self }) => {
-      self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+    /** The repository changed (the watcher, or a write here; coalesced): news for every window, which each asks again about */
+    announceRepositoryChanged: () => {
+      broadcastToSurface(surfaceId, { type: 'commit.REPOSITORY_CHANGED' })
     },
 
     stashPush: ({ event, context, self, reply }) => {
@@ -551,7 +551,6 @@ export const commitSystem = setup({
           data: { message: result }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-        self.send({ type: 'commit.STASH_LIST' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -614,7 +613,6 @@ export const commitSystem = setup({
           data: { message: 'Stash popped successfully' }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-        self.send({ type: 'commit.STASH_LIST' })
       }).catch((error: any) => {
         if (error instanceof StashConflictError) {
           answer(reply, {
@@ -622,7 +620,6 @@ export const commitSystem = setup({
             data: { message: error.message }
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-          self.send({ type: 'commit.STASH_LIST' })
           return
         }
         answer(reply, {
@@ -638,7 +635,7 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashDrop(ev.index).then(() => {
-        self.send({ type: 'commit.STASH_LIST' })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -651,7 +648,7 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashClear().then(() => {
-        self.send({ type: 'commit.STASH_LIST' })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -687,7 +684,6 @@ export const commitSystem = setup({
           data: { hash: ev.hash }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-        self.send({ type: 'commit.LOG_LIST' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -707,7 +703,6 @@ export const commitSystem = setup({
           data: { hash: ev.hash }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-        self.send({ type: 'commit.LOG_LIST' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -741,7 +736,7 @@ export const commitSystem = setup({
           type: 'commit.WORKTREE_ADDED',
           data: { path: ev.path, branch: ev.branch || '' }
         })
-        self.send({ type: 'commit.WORKTREE_LIST' })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -759,7 +754,7 @@ export const commitSystem = setup({
           type: 'commit.WORKTREE_REMOVED',
           data: { path: ev.path }
         })
-        self.send({ type: 'commit.WORKTREE_LIST' })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
       }).catch((error: any) => {
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
@@ -783,9 +778,6 @@ export const commitSystem = setup({
   states: {
     idle: {
       on: {
-        'CODE_CONNECTED': {
-          // No specific action needed for commit on startup
-        },
         'commit.GET_GIT_STATUS': {
           actions: 'getGitStatus'
         },
@@ -835,10 +827,13 @@ export const commitSystem = setup({
           actions: 'generateCommitMessage'
         },
         'commit.UPDATE_BASE_DIRECTORY': {
-          actions: ['updateBaseDirectory', 'selfRefreshGitStatus', 'worktreeList', 'getAllBranches', 'logList']
+          actions: ['updateBaseDirectory']
         },
         'commit.GIT_STATUS_CHANGED': {
           actions: 'handleGitStatusChanged'
+        },
+        'commit.ANNOUNCE_REPOSITORY_CHANGED': {
+          actions: 'announceRepositoryChanged'
         },
         'commit.STASH_PUSH': {
           actions: 'stashPush'
