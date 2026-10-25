@@ -98,7 +98,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
   await composer.fill(parent);const before=await context()
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),field=form.locator('[contenteditable="true"]')
-  const samples: any[]=[], captures: unknown[]=[]
+  const samples: any[]=[], captures: unknown[]=[], calendarSamples: any[]=[]
   const nativeWindow=await electronApp.browserWindow(appPage)
   const panel=focused.getByRole('dialog',{name:'Claude Code settings',exact:true})
   async function capture(label:string){
@@ -108,12 +108,21 @@ test('preserves selected Agent context through native Settings tabs and compact 
       if(await panel.isVisible()){
         await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport({ratio:1})
         await expect(panel.getByRole('navigation',{name:'Claude Code settings tabs'})).toBeInViewport()
-        if(label==='stats-models'){
-          const body=panel.locator('[aria-label="Claude Code Stats"]'),table=panel.locator('table')
-          const visible=()=>table.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
+        if(label==='stats-models'||label==='stats-calendar'){
+          const body=panel.locator('[aria-label="Claude Code Stats"]')
+          const target=label==='stats-calendar'?panel.getByLabel('Claude Code activity calendar',{exact:true}):panel.locator('table')
+          const bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();if(r.height>b.height)throw Error('Stats reading target exceeds viewport');return {visible:r.top>=b.top&&r.bottom<=b.bottom,shift:r.top<b.top?Math.max(-60,r.top-b.top):Math.min(60,r.bottom-b.bottom)}},undefined,{timeout:5000})
           await body.hover()
-          for(let step=0;step<40&&!await visible();step++){await appPage.mouse.wheel(0,60);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
-          expect(await visible()).toBe(true)
+          for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
+          expect((await bounds()).visible).toBe(true)
+          if(label==='stats-calendar'){
+            await expect(target).toContainText('52 weeks');await expect(target.locator('[data-activity-level]')).toHaveCount(364)
+            const levels=await target.locator('[data-activity-level]').evaluateAll(cells=>cells.map(cell=>cell.getAttribute('data-activity-level')))
+            const active=levels.filter(level=>['1','2','3','4'].includes(level!)).length;expect(active).toBeGreaterThan(0)
+            expect(levels.every(level=>['0','1','2','3','4','future'].includes(level!))).toBe(true)
+            expect(await target.innerText()).not.toMatch(/[·░▒▓█]/);await expect(target.locator('pre')).toHaveCount(0)
+            calendarSamples.push({width,cells:levels.length,active,graphical:true,realWheel:true})
+          }
         }
 
         const geometry=await panel.evaluate(element=>{
@@ -184,7 +193,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
   originalDocument=await field.evaluate(element=>(element as any).editor.state.doc.toJSON())
   originalSelection=await field.evaluate(element=>(element as any).editor.state.selection.toJSON())
   await open();await tab('Usage');await expect(panel.getByText('Context window',{exact:true})).toBeVisible();await capture('usage-tab')
-  await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible();await capture('stats-overview')
+  await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible();await capture('stats-overview');await capture('stats-calendar')
   await panel.getByRole('button',{name:'Models',exact:true}).click();await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(panel.locator('table thead')).toContainText('Cache read')
   const totals=await panel.locator('tbody tr').evaluateAll(rows=>rows.reduce((total,row)=>{
@@ -198,7 +207,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parent)
   await capture('retained-parent')
-  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({desktop:true,sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,totals,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures},null,2))
+  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({desktop:true,sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,totals,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures,calendarSamples},null,2))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing worker settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
