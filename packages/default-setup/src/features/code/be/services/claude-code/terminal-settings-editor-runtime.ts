@@ -2,7 +2,9 @@
 export const claudeTerminalSettingsEditorRuntime = String.raw`
 async function nativeSettingsEditorOpeners(n,entry){
  const {qh}=await import('/$bunfs/root/chunk-07y7va8x.js');
- const frame=nativeSettingsFrame(n,entry),pending=[frame.owner.child],seen=new Set(),owners=[];
+ const frame=nativeSettingsFrame(n,entry);
+ if(frame.panel.selectedTab!=='Config'||frame.panel.hidden)throw Error('Native Config editor is unavailable');
+ const pending=[frame.owner.child],seen=new Set(),owners=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
   if(seen.size>=4096)throw Error('Native Config traversal exceeded bound');seen.add(fiber);
@@ -39,5 +41,16 @@ async function nativeSettingsEditorOpeners(n,entry){
  entry.current();const current=nativeSettingsFrame(n,entry);
  if(entry.closed||entry.answered||current.owner!==frame.owner||current.panel!==frame.panel)throw Error('Native Config owner changed');
  return {owner:owners[0],openers};
+}
+async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
+ signal?.throwIfAborted();
+ if(typeof key!=='string'||!visibleKeys.has(key))throw Error('Native setting is no longer visible');
+ const before=await nativeSettingsEditorOpeners(n,entry),candidate=before.openers.get(key);
+ if(!candidate)throw Error('Native setting has no available editor');
+ const current=await nativeSettingsEditorOpeners(n,entry);
+ signal?.throwIfAborted();entry.current();
+ if(entry.closed||entry.answered||current.owner!==before.owner||current.openers.get(key)?.callback!==candidate.callback)throw Error('Native Config editor changed before opening');
+ // The original row callback owns locks, consent and editor selection. Never call a row writer here.
+ return await awaitNativeSettingsReading(candidate.callback(),signal);
 }
 `
