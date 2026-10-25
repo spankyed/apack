@@ -96,8 +96,15 @@ it('shows all native LSP choices in ordinary chat, retires the card and sends no
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
   const card = f.root.querySelector('[aria-label="Claude LSP recommendation"]')!
   expect(card.querySelector('b')).toBeNull()
-  expect([...card.querySelectorAll('button')].map(button => button.textContent)).toEqual(['yes', 'no', 'never', 'disable'])
-  for (const button of card.querySelectorAll('button')) {
+  expect([...card.querySelectorAll('.native-notice__actions button')].map(button => button.textContent)).toEqual(['yes', 'no', 'never', 'disable'])
+  const about = [...card.querySelectorAll('button')].find(button => button.textContent === 'About this plugin')!
+  about.click(); await nextTick()
+  await vi.waitFor(() => expect(document.body.querySelector('[aria-label="LSP plugin details"]')).not.toBeNull())
+  const details = document.body.querySelector('[aria-label="LSP plugin details"]')!
+  expect(details.textContent).toContain('<b>Review</b>'); expect(details.querySelector('b')).toBeNull()
+  details.querySelector<HTMLButtonElement>('button[aria-label="Close plugin details"]')!.click(); await nextTick()
+  expect(actor.send.mock.calls.filter(([event]) => event.type === 'CLAUDE_TERMINAL_NOTICE')).toHaveLength(0)
+  for (const button of [...card.querySelectorAll('button')].filter(button => button !== about)) {
     button.click()
     expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'lsp', revision: 'revision', sessionId: 'session', decision: button.textContent })
   }

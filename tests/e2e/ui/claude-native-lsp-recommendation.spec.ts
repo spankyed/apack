@@ -116,9 +116,9 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     for (const label of Object.values(labels)) await expect(notice.getByRole('button', { name: label, exact: true })).toBeInViewport()
     await expect(composer).toHaveText(draft)
     if (decision === 'no') {
-      const details = notice.locator('details')
-      await details.locator('summary').click()
-      await expect(details).toHaveAttribute('open', '')
+      await notice.getByRole('button', { name: 'About this plugin', exact: true }).click()
+      const details = appPage.getByRole('dialog', { name: 'LSP plugin details', exact: true })
+      await expect(details).toBeVisible()
       for (const paragraph of await details.locator('p').all()) { await paragraph.scrollIntoViewIfNeeded(); await expect(paragraph).toBeInViewport() }
     }
     await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
@@ -138,7 +138,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     for (const rect of draftVisibility.rects) { expect(rect.top).toBeGreaterThanOrEqual(draftVisibility.top - 1); expect(rect.bottom).toBeLessThanOrEqual(draftVisibility.bottom + 1); expect(rect.left).toBeGreaterThanOrEqual(draftVisibility.left - 1); expect(rect.right).toBeLessThanOrEqual(draftVisibility.right + 1) }
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
     expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
-    if (decision === 'no') { await notice.locator('summary').click(); await composer.focus(); await expect(composer).toBeFocused(); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection) }
+    if (decision === 'no') { await appPage.getByRole('dialog', { name: 'LSP plugin details', exact: true }).getByRole('button', { name: 'Close plugin details', exact: true }).click(); await composer.focus(); await expect(composer).toBeFocused(); expect(await composer.evaluate(element => (element as any).editor.state.selection.toJSON())).toEqual(savedSelection) }
 
   }
   if (decision === 'timeout') await expect(notice).toBeHidden({ timeout: 35000 })
