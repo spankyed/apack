@@ -2957,8 +2957,14 @@ Conditions: it hung on four of eleven runs across two fresh worktrees and on six
 `--trace retain-on-failure`, and never in the main checkout, three apps at once included. Repeated minutes later in
 the same worktree, the identical run exited cleanly. Spotlight's `mdworker_shared` processes were busy over a fresh
 worktree's `node_modules`, and a suite there took 23.3s against 8.9s for the same run in a `.noindex` worktree, where
-neither hung. That is consistent with I/O pressure on a fresh install slowing the writes Chromium blocks exit on;
-it is not proven. No timeout or assertion was changed.
+neither hung.
+
+The comparison, run as four pairs of fresh worktrees set up identically (`npm ci`, `build:default-setup`,
+`build:runtime`, `test:external-pack:contract`, then three apps at once with `--trace retain-on-failure`), alternating
+which went first: every worktree Spotlight indexed took 23–65s and two of the four hung; every one in a `.noindex`
+directory took 8.6–9.0s and none hung. So Spotlight indexing a fresh `node_modules` is what slowed the writes
+Chromium blocks exit on. `session:new` and `session:check` create worktrees under `<repository>-worktrees.noindex`
+(`worktreesRoot`, `scripts/session.mjs`). No timeout or assertion was changed.
 
 ### Versioned override reproducer and launch admission (2026-10-17)
 
