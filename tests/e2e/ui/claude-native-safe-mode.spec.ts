@@ -57,8 +57,8 @@ test('keeps safe-mode native startup and composer usable without private hooks',
     if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
-    if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
     currentScreen=text
+    if (native?.state?.status === 'live') return text.includes('Safe mode: all customizations are disabled')
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
@@ -73,6 +73,8 @@ test('keeps safe-mode native startup and composer usable without private hooks',
     const png=await win.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
     await writeFile(testInfo.outputPath('native-safe-mode-startup-failure.png'),Buffer.from(png,'base64'));throw error
   }
+  expect(currentScreen).toContain('Safe mode: all customizations are disabled')
+  expect(await readFile(join(workspace!,'native-select-drawing.json'),'utf8').then(()=>true, error=>{if(error.code==='ENOENT')return false;throw error})).toBe(false)
   const boundNativePid=(await context()).native.state.nativePid
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   const composer=card.locator('[contenteditable="true"]')

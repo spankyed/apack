@@ -13,7 +13,7 @@ import tarfile
 from urllib.request import urlopen
 
 CASES = {
-    'safe-mode-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_SAFE_MODE': '1'},
+    'safe-mode-app': {'CLAUDE_RESEARCH_PROMPT_THEME': 'agent', 'CLAUDE_RESEARCH_SAFE_MODE': '1', 'CLAUDE_RESEARCH_SELECT_EMPTY': '1'},
     'theme-preview-app': {},
     'idle-redraw-app': {'CLAUDE_RESEARCH_SEARCH_REVIEW': '1', 'CLAUDE_RESEARCH_IDLE_REDRAW': '1'},
     'cwd-navigation-app': {'CLAUDE_RESEARCH_SEARCH_REVIEW': '1', 'CLAUDE_RESEARCH_CWD_NAVIGATION': '1'},
