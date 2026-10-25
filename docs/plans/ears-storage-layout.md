@@ -451,7 +451,10 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   (`~/Develop/backups/abuddy-backups/full-db/…T23-06-18…`, 306 MB in format 1), copied and converted by
   `scripts/ears-convert.ts` in 6.9 s, 1 → 2 → 3 → 4: 22,816 entities in 13 types (19,803 `Message`, 2,033 `Artifact`,
   343 `Thread`, 280 `Note`), 178,131 attributes, 45,798 relations, 381 valueless rows skipped; 387 MB on disk after,
-  since LMDB keeps the pages the old tables freed (a compacting copy would shrink it). Read with the store open
+  since LMDB keeps the pages the old tables freed, which later writes reuse. A compacting copy would take it to 258 MB,
+  but a compacted copy of this data aborts the process when a reset empties it, an lmdb-js bug, so neither the
+  conversion nor a backup compacts
+  ([the evidence and repro](../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
   read-only, two runs each, both warm:
 
   | Reading | Production copy |
