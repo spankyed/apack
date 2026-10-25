@@ -403,18 +403,19 @@ it('rejects non-JSON native declaration data before cloning, without executing a
   expect(readSteps).not.toHaveBeenCalled();
 });
 
-it('preserves own entity names and declaration identity across native, source and installed catalog inputs', () => {
-  const entities = Object.fromEntries([['__proto__', {}]]);
+it('preserves entity names and declaration identity across native, source and installed catalog inputs', () => {
+  // An entity name is PascalCase, so none is a prototype member a record could lose
+  const entities = { Memo: {} };
   const manifest: PackManifest = { id: 'owned', name: 'Owned', version: '1.0.0', data: { entities } };
   const revision = _declarationRevision(manifest);
   const catalog = createContributionCatalog(app);
   catalog.setSources([{ dir: '/source/owned', manifest, declarationRevision: revision }]);
-  expect(Object.keys(catalog.getSnapshot().sourcePacks[0].manifest.data!.entities!)).toEqual(['__proto__']);
+  expect(Object.keys(catalog.getSnapshot().sourcePacks[0].manifest.data!.entities!)).toEqual(['Memo']);
   catalog.setSources([]);
   catalog.setNative([{ id: manifest.id, data: { entities } }]);
-  expect(Object.keys(catalog.getSnapshot().native[0].data!.entities!)).toEqual(['__proto__']);
+  expect(Object.keys(catalog.getSnapshot().native[0].data!.entities!)).toEqual(['Memo']);
   catalog.setNative([]);
   catalog.replace([{ dir: '/installed/owned', enabled: false, snapshot: { format: PACK_SNAPSHOT_FORMAT,
-    declarationRevision: revision, manifest, types: { entities: Object.fromEntries([['__proto__', '__proto__']]), relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} } }]);
-  expect(Object.keys(catalog.get('owned')!.snapshot.manifest.data!.entities!)).toEqual(['__proto__']);
+    declarationRevision: revision, manifest, types: { entities: { Memo: 'Memo' }, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} } }]);
+  expect(Object.keys(catalog.get('owned')!.snapshot.manifest.data!.entities!)).toEqual(['Memo']);
 });

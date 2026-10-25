@@ -96,7 +96,7 @@ interface RuleShape {
    * reads `packages/*` minus the packs takes part in neither — and a population is otherwise unassertable, which is
    * how `host-imports` came to read a pack's `src` alone while `apack pack test` ran it over a pack's tests.
    *
-   * Absent for the six rules whose subject is not a dir list: the layer table, `LMDB_RULES`, the shared-list files,
+   * Absent for the six rules whose subject is not a dir list: the layer table, `ELMDB_RULES`, the shared-list files,
    * the repo's configs, a package's own `scripts/` and the checkout itself.
    */
   readonly over?: readonly string[];
