@@ -659,7 +659,9 @@ function questionPresentation(n,payload){
   const kind=option.preview.length>2000?'withheld':!n.questionText.zL(option.preview)?'empty':n.questionText.VL(option.preview)?'withheld':'full';
   previews.push({question:question.question,option:option.label,kind,...(kind==='full'?(previewFormat==='html'?{html:option.preview}:{markdown:n.questionText._gt(option.preview)}):{})});
  }
- return {previewFormat,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews};
+ const originalNotice=n.runtime?.RFe?.noticesStore().getState().get(payload.requestId);
+ const notice=typeof originalNotice?.plugin==='string'&&typeof originalNotice?.text==='string'?n.runtime.z4e(originalNotice.plugin,originalNotice.text):undefined;
+ return {previewFormat,extendedQuestions:n.questionOptions.ZCe(),optionalDescriptions:n.questionOptions.Hzo(),previews,...(notice!==undefined?{notice}:{})};
 }
 const schemaNames={ui_focus:'HUt',ui_scroll:'MUt',ui_panes:'xUt',ui_pane_show:'PUt',ui_pane_focus:'IUt',ui_close:'OUt',ui_prompt_edit:'DUt',ui_prompt_autocomplete:'LUt',ui_attach:'M5n',ui_detach:'H5n',ui_render:'D5n',ui_press:'vUt',ui_input:'AUt',ui_select:'RUt'};
 let nativeViewSequence=0,nativeViewKey;

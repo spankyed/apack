@@ -247,6 +247,8 @@ export const claudeNativeLinuxBindings: {
     "chunk-hqtnbrjd.js": {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
+        "RFe": "b$e",
+        "z4e": "F6e",
         "_d": "_d",
         "$i": "Ui",
         "adt": "Zlt",

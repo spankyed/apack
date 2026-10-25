@@ -1461,8 +1461,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1478,8 +1478,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     cwd: string;
-    id: string;
     command: string;
+    id: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -2288,6 +2288,7 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
     toolName: z.ZodLiteral<"AskUserQuestion">;
     shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     presentation: z.ZodObject<{
+        notice: z.ZodOptional<z.ZodString>;
         previewFormat: z.ZodNullable<z.ZodString>;
         extendedQuestions: z.ZodBoolean;
         optionalDescriptions: z.ZodBoolean;
@@ -2321,6 +2322,7 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
             markdown?: string | undefined;
             html?: string | undefined;
         }[];
+        notice?: string | undefined;
     }, {
         previewFormat: string | null;
         extendedQuestions: boolean;
@@ -2332,6 +2334,7 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
             markdown?: string | undefined;
             html?: string | undefined;
         }[];
+        notice?: string | undefined;
     }>;
 }, "strip", z.ZodTypeAny, {
     revision: string;
@@ -2351,6 +2354,7 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
             markdown?: string | undefined;
             html?: string | undefined;
         }[];
+        notice?: string | undefined;
     };
 }, {
     revision: string;
@@ -2370,6 +2374,7 @@ declare const ClaudeNativeQuestionDialogSchema: z.ZodObject<{
             markdown?: string | undefined;
             html?: string | undefined;
         }[];
+        notice?: string | undefined;
     };
 }>;
 
@@ -2406,6 +2411,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
         revision: z.ZodString;
         shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
             previewFormat: z.ZodNullable<z.ZodString>;
             extendedQuestions: z.ZodBoolean;
             optionalDescriptions: z.ZodBoolean;
@@ -2439,6 +2445,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }, {
             previewFormat: string | null;
             extendedQuestions: boolean;
@@ -2450,6 +2457,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         revision: string;
@@ -2466,6 +2474,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }, {
@@ -2483,6 +2492,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }>;
@@ -2497,6 +2507,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
         revision: z.ZodString;
         shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
             previewFormat: z.ZodNullable<z.ZodString>;
             extendedQuestions: z.ZodBoolean;
             optionalDescriptions: z.ZodBoolean;
@@ -2530,6 +2541,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }, {
             previewFormat: string | null;
             extendedQuestions: boolean;
@@ -2541,6 +2553,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         revision: string;
@@ -2557,6 +2570,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }, {
@@ -2574,6 +2588,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }>;
@@ -2588,6 +2603,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
         revision: z.ZodString;
         shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
             previewFormat: z.ZodNullable<z.ZodString>;
             extendedQuestions: z.ZodBoolean;
             optionalDescriptions: z.ZodBoolean;
@@ -2621,6 +2637,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }, {
             previewFormat: string | null;
             extendedQuestions: boolean;
@@ -2632,6 +2649,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         revision: string;
@@ -2648,6 +2666,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }, {
@@ -2665,6 +2684,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }>;
@@ -2679,6 +2699,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
         revision: z.ZodString;
         shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
             previewFormat: z.ZodNullable<z.ZodString>;
             extendedQuestions: z.ZodBoolean;
             optionalDescriptions: z.ZodBoolean;
@@ -2712,6 +2733,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }, {
             previewFormat: string | null;
             extendedQuestions: boolean;
@@ -2723,6 +2745,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         revision: string;
@@ -2739,6 +2762,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }, {
@@ -2756,6 +2780,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }>;
@@ -2770,6 +2795,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
         revision: z.ZodString;
         shownInput: z.ZodRecord<z.ZodString, z.ZodUnknown>;
         presentation: z.ZodObject<{
+            notice: z.ZodOptional<z.ZodString>;
             previewFormat: z.ZodNullable<z.ZodString>;
             extendedQuestions: z.ZodBoolean;
             optionalDescriptions: z.ZodBoolean;
@@ -2803,6 +2829,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }, {
             previewFormat: string | null;
             extendedQuestions: boolean;
@@ -2814,6 +2841,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         }>;
     }, "strip", z.ZodTypeAny, {
         revision: string;
@@ -2830,6 +2858,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }, {
@@ -2847,6 +2876,7 @@ declare const ClaudeNativeQuestionRenderSchema: z.ZodEffects<z.ZodObject<{
                 markdown?: string | undefined;
                 html?: string | undefined;
             }[];
+            notice?: string | undefined;
         };
         dialogId: string;
     }>;
@@ -3627,6 +3657,7 @@ interface ClaudeQuestionAnswer {
 type ClaudeQuestionPresentation = z.infer<typeof ClaudeQuestionPresentationSchema>;
 
 declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
+    notice: z.ZodOptional<z.ZodString>;
     previewFormat: z.ZodNullable<z.ZodString>;
     extendedQuestions: z.ZodBoolean;
     optionalDescriptions: z.ZodBoolean;
@@ -3660,6 +3691,7 @@ declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
         markdown?: string | undefined;
         html?: string | undefined;
     }[];
+    notice?: string | undefined;
 }, {
     previewFormat: string | null;
     extendedQuestions: boolean;
@@ -3671,6 +3703,7 @@ declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
         markdown?: string | undefined;
         html?: string | undefined;
     }[];
+    notice?: string | undefined;
 }>;
 
 interface ClaudeSessionArtifactContent {
@@ -13440,8 +13473,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
         topic: string;
+        shortCode: _apackdev_ears.ShortCode<"THR">;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

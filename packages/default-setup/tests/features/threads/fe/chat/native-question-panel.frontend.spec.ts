@@ -92,3 +92,20 @@ it('renders a native HTML preview in an opaque scriptless frame and submits the 
     expect(f.respond).toHaveBeenCalledWith({ answers: { 'HTML?': 'Alpha' }, annotations: { 'HTML?': { preview: html } } })
   } finally { f.close() }
 })
+
+it('updates and clears original tool notices during an answer without changing its draft', async () => {
+  const presentation = {previewFormat:null,extendedQuestions:false,optionalDescriptions:true,previews:[],notice:'plugin: <b>Review</b>'}
+  const f=mount({questions:[{question:'Audience?',header:'Audience',options:[option('Developers'),option('Operators')]}]},presentation)
+  try {
+    await f.input('.answer textarea','Keep my answer')
+    expect(f.root.querySelector('[role=note]')?.textContent).toBe(presentation.notice)
+    expect(f.root.querySelector('[role=note] b')).toBeNull()
+    f.props.presentation={...presentation,notice:'plugin: Updated review'};await nextTick()
+    expect(f.root.querySelector('[role=note]')?.textContent).toBe('plugin: Updated review')
+    expect(f.root.querySelector<HTMLTextAreaElement>('.answer textarea')?.value).toBe('Keep my answer')
+    f.props.presentation={...presentation,notice:undefined};await nextTick()
+    expect(f.root.querySelector('[role=note]')).toBeNull()
+    f.button('Submit answers').click()
+    expect(f.respond).toHaveBeenCalledWith({answers:{'Audience?':'Keep my answer'},annotations:{}})
+  } finally {f.close()}
+})

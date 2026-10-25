@@ -27,6 +27,7 @@
       <details><summary>Add notes</summary><textarea v-model="state.notes" @input="markStarted" aria-label="Notes for this question" rows="2" :disabled="disabled" maxlength="8192" /></details>
       <details v-if="step + 1 === parsed.questions.length"><summary>Add a general response</summary><textarea v-model="generalResponse" @input="markStarted" aria-label="General response" rows="2" :disabled="disabled" maxlength="32768" /></details>
     </div>
+    <p v-if="props.presentation?.notice" class="native-tool-notice" role="note">{{ props.presentation.notice }}</p>
     <footer>
       <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">Cancel</button>
       <div class="navigation">
@@ -124,4 +125,5 @@ footer { display:flex; flex:none; justify-content:space-between; align-items:cen
 .navigation { display:flex; gap:6px; } button { border-radius:6px; padding:7px 10px; font-size:12px; background:#3b3b3b; cursor:pointer; }
 button.primary { background:#e5e5e5; color:#202020; } button.quiet { background:transparent; color:#aaa; } button:disabled { opacity:.5; cursor:default; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; }
+.native-tool-notice { flex:none; max-height:6rem; overflow:auto; overflow-wrap:anywhere; margin:0; padding:8px 12px; color:#aaa; font-size:11px; }
 </style>
