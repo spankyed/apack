@@ -25,7 +25,18 @@
         </details>
         <div v-if="stats.data.allTimeActivity?.length" class="space-y-3">
           <h3 class="text-xs font-medium text-neutral-300">All-time activity</h3>
-          <pre v-if="stats.calendar" aria-label="Claude Code activity calendar" tabindex="0" class="overflow-x-auto rounded-lg border border-white/10 p-2 font-mono text-xs leading-[14px] text-orange-300 min-[800px]:p-3 min-[800px]:leading-5">{{ stats.calendar }}</pre>
+          <figure v-if="activityCalendar" aria-label="Claude Code activity calendar" class="max-w-2xl space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+            <figcaption class="sr-only">Columns are weeks and rows are weekdays. Darker cells mean more messages. Exact dates and counts follow.</figcaption>
+            <div aria-hidden="true" class="ml-8 flex justify-between gap-1 text-[10px] text-neutral-500"><span v-for="(month,index) in activityCalendar.months" :key="index">{{ month }}</span></div>
+            <div aria-hidden="true" class="space-y-0.5">
+              <div v-for="(row,index) in activityCalendar.rows" :key="index" class="grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-2">
+                <span class="text-[9px] leading-none text-neutral-500">{{ index % 2 ? weekdays[index] : '' }}</span>
+                <div class="grid gap-0.5" :style="{gridTemplateColumns:`repeat(${row.length},minmax(0,1fr))`}"><span v-for="(level,week) in row" :key="week" :data-activity-level="level ?? 'future'" class="aspect-square rounded-[2px]" :style="{backgroundColor:activityColors[level ?? 5]}" /></div>
+              </div>
+            </div>
+            <div class="ml-8 flex items-center justify-between gap-2 text-[10px] text-neutral-500"><span>{{ activityCalendar.rows[0].length }} weeks</span><span aria-hidden="true" class="flex items-center gap-1">Less <span v-for="color in activityColors.slice(0,5)" :key="color" class="size-2 rounded-[2px]" :style="{backgroundColor:color}" /> More</span></div>
+          </figure>
+          <p v-else class="text-xs text-neutral-500">Calendar unavailable. View activity dates and counts below.</p>
           <details class="rounded-lg border border-white/10 p-3 text-xs text-neutral-400"><summary class="cursor-pointer text-neutral-300">Activity dates and counts</summary><div class="mt-3 overflow-x-auto"><table class="w-full text-left"><thead><tr><th class="py-2 pr-3">Date</th><th class="pr-3">Sessions</th><th class="pr-3">Messages</th><th>Tools</th></tr></thead><tbody><tr v-for="day in stats.data.allTimeActivity" :key="day.date" class="border-t border-white/5"><th class="py-2 pr-3 font-normal">{{ day.date }}</th><td>{{ number(day.sessionCount) }}</td><td>{{ number(day.messageCount) }}</td><td>{{ number(day.toolCallCount) }}</td></tr></tbody></table></div></details>
         </div>
         <h3 class="text-xs font-medium text-neutral-300">{{ rangeLabel }} activity</h3>
@@ -49,6 +60,17 @@ import type { ClaudeSettingsStats, ClaudeSettingsOperation } from '#features/cod
 const props = defineProps<{ stats?: ClaudeSettingsStats; pending: boolean }>()
 const emit = defineEmits<{ action: [action: Extract<ClaudeSettingsOperation,{kind:'stats'}>['action']] }>()
 const views = ['Overview','Models'] as const
+const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const activityColors = ['rgba(255,255,255,0.06)','rgba(218,119,86,0.25)','rgba(218,119,86,0.5)','rgba(218,119,86,0.75)','rgb(218,119,86)','transparent']
+// Decode the original rendered levels; dates, quartiles and calendar bounds remain native-owned.
+const activityCalendar = computed(() => {
+  const lines=props.stats?.calendar?.split('\n')
+  if(!lines||lines.length!==10)return
+  const glyphs=['·','░','▒','▓','█'],rows=lines.slice(1,8).map(line=>[...line.slice(4)])
+  const width=rows[0].length
+  if(width<10||width>52||rows.some(row=>row.length!==width||row.some(cell=>cell!==' '&&!glyphs.includes(cell))))return
+  return {months:lines[0].trim().split(/\s+/),rows:rows.map(row=>row.map(cell=>cell===' '?null:glyphs.indexOf(cell)))}
+})
 const rangeLabel = computed(() => ({all:'All time','7d':'Last 7 days','30d':'Last 30 days'}[props.stats?.range ?? 'all']))
 const models = computed(() => Object.entries(props.stats?.data?.modelUsage ?? {}).map(([name,usage]) => ({name,usage,tokens:usage.inputTokens+usage.outputTokens+usage.cacheReadInputTokens+usage.cacheCreationInputTokens})).sort((a,b)=>b.tokens-a.tokens))
 const totalTokens = computed(() => models.value.reduce((sum,model)=>sum+model.tokens,0))

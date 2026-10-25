@@ -3,15 +3,19 @@ import NativeSettingsStats from '#features/threads/fe/chat/NativeSettingsStats.v
 import type { ClaudeSettingsStats } from '#features/code/common/native-settings.ts'
 
 it('counts cache tokens, preserves native summaries and waits for native export feedback', async () => {
-  const stats = reactive<ClaudeSettingsStats>({outcome:'success',loading:false,copyState:'idle',view:'Overview',range:'all',calendar:'    Oct\nMon ·█  \n    Less ░ ▒ ▓ █ More',insight:'Original native insight',data:{totalSessions:1,totalMessages:4,totalDays:2,activeDays:1,streaks:{currentStreak:1,longestStreak:1},longestSession:{sessionId:'original-session',duration:65000,messageCount:4,timestamp:'2026-10-25T12:00:00Z'},dailyActivity:[{date:'2026-10-25',messageCount:4,sessionCount:1,toolCallCount:2}],allTimeActivity:[{date:'2026-10-25',messageCount:4,sessionCount:1,toolCallCount:2}],dailyModelTokens:[{date:'2026-10-25',tokensByModel:{model:20}}],modelUsage:{model:{inputTokens:10,outputTokens:5,cacheReadInputTokens:3,cacheCreationInputTokens:2,costUSD:0.02}}}})
+  const stats = reactive<ClaudeSettingsStats>({outcome:'success',loading:false,copyState:'idle',view:'Overview',range:'all',calendar:['    Sep Oct','    ·░▒▓█····█','Mon ········· ','    ········· ','Wed ········· ','    ········· ','Fri ········· ','    ········· ','','    Less ░ ▒ ▓ █ More'].join('\n'),insight:'Original native insight',data:{totalSessions:1,totalMessages:4,totalDays:2,activeDays:1,streaks:{currentStreak:1,longestStreak:1},longestSession:{sessionId:'original-session',duration:65000,messageCount:4,timestamp:'2026-10-25T12:00:00Z'},dailyActivity:[{date:'2026-10-25',messageCount:4,sessionCount:1,toolCallCount:2}],allTimeActivity:[{date:'2026-10-25',messageCount:4,sessionCount:1,toolCallCount:2}],dailyModelTokens:[{date:'2026-10-25',tokensByModel:{model:20}}],modelUsage:{model:{inputTokens:10,outputTokens:5,cacheReadInputTokens:3,cacheCreationInputTokens:2,costUSD:0.02}}}})
   const action=vi.fn(),root=document.createElement('div');document.body.append(root)
   const app=createApp(NativeSettingsStats,{stats,pending:false,onAction:action});app.mount(root)
   try {
     await nextTick()
     expect(root.textContent).toContain('Original native insight')
     const calendar=root.querySelector('[aria-label="Claude Code activity calendar"]')!
-    expect(calendar.textContent).toBe(stats.calendar)
-    expect(calendar.getAttribute('tabindex')).toBe('0')
+    expect(calendar.tagName).toBe('FIGURE')
+    expect(calendar.querySelectorAll('[data-activity-level]')).toHaveLength(70)
+    expect(calendar.querySelectorAll('[data-activity-level="future"]')).toHaveLength(6)
+    expect(calendar.querySelectorAll('[data-activity-level="4"]')).toHaveLength(2)
+    expect(calendar.querySelector('pre')).toBeNull()
+    expect(calendar.textContent).not.toMatch(/[·░▒▓█]/)
     expect(root.textContent).toContain('Longest session')
     expect(root.textContent).toContain('1m 5s')
     expect(root.textContent).not.toContain('Peak hour')
