@@ -7,7 +7,7 @@
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
     </nav>
-    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="pending" @select="editorCommand({action:'select',value:$event})" @preview="editorCommand({action:'preview',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
+    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="pending" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
     <template v-else-if="activeTab === 'Config'">
     <div class="shrink-0 border-b border-white/5 px-4 py-3">
       <input ref="searchInput" v-model="search" aria-label="Search Claude Code settings" placeholder="Search settings…" class="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-400" />

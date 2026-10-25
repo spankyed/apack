@@ -116,3 +116,17 @@ it('separates Theme preview, syntax toggle and commit under exact native editor 
   state.state.status='pending';await nextTick();expect(preview.disabled).toBe(true)
  }finally{app.unmount();root.remove()}
 })
+
+it('routes native Model details and effort while preserving price styling and disabled eligibility',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'model',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],frame:{selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true},editor:{kind:'choice',revision:'b'.repeat(64),title:'Model',disabled:false,value:'alpha',model:{focusValue:'alpha',description:'Native model instructions',effortText:'Native medium effort',canAdjustEffort:true,fastModeNotice:'Native fast-mode notice'},options:[{value:'alpha',label:'Native Alpha',description:'$8 $4',descriptionAnsi:'\u001b[9m$8\u001b[29m $4',disabled:false},{value:'locked',label:'Unavailable',disabled:true}]}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();expect(root.querySelector('[aria-label="Native Model details"]')?.textContent).toContain('Native medium effort');expect(root.querySelector('input')).toBeNull()
+  expect([...root.querySelectorAll<HTMLElement>('span')].find(span=>span.textContent==='$8')?.style.textDecoration).toBe('line-through')
+  root.querySelector<HTMLButtonElement>('[aria-label="Details for Native Alpha"]')!.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'focusModel',value:'alpha'}})
+  ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Decrease effort')!.click();expect(operations.at(-1)).toMatchObject({command:{action:'adjustEffort',direction:'left'}})
+  expect(root.querySelector<HTMLButtonElement>('[aria-label="Details for Unavailable"]')!.disabled).toBe(true)
+  ;[...root.querySelectorAll('button')].find(button=>button.querySelector('span')?.textContent==='Native Alpha')!.click();expect(operations.at(-1)).toMatchObject({command:{action:'select',value:'alpha'}})
+ }finally{app.unmount();root.remove()}
+})

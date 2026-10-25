@@ -1621,11 +1621,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    title: string;
     id: string;
+    title: string;
     sessionId: string;
-    question: string;
     input: Record<string, unknown>;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1653,11 +1653,11 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     reason?: string | undefined;
 }, {
     revision: string;
-    title: string;
     id: string;
+    title: string;
     sessionId: string;
-    question: string;
     input: Record<string, unknown>;
+    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -2040,39 +2040,39 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     revision: string;
     message: string;
     ready: boolean;
-    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
     sessionId: string;
     url: string;
     token: string;
     serverName: string;
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     warnings: string[];
 }, {
     revision: string;
     message: string;
     ready: boolean;
-    title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
+    title: string;
     sessionId: string;
     url: string;
     token: string;
     serverName: string;
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     warnings: string[];
 }>;
 
@@ -2093,17 +2093,17 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     sessionId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
+    title: string;
     sessionId: string;
     helpUrl: string;
     paragraphs: string[];
 }, {
     revision: string;
-    title: string;
     id: string;
     kind: "auto_mode_server_fallback";
+    title: string;
     sessionId: string;
     helpUrl: string;
     paragraphs: string[];
@@ -2129,32 +2129,32 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     sessionId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     revision: string;
-    title: string;
     id: string;
     kind: "lsp_recommendation";
+    title: string;
     sessionId: string;
-    paragraphs: string[];
-    pluginName: string;
-    marketplaceName: string;
-    fileExtension: string;
     choices: {
         value: "disable" | "never" | "no" | "yes";
         label: string;
     }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
 }, {
     revision: string;
-    title: string;
     id: string;
     kind: "lsp_recommendation";
+    title: string;
     sessionId: string;
-    paragraphs: string[];
-    pluginName: string;
-    marketplaceName: string;
-    fileExtension: string;
     choices: {
         value: "disable" | "never" | "no" | "yes";
         label: string;
     }[];
+    paragraphs: string[];
+    pluginName: string;
+    marketplaceName: string;
+    fileExtension: string;
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -10619,6 +10619,24 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<"kind", [z.ZodObj
     }, {
         action: "toggleSyntax";
     }>, z.ZodObject<{
+        action: z.ZodLiteral<"focusModel">;
+        value: z.ZodString;
+    }, "strict", z.ZodTypeAny, {
+        value: string;
+        action: "focusModel";
+    }, {
+        value: string;
+        action: "focusModel";
+    }>, z.ZodObject<{
+        action: z.ZodLiteral<"adjustEffort">;
+        direction: z.ZodEnum<["left", "right"]>;
+    }, "strict", z.ZodTypeAny, {
+        action: "adjustEffort";
+        direction: "left" | "right";
+    }, {
+        action: "adjustEffort";
+        direction: "left" | "right";
+    }>, z.ZodObject<{
         action: z.ZodLiteral<"save">;
         values: z.ZodEffects<z.ZodRecord<z.ZodString, z.ZodString>, Record<string, string>, Record<string, string>>;
     }, "strict", z.ZodTypeAny, {
@@ -10645,6 +10663,12 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<"kind", [z.ZodObj
     } | {
         action: "toggleSyntax";
     } | {
+        value: string;
+        action: "focusModel";
+    } | {
+        action: "adjustEffort";
+        direction: "left" | "right";
+    } | {
         values: Record<string, string>;
         action: "save";
     } | {
@@ -10662,6 +10686,12 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<"kind", [z.ZodObj
         action: "preview";
     } | {
         action: "toggleSyntax";
+    } | {
+        value: string;
+        action: "focusModel";
+    } | {
+        action: "adjustEffort";
+        direction: "left" | "right";
     } | {
         values: Record<string, string>;
         action: "save";
@@ -11239,6 +11269,25 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         title: z.ZodOptional<z.ZodString>;
         value: z.ZodOptional<z.ZodString>;
         previewValue: z.ZodOptional<z.ZodString>;
+        model: z.ZodOptional<z.ZodObject<{
+            focusValue: z.ZodOptional<z.ZodString>;
+            description: z.ZodString;
+            effortText: z.ZodString;
+            canAdjustEffort: z.ZodBoolean;
+            fastModeNotice: z.ZodOptional<z.ZodString>;
+        }, "strict", z.ZodTypeAny, {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        }, {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        }>>;
         canPreview: z.ZodOptional<z.ZodBoolean>;
         canToggleSyntax: z.ZodOptional<z.ZodBoolean>;
         preview: z.ZodOptional<z.ZodObject<{
@@ -11280,17 +11329,20 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
+            descriptionAnsi: z.ZodOptional<z.ZodString>;
             disabled: z.ZodBoolean;
         }, "strict", z.ZodTypeAny, {
             value: string;
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }, {
             value: string;
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }>, "many">;
     }, "strict", z.ZodTypeAny, {
         revision: string;
@@ -11299,10 +11351,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
         value?: string | undefined;
+        model?: {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        } | undefined;
         title?: string | undefined;
         previewValue?: string | undefined;
         canPreview?: boolean | undefined;
@@ -11324,10 +11384,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
         value?: string | undefined;
+        model?: {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        } | undefined;
         title?: string | undefined;
         previewValue?: string | undefined;
         canPreview?: boolean | undefined;
@@ -11363,8 +11431,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }>, "many">;
     }, "strict", z.ZodTypeAny, {
         revision: string;
-        title: string;
         kind: "form";
+        title: string;
         submitLabel: string;
         fields: {
             key: string;
@@ -11374,8 +11442,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         description?: string | undefined;
     }, {
         revision: string;
-        title: string;
         kind: "form";
+        title: string;
         submitLabel: string;
         fields: {
             key: string;
@@ -11519,10 +11587,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
         value?: string | undefined;
+        model?: {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        } | undefined;
         title?: string | undefined;
         previewValue?: string | undefined;
         canPreview?: boolean | undefined;
@@ -11539,8 +11615,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
     } | {
         revision: string;
-        title: string;
         kind: "form";
+        title: string;
         submitLabel: string;
         fields: {
             key: string;
@@ -11652,10 +11728,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: string;
             disabled: boolean;
             description?: string | undefined;
+            descriptionAnsi?: string | undefined;
         }[];
         kind: "choice";
         disabled: boolean;
         value?: string | undefined;
+        model?: {
+            description: string;
+            effortText: string;
+            canAdjustEffort: boolean;
+            focusValue?: string | undefined;
+            fastModeNotice?: string | undefined;
+        } | undefined;
         title?: string | undefined;
         previewValue?: string | undefined;
         canPreview?: boolean | undefined;
@@ -11672,8 +11756,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
     } | {
         revision: string;
-        title: string;
         kind: "form";
+        title: string;
         submitLabel: string;
         fields: {
             key: string;
@@ -11697,12 +11781,12 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
     columns: z.ZodNumber;
     rows: z.ZodNumber;
 }, "strict", z.ZodTypeAny, {
-    rows: number;
     kind: "resize";
+    rows: number;
     columns: number;
 }, {
-    rows: number;
     kind: "resize";
+    rows: number;
     columns: number;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"key">;
@@ -11753,7 +11837,7 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
         x: number;
         y: number;
     } | undefined;
-    button?: "left" | "middle" | "right" | undefined;
+    button?: "left" | "right" | "middle" | undefined;
 }, {
     type: "down" | "enter" | "leave" | "move" | "up";
     kind: "pointer";
@@ -11766,7 +11850,7 @@ declare const clientInput: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
         x: number;
         y: number;
     } | undefined;
-    button?: "left" | "middle" | "right" | undefined;
+    button?: "left" | "right" | "middle" | undefined;
 }>]>;
 
 declare const composerPlacement: z.ZodObject<{
@@ -11854,9 +11938,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
-        title: string;
         id: string;
         kind: "confirmation";
+        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     } | {
@@ -11904,9 +11988,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
             message: string;
             kind: "blocked";
         } | {
-            title: string;
             id: string;
             kind: "confirmation";
+            title: string;
             confirmLabel: string;
             commandName?: string | undefined;
         } | {
@@ -11948,9 +12032,9 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         message: string;
         kind: "blocked";
     } | {
-        title: string;
         id: string;
         kind: "confirmation";
+        title: string;
         confirmLabel: string;
         commandName?: string | undefined;
     }>;
@@ -12061,10 +12145,18 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     label: string;
                     disabled: boolean;
                     description?: string | undefined;
+                    descriptionAnsi?: string | undefined;
                 }[];
                 kind: "choice";
                 disabled: boolean;
                 value?: string | undefined;
+                model?: {
+                    description: string;
+                    effortText: string;
+                    canAdjustEffort: boolean;
+                    focusValue?: string | undefined;
+                    fastModeNotice?: string | undefined;
+                } | undefined;
                 title?: string | undefined;
                 previewValue?: string | undefined;
                 canPreview?: boolean | undefined;
@@ -12081,8 +12173,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 } | undefined;
             } | {
                 revision: string;
-                title: string;
                 kind: "form";
+                title: string;
                 submitLabel: string;
                 fields: {
                     key: string;
@@ -13424,15 +13516,15 @@ declare const parentCommandResult: z.ZodDiscriminatedUnion<"kind", [z.ZodObject<
     confirmLabel: z.ZodString;
     commandName: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
-    title: string;
     id: string;
     kind: "confirmation";
+    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }, {
-    title: string;
     id: string;
     kind: "confirmation";
+    title: string;
     confirmLabel: string;
     commandName?: string | undefined;
 }>, z.ZodObject<{
