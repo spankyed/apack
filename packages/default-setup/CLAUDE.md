@@ -79,139 +79,91 @@ Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `pa
 
 Code names a system by feature id, and reaches another system with the typed `sendToSystem(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
 
-## What a system sends a surface: pick the channel, then the shape
+## What a system sends a surface: data is a view, a result is a reply, news is a broadcast
 
-**There are two channels, and choosing wrongly is where this class of bug comes from.**
-`broadcastToSurface` is fire-and-forget to **every window**. `reply` — the one a handler is handed
-(`spec.actions`, `@apackdev/sdk/framework`) — answers the sender on the connection they asked from, and is
-absent when the message named none. Three jobs ride those two channels:
+**A system sends a surface three kinds of thing, and each has one channel.** Which kind an event is decides how it
+travels; getting that wrong is where every bug of this class came from — a terminal opened in every window, a flow
+navigated every window, six features announced an import to windows that had not run one.
 
-| the job | the channel | correlation |
+| the kind | the channel | correlation |
 |---|---|---|
-| a **notification** — a mutation happened | broadcast | none; guarding one is a category error |
-| a **view fetching data** | broadcast | a slot keyed by what was asked |
-| a **command's outcome** | **reply** | the envelope's call, which every ask already carries |
+| **data** — what the feature stores, as a window shows it | a **view** (`useView`, `fromView`) | none: it is the window's own subscription |
+| a **result** — the answer to one window's ask or write | **`reply`** | the envelope's call, which every ask already carries |
+| **news** — something happened that every window should know | `broadcastToSurface` | none, and guarding one is a category error |
 
-**Ask which job it is, then pick the channel.** Everything below is the second question — what shape the
-payload wants — and it only arises once the first is answered. For a long time there was no reply channel
-and every job was a broadcast, which is why the bugs it caused all look alike: a terminal opened in every
-window, a flow navigated every window, and six features announced an import to windows that had not run
-one. None of those was a missing id.
+**Data is a view.** A feature declares its reads (`be/views.ts`, `apack.json` `features.<id>.views`); a window
+subscribes with its arguments and is sent each changed result, and nothing that writes says who is looking. No
+system broadcasts rows, and no surface keeps a copy it patches from events. The worked examples here: prompts and
+actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recent`, `search`, `trash`), library
+(`index`, `folder`, `document`) and threads (`list`, `archived`, `recent`, `detail`, `chat`, `message`, `tab`).
 
-**A notification has no requester, so it is never correlated.** `NOTE_UPDATED`, `THREAD_UPDATED`,
-`commit.FILES_STAGED`, `ITEM_RENAMED` — a mutation happened and every view that cares folds it into its
-store. A handler that tries to decide whether such an event is "mine" is making a category error: nobody
-asked for it, so there is no request it could fail to match. These are already correct and must not be
-guarded, and they are the commonest of the three.
+- **Read what the window shows, and no more.** A view re-runs when anything it read changes. The threads chat page
+  lists its messages by id and reads no message's content, so a streamed reply re-runs that message's view alone;
+  the notes tree reads no note's text, so typing in a note re-runs nothing but that note's view.
+- **A view reads the engine and nothing else.** What is on disk (a symlinked library folder), in the run history (a
+  brain run's tree) or the result of a walk over the whole store (the database schema) is not a view: it is fetched,
+  and its answer is a result. The library says so in its view (`{ onDisk: true }`), and announces a write it makes on
+  disk as news (`FOLDER_CHANGED`) for the windows showing it to fetch again.
+- **Arguments come from the window.** A view that read the settings would not re-run when they change, so the
+  threads' recent list takes its limit and order as arguments from the settings the surface holds.
+- **An editor holds its views behind its own writes** (`ViewWrites`, `@apackdev/sdk/fe`): it applies an edit at
+  once, so a result from before the write landed would undo it. Once the last write is answered it reads the views
+  again. Every write such a surface records must be answered, a refusal included.
+- **A surface drawn in several areas follows its views from its machine** (`fromView`, `#generated/fe`), since no one
+  component is mounted for as long as it runs — threads is the example.
 
-**A view fetching data wants the answer to land in a slot keyed by what it asked for.** Then correlation
-is structural rather than checked: a late or another window's reply writes its own slot, the view reads
-the slot it is showing, and there is no guard anyone can forget — often it is a free cache fill instead.
-The worked examples here:
+**A result is a reply.** A handler is handed `reply` (`spec.actions({ … })`), absent when the message named no sender,
+and answering is the handler's whole job: the window that asked hears it, and no other. Where a result must still
+reach someone when nobody asked — an action opening a thread, the git watcher refreshing the status — a feature's
+`answer(reply, event)` replies or broadcasts, never both (`threads/be/answer.ts`, `code/be/answer.ts`).
 
-| pair | the slot |
-|---|---|
-| `GET_NODE_DETAILS` → `NODE_DETAILS_RESULT` | `Map<nodeId, RunNode>` (`features/database/fe/state.ts`), and `expandNode` checks `nodeDetails.has(id)` before asking, so the slot doubles as a cache |
-| `explorer.LIST_FILES` → `explorer.FILES_LISTED` | `dirContents[ev.data.path]` (`features/code/fe/features/explorer/state.ts:259`) |
-| `CREATE_NODE{tempId}` → `NODE_CREATED{tempId}` | the temp node it replaces, via `reconcileNodeId` (`features/flows/fe/state.ts`) |
-| `pr.GET_BRANCH_DIFF` → `pr.BRANCH_DIFF_RECEIVED` | `diffsByRef[refKey(base, head)]` (`features/code/fe/features/pull-request/state.ts`), read as the comparison the view is on, and `needsDiff` asks the slot rather than counting files |
+- **`reply` answers the message being delivered, and only that one.** An event a machine makes while handling a
+  message — a system telling its children something of its own — is not that message, and its handler is handed no
+  `reply`; the same object forwarded to a child still is.
+- **A surface asks where a delivery names it.** A send from a machine's own entry, from a timer or after an `await`
+  carries no sender, so its answer goes nowhere. A surface asks for what it starts from on `SURFACE_STARTED`, which
+  the shell hands it in a delivery naming it, and asks again from the handler of whatever news says it should.
+- **A pack asks about the call and never reads it** (`@apackdev/sdk/events`): `answersCall(event, outstanding)` where it
+  holds one outstanding ask, `recordCall`/`settleCall` where it holds several, and `newCall()` to mint one before a
+  send an `enqueueActions` body defers. `_callOf` is host-only: a raw call invites `===` against a stored one, which
+  answers *true* when both are absent. **No event type declares a correlation field, and none should.**
+- **A spec that drives a machine directly builds the answer with `answerTo(call, event)`** (`@apackdev/sdk/testing`);
+  one driving a whole system through `startApp` passes `nextEmit`'s `answering`. The `reserved-event-keys` pack rule
+  refuses the reserved key in `tests` as well as `src`.
 
-**Two limits, worth knowing before reaching for a key.** Where the slot is also the view's *membership
-list* — a list of open tabs, say — a write **creates** the row, so a reply for something the user has
-closed can bring it back; a key decides which row, not whether there should be one. And where the reply
-drives navigation, a key fixes which data lands but not that the user is moved. Library handles
-`DOCUMENT_LOADED` only in its current editor, matching `editingDocumentId`; the reply fills that view
-without opening it. Both cases need a current view intent as well as a key.
+**News is a broadcast, and carries what happened rather than the rows it touched.** The brain's state
+(`BRAIN_STARTED`, `BRAIN_PAUSED`), a file changed on disk (`explorer.FILE_CHANGED_EXTERNALLY`), the data replaced
+(`DATABASE_REPLACED`), a flow's notifications to the chat (`SET_MODE`, `FLASH_CHAT_STATE`). Nobody asked for it, so
+there is no request it could fail to match. A **feed** is news too: a terminal's output and a brain run's
+`RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would. What a system
+holds in memory and no stored row backs — the logs buffer — it publishes on `SEND_STATE`.
 
-**Where the answer is "everything", there is no key — publish instead of replying.** A whole-list replace
-is correct as written, and the better move is to delete the request: let the surface that owns the list hold
-it and have other views select it. `features/browser` has **no request/reply pairs at all**: one emit,
-`BROWSER_CONNECTED` on connect, and its `SYNC_TABS`/`SYNC_BOOKMARKS` handlers write and return nothing.
-The code panel reads the prompts surface's list with `useSurfaceState` rather than fetching it, so what it
-does send is paging and edits — and it sends those **through its own child machine**, because a component
-is in no delivery and a send from one carries no `Message.sender` for the owning surface to answer. The
-host does the same with
-`FEATURE_SETTINGS_UPDATED`: all eleven feature contracts carry a `settings` field and `GET_SETTINGS`
-appears nowhere under `features/`.
+**The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
+and they failed in four different ways — which is the argument for reading the list rather than copying the one you
+land on.
 
-**A command with a result is the only job that needs an id, and no event declares one.** The answer is not
-app state and no natural key identifies it, so a per-ask id is the only thing that works — and it is on the
-envelope. Every send mints `Message.call`, `reply` stamps `Message.answering` with the call it was entered
-under, and the delivery door puts that on the delivered event, which is the only channel to a transition
-guard. **No event type declares a correlation field, and none should.**
+**A guard needs an invariant every asker holds.** `answersSelectedNode` admits a reply only for the node in
+`selectedStepNode`, so every asker must select before it asks — stated over two of its four askers and broken by the
+fourth, which asked for an erroring node's details and never selected it.
+`tests/features/brain/fe/run-node-correlation.spec.ts` asks each asker rather than describing them, which is the thing
+to copy if a guard stays.
 
-**A pack asks about the call and never reads it** (`@apackdev/sdk/events`): `answersCall(event, outstanding)`
-where it holds one outstanding ask, `recordCall`/`settleCall` where it holds several, and `newCall()` to
-mint one before a send an `enqueueActions` body defers. `_callOf` is host-only, and the restriction is the
-point: a raw call invites `===` against a stored one, which answers *true* when both are absent — so the
-obvious comparison admits an answer nobody asked for, and nothing outstanding is the resting state.
+**A guard cannot correlate on what the answer does not carry.** `answersCurrentPage` matched a flow while
+`FLOW_EVENTS_RESULT` echoed no `offset`, so re-selecting a flow while a later page was in flight let that page replace
+the whole list. The answer carries its offset now; `loadMoreEvents` keeps one page in flight, which the correlation
+requires rather than prefers.
 
-**Why the envelope rather than a field per feature.** Correlation is a three-step obligation — mint, store,
-settle — and a feature doing all three by hand can fail at any one of them independently: declare a field
-and mint nothing, so only its specs ever produce one; store a domain id and never clear it, so it names the
-last ask for the life of the surface; answer by broadcast, so another window's answer for the same row
-matches. And some asks have nothing to key on at all — `terminal.CREATE_TERMINAL`'s id is minted by the
-backend, so nothing the asker sent could identify it (`docs/issues/ISSUE-terminal-integration-review.md`,
-T4, is what one slot for all of them costs). A per-send id on the envelope takes the mint and the settle out
-of a feature's hands, leaving it only the store.
+**A guard's invariant is not "who writes this" but "what else could satisfy it".** A slot with one setter says nothing
+about whether anything other than its own answer matches it. Set the slot before the ask, clear it on the answer,
+reply rather than broadcast, and read it with `answersCall`, which refuses an empty slot. A row a window shows needs
+no slot at all: it is a view.
 
-**The rule this leaves**, in order: *which job is this?* decides the channel, and only then does the shape
-follow. A notification broadcasts and needs nothing. A fetch broadcasts and wants a keyed slot. **A
-command's outcome is replied**, and the call that correlates it is already there — the question is no longer
-whether to add an id but whether to *read* one, which is "yes" wherever a window can have two of the same
-command in flight.
-
-**A spec that drives a machine directly builds the answer with `answerTo(call, event)`**
-(`@apackdev/sdk/testing`), which is what a delivery door would put on it; one driving a whole system through
-`startApp` passes `nextEmit`'s `answering`. A spec never names the reserved key itself — the
-`reserved-event-keys` pack rule refuses it in `tests` as well as `src`, which is where it would be reached
-for.
-
-**The guards that remain, and what each one got wrong first.** Every correlating guard in this pack has been
-through this, and they failed in four different ways — which is the argument for reading the list rather
-than copying whichever one you land on.
-
-**A guard needs an invariant every asker holds, and a slot does not.** `answersSelectedNode` admits a
-reply only for the node in `selectedStepNode`, so every asker must select before it asks — stated over two
-of its four askers and broken by the fourth, which asked for an erroring node's details and never selected
-it, so the panel that exists to show them was never given any.
-`tests/features/brain/fe/run-node-correlation.spec.ts` asks each asker rather than describing them, which is
-the thing to copy if a guard stays.
-
-**And a guard cannot correlate on what the answer does not carry.** `answersCurrentPage` matched a flow
-while `FLOW_EVENTS_RESULT` echoed no `offset`, so re-selecting a flow while a later page was in flight let
-that page replace the whole list. The answer carries its offset now; `loadMoreEvents` keeps one page in
-flight, which the correlation requires rather than prefers.
-
-**And a guard's invariant is not "who writes this" but "what else could satisfy it".** Counting setters is
-the wrong check: a slot with one setter says nothing about whether anything other than its own answer matches.
-Two things do, for a slot holding a domain id under a broadcast — every other window's answer for the same row,
-and, with no clear, every later answer at all. Set the slot before the ask, clear it on the answer, reply rather
-than broadcast, and read it with `answersCall`, which refuses an empty slot. A row a window shows needs no slot at
-all: it is a view (`useView`), whose results reach only the window that asked.
-
-And one that was worse than a guard: `code/be/features/pull-request.ts` stamped a module-scoped counter on
-every `pr.PR_DETAILS_RECEIVED`, justified as "monotonic within this process" — true, and beside the point,
-since what it is compared against lives in the renderer and outlives the backend. An API restart or a pack
-reload put it back to zero, every later answer then read as older than the viewer had accepted, and PR
-details silently stopped updating. The PR number was always the key; what the tie-break wanted was a clock,
-so it is `fetchedAt` now.
-
-**And a seventh correlation check this census missed, which is why it was the one with a hole.**
-`isStalePRDiffResponse` was not a guard, so counting guards did not find it: a function called inside two
-`enqueueActions` handlers, returning *reject*-true where every guard here returns accept-true. Never
-triaged, and it skipped its head check for an answer that carried no head — which is exactly what the
-branch-only asker's answers carry, since a branch with no PR compares against no head. Two PRs onto one
-base, the ordinary case, then let a branch diff land as a PR's files.
-
-A guard could have been fixed; the rule above says this job wanted no guard. The diff is a fetch, so it is
-`diffsByRef` now and the hole has nowhere to live — a key matches or it does not, and there is no
-permissive branch to leave open. Two things that fell out of it are worth copying. The answer must **not**
-write `prBaseBranch`: that is half the key the view reads under, so an answer setting it from its own
-payload would point the view at its own slot and be read after all — every asker names the base it asks
-about, no answer does. And the file-diff half **keeps** an in-flight check beside its key, because its
-answer opens a tab: this is the membership-list limit above, in the flesh. `tests/features/code/fe/features/pull-request/pr-correlation.spec.ts`
-holds both, and was the first spec for any `code` frontend machine.
+**And a clock is not a correlation.** `code/be/features/pull-request.ts` stamped a module-scoped counter on every
+`pr.PR_DETAILS_RECEIVED`, compared in the renderer, which outlives the backend: an API restart or a pack reload put
+it back to zero and every later answer read as older. The PR number was always the key; what the tie-break wanted was
+a clock, so it is `fetchedAt`. The PR diff is keyed by what was asked (`diffsByRef[refKey(base, head)]`), and its
+answer must **not** write `prBaseBranch`, half the key the view reads under; the file-diff half keeps an in-flight
+check beside its key because its answer opens a tab (`tests/features/code/fe/features/pull-request/pr-correlation.spec.ts`).
 
 ## Services
 
@@ -231,7 +183,7 @@ Model calls go through the host's `services.inference` (AI SDK 7, `provider:mode
 
 ## EARS (Entity types + Relations)
 
-Entity types and relation kinds come from `__generated__/ears.ts`, generated standalone from `apack.json` by `apack pack generate-entries`. The pack-entry registers the entity types and relation kinds `apack.json` declares. `ears.ts` also names the SDK's own: the flow model (Flow, Node, Action, Prompt; contains, transitions_to, instance_of) and the document model (Document, Collection; parent_of). The SDK defines their shapes (import `ActionEntity`, `PromptEntity`, `FlowEntity`, `NodeBase` from `@apackdev/sdk`) and owns their repositories (`flowRepository`, `actionRepository`, `promptRepository`, `documentRepository`, `collectionRepository` from `@apackdev/sdk/repositories`): the flows, actions and prompts repositories here (`flowsQueries`/`flowsCommands`, `actionQueries`/`actionCommands`, `promptQueries`/`promptCommands`) expose their methods by reference (`byId: actionRepository.byId`, never a wrapper re-declaring the signature), so this pack's code reaches all its data through `repository`, and add the surfaces' views (`connectedData`, `extendedData`, paging, a flow created with its entry node). The root flow is only the flow with the root role: the flows system sends it with its data (`FLOWS_CONNECTED`'s `rootFlow`, again after an import and whenever it is asked to publish) and changes it on `SET_ROOT_FLOW`, and the brain sends the root flow it started with (`BRAIN_STARTED`'s `rootFlowId`), which the Flows and Brain settings compare to offer a restart. No setting records either. Exporting actions and prompts to write files isn't a view: `export-actions.ts` and `export-prompts.ts` beside the repositories read through them. Note is default-setup's, declared in `apack.json` with its shape (`NoteEntity` in `features/notes/be/types.ts`). Document and Collection are not: they are the SDK's, and `features/library/be/types.ts` re-exports their shapes rather than declaring them, this feature being their editor. Settings isn't either: the host declares and owns its persisted row beside `AppState` (`HOST_ENTITY_TYPES`). A note's links are derived from its text (`syncReferences`, `features/notes/be/repository/link-utils.ts`): `linkTargets`, every note id they name, which the value index answers "who links here?" from, and a `REFERENCES` relation per named note that exists; both are rebuilt from the text at start and after the data is replaced, so neither is ever the only record of a link.
+Entity types and relation kinds come from `__generated__/ears.ts`, generated standalone from `apack.json` by `apack pack generate-entries`. The pack-entry registers the entity types and relation kinds `apack.json` declares. `ears.ts` also names the SDK's own: the flow model (Flow, Node, Action, Prompt; contains, transitions_to, instance_of) and the document model (Document, Collection; parent_of). The SDK defines their shapes (import `ActionEntity`, `PromptEntity`, `FlowEntity`, `NodeBase` from `@apackdev/sdk`) and owns their repositories (`flowRepository`, `actionRepository`, `promptRepository`, `documentRepository`, `collectionRepository` from `@apackdev/sdk/repositories`): the flows, actions and prompts repositories here (`flowsQueries`/`flowsCommands`, `actionQueries`/`actionCommands`, `promptQueries`/`promptCommands`) expose their methods by reference (`byId: actionRepository.byId`, never a wrapper re-declaring the signature), so this pack's code reaches all its data through `repository`, and add the surfaces' views (`connectedData`, `extendedData`, paging, a flow created with its entry node). The root flow is only the flow with the root role: the flows `list` view carries it beside the flows, a write changes it on `SET_ROOT_FLOW`, and the brain sends the root flow it started with (`BRAIN_STARTED`'s `rootFlowId`), which the Flows and Brain settings compare to offer a restart. No setting records either. Exporting actions and prompts to write files isn't a view: `export-actions.ts` and `export-prompts.ts` beside the repositories read through them. Note is default-setup's, declared in `apack.json` with its shape (`NoteEntity` in `features/notes/be/types.ts`). Document and Collection are not: they are the SDK's, and `features/library/be/types.ts` re-exports their shapes rather than declaring them, this feature being their editor. Settings isn't either: the host declares and owns its persisted row beside `AppState` (`HOST_ENTITY_TYPES`). A note's links are derived from its text (`syncReferences`, `features/notes/be/repository/link-utils.ts`): `linkTargets`, every note id they name, which the value index answers "who links here?" from, and a `REFERENCES` relation per named note that exists; both are rebuilt from the text at start and after the data is replaced, so neither is ever the only record of a link.
 The effective document has three owners: `app`, `packs[packId][groupId]`, and
 `features[featureRef]`. The common catalog supplies definitions even for disabled installed packs;
 the host writer composes defaults and explicit overrides and validates each effective value.
