@@ -108,6 +108,14 @@ test('preserves selected Agent context through native Settings tabs and compact 
       if(await panel.isVisible()){
         await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport({ratio:1})
         await expect(panel.getByRole('navigation',{name:'Claude Code settings tabs'})).toBeInViewport()
+        if(label==='stats-models'){
+          const body=panel.locator('[aria-label="Claude Code Stats"]'),table=panel.locator('table')
+          const visible=()=>table.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
+          await body.hover()
+          for(let step=0;step<40&&!await visible();step++){await appPage.mouse.wheel(0,60);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
+          expect(await visible()).toBe(true)
+        }
+
         const geometry=await panel.evaluate(element=>{
           const close=Array.from(element.querySelectorAll('button')).find(button=>button.textContent==='Close settings')!
           const rect=(node:Element)=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
@@ -177,7 +185,8 @@ test('preserves selected Agent context through native Settings tabs and compact 
   originalSelection=await field.evaluate(element=>(element as any).editor.state.selection.toJSON())
   await open();await tab('Usage');await expect(panel.getByText('Context window',{exact:true})).toBeVisible();await capture('usage-tab')
   await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible();await capture('stats-overview')
-  await panel.getByRole('button',{name:'Models',exact:true}).click();await expect(panel.locator('thead')).toContainText('Cache read')
+  await panel.getByRole('button',{name:'Models',exact:true}).click();await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
+  await expect(panel.locator('table thead')).toContainText('Cache read')
   const totals=await panel.locator('tbody tr').evaluateAll(rows=>rows.reduce((total,row)=>{
     const values=Array.from(row.querySelectorAll('td')).slice(0,4).map(cell=>Number((cell.textContent??'').replace(/,/g,'')))
     return {input:total.input+values[0],output:total.output+values[1],all:total.all+values.reduce((sum,value)=>sum+value,0)}
