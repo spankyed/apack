@@ -140,9 +140,23 @@
           "description": "Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity."
         },
         "relations": {
-          "type": "array",
-          "items": {
-            "type": "string",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "acyclic": {
+                "type": "boolean",
+                "description": "Refuses a link that would close a cycle through this kind (CYCLE): a tree, a folder hierarchy."
+              },
+              "unique": {
+                "type": "boolean",
+                "description": "At most one edge of this kind from an entity to another: linking the pair again replaces the edge's info."
+              }
+            },
+            "additionalProperties": false,
+            "description": "One relation kind: the rules its edges are held to, each off unless declared ({} for a kind with none)."
+          },
+          "propertyNames": {
             "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
             "not": {
               "enum": [
@@ -153,8 +167,7 @@
               ]
             }
           },
-          "description": "Pack-level relation wire names; generated EARS constants are their uppercase names. Do not repeat or redeclare SDK-owned wires.",
-          "uniqueItems": true
+          "description": "Pack-level relation wire names, each mapped to its declaration; generated EARS constants are their uppercase names. Do not redeclare SDK-owned wires."
         },
         "roles": {
           "type": "array",

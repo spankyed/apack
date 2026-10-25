@@ -29,7 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createEarsEngine, type EARS } from '@apackdev/ears';
+import { _createKvEngine, type EARS } from '@apackdev/ears';
 import { openLmdbStore } from '@apackdev/ears/lmdb';
 import { _packShortCodes, parseReferenceHref } from '@apackdev/sdk/framework';
 import { SDK_SHORT_CODES } from '@apackdev/sdk/types';
@@ -102,7 +102,7 @@ function rewriteAttributes(
 ) {
   const store = openLmdbStore({ path: dir });
   try {
-    const engine = createEarsEngine({ kv: store.kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
+    const engine = _createKvEngine({ kv: store.kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
     const result = { rewritten: 0, removed: 0, sequencesRemoved: 0, sequences: [] as string[] };
     engine.transact(() => {
       for (const id of engine.admin.getAllEntities()) {

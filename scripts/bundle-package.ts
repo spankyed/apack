@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { recordBundleReads, runPackageBuild } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
-import { manifestPaths, type Manifest } from '@apackdev/host/build/published-manifest';
+import { manifestPaths, publishedSpec, type Manifest } from '@apackdev/host/build/published-manifest';
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import ts from 'typescript';
 import { BareImports } from './lib/published-imports.ts';
@@ -108,8 +108,8 @@ if (!config) throw new Error(`No bundle config for ${pkg.name}`);
 const outDir = path.join(pkgDir, 'dist', 'package');
 /** Built here and renamed over `dist/package` at the end; `scripts/build-package.ts` says why */
 const stagedDir = path.join(pkgDir, '.temp', 'build');
-const workspaceManifest = (name: string) =>
-  JSON.parse(fs.readFileSync(createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`), 'utf-8'));
+const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`);
+const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
@@ -128,10 +128,15 @@ const externalizeAllButInlined: Plugin = {
 };
 
 function versionOf(name: string): string {
-  // The package's own ranges win; inlined shared-instance and host code brings their ranges
-  const sources = [pkg.dependencies, pkg.peerDependencies, ...sharedPkgs.flatMap((p) => [p.dependencies, p.peerDependencies]), hostPkg.dependencies];
-  for (const source of sources) {
-    if (source?.[name]) return source[name];
+  // The package's own ranges win; inlined shared-instance and host code brings their ranges. A `file:` range, relative to
+  // the manifest declaring it, is published as the version it links
+  const sources: Array<[Record<string, string> | undefined, string]> = [
+    [pkg.dependencies, pkgDir], [pkg.peerDependencies, pkgDir],
+    ...SHARED_INSTANCE_PACKAGES.flatMap((shared, i) => [[sharedPkgs[i].dependencies, path.dirname(workspaceManifestFile(shared))], [sharedPkgs[i].peerDependencies, path.dirname(workspaceManifestFile(shared))]] as Array<[Record<string, string> | undefined, string]>),
+    [hostPkg.dependencies, path.join(repoRoot, 'packages', 'apack-host')],
+  ];
+  for (const [source, dir] of sources) {
+    if (source?.[name]) return publishedSpec(source[name], dir);
   }
   throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the shared-instance packages nor @apackdev/host declares`);
 }

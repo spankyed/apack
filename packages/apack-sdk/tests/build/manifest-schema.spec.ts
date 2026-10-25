@@ -115,14 +115,14 @@ describe('parseManifest', () => {
     expect(errorsOf({ data: { entities: { Flow: {}, Memo: {} } } })).toEqual([
       'apack.json "data.entities": "Flow" is defined by the SDK and available to every pack: remove it',
     ]);
-    expect(errorsOf({ data: { relations: ['contains', 'transitions_to', 'holds', 'pinned'] } })).toEqual([
+    expect(errorsOf({ data: { relations: { contains: {}, transitions_to: {}, holds: {}, pinned: {} } } })).toEqual([
       'apack.json "data.relations": "CONTAINS": "contains", "TRANSITIONS_TO": "transitions_to" are defined by the SDK and available to every pack: remove them',
     ]);
-    expect(errorsOf({ data: { relations: ['holds'] } })).toEqual([]);
+    expect(errorsOf({ data: { relations: { holds: {} } } })).toEqual([]);
     // A name only an object's prototype has is a pack's to use
     expect(errorsOf({ data: { entities: { constructor: {}, toString: {} } } })).toEqual([]);
     // Settings is not an SDK-reserved entity name
-    expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: ['pinned'] }, })).toEqual([]);
+    expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: { pinned: {} } }, })).toEqual([]);
   });
 
   it("rejects an entity type the engine's own ids are written with: a relation's", () => {

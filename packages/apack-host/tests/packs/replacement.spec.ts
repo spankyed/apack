@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { _createPackServices, type SettingsService } from '@apackdev/sdk/services';
 import { startTestRuntime } from '@apackdev/sdk/testing';
@@ -10,9 +10,9 @@ startTestRuntime();
 
 const target = { kind: 'app' } as const;
 let previousEngine: ReturnType<typeof _bindEars>;
-let engine: ReturnType<typeof createEarsEngine>;
+let engine: ReturnType<typeof _createTestEngine>;
 beforeEach(() => {
-  engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: () => false });
+  engine = _createTestEngine();
   previousEngine = _bindEars(engine);
 });
 afterEach(() => { _bindEars(previousEngine); vi.restoreAllMocks(); });

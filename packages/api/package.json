@@ -35,6 +35,7 @@
   "license": "ISC",
   "dependencies": {
     "@napi-rs/keyring": "^1.3.0",
+    "elmdb": "file:../../vendor/elmdb/crates/elmdb-node",
     "@vscode/ripgrep": "^1.17.1",
     "chokidar": "^3.6.0",
     "croner": "^10.0.1",

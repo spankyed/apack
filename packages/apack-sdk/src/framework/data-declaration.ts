@@ -1,5 +1,5 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { RowRules } from '@apackdev/ears';
+import type { RelationRules, RowRules } from '@apackdev/ears';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
 export interface PackEntityDeclaration {
@@ -11,11 +11,22 @@ export interface PackEntityDeclaration {
   readonly indexes?: readonly string[];
 }
 
+/**
+ * One relation kind's declaration: what its edges are held to, each rule off unless declared. `{}` declares a kind
+ * with none
+ */
+export interface PackRelationDeclaration {
+  /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
+  readonly acyclic?: boolean;
+  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
+  readonly unique?: boolean;
+}
+
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
 export interface PackDataDeclarations {
   data?: {
     entities?: Readonly<Record<string, PackEntityDeclaration>>;
-    relations?: readonly string[];
+    relations?: Readonly<Record<string, PackRelationDeclaration>>;
     roles?: readonly string[];
   };
   features?: Readonly<Record<string, object>>;
@@ -111,7 +122,16 @@ function wireConstants(wires: readonly string[], what: 'Relation' | 'Role', key:
 
 /** @internal The pack's relation kinds as EARS constants (`tagged_with` → `TAGGED_WITH`) */
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string> {
-  return wireConstants(declaration.data?.relations ?? [], 'Relation', 'relations');
+  return wireConstants(Object.keys(declaration.data?.relations ?? {}), 'Relation', 'relations');
+}
+
+/** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
+  const rules: Record<string, RelationRules> = {};
+  for (const [wire, { acyclic, unique }] of Object.entries(declaration.data?.relations ?? {})) {
+    if (acyclic || unique) rules[wire] = { ...(acyclic && { acyclic }), ...(unique && { unique }) };
+  }
+  return rules;
 }
 
 /** @internal The pack's roles as EARS constants (`entry_event` → `ENTRY_EVENT`) */

@@ -66,7 +66,7 @@ async function packagedBoot(run: (app: ReturnType<typeof openAppStore>) => Promi
   } finally {
     app.packs.runShutdownHooks();
     for (const pack of app.packs.loadedPacks()) app.packs.unregisterPack(pack.id);
-    app.store.close();
+    app.database.close();
     unbindHost();
   }
 }

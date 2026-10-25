@@ -1,8 +1,7 @@
 // services.appData: reset, back up and restore the app's stored data
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin, RunNode } from '@apackdev/sdk/services';
-import type { RecordStore } from '@apackdev/ears';
-import type { LmdbStore } from '@apackdev/ears/lmdb';
-import { exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
+import type { EarsDatabase, RecordStore } from '@apackdev/ears';
+import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
 import { secretsStore } from '../secrets/index.ts';
 import { _getMediaPath } from '@apackdev/sdk/utils';
 import { getAppVersion } from '@apackdev/sdk/env';
@@ -16,13 +15,13 @@ import { createSettingsBackupValidator } from '../features/settings/be/backup.ts
  * already put back what was there. What it does with that is the caller's — replacing the data is this service's
  * job, and telling the app is not.
  */
-export function createAppData({ store, history, registry, settings, onReplaced }: {
-  store: LmdbStore;
+export function createAppData({ database, history, registry, settings, onReplaced }: {
+  database: EarsDatabase;
   /** The run history and its record store, which a backup copies and a reset empties with the database */
   history: { service: RunHistory; store: RecordStore<RunNode> };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
 }): AppDataService {
-  const stores: BackupStores = { lmdb: store, runHistory: history.store };
+  const stores: BackupStores = { lmdb: databaseBackupStore(database), runHistory: history.store };
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -47,8 +46,8 @@ export function createAppData({ store, history, registry, settings, onReplaced }
     async reset() {
       await exclusive(() => replaceData(async () => {
         registry.runShutdownHooks();
-        // The engine reads the store, so emptying the store empties the engine, in one unit
-        store.reset();
+        // The engine reads the database, so emptying the database empties the engine, in one unit; its schema stays
+        database.reset();
         await history.store.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();

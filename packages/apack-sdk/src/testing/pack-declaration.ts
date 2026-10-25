@@ -41,7 +41,7 @@ export function nativePackDeclarationFixture(fixture: PackRegistration, metadata
         const shortCode = fixture.ears?.rowRules?.[name]?.shortCode;
         return [name, shortCode ? { shortCode } : {}];
       })),
-      relations: Object.values(fixture.ears.relKinds ?? {}),
+      relations: Object.fromEntries(Object.values(fixture.ears.relKinds ?? {}).map((kind) => [kind, fixture.ears?.relationRules?.[kind] ?? {}])),
       roles: Object.values(fixture.ears.roles ?? {}),
     } }),
     ...(fixture.steps !== undefined && { steps: Object.fromEntries(fixture.steps.map(step => {

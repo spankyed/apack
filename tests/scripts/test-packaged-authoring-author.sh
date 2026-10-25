@@ -44,6 +44,10 @@ SDK_TGZ="$(ls "$WORK"/apackdev-sdk-*.tgz)"
 UI_TGZ="$(ls "$WORK"/apackdev-ui-*.tgz)"
 CLI_TGZ="$(ls "$WORK"/apackdev-cli-*.tgz)"
 TESTING_TGZ="$(ls "$WORK"/apackdev-testing-*.tgz)"
+# elmdb, which @apackdev/ears depends on, isn't published either: its tarball, binding built for this machine, stands
+# in for the registry through npm's overrides, as no pack depends on it but through @apackdev/ears
+(cd "$ROOT/vendor/elmdb/crates/elmdb-node" && npm pack --silent --pack-destination "$WORK" >/dev/null)
+ELMDB_TGZ="$(ls "$WORK"/elmdb-*.tgz)"
 
 step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # Every install revalidates npm's cached metadata, as a pack author's does: under `--prefer-offline`, metadata cached
@@ -51,7 +55,7 @@ step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # without an error (rollup's), so the build fails later for want of it
 mkdir "$WORK/tools"
 # The SDK's @apackdev/ears comes from its tarball too
-(cd "$WORK/tools" && npm init -y >/dev/null && npm install --silent --no-audit --no-fund "$EARS_TGZ" "$SDK_TGZ" "$CLI_TGZ")
+(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" && npm install --silent --no-audit --no-fund "$EARS_TGZ" "$SDK_TGZ" "$CLI_TGZ")
 APACK="$WORK/tools/node_modules/.bin/apack"
 "$APACK" --version
 
@@ -61,7 +65,7 @@ cd "$WORK"
 PACK="$WORK/demo-pack"
 cd "$PACK"
 # The tarballs stand in for the npm registry
-npm pkg set "dependencies.@apackdev/ears=file:$EARS_TGZ" "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ"
+npm pkg set "dependencies.@apackdev/ears=file:$EARS_TGZ" "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=file:$ELMDB_TGZ"
 npm install --silent --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
 for lib in @tiptap highlight.js lowlight @guolao/vue-monaco-editor; do

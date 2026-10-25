@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
-import { createEarsEngine, type Ears } from '@apackdev/ears';
-import { openEnvironment, openLmdbStore, openRecordStore, LMDB_FORMAT_VERSION, RECORD_STORE_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type Ears, type EarsDatabase } from '@apackdev/ears';
+import { DATABASE_FORMAT, openDatabase, openRecordStore, RECORD_STORE_FORMAT_VERSION } from '@apackdev/ears/lmdb';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -22,13 +22,22 @@ const defaultLog: BackupLog = {
   warn: (message, detail) => logger.warn(message, detail),
 };
 
-/** A store a backup copies from and an import puts back into: the LMDB store, or the run history's record store */
+/** A store a backup copies from and an import puts back into: the database, or the run history's record store */
 export interface BackupStore {
   readonly path: string;
-  /** LMDB's own copy of one moment of the store into `targetDir` */
+  /** The store's own copy of one moment of itself into `targetDir` */
   copyTo(targetDir: string): Promise<void>;
   /** Replaces the store's contents with those of the copy at `dir`, in one unit, while it stays open */
   replaceWith(dir: string): void;
+}
+
+/** The database as a backup copies it: elmdb's compacted copy, and its replacement from another database's data */
+export function databaseBackupStore(database: EarsDatabase): BackupStore {
+  return {
+    path: database.path,
+    copyTo: async (targetDir) => database.backup(targetDir),
+    replaceWith: (dir) => database.replaceWith(dir),
+  };
 }
 
 /**
@@ -36,7 +45,7 @@ export interface BackupStore {
  * backup's copy of it is checked — opened read-only, so one in a format this version can't read is refused, and closed
  */
 const DATABASES = {
-  lmdb: { format: LMDB_FORMAT_VERSION, check: (dir: string) => openEnvironment(dir, { readOnly: true }).root.close() },
+  lmdb: { format: DATABASE_FORMAT, check: (dir: string) => openDatabase({ path: dir, readOnly: true }).close() },
   runHistory: { format: RECORD_STORE_FORMAT_VERSION, check: (dir: string) => openRecordStore({ path: dir, indexes: {}, readOnly: true }).close() },
 } as const;
 
@@ -281,10 +290,10 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   // Every database the import would put in place, so one this version can't read is found before anything is
   // replaced, not when the store opens the new files again
   for (const name of databases) refusing(() => DATABASES[name].check(path.join(dir, name)));
-  const store = refusing(() => openLmdbStore({ path: path.join(dir, 'lmdb'), readOnly: true }));
+  const database = refusing(() => openDatabase({ path: path.join(dir, 'lmdb'), readOnly: true }));
   try {
-    // An engine over the backup's files that takes every name, since what a backup holds is what is being asked
-    const engine = createEarsEngine({ kv: store.kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
+    // An engine over the backup's files, held to the schema they hold, since what a backup holds is what is being asked
+    const engine = createEarsEngine({ database });
     validate?.(engine);
     const perType = new Map(Object.entries(engine.admin.countEntities()));
     const known = new Set(entityTypes);
@@ -306,7 +315,7 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
       counts,
     };
   } finally {
-    store.close();
+    database.close();
   }
 }
 

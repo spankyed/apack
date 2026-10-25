@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import { bindHost, unbindHost } from '../../src/runtime/host-runtime.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
 import type { StepCatalogEntry } from '../../src/framework/catalog-view.ts';
@@ -18,7 +18,7 @@ function fixture() {
     binding: { type: 'memo', node: { label: 'Memo', defaults: { tags: ['draft'] } }, runtime: { handler } } };
   const state = { entries: [entry] };
   const bindings = new Map([['memo', accepted]]);
-  bindHost({ ears: createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: () => true }), appVersion: '1.0.0', services: {} as never,
+  bindHost({ ears: _createTestEngine({ entityTypes: ['Memo'] }), appVersion: '1.0.0', services: {} as never,
     transport: {} as never, packs: { stepDeclarations: () => state.entries, stepBindings: () => bindings,
       step: (type: string) => bindings.get(type)?.binding, steps: () => [...bindings.values()].map(value => value.binding) } as never });
   return { entry, accepted, state, bindings, handler };

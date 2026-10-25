@@ -2,19 +2,14 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { LmdbStore } from '@apackdev/ears/lmdb';
-import { importDatabase } from '../../src/backup/index.ts';
+import { importDatabase, type BackupStore } from '../../src/backup/index.ts';
 
-// Exercise the rollback's order without opening native environments: the backup reads as an empty database, and
-// the store's files are text. import.spec covers real LMDB.
-vi.mock('@apackdev/ears/lmdb', async importOriginal => {
-  const { createMemoryKV } = await import('@apackdev/ears');
-  return {
-    ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
-    openEnvironment: () => ({ root: { close: () => {} } }),
-    openLmdbStore: () => ({ kv: createMemoryKV(), close: () => {} }),
-  };
-});
+// Exercise the rollback's order without opening native databases: the backup reads as an empty database, and the
+// store's files are text. import.spec covers real databases.
+vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
+  ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
+  openDatabase: () => ({ path: '', readOnly: true, isOpen: true, schema: null, stats: () => ({ types: {}, relations: {}, fileBytes: 0 }), close: () => {} }),
+}));
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.removeSync(root); });
@@ -33,7 +28,7 @@ function fixture() {
     path: primary,
     copyTo: (dest: string) => fs.copy(primary, dest),
     replaceWith: (dir: string) => fs.copySync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb')),
-  } as unknown as LmdbStore;
+  } satisfies BackupStore;
   return { root, primary, backup, media, store };
 }
 

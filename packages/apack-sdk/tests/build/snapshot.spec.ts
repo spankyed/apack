@@ -111,7 +111,7 @@ describe('snapshot data reader', () => {
     data.manifest.data.entities = { Flow: {} };
     expect(parseSnapshot(data).diagnostics.some(issue => issue.message.includes('defined by the SDK'))).toBe(true);
     delete data.manifest.data;
-    data.manifest.data = { relations: ['contains'] };
+    data.manifest.data = { relations: { contains: {} } };
     expect(parseSnapshot(data).diagnostics.some(issue => issue.path.join('.') === 'manifest.data.relations')).toBe(true);
   });
 

@@ -19,7 +19,7 @@ execution improvement, not a new query language or a general query planner.
 
 ## Findings
 
-- [attribute-storage.ts](../../packages/apack-ears/src/attribute-storage.ts) already owns
+- [attribute-storage.ts](../../packages/apack-ears/src/kv/attribute-storage.ts) already owns
   `Map<attributeKind, Map<entityId, values[]>>`. It provides attribute membership and values without
   an additional index. Entity-type membership is separately indexed.
 - [query.ts](../../packages/apack-ears/src/query.ts) materializes initial IDs immediately. Each

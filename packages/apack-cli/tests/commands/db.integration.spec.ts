@@ -9,8 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
 import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
-import { exportDatabase } from '@apackdev/host/backup';
-import { openEnvironment, LMDB_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
+import { DATABASE_FORMAT } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -57,7 +57,7 @@ function schemaContext(userDataDir: string) {
 /** Writes to the data dir's database as the app does, by the schema its installed packs declare */
 async function write(userDataDir: string, change: () => void): Promise<void> {
   const paths = _appDataPaths(userDataDir);
-  const { store, engine } = openDatabaseStore({
+  const { database: store, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(schemaContext(userDataDir)),
   });
@@ -102,7 +102,7 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
   }
   const log = { info: () => {}, warn: () => {} };
   // Through an open store, as the app backs up: LMDB copies each database itself
-  const { store } = openDatabaseStore({
+  const { database: store } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(schemaContext(userDataDir)),
     // Read-only: LMDB copies a database whose files this user can't write just as well
@@ -110,7 +110,7 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
   });
   const runHistory = fs.existsSync(paths.runHistory) ? openRunHistoryStore(paths.runHistory, { readOnly: true }) : undefined;
   try {
-    return await exportDatabase({ lmdb: store, ...(runHistory && { runHistory }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
+    return await exportDatabase({ lmdb: databaseBackupStore(store), ...(runHistory && { runHistory }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
   } finally {
     store.close();
     runHistory?.close();
@@ -118,13 +118,10 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
 }
 
 /** Records another storage format in a database's own files, as a newer apack would have written them */
-function writeStorageFormat(databaseDir: string, format: number): void {
-  const { root } = openEnvironment(databaseDir);
-  try {
-    root.openDB({ name: 'meta', encoding: 'json' }).putSync('format', format);
-  } finally {
-    root.close();
-  }
+/** Replaces a database's files with bytes no database holds, as files of a format this version can't read are to it */
+function writeUnreadableFiles(databaseDir: string): void {
+  fs.writeFileSync(path.join(databaseDir, 'data.mdb'), Buffer.alloc(16384, 7));
+  fs.rmSync(path.join(databaseDir, 'lock.mdb'), { force: true });
 }
 
 /** Runs `apack db <args>` and returns its stdout and stderr lines, and its error */
@@ -951,16 +948,16 @@ describe('apack db import', () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup');
     const metadata = JSON.parse(fs.readFileSync(path.join(backup, 'metadata.json'), 'utf-8'));
-    expect(metadata).toMatchObject({ appVersion: '0.3.14', storageFormats: { lmdb: LMDB_FORMAT_VERSION } });
+    expect(metadata).toMatchObject({ appVersion: '0.3.14', storageFormats: { lmdb: DATABASE_FORMAT } });
     expect(Object.keys(metadata).sort()).toEqual(['appVersion', 'databases', 'includesMedia', 'storageFormats', 'timestamp']);
 
     const listed = await ok(['import', backup, '--data-dir', dir]);
     expect(listed.out).toMatch(/made .* by apack 0\.3\.14/);
 
-    // The databases themselves are what a newer apack would have written
-    writeStorageFormat(path.join(backup, 'lmdb'), 99);
+    // The database's files are ones this version can't read
+    writeUnreadableFiles(path.join(backup, 'lmdb'));
     const refused = await run(['import', backup, '--force', '--data-dir', dir]);
-    expect(refused.error?.message).toMatch(new RegExp(`is in storage format 99, but this version reads format ${LMDB_FORMAT_VERSION}`));
+    expect(refused.error?.message).toMatch(/isn't a file this LMDB reads/);
     expect(refused.error?.message).toContain('(backup made by apack 0.3.14)');
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
   });
@@ -971,13 +968,13 @@ describe('apack db import', () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup', { databases: ['lmdb', 'runHistory'] });
     expect(fs.existsSync(path.join(backup, 'runHistory'))).toBe(true);
-    // Files that aren't a run history at all: an EARS database where the record store should be
+    // Files that aren't a run history at all: the app's database where the record store should be
     fs.rmSync(path.join(backup, 'runHistory'), { recursive: true });
     fs.cpSync(path.join(backup, 'lmdb'), path.join(backup, 'runHistory'), { recursive: true });
 
     const refused = await run(['import', backup, '--force', '--data-dir', dir]);
 
-    expect(refused.error?.message).toMatch(/are an EARS database, not a record store/);
+    expect(refused.error?.message).toMatch(/File is not an LMDB file/);
     // Nothing was put in place: the import says so for each database it replaces
     expect(refused.err).not.toContain('Imported ');
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');

@@ -50,9 +50,11 @@ function typecheck(tsc: TscVersion, moduleResolution: 'node16' | 'bundler') {
     "broadcastToSurface('memos', { type: 'MEMO_REMOVED' });",
     "// @ts-expect-error untyped query helpers aren't pack-facing",
     "export { findAll } from '@apackdev/ears';",
-    // An engine is an instance a test or tool creates; its admin face comes only with it
+    // An engine is an instance a test or tool creates over a database; its admin face comes only with it
     "import { createEarsEngine } from '@apackdev/ears';",
-    "const engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === 'Memo' });",
+    "import { openDatabase } from '@apackdev/ears/lmdb';",
+    "const database = openDatabase({ path: 'memos', schema: { types: { Memo: { required: [] } }, relations: {}, roles: [] } });",
+    "const engine = createEarsEngine({ database });",
     "engine.create('Memo').set('title', 'held');",
     "engine.admin.clear();",
     // Host-only modules live in the private @apackdev/host
@@ -170,8 +172,9 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
    */
   it.each(['ears', 'sdk', 'ui'])('publishes the workspace package.json of @apackdev/%s, derived', (name) => {
     const published = JSON.parse(fs.readFileSync(path.join(consumer!, 'node_modules', '@apackdev', name, 'package.json'), 'utf-8'));
-    const workspace = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'packages', `apack-${name}`, 'package.json'), 'utf-8'));
-    expect(published).toEqual(publishedManifest(workspace));
+    const dir = path.join(REPO_ROOT, 'packages', `apack-${name}`);
+    const workspace = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
+    expect(published).toEqual(publishedManifest(workspace, dir));
     expect(JSON.stringify(published)).not.toContain('@apackdev/source');
   });
 });

@@ -24,10 +24,10 @@ const { rootEvents } = await import('../../src/transport/emitter.ts');
 // The app's bus on the api's transport, as setup/backend.ts binds it (the services reach the store only when called)
 const { bindHost } = await import('@apackdev/sdk/runtime');
 const { createHostRuntime } = await import('@apackdev/host/services');
-const { createEarsEngine } = await import('@apackdev/ears');
+const { _createTestEngine } = await import('@apackdev/sdk/testing');
 const { untypedBroadcastToSurface } = await import('@apackdev/sdk/events');
-type LmdbStore = import('@apackdev/ears/lmdb').LmdbStore;
-bindHost(createHostRuntime({ runHistory: _memoryRunHistoryStore(), store: {} as LmdbStore, engine: createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: () => false }), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
+type EarsDatabase = import('@apackdev/ears').EarsDatabase;
+bindHost(createHostRuntime({ runHistory: _memoryRunHistoryStore(), database: {} as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
 const backendSystem = createAppBus(registry);
 
 const received: string[] = [];

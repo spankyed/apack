@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import { findRelations, _bindEars, boundEars, untypedWrite } from '@apackdev/sdk/ears';
 import { applyRecord, type ApplyRecord } from '../../src/utils/index.ts';
 
@@ -23,7 +23,7 @@ const { contentPath } = await import('../../src/build/manifest.ts');
 let tmp: string | undefined;
 // The applier reads and writes the installed engine: a fresh one per test
 beforeEach(() => {
-  _bindEars(createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => ['Flow', 'Node', 'Action', 'Prompt'].includes(name) }));
+  _bindEars(_createTestEngine());
 });
 afterEach(() => {
   _bindEars(undefined);
@@ -276,10 +276,7 @@ describe('flow applier', () => {
    * kind to `flow-compiler.ts` and this fails rather than the filter silently dropping it.
    */
   it('keeps the short code of a flow it deletes only to write again, rather than numbering it anew', () => {
-    _bindEars(createEarsEngine({
-      isRelationKind: () => true, isRole: () => true, isEntityType: (name) => ['Flow', 'Node', 'Action', 'Prompt'].includes(name),
-      rowRules: (type) => (type === 'Flow' ? { required: [], shortCode: 'FLW' } : undefined),
-    }));
+    _bindEars(_createTestEngine({ rowRules: { Flow: { required: [], shortCode: 'FLW' } } }));
     const dir = compiledFlows('Demo Flow');
     apply(dir);
     const codeOf = () => (flows('Demo Flow') as Array<{ shortCode?: string }>).map((flow) => flow.shortCode);
