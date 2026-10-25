@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "17cbbe1147a50f954dde099d914ac5bad909310f",
+  "researchCommit": "42d517d6a1399562e7afb00fe8534db0b0b7371d",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -87,7 +87,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "511ac7c695692ad821b270eed647fc28627e55883ae8957ed762f02029650fc4",
+    "src/integration/apack-terminal-owner-app.mjs": "4d5e9982143d5142e70eef11589620fe07d8bb043783877cedfb1aef9db97ad5",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -124,7 +124,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "4b30f3a7c22e45afc5de6e57a9d641bdcecab4cd91a87d678c9c7eac5f2fc2d4",
+    "src/integration/run-apack-controls.mjs": "2ed50106fcc9167ba0ef0843077eddc6e6e74d834039b3532bc5b36034f9dd3d",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -286,7 +286,8 @@
     "src/protocol/verify-prompt-process-replacement.mjs": "d13cf34be1b2d95a302f16d00b153140589123a3c5eb2ed66c11cc11082043ee",
     "src/protocol/native-select-fixture.mjs": "76a0256a5c7688ca52e1c052a281099c2e1d31c4b298e468053608d617a7a845",
     "src/protocol/verify-reset-media.mjs": "8a95cfda62bbca8d2b8e156508e2238f5d8203f55f10bd596a588e719f802bd1",
-    "src/protocol/native-compose-fixture.mjs": "e7532bd09dc3d2179238968804f7e947606df504868d31bff7ca87806c62160d"
+    "src/protocol/native-compose-fixture.mjs": "e7532bd09dc3d2179238968804f7e947606df504868d31bff7ca87806c62160d",
+    "src/protocol/native-notify-fixture.mjs": "467ef4ad093116da1c02d050fdda94a104e801cdd7160facea649be8a7365057"
   },
-  "archiveSha256": "15bd8e4c8269d130dedd59683e8d9b3d1ccaed5c2ac8eb8a9790b110badfead6"
+  "archiveSha256": "8a2796858232ae0fa7b94f28cefc11cfb94d8fda46df9ed86778687cd74d7a55"
 }
