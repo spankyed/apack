@@ -68,7 +68,7 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
    for(const row of group){
     signal?.throwIfAborted();entry.current();
     if(typeof row.label!=='string'||row.label.length>16384)throw Error('Native Settings Status label changed');
-    const value=await nativeGenericPermissionText(n,row.value);
+    const value=await nativeGenericPermissionText(n,typeof row.value==='string'?row.value:n.jsx.e(n.terminalComponents.n,{children:row.value}));
     if(value.length>65536)throw Error('Native Settings Status value exceeded bound');
     rows.push({label:row.label,value});
    }
