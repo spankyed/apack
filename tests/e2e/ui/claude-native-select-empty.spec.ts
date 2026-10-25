@@ -107,7 +107,7 @@ test('preserves native Select none and valid empty values through original callb
   }
   await expect.poll(async()=>(await drawing()).hasValue).toBe(false)
   expect(await callbacks()).toEqual([])
-  const keyboardCancellation=[]
+  const keyboardCancellation=[],openPopup=[]
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(true)
   for(const width of [1100,680]){
@@ -118,6 +118,20 @@ test('preserves native Select none and valid empty values through original callb
     for(const key of ['Enter','ArrowDown','Escape']){
       if(key==='Enter')await select.press(key)
       else await appPage.keyboard.press(key)
+      if(key==='Enter')await expect(appPage.getByRole('listbox')).toBeVisible()
+      if(key==='ArrowDown'){
+        await appPage.keyboard.press('End')
+        const option=appPage.getByRole('option',{name:'Developers',exact:true})
+        await expect(option).toBeFocused();await expect(option).toBeInViewport({ratio:1})
+        const popup=appPage.getByRole('listbox');await expect(popup).toBeInViewport({ratio:1})
+        await expect.poll(label).toBe('none');expect(await callbacks()).toEqual([])
+        await expect(composer).toHaveText(draft)
+        await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+        const file=`native-select-open-highlighted-${width}.png`
+        const png=await nativeWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+        await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
+        openPopup.push({width,file,highlighted:'Developers',label:await label(),callbacks:await callbacks(),bounds:await popup.boundingBox()})
+      }
       steps.push({key,label:await label(),callbacks:await callbacks()})
       await writeFile(join(workspace!,'native-select-keyboard-steps.json'),JSON.stringify({width,steps}))
     }
@@ -149,6 +163,6 @@ test('preserves native Select none and valid empty values through original callb
   await composer.fill('Continue after choosing the release audience.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-select-proof.json'),JSON.stringify({keyboardCancellation,states,callbacks:await callbacks(),sessionId,boundNativePid,noPhantomTurn:true}))
+  await writeFile(join(workspace!,'native-select-proof.json'),JSON.stringify({keyboardCancellation,openPopup,states,callbacks:await callbacks(),sessionId,boundNativePid,noPhantomTurn:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSelectEmpty:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
