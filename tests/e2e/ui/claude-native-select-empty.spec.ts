@@ -107,6 +107,18 @@ test('preserves native Select none and valid empty values through original callb
   }
   await expect.poll(async()=>(await drawing()).hasValue).toBe(false)
   expect(await callbacks()).toEqual([])
+  const keyboardCancellation=[]
+  await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
+  await expect.poll(()=>appPage.evaluate(()=>document.hasFocus())).toBe(true)
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===680?600:900})
+    await select.focus();await expect(select).toBeFocused()
+    await select.press('Enter');await select.press('ArrowDown');await select.press('Escape')
+    await expect(select).toBeFocused();await expect.poll(label).toBe('none')
+    expect(await callbacks()).toEqual([])
+    await expect(composer).toHaveText(draft)
+    keyboardCancellation.push({width,callbacks:await callbacks(),label:await label(),focused:await select.evaluate(element=>document.activeElement===element)})
+  }
   await capture('unset','none');expect(await callbacks()).toEqual([])
   await select.selectOption('')
   await expect.poll(async()=>(await callbacks()).length).toBe(1)
@@ -130,6 +142,6 @@ test('preserves native Select none and valid empty values through original callb
   await composer.fill('Continue after choosing the release audience.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-select-proof.json'),JSON.stringify({states,callbacks:await callbacks(),sessionId,boundNativePid,noPhantomTurn:true}))
+  await writeFile(join(workspace!,'native-select-proof.json'),JSON.stringify({keyboardCancellation,states,callbacks:await callbacks(),sessionId,boundNativePid,noPhantomTurn:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSelectEmpty:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
