@@ -94,6 +94,8 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'git is the only thing that knows what is tracked, and tracked-ness is the subject: a walk of the '
       + 'tree cannot tell a committed file from a build output, which is the distinction every repo-wide '
       + 'guard reading this rests on. One call, shared by every spec that asks' },
+  'packages/repo-checks/tests/vitest-exit-with-parent.integration.spec.ts': { calls: 1,
+    why: 'a forked child standing in for a vitest worker: the guard\'s subject is a process whose IPC parent goes away, and it kills itself' },
   'packages/repo-checks/tests/component-contracts.integration.spec.ts': { calls: 1,
     why: 'vue-tsc again, and it emits declarations for the component reports rather than only checking them' },
   'packages/repo-checks/tests/import-specifiers-script.integration.spec.ts': { calls: 2,

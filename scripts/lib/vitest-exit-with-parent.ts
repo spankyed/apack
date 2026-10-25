@@ -7,9 +7,9 @@
  * memory and CPU until someone kills them. A normal shutdown never reaches this: tinypool stops a worker with
  * SIGTERM, then SIGKILL. The IPC channel closes only when the parent has exited.
  *
- * A worker blocked in synchronous code sees the disconnect when it next turns its event loop. What a
- * launcher started is also reaped by process group (`scripts/lib/bounded-spawn.ts`); this covers a vitest
- * started any other way.
+ * A worker blocked in synchronous code sees the disconnect when it next turns its event loop, and one still
+ * loading when its vitest died finds the channel already closed as this installs. What a launcher started is also
+ * reaped by process group (`scripts/lib/bounded-spawn.ts`); this covers a vitest started any other way.
  *
  * Every host package's config lists it, and a worker loads it once per file, so it installs its listener once.
  */
@@ -20,5 +20,8 @@ const state = globalThis as { [INSTALLED]?: true };
 if (process.send !== undefined && state[INSTALLED] === undefined) {
   state[INSTALLED] = true;
   // A signal, because vitest replaces `process.exit` in a worker with one that throws
-  process.once('disconnect', () => process.kill(process.pid, 'SIGKILL'));
+  const exit = () => process.kill(process.pid, 'SIGKILL');
+  // A `disconnect` that came before this listener is not heard again
+  if (process.connected) process.once('disconnect', exit);
+  else exit();
 }
