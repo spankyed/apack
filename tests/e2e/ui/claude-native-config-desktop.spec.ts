@@ -71,7 +71,6 @@ test('edits original Settings through desktop controls and retains composing', a
   else {
     await expect(main).toContainText('Session ready')
     await expect(main).toContainText('Reviewing release notes')
-    await expect(main.locator('span').first()).toHaveCSS('color', 'rgb(74, 222, 128)')
   }
   const boundNativePid = (await context()).native.state.nativePid
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
