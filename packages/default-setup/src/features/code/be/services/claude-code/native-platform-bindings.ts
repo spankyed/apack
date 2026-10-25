@@ -12,6 +12,7 @@ export const claudeNativeLinuxBindings: {
   "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
   "platform": "linux",
   "modules": {
+    "chunk-kmv3514c.js": { "module": "chunk-tsw4ek67.js", "exports": { "xr": "xr" } },
     "chunk-p22r2x2e.js": { "module": "chunk-mct2b85z.js", "exports": { "AM": "E0" } },
     "chunk-002p0hd2.js": {
       "module": "chunk-ztnrxvr2.js",

@@ -732,23 +732,23 @@ async function control(request,abort){
  if(request.subtype==='apack_owner_snapshot'){
   const binding=originalContext??n.runtime.ey();
   if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native owner is not bound');
-  const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js');
+  const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js'),restrictions=await import('/$bunfs/root/chunk-kmv3514c.js');
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
   restoreNativePlanContext(n,binding.toolContext(abort),sessionId);
   helperPolicyReader=()=>{const effective=settings.ut(),policy=settings.me('policySettings')??{};return JSON.stringify([policy.allowManagedHooksOnly===true,policy.disableAllHooks===true,effective.disableAllHooks===true])};
-  const effective=settings.ut(),policy=settings.me('policySettings')??{};
+  const effective=settings.ut(),policy=settings.me('policySettings')??{},privateHooksSuppressed=restrictions.xr('plugins')===true;
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
-  if(request.policy_only===true)return {...facts,preview,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
   // Frozen native her: exclude synthetic/meta/virtual tool-result inputs from the human turn count.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
   const turn=n.runtime.lpe();
-  return {sessionId,view,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),modelSelection:context.getAppState().mainLoopModelForSession??context.getAppState().mainLoopModel??'default',turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
+  return {sessionId,view,privateHooksSuppressed,busy:context.turnActivity.getSnapshot()===true,transcriptPath:n.runtime.Cf(sessionId),hooksDisabled:effective.disableAllHooks===true,metadata:{permissionMode:context.getAppState().toolPermissionContext.mode,prePlanMode:context.getAppState().toolPermissionContext.prePlanMode,cwd:paths.ce(),model:binding.model(),modelSelection:context.getAppState().mainLoopModelForSession??context.getAppState().mainLoopModel??'default',turns,startedAt:usage.startedAt,totalCostUsd:usage.cost.usd},statusCommand:policy.disableAllHooks?null:command(helpers.statusLine),subagentCommand:policy.disableAllHooks?null:command(helpers.subagentStatusLine),shellPrefix:process.env.CLAUDE_CODE_SHELL_PREFIX??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},turn:turn?{id:turn.turnId,cancelled:turn.cancelled()}:null,workflows:nativeWorkflowTasks(n,context.taskRegistry),taskFacts:Object.values(context.taskRegistry.all()).flatMap(task=>{const identity=n.runtime.flt(task);return identity?[{...identity,status:task.status,isIdle:task.isIdle===true,finalizing:task.finalizing===true,awaitingPlanApproval:task.awaitingPlanApproval===true,keepaliveReasons:[...task.keepaliveReasons??[]]}]:[]})};
  }
  if(request.subtype==='apack_plan_dialogs'){
   let d=nativeDialog(n,'permission_enter_plan_mode');if(!d.item)d=nativeDialog(n,'permission_exit_plan_mode_v2');if(!d.item)return {dialogs:[]};
@@ -1247,7 +1247,7 @@ const ownerTimer=setInterval(async()=>{
   if(activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity,workflows:gate.workflows});reportedActivity=activityKey;}
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
-  if(gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
+  if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;
   if(native){refreshNativeTheme(native);refreshNativeToolProgress(native);refreshNativeToolGroups(native);refreshNativeComposer(native);refreshTerminalPlacements(native);nativeRasterMirrors.refresh();actionKeys.poll(native);}
   if(!ownerIndependent)return;
   const snapshot=await control({subtype:'apack_owner_snapshot',follow_native_session:true},new AbortController());
