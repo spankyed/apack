@@ -119,7 +119,14 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
       await notice.getByRole('button', { name: 'About this plugin', exact: true }).click()
       const details = appPage.getByRole('dialog', { name: 'About this plugin', exact: true })
       await expect(details).toBeVisible()
-      for (const paragraph of await details.locator('p').all()) { await paragraph.scrollIntoViewIfNeeded(); await expect(paragraph).toBeInViewport() }
+      const readDetails = () => details.evaluate(element => {
+        const viewport = element.getBoundingClientRect()
+        return { text: [...element.querySelectorAll('p')].map(p => p.textContent), visible: [...element.querySelectorAll('p')].flatMap((p, index) => { const rect = p.getBoundingClientRect(); return rect.top >= Math.max(0, viewport.top) - 1 && rect.bottom <= Math.min(window.innerHeight, viewport.bottom) + 1 ? [index] : [] }), scrollHeight: element.scrollHeight }
+      })
+      const initial = await readDetails(); expect(initial.text).toEqual(shown.paragraphs)
+      const read = new Set(initial.visible)
+      if (read.size < initial.text.length) { await details.hover(); await appPage.mouse.wheel(0, initial.scrollHeight); await expect.poll(async () => { for (const index of (await readDetails()).visible) read.add(index); return read.size }).toBe(initial.text.length) }
+      expect(read.size).toBe(shown.paragraphs.length)
     }
     await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
     const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
