@@ -80,7 +80,7 @@ test('preserves native Select none and valid empty values through original callb
   else await expect(status).toContainText('Session ready')
   const composer = card.locator('[contenteditable="true"]')
 
-  const select=card.getByRole('combobox',{name:'Release audience',exact:true})
+  const select=card.getByRole('combobox',{name:'Release audience',exact:true,includeHidden:true})
   const tools=card.getByRole('button',{name:'Session tools',exact:true})
   if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
   const draft='Keep my release notes while choosing an audience.'
