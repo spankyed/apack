@@ -94,6 +94,8 @@ it('boots host recovery before loading external modules, repairs, and starts nor
   expect(startPacks).not.toHaveBeenCalled();
   fixture.data = settings.getOverrides();
   backend.backendActor.stop();
+  // The run history's database, which the next boot opens again, as a restarted app's process does
+  backend.appRunHistory?.database.close();
   unbindHost();
   await backend.setupBackend();
   expect(loadAppPacks).toHaveBeenCalledTimes(1);

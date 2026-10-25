@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import type { EARS } from '@apackdev/ears';
 import { _createRunHistory, type RunNode, type RunNodeId } from '@apackdev/sdk/services';
-import { findRunningApp, openRunHistoryStore } from '@apackdev/host/database';
+import { findRunningApp, openRunHistory } from '@apackdev/host/database';
 import { toJSON } from './output';
 import { parseDbArgs, TARGET_USAGE, type DbIo } from './target';
 
@@ -47,20 +47,20 @@ export async function dbRuns(args: string[], io: DbIo): Promise<void> {
   if (running) io.err(`Warning: apack is running on it (${running.why}); this reads what it has committed`);
 
   // Read-only: the history is read, never changed, so this works while an app runs and on files it may not write
-  const store = openRunHistoryStore(dir, { readOnly: true });
+  const runs = openRunHistory(dir, { readOnly: true });
   try {
-    const history = _createRunHistory(store);
+    const history = _createRunHistory(runs.engine);
     if (typeof values.run === 'string') {
       const tree = history.tree(values.run as RunNodeId);
       if (!tree) throw new Error(`No run node ${values.run} in the run history`);
       io.out(toJSON(tree));
       return;
     }
-    const runs = history.findRuns({ limit, ...(typeof values.flow === 'string' && { flowId: values.flow as EARS.EntityId }) });
-    if (values.json) io.out(toJSON(runs));
-    else if (runs.length === 0) io.out('No runs');
-    else runs.forEach((run) => io.out(runLine(run)));
+    const found = history.findRuns({ limit, ...(typeof values.flow === 'string' && { flowId: values.flow as EARS.EntityId }) });
+    if (values.json) io.out(toJSON(found));
+    else if (found.length === 0) io.out('No runs');
+    else found.forEach((run) => io.out(runLine(run)));
   } finally {
-    store.close();
+    runs.database.close();
   }
 }

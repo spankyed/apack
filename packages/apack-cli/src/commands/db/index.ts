@@ -4,6 +4,7 @@ import { dbExec, dbQuery, EXEC_USAGE, QUERY_USAGE } from './code';
 import { VERIFY_USAGE } from './backup-verify';
 import { dbBackup, BACKUP_USAGE } from './backup';
 import { dbExport, EXPORT_USAGE } from './export';
+import { dbImportRuns, IMPORT_RUNS_USAGE } from './import-runs';
 import { dbInspect, INSPECT_USAGE } from './inspect';
 import { dbRepl, REPL_USAGE } from './repl';
 import { dbRuns, RUNS_USAGE } from './runs';
@@ -20,6 +21,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: DbIo) => Promise<void
   backup: { run: dbBackup, usage: BACKUP_USAGE },
   export: { run: dbExport, usage: EXPORT_USAGE },
   import: { run: dbImport, usage: IMPORT_USAGE },
+  'import-runs': { run: dbImportRuns, usage: IMPORT_RUNS_USAGE },
   reset: { run: dbReset, usage: RESET_USAGE },
   'clear-settings': { run: dbClearSettings, usage: CLEAR_SETTINGS_USAGE },
 };
@@ -41,6 +43,7 @@ Commands:
   backup verify <dir>   Check backup readability and completeness
   export --out <dir>    Each entity type's entities to a file
   import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)
+  import-runs <dump>    A run history dumped from a record store, into an empty one (lists it; --force imports)
   reset                 Delete all data, as Reset Database does (lists it; --force deletes)
   clear-settings        Destroy the Settings rows, so defaults come back (lists them; --force destroys)
 

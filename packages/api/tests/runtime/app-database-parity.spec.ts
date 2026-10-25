@@ -52,6 +52,7 @@ function closeApi(app: Awaited<ReturnType<typeof bootApi>>) {
   app.packs.runShutdownHooks();
   for (const pack of app.packs.loadedPacks()) app.packs.unregisterPack(pack.id);
   app.database.close();
+  app.runHistory.database.close();
   unbindHost();
 }
 

@@ -8,7 +8,8 @@ import { spawn } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
-import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
+import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
+import { runHistoryAt } from '../_support/run-history.ts';
 import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
 import { DATABASE_FORMAT } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
@@ -86,7 +87,7 @@ async function appDataDir(): Promise<string> {
   });
   // A run the app recorded, in the run history's own store: a session's root and the event it heard, as a run on
   // 2026-10-01 left them
-  const store = openRunHistoryStore(_appDataPaths(dir).runHistory);
+  const store = runHistoryAt(_appDataPaths(dir).runHistory);
   store.put({ id: 'RunNode-1', rootId: 'RunNode-1', kind: 'flow', label: 'Root', status: 'completed', startedAt: Date.UTC(2026, 9, 1), flowId: 'Flow-root' });
   store.put({ id: 'RunNode-2', rootId: 'RunNode-1', kind: 'event', label: 'go', eventType: 'go', triggerType: 'listener', status: 'completed', startedAt: Date.UTC(2026, 9, 1, 0, 1), parentId: 'RunNode-1' });
   store.close();
@@ -108,9 +109,9 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
     // Read-only: LMDB copies a database whose files this user can't write just as well
     readOnly: true,
   });
-  const runHistory = fs.existsSync(paths.runHistory) ? openRunHistoryStore(paths.runHistory, { readOnly: true }) : undefined;
+  const runHistory = fs.existsSync(paths.runHistory) ? runHistoryAt(paths.runHistory, { readOnly: true }) : undefined;
   try {
-    return await exportDatabase({ lmdb: databaseBackupStore(store), ...(runHistory && { runHistory }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
+    return await exportDatabase({ lmdb: databaseBackupStore(store), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
   } finally {
     store.close();
     runHistory?.close();
@@ -409,6 +410,47 @@ describe('apack db runs', () => {
     fs.rmSync(_appDataPaths(dir).runHistory, { recursive: true });
     expect((await run(['runs', '--data-dir', dir])).error?.message).toMatch(/No run history in .*: apack hasn't run a flow on it/);
     expect(fs.existsSync(_appDataPaths(dir).runHistory)).toBe(false);
+  });
+});
+
+describe('apack db import-runs', () => {
+  /** A dump as `tools/lmdb-js-export --records` writes one: its header, then each record as the store held it */
+  function dumpOf(header: Record<string, unknown>, records: Record<string, unknown>[]): string {
+    const file = path.join(tempDir('runs-dump-'), 'runs.jsonl');
+    fs.writeFileSync(file, [header, ...records].map((line) => JSON.stringify(line)).join('\n') + '\n');
+    return file;
+  }
+  const HEADER = { dump: 'apack-records', version: 1, format: 1 };
+  const RECORDS = [
+    { id: 'RunNode-00mg8xk2l0000', rootId: 'RunNode-00mg8xk2l0000', kind: 'flow', label: 'Dumped', status: 'completed', startedAt: Date.UTC(2026, 8, 1), flowId: 'Flow-root', input: { nested: [1, 'two'] } },
+    { id: 'RunNode-00mg8xk2l0001', rootId: 'RunNode-00mg8xk2l0000', parentId: 'RunNode-00mg8xk2l0000', kind: 'event', label: 'go', status: 'completed', startedAt: Date.UTC(2026, 8, 1, 0, 1) },
+  ];
+
+  it('lists the import without --force, then puts each node in an empty run history under its own id', async () => {
+    const dir = await appDataDir();
+    fs.rmSync(_appDataPaths(dir).runHistory, { recursive: true });
+    const dump = dumpOf(HEADER, RECORDS);
+
+    expect((await ok(['import-runs', dump, '--data-dir', dir])).out).toContain('Would import 2 run node(s)');
+    expect(fs.existsSync(_appDataPaths(dir).runHistory)).toBe(false);
+
+    expect((await ok(['import-runs', dump, '--force', '--data-dir', dir])).out).toBe(`Imported 2 run node(s) into ${_appDataPaths(dir).runHistory}`);
+    const tree = JSON.parse((await ok(['runs', '--run', 'RunNode-00mg8xk2l0000', '--data-dir', dir])).out);
+    expect(tree).toMatchObject({ label: 'Dumped', input: { nested: [1, 'two'] }, children: [{ id: 'RunNode-00mg8xk2l0001', label: 'go' }] });
+  });
+
+  it('refuses a run history that holds runs, a file that is not a records dump, and a record that is not a run node', async () => {
+    const dir = await appDataDir();
+    expect((await run(['import-runs', dumpOf(HEADER, RECORDS), '--force', '--data-dir', dir])).error?.message)
+      .toMatch(/already holds 2 run node\(s\): import into one that holds none/);
+    const history = runHistoryAt(_appDataPaths(dir).runHistory, { readOnly: true });
+    expect(history.get('RunNode-00mg8xk2l0000')).toBeUndefined();
+    history.close();
+
+    expect((await run(['import-runs', dumpOf({ dump: 'apack-records', version: 1, format: 2 }, RECORDS), '--data-dir', dir])).error?.message)
+      .toMatch(/isn't a run history dump/);
+    expect((await run(['import-runs', dumpOf(HEADER, [{ id: 'Note-a' }]), '--data-dir', dir])).error?.message)
+      .toMatch(/record 1: not a run node/);
   });
 });
 
@@ -968,13 +1010,13 @@ describe('apack db import', () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup', { databases: ['lmdb', 'runHistory'] });
     expect(fs.existsSync(path.join(backup, 'runHistory'))).toBe(true);
-    // Files that aren't a run history at all: the app's database where the record store should be
+    // Files that aren't a run history at all: the app's database where the run history's should be
     fs.rmSync(path.join(backup, 'runHistory'), { recursive: true });
     fs.cpSync(path.join(backup, 'lmdb'), path.join(backup, 'runHistory'), { recursive: true });
 
     const refused = await run(['import', backup, '--force', '--data-dir', dir]);
 
-    expect(refused.error?.message).toMatch(/File is not an LMDB file/);
+    expect(refused.error?.message).toMatch(/is a database, but not a run history/);
     // Nothing was put in place: the import says so for each database it replaces
     expect(refused.err).not.toContain('Imported ');
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
@@ -983,7 +1025,7 @@ describe('apack db import', () => {
   it('brings back the run history the backup holds', async () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup', { databases: ['lmdb', 'runHistory'] });
-    const history = () => openRunHistoryStore(_appDataPaths(dir).runHistory);
+    const history = () => runHistoryAt(_appDataPaths(dir).runHistory);
     const before = history();
     before.delete('RunNode-1');
     before.close();

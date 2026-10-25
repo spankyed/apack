@@ -7,7 +7,7 @@ import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/hos
 import { createSettingsBackupValidator } from '@apackdev/host/settings';
 import type { EARS } from '@apackdev/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
-import { openRunHistoryStore, type AppDatabase } from '@apackdev/host/database';
+import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';
 import { _secretProviderLabel } from '@apackdev/sdk/services';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
@@ -218,11 +218,11 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
     }
     // Its progress lines go to stderr with everything else that isn't the result, so `apack db import > file` holds
     // only what the command was asked for
-    const runHistory = openRunHistoryStore(db.paths.runHistory);
+    const runHistory = openRunHistory(db.paths.runHistory);
     try {
-      await importDatabase({ lmdb: databaseBackupStore(db.database), runHistory }, backupDir, db.paths.media, { skipUnknownDatabases: skipUnknown, log: backupLog(io), validate });
+      await importDatabase({ lmdb: databaseBackupStore(db.database), runHistory: databaseBackupStore(runHistory.database) }, backupDir, db.paths.media, { skipUnknownDatabases: skipUnknown, log: backupLog(io), validate });
     } finally {
-      runHistory.close();
+      runHistory.database.close();
     }
     return '\nImported.';
   });

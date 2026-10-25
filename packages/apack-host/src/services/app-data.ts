@@ -1,6 +1,6 @@
 // services.appData: reset, back up and restore the app's stored data
-import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin, RunNode } from '@apackdev/sdk/services';
-import type { EarsDatabase, RecordStore } from '@apackdev/ears';
+import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
+import type { EarsDatabase } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
 import { secretsStore } from '../secrets/index.ts';
 import { _getMediaPath } from '@apackdev/sdk/utils';
@@ -17,11 +17,11 @@ import { createSettingsBackupValidator } from '../features/settings/be/backup.ts
  */
 export function createAppData({ database, history, registry, settings, onReplaced }: {
   database: EarsDatabase;
-  /** The run history and its record store, which a backup copies and a reset empties with the database */
-  history: { service: RunHistory; store: RecordStore<RunNode> };
+  /** The run history and its database, which a backup copies and a reset empties with the app's */
+  history: { service: RunHistory; database: EarsDatabase };
   registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
 }): AppDataService {
-  const stores: BackupStores = { lmdb: databaseBackupStore(database), runHistory: history.store };
+  const stores: BackupStores = { lmdb: databaseBackupStore(database), runHistory: databaseBackupStore(history.database) };
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -48,7 +48,7 @@ export function createAppData({ database, history, registry, settings, onReplace
         registry.runShutdownHooks();
         // The engine reads the database, so emptying the database empties the engine, in one unit; its schema stays
         database.reset();
-        await history.store.reset();
+        history.database.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         startPacks(registry);

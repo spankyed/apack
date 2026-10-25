@@ -1,9 +1,9 @@
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
-import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears, type RecordStore } from '@apackdev/ears';
+import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { openDatabase, openRecordStore } from '@apackdev/ears/lmdb';
-import { _RUN_HISTORY_INDEXES, type RunNode } from '@apackdev/sdk/services';
+import { openDatabase } from '@apackdev/ears/lmdb';
+import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
 import { findAppDataPaths } from './layout.ts';
@@ -45,14 +45,23 @@ export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStor
   return { database, engine };
 }
 
+/** The run history's database and the engine over it, which no `transact` on the app's engine reaches */
+export interface RunsDatabase {
+  database: EarsDatabase;
+  engine: EarsEngine;
+}
+
 /**
- * The run history's store at `dir`, indexed as `services.runHistory` looks its records up. Opened to write, a store
- * that can't be opened — another format, another kind of files, damaged — is moved aside, to
- * `<dir>.unreadable-<time>`, and a new one is started: the history is a log, so what that costs is past runs, and
- * refusing would keep the whole app from starting over it. Opened read-only, it refuses as any store does.
+ * The run history's database at `dir` (`runs`), held to the run history's schema. Opened to write, files that can't be
+ * opened — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
+ * new database is started: the history is a log, so what that costs is past runs, and refusing would keep the whole app
+ * from starting over it. Opened read-only, it refuses as any database does.
  */
-export function openRunHistoryStore(dir: string, { readOnly }: { readOnly?: boolean } = {}): RecordStore<RunNode> {
-  const open = () => openRecordStore<RunNode>({ path: dir, indexes: _RUN_HISTORY_INDEXES, readOnly });
+export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
+  const open = (): RunsDatabase => {
+    const database = openDatabase({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
+    return { database, engine: createEarsEngine({ database }) };
+  };
   try {
     return open();
   } catch (error) {
@@ -94,7 +103,7 @@ export interface OpenAppDatabaseOptions {
 /**
  * Opens the database in `userDataDir` as the app does, held to the schema the app last declared, beside the installed
  * packs' names read from their manifests (no pack code runs), which a tool reports. The engine is bound, so `@apackdev/sdk/ears`'s
- * operations act on it until `close()`. The run history is a store of its own (`openRunHistoryStore`).
+ * operations act on it until `close()`. The run history is a database of its own (`openRunHistory`).
  */
 export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom }: OpenAppDatabaseOptions): Promise<AppDatabase> {
   const context = resolveAppEnvironment({ env, userDataDir });

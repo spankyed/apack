@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { EARS, EarsDatabase } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { _createTestEngine, _memoryRunHistoryStore, _openTestDatabase, testRootEvents } from '@apackdev/sdk/testing';
+import { _createTestEngine, _openTestRunHistory, _openTestDatabase, testRootEvents } from '@apackdev/sdk/testing';
 import { createHostRuntime } from '../../src/services/index.ts';
 import { inference } from '../../src/services/inference.ts';
 import { secrets } from '../../src/services/secrets.ts';
@@ -46,13 +46,12 @@ const bound = (target: object, key: string | symbol): unknown => {
   return typeof value === 'function' ? value.bind(target) : value;
 };
 
-/** A run history whose reset waits for `finish`: a reset is under way until it is called */
+/** A test run history whose database reset is watched */
 function blockedHistory() {
-  const runHistory = _memoryRunHistoryStore();
-  let finish!: () => void;
-  const reset = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
-  runHistory.reset = reset;
-  return { runHistory, reset, finish: () => finish() };
+  const runHistory = _openTestRunHistory();
+  const reset = vi.spyOn(runHistory.database, 'reset');
+  // A reset is under way until the promise it returned settles, which the cases await at `finish`
+  return { runHistory, reset, finish: () => {} };
 }
 
 /** An external pack the app loaded: where it came from, as the loader records it */
@@ -67,12 +66,15 @@ describe('createHostRuntime', () => {
     const store = { reset: vi.fn() } as unknown as EarsDatabase;
     const runtime = createHostRuntime({ runHistory, database: store, engine: newEngine(), transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry() });
+    // Each started while the first is under way, which it is until its promise settles
     const first = runtime.services.appData.reset();
+    const second = runtime.services.appData.reset();
+    const importing = runtime.services.appData.importBackup('/not-a-backup');
     try {
-      await expect(runtime.services.appData.reset()).rejects.toThrow('already being replaced');
-      await expect(runtime.services.appData.importBackup('/not-a-backup')).rejects.toThrow('already being replaced');
-      expect(reset).toHaveBeenCalledOnce();
+      await expect(second).rejects.toThrow('already being replaced');
+      await expect(importing).rejects.toThrow('already being replaced');
     } finally { finish(); await first; }
+    expect(reset).toHaveBeenCalledOnce();
     expect(store.reset).toHaveBeenCalledOnce();
     order.length = 0;
   });
@@ -100,7 +102,7 @@ describe('createHostRuntime', () => {
   it('keeps settings and onboarding on the owning engine when another engine is installed', () => {
     const firstEngine = newEngine();
     const secondEngine = newEngine();
-    const runtime = (engine: ReturnType<typeof newEngine>) => createHostRuntime({ runHistory: _memoryRunHistoryStore(),
+    const runtime = (engine: ReturnType<typeof newEngine>) => createHostRuntime({ runHistory: _openTestRunHistory(),
       database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents },
       appVersion: '1.2.3', packs: createNativePackTestRegistry(),
     });
@@ -122,7 +124,7 @@ describe('createHostRuntime', () => {
     // The services reach the store only when called
     const engine = newEngine();
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
+    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
     // What log redaction masks: the host's own check over the values its secrets store has handled
     expect(runtime.redaction).toBe(secretRedaction);
     expect(runtime.transport.rootEvents).toBe(testRootEvents);
@@ -156,7 +158,7 @@ describe('createHostRuntime', () => {
     });
     const id = engine.create('Memo', { id: 'Memo-1' as EARS.EntityId }).set('title', 'kept?').id();
     const packs = createNativePackTestRegistry();
-    const runtime = createHostRuntime({ runHistory: _memoryRunHistoryStore(), database: store, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
+    const runtime = createHostRuntime({ runHistory: _openTestRunHistory(), database: store, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs });
     secretsStore.add('openai', 'Work', 'sk-proj-resetspec1234567890');
     // An external pack the app loaded, holding something open between its onInit and onShutdown
     const boot = { onInit: () => order.push(`onInit (${secretsStore.list().length} keys)`), onShutdown: () => order.push('onShutdown') };

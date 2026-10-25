@@ -105,6 +105,12 @@ export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<R
   };
 }
 
+/** An entity type's name: PascalCase, as the database holds a type's */
+export const _ENTITY_NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
+
+/** A field the database is told of, one a shape requires or an entry indexes: lowerCamelCase, as it holds a field's */
+export const _FIELD_NAME_PATTERN = /^[a-z][A-Za-z0-9]*$/;
+
 /** A relation kind's or a role's stored name: snake_case, its generated EARS constant the same in uppercase */
 export const _WIRE_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 

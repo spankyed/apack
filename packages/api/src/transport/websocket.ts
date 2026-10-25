@@ -164,7 +164,7 @@ export function createWebSocketServer() {
       console.error('[backend] Closing the database failed', error);
     }
     try {
-      appRunHistory?.close();
+      appRunHistory?.database.close();
     } catch (error) {
       console.error('[backend] Closing the run history failed', error);
     }

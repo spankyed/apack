@@ -16,7 +16,7 @@ import { bindTestRuntime, resetTestHostState } from './host.ts';
 import type { OnboardingService } from '../services/onboarding.ts';
 
 export { testRootEvents, testRunHistory, takeSystemErrors, addTestSecret, type TestRootEvents } from './host.ts';
-export { _memoryRunHistoryStore } from './memory-run-history.ts';
+export { _openTestRunHistory } from './run-history.ts';
 export { testPacks, type TestPacks } from './packs.ts';
 export { fakeInference, type FakeInference, type FakeInferenceCall, type FakeInferenceReplies, type FakeInferenceReply, type FakeTextCall } from './fake-inference.ts';
 // A pack's own tests bind a frontend host for the file and forget it again; bindFeHost is the renderer's,

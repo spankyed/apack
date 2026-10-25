@@ -2,8 +2,8 @@ import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
-import type { EarsDatabase, EarsEngine, RecordStore } from '@apackdev/ears';
-import { assertNoDatabaseWriter, openDatabaseStore, openRunHistoryStore, storedSettings } from '@apackdev/host/database';
+import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
@@ -14,7 +14,7 @@ import {
 } from '@apackdev/host/features';
 import { createAppBus, createParticipantClaims, HOST } from '@apackdev/host/bus';
 import { createHostRuntime } from '@apackdev/host/services';
-import { _settingsAdmin, type RunNode } from '@apackdev/sdk/services';
+import { _settingsAdmin } from '@apackdev/sdk/services';
 import { compileSettingsCatalog, createSettingsAccess } from '@apackdev/host/settings';
 import { forwardSecretsChanges } from '@apackdev/host/secrets';
 import { assertSourceResolution } from '@apackdev/host/build/source-resolution';
@@ -47,8 +47,8 @@ function logErrors(actor: string) {
 /** The app's data: its elmdb database, the engine over it (both faces: the composition keeps `admin`), and its registered packs */
 export interface AppStore {
   database: EarsDatabase;
-  /** The run history's store, closed with the app's */
-  runHistory: RecordStore<RunNode>;
+  /** The run history's database and its engine, closed with the app's database */
+  runHistory: RunsDatabase;
   engine: EarsEngine;
   packs: PackRegistry;
 }
@@ -60,13 +60,13 @@ export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
 /** The open database, so shutdown can close it, which syncs what is owed */
 export let appDatabase: EarsDatabase | undefined;
 
-/** The run history's open store, so shutdown can close it */
-export let appRunHistory: RecordStore<RunNode> | undefined;
+/** The run history's open database, so shutdown can close it */
+export let appRunHistory: RunsDatabase | undefined;
 
 /**
  * Opens the app's data and binds the app: the registered packs (`createPackRegistry()`, empty until the caller
  * registers them), the elmdb database and the app's engine over it (`openDatabaseStore`, `@apackdev/host/database`,
- * which `apack db` opens a data dir with too) with their entity types, the run history's store, and
+ * which `apack db` opens a data dir with too) with their entity types, the run history's database, and
  * `bindHost(createHostRuntime(...))` with the root event bus, whose log events are printed, the app version, the
  * registry (the SDK's lookups read it), the engine (packs get its operations, bound by the bind) and the host
  * services over the database and the engine's admin face.
@@ -101,7 +101,7 @@ export function openAppStore(): AppStore {
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
-  const runHistory = openRunHistoryStore(_getRunHistoryPath());
+  const runHistory = openRunHistory(_getRunHistoryPath());
   runtime = createHostRuntime({ database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
   bindHost(runtime);
   printLogEvents();

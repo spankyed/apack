@@ -119,8 +119,11 @@ describe('parseManifest', () => {
       'apack.json "data.relations": "CONTAINS": "contains", "TRANSITIONS_TO": "transitions_to" are defined by the SDK and available to every pack: remove them',
     ]);
     expect(errorsOf({ data: { relations: { holds: {} } } })).toEqual([]);
-    // A name only an object's prototype has is a pack's to use
-    expect(errorsOf({ data: { entities: { constructor: {}, toString: {} } } })).toEqual([]);
+    // A name only an object's prototype has isn't the SDK's: it is refused for its case alone
+    expect(errorsOf({ data: { entities: { constructor: {}, toString: {} } } })).toEqual([
+      'apack.json "data.entities.constructor": Must be a PascalCase entity wire name',
+      'apack.json "data.entities.toString": Must be a PascalCase entity wire name',
+    ]);
     // Settings is not an SDK-reserved entity name
     expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: { pinned: {} } }, })).toEqual([]);
   });
@@ -145,6 +148,17 @@ describe('parseManifest', () => {
     // One entity per prefix, and the SDK's are taken
     expect(refused({ entities: { Memo: { shortCode: 'MEM' }, Tag: { shortCode: 'MEM' } } })).toContain('declared for both "Memo" and "Tag"');
     expect(refused({ entities: { Memo: { shortCode: 'DOC' } } })).toContain("the SDK's Document prefix");
+  });
+
+  it.each(['memo', 'memo_entry', 'Memo-entry', '_Memo', '__proto__', ''])
+  ('refuses an entity name the database does not hold, which is PascalCase: %j', (name) => {
+    const result = parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities: Object.fromEntries([[name, {}]]) } });
+    expect(messagesOf(result).join('\n')).toContain('Must be a PascalCase entity wire name');
+  });
+
+  it.each(['Status', 'due_at', 'due-at', ''])('refuses an index on a field the database does not hold, which is lowerCamelCase: %j', (field) => {
+    const result = parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities: { Memo: { indexes: [field] } } } });
+    expect(messagesOf(result).join('\n')).toContain('Must be a lowerCamelCase field name');
   });
 
 

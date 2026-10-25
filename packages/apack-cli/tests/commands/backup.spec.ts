@@ -7,7 +7,8 @@ import { openDatabase } from '@apackdev/ears/lmdb';
 import { databaseBackupStore, readBackup, importDatabase } from '@apackdev/host/backup';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { _appDataPaths } from '@apackdev/sdk/utils';
-import { findDatabaseWriter, publishRunningApp, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
+import { findDatabaseWriter, publishRunningApp, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
+import { runHistoryAt } from '../_support/run-history.ts';
 import { db } from '../../src/commands/db';
 
 /** The database at `dir` and an engine over it, declaring the notes these cases write and look for */
@@ -28,7 +29,7 @@ it('creates an importable backup with media and run history, and refuses overwri
     const primary = notesAt(paths.lmdb);
     primary.notes.create('Note', { id: 'Note-a' as EARS.EntityId });
     primary.database.close();
-    const history = openRunHistoryStore(paths.runHistory);
+    const history = runHistoryAt(paths.runHistory);
     history.put({ id: 'RunNode-a', rootId: 'RunNode-a', kind: 'flow', label: 'Run', status: 'completed', startedAt: 0 });
     history.close();
     fs.mkdirSync(paths.media, { recursive: true });
@@ -50,9 +51,9 @@ it('creates an importable backup with media and run history, and refuses overwri
       path: restored.lmdb,
       schema: { ...installed, getRegisteredEntityTypes: () => new Set([...installed.getRegisteredEntityTypes(), 'Note']) },
     });
-    const runHistory = openRunHistoryStore(restored.runHistory);
+    const runHistory = runHistoryAt(restored.runHistory);
     try {
-      await importDatabase({ lmdb: databaseBackupStore(database), runHistory }, out, restored.media, { log: { info: () => {}, warn: () => {} } });
+      await importDatabase({ lmdb: databaseBackupStore(database), runHistory: databaseBackupStore(runHistory.database) }, out, restored.media, { log: { info: () => {}, warn: () => {} } });
       expect(engine.query('Note').ids()).toEqual(['Note-a']);
       expect(runHistory.get('RunNode-a')).toMatchObject({ id: 'RunNode-a', status: 'completed' });
       expect(fs.readFileSync(path.join(restored.media, 'asset.txt'), 'utf8')).toBe('media');

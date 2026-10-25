@@ -246,12 +246,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     }>>>;
     media: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -262,12 +262,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -278,12 +278,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }>, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -294,12 +294,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -1198,12 +1198,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }>>>;
         formats: z.ZodOptional<z.ZodType<Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1214,12 +1214,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
             media?: string | undefined;
         }>, z.ZodTypeDef, Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1245,12 +1245,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1276,12 +1276,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1376,12 +1376,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1567,12 +1567,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1744,12 +1744,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1935,12 +1935,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -2112,12 +2112,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
