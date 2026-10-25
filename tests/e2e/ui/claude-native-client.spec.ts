@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test('runs native Client state props input and lifetime inside the app', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
+test('runs native Client state props input and lifetime inside the app', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture({path}:{path:string}){
