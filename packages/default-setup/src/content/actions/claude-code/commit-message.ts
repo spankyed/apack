@@ -14,6 +14,7 @@ export const meta: ActionMeta = {
   description: 'Generate a git commit message from a diff using Claude CLI',
   category: 'claude-code',
   input: {
+    client: { type: 'string', description: 'The connection of the window that asked, which the result answers alone' },
     diff: { type: 'string', description: 'Git diff to generate a commit message from', required: true },
     branch: { type: 'string', description: 'Current branch name', required: false },
     repoName: { type: 'string', description: 'Repository name', required: false },
@@ -52,17 +53,20 @@ export async function action(
   _z: Z,
   _flowId: string,
 ) {
-  const { diff, branch, repoName } = params;
+  const { diff, branch, repoName, client } = params;
+  // The window that asked: a flow run has no return address, so the ask carried its connection. With none, no
+  // window asked, and there is nobody to tell what this would make
+  if (!client) return { success: false, error: 'No window asked' };
 
   if (!diff?.trim()) {
-    services.emitter.broadcastToSurface('default-setup/code', {
+    services.emitter.sendToWindow(client, 'default-setup/code', {
       type: 'commit.ERROR_RECEIVED',
       data: { message: 'No diff provided' },
     });
     return { success: false, error: 'Empty diff' };
   }
 
-  services.emitter.broadcastToSurface('default-setup/code', { type: 'commit.GENERATING_MESSAGE' });
+  services.emitter.sendToWindow(client, 'default-setup/code', { type: 'commit.GENERATING_MESSAGE' });
 
   try {
     const fullPrompt = services.prompt.usePrompt('Commit Message', {
@@ -72,7 +76,7 @@ export async function action(
     });
 
     if (!fullPrompt) {
-      services.emitter.broadcastToSurface('default-setup/code', {
+      services.emitter.sendToWindow(client, 'default-setup/code', {
         type: 'commit.ERROR_RECEIVED',
         data: { message: 'Commit Message prompt template not found. Import the pack content.' },
       });
@@ -87,14 +91,14 @@ export async function action(
     const message = postprocess(result.stdout);
 
     if (!message) {
-      services.emitter.broadcastToSurface('default-setup/code', {
+      services.emitter.sendToWindow(client, 'default-setup/code', {
         type: 'commit.ERROR_RECEIVED',
         data: { message: 'Claude returned an empty response.' },
       });
       return { success: false, error: 'Empty response' };
     }
 
-    services.emitter.broadcastToSurface('default-setup/code', {
+    services.emitter.sendToWindow(client, 'default-setup/code', {
       type: 'commit.MESSAGE_GENERATED',
       data: { message },
     });
@@ -102,7 +106,7 @@ export async function action(
     return { success: true };
   } catch (error: any) {
     const errorMessage = formatProviderError(error, 'Claude Code');
-    services.emitter.broadcastToSurface('default-setup/code', {
+    services.emitter.sendToWindow(client, 'default-setup/code', {
       type: 'commit.ERROR_RECEIVED',
       data: { message: errorMessage },
     });

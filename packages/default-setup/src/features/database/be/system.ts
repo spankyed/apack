@@ -91,7 +91,7 @@ export const databaseSystem = setup({
       // The window that ran it asks for the schema again; every other one shows the schema it last asked for
       reply?.(await transactionAnswer(code));
     },
-    handleAiQuery: ({ event, reply }) => {
+    handleAiQuery: ({ event, reply, client }) => {
       const { prompt, mode } = databaseSpec.typeOf('GENERATE_AI_QUERY', event);
 
       if (!prompt?.trim()) {
@@ -106,7 +106,8 @@ export const databaseSystem = setup({
       sendToSystem('brain', {
         type: 'HANDLE_BRAIN_EVENT',
         eventType: 'db.query',
-        payload: { prompt: prompt.trim(), mode: mode ?? 'query', provider },
+        // A flow run has no return address, so the ask carries the asking window's connection for the action to answer
+        payload: { prompt: prompt.trim(), mode: mode ?? 'query', provider, ...(client && { client }) },
       });
     },
     getFlowRuns: ({ reply }) => {
