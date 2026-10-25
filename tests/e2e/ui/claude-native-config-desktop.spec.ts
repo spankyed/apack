@@ -186,11 +186,13 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any
+  const externalDisableRoutes:string[]=[]
   const disableExternalConsent=async()=>{
     await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
     const editor=panel.getByLabel('Claude Code setting editor',{exact:true})
     let outcome='pending'
     await expect.poll(async()=>{if((await consentProject()).hasClaudeMdExternalIncludesApproved===false)outcome='disabled';else if(await editor.count())outcome='confirmation';return outcome}).not.toBe('pending')
+    externalDisableRoutes.push(outcome)
     if(outcome==='confirmation')await editor.locator('[data-native-settings-option="cancel"]').click()
     await expect(editor).toHaveCount(0);await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false)
   }
@@ -219,7 +221,7 @@ test('edits original Settings through desktop controls and retains composing', a
     await disableExternalConsent()
     await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    externalConsent={samples,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
+    externalConsent={samples,disableRoutes:externalDisableRoutes,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
     await search.fill('');await appPage.setViewportSize({width:1100,height:900})
   }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_GROUPS==='1'){
