@@ -73,7 +73,7 @@
           <!-- Summaries -->
           <div class="flex-1 min-w-0">
             <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
-              <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
+              <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ toolInputSummary(entry) }}</div>
             </JsonHoverPopup>
             <JsonHoverPopup
               v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent && !entry.nativeResult"
@@ -118,6 +118,7 @@ import { type PropType, ref, computed, watch, nextTick, inject, onMounted, onBef
 import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from 'lucide-vue-next'
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
+import { toolInputSummary } from './tool-input-summary.ts'
 
 import type { ToolActivityEntry } from '#features/threads/be/types.ts'
 import { claudeToolDrawings } from './native-tool-drawings.ts'
