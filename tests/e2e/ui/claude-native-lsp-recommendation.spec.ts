@@ -186,7 +186,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
       const toggle = toolGroup.getByRole('button').first()
       if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click()
       await expect(navigation).toBeVisible(); await expect(navigation).toContainText('definitions.review')
-      await expect(toolGroup.getByText('Go to definition · ' + workspace + '/release.review:2:1', { exact: true })).toBeVisible()
+      await expect(toolGroup.getByText('Go to definition · release.review:2:1', { exact: true })).toBeVisible()
     } catch (error) {
       await writeFile(join(workspace!, 'native-lsp-installed-result-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }))
       const size = appPage.viewportSize()!, image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), size)
@@ -196,7 +196,14 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     const continuedDraft = 'Keep reviewing this definition.'
     await composer.fill(continuedDraft)
     for (const [width, height] of [[1100, 900], [680, 600]]) {
-      await appPage.setViewportSize({ width, height }); await navigation.scrollIntoViewIfNeeded(); await expect(navigation).toBeInViewport()
+      await appPage.setViewportSize({ width, height })
+      await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
+      await expect.poll(async () => {
+        await navigation.evaluate(element => element.scrollIntoView({ block: 'center' }))
+        const output = await navigation.boundingBox(), composing = await card.boundingBox()
+        return !!output && !!composing && output.y >= 0 && output.y + output.height <= composing.y
+      }).toBe(true)
+      await expect(navigation).toBeInViewport()
       await expect(composer).toHaveText(continuedDraft); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
       const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
       const path = testInfo.outputPath('native-lsp-installed-result-' + width + '.png'); await writeFile(path, Buffer.from(image, 'base64')); captures.push(path)

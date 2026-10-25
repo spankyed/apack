@@ -25,7 +25,7 @@
       <span class="flex-1 min-w-8" />
       <template v-if="previewEntry">
         <span class="text-[11px] text-neutral-500 flex-shrink-0">{{ previewEntry.tool }}</span>
-        <span class="text-[11px] text-neutral-600 truncate font-mono text-right min-w-0">{{ previewEntry.summary }}</span>
+        <span class="text-[11px] text-neutral-600 truncate font-mono text-right min-w-0">{{ toolInputSummary(previewEntry) }}</span>
       </template>
       <!-- <span v-if="badge" class="text-xs text-neutral-500 flex-shrink-0 tabular-nums">{{ badge }}</span> -->
     </button>
@@ -73,7 +73,7 @@
           <!-- Summaries -->
           <div class="flex-1 min-w-0">
             <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
-              <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ toolInputSummary(entry) }}</div>
+              <div class="text-neutral-400 truncate font-mono text-left" :dir="entry.tool === 'LSP' ? 'ltr' : 'rtl'">{{ toolInputSummary(entry) }}</div>
             </JsonHoverPopup>
             <JsonHoverPopup
               v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent && !entry.nativeResult"

@@ -10,5 +10,6 @@ export function toolInputSummary(entry: ToolActivityEntry): string {
   const label = operation === 'goToDefinition' ? 'Go to definition' : operation === 'hover' ? 'Hover' : operation
   const position = Number.isSafeInteger(line) && (line as number) > 0
     ? ':' + line + (Number.isSafeInteger(character) && (character as number) > 0 ? ':' + character : '') : ''
-  return `${label} · ${filePath}${position}`
+  const fileName = filePath.split(/[\\/]/).at(-1) || filePath
+  return `${label} · ${fileName}${position}`
 }
