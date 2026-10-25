@@ -1,3 +1,4 @@
+import { readClaudeTerminalSharedImage } from './terminal-image-shared-memory.ts'
 import type { ClaudeTerminalImagePixels } from './terminal-image-cache.ts'
 import { readClaudeTerminalImageFile, type ClaudeTerminalImageFileFormat } from './terminal-image-file.ts'
 
@@ -6,21 +7,23 @@ export function createClaudeTerminalImageFileTransport(options: {
   emit: (text: string) => void
   reply: (text: string) => void
   read?: typeof readClaudeTerminalImageFile
+  readShared?: typeof readClaudeTerminalSharedImage
   image?: (value: ClaudeTerminalImagePixels) => void
   remove?: (id: number) => void
 }) {
-  const read = options.read ?? readClaudeTerminalImageFile
+  const read = options.read ?? readClaudeTerminalImageFile, readShared = options.readShared ?? readClaudeTerminalSharedImage
   let pending = Promise.resolve(), queuedBytes = 0, closed = false
   let reading = false, cancelRead: (() => void) | undefined
-  async function readImage(path: string, image: ClaudeTerminalImageFileFormat) {
+  async function readImage(path: string, image: ClaudeTerminalImageFileFormat, shared: boolean) {
     if (reading) throw new Error('Previous terminal image read is still pending')
     reading = true
-    const source = Promise.resolve().then(() => read(path, image))
+    const controller = new AbortController()
+    const source = Promise.resolve().then(() => shared ? readShared(path, image, controller.signal) : read(path, image))
     void source.then(() => { reading = false }, () => { reading = false })
     let timer: ReturnType<typeof setTimeout> | undefined
     const stopped = new Promise<never>((_resolve, reject) => {
-      cancelRead = () => reject(new Error('Terminal image owner closed'))
-      timer = setTimeout(() => reject(new Error('Terminal image read timed out')), 4000)
+      cancelRead = () => { controller.abort(); reject(new Error('Terminal image owner closed')) }
+      timer = setTimeout(() => { controller.abort(); reject(new Error('Terminal image read timed out')) }, 4000)
       timer.unref?.()
     })
     try { return await Promise.race([source, stopped]) } finally { clearTimeout(timer); cancelRead = undefined }
@@ -49,15 +52,14 @@ export function createClaudeTerminalImageFileTransport(options: {
       if (!closed && id && /^[1-9][0-9]{0,9}$/.test(id) && Number(id) <= 0xffffffff && quiet !== '2' && (message !== 'OK' || quiet !== '1')) options.reply(`\x1b_Gi=${id};${message}\x1b\\`)
     }
     if (!valid || !id || !/^[1-9][0-9]{0,9}$/.test(id) || Number(id) > 0xffffffff || quiet !== undefined && !['0', '1', '2'].includes(quiet) || !['q', 'T'].includes(fields.get('a') ?? '') || [...fields.keys()].some(key => !['a', 't', 'q', 'f', 'i', 's', 'v', 'U', 'c', 'r'].includes(key))) { answer('EINVAL:invalid named image frame'); return }
-    if (fields.get('t') !== 'f') { answer('ENOTSUPPORTED:shared memory transport is unavailable'); return }
     const format = fields.get('f')
-    if (!['24', '32', '100'].includes(format ?? '')) { answer('EINVAL:invalid image format'); return }
+    if (!['24', '32', '100'].includes(format ?? '') || fields.get('t') === 's' && format === '100') { answer('EINVAL:invalid image format'); return }
     const payload = split < 0 ? '' : body.slice(split + 1)
     if (!payload || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(payload)) { answer('EINVAL:invalid image filename'); return }
     try {
       const path = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(payload, 'base64'))
       const image: ClaudeTerminalImageFileFormat = format === '100' ? { format: 'png' } : { format: format === '24' ? 'rgb' : 'rgba', width: Number(fields.get('s')), height: Number(fields.get('v')) }
-      const pixels = await readImage(path, image)
+      const pixels = await readImage(path, image, fields.get('t') === 's')
       if (closed) return
       if (fields.get('a') === 'q') { answer('OK'); return }
       options.image?.({ id: Number(id), image, pixels })

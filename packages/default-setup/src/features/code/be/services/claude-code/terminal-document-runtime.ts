@@ -27,7 +27,7 @@ function nativeImagePresentation(n,node,scope){
      while(hook&&++steps<=128){const state=hook.memoizedState;if(state?.images===root.terminalImages&&Number.isInteger(state.id))allocation=state;const ref=state?.current;if(ref&&Object.hasOwn(ref,'reactKey')&&Object.hasOwn(ref,'source')&&ref.box===props.columns+'x'+props.rows)admitted=ref;hook=hook.next;}
      if(!allocation||!root.terminalImages?.live?.get(allocation.id)?.isSent||!admitted?.source)throw Error('Native Image has no admitted byte source');
      const source=admitted.source,format=typeof source.png==='string'?'png':typeof source.rgba==='string'?'rgba':undefined,data=format&&source[format];
-     if(!format){if(typeof source.file==='string'){matches.push({type:'NativeImageReference',props:{imageId:allocation.id,columns:props.columns,rows:props.rows,alt:props.alt},part:{plugin}});continue;}throw Error('Native Image pixel delivery requires an admitted byte source');}
+     if(!format){if(typeof source.file==='string'||typeof source.shm==='string'){matches.push({type:'NativeImageReference',props:{imageId:allocation.id,columns:props.columns,rows:props.rows,alt:props.alt},part:{plugin}});continue;}throw Error('Native Image pixel delivery requires an admitted byte source');}
      if(data.length>65536){matches.push({type:'Text',props:{dimColor:true},children:['Image preview exceeds this view. Open the native interface to inspect it.'],part:{plugin}});continue;}
      if(!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)||!data.length)throw Error('Invalid native Image bytes');
      const dimensions=format==='rgba'?{width:source.width,height:source.height}:{};

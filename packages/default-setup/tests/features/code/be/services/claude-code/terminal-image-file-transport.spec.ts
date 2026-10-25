@@ -1,8 +1,8 @@
 import { createClaudeTerminalImageFileTransport } from '#features/code/be/services/claude-code/terminal-image-file-transport.ts'
 const frame = (header: string, path = '/private/frame.rgba') => `\x1b_G${header};${Buffer.from(path).toString('base64')}\x1b\\`
-function fixture(read = vi.fn(async () => Buffer.from([1, 2, 3, 255]))) {
-  const emit = vi.fn(), reply = vi.fn(), transport = createClaudeTerminalImageFileTransport({ emit, reply, read })
-  return { emit, reply, read, ...transport, output: () => emit.mock.calls.map(call => call[0]).join('') }
+function fixture(read = vi.fn(async () => Buffer.from([1, 2, 3, 255])), readShared = vi.fn(async (_name: string, _image: unknown, _signal?: AbortSignal): Promise<Buffer> => { throw new Error('shared source unavailable') })) {
+  const emit = vi.fn(), reply = vi.fn(), transport = createClaudeTerminalImageFileTransport({ emit, reply, read, readShared })
+  return { emit, reply, read, readShared, ...transport, output: () => emit.mock.calls.map(call => call[0]).join('') }
 }
 it('answers the original four-byte local file probe without exposing its name', async () => {
   const f = fixture()
@@ -23,13 +23,13 @@ it('preserves terminal text order across split frames and asynchronous file read
   expect(f.output()).toBe('before\x1b_Ga=T,U=1,q=2,f=32,s=1,v=1,t=d,i=7,c=2,r=1,m=0;AQID/w==\x1b\\afterlast')
   expect(f.reply).not.toHaveBeenCalled()
 })
-it('refuses failed file reads and shared memory without claiming support', async () => {
+it('refuses failed file and shared-memory reads without painting', async () => {
   const f = fixture(vi.fn(async () => { throw new Error('private filename') }))
   await f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=8'))
   await f.write(frame('a=T,q=1,f=32,s=1,v=1,t=s,i=9'))
   expect(f.read).toHaveBeenCalledOnce()
   expect(f.output()).toBe('')
-  expect(f.reply.mock.calls).toEqual([['\x1b_Gi=8;EIO:terminal image file could not be read\x1b\\'], ['\x1b_Gi=9;ENOTSUPPORTED:shared memory transport is unavailable\x1b\\']])
+  expect(f.reply.mock.calls).toEqual([['\x1b_Gi=8;EIO:terminal image file could not be read\x1b\\'], ['\x1b_Gi=9;EIO:terminal image file could not be read\x1b\\']])
 })
 it('leaves direct image frames and unrelated terminal escapes untouched', async () => {
   const f = fixture(), text = '\x1b[31mred\x1b[0m\x1b_Ga=T,t=d,f=32,i=1;AQID/w==\x1b\\'
@@ -78,4 +78,20 @@ it('bounds a stalled read without accumulating reads or publishing its late pixe
     await f.write(frame('a=T,q=1,f=32,s=1,v=1,t=f,i=9'))
     expect(read).toHaveBeenCalledTimes(2);expect(f.output()).toContain('i=9');expect(f.output()).not.toContain('i=7')
   } finally { f.close();vi.useRealTimers() }
+})
+
+it('routes raw shared pixels through the terminal reader and emits direct bytes', async () => {
+  const readShared=vi.fn(async (_name:string,_image:unknown,_signal?:AbortSignal)=>Buffer.from([1,2,3,255])),f=fixture(undefined,readShared)
+  await f.write(frame('a=T,U=1,q=1,f=32,s=1,v=1,t=s,i=7,c=2,r=1','/shared-frame'))
+  expect(readShared).toHaveBeenCalledWith('/shared-frame',{format:'rgba',width:1,height:1},expect.any(AbortSignal))
+  expect(f.read).not.toHaveBeenCalled();expect(f.output()).toContain('t=d');expect(f.output()).toContain('AQID/w==');expect(f.output()).not.toContain(Buffer.from('/shared-frame').toString('base64'))
+})
+it('aborts the shared reader when its terminal owner closes', async () => {
+  let release!:(pixels:Buffer)=>void
+  const readShared=vi.fn((_name:string,_image:unknown,_signal?:AbortSignal)=>new Promise<Buffer>(resolve=>{release=resolve})),f=fixture(undefined,readShared)
+  const pending=f.write(frame('a=T,q=1,f=32,s=1,v=1,t=s,i=7','/shared-frame'))
+  await vi.waitFor(()=>expect(readShared).toHaveBeenCalledOnce())
+  const signal=readShared.mock.calls[0]![2]!
+  f.close();await pending;expect(signal.aborted).toBe(true);release(Buffer.alloc(4));await Promise.resolve()
+  expect(f.output()).toBe('');expect(f.reply).not.toHaveBeenCalled()
 })

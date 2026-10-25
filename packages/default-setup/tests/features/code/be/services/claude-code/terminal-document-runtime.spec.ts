@@ -139,3 +139,13 @@ it('exports only an admitted native file allocation reference without reading it
  expect(await f.draw(f.n,node,{terminalScope:scope})).toMatchObject({type:'NativeImageReference',props:{imageId:7,columns:8,rows:2,alt:'Release cover'}})
  images.live.delete(7);await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('no admitted byte source')
 })
+
+it('exports only an admitted shared-memory allocation reference without reading its name',async()=>{
+ const f=fixture();function Fo(){};f.hashes.set(Fo,'90ffae0a8b68a15a4c68fa3ca5513e524c112e97e31aac7c1abc7bf8a217f6cf')
+ const scope={component:'InfoNotice',requestId:'native-notice'},source={shm:'/terminal-owned',format:'rgba',width:1,height:1},props={key:'cover',source,columns:8,rows:2,alt:'Release cover'}
+ const images={live:new Map([[7,{isSent:true}]])},held={current:{reactKey:'original key',source,box:'8x2'}},fiber:any={type:Fo,memoizedProps:{...props,elementKey:'cover',plugin:'native'},return:{memoizedProps:{value:scope}},memoizedState:{memoizedState:{id:7,images},next:{memoizedState:held}},child:{memoizedProps:{width:8,height:2,overflow:'hidden',children:{type:'ink-raw-ansi'}}}}
+ ;(f.n as any).themeRoots={ai:()=>({get:()=>({container:{current:fiber},terminalImages:images})})}
+ const node={type:'Image',props,image:{plugin:'native'}}
+ expect(await f.draw(f.n,node,{terminalScope:scope})).toMatchObject({type:'NativeImageReference',props:{imageId:7,columns:8,rows:2,alt:'Release cover'}})
+ images.live.delete(7);await expect(f.draw(f.n,node,{terminalScope:scope})).rejects.toThrow('no admitted byte source')
+})
