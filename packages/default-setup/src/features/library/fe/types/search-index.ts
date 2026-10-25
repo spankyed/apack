@@ -1,10 +1,7 @@
-import type { SearchEmbeddingModelId } from '../../embedding-models.ts'
 import type { EARS } from '@apackdev/sdk'
 
 type ContentType = 'field' | 'list' | 'markdown' | 'text'
 
-export type EmbeddingModel = SearchEmbeddingModelId
-export type IndexMetric = 'cosine' | 'dot_product'
 
 export interface SegmentRule {
   id: string
@@ -18,9 +15,6 @@ export interface SearchIndexConfig {
   // Details tab
   name: string
   description: string
-  embeddingModel: EmbeddingModel
-  indexMetric: IndexMetric
-  connectors: number // 8, 16, 32, 64
 
   // Scope tab
   excludeAllSubfolders: boolean

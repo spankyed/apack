@@ -2025,8 +2025,8 @@ export type { ImportMode } from '@apackdev/sdk/utils';
    * What each of this pack's own entities holds a created row to: the fields the engine refuses a created row without,
    * read off its shape, and the prefix it numbers a short code with, which its manifest entry declares (`shortCode`).
    * The shape declares no `shortCode`: the engine writes it, and `#generated/ears` types it from that same prefix, so
-   * the type and the numbering have one source. Its `indexes` are its manifest entry's, each a field its shape
-   * declares. An entity with neither a shape, a prefix nor an index is held to nothing, and a dependency's register
+   * the type and the numbering have one source. Its `indexes`, and its text and vector indexes (`search`, `embed`), are
+   * its manifest entry's, each over fields its shape declares. An entity with neither a shape, a prefix nor an index is held to nothing, and a dependency's register
    * their own.
    */
   function rowRulesLiteral(): string {
@@ -2034,6 +2034,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const prefixes = new Map(entities.flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
     const indexed = new Map(entities.flatMap(({ name, indexes }) => (indexes ? [[name, indexes] as const] : [])));
     const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
+    const embedded = new Map(entities.flatMap(({ name, embed }) => (embed ? [[name, embed] as const] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2072,15 +2073,20 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       // A text index reads fields the shape declares, as an index does
       const search = searched.get(entity);
-      const unread = Object.keys(search?.fields ?? {}).filter((field) => !fields.includes(field));
-      if (unread.length > 0) {
-        throw new Error(`Entity "${entity}": its search names ${unread.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
+      const embed = embedded.get(entity);
+      for (const [index, named] of [['search', Object.keys(search?.fields ?? {})], ['embed', embed?.from ?? []]] as const) {
+        const unread = named.filter((field) => !fields.includes(field));
+        if (unread.length > 0) {
+          throw new Error(`Entity "${entity}": its ${index} names ${unread.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
+        }
       }
-      rules[entity] = { required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }) };
+      rules[entity] = {
+        required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
+      };
     }
-    for (const { name: entity, shortCode, indexes, search } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined)) continue;
-      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }) };
+    for (const { name: entity, shortCode, indexes, search, embed } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined)) continue;
+      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }) };
     }
     return dataLiteral(rules);
   }

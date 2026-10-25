@@ -1,5 +1,6 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbedDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbeddingModelId } from '../services/models.ts';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
 export interface PackEntityDeclaration {
@@ -11,6 +12,14 @@ export interface PackEntityDeclaration {
   readonly indexes?: readonly string[];
   /** Its text index: the fields `search` matches, each at its weight, and the language it stems in */
   readonly search?: PackSearchDeclaration;
+  /** Its vector index: the fields whose text is embedded, and the model `services.inference` embeds it with */
+  readonly embed?: PackEmbedDeclaration;
+}
+
+/** A vector index as a manifest declares it: the engine's `EmbedDeclaration`, its model one `services.inference` runs */
+export interface PackEmbedDeclaration extends EmbedDeclaration {
+  /** The model, as `provider:model`, that `embedPending` (`@apackdev/sdk/services`) embeds the chunks with */
+  readonly model: EmbeddingModelId;
 }
 
 /** A language a text index stems in (ISO 639-1): Snowball's, as elmdb names them */
@@ -54,6 +63,8 @@ export interface _PackEntityDeclaration {
   indexes?: readonly string[];
   /** Its text index, when its entry declares one */
   search?: SearchDeclaration;
+  /** Its vector index, when its entry declares one */
+  embed?: EmbedDeclaration;
 }
 
 /**
@@ -77,7 +88,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes, search } = entry ?? {};
+      const { shape, shortCode, indexes, search, embed } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
@@ -86,7 +97,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
       }
       result.set(name, {
         name, owner, shape: shape ?? null,
-        ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }),
+        ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }), ...(embed && { embed }),
       });
     }
   }

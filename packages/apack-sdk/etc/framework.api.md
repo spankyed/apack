@@ -8,6 +8,7 @@ import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import type { AnyStateMachine } from 'xstate';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { EmbedDeclaration } from '@apackdev/ears';
 import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
@@ -416,11 +417,17 @@ export interface PackEARS {
     rowRules?: Record<string, RowRules>;
 }
 
+// @public
+export interface PackEmbedDeclaration extends EmbedDeclaration {
+    readonly model: EmbeddingModelId;
+}
+
 // @internal
 export function _packEntities(declaration: PackDataDeclarations): _PackEntityDeclaration[];
 
 // @public
 export interface PackEntityDeclaration {
+    readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
     readonly search?: PackSearchDeclaration;
     readonly shape?: string;
@@ -429,6 +436,7 @@ export interface PackEntityDeclaration {
 
 // @internal
 export interface _PackEntityDeclaration {
+    embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)
     name: string;

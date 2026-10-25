@@ -197,13 +197,6 @@ export default /** @type import('electron-builder').Configuration */
   
   // Extra resources
   extraResources: [
-    // [SEARCH_INDEX_FF] FastEmbed weights for the dormant library search index (the path is the API's old cache):
-    // packages/default-setup/src/features/library/be/search-index/README.md
-    // {
-    //   from: 'packages/api/local_cache',
-    //   to: 'api/local_cache',
-    //   filter: ['**/*']
-    // }
     {from: path.join(buildRoot, 'build-manifest.json'), to: 'app/build-manifest.json'},
     ...speechResources,
     // `apack` launcher for "Install 'apack' command in PATH"; runs packages/apack-cli/dist/package

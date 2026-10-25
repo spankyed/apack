@@ -26,6 +26,7 @@ export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.
 export type { SecretMetadata, SecretProvider, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus } from './secrets.ts';
 export { _secretRules, _secretProviderLabel, _toSecretMetadata } from './secrets-rules.ts';
 export type { ModelId, ProviderName } from './models.ts';
+export { embedPending, embedSearchText, type EmbedPendingResult } from './embeddings.ts';
 
 const logger = createLogger('log-service');
 

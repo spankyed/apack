@@ -13,7 +13,6 @@ import * as os from 'os'
 import * as fs from 'fs/promises'
 import { libraryService } from './services/library.ts'
 import * as symlink from './repository/symlink.ts'
-// [SEARCH_INDEX_FF] import { DEFAULT_EMBEDDING_MODEL } from '#features/library/embedding-models.ts'
 import { toMap, toIdentifierSet, mapArray } from '@apackdev/sdk/utils'
 import { exportLibrary } from './export-library.ts'
 import { importLibrary } from './import-library.ts'
@@ -231,6 +230,7 @@ export const librarySystem = setup({
     //     ev.folderId ? ev.folderId as EARS.EntityId : null
     //   )
     //   broadcastToSurface('library', { type: 'SEARCH_INDEX_CREATED', data: { index } })
+    //   await searchIndexRepo.embedIndexedDocs()
     // },
     // updateSearchIndex: async ({ system, event }) => {
     //   const ev = event as { type: 'UPDATE_SEARCH_INDEX'; id: string; config: any }
@@ -240,6 +240,7 @@ export const librarySystem = setup({
     //     ev.config
     //   )
     //   broadcastToSurface('library', { type: 'SEARCH_INDEX_UPDATED', data: { index } })
+    //   await searchIndexRepo.embedIndexedDocs()
     // },
     // deleteSearchIndex: async ({ system, event }) => {
     //   const ev = event as { type: 'DELETE_SEARCH_INDEX'; id: string }

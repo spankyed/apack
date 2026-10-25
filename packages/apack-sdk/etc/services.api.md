@@ -100,6 +100,23 @@ export function _createPackServices(): {
 export function _createRunHistory(runs: Ears): RunHistory;
 
 // @public
+export function embedPending(input?: {
+    types?: readonly string[];
+    batch?: number;
+}): Promise<EmbedPendingResult>;
+
+// @public
+export interface EmbedPendingResult {
+    // (undocumented)
+    stale: number;
+    // (undocumented)
+    stored: number;
+}
+
+// @public
+export function embedSearchText(type: string, text: string): Promise<number[]>;
+
+// @public
 export const entityTypeOfShortCode: (code: string) => string | undefined;
 
 // @public
