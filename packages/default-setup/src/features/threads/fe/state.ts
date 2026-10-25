@@ -208,6 +208,9 @@ type UIEvent =
   | { type: 'UNQUEUE_MESSAGE'; threadId: string; messageId: string }
   | { type: 'DISMISS_MESSAGE'; messageId: string }
   | { type: 'LOAD_MORE_MESSAGES' }
+  | { type: 'SEARCH_MESSAGES'; query: string }
+  | { type: 'OPEN_MESSAGE'; threadId: string; messageId: string }
+  | { type: 'FOCUSED_MESSAGE_SHOWN' }
   | { type: 'TOKEN_STREAM'; token: string }
   | { type: 'LLM_DONE' }
   | { type: 'RENAME_THREAD'; threadId: string; topic: string }
@@ -1399,6 +1402,31 @@ const threadsState = setup({
         messagePagination: { hasMore, nextCursor, isLoading: false },
       };
     }),
+    searchMessages: enqueueActions(({ enqueue, event }) => {
+      const { query } = typeOf('SEARCH_MESSAGES', event);
+      const asked = query.trim();
+      enqueue.assign({ messageSearch: { query: asked, results: [], searching: asked !== '' } });
+      if (asked) enqueue(() => sendToSystem(id, { type: 'SEARCH_MESSAGES', query: asked }));
+    }),
+    // The answer to the query in the box, and to no earlier one still in flight when it arrives
+    setMessagesFound: assign(({ context, event }) => {
+      const { query, results } = typeOf('MESSAGES_FOUND', event);
+      if (query !== context.messageSearch.query) return {};
+      return { messageSearch: { query, results, searching: false } };
+    }),
+    openMessage: enqueueActions(({ enqueue, event, self }) => {
+      const { threadId, messageId } = typeOf('OPEN_MESSAGE', event);
+      enqueue.assign({ focusMessageId: messageId });
+      enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId }));
+    }),
+    // A focused message not in the pages loaded is in an older one: ask for the next, until it is or none is left
+    seekFocusedMessage: enqueueActions(({ context, enqueue, self }) => {
+      const wanted = context.focusMessageId;
+      if (!wanted || !context.currentThread) return;
+      if ((context.currentThread.messages ?? []).some((m) => m.id === wanted)) return;
+      if (context.messagePagination.hasMore) enqueue(() => self.send({ type: 'LOAD_MORE_MESSAGES' }));
+      else enqueue.assign({ focusMessageId: null });
+    }),
     forkThread: ({ event }) => {
       const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
       sendToSystem(id, { type: 'FORK_THREAD', messageId, threadId, threadTopic });
@@ -1477,6 +1505,8 @@ const threadsState = setup({
     navHistory: createNavHistory(getInitialView()),
     messagePagination: { hasMore: false, nextCursor: null, isLoading: false },
     sidebarArchivedThreads: [],
+    messageSearch: { query: '', results: [], searching: false },
+    focusMessageId: null,
   }),
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
@@ -1723,7 +1753,7 @@ const threadsState = setup({
       { actions: 'openQuickPromptsAtCursor' },
     ],
     VIEW_THREAD: { actions: 'sendOpenThreadView' },
-    LOAD_CHAT_THREAD: { target: '.dashboard', actions: 'setThreadChatData' },
+    LOAD_CHAT_THREAD: { target: '.dashboard', actions: ['setThreadChatData', 'seekFocusedMessage'] },
     REFRESH_RECENT_THREADS: { actions: 'setRefreshThreadsData' },
     AGENT_CONNECTED: { actions: 'setStartupData' },
     AGENT_SETTINGS_UPDATED: { actions: 'handleChatSettingsUpdate' },
@@ -1736,7 +1766,11 @@ const threadsState = setup({
     UPDATE_MESSAGE_STATE: { actions: 'updateMessageState' },
     MESSAGE_ADDED: { actions: 'addMessageToThread' },
     LOAD_MORE_MESSAGES: { actions: ['setLoadingMore', 'requestOlderMessages'] },
-    OLDER_MESSAGES_LOADED: { actions: 'prependOlderMessages' },
+    OLDER_MESSAGES_LOADED: { actions: ['prependOlderMessages', 'seekFocusedMessage'] },
+    SEARCH_MESSAGES: { actions: 'searchMessages' },
+    MESSAGES_FOUND: { actions: 'setMessagesFound' },
+    OPEN_MESSAGE: { actions: 'openMessage' },
+    FOCUSED_MESSAGE_SHOWN: { actions: assign({ focusMessageId: null }) },
     SEND_MESSAGE: { actions: 'sendMessage' },
     SEND_COMMAND: { actions: 'sendCommand' },
     SET_CHAT_STATE: { actions: 'setChatState' },

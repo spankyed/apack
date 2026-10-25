@@ -13,6 +13,7 @@ import type {
   ThreadExtendedData,
   ThreadConnectedData,
   AgentThreadData, RecentThreadRefreshData, AgentConnectedData, Tab, ArtifactType, ThreadLinkRelation,
+  MessageSearchResult,
 } from '../types.ts';
 import { ThreadRelations } from '../types.ts';
 import type { ThreadTagOption } from '#generated/types.ts';
@@ -478,7 +479,55 @@ function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
   return { messages, hasMore, nextCursor };
 }
 
+/** How far before a snippet's first match its window starts, and how long the window is, in UTF-16 units */
+const SNIPPET_LEAD = 40;
+const SNIPPET_LENGTH = 180;
+
+/** A message's text matched newer first: a score halves for each week a message is older */
+const SEARCH_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * A window of `text` around its first mark, the marks inside it moved to the window's places: a mark the window cuts
+ * is cut with it
+ */
+export function snippetOf(text: string, marks: ReadonlyArray<readonly [number, number]>) {
+  const first = marks[0]?.[0] ?? 0;
+  const start = Math.max(0, Math.min(first - SNIPPET_LEAD, text.length - SNIPPET_LENGTH));
+  const end = Math.min(text.length, start + SNIPPET_LENGTH);
+  const inside = marks
+    .filter(([s, e]) => e > start && s < end)
+    .map(([s, e]): [number, number] => [Math.max(s, start) - start, Math.min(e, end) - start]);
+  return { snippet: text.slice(start, end), marks: inside, clippedStart: start > 0, clippedEnd: end < text.length };
+}
+
+/**
+ * The messages a query matches, most relevant first and newer before older, with their threads: what the threads
+ * panel's search lists. A compaction marker is no message a person wrote or read, and is left out
+ */
+function searchMessages(text: string, limit = 20): MessageSearchResult[] {
+  if (!text.trim()) return [];
+  const hits = query(EARS.Entity.Message)
+    .search(text, { prefix: true, recency: { field: 'timestamp', halfLife: SEARCH_HALF_LIFE_MS } })
+    .limit(limit)
+    .hits({ fields: ['text', 'sender', 'timestamp'], highlights: true });
+  const results: MessageSearchResult[] = [];
+  for (const { id, row, highlights } of hits) {
+    if (row.sender === 'marker') continue;
+    const threadId = query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Thread).first();
+    if (!threadId) continue;
+    const topic = query.ids(threadId).pickOne(['topic'])?.topic ?? '';
+    const marks = (highlights?.text ?? []).map(([, s, e]) => [s, e] as [number, number]);
+    results.push({
+      messageId: id, threadId, topic, sender: row.sender, timestamp: row.timestamp,
+      ...snippetOf(row.text ?? '', marks),
+    });
+  }
+  return results;
+}
+
 export const chatQueries = {
+  searchMessages,
+
   threadArtifacts: (threadId: EARS.EntityId) => {
     return getThreadArtifacts(threadId);
   },

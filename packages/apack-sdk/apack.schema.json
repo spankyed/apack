@@ -119,10 +119,55 @@
                   "pattern": "^[a-z][A-Za-z0-9]*$"
                 },
                 "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
+              },
+              "search": {
+                "type": "object",
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
+                    "description": "Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times."
+                  },
+                  "stem": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "da",
+                      "de",
+                      "el",
+                      "en",
+                      "es",
+                      "fi",
+                      "fr",
+                      "hu",
+                      "it",
+                      "nl",
+                      "no",
+                      "pt",
+                      "ro",
+                      "ru",
+                      "sv",
+                      "ta",
+                      "tr"
+                    ],
+                    "description": "The language whose stems match a word's other forms (`en`: \"running\" matches \"runs\")."
+                  }
+                },
+                "required": [
+                  "fields"
+                ],
+                "additionalProperties": false,
+                "description": "A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
               }
             },
             "additionalProperties": false,
-            "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
+            "description": "One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity)."
           },
           "propertyNames": {
             "pattern": "^[A-Z][A-Za-z0-9]*$",
@@ -220,10 +265,55 @@
                     "pattern": "^[a-z][A-Za-z0-9]*$"
                   },
                   "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
+                },
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "propertyNames": {
+                        "pattern": "^[a-z][A-Za-z0-9]*$"
+                      },
+                      "description": "Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times."
+                    },
+                    "stem": {
+                      "type": "string",
+                      "enum": [
+                        "ar",
+                        "da",
+                        "de",
+                        "el",
+                        "en",
+                        "es",
+                        "fi",
+                        "fr",
+                        "hu",
+                        "it",
+                        "nl",
+                        "no",
+                        "pt",
+                        "ro",
+                        "ru",
+                        "sv",
+                        "ta",
+                        "tr"
+                      ],
+                      "description": "The language whose stems match a word's other forms (`en`: \"running\" matches \"runs\")."
+                    }
+                  },
+                  "required": [
+                    "fields"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A text index: what query(type).search(...) matches, ranked by relevance. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
                 }
               },
               "additionalProperties": false,
-              "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
+              "description": "One entity type: its shape, its short code prefix, its indexes and its text index, each optional ({} for an untyped, unnumbered entity)."
             },
             "propertyNames": {
               "pattern": "^[A-Z][A-Za-z0-9]*$",

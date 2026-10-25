@@ -373,6 +373,11 @@ export const threadsSystem = setup({
         });
       }
     },
+    // A view's fetch: the answer goes back to the window that asked, keyed by the query it answers
+    searchMessages: ({ event, reply }) => {
+      const { query } = threadsSpec.typeOf('SEARCH_MESSAGES', event);
+      answer(reply, { type: 'MESSAGES_FOUND', query, results: repository.chatQueries.searchMessages(query) });
+    },
     loadMoreMessages: ({ event }) => {
       const { threadId, cursor } = threadsSpec.typeOf('LOAD_MORE_MESSAGES', event);
       const result = repository.chatQueries.paginatedMessages(threadId as EARS.EntityId, cursor);
@@ -841,6 +846,9 @@ export const threadsSystem = setup({
       },
       LOAD_MORE_MESSAGES: {
         actions: 'loadMoreMessages',
+      },
+      SEARCH_MESSAGES: {
+        actions: 'searchMessages',
       },
       OPEN_THREAD_TAB: {
         actions: 'sendThreadTabData',

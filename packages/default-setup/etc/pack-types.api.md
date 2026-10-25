@@ -2500,6 +2500,9 @@ type IncomingTerminalEvents = {
 };
 
 type IncomingThreadsEvents = {
+    type: 'SEARCH_MESSAGES';
+    query: string;
+} | {
     type: 'CREATE_THREAD';
     topic: string;
     tags?: string[];
@@ -2913,6 +2916,23 @@ interface MessageReferences {
     images?: ImageReference[];
     files?: FileReference[];
     context?: ContextReference[];
+}
+
+/**
+ * A message a search of the threads matched: where it is, and a window of its text around the first match, with each
+ * match's place in the window, start and end in UTF-16 units, as a string's indexes count them
+ */
+interface MessageSearchResult {
+    messageId: string;
+    threadId: string;
+    topic: string;
+    sender: MessageEntity['sender'];
+    timestamp: number;
+    snippet: string;
+    marks: Array<[start: number, end: number]>;
+    /** Whether the window starts after the text does, or ends before it */
+    clippedStart: boolean;
+    clippedEnd: boolean;
 }
 
 type NodeCreateInput = Partial<NodeEntity> & {
@@ -4010,6 +4030,10 @@ type OutgoingTerminalEvents =
 };
 
 type OutgoingThreadsEvents = {
+    type: 'MESSAGES_FOUND';
+    query: string;
+    results: MessageSearchResult[];
+} | {
     type: 'THREAD_CONNECTED';
     data: ThreadConnectedData;
 } | {
@@ -5292,6 +5316,14 @@ interface ThreadsContext {
         isLoading: boolean;
     };
     sidebarArchivedThreads: ThreadListItem[];
+    /** The panel's message search: the query typed, and the results answering it once they arrive */
+    messageSearch: {
+        query: string;
+        results: MessageSearchResult[];
+        searching: boolean;
+    };
+    /** A message the chat brings into view once its thread has loaded it, older pages included */
+    focusMessageId: string | null;
 }
 
 interface ThreadsContext$1 {
@@ -5978,6 +6010,7 @@ declare const chatCommands: {
 };
 
 declare const chatQueries: {
+    readonly searchMessages: typeof searchMessages;
     readonly threadArtifacts: (threadId: EARS.EntityId) => ArtifactItem<unknown>[];
     readonly threadData: (threadId: EARS.EntityId) => AgentThreadData | null;
     readonly threadDataPaginated: (threadId: EARS.EntityId, cursor?: string | null) => AgentThreadData | null;
@@ -6399,6 +6432,12 @@ declare function resolveReferences(references: MessageReferences | undefined): P
     imageBlocks: any[];
     addDirs: string[];
 }>;
+
+/**
+ * The messages a query matches, most relevant first and newer before older, with their threads: what the threads
+ * panel's search lists. A compaction marker is no message a person wrote or read, and is left out
+ */
+declare function searchMessages(text: string, limit?: number): MessageSearchResult[];
 
 /**
  * Send a message with custom blocks and emit MESSAGE_ADDED event

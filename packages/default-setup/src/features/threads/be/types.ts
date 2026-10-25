@@ -466,8 +466,26 @@ export type AgentSettings = ThreadsSettings['chat'];
 
 // System-private entity type
 
+/**
+ * A message a search of the threads matched: where it is, and a window of its text around the first match, with each
+ * match's place in the window, start and end in UTF-16 units, as a string's indexes count them
+ */
+export interface MessageSearchResult {
+  messageId: string;
+  threadId: string;
+  topic: string;
+  sender: MessageEntity['sender'];
+  timestamp: number;
+  snippet: string;
+  marks: Array<[start: number, end: number]>;
+  /** Whether the window starts after the text does, or ends before it */
+  clippedStart: boolean;
+  clippedEnd: boolean;
+}
+
 export type IncomingThreadsEvents =
   // Thread management events
+  | { type: 'SEARCH_MESSAGES'; query: string }
   | { type: 'CREATE_THREAD'; topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }
   | { type: 'VIEW_THREAD'; threadId: string }
   | { type: 'UPDATE_THREAD_STATUS'; threadId: string; status: string }
@@ -498,6 +516,7 @@ export type IncomingThreadsEvents =
 
 export type OutgoingThreadsEvents =
   // Thread management events
+  | { type: 'MESSAGES_FOUND'; query: string; results: MessageSearchResult[] }
   | { type: 'THREAD_CONNECTED'; data: ThreadConnectedData }
   | { type: 'SET_VIEW_DATA', id: EARS.EntityId, data: ThreadExtendedData }
   | { type: 'THREAD_CREATED', id: EARS.EntityId, shortCode: string, entityType: EARS.Entity, timestamp: number, topic?: string, instructions?: string, status?: string }

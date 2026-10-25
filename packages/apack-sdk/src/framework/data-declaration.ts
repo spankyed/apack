@@ -1,5 +1,5 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { RelationRules, RowRules } from '@apackdev/ears';
+import type { RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
 export interface PackEntityDeclaration {
@@ -9,6 +9,17 @@ export interface PackEntityDeclaration {
   readonly shortCode?: string;
   /** The fields a `where` on its rows reads an index for; any other field is found by filtering the type */
   readonly indexes?: readonly string[];
+  /** Its text index: the fields `search` matches, each at its weight, and the language it stems in */
+  readonly search?: PackSearchDeclaration;
+}
+
+/** A language a text index stems in (ISO 639-1): Snowball's, as elmdb names them */
+export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+
+/** A text index as a manifest declares it: the engine's `SearchDeclaration`, its language one elmdb stems in */
+export interface PackSearchDeclaration extends SearchDeclaration {
+  /** The language whose stems match a word's other forms: with `en`, "running" matches "runs" */
+  readonly stem?: SearchStemLanguage;
 }
 
 /**
@@ -41,6 +52,8 @@ export interface _PackEntityDeclaration {
   shortCode?: string;
   /** The fields it declares an index for, when its entry names any */
   indexes?: readonly string[];
+  /** Its text index, when its entry declares one */
+  search?: SearchDeclaration;
 }
 
 /**
@@ -64,14 +77,17 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes } = entry ?? {};
+      const { shape, shortCode, indexes, search } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
         if (taken) throw new Error(`The short code prefix "${shortCode}" is declared for both "${taken}" and "${name}"`);
         prefixOwners.set(shortCode, name);
       }
-      result.set(name, { name, owner, shape: shape ?? null, ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }) });
+      result.set(name, {
+        name, owner, shape: shape ?? null,
+        ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }),
+      });
     }
   }
   return [...result.values()];
@@ -104,6 +120,9 @@ export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<R
     return byPrefix.get(code.slice(0, dash));
   };
 }
+
+/** @internal The languages a text index stems in: Snowball's, as elmdb names them (ISO 639-1) */
+export const _SEARCH_STEM_LANGUAGES = ['ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'hu', 'it', 'nl', 'no', 'pt', 'ro', 'ru', 'sv', 'ta', 'tr'] as const;
 
 /** An entity type's name: PascalCase, as the database holds a type's */
 export const _ENTITY_NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;

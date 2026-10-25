@@ -7,6 +7,7 @@
         v-if="showThreadSidebar && !isOnboarding"
         :style="{ width: sidebarWidthPx + 'px' }"
         @select-thread="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
         @close="showThreadSidebar = false"
       />
       <PanelResizer
@@ -147,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 
 const quotes = [
   '"If a chatbot speaks in a forest and no one reads the output, does it still hallucinate?"',
@@ -189,7 +190,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import { openSurface } from '#generated/fe.ts'
 import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
-import type { MessageEntity, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
+import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
@@ -200,6 +201,8 @@ const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
+const focusMessageId = useSelector(actor, (state) => state.context.focusMessageId);
+const style = useCssModule();
 
 // Scroll preservation for prepending older messages
 const savedScrollHeight = ref(0);
@@ -553,6 +556,22 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
     showInlineDashboard.value = false
   }
 
+  // A message opened from the panel's search is brought into view in place of a load's scroll, once its page is
+  // loaded; until then the machine is asking for older pages. One hidden as compacted is as shown as it can be
+  const focused = focusMessageId.value
+  if (focused) {
+    const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
+    if (el) {
+      el.scrollIntoView({ block: 'center' })
+      el.classList.add(style.focused)
+      setTimeout(() => el.classList.remove(style.focused), 1600)
+      actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+      return
+    }
+    if (!newMsgs.some((m) => m.id === focused)) return
+    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+  }
+
   const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
     pendingScrollOnSend.value = false
@@ -595,6 +614,12 @@ watch(messagesContent, (el, _, onCleanup) => {
     pointer-events: none;
     z-index: 5;
   }
+}
+
+.focused {
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px rgb(234 179 8 / 0.6);
+  transition: box-shadow 0.4s ease-out;
 }
 
 .messagesContainer {

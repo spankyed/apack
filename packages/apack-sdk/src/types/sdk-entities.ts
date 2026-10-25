@@ -223,13 +223,16 @@ export const SDK_ROW_RULES = {
   Node: { required: ['nodeType', 'label'] },
   Action: { required: ['label', 'input', 'actionFn'], shortCode: SDK_SHORT_CODES.Action, indexes: ['label', 'category'] },
   Prompt: { required: ['label', 'inputs', 'templateFn'], shortCode: SDK_SHORT_CODES.Prompt, indexes: ['label'] },
-  Document: { required: ['name', 'content'], shortCode: SDK_SHORT_CODES.Document, indexes: ['name'] },
+  // Its text index reads its name and tags: a section's text is under keys beside its type's tag, which a field's
+  // strings read whole would match
+  Document: { required: ['name', 'content'], shortCode: SDK_SHORT_CODES.Document, indexes: ['name'], search: { fields: { name: 3, tags: 1 } } },
   Collection: { required: ['name'], indexes: ['name'] },
 } as const satisfies {
   [E in keyof SdkEntityShapes]: RowRules & {
     required: readonly RequiredField<SdkEntityShapes, E>[];
     shortCode?: ShortCodePrefix<SdkEntityShapes[E]>;
     indexes?: readonly (keyof SdkEntityShapes[E] & string)[];
+    search?: { fields: Partial<Record<keyof SdkEntityShapes[E] & string, number>>; stem?: string };
   }
 };
 
