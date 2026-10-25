@@ -263,7 +263,7 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
       })
       if (new Set(options.map(option => option.value)).size !== options.length) throw new ClaudeProtocolError('native UI select options are ambiguous')
       fields.set(actionId, { ...field, options: options.map(option => option.value) })
-      return { kind: 'select', ...common, options }
+      return { kind: 'select', ...common, value: typeof props.value === 'string' ? props.value : undefined, options }
     }
     if (value.type === 'Button') {
       if (!record(value.props) || typeof value.props.label !== 'string') throw new ClaudeProtocolError('native UI button must have a label')

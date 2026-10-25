@@ -4,8 +4,9 @@
       <span v-if="node.label" class="native-field-label min-w-0 text-[11px] leading-4 tracking-wide">{{ node.label }}</span>
       <span v-if="node.kind === 'input'" :style="{ visibility: focused ? 'visible' : 'hidden' }" :aria-hidden="!focused" class="native-field-hint shrink-0 whitespace-nowrap text-[10px]">Enter: {{ node.submitLabel }}</span>
     </span>
-    <select v-if="node.kind === 'select'" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :aria-label="node.label || 'Claude selection'"
+    <select v-if="node.kind === 'select'" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="selectValue" :aria-label="node.label || 'Claude selection'"
       class="h-9 min-w-0 max-w-full rounded-lg border border-current bg-transparent px-2.5 text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current" @change="pick">
+      <option v-if="!selectHasValue" :value="unselectedValue" disabled hidden>none</option>
       <option v-for="option in node.options" :key="option.value" :value="option.value">{{ option.label }}</option>
     </select>
     <textarea v-else ref="textarea" :data-native-focus-id="node.focusId" :data-native-autofocus="node.autoFocus" :value="draft" :rows="visibleRows" :style="{ maxHeight: maximumHeight + 'px' }" :placeholder="node.placeholder"
@@ -78,23 +79,31 @@ onBeforeUnmount(() => { sizeObserver?.disconnect(); window.removeEventListener('
 const nativeInputLimit = 16384
 const problem = ref<string>()
 const draft = ref(props.node.value)
+const selectHasValue = computed(() => props.node.kind === 'select' && props.node.options.some(option => option.value === draft.value))
+const unselectedValue = computed(() => {
+  let value = '__native_unselected__'
+  if (props.node.kind === 'select') while (props.node.options.some(option => option.value === value)) value += '_'
+  return value
+})
+const selectValue = computed(() => selectHasValue.value ? draft.value : unselectedValue.value)
 let revision = props.node.revision
 let nativeValue = props.node.value
 let lastChangeValue = props.node.value
 let composing = false
-let replacement: string | undefined
+let replacement: { value: string | undefined } | undefined
 const focused = ref(false)
 watch(() => [props.node.value, props.node.revision, props.node.kind === 'select' ? props.node.options.map(option => option.value).join('\u0000') : ''] as const, ([value, completed]) => {
-  if (value !== nativeValue || (props.node.kind === 'select' && !props.node.options.some(option => option.value === draft.value))) replacement = value
+  if (value !== nativeValue || (props.node.kind === 'select' && !props.node.options.some(option => option.value === draft.value))) replacement = { value }
   nativeValue = value
   if (!composing && completed >= revision && replacement !== undefined) {
-    draft.value = replacement
+    draft.value = replacement.value
     lastChangeValue = replacement
     replacement = undefined
     problem.value = undefined
   }
 })
 function send(kind: ClaudeUiFieldEvent['kind']) {
+  if (typeof draft.value !== 'string') return
   ++revision
   if (draft.value.length > nativeInputLimit) { problem.value = 'Shorten this field to 16,384 characters before sending it to Claude.'; return }
   problem.value = undefined
@@ -108,10 +117,12 @@ function compositionStart() { composing = true }
 function compositionEnd(event: CompositionEvent) {
   composing = false
   change(event)
-  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement; lastChangeValue = replacement; replacement = undefined; problem.value = undefined }
+  if (props.node.revision >= revision && replacement !== undefined) { draft.value = replacement.value; lastChangeValue = replacement; replacement = undefined; problem.value = undefined }
 }
 function pick(event: Event) {
-  draft.value = (event.target as HTMLSelectElement).value
+  const value = (event.target as HTMLSelectElement).value
+  if (props.node.kind !== 'select' || !props.node.options.some(option => option.value === value)) return
+  draft.value = value
   send('select')
 }
 function keydown(event: KeyboardEvent) {

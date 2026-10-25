@@ -264,3 +264,9 @@ it('keeps large drawn Input values and requested rows separate from reverse-inpu
   expect(drawing.fields.size).toBe(1)
   expect(() => createClaudeUiDrawing({ type: 'Input', props: { key: 'notes', rows: 0, value }, press: { plugin: 'fixture', handle: 1 } })).toThrow('rows')
 })
+
+it('distinguishes a native unset Select from a valid empty-string option', () => {
+  const select = { type: 'Select', props: { key: 'choice', options: [{ value: '', label: 'Empty choice' }, { value: 'a' }] }, press: { plugin: 'fixture', handle: 1 } }
+  expect(createClaudeUiDrawing(select).tree).toMatchObject({ kind: 'select', value: undefined })
+  expect(createClaudeUiDrawing({ ...select, props: { ...select.props, value: '' } }).tree).toMatchObject({ kind: 'select', value: '' })
+})
