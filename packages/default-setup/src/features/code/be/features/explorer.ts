@@ -51,8 +51,7 @@ export type Event =
   | { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
   | { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
   | { type: 'explorer.FILE_CHANGE_CALLBACK'; change: FileChangeInfo }
-  | { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
-  | { type: 'CODE_CONNECTED' };
+  | { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string };
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodeExplorerSystemContext, Event>();
@@ -82,19 +81,6 @@ export const explorerSystem = setup({
       })
     },
 
-    sendBaseDirectoryInfo: ({ context, reply }) => {
-      // Send base directory listing on connect
-      if (context.baseDirectory && context.repository) {
-        context.repository.listDirectory(context.baseDirectory).then(content => {
-          answer(reply, {
-            type: 'explorer.FILES_LISTED',
-            data: content,
-          })
-        }).catch(() => {
-          // Ignore errors on connect
-        })
-      }
-    },
 
     listFiles: async ({ event, context, reply }) => {
       const ev = event as { type: 'explorer.LIST_FILES'; path: string }
@@ -407,27 +393,6 @@ export const explorerSystem = setup({
       }
     },
 
-    listBaseFiles: async ({ context, reply }) => {
-      if (!requireRepository(context, context.baseDirectory || '', reply)) return
-
-      try {
-        const path = context.baseDirectory || ''
-        const content = await context.repository.listDirectory(path)
-        answer(reply, {
-          type: 'explorer.FILES_LISTED',
-          data: content,
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
   })
 }).createMachine({
   id: 'explorer',
@@ -444,9 +409,6 @@ export const explorerSystem = setup({
   states: {
     idle: {
       on: {
-        'CODE_CONNECTED': {
-          actions: 'sendBaseDirectoryInfo'
-        },
         'explorer.LIST_FILES': {
           actions: 'listFiles'
         },
@@ -481,7 +443,7 @@ export const explorerSystem = setup({
           actions: 'copyFiles'
         },
         'explorer.UPDATE_BASE_DIRECTORY': {
-          actions: ['updateBaseDirectory', 'setupFileWatcher', 'listBaseFiles']
+          actions: ['updateBaseDirectory', 'setupFileWatcher']
         },
         'explorer.CLOSE_FILE': {
           actions: 'closeFile'

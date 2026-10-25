@@ -1,5 +1,6 @@
-// Who hears a code result, which every handler here rests on: the window that asked, and when nobody asked — the git
-// watcher's refresh, an action — every window showing the code surface, which all show the one repository.
+// Who hears a code result, which every handler here rests on: the window that asked, and when nobody asked every window
+// showing the code surface, which all show the one repository. What the system does unasked — the watcher, a write
+// changing the repository — it announces as news (`commit.REPOSITORY_CHANGED`), so a listing reaches only its asker.
 import { broadcastToSurface } from '#generated/events.ts';
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingCodeEvents } from './contract.ts';

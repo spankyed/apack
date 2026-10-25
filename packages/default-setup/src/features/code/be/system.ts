@@ -197,6 +197,9 @@ export const systemMachine = setup({
       // Note: Updates terminal's base directory for new terminal creation.
       // Individual terminal processes track their own cwd independently.
       child(self, 'terminal')?.send({ type: 'terminal.UPDATE_BASE_DIRECTORY', path: newPath });
+
+      // News for every window; each asks again for what it shows of the new directory
+      broadcastToSurface('code', { type: 'BASE_DIRECTORY_CHANGED', baseDirectory: newPath });
     },
 
     /**
@@ -250,26 +253,17 @@ export const systemMachine = setup({
 
     },
     
-    broadcastConnected: ({ self, context }) => {
-      // Send CODE_CONNECTED to all children that need it
-      child(self, 'explorer')?.send({ type: 'CODE_CONNECTED' });
-      child(self, 'terminal')?.send({ type: 'CODE_CONNECTED' });
-      child(self, 'codeActions')?.send({ type: 'CODE_CONNECTED' });
-      child(self, 'codePrompts')?.send({ type: 'CODE_CONNECTED' });
-
-      // Get code settings - this will create default settings if they don't exist
-      const codeSettings = featureSettings.forFeature('code').get();
-
-      // Send initial directory state to frontend
+    /**
+     * What a window's code surface starts from, answered to it: the directory and the settings, then — the same ask
+     * handed on, so it answers that window too — the running terminals. The panels ask for their own on the answer
+     */
+    sendCodeStart: ({ self, context, event, reply }) => {
       const connectedData: CodeConnectedData = {
         baseDirectory: context.baseDirectory,
-        settings: codeSettings
+        settings: featureSettings.forFeature('code').get(),
       };
-
-      broadcastToSurface('code', {
-        type: 'CODE_CONNECTED',
-        data: connectedData
-      })
+      reply?.({ type: 'CODE_STARTED', data: connectedData });
+      child(self, 'terminal')?.send(event);
     },
     
     selectGitWatcher: sendTo('gitWatcher', ({ context }) => ({
@@ -311,8 +305,8 @@ export const systemMachine = setup({
   states: {
     idle: {
       on: {
-        SEND_STATE: {
-          actions: 'broadcastConnected',
+        GET_CODE_START: {
+          actions: 'sendCodeStart',
         },
         // Handle settings updates
         TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
