@@ -126,6 +126,7 @@ it('routes native Model details and effort while preserving price styling and di
   expect([...root.querySelectorAll<HTMLElement>('span')].find(span=>span.textContent==='$8')?.style.textDecoration).toBe('line-through')
   root.querySelector<HTMLButtonElement>('[aria-label="Details for Native Alpha"]')!.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'focusModel',value:'alpha'}})
   ;[...root.querySelectorAll('button')].find(button=>button.textContent==='Decrease effort')!.click();expect(operations.at(-1)).toMatchObject({command:{action:'adjustEffort',direction:'left'}})
+  root.querySelector('[aria-label="Native Model details"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));expect(operations.at(-1)).toMatchObject({command:{action:'adjustEffort',direction:'right'}})
   expect(root.querySelector<HTMLButtonElement>('[aria-label="Details for Unavailable"]')!.disabled).toBe(true)
   ;[...root.querySelectorAll('button')].find(button=>button.querySelector('span')?.textContent==='Native Alpha')!.click();expect(operations.at(-1)).toMatchObject({command:{action:'select',value:'alpha'}})
  }finally{app.unmount();root.remove()}

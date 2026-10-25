@@ -11,10 +11,10 @@
         <button v-if="editor.model" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.model.focusValue === option.value" :aria-label="`Details for ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" :class="editor.model.focusValue === option.value ? 'bg-blue-500/10' : ''" @click="showModelDetails(option.value)">Details</button>
         <button v-if="editor.canPreview" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.previewValue === option.value" :aria-label="`Preview ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('preview', option.value)">Preview</button>
       </div>
-      <section v-if="editor.model" ref="modelDetails" aria-label="Native Model details" :data-native-model-draft-effort="editor.model.draftEffort" class="space-y-3 rounded-lg border border-white/10 p-3 text-xs text-neutral-300">
+      <section v-if="editor.model" ref="modelDetails" aria-label="Native Model details" :data-native-model-draft-effort="editor.model.draftEffort" tabindex="0" @keydown.left.prevent="adjustModelEffort('left')" @keydown.right.prevent="adjustModelEffort('right')" class="space-y-3 rounded-lg border border-white/10 p-3 text-xs text-neutral-300">
         <p class="font-medium">{{ modelLabel }}</p>
         <p class="whitespace-pre-wrap break-words">{{ editor.model.effortText }}</p>
-        <div v-if="editor.model.canAdjustEffort" class="flex flex-wrap gap-2"><button type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 disabled:opacity-40" @click="emit('adjust-effort', 'left')">Decrease effort</button><button type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 disabled:opacity-40" @click="emit('adjust-effort', 'right')">Increase effort</button></div>
+        <div v-if="editor.model.canAdjustEffort" class="flex flex-wrap gap-2"><button type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 disabled:opacity-40" @click="adjustModelEffort('left')">Decrease effort</button><button type="button" :disabled="pending" class="rounded-lg border border-white/10 px-3 py-2 disabled:opacity-40" @click="adjustModelEffort('right')">Increase effort</button></div>
         <p v-if="editor.model.fastModeNotice" class="whitespace-pre-wrap break-words text-neutral-400">{{ editor.model.fastModeNotice }}</p>
       </section>
       <section v-if="editor.preview" aria-label="Native Theme preview" class="rounded-lg border border-white/10 p-3 text-xs"><NativeThemePreview :preview="editor.preview" /></section>
@@ -41,6 +41,7 @@ const emit = defineEmits<{ select: [value: string]; preview: [value: string]; 'f
 const drafts = ref<Record<string, string>>({})
 const modelDetails = ref<HTMLElement>()
 const modelLabel = computed(() => { const editor=props.editor; if(editor.kind!=='choice')return; const focus=editor.model?.focusValue; return editor.options.find(option=>option.value===focus)?.label })
-function showModelDetails(value: string) { emit('focus-model', value); void nextTick(() => modelDetails.value?.scrollIntoView?.({ block: 'nearest' })) }
+function showModelDetails(value: string) { emit('focus-model', value); void nextTick(() => { modelDetails.value?.scrollIntoView?.({ block: 'nearest' }); modelDetails.value?.focus({ preventScroll: true }) }) }
+function adjustModelEffort(direction: 'left' | 'right') { if(!props.pending && props.editor.kind==='choice' && props.editor.model?.canAdjustEffort)emit('adjust-effort', direction) }
 watch(() => props.editor.revision, () => { drafts.value = props.editor.kind === 'form' ? Object.fromEntries(props.editor.fields.map(field => [field.key, field.value])) : {} }, { immediate: true })
 </script>
