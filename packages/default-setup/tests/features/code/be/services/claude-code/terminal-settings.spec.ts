@@ -133,3 +133,11 @@ it('keeps an exact live editor usable across unrelated Config updates but reject
  locked=true;await expect(f.run(f.n,request,new AbortController())).rejects.toThrow('changed');expect(f.editorAction).toHaveBeenCalledOnce()
  locked=false;f.setNativeEditor({...editor,revision:'b'.repeat(64)});await expect(f.run(f.n,request,new AbortController())).rejects.toThrow('changed');expect(f.editorAction).toHaveBeenCalledOnce()
 })
+
+it('does not wait for a row change when the original choice is selected again',async()=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'choice',options:[{value:'native-default',label:'Default',disabled:false}],value:'native-default',disabled:false}}
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='tips'
+ const before=await f.read();f.editorAction.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false});return {}})
+ const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'select',value:'native-default'}},new AbortController())
+ expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled()
+})

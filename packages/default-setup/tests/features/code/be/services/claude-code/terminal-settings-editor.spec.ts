@@ -173,19 +173,21 @@ it('projects original Theme choices, preview, syntax toggle, commit and preview-
 function modelFixture(){
  const f=fixture(),Model=function OriginalModel(){},Choice=function OriginalModelChoices(){},key=function OriginalModelKey(){},onSelect=vi.fn(),onCancel=vi.fn(),onChange=vi.fn(),onFocus=vi.fn((value:string)=>{focused=value}),adjust=vi.fn(),getFocus=()=>focused
  let focused='alpha'
+ const effortBox={value:'high'},setEffort=function OriginalEffortSetter(){},getEffort=()=>effortBox.value
  const options=[{value:'alpha',label:'Alpha',description:'Original price'},{value:'beta',label:'Beta'},{value:'locked',label:'Unavailable',description:'Original eligibility',disabled:true}]
  f.setFunctionHash(Model,'c0cf4bcdab4f51bf2da39b356899e179c0a8f40f309822461c09d46c4a0e7040');f.setFunctionHash(Choice,'0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3');f.setFunctionHash(key,'09e2e0734b5e0da805593b8a45464256b7760e84204a62141ca8ca70f62cb566');f.setFunctionHash(adjust,'2bae149d18b9a99477ae1c8cb7fd72b19cbcc28c9f8258104aae644e911261cb');f.setFunctionHash(getFocus,'56513689669af7d6bbc5e14de1319ed6c48d14a2f545d7ca66caa4b082bd9d41')
+ f.setFunctionHash(setEffort,'614e5f6e400f38931145513694025965d78b7003e49433d66ae369c535e3ee47');f.setFunctionHash(getEffort,'56513689669af7d6bbc5e14de1319ed6c48d14a2f545d7ca66caa4b082bd9d41')
  const controls={options,selectedValue:'alpha',defaultFocusValue:'alpha',onChange,onFocus,onCancel:vi.fn(),isDisabled:false}
  const detail:any={props:{children:{type:Symbol.for('react.fragment'),props:{children:'Native medium effort'}}}}
  const groups=[{props:{children:'Native model instructions'}},{props:{children:[false,{props:{children:[{type:Choice,props:controls}]} }]}},{props:{children:detail}},'Native fast-mode notice']
- const root={onKeyDown:key,children:[{props:{children:groups}}]},hook:any={memoizedState:[adjust,[options,getFocus,()=>{},()=>{}]],next:null}
+ const root={onKeyDown:key,children:[{props:{children:groups}}]},hook:any={memoizedState:[adjust,[options,getFocus,()=>{},setEffort]],next:{memoizedState:[setEffort,[effortBox]],next:{memoizedState:[getEffort,[effortBox]],next:null}}}
  const model:any={type:Model,memoizedProps:{onSelect,onCancel},child:{memoizedProps:root},memoizedState:hook};f.config.child=model;f.frame.panel.hidden=true
  f.formatText.mockImplementation(async(_n:unknown,value:unknown)=>typeof value==='string'?value:'Native effort details')
  return {f,model,root,controls,hook,detail,onSelect,onCancel,onChange,onFocus,adjust}
 }
 it('projects admitted native Model choices, focus/effort and notices without enabling search',async()=>{
  const {f,controls,detail,onFocus,onChange,onCancel,adjust}=modelFixture(),result=await f.editor()
- expect(result.snapshot).toMatchObject({kind:'choice',value:'alpha',disabled:false,model:{focusValue:'alpha',canAdjustEffort:true,description:'Native effort details',fastModeNotice:'Native fast-mode notice'}})
+ expect(result.snapshot).toMatchObject({kind:'choice',value:'alpha',disabled:false,model:{focusValue:'alpha',canAdjustEffort:true,draftEffort:'high',description:'Native effort details',fastModeNotice:'Native fast-mode notice'}})
  await f.act({action:'focusModel',revision:result.revision,value:'beta'});expect(onFocus).toHaveBeenCalledExactlyOnceWith('beta');expect(onChange).not.toHaveBeenCalled()
  let current=await f.editor();expect(current.snapshot.model.focusValue).toBe('beta')
  await f.act({action:'adjustEffort',revision:current.revision,direction:'left'});expect(adjust).toHaveBeenCalledExactlyOnceWith('left')
@@ -197,7 +199,7 @@ it('projects admitted native Model choices, focus/effort and notices without ena
 })
 it('refuses changed Model roots, ambiguous effort callbacks and replaced root props during reading',async()=>{
  const {f,model,hook}=modelFixture();model.memoizedProps.onSetDefault=()=>{};await expect(f.editor()).rejects.toThrow('root changed');delete model.memoizedProps.onSetDefault
- hook.next={memoizedState:hook.memoizedState,next:null};await expect(f.editor()).rejects.toThrow('not uniquely supported');hook.next=null
+ const rest=hook.next;hook.next={memoizedState:hook.memoizedState,next:rest};await expect(f.editor()).rejects.toThrow('not uniquely supported');hook.next=rest
  f.formatText.mockImplementationOnce(async()=>{model.child.memoizedProps={...model.child.memoizedProps};return 'retired label'})
  await expect(f.editor()).rejects.toThrow('changed while reading')
 })
