@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "fc61e3e37fafe2592e2947295da5077bbe1a8781",
+  "researchCommit": "67af10eed6c731553a77c000c39e31d407b20667",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -207,7 +207,7 @@
     "src/protocol/native-process-observer.mjs": "7fd2a67bcd4f2e24484fde9ac3069c43b9beb2353422de9ace08b97e449bb1a5",
     "src/protocol/native-question-gates.mjs": "a2aee2181ee04f92cf108c2201af0b52a8e02e44f7175f540e31fae5ab7e4ef2",
     "src/protocol/native-question-owner-failure.mjs": "1b6523c46ffb9a2bb0169aed341fa2aefb7288bcd6437348e7bba3bae25b6053",
-    "src/protocol/native-question-tool-notice-fixture.mjs": "3763d9c83418356563cb3cdc573538c805779f34cba0e93eea9d99397d25567d",
+    "src/protocol/native-question-tool-notice-fixture.mjs": "6bb111d211e0eaac55262af7e99bcbf3585ae3826ddfdf547f421dfd2bdd6ae0",
     "src/protocol/native-read-media-fixture.mjs": "ac22482db23f6f61f57bad65272891254d48bd411c5a602bfee264fa29a7b4a4",
     "src/protocol/native-resting-hover-fixture.mjs": "bfa6458556b421cf171f64bf1f88d627919ffe1c72960f1a313c8d6a50ec5857",
     "src/protocol/native-root-ime-fixture.mjs": "bcd42bab8846ff0db7c44c36ecd7657d5bc23e261f4ec3e71681b37614390d75",
@@ -291,5 +291,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "5edf0cb5f338ba5d926556585e7b2eecd0e61694011b9850284ec51ff1e02709"
+  "archiveSha256": "89d35eecbae8cace2c15032dc3f2fe4acdb64965201c02ce71ca5e8d8f25be88"
 }
