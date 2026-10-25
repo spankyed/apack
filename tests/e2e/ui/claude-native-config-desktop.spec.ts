@@ -266,12 +266,22 @@ test('edits original Settings through desktop controls and retains composing', a
         const text=(await value.innerText()).replace(/\s+/g,' ').trim();expect(text).toMatch(/user settings/i);expect(text).toMatch(/project local settings/i);expect(text).toMatch(/,\s+/)
         const sample:any={width,height,value:text,geometry,realWheel:true}
         if(process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1'){
-          const warning=panel.getByRole('region',{name:'System diagnostics',exact:true}),item=warning.locator('li').filter({hasText:/^Native installation exists but ~\/\.local\/bin is not in your PATH$/})
-          await expect(item).toHaveCount(1)
-          const diagnosticBounds=()=>item.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Status"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Diagnostic exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
-          await body.hover();for(let step=0;step<40;step++){const state=await diagnosticBounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
-          const diagnosticGeometry=await diagnosticBounds();expect(diagnosticGeometry.visible).toBe(true)
-          sample.diagnostic={text:await item.innerText(),geometry:diagnosticGeometry,realWheel:true}
+          const warning=panel.getByRole('region',{name:'System diagnostics',exact:true}),items=warning.locator('li')
+          const count=await items.count();expect(count).toBeGreaterThan(0);expect(count).toBeLessThanOrEqual(128)
+          sample.diagnosticReadings=[]
+          for(let index=0;index<count;index++){
+            const item=items.nth(index)
+            const diagnosticBounds=()=>item.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Status"]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Diagnostic exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
+            await body.hover();for(let step=0;step<40;step++){const state=await diagnosticBounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+            const diagnosticGeometry=await diagnosticBounds();expect(diagnosticGeometry.visible).toBe(true)
+            await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+            const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+            const capture=testInfo.outputPath(`native-settings-diagnostic-${index}-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'))
+            sample.diagnosticReadings.push({index,text:await item.innerText(),geometry:diagnosticGeometry,realWheel:true,capture})
+          }
+          sample.diagnostic=sample.diagnosticReadings.find((reading:any)=>/^Native installation exists but ~\/\.local\/bin is not in your PATH$/.test(reading.text))
+          expect(sample.diagnostic).toBeTruthy()
+
         }
         statusSamples.push(sample)
       }
@@ -290,6 +300,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
