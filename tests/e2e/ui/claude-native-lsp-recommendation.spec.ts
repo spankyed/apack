@@ -114,6 +114,17 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
     await appPage.setViewportSize({ width, height })
     for (const label of Object.values(labels)) await expect(notice.getByRole('button', { name: label, exact: true })).toBeInViewport()
     await expect(composer).toHaveText(draft)
+    const draftVisibility = await composer.evaluate(element => {
+      const area = element.closest('[data-testid="composer-editor-area"]')!.getBoundingClientRect()
+      const card = element.closest('[data-onboarding-id="agent-chat-input"]')!, bounds = card.getBoundingClientRect()
+      const status = card.querySelector('[data-testid="composer-native-status"]')?.getBoundingClientRect()
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT), rects: { top: number; bottom: number; left: number; right: number }[] = []
+      let node: Node | null
+      while ((node = walker.nextNode())) { if (!node.textContent?.trim()) continue; const range = document.createRange(); range.selectNodeContents(node); rects.push(...[...range.getClientRects()].map(rect => ({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }))) }
+      return { rects, top: Math.max(area.top, bounds.top, status?.bottom ?? 0, 0), bottom: Math.min(area.bottom, bounds.bottom, window.innerHeight), left: Math.max(area.left, bounds.left), right: Math.min(area.right, bounds.right) }
+    })
+    expect(draftVisibility.rects.length).toBeGreaterThan(0)
+    for (const rect of draftVisibility.rects) { expect(rect.top).toBeGreaterThanOrEqual(draftVisibility.top - 1); expect(rect.bottom).toBeLessThanOrEqual(draftVisibility.bottom + 1); expect(rect.left).toBeGreaterThanOrEqual(draftVisibility.left - 1); expect(rect.right).toBeLessThanOrEqual(draftVisibility.right + 1) }
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport()
     expect(await composer.evaluate(element => (element as any).editor.state.doc.toJSON())).toEqual(savedDocument)
     await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))

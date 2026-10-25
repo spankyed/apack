@@ -5,7 +5,7 @@ const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({ ...identity, ...body, kind: z.literal('auto_mode_server_fallback'), helpUrl: z.string().max(4000) }),
-  z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
+  z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
 ])
 export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
 export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & { decision: 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' }

@@ -92,7 +92,7 @@ it('explains unexpected failure beside reopen in ordinary conversation, while pr
 it('shows all native LSP choices in ordinary chat, retires the card and sends no on Escape', async () => {
   const f = await fixture()
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
-  const notice = { id: 'lsp', revision: 'revision', sessionId: 'session', kind: 'lsp_recommendation' as const, title: 'LSP plugin recommendation', paragraphs: ['Plugin: <b>Review</b>'], choices: (['yes', 'no', 'never', 'disable'] as const).map(value => ({ value, label: value })) }
+  const notice = { id: 'lsp', revision: 'revision', sessionId: 'session', kind: 'lsp_recommendation' as const, pluginName: 'Review', marketplaceName: 'Owned', fileExtension: '.review', title: 'LSP plugin recommendation', paragraphs: ['Plugin: <b>Review</b>'], choices: (['yes', 'no', 'never', 'disable'] as const).map(value => ({ value, label: value })) }
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
   const card = f.root.querySelector('[aria-label="Claude LSP recommendation"]')!
   expect(card.querySelector('b')).toBeNull()

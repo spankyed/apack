@@ -1,10 +1,19 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : 'Claude auto mode notice'" class="native-notice" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'lsp_recommendation' ? 'no' : 'interrupt')">
+    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind === 'lsp_recommendation' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'lsp_recommendation' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <h3>{{ view.state.notice.title }}</h3>
-        <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
-        <p v-if="view.state.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+        <template v-if="view.state.notice.kind === 'lsp_recommendation'">
+          <p class="native-notice__identity">{{ view.state.notice.pluginName }} · {{ view.state.notice.marketplaceName }}</p>
+          <details class="native-notice__details">
+            <summary>About this plugin</summary>
+            <div class="native-notice__detail-text"><p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p></div>
+          </details>
+        </template>
+        <template v-else>
+          <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
+          <p class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+        </template>
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
       <div class="native-notice__actions">
@@ -170,6 +179,12 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-notice h3 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: #eee7dd; }
 .native-notice p { margin: 0 0 8px; }
 .native-notice__url { color: #9f9a92; font-size: 11px; }
+.native-notice--recommendation { padding: 8px 12px; }
+.native-notice--recommendation h3, .native-notice--recommendation p { margin-bottom: 4px; }
+.native-notice__identity { overflow-wrap: anywhere; }
+.native-notice__details { color: #aaa59e; font-size: 11px; }
+.native-notice__details summary { cursor: pointer; width: fit-content; }
+.native-notice__detail-text { margin-top: 6px; max-height: 20vh; overflow-y: auto; }
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }

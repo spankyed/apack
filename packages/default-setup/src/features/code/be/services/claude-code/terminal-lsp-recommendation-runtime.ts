@@ -59,7 +59,7 @@ async function projectNativeLspRecommendation(n,d){
  const p=d.payload,paragraphs=['LSP provides code intelligence like go-to-definition and error checking','Plugin: '+p.pluginName,'Marketplace: '+p.marketplaceName,'Triggered by: '+p.fileExtension+' files',...(p.pluginDescription?[p.pluginDescription]:[]),'Would you like to install this LSP plugin?'];
  const current=nativeLspRecommendation(n);
  if(current.item!==d.item||current.revision!==d.revision||current.source?.control!==d.source.control)throw Error('Native recommendation changed while formatting');
- return {id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'lsp_recommendation',title:d.source.panel.title,paragraphs,choices};
+ return {id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'lsp_recommendation',pluginName:p.pluginName,marketplaceName:p.marketplaceName,fileExtension:p.fileExtension,title:d.source.panel.title,paragraphs,choices};
 }
 function answerNativeLspRecommendation(n,request){
  const d=nativeLspRecommendation(n);
