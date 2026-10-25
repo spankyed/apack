@@ -186,7 +186,7 @@ test('preserves native LSP recommendation decisions and everyday composing', asy
       const toggle = toolGroup.getByRole('button').first()
       if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click()
       await expect(navigation).toBeVisible(); await expect(navigation).toContainText('definitions.review')
-      await expect(toolGroup.getByText('Go to definition · release.review:2:1', { exact: true })).toBeVisible()
+      await expect(toolGroup.locator('[data-native-tool-use-id="native_lsp_1"]').getByText('Go to definition · release.review:2:1', { exact: true })).toBeVisible()
     } catch (error) {
       await writeFile(join(workspace!, 'native-lsp-installed-result-failure.json'), JSON.stringify({ context: await context(), text: await appPage.locator('body').innerText() }))
       const size = appPage.viewportSize()!, image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), size)
