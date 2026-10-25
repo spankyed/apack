@@ -1427,7 +1427,7 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
   function viewsFe(): { imports: string; code: string } | undefined {
     const views = viewEntries();
     if (views.length === 0) return undefined;
-    const imports = `import { untypedUseView, type ViewState } from '@apackdev/sdk/fe';
+    const imports = `import { untypedUseView, type UseViewOptions, type ViewState } from '@apackdev/sdk/fe';
 import type { ViewArgs, ViewResult } from '@apackdev/sdk/framework';
 import type { MaybeRefOrGetter } from 'vue';
 ${views.map(({ featureId, source, exportName }) => `import type { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n')}`;
@@ -1440,8 +1440,11 @@ ${views.map(({ featureId }) => `  '${featureId}': typeof ${viewsBinding(featureI
 /** A feature of this pack that declares views */
 export type ViewFeatureName = keyof PackViews & string;
 
-/** What \`useView\` takes after the names: nothing for a view without arguments, else its arguments, or \`null\` or \`undefined\` for none yet */
-export type ViewArgsParameter<Read> = ViewArgs<Read> extends undefined ? [] : [args: MaybeRefOrGetter<ViewArgs<Read> | null | undefined>];
+/**
+ * What \`useView\` takes after the names: nothing for a view without arguments, else its arguments, or \`null\` or
+ * \`undefined\` for none yet, and how to follow them
+ */
+export type ViewArgsParameter<Read> = ViewArgs<Read> extends undefined ? [] : [args: MaybeRefOrGetter<ViewArgs<Read> | null | undefined>, options?: UseViewOptions];
 
 /**
  * One of this pack's views, live: its result now, and again after every commit that changes it, until the calling

@@ -1428,7 +1428,8 @@
       "repositories": {
         "promptQueries": "src/features/prompts/be/repository/index.ts#promptQueries",
         "promptCommands": "src/features/prompts/be/repository/index.ts#promptCommands"
-      }
+      },
+      "views": "src/features/prompts/be/views.ts#promptViews"
     },
     "brain": {
       "description": "Execute flows and coordinate their running steps.",

@@ -16,7 +16,7 @@ export type Event =
   // Tab restoration
   | { type: 'codePrompts.OPEN_TABS'; promptIds: string[] }
   /**
-   * What the panel asks of the **prompts surface**, which owns the list and the rows.
+   * What the panel asks of the **prompts surface**: its edits, which that surface sends its system.
    *
    * The panel used to send these straight to that surface from its click handlers. Two things were wrong
    * with that and the second is why they are here rather than merely tidier: a component is not inside any
@@ -27,8 +27,6 @@ export type Event =
    * The names match what they forward, so the hand-off reads as one; the `codePrompts.` prefix is how the
    * code surface routes an event to this child.
    */
-  | { type: 'codePrompts.LOAD_ALL' }
-  | { type: 'codePrompts.LOAD_MORE' }
   | { type: 'codePrompts.UPDATE_INPUTS'; promptId: string; inputs: Record<string, unknown> }
   | { type: 'codePrompts.UPDATE_LABEL'; promptId: string; label: string }
   | { type: 'codePrompts.DELETE'; promptId: EARS.EntityId }
@@ -101,10 +99,8 @@ export const promptsState = setup({
       updateParentState(self, { openFiles: updatedFiles })
     },
 
-    // The panel's asks of the prompts surface, forwarded from here so each one carries a sender
-    loadAllPrompts: () => { sendToSurface('prompts', { type: 'PROMPTS.LOAD_ALL' }) },
-    loadMorePrompts: () => { sendToSurface('prompts', { type: 'PROMPTS.LOAD_MORE' }) },
 
+    // The panel's asks of the prompts surface, forwarded from here so each one carries a sender
     updatePromptInputs: ({ event }) => {
       const ev = event as { type: 'codePrompts.UPDATE_INPUTS'; promptId: string; inputs: Record<string, unknown> }
       sendToSurface('prompts', { type: 'PROMPT.UPDATE_INPUTS', promptId: ev.promptId, inputs: ev.inputs })
@@ -156,8 +152,6 @@ export const promptsState = setup({
       actions: 'updatePromptInOpenFiles'
     },
     // The panel's asks of the prompts surface
-    'codePrompts.LOAD_ALL': { actions: 'loadAllPrompts' },
-    'codePrompts.LOAD_MORE': { actions: 'loadMorePrompts' },
     'codePrompts.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'codePrompts.UPDATE_LABEL': { actions: 'updatePromptLabel' },
     'codePrompts.DELETE': { actions: 'deletePrompt' },

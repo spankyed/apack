@@ -27,15 +27,30 @@ export interface ViewState<Result> {
   readonly commit: number;
 }
 
+/** How a view follows its arguments */
+export interface UseViewOptions {
+  /**
+   * Keep showing the last result while the result for new arguments loads, rather than starting again from
+   * `undefined`: for a list that pages further or filters, where blanking between pages is wrong. A view that asks
+   * for something else entirely (another prompt) leaves it off, so it never shows one row under another's name.
+   */
+  keepPrevious?: boolean;
+}
+
 /**
  * The view `view` of the feature at `ref`, followed until the calling scope is disposed — so it runs in a component's
  * setup or an effect scope, never inside a `computed`.
  *
  * With `args`, a ref or a getter is followed too, and a change that asks for something different (compared as data,
  * so a new object holding the same values asks for nothing new) subscribes again; `null` or `undefined` unsubscribes
- * and leaves the view `idle`. Without, the view takes no arguments.
+ * and leaves the view `idle`. Without, the view takes no arguments. New arguments start from no result unless `options`
+ * keeps the previous one (`keepPrevious`).
  */
-export function untypedUseView<Result = unknown>(ref: string, view: string, ...args: [] | [args: MaybeRefOrGetter<unknown>]): ViewState<Result> {
+export function untypedUseView<Result = unknown>(
+  ref: string,
+  view: string,
+  ...args: [] | [args: MaybeRefOrGetter<unknown>, options?: UseViewOptions]
+): ViewState<Result> {
   if (!getCurrentScope()) {
     throw new Error(`useView("${ref}", "${view}") runs in a component's setup or an effect scope: it follows the view until that scope is disposed`)
   }
@@ -58,9 +73,9 @@ export function untypedUseView<Result = unknown>(ref: string, view: string, ...a
   }, () => {
     stop?.()
     stop = undefined
-    state.data = undefined
     state.error = undefined
     const request = current()
+    if (!request || !args[1]?.keepPrevious) state.data = undefined
     if (!request) {
       state.status = 'idle'
       return

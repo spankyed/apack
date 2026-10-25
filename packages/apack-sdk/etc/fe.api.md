@@ -958,7 +958,7 @@ export type TrailClickEvent<TInfo = unknown> = {
 export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEvent[]): void;
 
 // @public
-export function untypedUseView<Result = unknown>(ref: string, view: string, ...args: [] | [args: MaybeRefOrGetter<unknown>]): ViewState<Result>;
+export function untypedUseView<Result = unknown>(ref: string, view: string, ...args: [] | [args: MaybeRefOrGetter<unknown>, options?: UseViewOptions]): ViewState<Result>;
 
 // @public
 export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
@@ -1008,6 +1008,11 @@ export function useTrackedMenuOpen(menuOpen: Ref<boolean>): void;
 
 // @public
 export function useUntypedSurfaceState<TSnapshot, TSelected>(ref: string, selector: (snapshot: TSnapshot) => TSelected): Readonly<Ref<TSelected | undefined>>;
+
+// @public
+export interface UseViewOptions {
+    keepPrevious?: boolean;
+}
 
 // @public
 export interface ViewRequest {

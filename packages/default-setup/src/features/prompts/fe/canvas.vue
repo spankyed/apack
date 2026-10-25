@@ -6,7 +6,7 @@
       :prompts="filteredPrompts"
       :categories="categories"
       :selected-categories="selectedCategories"
-      :has-prompts="prompts.length > 0"
+      :has-prompts="totalCount > 0"
       :has-more="hasMore"
       :loading-more="loadingMore"
       @select="handleSelectPrompt"
@@ -21,7 +21,7 @@
     <!-- Create/Edit View -->
     <PromptDetail
       v-else-if="state.hasTag('create-prompt') || state.hasTag('detail-prompt')"
-      :prompt="state.hasTag('detail-prompt') ? selectedPrompt : undefined"
+      :prompt="state.hasTag('detail-prompt') ? (open.data ?? undefined) : undefined"
       :form-data="formData"
       :categories="categories"
       @update-label="handleUpdateLabel"
@@ -39,40 +39,42 @@
 <script setup lang="ts">
 import { useSurface } from '@apackdev/sdk/fe'
 
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useSelector } from '@xstate/vue';
 import type { PromptsState } from './state.ts';
 import PromptsList from './components/PromptsList.vue';
 import PromptDetail from './components/PromptDetail.vue';
 import type { EARS } from '@apackdev/sdk';
 import type { TemplateInput } from '@apackdev/sdk';
+import { useView } from '#generated/fe.ts';
+import { useSettings } from '#generated/settings-fe.ts';
 
 const actor: PromptsState = useSurface();
 const state = useSelector(actor, (state) => state);
-const prompts = useSelector(actor, (state) => state.context.prompts);
-const selectedPrompt = useSelector(actor, (state) => state.context.selectedPrompt);
 const formData = useSelector(actor, (state) => state.context.formData);
-const categories = useSelector(actor, (state) => state.context.categories);
 const selectedCategories = useSelector(actor, (state) => state.context.selectedCategories);
-const page = useSelector(actor, (state) => state.context.page);
-const totalPages = useSelector(actor, (state) => state.context.totalPages);
-const loadingMore = useSelector(actor, (state) => state.context.loadingMore);
+const listLimit = useSelector(actor, (state) => state.context.listLimit);
+const selectedPromptId = useSelector(actor, (state) => state.context.selectedPromptId);
+const showingList = computed(() => state.value.hasTag('list-prompts'));
+const showingDetail = computed(() => state.value.hasTag('detail-prompt'));
 
-const hasMore = computed(() => page.value < totalPages.value);
+const settings = useSettings('prompts');
+const categories = computed(() => settings.value.value?.categories ?? []);
 
-// Filter prompts based on selected categories
-const filteredPrompts = computed(() => {
-  // If no categories selected, show all prompts
-  if (selectedCategories.value.length === 0) {
-    return prompts.value;
-  }
+// The list this window shows, and the prompt it has open: each the view's result for what this window asked, kept
+// up to date by the backend, so a change in another window reaches this one without anyone sending it
+const list = useView('prompts', 'list', () => (showingList.value ? { limit: listLimit.value, categories: selectedCategories.value } : null), { keepPrevious: true });
+const open = useView('prompts', 'byId', () => (showingDetail.value && selectedPromptId.value ? { id: selectedPromptId.value } : null));
 
-  // Filter prompts that match selected categories
-  return prompts.value.filter(prompt => {
-    // If prompt has no category, don't show it when filters are active
-    if (!prompt.category) return false;
-    return selectedCategories.value.includes(prompt.category);
-  });
+const filteredPrompts = computed(() => list.data?.prompts ?? []);
+const totalCount = computed(() => list.data?.totalCount ?? 0);
+const hasMore = computed(() => filteredPrompts.value.length < totalCount.value);
+const loadingMore = computed(() => list.status === 'loading');
+
+// The machine fills its form from the open prompt once, and leaves the detail view when the prompt is gone
+watch(() => [open.status, open.data] as const, ([status, prompt]) => {
+  if (status !== 'ready' || !selectedPromptId.value) return;
+  actor.send({ type: 'PROMPT.LOADED', promptId: selectedPromptId.value, prompt: prompt ?? null });
 });
 
 // List handlers
