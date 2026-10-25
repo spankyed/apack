@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "47e7d3c130ced155c14474f6057326ed4e058090",
+  "researchCommit": "1f40e28449d688348c205765ea6a1e292a9b0db2",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -87,7 +87,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "12237c452b92960e30b67fd1c9604e3d6800de3f9d5b47424dd6217da01bcf32",
+    "src/integration/apack-terminal-owner-app.mjs": "583f1b58fc8c8f83ce0c9f3aea2d4e2337fb9b770206cdd4e19a6c69b95ea36f",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -215,7 +215,7 @@
     "src/protocol/native-search-review-fixture.mjs": "22660edad17753efe230367057253a985b5b8d17b4e9327fbed461bd7ae3021a",
     "src/protocol/native-select-fixture.mjs": "e8987ab57acd2bb84fdae7c0c62a4536dc3bfd406203050288d1e56bce6a57b9",
     "src/protocol/native-settings-inspector.mjs": "a1551822038839b287405846af1c4ada2db1b427b6d72997d4e0a25dadb5e846",
-    "src/protocol/native-settings-proof.mjs": "e4cd3d587d5102547ebf0d580d8127a92a808487499b3e4e848d8a611aa9f595",
+    "src/protocol/native-settings-proof.mjs": "520f98aa345dc630cc67ca5e645fba55efd140a7b13464bfac895d2eaf81695f",
     "src/protocol/native-snapshot-action-fixture.mjs": "10b2209e0981ed6f2ca167632bf445a7dd1131f158fb38b87c88a59bd65f67eb",
     "src/protocol/native-staged-directory-fixture.mjs": "fa3a9778fcaf744cc22a1650ba1c8920a168f4dc13989b8ffa5a1e0d1c36806d",
     "src/protocol/native-status-prefix-runtime.mjs": "74d83201ae41ebc6f60c4e43ea704e3d13c091e781115f1465f06ac15abbe3b6",
@@ -296,5 +296,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "eb21771f4995e90351c93e2b37a46bbac112c5102270a877010e53c4f8b27ea1"
+  "archiveSha256": "03d9f5352ccb16eb59943197afd8f6ae53113239e250dd0d39b2a6606570ee63"
 }
