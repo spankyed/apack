@@ -204,6 +204,17 @@ test('edits original Settings through desktop controls and retains composing', a
         const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
         const path=testInfo.outputPath('native-rich-stats-'+label+'-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));statsCompleteness.captures.push(path)
       }
+      async function copyStats(view:'Overview'|'Models',width:number){
+        await statistics.getByRole('button',{name:'Copy stats',exact:true}).scrollIntoViewIfNeeded()
+        await electronApp.evaluate(({clipboard})=>clipboard.clear())
+        await statistics.getByRole('button',{name:'Copy stats',exact:true}).click()
+        await expect(statistics.getByText('Copied by Claude Code',{exact:true})).toBeVisible({timeout:15000})
+        await expect.poll(()=>electronApp.evaluate(({clipboard})=>!clipboard.readImage().isEmpty()),{timeout:15000}).toBe(true)
+        const exported=await electronApp.evaluate(({clipboard})=>{const image=clipboard.readImage();return {formats:clipboard.availableFormats(),size:image.getSize(),png:image.toPNG().toString('base64')}})
+        expect(exported.formats).toContain('image/png');expect(exported.size.width).toBeGreaterThan(0);expect(exported.size.height).toBeGreaterThan(0)
+        const bytes=Buffer.from(exported.png,'base64'),file='native-rich-stats-'+(view==='Models'?'models-':'')+'export-'+width+'.png';await writeFile(testInfo.outputPath(file),bytes)
+        statsCompleteness.exports.push({file,width,view,formats:exported.formats,size:exported.size,sha256:createHash('sha256').update(bytes).digest('hex')})
+      }
       for(const width of [1100,680]){
         await appPage.setViewportSize({width,height:width===680?600:900})
         const longest=statistics.locator('dt').filter({hasText:/^Longest session$/}).locator('..');await readTo(longest);await statsCapture('summary',width)
@@ -212,15 +223,7 @@ test('edits original Settings through desktop controls and retains composing', a
         const historicalRow=statistics.locator('details[open] tbody tr').filter({hasText:histories[2].date})
         await readTo(historicalRow);await statsCapture('history',width);statsCompleteness.reading.push({width,longest:true,historicalDate:histories[2].date,realWheel:true})
         await history.click()
-        await statistics.getByRole('button',{name:'Copy stats',exact:true}).scrollIntoViewIfNeeded()
-        await electronApp.evaluate(({clipboard})=>clipboard.clear())
-        await statistics.getByRole('button',{name:'Copy stats',exact:true}).click()
-        await expect(statistics.getByText('Copied by Claude Code',{exact:true})).toBeVisible({timeout:15000})
-        await expect.poll(()=>electronApp.evaluate(({clipboard})=>!clipboard.readImage().isEmpty()),{timeout:15000}).toBe(true)
-        const exported=await electronApp.evaluate(({clipboard})=>{const image=clipboard.readImage();return {formats:clipboard.availableFormats(),size:image.getSize(),png:image.toPNG().toString('base64')}})
-        expect(exported.formats).toContain('image/png');expect(exported.size.width).toBeGreaterThan(0);expect(exported.size.height).toBeGreaterThan(0)
-        const bytes=Buffer.from(exported.png,'base64'),file='native-rich-stats-export-'+width+'.png';await writeFile(testInfo.outputPath(file),bytes)
-        statsCompleteness.exports.push({file,width,formats:exported.formats,size:exported.size,sha256:createHash('sha256').update(bytes).digest('hex')})
+        await copyStats('Overview',width)
       }
       await panel.getByRole('button',{name:'Models',exact:true}).click()
       await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
@@ -229,6 +232,7 @@ test('edits original Settings through desktop controls and retains composing', a
         await appPage.setViewportSize({width,height:width===680?600:900})
         await readTo(modelTable);await expect(modelTable.locator('thead')).toContainText('Cache read');await statsCapture('models',width)
         statsCompleteness.reading.find((row:any)=>row.width===width).modelTable=true
+        await copyStats('Models',width)
       }
       await panel.getByRole('button',{name:/Change dates/}).click()
       await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 7 days')
