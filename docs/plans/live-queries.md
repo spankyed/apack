@@ -1,6 +1,7 @@
 # Live queries
 
-Status: planned, 2026-10-25. Not started.
+Status: Step 1 implemented, 2026-10-25 (`engine.watch`, the read-set index, the harness property); its readings
+below. Steps 1a–5 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
@@ -211,6 +212,31 @@ capabilities. Settings already have their own channel (`FEATURE_SETTINGS_UPDATED
 
 **Done when:** the harness passes on both backends with watches, each mutation fails it, the index agrees with the
 brute-force scan, and the bench readings are recorded here.
+
+**Readings** (2026-10-25, `npm run bench -w @apackdev/ears`, LMDB, MacBook Pro, Node 23.11; a busy machine, load
+average 6–10, so read the trend, not the third digit). Means:
+
+| Case | Mean |
+|---|---|
+| 1,000 creates, 0 watches open on other rows | 129 ms |
+| … 10 watches | 122 ms |
+| … 100 watches | 155 ms |
+| … 1,000 watches | 132 ms |
+| 1,000 creates, then 100 watches on a page of the type run again (one burst) | 178 ms |
+| 1,000 page reads (`query('Task').limit(50).pickAll()`) | 428 ms |
+| 1,000 page reads, tracked as a watch runs them | 474 ms |
+
+Commit cost is flat from 0 to 1,000 watches (the spread is the machine's), which is what the index is for. Tracking
+adds about 11% to a watched read and nothing to an unwatched one. A burst of 1,000 commits re-runs each of 100 page
+watches once, about 0.5 ms a re-run.
+
+**Found while measuring, not this plan's:** an indexed `where` with a `limit` reads every match before limiting
+(`query('Task').where('status', 'open').limit(50).pickAll()` took 32 ms over 13k matches), since it gives matches in
+the type's order. A view that pages through an indexed `where` pays that on every re-run.
+
+**Mutation checks**, each failing at least one spec (`watch.spec.ts`, `read-set-index.spec.ts`, the harness): a write
+log that drops `del`, a stopped range recorded one key short, a `get` not recorded, a unit that threw notifying, a
+`clear` notifying nobody, an index that keeps a re-run watch's old entries.
 
 ### 1a. elmdb's protocol
 
