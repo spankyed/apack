@@ -7,6 +7,14 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test('runs native Client state props input and lifetime inside the app', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capture({path}:{path:string}){
+    const size=appPage.viewportSize()!
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
+    expect(result.size).toEqual(size)
+    await writeFile(path,Buffer.from(result.png,'base64'))
+  }
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
@@ -93,13 +101,13 @@ test('runs native Client state props input and lifetime inside the app', async (
     await left.focus();await left.press('Control+d');await expect(left).not.toBeFocused()
     await expect(left).toContainText('key=space');await expect(right).toContainText('key=none')
     await a.scrollIntoViewIfNeeded()
-    await appPage.screenshot({path:testInfo.outputPath('apack-native-client-fields-wide.png')})
+    await capture({path:testInfo.outputPath('apack-native-client-fields-wide.png')})
     await left.getByRole('combobox').scrollIntoViewIfNeeded()
-    await appPage.screenshot({path:testInfo.outputPath('apack-native-client-fields-choices.png')})
+    await capture({path:testInfo.outputPath('apack-native-client-fields-choices.png')})
     await appPage.setViewportSize({width:680,height:900})
     await expect(a).toHaveValue('日本語');await expect(b).toHaveValue('RightDraft')
     await b.scrollIntoViewIfNeeded()
-    await appPage.screenshot({path:testInfo.outputPath('apack-native-client-fields-compact.png')})
+    await capture({path:testInfo.outputPath('apack-native-client-fields-compact.png')})
   }else{
   const region=card.locator('[data-native-client]')
   await expect(region).toContainText('label=initial')
@@ -115,7 +123,7 @@ test('runs native Client state props input and lifetime inside the app', async (
   }
   await showClientLabel()
   await expect.poll(()=>region.textContent()).not.toContain('room=0x0')
-  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-initial.png')})
+  await capture({path:testInfo.outputPath('apack-native-client-initial.png')})
   const id=await region.getAttribute('data-native-client')
   await region.getByRole('button',{name:'Increment Client',exact:true}).click()
   await expect(region).toContainText('count=1')
@@ -137,7 +145,7 @@ test('runs native Client state props input and lifetime inside the app', async (
     return{x,y,outsideX:bounds.left-20,outsideY:Math.min(innerHeight-2,bounds.bottom+10),visible:element.contains(document.elementFromPoint(x,y)),width:right-left,height:bottom-top}
   })
   expect(point.visible).toBe(true);expect(point.width).toBeGreaterThan(0);expect(point.height).toBeGreaterThan(0)
-  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-before-drag.png')})
+  await capture({path:testInfo.outputPath('apack-native-client-before-drag.png')})
   await appPage.mouse.move(point.x,point.y);await appPage.mouse.down()
   await appPage.mouse.move(point.outsideX,point.outsideY)
   await expect.poll(()=>region.textContent()).toMatch(/xy=-[0-9]+,/)
@@ -145,13 +153,13 @@ test('runs native Client state props input and lifetime inside the app', async (
   await region.focus();await region.press('Escape');await expect(composer).toBeFocused()
   await expect(composer).toHaveText('Composer draft survives Client updates')
   await showClientLabel()
-  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-interactive.png')})
+  await capture({path:testInfo.outputPath('apack-native-client-interactive.png')})
   const wideColumns=Number((await region.textContent())!.match(/room=(\d+)x/)![1])
   await appPage.setViewportSize({width:680,height:900})
   await expect.poll(async()=>Number((await region.textContent())?.match(/room=(\d+)x/)?.[1]??0)).toBeLessThan(wideColumns)
   await expect(region).toContainText('count=1')
   await showClientLabel()
-  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-compact.png')})
+  await capture({path:testInfo.outputPath('apack-native-client-compact.png')})
   const collapseProof: any[]=[]
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===1100?900:600})
@@ -165,7 +173,7 @@ test('runs native Client state props input and lifetime inside the app', async (
     expect(JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8'))).toEqual(before)
     await expect(composer).toHaveText('Composer draft survives Client updates')
     await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:.99})
-    await appPage.screenshot({path:testInfo.outputPath(`apack-native-client-collapsed-${width}.png`)})
+    await capture({path:testInfo.outputPath(`apack-native-client-collapsed-${width}.png`)})
     await card.getByRole('button',{name:'Session tools',exact:true}).click()
     expect(await region.getAttribute('data-native-client')).toBe(id)
     await expect(region).toContainText('count=1')
@@ -173,7 +181,7 @@ test('runs native Client state props input and lifetime inside the app', async (
     await keyboard.focus();await keyboard.press(freshKey)
     await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8')).data.key).toBe(freshKey)
     await showClientLabel()
-    await appPage.screenshot({path:testInfo.outputPath(`apack-native-client-reopened-${width}.png`)})
+    await capture({path:testInfo.outputPath(`apack-native-client-reopened-${width}.png`)})
     collapseProof.push({width,id,hiddenInputRefused:true,stateRetained:true,freshKey,sessionId,nativePid:(await context()).native.state.nativePid})
   }
   await writeFile(join(workspace!,'native-client-collapse-proof.json'),JSON.stringify(collapseProof,null,2))
@@ -181,7 +189,7 @@ test('runs native Client state props input and lifetime inside the app', async (
   await card.getByRole('button',{name:'Toggle Client',exact:true}).click();await expect(region).toContainText('count=0')
   expect(await region.getAttribute('data-native-client')).not.toBe(id)
   await showClientLabel()
-  await appPage.screenshot({path:testInfo.outputPath('apack-native-client-remounted.png')})
+  await capture({path:testInfo.outputPath('apack-native-client-remounted.png')})
   await expect(composer).toHaveText('Composer draft survives Client updates')
   }
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
