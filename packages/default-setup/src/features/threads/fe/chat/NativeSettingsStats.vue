@@ -66,7 +66,7 @@ const activityColors = ['rgba(255,255,255,0.06)','rgba(218,119,86,0.25)','rgba(2
 const activityCalendar = computed(() => {
   const lines=props.stats?.calendar?.split('\n')
   if(!lines||lines.length!==10)return
-  const glyphs=['·','░','▒','▓','█'],rows=lines.slice(1,8).map(line=>[...line.slice(4)])
+  const glyphs=['·','░','▒','▓','█'],rows=lines.slice(1,8).map(line=>Array.from(line.slice(4)))
   const width=rows[0].length
   if(width<10||width>52||rows.some(row=>row.length!==width||row.some(cell=>cell!==' '&&!glyphs.includes(cell))))return
   return {months:lines[0].trim().split(/\s+/),rows:rows.map(row=>row.map(cell=>cell===' '?null:glyphs.indexOf(cell)))}
