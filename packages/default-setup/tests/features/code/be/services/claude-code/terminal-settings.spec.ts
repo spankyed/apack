@@ -101,3 +101,16 @@ it('publishes bounded native commit waiting and settles from original row change
  ;(f.entry as any).settingsCommit={key:'tips',before:true,until:0};const timedOut=await f.read()
  expect(timedOut.problem).toContain('not acknowledged');expect(timedOut.snapshot.commitPending).toBeUndefined()
 })
+
+it('tracks Language form acknowledgement by its native field and avoids waiting on an unchanged default draft',async()=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'form',title:'Language',submitLabel:'Save',fields:[{key:'language',label:'Language',value:'French'}]}}
+ f.n.runtime.p_r.mockImplementation(async(row:any)=>row.key==='tips'?{...row,key:'language',kind:'string',value:'French'}:undefined)
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='language'
+ const before=await f.read();f.editorSaving.mockImplementation(async()=>{f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false});return {}})
+ const changed=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'save',values:{language:''}}},new AbortController())
+ expect(changed.snapshot.commitPending).toBe(true)
+ delete (f.entry as any).settingsCommit
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor({...editor,snapshot:{...editor.snapshot,fields:[{key:'language',label:'Language',value:''}]}})
+ const reset=await f.read();const unchanged=await f.run(f.n,{...f.request,operation:'editor',revision:reset.snapshot.revision,editor_revision:editor.revision,command:{action:'save',values:{language:'   '}}},new AbortController())
+ expect(unchanged.snapshot.commitPending).toBeUndefined();expect(f.writer).not.toHaveBeenCalled()
+})

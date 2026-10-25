@@ -95,9 +95,12 @@ async function nativeSettings(n,request,abort){
     nativeSettingsPanel(request);
     if(result?.problem)return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot,problem:result.problem};
     const row=read.snapshot.rows.find(row=>row.key===entry.settingsEditorKey);
-    const selected=command.action==='select'?command.value:command.values?.value;
+    const language=entry.settingsEditorKey==='language'&&command.action==='save';
+    const selected=command.action==='select'?command.value:language?command.values?.language:command.values?.value;
     const proposed=row?.kind==='number'?Number(selected):selected;
-    if(row&&selected!==undefined&&!Object.is(row.value,proposed))entry.settingsCommit={key:row.key,before:row.value,until:Date.now()+5000};
+    // This only identifies a no-op draft; the original submit callback owns normalization and writes.
+    const sameLanguage=language&&typeof selected==='string'&&read.snapshot.editor?.kind==='form'&&selected.trim()===(read.snapshot.editor.fields.find(field=>field.key==='language')?.value??'').trim();
+    if(row&&selected!==undefined&&!sameLanguage&&!Object.is(row.value,proposed))entry.settingsCommit={key:row.key,before:row.value,until:Date.now()+5000};
    }
    controller.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
    return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot};
