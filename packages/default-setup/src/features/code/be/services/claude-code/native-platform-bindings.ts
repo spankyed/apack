@@ -473,6 +473,7 @@ export const claudeNativeLinuxBindings: {
     "Tst": "Ist",
     "Sat": "xat",
     "ozr": "MGr",
+    "Bve": "Yve",
     "qJ": "B7",
     "WCe": "v_e",
     "VCe": "x_e",
@@ -487,6 +488,7 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "62375d46497460f826daf4b1f1381395e656d68df6f5a341919cceb35cc8c15f": "920e6817974ac86bae2959f053c28a84a43b83b553c5684016e5865a201b96cc",
     "72bb984b5b6cf53a450e67dd52de7baf2f73defd50f4d9072e90c0699bd692cc": "4a9772762e4f092736d8e6aa40ff695d8ed5bf00d78b0a96a928d2f482c2c500",
     "77f448ae7516bdbfe0eb0551bad38f50cc372347ef95beaf2a87b9d6a8fdcdcc": "cd3282ce3b6ea6f668a46425945662b457d59fabb507853e1f975feee2d0c9d0",
     "72edfab66d939fee12559ff708e9fa21a67c9cceb84a7937b7c1b0d994c7a747": "4dc2845fd34894d5f3ae8f56dace344a119435b62480bba93ad735616e231663",

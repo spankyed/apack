@@ -43,6 +43,18 @@ async function nativeGenericPermissionDetail(n,label,node){
  const ansi=await nativeGenericPermissionText(n,node,true);
  return {label,value:stripVTControlCharacters(ansi).trim(),ansi};
 }
+function nativeGenericPermissionNotice(n,d){
+ const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
+ while(pending.length){
+  const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native permission notice traversal exceeded bound');seen.add(fiber);
+  if(typeof fiber.type==='function'&&fiber.type.name===nativeFunctionName('Bve')&&fiber.memoizedProps?.toolUseId===d.payload.requestId){
+   let hash=composerFunctionHashes.get(fiber.type);if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
+   if(hash!=='62375d46497460f826daf4b1f1381395e656d68df6f5a341919cceb35cc8c15f')throw Error('Native permission notice renderer changed');matches.push(fiber);
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
+ }
+ if(matches.length>1)throw Error('Ambiguous native permission notice');return matches[0];
+}
 async function nativeGenericPermissionPreview(n,d,source){
  if(!source)return;
  const caches=source.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===155);
@@ -59,12 +71,8 @@ async function nativeGenericPermissionPreview(n,d,source){
   if(typeof cache[65]==='string'&&cache[65])details.push({label:'Description',value:await nativeGenericPermissionText(n,cache[65])});
  }else return;
  if(typeof title!=='string'||!title.length||title.length>4000)return;
- // The original per-call footer is a sibling of the permission body, not an input parameter.
- const notice=cache[139];
- if(notice!==undefined){
-  if(typeof notice?.type!=='function'||notice.type.name!==nativeFunctionName('Bve')||notice.props?.toolUseId!==d.payload.requestId)throw Error('Native permission notice identity changed');
-  const detail=await nativeGenericPermissionDetail(n,'Plugin notice',notice);if(detail.value)details.push(detail);
- }
+ const notice=nativeGenericPermissionNotice(n,d);
+ if(notice){const detail=await nativeGenericPermissionDetail(n,'Plugin notice',n.jsx.e(notice.type,notice.memoizedProps));if(detail.value)details.push(detail);}
  return {title,details};
 }
 async function nativeGenericPermissionChoices(n,d){
