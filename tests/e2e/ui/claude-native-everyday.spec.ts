@@ -218,10 +218,26 @@ test('completes an everyday native review across Agent, approval, question and i
   const question = appPage.getByTestId('native-question-panel')
   await expect(question).toBeVisible(); await expect(question).toContainText('Who should the release summary address?')
   await expect(composer).toBeHidden(); await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
-  await capture('question', question.locator('h2'), [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
+  const toolNotice=process.env.CLAUDE_RESEARCH_QUESTION_TOOL_NOTICE==='1'
+  let questionNoticeReceipt: any
+  if(toolNotice){
+    questionNoticeReceipt=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-native.json'),'utf8'))
+    expect(questionNoticeReceipt.accepted).toBe(true)
+    await expect.poll(async()=>{
+      const native=(await context()).native,chunks=native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
+      if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));lastSequence=chunks.at(-1).sequence}
+      const buffer=terminalScreen!.buffer.active
+      const screen=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n')
+      await writeFile(join(workspace!,'native-question-tool-notice-screen.json'),JSON.stringify({receipt:questionNoticeReceipt,screen}))
+      return screen.includes(questionNoticeReceipt.text)
+    }).toBe(true)
+    await expect(question.getByText(questionNoticeReceipt.text,{exact:false})).toBeVisible()
+  }
+  await capture(toolNotice?'question-notice':'question', toolNotice?question.getByText(questionNoticeReceipt.text,{exact:false}):question.locator('h2'), [question.getByRole('button', { name: 'Submit answers', exact: true })], question.getByLabel('Question details', { exact: true }))
   await question.getByRole('radio', { name: 'Developers People integrating the updated behavior', exact: true }).check()
   await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
   await expect(question).toBeHidden()
+  if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('for developers.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
   await composer.fill('Draft the release summary while I review the checklist.')
