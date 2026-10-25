@@ -49,7 +49,8 @@ export const browserCommands = {
       create(EARS.Entity.BrowserBookmark, {
         url: bm.url,
         title: bm.title,
-        favicon: bm.favicon,
+        // A page may have no favicon, and the client then sends none
+        favicon: bm.favicon ?? '',
         displayOrder: bm.displayOrder,
       });
     }
