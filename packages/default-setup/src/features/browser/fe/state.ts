@@ -1,4 +1,5 @@
 import { surfaceStorage } from '@apackdev/sdk/fe'
+import type { SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
@@ -74,7 +75,8 @@ type BrowserEvents =
   | { type: 'BOOKMARK.REMOVE'; url: string }
   | { type: 'BOOKMARK.NAVIGATE'; url: string }
   // Backend events
-  | { type: 'BROWSER_CONNECTED'; savedTabs: SavedTab[]; savedBookmarks: Bookmark[] }
+  | { type: 'SAVED_SESSION_READ'; savedTabs: SavedTab[]; savedBookmarks: Bookmark[] }
+  | SurfaceLifecycleEvent
   // IPC bridge events
   | { type: 'IPC.TAB_CREATED'; tab: BrowserTabState }
   | { type: 'IPC.TAB_REMOVED'; tabId: number }
@@ -556,8 +558,11 @@ const browserState = setup({
             'navigate',
           ],
         },
-        // Backend events
-        'BROWSER_CONNECTED': {
+        // What the window restores, asked for when the shell starts the surface, in a delivery naming it
+        SURFACE_STARTED: {
+          actions: () => { sendToSystem(id, { type: 'GET_SAVED_SESSION' }); },
+        },
+        'SAVED_SESSION_READ': {
           actions: [
             assign(({ event }) => ({
               tabGroups: loadTabGroups(storage, 'tab-groups'),

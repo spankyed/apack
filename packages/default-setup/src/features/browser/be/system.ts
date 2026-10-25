@@ -1,4 +1,3 @@
-import { broadcastToSurface } from '#generated/events.ts';
 import { repository } from '#generated/repository.ts';
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
@@ -13,15 +12,15 @@ export const browserSpec = defineSystem<Contract>();
 export const browserSystem = setup({
   types: browserSpec.types,
   actions: browserSpec.actions({
-    sendBrowserConnected: () => {
+    sendSavedSession: ({ reply }) => {
       const savedTabs = repository.browserQueries.allTabs();
       const savedBookmarks = repository.browserQueries.allBookmarks();
       logger.info('Sending browser restore payload', {
         savedTabCount: savedTabs.length,
         savedBookmarkCount: savedBookmarks.length,
       });
-      broadcastToSurface('browser', {
-        type: 'BROWSER_CONNECTED',
+      reply?.({
+        type: 'SAVED_SESSION_READ',
         savedTabs,
         savedBookmarks,
       });
@@ -40,8 +39,8 @@ export const browserSystem = setup({
   initial: 'active',
   context: {},
   on: {
-    SEND_STATE: {
-      actions: ['sendBrowserConnected'],
+    GET_SAVED_SESSION: {
+      actions: ['sendSavedSession'],
     },
     SYNC_TABS: {
       actions: ['syncTabs'],

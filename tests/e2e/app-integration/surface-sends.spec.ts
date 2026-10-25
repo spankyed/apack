@@ -98,7 +98,7 @@ test("the code system's file watcher and terminal output reach the code surface"
   }
 });
 
-test("a restarted pack's browser system sends its startup data to the browser surface", async ({ appPage }) => {
+test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ appPage }) => {
   const url = `https://example.com/e2e-surface-sends-${Date.now()}`;
   await recordSurfaceEvents(appPage);
   await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
@@ -110,7 +110,7 @@ test("a restarted pack's browser system sends its startup data to the browser su
   expect(apiToken, 'the renderer knows the API token').toBeTruthy();
 
   try {
-    // The reload restarts the pack's systems, and the bus sends them CLIENT_CONNECTED: the client is connected
+    // The reload restarts the pack's systems and replaces its frontend's actors, each of which the shell starts
     await expect.poll(async () => {
       const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
         method: 'POST',
@@ -120,7 +120,7 @@ test("a restarted pack's browser system sends its startup data to the browser su
       return response.status;
     }, { timeout: 15_000 }).toBe(200);
 
-    await expect.poll(async () => (await received(appPage, 'browser', 'BROWSER_CONNECTED'))
+    await expect.poll(async () => (await received(appPage, 'browser', 'SAVED_SESSION_READ'))
       .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url)), { timeout: 15_000 }).toBe(true);
   } finally {
     await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [] });
