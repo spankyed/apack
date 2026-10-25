@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "70ee0037347b7e3681e952d9ad277f62842a043e",
+  "researchCommit": "358b497394eb5aff56e065e4fe3b25b2512526e4",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -124,7 +124,7 @@
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
-    "src/integration/run-apack-controls.mjs": "a74905728ab78cb5502bbf0fc2b0f58947c375e78dcfcfc7185c6a382bad5951",
+    "src/integration/run-apack-controls.mjs": "bcff4a5905c0686d475e47079eb1f33021a810e22b8e985ef8945f5e6cd2a4d9",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -188,7 +188,7 @@
     "src/protocol/native-history-reopen-fixture.mjs": "35957458e3d38b8a938cee1d453655c4b153f98f0d9e26329dae85668affc8c4",
     "src/protocol/native-inline-eligibility-preload.mjs": "ad47a06d05a6250c9a202f84c7460c57869987ac3af744093121e98a524fcb3d",
     "src/protocol/native-large-document-fixture.mjs": "c0c05db460c2938c8528ec78825c1071de375977957e053877c5a7588f94d8c6",
-    "src/protocol/native-log-fixture.mjs": "1dde422020f462345015590e4f25a13b62290d9c01b332c7f4152d0b9038f097",
+    "src/protocol/native-log-fixture.mjs": "a9b535f04463416b35cb2b45e6dad6361495bedbb05e588c16d2836e1224bfd6",
     "src/protocol/native-lsp-fixture.mjs": "266ef8970f3f7c5a93ecbfcbf45f74738b996e6acc620c596a5c5bbbe599e2ca",
     "src/protocol/native-managed-files.mjs": "98ece77fe5a7ac98330991e4d9647c8d3761d26833aa52ca10fe912ef5b170ab",
     "src/protocol/native-managed-media-fixture.mjs": "765e83b1996ef41b2da56f3f2c934fe5394eff125c4f06bc39b63deb81363be2",
@@ -290,5 +290,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "08936a81db130d6fa0ebeba553a23c77417aae7565b74572136b5aa70a26eca3"
+  "archiveSha256": "602444e412d0a11a4e2ea912a33491ed7bf4fcf9513ec2c52a89c3e6067b0410"
 }
