@@ -12,6 +12,10 @@ import { availableModels } from '@apackdev/sdk/models';
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type ValidationError } from '@apackdev/sdk/build';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'DSL_EXPORT_FAILED' | 'DSL_EXPORTED' | 'DSL_IMPORT_FAILED' | 'DSL_IMPORTED'
+type Outcome = Extract<OutgoingFlowsEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
@@ -19,7 +23,7 @@ import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type V
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
  * flows the import wrote reach every window through the feature's views.
  */
-const answer = (reply: Reply<OutgoingFlowsEvents> | undefined, event: OutgoingFlowsEvents): void =>
+const answer = (reply: Reply<OutgoingFlowsEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('flows', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 

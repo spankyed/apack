@@ -40,8 +40,12 @@ export type Event =
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
   | { type: 'GET_CODE_START' };
 
-/** Emit an event to the frontend code surface */
-const emitToFrontend = (event: OutgoingTerminalEvents) => {
+/** A terminal's news, for every window showing the code surface: what its process did, never a listing */
+type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED' | 'terminal.ERROR'
+type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
+
+/** Tell every window showing the code surface what a terminal did */
+const emitToFrontend = (event: TerminalNews) => {
   broadcastToSurface(surfaceId, event)
 }
 

@@ -16,6 +16,10 @@ import { importNotes } from './import-notes.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import type { NoteEntity } from '#features/notes/be/types.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'NOTES_EXPORT_FAILED' | 'NOTES_EXPORTED' | 'NOTES_IMPORT_FAILED' | 'NOTES_IMPORTED'
+type Outcome = Extract<OutgoingNotesEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
@@ -24,7 +28,7 @@ import type { NoteEntity } from '#features/notes/be/types.ts';
  * did. The notes the import wrote reach every window through the feature's views. `answerSettings`
  * (`@apackdev/host`) is the same shape for the same reason.
  */
-const answer = (reply: Reply<OutgoingNotesEvents> | undefined, event: OutgoingNotesEvents): void =>
+const answer = (reply: Reply<OutgoingNotesEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('notes', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 

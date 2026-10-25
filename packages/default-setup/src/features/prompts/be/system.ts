@@ -11,6 +11,10 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { toMap, toIdentifierSet, mapScalar } from '@apackdev/sdk/utils';
 import { exportPrompts } from './repository/export-prompts.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'PROMPTS_EXPORT_FAILED' | 'PROMPTS_EXPORTED' | 'PROMPTS_IMPORT_FAILED' | 'PROMPTS_IMPORTED'
+type Outcome = Extract<OutgoingPromptEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
@@ -18,7 +22,7 @@ import { exportPrompts } from './repository/export-prompts.ts';
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
  * prompts the import wrote reach every window through its views.
  */
-const answer = (reply: Reply<OutgoingPromptEvents> | undefined, event: OutgoingPromptEvents): void =>
+const answer = (reply: Reply<OutgoingPromptEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('prompts', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 

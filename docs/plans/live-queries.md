@@ -555,6 +555,15 @@ and `threads`' streaming tokens are notifications.
   "$.event.data.payload.client"`), and the action answers that window alone with `services.emitter.sendToWindow`. An
   action run with no `client` has nobody to answer and fails saying so, rather than broadcasting. The connection is
   the return address, not the sender: the run is not a reply, and `sendToWindow` names the surface itself.
+- **A fallback broadcast is typed to what may fall back.** Each feature's `answer(reply, event)` replies, or broadcasts
+  when nobody asked, and was typed over its feature's whole outgoing union — so nothing but the absence of an unasked
+  caller kept a data result off every window. Read with the type checker, code's `answer` carried ninety event types,
+  file contents, diffs and pull requests among them. Code's `answer` now replies or goes nowhere: every code result is
+  data its asker shows, and what happens unasked is news broadcast where it happens. Each other helper takes only its
+  feature's command outcomes (`Outcome`, an `Extract` of the outgoing union: imports, exports, resets, `SHOW_THREAD`,
+  a chat error), the terminal's emitter only its news, and `brainState` only the brain's state. So the compiler, not a
+  review, is what keeps data off a broadcast: every event any default-setup broadcast can carry, as the checker
+  resolves each of the forty calls, is news or a command's outcome.
 - **What still broadcasts, by feature**, read from every call site: brain — its state, the event pulse, the run's feed;
   code — a file changed on disk, `commit.REPOSITORY_CHANGED`, `BASE_DIRECTORY_CHANGED`, a terminal's lifecycle and
   output; database — `DATABASE_REPLACED`; library — `FOLDER_CHANGED` (its search-index sends are commented out with

@@ -20,6 +20,10 @@ import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingLibraryEvents } from './types.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'LIBRARY_EXPORT_FAILED' | 'LIBRARY_EXPORTED' | 'LIBRARY_IMPORT_FAILED' | 'LIBRARY_IMPORTED'
+type Outcome = Extract<OutgoingLibraryEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
@@ -27,7 +31,7 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. What
  * the import stored reaches every window through the library's views.
  */
-const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: OutgoingLibraryEvents): void =>
+const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('library', event));
 
 export const librarySpec = defineSystem<Contract>();
