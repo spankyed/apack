@@ -186,7 +186,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any
   if(externalConsentProfile){
-    const originalTurns=(await context()).turns,editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="showExternalIncludesDialog"]'),globalConfig=async()=>JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8'))
+    const originalTurns=(await context()).turns,editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="showExternalIncludesDialog"]'),projectConfig=async()=>JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8')).projects[workspace!]
     const begin=async()=>{await search.fill('External');await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible();await expect(editor.getByRole('heading',{name:'Allow external CLAUDE.md file imports?',exact:true})).toBeVisible()}
     const samples:any[]=[]
     for(const [width,height]of [[1100,900],[680,600]]){
@@ -202,14 +202,14 @@ test('edits original Settings through desktop controls and retains composing', a
         const capture=testInfo.outputPath(`native-settings-external-consent-${width}-${index}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
         await writeFile(capture,Buffer.from(image,'base64'));readings.push({index,text,geometry,realWheel:true,capture})
       }
-      await no.click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(false);await expect(panel.getByRole('alert')).toHaveCount(0)
-      samples.push({width,height,readings,declined:true,global:await globalConfig()})
+      await no.click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(false);await expect(panel.getByRole('alert')).toHaveCount(0)
+      samples.push({width,height,readings,declined:true,project:await projectConfig()})
     }
-    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
-    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(false)
-    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
+    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(false)
+    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    externalConsent={samples,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedGlobal:await globalConfig()}
+    externalConsent={samples,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
     await search.fill('');await appPage.setViewportSize({width:1100,height:900})
   }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_GROUPS==='1'){
@@ -493,7 +493,7 @@ test('edits original Settings through desktop controls and retains composing', a
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
-  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Change…',exact:true}).click();const global=JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8'));expect(global.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledGlobal=global;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
+  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Change…',exact:true}).click();const project=JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8')).projects[workspace!];expect(project.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledProject=project;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
