@@ -7,7 +7,8 @@ reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-la
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
 **Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
-already, below); compaction on conversion and production-shaped bench data are still to take, in that order.
+already, below); production-shaped bench data is still to take. Compaction was taken and then taken back out (under
+Not taken, below).
 
 ## Head to head on the production copy
 
@@ -28,16 +29,7 @@ Step 5.
 
 ## Take
 
-### 1. Compaction on conversion
-
-#274's converted production copy compacts from 116 to 86 MB. #273's is 387 MB after conversion, because LMDB keeps
-the pages the format 3 tables freed, and they are reused by later writes rather than returned.
-
-**Cost:** `scripts/ears-convert.ts` writes the converted environment through LMDB's compacting copy
-(`root.backup(dir, true)`) and swaps it in. A conversion runs once, on a copy, so the extra copy costs nothing a user
-waits on.
-
-### 2. Production-shaped bench data
+### 1. Production-shaped bench data
 
 `bench/production-shape.ts` and `bench/budget.ts` in #274 generate data shaped like the production database (its
 types, field sizes and relation counts, profiled 2026-10-24) at 1× and 2×. #273's bench is a uniform graph of three
@@ -121,6 +113,19 @@ all three.
 `c8d7de6ae` (`SYNC_IDLE_MS`, `SYNC_INTERVAL_MS`), and the bus's sync request after each client message was removed: a
 user's action is durable within 100 ms of its last write.
 
+## Not taken
+
+### Compaction on conversion and backup
+
+#274's converted production copy compacts from 116 to 86 MB. On #273 a compacting copy (`root.backup(dir, true)`) takes
+the converted production copy from 369 to 258 MB — most of the rest is 146 MB of large values stored uncompressed — and
+was added to the conversion and to every backup (`c31804a75`). It came back out (`a7a4234ae`): a compacted copy of
+data with values spanning several overflow pages aborts the process when it is emptied, an LMDB assertion in
+`mdb_page_alloc` on lmdb-js 3.5.9, the newest release. It reproduces without this repo's data; the evidence, the
+measurements and a repro to report it with are in
+[lmdb-compacted-copy-crash.md](evidence/lmdb-compacted-copy-crash.md). Not before a release that no longer aborts on
+that repro.
+
 ## Not needed here
 
 - **Large values out of line, for memory** (#274 Steps 2–3): values over 2 KB leave memory once committed and are
@@ -138,4 +143,4 @@ user's action is durable within 100 ms of its last write.
 
 ## Order
 
-Compaction and the bench data are small and improve the conversion and the readings. Live queries and the served database are designs to plan, after #273 lands.
+The bench data is small and improves the readings. Live queries and the served database are designs to plan, after #273 lands.
