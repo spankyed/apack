@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "12d58084a2da2109b8147d50e12f1816cf872241",
+  "researchCommit": "47e7d3c130ced155c14474f6057326ed4e058090",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -215,7 +215,7 @@
     "src/protocol/native-search-review-fixture.mjs": "22660edad17753efe230367057253a985b5b8d17b4e9327fbed461bd7ae3021a",
     "src/protocol/native-select-fixture.mjs": "e8987ab57acd2bb84fdae7c0c62a4536dc3bfd406203050288d1e56bce6a57b9",
     "src/protocol/native-settings-inspector.mjs": "a1551822038839b287405846af1c4ada2db1b427b6d72997d4e0a25dadb5e846",
-    "src/protocol/native-settings-proof.mjs": "94e44d8c7460c3d63b9b9e4fd6c099188f69ecaae9519b388a7a777b319d2984",
+    "src/protocol/native-settings-proof.mjs": "e4cd3d587d5102547ebf0d580d8127a92a808487499b3e4e848d8a611aa9f595",
     "src/protocol/native-snapshot-action-fixture.mjs": "10b2209e0981ed6f2ca167632bf445a7dd1131f158fb38b87c88a59bd65f67eb",
     "src/protocol/native-staged-directory-fixture.mjs": "fa3a9778fcaf744cc22a1650ba1c8920a168f4dc13989b8ffa5a1e0d1c36806d",
     "src/protocol/native-status-prefix-runtime.mjs": "74d83201ae41ebc6f60c4e43ea704e3d13c091e781115f1465f06ac15abbe3b6",
@@ -296,5 +296,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "662cb83477fc641ac443903e51b01e5ae053f5f1ac12eb5dcc6bf1686ad6ddd4"
+  "archiveSha256": "eb21771f4995e90351c93e2b37a46bbac112c5102270a877010e53c4f8b27ea1"
 }
