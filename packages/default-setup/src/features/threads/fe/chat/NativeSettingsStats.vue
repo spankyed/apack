@@ -25,7 +25,7 @@
         </details>
         <div v-if="stats.data.allTimeActivity?.length" class="space-y-3">
           <h3 class="text-xs font-medium text-neutral-300">All-time activity</h3>
-          <pre v-if="stats.calendar" aria-label="Claude Code activity calendar" tabindex="0" class="overflow-x-auto rounded-lg border border-white/10 p-3 font-mono text-xs leading-5 text-orange-300">{{ stats.calendar }}</pre>
+          <pre v-if="stats.calendar" aria-label="Claude Code activity calendar" tabindex="0" class="overflow-x-auto rounded-lg border border-white/10 p-2 font-mono text-xs leading-[14px] text-orange-300 min-[800px]:p-3 min-[800px]:leading-5">{{ stats.calendar }}</pre>
           <details class="rounded-lg border border-white/10 p-3 text-xs text-neutral-400"><summary class="cursor-pointer text-neutral-300">Activity dates and counts</summary><div class="mt-3 overflow-x-auto"><table class="w-full text-left"><thead><tr><th class="py-2 pr-3">Date</th><th class="pr-3">Sessions</th><th class="pr-3">Messages</th><th>Tools</th></tr></thead><tbody><tr v-for="day in stats.data.allTimeActivity" :key="day.date" class="border-t border-white/5"><th class="py-2 pr-3 font-normal">{{ day.date }}</th><td>{{ number(day.sessionCount) }}</td><td>{{ number(day.messageCount) }}</td><td>{{ number(day.toolCallCount) }}</td></tr></tbody></table></div></details>
         </div>
         <h3 class="text-xs font-medium text-neutral-300">{{ rangeLabel }} activity</h3>

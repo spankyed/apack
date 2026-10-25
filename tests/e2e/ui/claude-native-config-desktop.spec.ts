@@ -194,7 +194,10 @@ test('edits original Settings through desktop controls and retains composing', a
       const inBody=(target:import('@playwright/test').Locator)=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})
       async function readTo(target:import('@playwright/test').Locator){
         await body.hover()
-        for(let step=0;step<40&&!await inBody(target);step++){await appPage.mouse.wheel(0,60);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))}
+        for(let step=0;step<40&&!await inBody(target);step++){
+          const shift=await target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[aria-label="Claude Code Stats"]')!.getBoundingClientRect();if(r.height>b.height)throw Error(`Stats reading target is taller than the viewport: ${r.height} > ${b.height}`);return r.top<b.top?Math.max(-60,r.top-b.top):Math.min(60,r.bottom-b.bottom)},undefined,{timeout:5000})
+          await appPage.mouse.wheel(0,shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))))
+        }
         expect(await inBody(target)).toBe(true)
       }
       async function statsCapture(label:string,width:number){
