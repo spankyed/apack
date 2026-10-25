@@ -380,8 +380,10 @@ it.each(['reset','replacement'] as const)('retires an upload on same-thread Clau
   f.submit();await vi.waitFor(()=>expect(upload).toHaveBeenCalledOnce())
   f.state.currentThread.context=change==='reset'?{}:{claudeCode:{sessionId:'replacement-native-session'}}
   await nextTick()
+  const sendButton=f.root.querySelector<HTMLButtonElement>('[aria-label="Send"]')!
+  expect(sendButton.disabled).toBe(true)
   finish('/media/pending-reset.png')
-  await new Promise(resolve=>setTimeout(resolve,20))
+  await vi.waitFor(()=>expect(sendButton.disabled).toBe(false))
   expect(f.send).not.toHaveBeenCalled()
   expect(f.command).not.toHaveBeenCalled()
   expect(editor.state.doc.textContent).toBe('first')
