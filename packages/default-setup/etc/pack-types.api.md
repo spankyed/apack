@@ -3846,6 +3846,10 @@ type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
 type ClaudeSettingsOperation = {
     kind: 'read';
 } | {
+    kind: 'tab';
+    revision: string;
+    tab: z.infer<typeof claudeSettingsTab>;
+} | {
     kind: 'write';
     revision: string;
     key: string;
@@ -10545,6 +10549,37 @@ declare const chatQueries: {
 declare const claudeSettingValue: z.ZodUnion<[z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
 
 declare const claudeSettingsSnapshot: z.ZodObject<{
+    frame: z.ZodOptional<z.ZodObject<{
+        selectedTab: z.ZodEnum<["Status", "Config", "Usage", "Stats"]>;
+        tabs: z.ZodArray<z.ZodEnum<["Status", "Config", "Usage", "Stats"]>, "many">;
+        hidden: z.ZodBoolean;
+        status: z.ZodOptional<z.ZodArray<z.ZodArray<z.ZodObject<{
+            label: z.ZodString;
+            value: z.ZodString;
+        }, "strict", z.ZodTypeAny, {
+            value: string;
+            label: string;
+        }, {
+            value: string;
+            label: string;
+        }>, "many">, "many">>;
+    }, "strict", z.ZodTypeAny, {
+        selectedTab: "Config" | "Stats" | "Status" | "Usage";
+        tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+        hidden: boolean;
+        status?: {
+            value: string;
+            label: string;
+        }[][] | undefined;
+    }, {
+        selectedTab: "Config" | "Stats" | "Status" | "Usage";
+        tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+        hidden: boolean;
+        status?: {
+            value: string;
+            label: string;
+        }[][] | undefined;
+    }>>;
     revision: z.ZodString;
     rows: z.ZodArray<z.ZodObject<{
         key: z.ZodString;
@@ -10586,6 +10621,15 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         description?: string | undefined;
         lockReason?: string | undefined;
     }[];
+    frame?: {
+        selectedTab: "Config" | "Stats" | "Status" | "Usage";
+        tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+        hidden: boolean;
+        status?: {
+            value: string;
+            label: string;
+        }[][] | undefined;
+    } | undefined;
 }, {
     revision: string;
     rows: {
@@ -10598,7 +10642,18 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         description?: string | undefined;
         lockReason?: string | undefined;
     }[];
+    frame?: {
+        selectedTab: "Config" | "Stats" | "Status" | "Usage";
+        tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+        hidden: boolean;
+        status?: {
+            value: string;
+            label: string;
+        }[][] | undefined;
+    } | undefined;
 }>;
+
+declare const claudeSettingsTab: z.ZodEnum<["Status", "Config", "Usage", "Stats"]>;
 
 /**
  * Stop and remove all cron jobs. Called on brain kill/restart.
@@ -10886,6 +10941,15 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 description?: string | undefined;
                 lockReason?: string | undefined;
             }[];
+            frame?: {
+                selectedTab: "Config" | "Stats" | "Status" | "Usage";
+                tabs: ("Config" | "Stats" | "Status" | "Usage")[];
+                hidden: boolean;
+                status?: {
+                    value: string;
+                    label: string;
+                }[][] | undefined;
+            } | undefined;
         };
         savedKey?: string | undefined;
         problem?: string | undefined;
