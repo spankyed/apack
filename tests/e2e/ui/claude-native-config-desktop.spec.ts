@@ -217,13 +217,13 @@ test('edits original Settings through desktop controls and retains composing', a
       }
       for(const width of [1100,680]){
         await appPage.setViewportSize({width,height:width===680?600:900})
+        const longest=statistics.locator('dt').filter({hasText:/^Longest session$/}).locator('..');await readTo(longest);await statsCapture('summary',width)
+        await readTo(insight);await statsCapture('insight',width)
         const calendar=statistics.getByLabel('Claude Code activity calendar',{exact:true})
         await expect(calendar).toContainText('Less ░ ▒ ▓ █ More')
         const calendarText=await calendar.innerText();expect(calendarText.split('\n')).toHaveLength(10)
         expect(calendarText).toMatch(/Mon /);expect(calendarText).toContain('·')
         await readTo(calendar);await statsCapture('calendar',width)
-        const longest=statistics.locator('dt').filter({hasText:/^Longest session$/}).locator('..');await readTo(longest);await statsCapture('summary',width)
-        await readTo(insight);await statsCapture('insight',width)
         const history=statistics.getByText('Activity dates and counts',{exact:true});await readTo(history);await history.click()
         const historicalRow=statistics.locator('details[open] tbody tr').filter({hasText:histories[2].date})
         await readTo(historicalRow);await statsCapture('history',width);statsCompleteness.reading.push({width,longest:true,historicalDate:histories[2].date,realWheel:true})
