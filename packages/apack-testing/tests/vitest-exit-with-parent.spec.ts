@@ -42,3 +42,29 @@ describe('a vitest worker whose vitest is gone', () => {
     expect(await workerExit('after the channel closed')).toBe('SIGKILL');
   });
 });
+
+describe('a vitest worker that vitest stops', () => {
+  // What a spec's temporary databases close in, and so what removes their LMDB lock semaphores
+  it('exits through its exit handlers when it is sent SIGTERM, as tinypool stops a worker', async () => {
+    const mark = path.join(dir, 'exit-handlers-ran');
+    const script = path.join(dir, 'stopped.mts');
+    fs.writeFileSync(script, [
+      `import * as fs from 'node:fs';`,
+      `await import(${JSON.stringify(GUARD)});`,
+      `process.once('exit', () => fs.writeFileSync(${JSON.stringify(mark)}, 'ran'));`,
+      `process.send!('ready');`,
+      `setTimeout(() => {}, 10_000);`,
+    ].join('\n'));
+    const worker = fork(script, { execArgv: ['--import', 'tsx'], cwd: PACKAGE_DIR, stdio: 'ignore' });
+    try {
+      const exited = once(worker, 'exit');
+      await once(worker, 'message');
+      worker.kill('SIGTERM');
+      const [code, signal] = await exited as [number | null, NodeJS.Signals | null];
+      expect({ code, signal }).toEqual({ code: 143, signal: null });
+      expect(fs.readFileSync(mark, 'utf8')).toBe('ran');
+    } finally {
+      worker.kill('SIGKILL');
+    }
+  });
+});
