@@ -88,7 +88,8 @@ test('reads original native system sections through composition hooks without se
   await card.getByRole('button',{name:'Review system instructions',exact:true}).click()
   await expect(card.getByText('System instructions inspected 1',{exact:true})).toBeVisible()
   const native=JSON.parse(await readFile(join(workspace!,'native-compose-native.json'),'utf8'))
-  expect(native.returned).toEqual(native.observed.result)
+  const observed=JSON.parse(await readFile(join(workspace!,'native-compose-observer.json'),'utf8'))
+  expect(native.nonce).toBe(observed.nonce);expect(native.returned).toEqual(observed.result)
   expect(native.returned.sections.some((section:any)=>section.id==='release_review')).toBe(true)
   const nativeWindow=await electronApp.browserWindow(appPage),widths=[]
   for(const width of [1100,680]){
