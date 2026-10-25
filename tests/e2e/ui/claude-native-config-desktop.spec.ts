@@ -168,6 +168,31 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await expect(panel.getByRole('textbox',{name:'Language',exact:true})).toHaveValue('French')
+  let outputStyleEditor:any
+  if(process.env.CLAUDE_RESEARCH_SETTINGS_EDITORS==='1'){
+    const beforeStyle=await local(),editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="outputStyle"]'),samples:any[]=[]
+    await search.fill('Output style')
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible()
+      const options=editor.locator('button[aria-pressed]');expect(await options.count()).toBeGreaterThan(1)
+      const optionTexts=await options.allTextContents(),target=options.last()
+      const bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Picker option exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
+      await editor.locator('[data-native-settings-editor-body]').hover();for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+      const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport()
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+      const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      const capture=testInfo.outputPath(`native-settings-output-style-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'))
+      samples.push({width,height,options:optionTexts,geometry,realWheel:true,capture})
+      await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect(await local()).toEqual(beforeStyle)
+    }
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible()
+    const choice=editor.locator('button[aria-pressed="false"]:not([disabled])').last(),chosenLabel=await choice.innerText();await choice.click();await expect(editor).toHaveCount(0)
+    await expect.poll(async()=>(await local()).outputStyle).not.toBe(beforeStyle.outputStyle)
+    const afterStyle=await local(),unchanged={...afterStyle};if(Object.hasOwn(beforeStyle,'outputStyle'))unchanged.outputStyle=beforeStyle.outputStyle;else delete unchanged.outputStyle;expect(unchanged).toEqual(beforeStyle)
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.locator('button[aria-pressed="true"]')).toHaveText(chosenLabel)
+    await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
+    outputStyleEditor={before:beforeStyle,after:afterStyle,chosenLabel,samples,cancelPreserved:true,reopenedNativeSelection:true}
+  }
   await search.fill('')
   for (const [width,height] of [[1100,900],[680,600]]) {
     await appPage.setViewportSize({width,height});await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport();await expect(search).toBeInViewport()
@@ -300,6 +325,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

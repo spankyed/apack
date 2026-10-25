@@ -1,14 +1,14 @@
 <template>
-  <section aria-label="Claude Code setting editor" class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-    <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <section aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <header class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
       <h3 class="min-w-0 break-words text-sm font-medium text-neutral-200">{{ editor.title || 'Choose a value' }}</h3>
       <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">Cancel</button>
     </header>
-    <div v-if="editor.kind === 'choice'" class="space-y-2" role="group" :aria-label="editor.title || 'Available values'">
+    <div v-if="editor.kind === 'choice'" data-native-settings-editor-body class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4" role="group" :aria-label="editor.title || 'Available values'">
       <button v-for="option in editor.options" :key="option.value" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.value === option.value" class="block w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" :class="editor.value === option.value ? 'bg-blue-500/10' : ''" @click="emit('select', option.value)">{{ option.label }}</button>
       <p v-if="!editor.options.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available values.</p>
     </div>
-    <form v-else class="space-y-4" @submit.prevent="emit('save', { ...drafts })">
+    <form v-else data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" @submit.prevent="emit('save', { ...drafts })">
       <p v-if="editor.description" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.description }}</p>
       <label v-for="field in editor.fields" :key="field.key" class="block text-xs text-neutral-300">
         <span class="mb-2 block break-words">{{ field.label }}</span>
