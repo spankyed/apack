@@ -90,9 +90,9 @@ function save(key: string, value: ClaudeSettingValue) {
   if (!pending.value && props.state?.snapshot) emit('operate', {kind:'write',revision:props.state.snapshot.revision,key,value})
 }
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
-watch(() => [props.state?.status,frame.value?.stats?.loading,frame.value?.stats?.copyState] as const, ([status,loading,copyState]) => {
+watch(() => [props.state?.status,activeTab.value,frame.value?.stats?.loading,frame.value?.stats?.copyState] as const, ([status,tab,loading,copyState]) => {
   clearTimeout(refreshTimer)
-  if (status === 'ready' && (loading || copyState && copyState !== 'idle')) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
+  if (status === 'ready' && tab === 'Stats' && (loading || copyState && copyState !== 'idle')) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
 })
 onUnmounted(() => clearTimeout(refreshTimer))
 watch(() => props.state?.savedKey, key => { if (key) delete drafts.value[key] })

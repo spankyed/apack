@@ -125,3 +125,15 @@ it('cancels a held Status formatter and still refuses malformed labels', async (
   const reading=f.read(controller.signal);controller.abort();await expect(reading).rejects.toThrow();release('late retired value')
   cache[10][0][0].label=42;await expect(f.read()).rejects.toThrow('label changed')
 })
+
+it('keeps admitted suspended Stats loading and original refusal distinct before the loader mounts', async () => {
+  const f=fixture(),Gate=()=>{},cache=Array(21).fill(null)
+  f.panel.selectedTab='Stats';cache[1]=true
+  f.hashes.set(Gate,'c11f2107b5a2af92dc0ef980612f16d3ad6472be64af9d5dc19150dd3f8acaba')
+  ;(f.owner.child as any).child={type:Gate,memoizedProps:{onClose:f.entry.originalProps.onClose},updateQueue:{memoCache:{data:[cache]}}}
+  expect((await f.read()).stats).toEqual({outcome:'loading',loading:true})
+  await expect(f.statsAction('copy')).rejects.toThrow('unavailable')
+  cache[1]=false;cache[9]='Original native privacy refusal'
+  expect((await f.read()).stats).toEqual({outcome:'unavailable',loading:false,problem:'Original native privacy refusal'})
+  expect(cache[1]).toBe(false)
+})

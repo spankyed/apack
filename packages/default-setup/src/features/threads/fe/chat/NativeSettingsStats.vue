@@ -6,8 +6,8 @@
       <button type="button" :disabled="pending || !stats?.data || stats.loading || stats.copyState === 'pending'" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('action','copy')">Copy stats</button>
     </div>
     <p v-if="stats?.copyState && stats.copyState !== 'idle'" :role="stats.copyState === 'error' ? 'alert' : 'status'" class="text-xs text-neutral-400">{{ stats.copyState === 'pending' ? 'Copying stats…' : stats.copyState === 'saved' ? 'Copied by Claude Code' : 'Claude Code could not copy stats' }}</p>
-    <p v-if="stats?.problem" role="alert" class="text-sm text-amber-200">{{ stats.problem }}</p>
-    <p v-else-if="!stats?.data" role="status" class="text-sm text-neutral-400">{{ stats?.outcome === 'empty' ? 'No stats available yet. Start using Claude Code.' : 'Claude Code has not provided Stats data.' }}</p>
+    <p v-if="stats?.problem" :role="stats.outcome === 'error' ? 'alert' : 'status'" class="text-sm" :class="stats.outcome === 'error' ? 'text-amber-200' : 'text-neutral-400'">{{ stats.problem }}</p>
+    <p v-else-if="!stats?.data" role="status" class="text-sm text-neutral-400">{{ !stats || stats.outcome === 'loading' ? 'Loading Claude Code stats…' : stats.outcome === 'unavailable' ? 'Stats are unavailable for this session.' : stats.outcome === 'empty' ? 'No stats available yet. Start using Claude Code.' : 'Claude Code has not provided Stats data.' }}</p>
     <template v-else>
       <p v-if="stats.loading" role="status" class="text-xs text-neutral-400">Updating dates…</p>
       <dl class="grid grid-cols-2 gap-3 text-xs">

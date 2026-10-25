@@ -10630,7 +10630,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             copyState: z.ZodOptional<z.ZodEnum<["idle", "pending", "saved", "error"]>>;
             insight: z.ZodOptional<z.ZodString>;
             calendar: z.ZodOptional<z.ZodString>;
-            outcome: z.ZodEnum<["success", "empty", "error", "loading"]>;
+            outcome: z.ZodEnum<["success", "empty", "error", "loading", "unavailable"]>;
             problem: z.ZodOptional<z.ZodString>;
             data: z.ZodOptional<z.ZodObject<{
                 totalSessions: z.ZodNumber;
@@ -10830,7 +10830,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             }>>;
         }, "strict", z.ZodTypeAny, {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -10885,7 +10885,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             } | undefined;
         }, {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -10975,7 +10975,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         stats?: {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -11055,7 +11055,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         stats?: {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -11177,7 +11177,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         stats?: {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -11270,7 +11270,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         } | undefined;
         stats?: {
             loading: boolean;
-            outcome: "empty" | "error" | "loading" | "success";
+            outcome: "empty" | "error" | "loading" | "success" | "unavailable";
             view?: "Overview" | "Models" | undefined;
             range?: "all" | "7d" | "30d" | undefined;
             copyState?: "error" | "idle" | "pending" | "saved" | undefined;
@@ -11641,7 +11641,7 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 } | undefined;
                 stats?: {
                     loading: boolean;
-                    outcome: "empty" | "error" | "loading" | "success";
+                    outcome: "empty" | "error" | "loading" | "success" | "unavailable";
                     view?: "Overview" | "Models" | undefined;
                     range?: "all" | "7d" | "30d" | undefined;
                     copyState?: "error" | "idle" | "pending" | "saved" | undefined;

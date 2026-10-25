@@ -8,7 +8,7 @@ export const claudeSettingsStats = z.object({
   copyState: z.enum(['idle','pending','saved','error']).optional(),
   insight: z.string().max(16384).optional(),
   calendar: z.string().max(16384).optional(),
-  outcome: z.enum(['success', 'empty', 'error', 'loading']), problem: z.string().max(16384).optional(),
+  outcome: z.enum(['success', 'empty', 'error', 'loading', 'unavailable']), problem: z.string().max(16384).optional(),
   data: z.object({
     totalSessions: nativeReading, totalMessages: nativeReading, totalDays: nativeReading, activeDays: nativeReading,
     streaks: z.object({currentStreak:nativeReading,longestStreak:nativeReading,currentStreakStart:z.string().max(128).nullable().optional(),longestStreakStart:z.string().max(128).nullable().optional(),longestStreakEnd:z.string().max(128).nullable().optional()}).strict().optional(),

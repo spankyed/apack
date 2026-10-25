@@ -47,3 +47,23 @@ it('waits for native tab acknowledgement and displays structured Status, Usage a
     cycle.click(); expect(operations.at(-1)).toEqual({kind:'stats',action:'cycleDates',revision:'b'.repeat(64)})
   } finally { app.unmount(); root.remove() }
 })
+
+it('refreshes admitted Stats loading and stops on native refusal, another tab or unmount', async () => {
+  vi.useFakeTimers()
+  const frame=reactive<NonNullable<import('#features/code/common/native-settings.ts').ClaudeSettingsSnapshot['frame']>>({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false})
+  const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+  const app=createApp(NativeSettingsPanel,{state:{requestId:'loading',status:'ready',snapshot:{revision:'c'.repeat(64),rows:[],frame}},onOperate:(event:ClaudeSettingsOperation)=>operations.push(event)})
+  app.mount(root)
+  try {
+    await nextTick();const initial=operations.length
+    frame.selectedTab='Stats';frame.stats={outcome:'loading',loading:true};await nextTick()
+    expect(root.textContent).toContain('Loading Claude Code stats')
+    await vi.advanceTimersByTimeAsync(250);expect(operations.slice(initial)).toEqual([{kind:'read'}])
+    frame.stats={outcome:'unavailable',loading:false,problem:'Original native privacy refusal'};await nextTick()
+    expect(root.textContent).toContain('Original native privacy refusal');expect(root.querySelector('[role="alert"]')).toBeNull()
+    const settled=operations.length;await vi.advanceTimersByTimeAsync(1000);expect(operations).toHaveLength(settled)
+    frame.stats={outcome:'loading',loading:true};await nextTick();frame.selectedTab='Usage';await nextTick()
+    await vi.advanceTimersByTimeAsync(500);expect(operations).toHaveLength(settled)
+    frame.selectedTab='Stats';await nextTick();app.unmount();await vi.advanceTimersByTimeAsync(500);expect(operations).toHaveLength(settled)
+  } finally {app.unmount();root.remove();vi.useRealTimers()}
+})
