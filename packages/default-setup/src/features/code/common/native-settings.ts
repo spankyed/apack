@@ -30,7 +30,7 @@ export const claudeSettingsFrame = z.object({
   status: z.array(z.array(z.object({ label: z.string().max(16384), value: z.string().max(65536) }).strict()).max(128)).max(16).optional(),
 }).strict()
 export const claudeSettingsEditor = z.discriminatedUnion('kind', [
-  z.object({kind:z.literal('choice'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536).optional(),value:z.string().max(16384).optional(),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),description:z.string().max(65536).optional(),disabled:z.boolean()}).strict()).max(256)}).strict(),
+  z.object({kind:z.literal('choice'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536).optional(),value:z.string().max(16384).optional(),previewValue:z.string().max(16384).optional(),canPreview:z.boolean().optional(),canToggleSyntax:z.boolean().optional(),preview:z.object({text:z.string().max(200000),ansi:z.string().max(200000).optional()}).strict().optional(),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),description:z.string().max(65536).optional(),disabled:z.boolean()}).strict()).max(256)}).strict(),
   z.object({kind:z.literal('form'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536).optional(),submitLabel:z.string().max(65536),fields:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),value:z.string().max(16384)}).strict()).max(64)}).strict(),
 ])
 export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
@@ -52,6 +52,8 @@ export type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>
 export type ClaudeSettingValue = z.infer<typeof claudeSettingValue>
 export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
   z.object({action:z.literal('select'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('preview'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('toggleSyntax')}).strict(),
   z.object({action:z.literal('save'),values:z.record(z.string().max(4096),z.string().max(16384)).refine(values=>Object.keys(values).length<=64)}).strict(),
   z.object({action:z.literal('cancel')}).strict(),
 ])

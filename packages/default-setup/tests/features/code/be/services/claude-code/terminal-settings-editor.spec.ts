@@ -9,7 +9,7 @@ function fixture(){
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replace("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls')+';({nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
   return {wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
@@ -150,4 +150,21 @@ it('refuses Language input replacement during projection even if original modal 
  f.config.child={type:Language,memoizedProps:{onComplete,onCancel},updateQueue:{memoCache:{data:[cache]}}}
  f.formatText.mockImplementationOnce(async()=>{cache[9]={props:{children:[null,{props:{...input}}]}};return 'Language'})
  await expect(f.editor()).rejects.toThrow('changed while reading');expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it('projects original Theme choices, preview, syntax toggle, commit and preview-restoring Cancel',async()=>{
+ const f=fixture(),Theme=function OriginalTheme(){},onThemeSelect=vi.fn(),onCancel=vi.fn(),preview=vi.fn(),select=vi.fn(),cancel=vi.fn(),toggle=vi.fn()
+ f.frame.panel.hidden=true;f.setFunctionHash(Theme,'b9f5ab35590945b214b817f84d10a4cb1469872f52ab96cc93f8a47613b31987')
+ const cache:any[]=Array(109).fill(null),options=[{value:'dark',label:'Dark mode'},{value:'light',label:'Light mode',origin:'Original origin'}]
+ cache[0]=null;cache[11]=toggle;cache[14]=onCancel;cache[15]=cancel;cache[30]=options;cache[56]=options;cache[62]=options;cache[54]='light';cache[65]='dark';cache[57]=preview;cache[63]=select;cache[61]=onThemeSelect;cache[72]={props:{onFocus:preview,onSelect:select}};cache[84]={original:'sample'}
+ f.config.child={type:Theme,memoizedProps:{onThemeSelect,onCancel,skipExitHandling:true},updateQueue:{memoCache:{data:[cache]}}}
+ const result=await f.editor();expect(result.snapshot).toMatchObject({kind:'choice',value:'dark',previewValue:'light',canPreview:true,canToggleSyntax:true,preview:{text:'Original code preview'},options:[{value:'dark',label:'Dark mode'},{value:'light',label:'Light mode',description:'Original origin'}]})
+ await f.act({action:'preview',revision:result.revision,value:'light'});expect(preview).toHaveBeenCalledExactlyOnceWith(1);expect(select).not.toHaveBeenCalled()
+ await f.act({action:'select',revision:result.revision,value:'dark'});expect(select).toHaveBeenCalledExactlyOnceWith(0)
+ await f.act({action:'cancel',revision:result.revision});expect(cancel).toHaveBeenCalledOnce();expect(onCancel).not.toHaveBeenCalled()
+ await f.act({action:'toggleSyntax',revision:result.revision});expect(toggle).toHaveBeenCalledOnce()
+ cache[0]='env';const locked=await f.editor();expect(locked.snapshot.canToggleSyntax).toBe(false);await expect(f.act({action:'toggleSyntax',revision:locked.revision})).rejects.toThrow('unavailable')
+ await expect(f.act({action:'preview',revision:locked.revision,value:'foreign'})).rejects.toThrow('unavailable')
+ f.formatText.mockImplementationOnce(async()=>{cache[72]={props:{onFocus:preview,onSelect:select}};return 'Dark mode'})
+ await expect(f.editor()).rejects.toThrow('Theme changed while reading')
 })

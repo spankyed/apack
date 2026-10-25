@@ -114,3 +114,10 @@ it('tracks Language form acknowledgement by its native field and avoids waiting 
  const reset=await f.read();const unchanged=await f.run(f.n,{...f.request,operation:'editor',revision:reset.snapshot.revision,editor_revision:editor.revision,command:{action:'save',values:{language:'   '}}},new AbortController())
  expect(unchanged.snapshot.commitPending).toBeUndefined();expect(f.writer).not.toHaveBeenCalled()
 })
+
+it.each([{action:'preview',value:'true'},{action:'toggleSyntax'}])('does not publish a Config commit wait for a Theme presentation action %j',async(command)=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'choice',options:[{value:'true',label:'Light',disabled:false}],value:'false',disabled:false,canPreview:true,canToggleSyntax:true}}
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='tips'
+ const before=await f.read();const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command},new AbortController())
+ expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled();expect(f.commit).not.toHaveBeenCalled()
+})

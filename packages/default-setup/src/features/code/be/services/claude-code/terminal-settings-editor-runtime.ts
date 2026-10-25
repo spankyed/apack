@@ -93,7 +93,7 @@ async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
 async function readNativeSettingsEditor(n,entry,signal){
  signal?.throwIfAborted();const {frame,owner}=nativeSettingsConfig(n,entry);
  if(!frame.panel.hidden)return;
- const hashes={language:['080eee2fde8fe097c91811244a1dc193b139c7df65f12765827c4117230eace6','4251c8f399ee8c6b3dfe922dfa46ef8adfa3e34dc8de1d52aec1b1aaa617b3e9'],choice:['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5','0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3'],form:['7fa52a5f24b4241caf7eca5d99985519e0a485aab0f347cc323ba1a92f3ffa0c','e2474315a210faf7b3cbaab9c4b40793486c2f19ed4b0a997e16fede82b933b4']};
+ const hashes={theme:['0333a3f408c68ec72bd8c5d0777f46e5e145c460013adb5a0ff665bbf7162ae7','b9f5ab35590945b214b817f84d10a4cb1469872f52ab96cc93f8a47613b31987'],language:['080eee2fde8fe097c91811244a1dc193b139c7df65f12765827c4117230eace6','4251c8f399ee8c6b3dfe922dfa46ef8adfa3e34dc8de1d52aec1b1aaa617b3e9'],choice:['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5','0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3'],form:['7fa52a5f24b4241caf7eca5d99985519e0a485aab0f347cc323ba1a92f3ffa0c','e2474315a210faf7b3cbaab9c4b40793486c2f19ed4b0a997e16fede82b933b4']};
  const pending=[owner.child],seen=new Set(),matches=[];
  while(pending.length){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;
@@ -106,13 +106,20 @@ async function readNativeSettingsEditor(n,entry,signal){
  }
  if(matches.length===0)throw Error('Native Settings editor is not ready');
  if(matches.length!==1)throw Error('Native Settings editor is not uniquely supported');
- const match=matches[0],p=match.props;let controls=p,cancelFiber,cancelProps,languageInput;
+ const match=matches[0],p=match.props;let controls=p,cancelFiber,cancelProps,languageInput,themeCache;
  if(match.kind==='outputStyle'){
   const caches=match.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===15);
   const consumer=caches?.length===1?caches[0][9]?.props?.children?.[1]?.props?.children?.props:undefined;
   if(!consumer||consumer.styleOptionsPromise!==caches[0][7]||consumer.onComplete!==p?.onComplete||consumer.initialStyle!==p.initialStyle||typeof p.onComplete!=='function'||typeof p.onCancel!=='function')throw Error('Native output style callbacks changed');
   cancelFiber=match.fiber;cancelProps=p;
   controls={options:await awaitNativeSettingsReading(consumer.styleOptionsPromise,signal),defaultValue:consumer.initialStyle,onChange:p.onComplete,onCancel:p.onCancel};
+ }
+ if(match.kind==='theme'){
+  const caches=match.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===109);
+  const cache=caches?.length===1?caches[0]:undefined,picker=cache?.[72]?.props;
+  if(!cache||!picker||p.skipExitHandling!==true||p.onCustomTheme!==undefined||cache[61]!==p.onThemeSelect||cache[14]!==p.onCancel||cache[62]!==cache[30]||cache[56]!==cache[30]||picker.onFocus!==cache[57]||picker.onSelect!==cache[63]||typeof cache[57]!=='function'||typeof cache[63]!=='function'||typeof cache[15]!=='function'||typeof cache[11]!=='function'||typeof cache[54]!=='string'||typeof cache[65]!=='string')throw Error('Native Theme picker callbacks changed');
+  themeCache={cache,options:cache[30],preview:cache[54],value:cache[65],picker:cache[72],sample:cache[84],cancel:cache[15],toggle:cache[11]};
+  controls={options:cache[30],selectedValue:cache[65],onChange:value=>cache[63](themeCache.options.findIndex(option=>option.value===value)),onPreview:value=>cache[57](themeCache.options.findIndex(option=>option.value===value)),onToggle:cache[0]===null?cache[11]:undefined,onCancel:cache[15]};
  }
  if(match.kind==='language'){
   const caches=match.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===13);
@@ -124,16 +131,17 @@ async function readNativeSettingsEditor(n,entry,signal){
  if(!controls||typeof controls.onChange!=='function'||typeof controls.onCancel!=='function')throw Error('Native Settings editor callbacks changed');
  const text=async(value)=>{const result=await awaitNativeSettingsReading(nativeGenericPermissionText(n,value),signal);if(typeof result!=='string'||result.length>65536)throw Error('Native Settings editor text exceeded bound');return result;};
  let snapshot;
- if(match.kind==='choice'||match.kind==='outputStyle'){
+ if(match.kind==='choice'||match.kind==='outputStyle'||match.kind==='theme'){
   if(!Array.isArray(controls.options)||controls.options.length>256)throw Error('Native Settings editor option limit exceeded');
   const options=[],values=new Set();
   for(const option of controls.options){
    if(option.type==='input'||typeof option.value!=='string'||option.value.length>16384||values.has(option.value))throw Error('Native Settings editor option changed');values.add(option.value);
-   options.push({value:option.value,label:await text(option.label),...option.description!=null?{description:await text(option.description)}:{},disabled:option.disabled===true});
+   options.push({value:option.value,label:await text(option.label),...(option.description??(themeCache?option.origin:undefined))!=null?{description:await text(option.description??option.origin)}:{},disabled:option.disabled===true});
   }
   const value=controls.selectedValue??controls.defaultValue;
   if(value!==undefined&&typeof value!=='string')throw Error('Native Settings editor selection changed');
   snapshot={kind:'choice',...typeof entry.settingsEditorLabel==='string'?{title:entry.settingsEditorLabel}:{},options,...typeof value==='string'?{value}:{},disabled:controls.isDisabled===true||controls.disableSelection===true||!!controls.refuseInput};
+  if(themeCache){const detail=await awaitNativeSettingsReading(nativeGenericPermissionDetail(n,'Theme preview',themeCache.sample),signal);snapshot.preview={text:detail.value,...detail.ansi!==undefined?{ansi:detail.ansi}:{}};snapshot.previewValue=themeCache.preview;snapshot.canPreview=true;snapshot.canToggleSyntax=typeof controls.onToggle==='function';}
  }else{
   if(!Array.isArray(controls.fields)||controls.fields.length>64||typeof controls.onSubmit!=='function'||!controls.values||typeof controls.values!=='object')throw Error('Native Settings form changed');
   const fields=[],keys=new Set();
@@ -143,19 +151,22 @@ async function readNativeSettingsEditor(n,entry,signal){
   }
   snapshot={kind:'form',title:await text(controls.title),...controls.subtitle?{description:await text(controls.subtitle)}:{},submitLabel:await text(controls.submitLabel??'Save'),fields};
  }
+ if(themeCache&&(themeCache.cache[30]!==themeCache.options||themeCache.cache[54]!==themeCache.preview||themeCache.cache[65]!==themeCache.value||themeCache.cache[72]!==themeCache.picker||themeCache.cache[84]!==themeCache.sample||themeCache.cache[15]!==themeCache.cancel||themeCache.cache[11]!==themeCache.toggle))throw Error('Native Theme changed while reading');
  signal?.throwIfAborted();entry.current();const current=nativeSettingsConfig(n,entry);
- if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,owner)||current.frame.panel!==frame.panel||currentNativeSettingsFiber(current.owner,match.fiber).memoizedProps!==p||languageInput&&currentNativeSettingsFiber(current.owner,match.fiber).updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===13)?.[0]?.[9]?.props?.children?.[1]?.props!==languageInput||cancelFiber&&currentNativeSettingsFiber(current.owner,cancelFiber).memoizedProps!==cancelProps)throw Error('Native Settings editor changed while reading');
- return {snapshot,revision:createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),owner:current.owner,fiber:currentNativeSettingsFiber(current.owner,match.fiber),props:p,actions:controls,cancelProps,languageInput};
+ if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,owner)||current.frame.panel!==frame.panel||currentNativeSettingsFiber(current.owner,match.fiber).memoizedProps!==p||themeCache&&currentNativeSettingsFiber(current.owner,match.fiber).updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===109)?.[0]!==themeCache.cache||languageInput&&currentNativeSettingsFiber(current.owner,match.fiber).updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===13)?.[0]?.[9]?.props?.children?.[1]?.props!==languageInput||cancelFiber&&currentNativeSettingsFiber(current.owner,cancelFiber).memoizedProps!==cancelProps)throw Error('Native Settings editor changed while reading');
+ return {snapshot,revision:createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),owner:current.owner,fiber:currentNativeSettingsFiber(current.owner,match.fiber),props:p,actions:controls,cancelProps,languageInput,themeCache};
 }
 async function actNativeSettingsEditor(n,entry,request,signal){
  const before=await readNativeSettingsEditor(n,entry,signal);
  if(!before||before.revision!==request.revision)throw Error('Native Settings editor changed; refresh before editing');
  const p=before.props,actions=before.actions;let callback,args=[],validationProblem;
  if(request.action==='cancel')callback=actions.onCancel;
- else if(request.action==='select'&&before.snapshot.kind==='choice'){
+ else if(['select','preview'].includes(request.action)&&before.snapshot.kind==='choice'){
   const option=before.snapshot.options.find(option=>option.value===request.value);
   if(before.snapshot.disabled||!option||option.disabled)throw Error('Native Settings choice is unavailable');
-  callback=actions.onChange;args=[option.value];
+  callback=request.action==='preview'?actions.onPreview:actions.onChange;if(typeof callback!=='function')throw Error('Native Settings preview is unavailable');args=[option.value];
+ }else if(request.action==='toggleSyntax'&&before.snapshot.kind==='choice'&&before.snapshot.canToggleSyntax){
+  callback=actions.onToggle;
  }else if(request.action==='change'&&before.snapshot.kind==='form'){
   if(!before.snapshot.fields.some(field=>field.key===request.key)||typeof request.value!=='string'||request.value.length>16384)throw Error('Native Settings form change is invalid');
   callback=actions.onChange;args=[request.key,request.value];
@@ -170,7 +181,7 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  }else throw Error('Native Settings editor action is unavailable');
  const current=await readNativeSettingsEditor(n,entry,signal);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.languageInput!==before.languageInput||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
+ if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.languageInput!==before.languageInput||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
  if(validationProblem!==undefined)return {problem:validationProblem};
  await awaitNativeSettingsReading(callback(...args),signal);
  return {};
