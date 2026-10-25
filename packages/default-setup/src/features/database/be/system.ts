@@ -114,13 +114,13 @@ export const databaseSystem = setup({
         // A session's root and every subflow it ran, newest first
         const flows = services.runHistory.findRuns({ limit: 100 });
         logger.info('Retrieved flow runs', { count: flows.length });
-        answer(reply, {
+        reply?.({
           type: 'FLOW_RUNS_RESULT',
           flows
         });
       } catch (error: unknown) {
         logger.error('Failed to get flow runs:', { error: errorMessage(error) });
-        answer(reply, {
+        reply?.({
           type: 'FLOW_RUNS_RESULT',
           flows: []
         });
@@ -135,7 +135,7 @@ export const databaseSystem = setup({
         const heard = services.runHistory.findChildren(flowId as RunNodeId, { reverse: true, limit: offset + limit + 1 });
         const events = heard.slice(offset, offset + limit).map((node) => services.runHistory.tree(node.id)!);
         logger.info('Retrieved events for flow', { count: events.length, flowId });
-        answer(reply, {
+        reply?.({
           type: 'FLOW_EVENTS_RESULT',
           flowId,
           events,
@@ -144,7 +144,7 @@ export const databaseSystem = setup({
         });
       } catch (error: unknown) {
         logger.error('Failed to get flow events:', { error: errorMessage(error), flowId });
-        answer(reply, {
+        reply?.({
           type: 'FLOW_EVENTS_RESULT',
           flowId,
           events: [],
@@ -159,14 +159,14 @@ export const databaseSystem = setup({
       try {
         const details = services.runHistory.get(nodeId as RunNodeId) ?? null;
         logger.info('Retrieved node details', { nodeId });
-        answer(reply, {
+        reply?.({
           type: 'NODE_DETAILS_RESULT',
           nodeId,
           details
         });
       } catch (error: unknown) {
         logger.error('Failed to get node details:', { error: errorMessage(error), nodeId });
-        answer(reply, {
+        reply?.({
           type: 'NODE_DETAILS_RESULT',
           nodeId,
           details: null
@@ -233,13 +233,13 @@ export const databaseSystem = setup({
 
       try {
         const info = await services.appData.readBackupSummary(path);
-        answer(reply, {
+        reply?.({
           type: 'BACKUP_INFO_RESULT',
           info
         });
       } catch (error: unknown) {
         logger.error('Failed to get backup info:', { error: errorMessage(error) });
-        answer(reply, {
+        reply?.({
           type: 'BACKUP_INFO_RESULT',
           info: null
         });
