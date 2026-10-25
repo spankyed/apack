@@ -181,9 +181,35 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
-  let outputStyleEditor:any
+  let outputStyleEditor:any,themeEditor:any
   if(process.env.CLAUDE_RESEARCH_SETTINGS_EDITORS==='1'){
     const beforeStyle=await local(),editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="outputStyle"]'),samples:any[]=[]
+    await search.fill('Theme');const themeRow=panel.locator('[data-native-setting="theme"]')
+    const openTheme=async()=>{await themeRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('region',{name:'Native Theme preview',exact:true})).toBeVisible()}
+    await openTheme();await editor.getByRole('button',{name:'Dark mode',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).theme).toBe('dark');await expect(themeRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
+    const themeSamples:any[]=[]
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await openTheme()
+      const preview=editor.getByRole('region',{name:'Native Theme preview',exact:true}),before=await user(),dark=await preview.innerHTML()
+      await editor.getByRole('button',{name:'Preview Light mode',exact:true}).click()
+      await expect.poll(()=>preview.innerHTML()).not.toBe(dark);expect(await user()).toEqual(before)
+      await expect(editor.getByRole('button',{name:'Preview Light mode',exact:true})).toHaveAttribute('aria-pressed','true')
+      const bounds=()=>preview.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();if(r.height>b.height+1)throw Error('Theme sample exceeds viewport');const delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}})
+      await editor.locator('[data-native-settings-editor-body]').hover();for(let step=0;step<50;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+      const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport()
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+      const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      const capture=testInfo.outputPath(`native-settings-theme-preview-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'));themeSamples.push({width,height,geometry,realWheel:true,capture,previewChanges:true})
+      await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect(await user()).toEqual(before)
+      await openTheme();await expect(preview).toHaveJSProperty('innerHTML',dark);await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
+    }
+    await openTheme();await editor.getByRole('button',{name:'Light mode',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).theme).toBe('light');await expect(themeRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
+    await openTheme();await expect(editor.getByRole('button',{name:'Light mode',exact:true})).toHaveAttribute('aria-pressed','true')
+    const sample=editor.getByRole('region',{name:'Native Theme preview',exact:true}),syntaxBefore=await sample.innerText()
+    await editor.getByRole('button',{name:'Toggle syntax highlighting',exact:true}).click();await expect.poll(async()=>(await user()).syntaxHighlightingDisabled).toBe(true);await expect(sample).toContainText('Syntax highlighting disabled')
+    await editor.getByRole('button',{name:'Toggle syntax highlighting',exact:true}).click();await expect.poll(async()=>(await user()).syntaxHighlightingDisabled).toBe(false);await expect(sample).toHaveText(syntaxBefore,{useInnerText:true})
+    await editor.getByRole('button',{name:'Dark mode',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).theme).toBe('dark');await expect(themeRow.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
+    themeEditor={samples:themeSamples,cancelRestoresPreview:true,previewPreservesSettings:true,lightCommitReopened:true,darkRestored:true,syntaxDisabledRestored:true}
     await search.fill('Output style')
     for(const [width,height]of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height});await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible()
@@ -361,6 +387,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
