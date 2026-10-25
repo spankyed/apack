@@ -181,7 +181,7 @@ test('renders original theme previews, cancellation, button roles and saved cust
   await expect(note).toHaveCSS('color', 'rgb(18, 52, 86)')
   await expect(choice).toHaveCSS('color', 'rgb(18, 52, 86)')
   await expect(note).toHaveValue('Retain this field note through theme changes')
-  const themedBox = label.locator('..')
+  const themedBox = label.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " native-box ")][1]')
   await expect(themedBox).toHaveCSS('border-top-color', 'rgb(171, 205, 239)')
   if (documentTheme) {
     await verifyDocuments('rgb(18, 52, 86)', 'custom-saved')
