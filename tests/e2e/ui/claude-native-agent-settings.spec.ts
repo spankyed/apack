@@ -13,6 +13,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async ({appPage,electronApp},testInfo)=>{
   if(testInfo.status===testInfo.expectedStatus||!workspace)return
   await writeFile(join(workspace,'native-agent-settings-failure.txt'),await appPage.locator('body').innerText())
+  await writeFile(join(workspace!,'native-stats-loading-failure-trace.json'),JSON.stringify(await appPage.evaluate(()=>{const target=globalThis as any;target.__claudeStatsLoadingObserver?.disconnect();return target.__claudeStatsLoadingTrace??[]})))
   const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
   const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
   await writeFile(testInfo.outputPath('native-agent-settings-failure.png'),Buffer.from(image,'base64'))
@@ -193,7 +194,15 @@ test('preserves selected Agent context through native Settings tabs and compact 
   originalDocument=await field.evaluate(element=>(element as any).editor.state.doc.toJSON())
   originalSelection=await field.evaluate(element=>(element as any).editor.state.selection.toJSON())
   await open();await tab('Usage');await expect(panel.getByText('Context window',{exact:true})).toBeVisible();await capture('usage-tab')
-  await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible();await capture('stats-overview');await capture('stats-calendar')
+  await panel.evaluate(element=>{
+    const target=window as any;target.__claudeStatsLoadingTrace=[]
+    const record=()=>{const body=element.querySelector('[aria-label="Claude Code Stats"]');if(!body)return;const text=body.textContent??'';const row={loading:text.includes('Loading Claude Code stats'),loaded:[...body.querySelectorAll('dt')].some(node=>node.textContent==='Sessions'),missingDataClaim:text.includes('Claude Code has not provided Stats data.'),status:[...body.querySelectorAll('[role="status"],[role="alert"]')].map(node=>node.textContent?.slice(0,500)).join(' | ')};const previous=target.__claudeStatsLoadingTrace.at(-1);if(target.__claudeStatsLoadingTrace.length<32&&JSON.stringify(previous)!==JSON.stringify(row))target.__claudeStatsLoadingTrace.push(row)}
+    target.__claudeStatsLoadingObserver=new MutationObserver(record);target.__claudeStatsLoadingObserver.observe(element,{childList:true,subtree:true,characterData:true})
+  })
+  await tab('Stats');await expect(panel.locator('dt').filter({hasText:/^Sessions$/})).toBeVisible()
+  const statsLoadingTrace=await appPage.evaluate(()=>{const target=window as any;target.__claudeStatsLoadingObserver?.disconnect();return target.__claudeStatsLoadingTrace})
+  expect(statsLoadingTrace.some((row:any)=>row.loaded)).toBe(true);expect(statsLoadingTrace.every((row:any)=>!row.missingDataClaim)).toBe(true)
+  await capture('stats-overview');await capture('stats-calendar')
   await panel.getByRole('button',{name:'Models',exact:true}).click();await expect(panel.getByRole('button',{name:'Models',exact:true})).toHaveAttribute('aria-pressed','true')
   await expect(panel.locator('table thead')).toContainText('Cache read')
   const totals=await panel.locator('tbody tr').evaluateAll(rows=>rows.reduce((total,row)=>{
@@ -207,7 +216,7 @@ test('preserves selected Agent context through native Settings tabs and compact 
   const after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parent)
   await capture('retained-parent')
-  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({desktop:true,sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,totals,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures,calendarSamples},null,2))
+  await writeFile(join(workspace!,'native-agent-settings-proof.json'),JSON.stringify({desktop:true,sessionId,taskId,boundNativePid,agentName,parent,draft,originalDocument,originalSelection,originalView,workerMessageCount,retained,expectedStatsTokens,expectedStatsInputTokens,expectedStatsOutputTokens,totals,usageUuids:usageRows.map(row=>row.uuid),originalHumans,finalHumans:await humanRows(),noPhantomTurn:true,samples,captures,calendarSamples,statsLoadingTrace},null,2))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue after reviewing worker settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
