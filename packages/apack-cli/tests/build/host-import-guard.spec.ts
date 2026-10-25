@@ -43,7 +43,7 @@ describe('apack pack build rejects @apackdev/host imports', () => {
   });
 
   it('rejects an export only the app loads, the LMDB store', async () => {
-    const dir = pack({ 'src/__generated__/pack-entry.ts': "import { openLmdbStore } from '@apackdev/ears/lmdb';\nexport const registration = { openLmdbStore };\n" });
+    const dir = pack({ 'src/__generated__/pack-entry.ts': "import { openDatabase } from '@apackdev/ears/lmdb';\nexport const registration = { openDatabase };\n" });
     const result = await bundlePackRuntime(dir, path.join(dir, 'dist'));
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/@apackdev\/ears\/lmdb is only for the app[\s\S]*packs can't import it/);

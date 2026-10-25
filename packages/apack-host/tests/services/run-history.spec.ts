@@ -6,7 +6,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import type { EARS } from '@apackdev/ears';
-import { openEnvironment } from '@apackdev/ears/lmdb';
 import type { RunHistory, RunNode, RunNodeId, RunNodeStart } from '@apackdev/sdk/services';
 import { _openTestRunHistory } from '@apackdev/sdk/testing';
 import { openRunHistory, type RunsDatabase } from '../../src/database/open.ts';
@@ -174,8 +173,9 @@ describe('the app\'s run history', () => {
 
   it('moves files it cannot read aside and starts a new history, rather than keeping the app from starting', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
-    // Files elmdb can't read where the history should be: lmdb-js's, as a record store from before left them
-    openEnvironment(dir).root.close();
+    // Files elmdb can't read where the history should be, as damage or another program's leave them
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'data.mdb'), Buffer.alloc(16384, 7));
     expect(() => openRunHistory(dir, { readOnly: true })).toThrow(/isn't a file this LMDB reads/);
 
     const history = createRunHistory(onDisk(dir).engine);

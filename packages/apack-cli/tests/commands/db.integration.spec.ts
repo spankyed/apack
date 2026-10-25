@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
@@ -201,6 +202,31 @@ describe('apack db query', () => {
     const { out, err } = await ok(['query', 'return getSchemaStats().entities.Note', '--data-dir', dir]);
     expect(out).toBe('2');
     expect(err).toMatch(/Warning: apack is running on it/);
+  });
+
+  it('reads a database another process holds open in a unit it is writing, as a running app does', async () => {
+    const dir = await appDataDir();
+    // elmdb as @apackdev/ears resolves it, opened to write and holding a unit, so LMDB's one write transaction is taken
+    const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+    const holder = spawn(process.execPath, ['-e', [
+      `const { Database } = require(${JSON.stringify(elmdb)});`,
+      'const database = Database.open(process.argv[1]);',
+      'const unit = database.begin();',
+      "process.stdout.write('held\\n');",
+      "process.stdin.on('end', () => { unit.abort(); database.close(); }).resume();",
+    ].join('\n'), _appDataPaths(dir).lmdb], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const closed = new Promise((resolve) => holder.once('close', resolve));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        holder.once('error', reject);
+        holder.stdout.setEncoding('utf-8').on('data', (chunk: string) => { if (chunk.includes('held')) resolve(); });
+      });
+      const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
+      expect(out).toBe('Alpha');
+    } finally {
+      holder.stdin.end();
+      await closed;
+    }
   });
 
   it('refuses bad arguments with its usage', async () => {

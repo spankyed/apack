@@ -1,6 +1,6 @@
 # Optimize EARS attribute filtering without changing the API
 
-**Status:** proposed; source inspected, no implementation or performance measurements yet.
+**Status:** superseded, not implemented: the engine moved onto elmdb ([ears-on-elmdb.md](../../plans/ears-on-elmdb.md)), which keeps no copy of the data in memory and holds both databases.
 **Scope:** in-memory `query(...).where(X).where(Y)` execution, preserving the public API and current
 evaluation behavior. Database persistence and trace-history indexing are outside this plan.
 
@@ -19,19 +19,19 @@ execution improvement, not a new query language or a general query planner.
 
 ## Findings
 
-- [attribute-storage.ts](../../packages/apack-ears/src/kv/attribute-storage.ts) already owns
+- `packages/apack-ears/src/kv/attribute-storage.ts` already owns
   `Map<attributeKind, Map<entityId, values[]>>`. It provides attribute membership and values without
   an additional index. Entity-type membership is separately indexed.
-- [query.ts](../../packages/apack-ears/src/query.ts) materializes initial IDs immediately. Each
+- [query.ts](../../../packages/apack-ears/src/query.ts) materializes initial IDs immediately. Each
   `.where()` filters that array, calling `getAttrs()` for every candidate; each call resolves the
   attribute bucket and returns an empty array for absence. Chaining creates intermediate arrays
   and builder objects, but the next filter already runs over the previous filter's reduced results.
 - `.where(kind)` checks whether the value list is nonempty. `.where(kind, value)` uses strict
   equality against any value. An explicit `undefined` selects presence semantics.
-- [queries.spec.ts](../../packages/apack-ears/tests/engine/queries.spec.ts) already covers filtering,
+- [queries.spec.ts](../../../packages/apack-ears/tests/engine/queries.spec.ts) already covers filtering,
   incoming order and builders retained across deletion. Extend that contract where the optimization
   could change observable behavior.
-- [ears.bench.ts](../../packages/apack-ears/bench/ears.bench.ts) covers a type-filtered value query,
+- [ears.bench.ts](../../../packages/apack-ears/bench/ears.bench.ts) covers a type-filtered value query,
   hydration, writes and relation traversal, but does not yet compare chained presence/value filters
   at different selectivities.
 
