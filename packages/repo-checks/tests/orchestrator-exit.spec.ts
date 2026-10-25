@@ -31,7 +31,9 @@ describe('a script that reprints a captured buffer', () => {
   // `scripts/lib/exit-on-epipe.ts` needs no exception here: it calls `process.exit` legitimately, and it
   // does not capture a buffer, so it was never in this set. An exception that never fires is worse than
   // none — the first draft of this check carried one.
-  const capturing = scriptFiles(SCRIPTS).filter((file) => fs.readFileSync(file, 'utf-8').includes('bounded-spawn'));
+  // An import of it, not a mention: a script naming it in a comment captures nothing
+  const capturing = scriptFiles(SCRIPTS)
+    .filter((file) => codeLines(file).some((line) => /\bfrom\s+['"][^'"]*bounded-spawn(\.ts)?['"]/.test(line)));
 
   it('there are some, so this check is not vacuous', () => {
     expect(capturing.map((f) => path.relative(REPO_ROOT, f)).sort()).not.toEqual([]);
