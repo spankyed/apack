@@ -61,7 +61,10 @@ async function nativeSettings(n,request,abort){
  if(entry.settingsCommit&&request.operation!=='editor')throw Error('A native setting change is pending');
  if(request.operation==='open'||request.operation==='editor'){
   if(entry.settingsCommit&&!isEditorCancel)throw Error('A native setting change is pending');
-  if(request.revision!==read.snapshot.revision&&!cancelledLease)throw Error('Native Settings changed; refresh before editing');
+  const editorRow=read.snapshot.rows.find(row=>row.key===entry.settingsEditorKey);
+  // Background Config cache updates do not retire an unchanged, still-advertised editor.
+  const currentEditor=request.operation==='editor'&&!!read.snapshot.editor&&read.snapshot.editor.revision===request.editor_revision&&editorRow&&!editorRow.isLocked;
+  if(request.revision!==read.snapshot.revision&&!currentEditor&&!cancelledLease)throw Error('Native Settings changed; refresh before editing');
   if(isEditorCancel){
    const current=await readNativeSettingsEditor(n,entry,abort.signal);nativeSettingsPanel(request);
    if(!current&&cancelledLease){

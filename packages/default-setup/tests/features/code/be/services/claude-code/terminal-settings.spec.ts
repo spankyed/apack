@@ -121,3 +121,15 @@ it.each([{action:'preview',value:'true'},{action:'toggleSyntax'}])('does not pub
  const before=await f.read();const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command},new AbortController())
  expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled();expect(f.commit).not.toHaveBeenCalled()
 })
+
+it('keeps an exact live editor usable across unrelated Config updates but rejects retired or locked editors',async()=>{
+ const f=fixture(),editor={owner:{},revision:'a'.repeat(64),snapshot:{kind:'choice',options:[{value:'light',label:'Light',disabled:false}],value:'light',disabled:false,canToggleSyntax:true}}
+ let other=false,locked=false
+ f.n.runtime.p_r.mockImplementation(async(row:any)=>row.key==='tips'?{...row,key:'theme',kind:'choice',value:'light',isLocked:locked}:{...row,key:'other',value:other})
+ f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:true});f.setNativeEditor(editor);(f.entry as any).settingsEditorKey='theme'
+ const before=await f.read();other=true
+ const request={...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'toggleSyntax'}}
+ await f.run(f.n,request,new AbortController());expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled()
+ locked=true;await expect(f.run(f.n,request,new AbortController())).rejects.toThrow('changed');expect(f.editorAction).toHaveBeenCalledOnce()
+ locked=false;f.setNativeEditor({...editor,revision:'b'.repeat(64)});await expect(f.run(f.n,request,new AbortController())).rejects.toThrow('changed');expect(f.editorAction).toHaveBeenCalledOnce()
+})
