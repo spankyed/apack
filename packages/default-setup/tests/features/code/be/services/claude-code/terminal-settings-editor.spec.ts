@@ -121,3 +121,33 @@ it('waits for an unmounted original Config root but refuses duplicate owners and
   const cancelled=new AbortController();cancelled.abort();await expect(f.wait(cancelled.signal)).rejects.toThrow()
  }finally{vi.useRealTimers()}
 })
+
+it('projects native Language drafts and submits through original trim/default and Cancel callbacks',async()=>{
+ const f=fixture(),Language=function OriginalLanguage(){},onComplete=vi.fn(),onCancel=vi.fn()
+ f.frame.panel.hidden=true;f.setFunctionHash(Language,'4251c8f399ee8c6b3dfe922dfa46ef8adfa3e34dc8de1d52aec1b1aaa617b3e9')
+ const cache:any[]=Array(13).fill(null)
+ const mount=(value:string)=>{
+  const onSubmit=()=>onComplete(value.trim()||undefined)
+  const input={value,onChange:vi.fn((next:string)=>mount(next)),onSubmit}
+  cache[2]=onComplete;cache[3]=onSubmit;cache[7]=onSubmit;cache[8]=value
+  cache[4]={props:{children:'Enter your preferred response and voice language:'}}
+  cache[9]={props:{children:[null,{props:input}]}};cache[10]={props:{children:'Leave empty for default (English)'}}
+ }
+ mount('French')
+ f.config.child={type:Language,memoizedProps:{initialLanguage:'French',onComplete,onCancel},updateQueue:{memoCache:{data:[cache]}}}
+ let editor=await f.editor()
+ expect(editor.snapshot).toMatchObject({kind:'form',title:'Language',description:'Leave empty for default (English)',fields:[{key:'language',label:'Enter your preferred response and voice language:',value:'French'}]})
+ await f.act({action:'cancel',revision:editor.revision});expect(onCancel).toHaveBeenCalledOnce();expect(onComplete).not.toHaveBeenCalled()
+ await f.save(editor.revision,{language:'  日本語  '});expect(onComplete).toHaveBeenLastCalledWith('日本語')
+ editor=await f.editor();await f.save(editor.revision,{language:'   '});expect(onComplete).toHaveBeenLastCalledWith(undefined)
+ cache[2]=()=>{};await expect(f.editor()).rejects.toThrow('input callbacks changed')
+})
+it('refuses Language input replacement during projection even if original modal props remain',async()=>{
+ const f=fixture(),Language=function OriginalLanguage(){},onComplete=vi.fn(),onCancel=vi.fn(),onSubmit=vi.fn()
+ f.frame.panel.hidden=true;f.setFunctionHash(Language,'080eee2fde8fe097c91811244a1dc193b139c7df65f12765827c4117230eace6')
+ const cache:any[]=Array(13).fill(null),input={value:'French',onChange:vi.fn(),onSubmit}
+ cache[2]=onComplete;cache[3]=onSubmit;cache[7]=onSubmit;cache[8]='French';cache[4]={props:{children:'Language'}};cache[9]={props:{children:[null,{props:input}]}}
+ f.config.child={type:Language,memoizedProps:{onComplete,onCancel},updateQueue:{memoCache:{data:[cache]}}}
+ f.formatText.mockImplementationOnce(async()=>{cache[9]={props:{children:[null,{props:{...input}}]}};return 'Language'})
+ await expect(f.editor()).rejects.toThrow('changed while reading');expect(onSubmit).not.toHaveBeenCalled()
+})

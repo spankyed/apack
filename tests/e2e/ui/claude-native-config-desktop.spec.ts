@@ -141,20 +141,31 @@ test('edits original Settings through desktop controls and retains composing', a
   await panel.getByRole('combobox',{name:'Time format',exact:true}).selectOption('24-hour')
   await expect.poll(async()=>(await user()).timeFormat).toBe('24-hour')
   await search.fill('Language')
-  await panel.getByRole('textbox',{name:'Language',exact:true}).fill('French')
-  await panel.getByRole('button',{name:'Save',exact:true}).click()
-  await expect.poll(async()=>(await user()).language).toBe('French')
+  const languageRow=panel.locator('[data-native-setting="language"]'),languageEditor=panel.getByLabel('Claude Code setting editor',{exact:true})
+  const languageInput=languageEditor.getByRole('textbox',{name:'Enter your preferred response and voice language:',exact:true})
+  const openLanguage=async()=>{await languageRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(languageInput).toBeVisible()}
+  const beforeLanguage=await user()
+  await openLanguage();await languageInput.fill('Cancelled language');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click()
+  await expect(languageEditor).toHaveCount(0);expect(await user()).toEqual(beforeLanguage)
+  await openLanguage();await languageInput.fill('   ');await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
+  await expect.poll(async()=>(await user()).language).toBeUndefined();await expect(languageEditor).toHaveCount(0)
   await expect(panel.getByRole('status')).toHaveText('Saved by Claude Code')
+  await openLanguage();await expect(languageInput).toHaveValue('');await languageInput.fill('  French  ')
+  await languageEditor.getByRole('button',{name:'Save',exact:true}).click()
+  await expect.poll(async()=>(await user()).language).toBe('French');await expect(languageEditor).toHaveCount(0)
+  await expect(panel.getByRole('status')).toHaveText('Saved by Claude Code')
+  await openLanguage();await expect(languageInput).toHaveValue('French')
   const nativeWindow = await electronApp.browserWindow(appPage), captures:string[]=[]
   for (const [width,height] of [[1100,900],[680,600]]) {
     await appPage.setViewportSize({width,height})
-    for (const label of ['Search Claude Code settings','Language']) await expect(panel.getByRole('textbox',{name:label,exact:true})).toBeInViewport()
+    await expect(languageInput).toBeInViewport();await expect(languageEditor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport();await expect(languageEditor.getByRole('button',{name:'Save',exact:true})).toBeInViewport()
     await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport()
     await expect(panel.getByRole('button',{name:'Refresh',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
     const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
     const path=testInfo.outputPath('native-config-desktop-language-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));captures.push(path)
   }
+  await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   await search.fill('Thinking')
   const locked = panel.getByRole('checkbox',{name:/Thinking/})
   await expect(locked).toBeDisabled()
@@ -167,7 +178,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await expect(panel.getByRole('checkbox',{name:'Show tips',exact:true})).not.toBeChecked()
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
-  await search.fill('Language');await expect(panel.getByRole('textbox',{name:'Language',exact:true})).toHaveValue('French')
+  await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   let outputStyleEditor:any
   if(process.env.CLAUDE_RESEARCH_SETTINGS_EDITORS==='1'){
     const beforeStyle=await local(),editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="outputStyle"]'),samples:any[]=[]
@@ -348,6 +359,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
