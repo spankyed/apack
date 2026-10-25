@@ -2,7 +2,7 @@
 
 Status: Steps 1–3 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property; elmdb's
 protocol (`elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness (`e4f65d409`); prompts on views
-(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain (`d19538a74`) and browser done; logs sorted, unchanged. Step 1's readings and the decisions each step made are below. Step 5
+(`cdeb2c846`). Step 4 in progress: actions (`0a7313f0f`), flows (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain (`d19538a74`), browser (`fab8e242d`) and code done; logs sorted, unchanged. Step 1's readings and the decisions each step made are below. Step 5
 not started.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
@@ -502,6 +502,24 @@ and `threads`' streaming tokens are notifications.
   a window restores once and then owns — each window syncs its own tabs back — so a view would hand every window the
   tabs another window just synced. The surface asks on `SURFACE_STARTED` (`GET_SAVED_SESSION`), answered to it alone
   (`SAVED_SESSION_READ`).
+- **code** — no views: what it shows is the repository, the files, GitHub and the running terminals, none of them
+  stored rows but the action and prompt it opens in the editor. Sorted: some 120 broadcasts across the seven child
+  systems, nearly all of them a window's result sent to every window — a file's contents, a diff, a branch list, a
+  pull request's details, an error. Every one is now answered through one rule (`code/be/answer.ts`): the window that
+  asked, or every window when nobody did, which is what the git watcher's refresh and an action's request are. What
+  stays broadcast is news: a file changed on disk, the repository changed, a terminal created, renamed, moved or
+  closed, a terminal's output. Decisions:
+  - **The action and prompt the editor opens are answers, not views.** `codeActions.ACTION_SELECTED` and
+    `codePrompts.PROMPT_SELECTED` are the row an editor takes to edit, as a file read is a file's text: following it
+    live would replace what the user is typing with another window's save. They reach the window that opened them.
+  - **`reply` answers the delivered message only** (`_Delivery.event`, `@apackdev/sdk/events`). The code system tells
+    its children what to do with events of its own making — a new base directory, a connection — while handling
+    another system's message; the settings system's \`FEATURE_SETTINGS_UPDATED\` was handing those children's handlers
+    a \`reply\` addressed to host/settings, so the explorer's listing and the worktree list were answered to the
+    settings system. Each door now records the event object it hands the receiver, and a handler is handed \`reply\`
+    only when the event it handles is that object — which a system forwarding the event to a child still is.
+  - **Terminals stay process state.** The running terminals are the service's processes, mirrored to the engine only
+    to restore them, so their lifecycle is news and the list (\`TERMINALS_LISTED\`) an answer.
 - **logs** — sorted, and left as it is. Its broadcasts carry the system's in-memory log buffer, which is no stored
   row: `LOG_ADDED` is a feed and `LOGS_CLEARED` news, and `LOGS_CONNECTED`/`LOGS_UPDATE` publish the buffer
   (filtered by the settings) as a system publishes what its surface starts from. Nothing there is a view's to serve.

@@ -316,7 +316,7 @@ export function createBusMachine(options: BusOptions) {
           reportUndeclared(to, incoming.type, event.message);
           const delivered = { ...incoming, ..._callOn(event.message) };
           carrySettingsRequest(incoming, delivered);
-          deliverAs({ to, sender, client, call }, () => actor.send(delivered));
+          deliverAs({ to, sender, client, call }, delivered, () => actor.send(delivered));
         }
         // An event every system accepts (a feature's settings changing) is the feature's system's if it runs one
         else if (!(SYSTEM_EVENT_TYPES as readonly string[]).includes(incoming.type)) {

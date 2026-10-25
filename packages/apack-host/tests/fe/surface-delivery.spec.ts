@@ -21,9 +21,13 @@ import { notifySurfaceActor, sendToSurfaceActor } from '../../src/fe/surface-del
 
 /** An actor that records what was being handled each time it is given an event */
 function recording() {
-  const seen: Array<_Delivery | undefined> = [];
+  const seen: Array<(Omit<_Delivery, 'event'> & { event?: unknown }) | undefined> = [];
   const actor = createActor(setup({}).createMachine({
-    on: { PING: { actions: () => { seen.push(_currentDelivery()); } } },
+    // What was being handled, and whether the event the actor handles is the one that delivery delivered
+    on: { PING: { actions: ({ event }) => {
+      const delivery = _currentDelivery();
+      seen.push(delivery && { ...delivery, event: delivery.event === event ? 'this one' : delivery.event });
+    } } },
   })).start();
   return { seen, actor };
 }
@@ -37,7 +41,7 @@ describe('handing an actor an event nobody asked for', () => {
 
     notifySurfaceActor(actor, 'pack/receiver', { type: 'PING' });
 
-    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: undefined }]);
+    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: undefined, event: 'this one' }]);
   });
 
   /**
@@ -53,8 +57,8 @@ describe('handing an actor an event nobody asked for', () => {
       notifySurfaceActor(actor, 'pack/receiver', { type: 'PING' });
     });
 
-    expect(seen, "the sender's ref and its asker both stop here").toEqual([
-      { receiver: 'pack/receiver', asker: undefined },
+    expect(seen, "the sender's ref, its asker and its event all stop here").toEqual([
+      { receiver: 'pack/receiver', asker: undefined, event: 'this one' },
     ]);
   });
 
@@ -80,7 +84,7 @@ describe('handing an actor an event someone is waiting on', () => {
 
     sendToSurfaceActor(actor, 'pack/receiver', { type: 'PING' }, { kind: 'window', ref: 'pack/curious' });
 
-    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: { kind: 'window', ref: 'pack/curious' } }]);
+    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: { kind: 'window', ref: 'pack/curious' }, event: 'this one' }]);
   });
 
   /**
@@ -95,7 +99,7 @@ describe('handing an actor an event someone is waiting on', () => {
       sendToSurfaceActor(actor, 'pack/receiver', { type: 'PING' }, { kind: 'window', ref: 'pack/curious' });
     });
 
-    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: { kind: 'window', ref: 'pack/curious' } }]);
+    expect(seen).toEqual([{ receiver: 'pack/receiver', asker: { kind: 'window', ref: 'pack/curious' }, event: 'this one' }]);
   });
 
   /**
