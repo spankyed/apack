@@ -4753,7 +4753,8 @@ interface RunNodeUpdate {
 interface SavedBookmark {
     url: string;
     title: string;
-    favicon: string;
+    /** None for a page that has no favicon */
+    favicon?: string;
     displayOrder: number;
 }
 
