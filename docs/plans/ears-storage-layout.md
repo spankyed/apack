@@ -452,7 +452,7 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   `scripts/ears-convert.ts` in 6.9 s, 1 → 2 → 3 → 4: 22,816 entities in 13 types (19,803 `Message`, 2,033 `Artifact`,
   343 `Thread`, 280 `Note`), 178,131 attributes, 45,798 relations, 381 valueless rows skipped; 387 MB on disk after,
   since LMDB keeps the pages the old tables freed; on this branch the script compacts the converted file
-  (`compactEnvironment`), which takes it to 258 MB. The branch is parked: a compacted copy of this data aborts the
+  (`compactEnvironment`), which takes it to 271 MB. The branch is parked: a compacted copy of this data aborts the
   process when a reset empties it, an lmdb-js bug
   ([the evidence and repro](../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
   read-only, two runs each, both warm:
