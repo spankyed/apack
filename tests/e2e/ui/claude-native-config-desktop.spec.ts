@@ -191,7 +191,30 @@ test('edits original Settings through desktop controls and retains composing', a
     const afterStyle=await local(),unchanged={...afterStyle};if(Object.hasOwn(beforeStyle,'outputStyle'))unchanged.outputStyle=beforeStyle.outputStyle;else delete unchanged.outputStyle;expect(unchanged).toEqual(beforeStyle)
     await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.locator('button[aria-pressed="true"]')).toHaveText(chosenLabel)
     await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
-    outputStyleEditor={before:beforeStyle,after:afterStyle,chosenLabel,samples,cancelPreserved:true,reopenedNativeSelection:true}
+    const formSamples:any[]=[],noteDraft='日本語 – release review note'
+    await search.fill('Review note')
+    const noteRow=panel.locator('[data-native-setting$=".reviewNote"]')
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await noteRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible()
+      const field=editor.getByRole('textbox',{name:'Review note',exact:true});await expect(field).toHaveValue('Original release note');await field.fill(noteDraft)
+      await expect(field).toBeInViewport();await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport()
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+      const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      const capture=testInfo.outputPath(`native-settings-note-form-${width}.png`);await writeFile(capture,Buffer.from(image,'base64'));formSamples.push({width,height,draft:await field.inputValue(),capture})
+      await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
+    }
+    await noteRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('textbox',{name:'Review note',exact:true})).toHaveValue('Original release note')
+    await editor.getByRole('textbox',{name:'Review note',exact:true}).fill(noteDraft);await editor.getByRole('button',{name:'Save',exact:true}).click();await expect(editor).toHaveCount(0)
+    await noteRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('textbox',{name:'Review note',exact:true})).toHaveValue(noteDraft)
+    await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
+    await search.fill('Review count');const countRow=panel.locator('[data-native-setting$=".reviewCount"]')
+    await countRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('textbox',{name:'Review count',exact:true})).toHaveValue('2')
+    await editor.getByRole('textbox',{name:'Review count',exact:true}).fill('42');await editor.getByRole('button',{name:'Save',exact:true}).click();await expect(panel.getByRole('alert')).toContainText('between 1 and 9');await expect(editor).toBeVisible()
+    const validationMessage=await panel.getByRole('alert').innerText()
+    await editor.getByRole('textbox',{name:'Review count',exact:true}).fill('3');await editor.getByRole('button',{name:'Save',exact:true}).click();await expect(editor).toHaveCount(0)
+    await countRow.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('textbox',{name:'Review count',exact:true})).toHaveValue('3')
+    await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0)
+    outputStyleEditor={before:beforeStyle,after:afterStyle,chosenLabel,samples,cancelPreserved:true,reopenedNativeSelection:true,forms:{samples:formSamples,noteDraft,noteReopened:true,cancelPreserved:true,validationMessage,numberReopened:'3'}}
   }
   await search.fill('')
   for (const [width,height] of [[1100,900],[680,600]]) {
