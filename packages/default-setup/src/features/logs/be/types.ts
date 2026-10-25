@@ -21,7 +21,8 @@ export type LogsSettings = import('#generated/settings.ts').SettingsOf<'logs'>;
 
 export type IncomingLogEvents =
   | { type: 'CLEAR_LOGS' }
-  | { type: 'REQUEST_LOGS_UPDATE' };
+  /** The buffer as the settings filter it, and the settings: answered with \`LOGS_READ\` */
+  | { type: 'GET_LOGS' };
 
 export type LogsInternalEvents =
   | {
@@ -29,9 +30,12 @@ export type LogsInternalEvents =
     log: Omit<LogEntry, 'id' | 'timestamp'>;
   };
 
+/**
+ * What the logs system sends: the buffer, to the window that asked for it (as it starts, and when the settings that
+ * filter it change); and to every window, each entry as it is logged — a feed — and that the buffer was cleared.
+ */
 export type OutgoingLogsEvents =
-  | { type: 'LOGS_CONNECTED'; logs: LogEntry[]; settings?: LogsSettings }
-  | { type: 'LOGS_UPDATE'; logs: LogEntry[] }
+  | { type: 'LOGS_READ'; logs: LogEntry[]; settings: LogsSettings }
   | { type: 'LOG_ADDED'; log: LogEntry }
   | { type: 'LOGS_CLEARED' };
 
