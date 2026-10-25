@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -149,6 +149,25 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await capture({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
     await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(1);expect((await receipts())[0].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
+    if(process.env.CLAUDE_RESEARCH_IMAGE_SHM==='1'){
+      const objects=JSON.parse(await readFile(join(workspace!,'native-image-shm.json'),'utf8'))
+      const absent=async(name:string)=>{try{await access('/dev/shm/'+name.slice(1));return false}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}}
+      await expect.poll(()=>absent(objects.initial)).toBe(true);await expect.poll(()=>absent(objects.blit)).toBe(true)
+      await info.focus();await info.press('d');await expect(info).toContainText('key=d');await expect.poll(pixel).toEqual([0,136,255,255])
+      expect(await absent(objects.initial)).toBe(true);expect(await absent(objects.blit)).toBe(true)
+      await writeFile('/dev/shm/'+objects.initial.slice(1),Buffer.from([0,200,80,0,200,80,0,200,80,0,200,80]),{flag:'wx',mode:0o600})
+      await info.focus();await info.press('r');await expect.poll(pixel).toEqual([0,200,80,255]);await expect.poll(()=>absent(objects.initial)).toBe(true)
+      const generation=await pixel()
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-shm-generation-'+size.width+'.png')})}
+      await appPage.setViewportSize({width:1100,height:900});await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+      for(const size of [{width:1100,height:900},{width:680,height:600},{width:1100,height:900}]){await appPage.setViewportSize(size);if(size.width===1100)await expect.poll(terminalPixels).toContainEqual([0,200,80,255]);await capture({path:testInfo.outputPath('native-image-shm-terminal-'+size.width+'.png')})}
+      expect((await context()).native.state.nativePid).toBe(boundNativePid)
+      await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after the shared-memory image review.')
+      await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+      await writeFile(join(workspace!,'native-image-shm-proof.json'),JSON.stringify({initial:[255,136,0,255],blitted:[0,136,255,255],generation,initialConsumed:await absent(objects.initial),blitConsumed:await absent(objects.blit),redrawRetained:true,format:objects.format,receipts:await receipts(),sessionId,boundNativePid,draft},null,2))
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImageSharedMemory:true,nativeImageSharedGeneration:true,nativeImageSharedOneUse:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    }
     if(process.env.CLAUDE_RESEARCH_IMAGE_FILE_LIFETIME==='1'){
       const files=JSON.parse(await readFile(join(workspace!,'native-image-files.json'),'utf8'))
       const held=async(id:string)=>JSON.parse(await readFile(join(workspace!,'native-image-read-'+id+'.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return 'null';throw error}))
