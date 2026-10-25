@@ -21,6 +21,8 @@ test('edits original Settings through desktop controls and retains composing', a
   test.setTimeout(260000)
   expect(process.env.HOME).toBe(workspace)
   const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const externalConsentProfile=process.env.CLAUDE_RESEARCH_EXTERNAL_CONSENT==='1',externalFixture=externalConsentProfile?JSON.parse(await readFile(join(workspace!,'external-consent-fixture.json'),'utf8')):undefined
+  let startupConsentAt=0,startupConsentAttempts=0
   const restriction = false, statusOnly=process.env.CLAUDE_RESEARCH_STATUS_ROWS==='1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -63,6 +65,7 @@ test('edits original Settings through desktop controls and retains composing', a
     if (chunks.length) { await new Promise<void>(resolve => terminalScreen!.write(chunks.map((chunk: any) => chunk.text).join(''), resolve)); lastSequence = chunks.at(-1).sequence }
     const buffer = terminalScreen!.buffer.active
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
+    if(externalConsentProfile&&text.includes('Allow external CLAUDE.md file imports?')){if(!startupConsentAt)startupConsentAt=Date.now();if(startupConsentAttempts<3&&Date.now()-startupConsentAt>1200){startupConsentAttempts++;startupConsentAt=Date.now();await input.press('Enter')}return false}
     if (native?.state?.status === 'live') return native.state.mainStatus?.includes('Session ready') === true
     const screen = recognizeOnboardingPrompt(text, workspace)
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
@@ -181,7 +184,34 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
-  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any
+  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any
+  if(externalConsentProfile){
+    const originalTurns=(await context()).turns,editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="showExternalIncludesDialog"]'),globalConfig=async()=>JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8'))
+    const begin=async()=>{await search.fill('External');await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toBeVisible();await expect(editor.getByRole('heading',{name:'Allow external CLAUDE.md file imports?',exact:true})).toBeVisible()}
+    const samples:any[]=[]
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await begin()
+      const no=editor.locator('[data-native-settings-option="cancel"]');await expect(no).toBeFocused()
+      const body=editor.locator('[data-native-settings-editor-body]'),description=body.locator('p').first(),readings:any[]=[]
+      await expect(description).toContainText(externalFixture.path);await expect(description).toContainText('Never allow this for third-party repositories.')
+      for(const [index,text]of ["Never allow this for third-party repositories.",externalFixture.path,'Important: Only use Claude Code with files you trust.'].entries()){
+        const bounds=()=>description.evaluate((element,text)=>{const walk=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node;while((node=walk.nextNode())){const start=node.textContent!.indexOf(text);if(start<0)continue;const range=document.createRange();range.setStart(node,start);range.setEnd(node,start+text.length);const r=range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect(),delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}}throw Error('Original consent disclosure text missing')},text)
+        await body.hover();for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+        const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'No, disable external imports',exact:true}).first()).toBeInViewport()
+        await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+        const capture=testInfo.outputPath(`native-settings-external-consent-${width}-${index}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+        await writeFile(capture,Buffer.from(image,'base64'));readings.push({index,text,geometry,realWheel:true,capture})
+      }
+      await no.click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(false);await expect(panel.getByRole('alert')).toHaveCount(0)
+      samples.push({width,height,readings,declined:true,global:await globalConfig()})
+    }
+    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(false)
+    await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await globalConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
+    expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    externalConsent={samples,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedGlobal:await globalConfig()}
+    await search.fill('');await appPage.setViewportSize({width:1100,height:900})
+  }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_GROUPS==='1'){
     groupEditors=[]
     const editor=panel.getByLabel('Claude Code setting editor',{exact:true})
@@ -463,9 +493,10 @@ test('edits original Settings through desktop controls and retains composing', a
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  if(externalConsentProfile){await expect.poll(async()=>(await context()).native.state.busy).toBe(false);await open();await search.fill('External');await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Change…',exact:true}).click();const global=JSON.parse(await readFile(join(workspace!,'.claude.json'),'utf8'));expect(global.hasClaudeMdExternalIncludesApproved).toBe(false);externalConsent.disabledBeforeResume=true;externalConsent.disabledGlobal=global;await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0)}
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
