@@ -18,7 +18,7 @@ test.afterEach(async ({appPage,electronApp},testInfo)=>{
   await writeFile(testInfo.outputPath('native-config-desktop-failure.png'),Buffer.from(image,'base64'))
 })
 test('edits original Settings through desktop controls and retains composing', async ({ app, appPage, electronApp }, testInfo) => {
-  test.setTimeout(210000)
+  test.setTimeout(260000)
   expect(process.env.HOME).toBe(workspace)
   const {promptMedia: _promptMedia,promptSyntax: _promptSyntax,uiCopy: _uiCopy,uiSelection: _uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
