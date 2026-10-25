@@ -10,6 +10,7 @@ function nativeLspRecommendationControl(n,d){
   const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native recommendation traversal exceeded bound');seen.add(fiber);
   if(typeof fiber.type==='function'&&fiber.type.name===nativeFunctionName('GCo')&&fiber.memoizedProps?.payload===d.payload){
    checked(fiber.type,'3b940676db580289927110c44fd7c74c3669ebd556127ddc0fe5b74d759fd754');
+   if(typeof fiber.memoizedProps.wouldTakeAnswer!=='function'||fiber.memoizedProps.wouldTakeAnswer()!==true)return;
    const children=[fiber.child],visited=new Set();
    while(children.length){
     const child=children.pop();if(!child||visited.has(child))continue;if(visited.size>=2048)throw Error('Native recommendation controls exceeded bound');visited.add(child);
@@ -21,7 +22,8 @@ function nativeLspRecommendationControl(n,d){
      while(controls.length){
       const c=controls.pop();if(!c||controlSeen.has(c))continue;if(controlSeen.size>=1024)throw Error('Native recommendation selector exceeded bound');controlSeen.add(c);
       const props=c.memoizedProps;
-      if(Array.isArray(props?.options)&&typeof props.onChange==='function'&&typeof props.onCancel==='function'){
+      if(typeof c.type==='function'&&c.type.name===nativeFunctionName('Xe')&&Array.isArray(props?.options)&&typeof props.onChange==='function'&&typeof props.onCancel==='function'){
+       checked(c.type,'e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5');
        if(JSON.stringify(props.options.map(option=>option.value))!==JSON.stringify(['yes','no','never','disable']))throw Error('Native recommendation choices changed');
        matches.push({panel,control:props});
       }
