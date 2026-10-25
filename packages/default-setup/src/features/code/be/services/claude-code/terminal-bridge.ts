@@ -45,6 +45,7 @@ export async function createClaudeTerminalBridge(options: {
   let shellPrefix: string | null = null
   const initialPolicy = options.settings.sources.find(source => source.source === 'policySettings' || source.source === 'policy')?.settings ?? {}
   let helperPolicyKey = JSON.stringify([initialPolicy.allowManagedHooksOnly === true, initialPolicy.disableAllHooks === true, options.settings.effective.disableAllHooks === true])
+  let policyGeneration = randomUUID()
   const generations = { main: randomUUID(), subagent: randomUUID() }
   const waiting: Record<string, unknown>[] = []
   let saveObserver: (() => Promise<void>) | undefined
@@ -139,6 +140,7 @@ export async function createClaudeTerminalBridge(options: {
         const policyChanged = nextPolicyKey !== helperPolicyKey
         const changedSession = projection.sessionId !== value.sessionId
         if (!projection.updateSession(value.sessionId, value.agents)) return reply(400, {})
+        if (policyChanged) policyGeneration = randomUUID()
         helperPolicyKey = nextPolicyKey
         if (value.directOwner === true) { nativePolling = true; busy = value.busy as boolean }
         const previous = { ...generations }
@@ -256,10 +258,12 @@ export async function createClaudeTerminalBridge(options: {
         const site = typeof event.client_id === 'string' && ['Pane', 'AbovePrompt'].includes(String(event.component)) && typeof event.instance_id === 'string'
         const scroll = site && event.subtype === 'ui_scroll' && Number.isSafeInteger(event.offset) && Number(event.offset) >= 0
         const focus = site && event.subtype === 'ui_focus' && typeof event.plugin === 'string' && typeof event.key === 'string'
-        const notice = ['ui_status', 'ui_toast'].includes(String(event.subtype)) && event.session_id === projection.sessionId
+        const notification = event.subtype === 'ui_notification'
+        const notice = ['ui_status', 'ui_toast', 'ui_notification'].includes(String(event.subtype)) && event.session_id === projection.sessionId
           && typeof event.uuid === 'string' && event.uuid.length > 0 && event.uuid.length <= 128 && typeof event.plugin === 'string' && event.plugin.length > 0 && event.plugin.length <= 256
-          && (typeof event.text === 'string' && event.text.length <= 10001 || event.subtype === 'ui_status' && event.text === null)
-          && (event.subtype !== 'ui_toast' || Number.isSafeInteger(event.timeout_ms) && Number(event.timeout_ms) >= 0)
+          && (typeof event.text === 'string' && (notification || event.text.length <= 10001) || event.subtype === 'ui_status' && event.text === null)
+          && (!['ui_toast', 'ui_notification'].includes(String(event.subtype)) || Number.isSafeInteger(event.timeout_ms) && Number(event.timeout_ms) >= 0)
+          && (!notification || typeof event.title === 'string' && ['iterm2', 'iterm2_with_bell', 'kitty', 'ghostty', 'terminal_bell'].includes(String(event.channel)) && event.policy_generation === policyGeneration)
         const actionKeys = event.subtype === 'apack_ui_action_keys' && typeof event.client_id === 'string'
           && /^[A-Za-z0-9._-]{1,64}$/.test(event.client_id) && readClaudeUiActionKeys(event.action_keys) !== undefined
         if (!invalidation && !promptTheme && !panes && !scroll && !focus && !notice && !actionKeys) return reply(409, {})
@@ -313,7 +317,7 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
     let observerWrite = Promise.resolve()
     saveObserver = () => {
-      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, restorePlan: options.restorePlan, originalBunOptions: options.bunOptions, generations })
+      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, restorePlan: options.restorePlan, originalBunOptions: options.bunOptions, generations, policyGeneration })
       observerWrite = observerWrite.catch(() => {}).then(async () => {
         const temporary = observerConfig + '.' + randomUUID() + '.tmp'
         await writeFile(temporary, snapshot, { mode: 0o600 })

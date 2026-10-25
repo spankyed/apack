@@ -120,7 +120,7 @@ export type ClaudeUiNoticeEvent = { kind: 'dismiss'; id: string } | { kind: 'hol
 
 export interface ClaudeUiNotices {
   statuses: { plugin: string; text: string }[]
-  toasts: { id: string; plugin: string; text: string }[]
+  toasts: { id: string; plugin: string; text: string; title?: string }[]
 }
 
 interface ClaudeUiTranscriptRowSource {

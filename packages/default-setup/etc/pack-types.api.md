@@ -1461,8 +1461,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     revision: string;
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -1478,8 +1478,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
 }, {
     revision: string;
     cwd: string;
-    command: string;
     id: string;
+    command: string;
     input: Record<string, unknown>;
     sessionId: string;
     requestId: string;
@@ -4271,6 +4271,7 @@ interface ClaudeUiNotices {
         id: string;
         plugin: string;
         text: string;
+        title?: string;
     }[];
 }
 
@@ -13439,8 +13440,8 @@ declare const threadQueries: {
             readonly __entity?: "Thread" | undefined;
         };
         status: string;
-        topic: string;
         shortCode: _apackdev_ears.ShortCode<"THR">;
+        topic: string;
         timestamp: number;
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];

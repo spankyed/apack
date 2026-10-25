@@ -7,7 +7,7 @@
     <div v-for="toast in visibleToasts" :key="toast.id" class="flex min-w-0 items-start gap-2 rounded-lg border border-blue-300/10 bg-blue-300/[0.04] px-3 py-2 leading-5" data-native-toast
       @pointerenter="hold(toast.id, 'pointer', true)" @pointerleave="hold(toast.id, 'pointer', false)" @focusin="hold(toast.id, 'focus', true)"
       @focusout="leaveFocus($event, toast.id)">
-      <div class="min-w-0 flex-1"><span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">{{ toast.plugin }}</span><p class="whitespace-pre-wrap break-words text-neutral-200">{{ toast.text }}</p></div>
+      <div class="min-w-0 flex-1"><span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-400">{{ toast.title ?? toast.plugin }}</span><p class="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-neutral-200">{{ toast.text }}</p></div>
       <button type="button" class="shrink-0 rounded p-1 text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" aria-label="Dismiss native notification" @click="emit('operate', { kind: 'dismiss', id: toast.id })"><X :size="12" /></button>
     </div>
   </section>

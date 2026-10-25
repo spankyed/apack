@@ -464,3 +464,23 @@ it('captures original helper policy at spawn before the bridge policy poll',asyn
  await request('/poll',{sessionId:session,agents:[],statusCommand:helper,policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
  expect(bridge.projection.mainStatus).toBe('fresh managed helper')
 },10000)
+
+it('admits only current-policy native notifications and preserves the epoch across unrelated helper changes', async () => {
+  await create()
+  const receive=vi.fn(),unsubscribe=bridge!.uiTransport.subscribe(receive)
+  const generation=(await config()).policyGeneration
+  const event={type:'system',subtype:'ui_notification',session_id:session,uuid:'native-notify',plugin:'fixture',title:'Release review',text:'Needs attention',channel:'terminal_bell',timeout_ms:5000,policy_generation:generation}
+  try{
+    for(const invalid of [{...event,policy_generation:'retired'},{...event,title:null},{...event,channel:'disabled'}])expect((await request('/ui-event',{sessionId:session,pid:process.pid,event:invalid})).status).toBe(409)
+    expect((await request('/ui-event',{sessionId:session,pid:process.pid,event})).status).toBe(200)
+    expect(receive).toHaveBeenCalledExactlyOnceWith(event)
+    await request('/poll',{sessionId:session,agents:[],statusCommand:'new helper'})
+    expect((await config()).policyGeneration).toBe(generation)
+    await request('/poll',{sessionId:session,agents:[],policy:{allowManagedHooksOnly:true,disableAllHooks:false},hooksDisabled:false})
+    await request('/poll',{sessionId:session,agents:[],policy:{allowManagedHooksOnly:false,disableAllHooks:false},hooksDisabled:false})
+    const current=(await config()).policyGeneration;expect(current).not.toBe(generation)
+    expect((await request('/ui-event',{sessionId:session,pid:process.pid,event:{...event,uuid:'late-notify'}})).status).toBe(409)
+    expect((await request('/ui-event',{sessionId:session,pid:process.pid,event:{...event,uuid:'fresh-notify',policy_generation:current}})).status).toBe(200)
+    expect(receive).toHaveBeenCalledTimes(2)
+  }finally{unsubscribe()}
+})

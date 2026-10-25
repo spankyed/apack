@@ -59,26 +59,37 @@ function publish(event){
  try{const current=JSON.parse(readFileSync(configUrl,'utf8'));const request=http.request({socketPath:config.socketPath,path:'/ui-event',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:500},response=>response.resume());request.on('error',()=>{});request.on('timeout',()=>request.destroy());request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,event}));}catch{}
 }
 // Match native remote replay: latest status per plugin, bounded recent transients for first attach.
-const noticeStatuses=new Map(),noticeTransient=[],noticeContexts=new WeakSet(),noticeMethods=new WeakSet();
+const noticeStatuses=new Map(),noticeTransient=[],noticeMethods=new WeakSet();
 let noticeSession=config.sessionId,noticeOrder=0,noticeAttached=false;
 function resetNotices(sessionId){noticeSession=sessionId;noticeStatuses.clear();noticeTransient.length=0;noticeAttached=false;}
-function recordNotice(subtype,plugin,text,timeout){
+function recordNotice(subtype,plugin,text,timeout,details){
  const current=JSON.parse(readFileSync(configUrl,'utf8'));
  if(noticeSession!==current.sessionId)resetNotices(current.sessionId);
- const event={type:'system',subtype,plugin,text:text??null,uuid:randomUUID(),session_id:current.sessionId,...(subtype==='ui_toast'?{timeout_ms:timeout}:{})};
+ const event={type:'system',subtype,plugin,text:text??null,uuid:randomUUID(),session_id:current.sessionId,...(['ui_toast','ui_notification'].includes(subtype)?{timeout_ms:timeout}:{}),...(details??{})};
  const item={event,at:Date.now(),order:++noticeOrder};
  if(subtype==='ui_status'){noticeStatuses.delete(plugin);noticeStatuses.set(plugin,item);}
  else if(!clients.size){noticeTransient.push(item);noticeTransient.splice(0,Math.max(0,noticeTransient.length-20));}
  if(clients.size)publish(event);
 }
+function noticeScope(){try{const current=JSON.parse(readFileSync(configUrl,'utf8'));return JSON.stringify([current.sessionId,current.policyGeneration,helperPolicyReader?.()])}catch{return}}
+function notificationPlugin(origin){return Array.isArray(origin)?origin.map(value=>typeof value==='string'?value:value?.plugin).findLast(value=>typeof value==='string'&&value.length>0&&value.length<=256):undefined}
 function installNotices(n,context){
- if(context?.surface!=='terminal'||noticeContexts.has(context))return;
- if(noticeMethods.has(context.toast)&&noticeMethods.has(context.status)){noticeContexts.add(context);return;}
- noticeContexts.add(context);
- const toast=context.toast,status=context.status;
- context.toast=function(plugin,text,timeout){const result=Reflect.apply(toast,this,arguments);try{recordNotice('ui_toast',plugin,text,timeout??n.runtime.o7t);}catch{}return result;};
- context.status=function(plugin,text){const result=Reflect.apply(status,this,arguments);try{recordNotice('ui_status',plugin,text);}catch{}return result;};
- noticeMethods.add(context.toast);noticeMethods.add(context.status);
+ if(context?.surface!=='terminal')return;
+ if(!noticeMethods.has(context.toast)){
+  const toast=context.toast;context.toast=function(plugin,text,timeout){const result=Reflect.apply(toast,this,arguments);try{recordNotice('ui_toast',plugin,text,timeout??n.runtime.o7t);}catch{}return result;};noticeMethods.add(context.toast);
+ }
+ if(!noticeMethods.has(context.status)){
+  const status=context.status;context.status=function(plugin,text){const result=Reflect.apply(status,this,arguments);try{recordNotice('ui_status',plugin,text);}catch{}return result;};noticeMethods.add(context.status);
+ }
+ if(typeof context.notify==='function'&&!noticeMethods.has(context.notify)){
+  const notify=context.notify;
+  context.notify=async function(data,origin){
+   const scope=noticeScope(),receiver=this,plugin=notificationPlugin(origin);
+   const result=await Reflect.apply(notify,this,arguments);
+   if(scope&&scope===noticeScope()&&n.runtime.ey()===receiver&&plugin&&data?.notificationType==='plugin_notification'&&typeof data.message==='string'&&typeof data.title==='string'&&['iterm2','iterm2_with_bell','kitty','ghostty','terminal_bell'].includes(result))try{recordNotice('ui_notification',plugin,data.message,n.runtime.o7t,{title:data.title,channel:result,policy_generation:JSON.parse(scope)[1]})}catch{}
+   return result;
+  };noticeMethods.add(context.notify);
+ }
 }
 function replayNotices(){
  const current=JSON.parse(readFileSync(configUrl,'utf8'));

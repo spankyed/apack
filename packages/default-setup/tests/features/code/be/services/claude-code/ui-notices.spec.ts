@@ -56,3 +56,12 @@ it('holds reading lifetimes for hover/focus, composes pane pauses and caps a con
   f.host.receive(f.event('ui_toast', 'c', 'Dismiss', { timeout_ms: 1000 })); f.host.operate({ kind: 'dismiss', id: 'foreign' }); expect(f.host.state?.toasts).toHaveLength(1)
   f.host.operate({ kind: 'dismiss', id: 'c' }); expect(f.host.state).toBeUndefined(); expect(vi.getTimerCount()).toBe(0); f.host.dispose()
 })
+
+it('keeps native notification titles and long bodies without accepting refused channels', () => {
+  const f=fixture(),text='Release detail '.repeat(1000)
+  f.host.receive(f.event('ui_notification','accepted',text,{title:'Release review',channel:'terminal_bell',timeout_ms:5000}))
+  expect(f.host.state?.toasts).toEqual([{id:'accepted',plugin:'fixture',title:'Release review',text}])
+  f.host.receive(f.event('ui_notification','disabled','Refused',{title:'Title',channel:'disabled',timeout_ms:5000}))
+  f.host.receive(f.event('ui_toast','oversized',text,{timeout_ms:5000}))
+  expect(f.host.state?.toasts).toHaveLength(1);f.host.dispose()
+})

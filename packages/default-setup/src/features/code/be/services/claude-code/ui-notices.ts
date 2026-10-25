@@ -3,7 +3,7 @@ import type { ClaudeUiNotices } from './ui-presentation.ts'
 /** A mounted native view owns its notice clock; a shown holdToasts pane pauses transient lifetimes. */
 export function createClaudeUiNotices(options: { current(): boolean; sessionId(): string | undefined; publish(): void }) {
   const statuses = new Map<string, string>(), seen = new Set<string>()
-  let toasts: { id: string; plugin: string; text: string; deadline: number; hoveredAt?: number }[] = []
+  let toasts: { id: string; plugin: string; text: string; title?: string; deadline: number; hoveredAt?: number }[] = []
   let sessionId: string | undefined, held = false, pausedAt = 0, pausedFor = 0, disposed = false, timer: ReturnType<typeof setTimeout> | undefined
   const now = () => (held ? pausedAt : Date.now()) - pausedFor
   function clearTimer() { if (timer) clearTimeout(timer); timer = undefined }
@@ -24,7 +24,7 @@ export function createClaudeUiNotices(options: { current(): boolean; sessionId()
   return {
     get state(): ClaudeUiNotices | undefined {
       if (disposed) return
-      const visible = held ? [] : toasts.map(({ id, plugin, text }) => ({ id, plugin, text }))
+      const visible = held ? [] : toasts.map(({ id, plugin, text, title }) => ({ id, plugin, text, ...(title === undefined ? {} : { title }) }))
       if (!statuses.size && !visible.length) return
       return { statuses: [...statuses].map(([plugin, text]) => ({ plugin, text })), toasts: visible }
     },
@@ -41,12 +41,13 @@ export function createClaudeUiNotices(options: { current(): boolean; sessionId()
         if (sessionId && sessionId !== event.session_id) { reset(event.session_id); options.publish() }
         return
       }
-      if (event.type !== 'system' || !['ui_status', 'ui_toast'].includes(String(event.subtype))) return
+      if (event.type !== 'system' || !['ui_status', 'ui_toast', 'ui_notification'].includes(String(event.subtype))) return
       if (typeof event.session_id !== 'string' || !event.session_id || (options.sessionId() && options.sessionId() !== event.session_id)
         || (sessionId && sessionId !== event.session_id) || typeof event.uuid !== 'string' || !event.uuid || event.uuid.length > 128
         || typeof event.plugin !== 'string' || !event.plugin || event.plugin.length > 256
-        || (event.text !== null && (typeof event.text !== 'string' || event.text.length > 10001))) return
-      if (event.subtype === 'ui_toast' && (typeof event.text !== 'string' || !Number.isSafeInteger(event.timeout_ms))) return
+        || (event.text !== null && (typeof event.text !== 'string' || event.subtype !== 'ui_notification' && event.text.length > 10001))) return
+      if (['ui_toast', 'ui_notification'].includes(String(event.subtype)) && (typeof event.text !== 'string' || !Number.isSafeInteger(event.timeout_ms))) return
+      if (event.subtype === 'ui_notification' && (typeof event.title !== 'string' || !['iterm2', 'iterm2_with_bell', 'kitty', 'ghostty', 'terminal_bell'].includes(String(event.channel)))) return
       if (seen.has(event.uuid)) return
       sessionId = event.session_id; seen.add(event.uuid)
       if (seen.size > 512) seen.delete(seen.values().next().value!)
@@ -55,7 +56,7 @@ export function createClaudeUiNotices(options: { current(): boolean; sessionId()
         else { statuses.delete(event.plugin); statuses.set(event.plugin, event.text as string) }
       } else {
         const remaining = Math.max(0, event.timeout_ms as number)
-        toasts.push({ id: event.uuid, plugin: event.plugin, text: event.text as string, deadline: now() + remaining })
+        toasts.push({ id: event.uuid, plugin: event.plugin, text: event.text as string, ...(event.subtype === 'ui_notification' ? { title: event.title as string } : {}), deadline: now() + remaining })
         // Native caps the stack at fifty and evicts an oldest row from its most numerous owner.
         if (toasts.length > 50) {
           const counts = new Map<string, number>()
