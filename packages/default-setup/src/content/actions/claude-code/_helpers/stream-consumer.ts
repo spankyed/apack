@@ -1,3 +1,4 @@
+import { projectClaudeUiLog } from './native-ui-log.ts';
 import { presentMcpElicitation } from './mcp-elicitation.ts';
 import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
 import { projectClaudeInputReplay } from './native-input-replay.ts';
@@ -138,6 +139,7 @@ export async function consumeStream(
   let currentMessageCliUuid: string | undefined;
   let nativeMessages = createClaudeNativeMessageTracker();
   let nativeSessionId = ctx.resumeSessionId;
+  const nativeLogIds = new Set<string>();
   const activity = ctx.activity;
   let nestedToolCount = 0;
   let nestedToolErrors = false;
@@ -246,6 +248,21 @@ export async function consumeStream(
             cwd: line.cwd || '',
           },
         });
+        continue;
+      }
+
+      if (line.type === 'system' && line.subtype === 'ui_log') {
+        const notice = projectClaudeUiLog(line, nativeSessionId);
+        if (notice) {
+          const key = JSON.stringify([notice.sessionId, notice.uuid]);
+          if (!nativeLogIds.has(key)) {
+            const message = services.chat.sendSystemMessage({ threadId, text: notice.text });
+            services.chat.updateMessageState(message.messageId, { text: notice.text, context: {
+              cliUuid: notice.uuid, claudeNativeLog: { uuid: notice.uuid, sessionId: notice.sessionId, plugin: notice.plugin },
+            } });
+            nativeLogIds.add(key);
+          }
+        }
         continue;
       }
 
