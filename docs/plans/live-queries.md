@@ -1,12 +1,15 @@
 # Live queries
 
-Status: Steps 1–5 implemented, 2026-10-25: `engine.watch`, the read-set index and the harness property (step 1,
+Status: Steps 1–5 done, 2026-10-25: `engine.watch`, the read-set index and the harness property (step 1,
 `517900b52`); elmdb's protocol (step 1a, done: `elmdb` `78f9fb0`); views in the SDK, host, API, renderer and harness
 (`e4f65d409`); prompts on views (`cdeb2c846`); step 4, one change per feature: actions (`0a7313f0f`), flows
 (`50d788397`), notes (`675f2c6f0`), library (`301c6c917`), database (`ec02c7754`), threads (`522b5f5c5`), brain
-(`d19538a74`), browser (`fab8e242d`), code (`7b80bffb8`) and logs (`97812929a`), with the run-history fetches answered
-to their asker alone; step 5, the guide rewritten and the pack rule decided against (`b9d9be8bb`). No feature in default-setup broadcasts row data. Step 1's readings and
-the decisions each step made are below.
+(`d19538a74`), browser (`fab8e242d`), code (`7b80bffb8`) and logs (`97812929a`); step 5, the guide rewritten and the
+pack rule decided against (`b9d9be8bb`). Then the last broadcasts carrying data, one change per feature: the
+run-history fetches answered to their asker alone (`2f9fd5723`), the flows model catalog asked for (`0061451ea`), the
+code surface's startup asked for and a git write announced as news (`da805a5d1`), and a flow's generated query and
+commit message answered to the window that asked (`ce5e05236`). No feature in default-setup broadcasts row data.
+Step 1's readings and the decisions each step made are below.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
