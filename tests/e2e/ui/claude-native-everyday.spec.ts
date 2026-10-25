@@ -219,7 +219,7 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect(question).toBeVisible(); await expect(question).toContainText('Who should the release summary address?')
   await expect(composer).toBeHidden(); await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
   const toolNotice=process.env.CLAUDE_RESEARCH_QUESTION_TOOL_NOTICE==='1'
-  let questionNoticeReceipt: any
+  let questionNoticeReceipt: any, missingCallRefusal: any
   const questionNoticeLiveUpdates: any[]=[]
   async function readQuestionNoticeScreen(){
     const native=(await context()).native,chunks=native.output.filter((chunk:any)=>chunk.sequence>lastSequence)
@@ -261,16 +261,34 @@ test('completes an everyday native review across Agent, approval, question and i
       questionNoticeLiveUpdates.push({action,receipt,nativePaint:true,answerRetained:true,widths:[1100,680]})
       await writeFile(join(workspace!,'native-question-tool-notice-live-progress.json'),JSON.stringify(questionNoticeLiveUpdates))
     }
+    await writeFile(join(workspace!,'native-question-tool-notice-command.json'),JSON.stringify({sequence:4,action:'non-open'}))
+    await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-command-result.json'),'utf8').catch(()=>'{}')).sequence).toBe(4)
+    missingCallRefusal=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-command-result.json'),'utf8'))
+    expect(missingCallRefusal.accepted).toBe(false);expect(missingCallRefusal.error).toContain('no call with that tool_use_id is open')
+    await expect(question.getByRole('note')).toContainText(questionNoticeReceipt.text)
+    await expect(appPage.getByText('Nonexistent-call notice must not appear.',{exact:false})).toHaveCount(0)
+    await expect(answer).toHaveValue('Developers')
+    expect((await context()).claude.turns).toBe(before.claude.turns)
+    expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    await capture('question-notice-refused',question.getByRole('note'),[question.getByRole('button',{name:'Submit answers',exact:true})],question.getByLabel('Question details',{exact:true}))
   }
   await question.getByRole('radio', { name: 'Developers People integrating the updated behavior', exact: true }).check()
   await question.getByRole('button', { name: 'Submit answers', exact: true }).click()
   await expect(question).toBeHidden()
-  if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,liveUpdates:questionNoticeLiveUpdates,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
+  if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,missingCallRefusal,liveUpdates:questionNoticeLiveUpdates,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('for developers.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
   await composer.fill('Draft the release summary while I review the checklist.')
   await send.click()
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-pause-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
+  if(toolNotice){
+    const closedRefusal=JSON.parse(await readFile(join(workspace!,'native-question-tool-notice-closed-refusal.json'),'utf8'))
+    expect(closedRefusal.accepted).toBe(false);expect(closedRefusal.toolUseId).toBe(questionNoticeReceipt.toolUseId)
+    expect(closedRefusal.error).toContain('no call with that tool_use_id is open')
+    await expect(appPage.getByText('Closed-question notice must not appear.',{exact:false})).toHaveCount(0)
+    const path=join(workspace!,'native-question-tool-notice-app.json'),proof=JSON.parse(await readFile(path,'utf8'))
+    await writeFile(path,JSON.stringify({...proof,closedRefusal}))
+  }
   await composer.fill('Keep this note after interruption.')
   await card.getByTitle('Pause agent work', { exact: true }).click()
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
