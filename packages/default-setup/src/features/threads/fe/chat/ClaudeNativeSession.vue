@@ -8,7 +8,7 @@
           <PopoverRoot :key="view.state.notice.revision">
             <PopoverTrigger as-child><button type="button" class="native-notice__details">About this plugin</button></PopoverTrigger>
             <PopoverPortal>
-              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" aria-label="LSP plugin details" class="native-notice__detail-text">
+              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" aria-label="LSP plugin details" class="claude-native-lsp-details">
                 <header><h3>About this plugin</h3><PopoverClose as-child><button type="button" aria-label="Close plugin details">Close</button></PopoverClose></header>
                 <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
               </PopoverContent>
@@ -190,11 +190,11 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-notice__identity { overflow-wrap: anywhere; }
 .native-notice__details { padding: 0; border: 0; background: none; color: #aaa59e; font-size: 11px; cursor: pointer; }
 .native-notice__details:focus-visible { outline: 1px solid #8eadd3; outline-offset: 3px; }
-.native-notice__detail-text { z-index: 50; width: min(32rem, calc(100vw - 24px)); max-height: min(35vh, var(--reka-popover-content-available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #ffffff26; border-radius: 10px; background: #232323; color: #c9c5bf; font-size: 12px; line-height: 1.5; box-shadow: 0 12px 36px #0008; overflow-wrap: anywhere; }
-.native-notice__detail-text header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
-.native-notice__detail-text h3 { margin: 0; color: #eee7dd; font-size: 13px; font-weight: 500; }
-.native-notice__detail-text header button { color: #aaa59e; font-size: 11px; cursor: pointer; }
-.native-notice__detail-text p { margin: 0 0 8px; }
+:global(.claude-native-lsp-details) { z-index: 50; width: min(32rem, calc(100vw - 24px)); max-height: min(35vh, var(--reka-popover-content-available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #ffffff26; border-radius: 10px; background: #232323; color: #c9c5bf; font-size: 12px; line-height: 1.5; box-shadow: 0 12px 36px #0008; overflow-wrap: anywhere; }
+:global(.claude-native-lsp-details header) { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+:global(.claude-native-lsp-details h3) { margin: 0; color: #eee7dd; font-size: 13px; font-weight: 500; }
+:global(.claude-native-lsp-details header button) { color: #aaa59e; font-size: 11px; cursor: pointer; }
+:global(.claude-native-lsp-details p) { margin: 0 0 8px; }
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
