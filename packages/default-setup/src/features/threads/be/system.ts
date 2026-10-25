@@ -561,6 +561,12 @@ export const threadsSystem = setup({
         threadId = result.threadId;
         threadData = result.threadData;
 
+        // A first slash command consumes the draft's project just like a first message.
+        // Save it before broadcasting the thread so another window can continue there.
+        if (mode === 'Claude Code' && cwdOverride) {
+          repository.threadCommands.update(threadId, { context: { claudeCode: { cwd: cwdOverride } } });
+        }
+
         logger.info('Created new thread for user command', {
           threadId,
           command,

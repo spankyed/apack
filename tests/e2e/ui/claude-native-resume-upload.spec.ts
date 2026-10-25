@@ -111,14 +111,7 @@ test('retires a held image upload when another window resumes into the same empt
   await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='assistant'&&message.text?.includes('Last reported:'))).toBe(true)
   expect((await context()).messages.filter((message:any)=>message.sender==='user'&&!message.isCommand)).toHaveLength(0)
   expect((await context()).sessionId).toBeUndefined()
-  // The first read-only command consumes pendingThreadCwd without persisting a native session.
-  // Establish the project through its ordinary command before the cross-window race.
-  await composer.fill('');await composer.pressSequentially('/cc-set-dir')
-  await appPage.locator('.command-suggestion-popup').getByText('/cc-set-dir',{exact:true}).click()
-  await composer.pressSequentially(' '+workspace!)
-  await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='assistant'&&message.text===`Working directory set to: ${workspace}`)).toBe(true)
-  expect((await context()).sessionId).toBeUndefined()
+  expect((await context()).claude.cwd).toBe(workspace)
   const threadId=(await context()).threadId
   let popout:import('@playwright/test').Page|undefined
     const opened=electronApp.waitForEvent('window')
