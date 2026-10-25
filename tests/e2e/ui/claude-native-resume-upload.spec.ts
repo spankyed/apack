@@ -191,7 +191,9 @@ test('retires a held image upload when another window resumes into the same empt
   const baselineIds=new Set(baselineHumans.map((row:any)=>row.uuid)),fresh=humans.filter((row:any)=>!baselineIds.has(row.uuid))
   expect(fresh).toHaveLength(1);expect(typeof fresh[0].message.content).toBe('string');expect(fresh[0].message.content).not.toContain(heldDraft);expect(fresh[0].message.content).toContain(freshText)
   expect(humans).toHaveLength(baselineHumans.length+1)
-  await expect.poll(async()=>(await originalRows()).filter((row:any)=>row.type==='cost-state').at(-1)?.totalCostUSD).toBe(replacement.claude.totalCostUsd)
+  // Native cost-state is flushed on owned shutdown; the outer verifier checks that journal.
+  // The completed original print result is the authoritative live cumulative cost.
+  await expect.poll(async()=>{const rows=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));return rows.filter((row:any)=>row.sessionId===sessionId).at(-1)?.totalCostUsd}).toBe(replacement.claude.totalCostUsd)
   expect(replacement.claude.totalCostUsd).toBeGreaterThanOrEqual(baselineCost)
   await composer.fill('Keep working in the resumed session.');await capture('fresh')
   await writeFile(join(workspace!,'native-resume-upload-proof.json'),JSON.stringify({threadId,sourceSessionId:sessionId,finalSessionId:replacement.sessionId,boundNativePid,heldDraft,freshText,baselineCost,finalCost:replacement.claude.totalCostUsd,baselineHumanUuids:baselineHumans.map((row:any)=>row.uuid),newHumanUuid:fresh[0].uuid,uploadHeld:true,uploadCompleted:true,resumeFromOtherWindow:true,sameEmptyThread:true,noResetDuringUpload:true,oldSendRetired:true,draftAndImageRetained:true,explicitImageRemoval:true,replacementImageBlocks:0,captures}))
