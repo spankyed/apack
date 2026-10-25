@@ -107,7 +107,11 @@ test('runs native Client state props input and lifetime inside the app', async (
   const clientLabel=region.getByText(/^Native Client label=/)
   async function showClientLabel(){
     await clientLabel.scrollIntoViewIfNeeded()
-    await expect.poll(()=>clientLabel.evaluate(element=>{const bounds=element.getBoundingClientRect();return element.contains(document.elementFromPoint(bounds.left+Math.min(20,bounds.width/2),bounds.top+bounds.height/2))})).toBe(true)
+    await expect.poll(()=>clientLabel.evaluate(element=>{
+      let left=0,right=innerWidth,top=0,bottom=innerHeight
+      for(let parent=element.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent),box=parent.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(style.overflowX)){left=Math.max(left,box.left);right=Math.min(right,box.right)}if(/auto|scroll|hidden|clip/.test(style.overflowY)){top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
+      return [...element.getClientRects()].some(box=>{const x1=Math.max(left,box.left),x2=Math.min(right,box.right),y1=Math.max(top,box.top),y2=Math.min(bottom,box.bottom);return x2>x1&&y2>y1&&element.contains(document.elementFromPoint(x1+Math.min(10,(x2-x1)/2),(y1+y2)/2))})
+    })).toBe(true)
   }
   await showClientLabel()
   await expect.poll(()=>region.textContent()).not.toContain('room=0x0')
