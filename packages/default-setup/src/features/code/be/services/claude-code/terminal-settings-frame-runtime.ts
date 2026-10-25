@@ -23,12 +23,13 @@ function nativeSettingsFrame(n,entry){
   if(fiber.sibling)pending.push(fiber.sibling);if(fiber.child)pending.push(fiber.child);
  }
  if(owners.length!==1)throw Error('Native Settings frame is not uniquely mounted');
- const children=[owners[0].child],visited=new Set(),tabs=[],status=[],loaders=[],stats=[];
+ const children=[owners[0].child],visited=new Set(),tabs=[],status=[],loaders=[],stats=[],statsTabs=[];
  while(children.length){
   const fiber=children.pop();if(!fiber||visited.has(fiber))continue;
   if(visited.size>=4096)throw Error('Native Settings frame exceeded bound');visited.add(fiber);
   const p=fiber.memoizedProps;
   if(typeof fiber.type==='function'&&p){
+   if(p.title===null&&typeof p.onTabChange==='function'&&['Overview','Models'].includes(p.selectedTab))statsTabs.push(p);
    if(p.title==='Settings'&&typeof p.onTabChange==='function')tabs.push(p);
    if(Object.hasOwn(p,'accountStatusRead')&&Object.hasOwn(p,'machineStatusRead')){checked(fiber,'status');status.push(fiber);}
    if(p.allTimePromise&&p.activeTimePromise){checked(fiber,'loader');loaders.push(fiber);}
@@ -37,13 +38,22 @@ function nativeSettingsFrame(n,entry){
   // Do not visit the owner's siblings: a second dialog must never supply this frame's data.
   if(fiber.sibling)children.push(fiber.sibling);if(fiber.child)children.push(fiber.child);
  }
- if(tabs.length!==1||status.length>1||loaders.length>1||stats.length>1)throw Error('Native Settings controls are ambiguous');
+ if(tabs.length!==1||status.length>1||loaders.length>1||stats.length>1||statsTabs.length>1)throw Error('Native Settings controls are ambiguous');
  const panel=tabs[0],titles=(Array.isArray(panel.children)?panel.children:[panel.children]).map(child=>child?.props?.title);
  if(JSON.stringify(titles)!==JSON.stringify(['Status','Config','Usage','Stats'])||!titles.includes(panel.selectedTab)||typeof panel.hidden!=='boolean')throw Error('Native Settings tab contract changed');
  entry.current();if(entry.closed||entry.answered)throw Error('Native Settings frame expired');
- return {owner:owners[0],panel,status:status[0],loader:loaders[0],stats:stats[0]};
+ return {owner:owners[0],panel,status:status[0],loader:loaders[0],stats:stats[0],statsTabs:statsTabs[0]};
 }
-async function readNativeSettingsFrame(n,entry,signal){
+async function awaitNativeSettingsReading(promise,signal){
+ signal?.throwIfAborted();let timer,cancel;
+ try{return await new Promise((resolve,reject)=>{
+  timer=setTimeout(()=>reject(Error('Native Settings reading timed out')),5000);
+  cancel=()=>reject(signal.reason??Error('Native Settings reading cancelled'));
+  signal?.addEventListener('abort',cancel,{once:true});
+  Promise.resolve(promise).then(resolve,reject);
+ });}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
+}
+async function readNativeSettingsFrameOnce(n,entry,signal){
  signal?.throwIfAborted();
  const source=nativeSettingsFrame(n,entry),panel=source.panel;
  const result={selectedTab:panel.selectedTab,tabs:panel.children.map(child=>child.props.title),hidden:panel.hidden};
@@ -65,9 +75,34 @@ async function readNativeSettingsFrame(n,entry,signal){
    result.status.push(rows);
   }
  }
+ if(panel.selectedTab==='Usage'){
+  // No breakdown argument: the original API only reads its existing ledger, without token-count requests.
+  const usage=await awaitNativeSettingsReading(n.runtime.Hco({},'apack native Settings'),signal);
+  result.usage={startedAt:usage.startedAt,context:{window:usage.context.window,...(usage.context.tokens!==undefined?{tokens:usage.context.tokens}:{}),...(usage.context.percent!==undefined?{percent:usage.context.percent}:{})},...(usage.cost?{cost:{usd:usage.cost.usd}}:{}),rateLimits:usage.rateLimits.map(row=>({kind:row.kind,percentUsed:row.percentUsed,...(row.resetsAt!==undefined?{resetsAt:row.resetsAt}:{})}))};
+ }
+ if(panel.selectedTab==='Stats'&&source.loader){
+  const outcome=await awaitNativeSettingsReading(source.loader.memoizedProps.allTimePromise,signal);
+  const props=source.stats?.memoizedProps;
+  if(outcome.type==='success'&&!props)throw Error('Native Settings frame is not ready');
+  result.stats={outcome:outcome.type,loading:props?.isLoading===true,...(outcome.type==='error'?{problem:String(outcome.message)}:{}),...(source.statsTabs?{view:source.statsTabs.selectedTab}:{}),...(props?{range:props.selectorRange??props.dateRange??'all'}:{})};
+  if(props){
+   const data=props.stats;
+   result.stats.data={totalSessions:data.totalSessions,totalMessages:data.totalMessages,totalDays:data.totalDays,activeDays:data.activeDays,dailyActivity:data.dailyActivity.map(row=>({date:row.date,messageCount:row.messageCount,sessionCount:row.sessionCount,toolCallCount:row.toolCallCount})),modelUsage:Object.fromEntries(Object.entries(data.modelUsage).map(([model,row])=>[model,{inputTokens:row.inputTokens,outputTokens:row.outputTokens,cacheReadInputTokens:row.cacheReadInputTokens,cacheCreationInputTokens:row.cacheCreationInputTokens,costUSD:row.costUSD}]))};
+  }
+ }
  signal?.throwIfAborted();const current=nativeSettingsFrame(n,entry);
- if(current.owner!==source.owner||current.panel!==source.panel||current.status!==source.status)throw Error('Native Settings frame changed while reading');
+ if(current.owner!==source.owner||current.panel!==source.panel||current.status!==source.status||current.stats!==source.stats||current.loader!==source.loader)throw Error('Native Settings frame changed while reading');
  return result;
+}
+async function readNativeSettingsFrame(n,entry,signal){
+ const until=Date.now()+1500;
+ while(true){
+  try{return await readNativeSettingsFrameOnce(n,entry,signal);}
+  catch(error){
+   if(!['Native Settings Status rows are not ready','Native Settings frame is not ready','Native Settings frame changed while reading'].includes(error.message)||Date.now()>=until)throw error;
+   signal?.throwIfAborted();entry.current();await new Promise(resolve=>setTimeout(resolve,40));
+  }
+ }
 }
 async function selectNativeSettingsTab(n,entry,tab,signal){
  const source=nativeSettingsFrame(n,entry);
@@ -80,5 +115,19 @@ async function selectNativeSettingsTab(n,entry,tab,signal){
   if(Date.now()>=until)throw Error('Claude Code has not acknowledged the selected Settings tab');
   await new Promise(resolve=>setTimeout(resolve,40));
  }
+}
+async function actNativeSettingsStats(n,entry,action,signal){
+ signal?.throwIfAborted();const source=nativeSettingsFrame(n,entry);
+ if(source.panel.selectedTab!=='Stats'||!source.loader)throw Error('Native Stats controls are unavailable');
+ if(action==='Overview'||action==='Models'){
+  if(!source.statsTabs)throw Error('Native Stats views are unavailable');
+  source.statsTabs.onTabChange(action);
+ }else if(action==='cycleDates'){
+  const caches=source.loader.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===50);
+  if(caches?.length!==1||typeof caches[0][3]!=='function')throw Error('Native Stats date control changed');
+  caches[0][3]();
+ }else throw Error('Invalid native Stats action');
+ // Let the original React state update; the following read still validates dialog identity.
+ await new Promise(resolve=>setTimeout(resolve,40));signal?.throwIfAborted();entry.current();
 }
 `

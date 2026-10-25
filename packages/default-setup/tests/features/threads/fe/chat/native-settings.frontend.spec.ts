@@ -23,3 +23,25 @@ it('keeps native values authoritative, explains locks and allows Close while a s
     expect(root.querySelector('[role="alert"]')?.textContent).toBe('Native save refused'); expect(tips.checked).toBe(true)
   } finally { app.unmount(); root.remove() }
 })
+
+it('waits for native tab acknowledgement and displays structured Status, Usage and Stats', async () => {
+  const frame = reactive<NonNullable<import('#features/code/common/native-settings.ts').ClaudeSettingsSnapshot['frame']>>({ selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false })
+  const operations: ClaudeSettingsOperation[] = [], root = document.createElement('div'); document.body.append(root)
+  const app = createApp(NativeSettingsPanel, {state:{requestId:'frame',status:'ready',snapshot:{revision:'b'.repeat(64),rows:[],frame}},onOperate:(event:ClaudeSettingsOperation)=>operations.push(event)})
+  app.mount(root)
+  try {
+    await nextTick()
+    const status = [...root.querySelectorAll('nav button')].find(button=>button.textContent==='Status') as HTMLButtonElement
+    status.click(); await nextTick()
+    expect(operations.at(-1)).toEqual({kind:'tab',tab:'Status',revision:'b'.repeat(64)})
+    expect(root.querySelector('[aria-label="Search Claude Code settings"]')).not.toBeNull()
+    frame.selectedTab='Status'; frame.status=[[{label:'Version',value:'2.1.302'}]]; await nextTick()
+    expect(root.textContent).toContain('2.1.302'); expect(root.querySelector('[aria-label="Search Claude Code settings"]')).toBeNull()
+    frame.selectedTab='Usage'; frame.usage={startedAt:1,context:{window:200000},rateLimits:[]}; await nextTick()
+    expect(root.textContent).toContain('no rate-limit reading'); expect(root.textContent).not.toContain('Session cost')
+    frame.selectedTab='Stats'; frame.stats={outcome:'success',loading:false,view:'Models',range:'7d',data:{totalSessions:1,totalMessages:2,totalDays:1,activeDays:1,dailyActivity:[],modelUsage:{'native-model':{inputTokens:10,outputTokens:5,cacheReadInputTokens:0,cacheCreationInputTokens:0,costUSD:0.02}}}}; await nextTick()
+    expect(root.textContent).toContain('native-model'); expect(root.textContent).toContain('Last 7 days')
+    const cycle = [...root.querySelectorAll('button')].find(button=>button.textContent?.includes('Change dates')) as HTMLButtonElement
+    cycle.click(); expect(operations.at(-1)).toEqual({kind:'stats',action:'cycleDates',revision:'b'.repeat(64)})
+  } finally { app.unmount(); root.remove() }
+})

@@ -1459,8 +1459,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1476,8 +1476,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    revision: string;
     cwd: string;
+    revision: string;
     command: string;
     id: string;
     input: Record<string, unknown>;
@@ -1623,9 +1623,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1655,9 +1655,9 @@ declare const ClaudeNativeFileDialogSchema: z.ZodObject<{
     revision: string;
     title: string;
     id: string;
+    question: string;
     input: Record<string, unknown>;
     sessionId: string;
-    question: string;
     requestId: string;
     toolName: "Edit" | "NotebookEdit" | "Read" | "Write";
     review?: {
@@ -1952,10 +1952,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1970,10 +1970,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
+    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
-    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2037,9 +2037,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2047,18 +2047,18 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     token: string;
     serverName: string;
     url: string;
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     warnings: string[];
 }, {
+    ready: boolean;
     revision: string;
     message: string;
-    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2066,13 +2066,13 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     token: string;
     serverName: string;
     url: string;
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     warnings: string[];
 }>;
 
@@ -2133,28 +2133,28 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }, {
     revision: string;
     title: string;
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -2198,8 +2198,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             clearContext: boolean;
         }>, "many">;
     }, "strip", z.ZodTypeAny, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2210,8 +2210,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
         initialChoice: string;
         planFilePath?: string | undefined;
     }, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2222,8 +2222,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
         initialChoice: string;
         planFilePath?: string | undefined;
     }>, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2234,8 +2234,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
         initialChoice: string;
         planFilePath?: string | undefined;
     }, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2246,8 +2246,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
         initialChoice: string;
         planFilePath?: string | undefined;
     }>, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2258,8 +2258,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
         initialChoice: string;
         planFilePath?: string | undefined;
     }, {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2280,8 +2280,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
     requestId: string;
     toolName: "EnterPlanMode" | "ExitPlanMode";
     presentation: {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -2301,8 +2301,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
     requestId: string;
     toolName: "EnterPlanMode" | "ExitPlanMode";
     presentation: {
-        withheld: boolean;
         empty: boolean;
+        withheld: boolean;
         plan: string;
         choices: {
             value: string;
@@ -3845,6 +3845,10 @@ type ClaudeSettings = z.infer<typeof ClaudeSettingsSchema>;
 
 type ClaudeSettingsOperation = {
     kind: 'read';
+} | {
+    kind: 'stats';
+    revision: string;
+    action: 'Models' | 'Overview' | 'cycleDates';
 } | {
     kind: 'tab';
     revision: string;
@@ -10553,6 +10557,206 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         selectedTab: z.ZodEnum<["Status", "Config", "Usage", "Stats"]>;
         tabs: z.ZodArray<z.ZodEnum<["Status", "Config", "Usage", "Stats"]>, "many">;
         hidden: z.ZodBoolean;
+        usage: z.ZodOptional<z.ZodObject<{
+            startedAt: z.ZodNumber;
+            context: z.ZodObject<{
+                window: z.ZodNumber;
+                tokens: z.ZodOptional<z.ZodNumber>;
+                percent: z.ZodOptional<z.ZodNumber>;
+            }, "strict", z.ZodTypeAny, {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            }, {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            }>;
+            cost: z.ZodOptional<z.ZodObject<{
+                usd: z.ZodNumber;
+            }, "strict", z.ZodTypeAny, {
+                usd: number;
+            }, {
+                usd: number;
+            }>>;
+            rateLimits: z.ZodArray<z.ZodObject<{
+                kind: z.ZodString;
+                percentUsed: z.ZodNumber;
+                resetsAt: z.ZodOptional<z.ZodString>;
+            }, "strict", z.ZodTypeAny, {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }, {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }>, "many">;
+        }, "strict", z.ZodTypeAny, {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        }, {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        }>>;
+        stats: z.ZodOptional<z.ZodObject<{
+            view: z.ZodOptional<z.ZodEnum<["Overview", "Models"]>>;
+            range: z.ZodOptional<z.ZodEnum<["all", "7d", "30d"]>>;
+            loading: z.ZodBoolean;
+            outcome: z.ZodEnum<["success", "empty", "error", "loading"]>;
+            problem: z.ZodOptional<z.ZodString>;
+            data: z.ZodOptional<z.ZodObject<{
+                totalSessions: z.ZodNumber;
+                totalMessages: z.ZodNumber;
+                totalDays: z.ZodNumber;
+                activeDays: z.ZodNumber;
+                modelUsage: z.ZodRecord<z.ZodString, z.ZodObject<{
+                    inputTokens: z.ZodNumber;
+                    outputTokens: z.ZodNumber;
+                    cacheReadInputTokens: z.ZodNumber;
+                    cacheCreationInputTokens: z.ZodNumber;
+                    costUSD: z.ZodNumber;
+                }, "strict", z.ZodTypeAny, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>>;
+                dailyActivity: z.ZodArray<z.ZodObject<{
+                    date: z.ZodString;
+                    messageCount: z.ZodNumber;
+                    sessionCount: z.ZodNumber;
+                    toolCallCount: z.ZodNumber;
+                }, "strict", z.ZodTypeAny, {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }, {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }>, "many">;
+            }, "strict", z.ZodTypeAny, {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            }, {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            }>>;
+        }, "strict", z.ZodTypeAny, {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        }, {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        }>>;
         status: z.ZodOptional<z.ZodArray<z.ZodArray<z.ZodObject<{
             label: z.ZodString;
             value: z.ZodString;
@@ -10571,6 +10775,48 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
+        stats?: {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        } | undefined;
     }, {
         selectedTab: "Config" | "Stats" | "Status" | "Usage";
         tabs: ("Config" | "Stats" | "Status" | "Usage")[];
@@ -10579,6 +10825,48 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
+        stats?: {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        } | undefined;
     }>>;
     revision: z.ZodString;
     rows: z.ZodArray<z.ZodObject<{
@@ -10629,6 +10917,48 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
+        stats?: {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        } | undefined;
     } | undefined;
 }, {
     revision: string;
@@ -10650,6 +10980,48 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             value: string;
             label: string;
         }[][] | undefined;
+        usage?: {
+            context: {
+                window: number;
+                tokens?: number | undefined;
+                percent?: number | undefined;
+            };
+            startedAt: number;
+            rateLimits: {
+                kind: string;
+                percentUsed: number;
+                resetsAt?: string | undefined;
+            }[];
+            cost?: {
+                usd: number;
+            } | undefined;
+        } | undefined;
+        stats?: {
+            loading: boolean;
+            outcome: "empty" | "error" | "loading" | "success";
+            view?: "Overview" | "Models" | undefined;
+            range?: "all" | "7d" | "30d" | undefined;
+            problem?: string | undefined;
+            data?: {
+                totalSessions: number;
+                totalMessages: number;
+                totalDays: number;
+                activeDays: number;
+                modelUsage: Record<string, {
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadInputTokens: number;
+                    cacheCreationInputTokens: number;
+                    costUSD: number;
+                }>;
+                dailyActivity: {
+                    date: string;
+                    messageCount: number;
+                    sessionCount: number;
+                    toolCallCount: number;
+                }[];
+            } | undefined;
+        } | undefined;
     } | undefined;
 }>;
 
@@ -10949,10 +11321,52 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     value: string;
                     label: string;
                 }[][] | undefined;
+                usage?: {
+                    context: {
+                        window: number;
+                        tokens?: number | undefined;
+                        percent?: number | undefined;
+                    };
+                    startedAt: number;
+                    rateLimits: {
+                        kind: string;
+                        percentUsed: number;
+                        resetsAt?: string | undefined;
+                    }[];
+                    cost?: {
+                        usd: number;
+                    } | undefined;
+                } | undefined;
+                stats?: {
+                    loading: boolean;
+                    outcome: "empty" | "error" | "loading" | "success";
+                    view?: "Overview" | "Models" | undefined;
+                    range?: "all" | "7d" | "30d" | undefined;
+                    problem?: string | undefined;
+                    data?: {
+                        totalSessions: number;
+                        totalMessages: number;
+                        totalDays: number;
+                        activeDays: number;
+                        modelUsage: Record<string, {
+                            inputTokens: number;
+                            outputTokens: number;
+                            cacheReadInputTokens: number;
+                            cacheCreationInputTokens: number;
+                            costUSD: number;
+                        }>;
+                        dailyActivity: {
+                            date: string;
+                            messageCount: number;
+                            sessionCount: number;
+                            toolCallCount: number;
+                        }[];
+                    } | undefined;
+                } | undefined;
             } | undefined;
         };
-        savedKey?: string | undefined;
         problem?: string | undefined;
+        savedKey?: string | undefined;
     }>;
     agentPanel(options: {
         client_id: string;

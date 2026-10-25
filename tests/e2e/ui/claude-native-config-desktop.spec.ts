@@ -149,6 +149,31 @@ test('edits original Settings through desktop controls and retains composing', a
     const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
     const path=testInfo.outputPath('native-config-desktop-list-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));captures.push(path)
   }
+  const frameCaptures:string[]=[]
+  const tabs=panel.getByRole('navigation',{name:'Claude Code settings tabs'})
+  for(const tab of ['Status','Usage','Stats']){
+    await tabs.getByRole('button',{name:tab,exact:true}).click()
+    await expect(tabs.getByRole('button',{name:tab,exact:true})).toHaveAttribute('aria-current','page')
+    if(tab==='Status'){await expect(panel.locator('dt').filter({hasText:/^Version$/})).toHaveText('Version');await expect(panel.locator('dd').filter({hasText:/^2\.1\.302$/})).toHaveCount(1)}
+    if(tab==='Usage')await expect(panel.getByText('Context window',{exact:true})).toBeVisible()
+    if(tab==='Stats'){
+      await expect(panel.getByRole('button',{name:'Models',exact:true})).toBeEnabled()
+      await expect(panel.getByText('Sessions',{exact:true})).toBeVisible()
+      await panel.getByRole('button',{name:'Models',exact:true}).click()
+      await expect(panel.locator('thead')).toContainText('Cache read')
+      await panel.getByRole('button',{name:/Change dates/}).click()
+      await expect(panel.getByRole('button',{name:/Change dates/})).toContainText('Last 7 days')
+    }
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height})
+      await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport()
+      await expect(tabs.getByRole('button',{name:tab,exact:true})).toBeInViewport()
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+      const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      const path=testInfo.outputPath('native-settings-desktop-'+tab.toLowerCase()+'-'+width+'.png');await writeFile(path,Buffer.from(image,'base64'));frameCaptures.push(path)
+    }
+  }
+  await tabs.getByRole('button',{name:'Config',exact:true}).click();await expect(search).toBeVisible()
   await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0);await expect(composer).toHaveText(draft)
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
@@ -156,6 +181,6 @@ test('edits original Settings through desktop controls and retains composing', a
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,local:await local(),user:await user(),captures,frameCaptures,desktopFrameTabs:true,nativeStatsDates:true,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

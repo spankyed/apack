@@ -30,6 +30,11 @@ async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
  const entry=nativeSettingsPanel(request),read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
  if(request.operation==='read')return {snapshot:read.snapshot};
+ if(request.operation==='stats'){
+  if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before changing Stats');
+  await actNativeSettingsStats(n,entry,request.action,abort.signal);nativeSettingsPanel(request);
+  return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
+ }
  if(request.operation==='tab'){
   if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before switching tabs');
   await selectNativeSettingsTab(n,entry,request.tab,abort.signal);nativeSettingsPanel(request);

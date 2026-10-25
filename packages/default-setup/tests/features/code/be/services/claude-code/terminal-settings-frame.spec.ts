@@ -11,9 +11,9 @@ function fixture() {
   const hashes = new WeakMap<Function, string>([[Frame, '8a56a17e7c83ad4879b026f7d8498fb45fea80c549f97547bcfdb4ef3b9725ee'], [Status, '8c89bb757b28a8a05a69fdc7d3beebb9b5bd02e74fc0bf54a238dc7b1921cf29']])
   const root: any = { child: owner }
   const entry = { originalProps, current: vi.fn(), closed: false, answered: false }
-  const api = vm.runInNewContext(claudeTerminalSettingsFrameRuntime + ';({nativeSettingsFrame,readNativeSettingsFrame,selectNativeSettingsTab})', { process, createHash, composerFunctionHashes: hashes, setTimeout, nativeGenericPermissionText: async (_n: unknown, value: unknown) => String(value) })
+  const api = vm.runInNewContext(claudeTerminalSettingsFrameRuntime + ';({nativeSettingsFrame,readNativeSettingsFrame,selectNativeSettingsTab,actNativeSettingsStats})', { process, createHash, composerFunctionHashes: hashes, setTimeout, clearTimeout, nativeGenericPermissionText: async (_n: unknown, value: unknown) => String(value) })
   const n = { themeRoots: { ai: () => new Map([[process.stdout, { container: { current: root } }]]) } }
-  return { run: () => api.nativeSettingsFrame(n, entry), read: (signal?: AbortSignal) => api.readNativeSettingsFrame(n, entry, signal), select: (tab: string, signal?: AbortSignal) => api.selectNativeSettingsTab(n, entry, tab, signal), root, owner, rows, panel, entry, hashes, Status }
+  return { run: () => api.nativeSettingsFrame(n, entry), read: (signal?: AbortSignal) => api.readNativeSettingsFrame(n, entry, signal), select: (tab: string, signal?: AbortSignal) => api.selectNativeSettingsTab(n, entry, tab, signal), statsAction: (action: string) => api.actNativeSettingsStats(n, entry, action), n, root, owner, rows, panel, entry, hashes, Status }
 }
 it('correlates the owned dialog and excludes a sibling dialog from its data', () => {
   const f = fixture()
@@ -55,4 +55,23 @@ it('uses the original tab callback and rejects hidden, invalid and cancelled sel
   const cancelled = new AbortController(); cancelled.abort()
   await expect(f.select('Usage', cancelled.signal)).rejects.toThrow()
   expect(f.panel.onTabChange).toHaveBeenCalledTimes(1)
+})
+
+it('uses the guarded original Stats date callback and preserves native empty outcomes', async () => {
+  const f = fixture(), Loader = () => {}, cycle = vi.fn(), cache = Array(50).fill(null)
+  f.panel.selectedTab = 'Stats'; cache[3] = cycle
+  f.hashes.set(Loader, 'dea182e69c551bbf30ca8dc15dbbd4ce008db3150028451a40b64fff5d53282a')
+  ;(f.owner.child as any).child = {type:Loader,memoizedProps:{allTimePromise:Promise.resolve({type:'empty'}),activeTimePromise:Promise.resolve({})},updateQueue:{memoCache:{data:[cache]}}}
+  expect((await f.read()).stats).toEqual({outcome:'empty',loading:false})
+  await f.statsAction('cycleDates'); expect(cycle).toHaveBeenCalledOnce()
+  cache[3] = null
+  await expect(f.statsAction('cycleDates')).rejects.toThrow('date control changed')
+})
+it('cancels a pending Usage reading without inventing zero values', async () => {
+  const f = fixture(), cancelled = new AbortController()
+  f.panel.selectedTab = 'Usage'; (f.owner.child as any).child = null
+  ;(f.n as any).runtime = {Hco:vi.fn(()=>new Promise(()=>{}))}
+  const reading = f.read(cancelled.signal); cancelled.abort()
+  await expect(reading).rejects.toThrow()
+  expect((f.n as any).runtime.Hco).toHaveBeenCalledWith({},'apack native Settings')
 })
