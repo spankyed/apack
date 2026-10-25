@@ -306,8 +306,7 @@ import {
   HardDrive,
   Image as ImageIcon
 } from 'lucide-vue-next';
-import { id, type DatabaseState } from '../state.ts';
-import { sendToSystem } from '#generated/events.ts';
+import type { DatabaseState } from '../state.ts';
 import ToastNotification from '@apackdev/ui/design/ToastNotification';
 
 const actor: DatabaseState = useSurface();
@@ -436,10 +435,7 @@ async function selectImportDirectory() {
     // Save to this surface's storage for future use
     storage.set('backup-import-path', directoryPath);
     // Get backup info for the selected directory
-    sendToSystem(id, {
-      type: 'GET_BACKUP_INFO',
-      path: directoryPath,
-    });
+    actor.send({ type: 'BACKUP.READ_INFO', path: directoryPath });
   }
 }
 

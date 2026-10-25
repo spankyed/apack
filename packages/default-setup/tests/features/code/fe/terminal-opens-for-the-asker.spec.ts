@@ -9,7 +9,7 @@
 // slot keyed by what was asked for cannot settle this one. Two things settle it instead, and they answer
 // different questions. **Addressing** says which window: the news stays a broadcast and the answer is replied
 // to the asker (`code/be/features/terminal.ts`), the same split the database system makes between
-// `TRANSACTION_RESULT` and `DATABASE_REFRESH`. **The call** says which of that window's asks, which addressing
+// `IMPORT_DATABASE_SUCCESS` and `DATABASE_REPLACED`. **The call** says which of that window's asks, which addressing
 // cannot — a window can have two creates in flight, and the intent held for each (a tab or the panel, a
 // command to run) is not interchangeable, so one slot could not hold both.
 //

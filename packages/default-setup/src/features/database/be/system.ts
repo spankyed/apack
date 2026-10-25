@@ -17,6 +17,8 @@ import { services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import type { Reply } from '@apackdev/sdk/events';
+import type { OutgoingDatabaseEvents } from './types.ts';
 
 const logger = createLogger('database');
 
@@ -52,15 +54,21 @@ async function transactionAnswer(code: string) {
 
 export const databaseSpec = defineSystem<Contract>();
 
+/**
+ * Answers whoever asked, and tells every window when nobody did: an outcome sent from the backend still has to reach
+ * a window, which is the case `reply` is absent for
+ */
+const answer = (reply: Reply<OutgoingDatabaseEvents> | undefined, event: OutgoingDatabaseEvents): void =>
+  (reply ? reply(event) : broadcastToSurface('database', event));
+
+/** The data was replaced: every window drops what it showed, and the asker hears its own outcome besides */
+const replaced = () => broadcastToSurface('database', { type: 'DATABASE_REPLACED' });
+
 export const databaseSystem = setup({
   types: databaseSpec.types,
   actions: databaseSpec.actions({
-    sendDatabaseRefresh: () => {
-      const schema = generateSchemaInfo();
-      broadcastToSurface('database', { 
-        type: 'DATABASE_REFRESH',
-        data: { schema }
-      });
+    getSchema: ({ reply }) => {
+      reply?.({ type: 'SCHEMA_READ', schema: generateSchemaInfo() });
     },
     /**
      * **Nothing here names the request, and nothing has to.** `reply` is bound to the delivery this handler
@@ -80,25 +88,15 @@ export const databaseSystem = setup({
     /** Answered through the same bound `reply`, for `executeQuery`'s reason above */
     executeTransaction: async ({ event, reply }) => {
       const { code } = databaseSpec.typeOf('EXECUTE_TRANSACTION', event);
-      const answer = await transactionAnswer(code);
-      reply?.(answer);
-
-      // Still a broadcast, and deliberately: a changed schema is news for every window's schema view, not an
-      // answer to the window that ran the transaction. Converting this one would narrow it to the asker.
-      if (answer.type === 'TRANSACTION_RESULT') {
-        logger.info('Transaction completed successfully, sending database refresh');
-        broadcastToSurface('database', { type: 'DATABASE_REFRESH', data: { schema: generateSchemaInfo() } });
-      }
+      // The window that ran it asks for the schema again; every other one shows the schema it last asked for
+      reply?.(await transactionAnswer(code));
     },
-    handleAiQuery: ({ event }) => {
+    handleAiQuery: ({ event, reply }) => {
       const { prompt, mode } = databaseSpec.typeOf('GENERATE_AI_QUERY', event);
 
       if (!prompt?.trim()) {
         logger.error('Invalid prompt provided for AI query generation');
-        broadcastToSurface('database', {
-          type: 'AI_QUERY_ERROR',
-          error: 'Please provide a valid prompt'
-        });
+        answer(reply, { type: 'AI_QUERY_ERROR', error: 'Please provide a valid prompt' });
         return;
       }
 
@@ -111,33 +109,33 @@ export const databaseSystem = setup({
         payload: { prompt: prompt.trim(), mode: mode ?? 'query', provider },
       });
     },
-    getFlowRuns: () => {
+    getFlowRuns: ({ reply }) => {
       try {
         // A session's root and every subflow it ran, newest first
         const flows = services.runHistory.findRuns({ limit: 100 });
         logger.info('Retrieved flow runs', { count: flows.length });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'FLOW_RUNS_RESULT',
           flows
         });
       } catch (error: unknown) {
         logger.error('Failed to get flow runs:', { error: errorMessage(error) });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'FLOW_RUNS_RESULT',
           flows: []
         });
       }
     },
-    getFlowEvents: ({ event }) => {
+    getFlowEvents: ({ event, reply }) => {
       const { flowId, offset = 0, limit = 50 } = databaseSpec.typeOf('GET_FLOW_EVENTS', event);
-      
+
       try {
         // The events a flow run heard are its children: a page of them, newest first, each with what it ran. The
         // index is asked for no more than the page and one beyond it, which says whether there is more
         const heard = services.runHistory.findChildren(flowId as RunNodeId, { reverse: true, limit: offset + limit + 1 });
         const events = heard.slice(offset, offset + limit).map((node) => services.runHistory.tree(node.id)!);
         logger.info('Retrieved events for flow', { count: events.length, flowId });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'FLOW_EVENTS_RESULT',
           flowId,
           events,
@@ -146,7 +144,7 @@ export const databaseSystem = setup({
         });
       } catch (error: unknown) {
         logger.error('Failed to get flow events:', { error: errorMessage(error), flowId });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'FLOW_EVENTS_RESULT',
           flowId,
           events: [],
@@ -155,46 +153,46 @@ export const databaseSystem = setup({
         });
       }
     },
-    getNodeDetails: ({ event }) => {
+    getNodeDetails: ({ event, reply }) => {
       const { nodeId } = databaseSpec.typeOf('GET_NODE_DETAILS', event);
-      
+
       try {
         const details = services.runHistory.get(nodeId as RunNodeId) ?? null;
         logger.info('Retrieved node details', { nodeId });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'NODE_DETAILS_RESULT',
           nodeId,
           details
         });
       } catch (error: unknown) {
         logger.error('Failed to get node details:', { error: errorMessage(error), nodeId });
-        broadcastToSurface('database', { 
+        answer(reply, {
           type: 'NODE_DETAILS_RESULT',
           nodeId,
           details: null
         });
       }
     },
-    exportDatabase: ({ event }) => {
+    exportDatabase: ({ event, reply }) => {
       const { path, name, databases } = databaseSpec.typeOf('EXPORT_DATABASE', event);
-      
+
       services.appData.exportBackup(path, name, databases).then(
         (resultPath) => {
-          broadcastToSurface('database', { 
+          answer(reply, {
             type: 'EXPORT_DATABASE_SUCCESS',
             path: resultPath
           });
         },
         (error: unknown) => {
           logger.error('Failed to export database:', { error: errorMessage(error) });
-          broadcastToSurface('database', { 
+          answer(reply, {
             type: 'EXPORT_DATABASE_ERROR',
             error: errorMessage(error)
           });
         }
       );
     },
-    importDatabase: ({ event }) => {
+    importDatabase: ({ event, reply }) => {
       const { path, skipUnknownDatabases } = databaseSpec.typeOf('IMPORT_DATABASE', event);
 
       // Replaces stored data and reloads memory from it; on failure the previous data is restored and reloaded. The
@@ -213,18 +211,15 @@ export const databaseSystem = setup({
             ? ` It also holds ${unknownEntityTypes.map(([type, count]) => `${count} ${type}`).join(', ')} that no installed pack declares;`
               + ' those stay until the pack that declared them is installed again.'
             : '';
-          broadcastToSurface('database', {
+          answer(reply, {
             type: 'IMPORT_DATABASE_SUCCESS',
             message: `Import successful.${nothingToRestore}${fromMissingPacks} Please restart the brain manually.`
           });
-          broadcastToSurface('database', { 
-            type: 'DATABASE_REFRESH',
-            data: { schema: generateSchemaInfo() }
-          });
+          replaced();
         },
         (error: unknown) => {
           logger.error('Failed to import database:', { error: errorMessage(error) });
-          broadcastToSurface('database', {
+          answer(reply, {
             type: 'IMPORT_DATABASE_ERROR',
             error: errorMessage(error),
             // The user decides whether to import a newer apack's backup without what this one can't hold
@@ -233,24 +228,24 @@ export const databaseSystem = setup({
         }
       );
     },
-    readBackupSummary: async ({ event }) => {
+    readBackupSummary: async ({ event, reply }) => {
       const { path } = databaseSpec.typeOf('GET_BACKUP_INFO', event);
 
       try {
         const info = await services.appData.readBackupSummary(path);
-        broadcastToSurface('database', {
+        answer(reply, {
           type: 'BACKUP_INFO_RESULT',
           info
         });
       } catch (error: unknown) {
         logger.error('Failed to get backup info:', { error: errorMessage(error) });
-        broadcastToSurface('database', {
+        answer(reply, {
           type: 'BACKUP_INFO_RESULT',
           info: null
         });
       }
     },
-    resetDatabase: async () => {
+    resetDatabase: async ({ reply }) => {
       try {
         logger.info('Starting database reset...');
 
@@ -262,20 +257,16 @@ export const databaseSystem = setup({
 
         logger.info('Database reset completed', { flowId: repository.flowsQueries.rootFlow() });
 
-        // Send success response and refresh
-        broadcastToSurface('database', {
+        answer(reply, {
           type: 'RESET_DATABASE_SUCCESS',
           message: 'Database reset successfully. New root flow created.'
         });
 
-        broadcastToSurface('database', {
-          type: 'DATABASE_REFRESH',
-          data: { schema: generateSchemaInfo() }
-        });
+        replaced();
       } catch (error: unknown) {
         logger.error('Database reset failed:', { error: errorMessage(error) });
 
-        broadcastToSurface('database', {
+        answer(reply, {
           type: 'RESET_DATABASE_ERROR',
           error: errorMessage(error)
         });
@@ -286,11 +277,6 @@ export const databaseSystem = setup({
   id: 'database',
   initial: 'idle',
   context: () => ({}),
-  on: {
-    SEND_STATE: {
-      actions: 'sendDatabaseRefresh',
-    },
-  },
   states: {
     idle: {
       on: {
@@ -303,8 +289,8 @@ export const databaseSystem = setup({
         GENERATE_AI_QUERY: {
           actions: 'handleAiQuery',
         },
-        REFRESH_SCHEMA: {
-          actions: 'sendDatabaseRefresh',
+        GET_SCHEMA: {
+          actions: 'getSchema',
         },
         GET_FLOW_RUNS: {
           actions: 'getFlowRuns',

@@ -58,6 +58,7 @@ type UIEvent =
   | { type: 'BACK_TO_EXPLORER' }
   | { type: 'BACKUP.EXPORT'; path: string; name?: string; databases: Array<'lmdb' | 'runHistory'> }
   | { type: 'BACKUP.IMPORT'; path: string; skipUnknownDatabases?: boolean }
+  | { type: 'BACKUP.READ_INFO'; path: string }
   | TrailClickEvent
 
 export type DatabaseEvents = UIEvent | SystemEvent
@@ -108,13 +109,13 @@ const databaseState = setup({
     },
   },
   actions: {
-    /* ── bootstrap ─────────────────────────────────────── */
-    setDatabaseRefresh: assign(({ event }) => {
-      const ev = typeOf('DATABASE_REFRESH', event);
-      return {
-        schema: ev.data.schema
-      }
-    }),
+    /* ── the schema, fetched: a walk over the whole store, which no view should re-run on every commit ── */
+    requestSchema: () => {
+      sendToSystem(id, { type: 'GET_SCHEMA' });
+    },
+    setSchema: assign(({ event }) => ({ schema: typeOf('SCHEMA_READ', event).schema, isRefreshing: false })),
+    /** Any window replaced the data: what this one shows names rows that may be gone */
+    dropReplacedResults: assign(emptyDatabaseResults),
 
     /* ── settings ─────────────────────────────────────── */
     setDatabaseSettings: assign(({ event }) => {
@@ -207,6 +208,8 @@ const databaseState = setup({
         pendingTransactionCall: null,
       } as const;
 
+      // A transaction can add an entity type or a relation kind, so the schema is asked for again
+      enqueue('requestSchema');
       // Check if this was a delete operation
       if (ev.result && ev.result.deleted) {
         // After successful deletion, refresh the current query
@@ -293,18 +296,8 @@ const databaseState = setup({
       };
     }),
 
-    refreshSchema: () => {
-      sendToSystem(id, {
-        type: 'REFRESH_SCHEMA',
-      });
-    },
-
     setRefreshing: assign({
       isRefreshing: true,
-    }),
-
-    setRefreshComplete: assign({
-      isRefreshing: false,
     }),
 
     /* ── run history viewer actions ──────────────────────── */
@@ -452,6 +445,10 @@ const databaseState = setup({
     }),
 
     /* ── backup actions ─────────────────────────────────── */
+    requestBackupInfo: ({ event }) => {
+      sendToSystem(id, { type: 'GET_BACKUP_INFO', path: typeOf('BACKUP.READ_INFO', event).path });
+    },
+
     setBackupInfo: assign(({ event }) => {
       const ev = typeOf('BACKUP_INFO_RESULT', event);
       return {
@@ -504,6 +501,7 @@ const databaseState = setup({
 }).createMachine({
   id,
   initial: 'explorer',
+  entry: 'requestSchema',
   context: () => ({
     ...emptyDatabaseResults(),
     schema: {
@@ -526,7 +524,8 @@ const databaseState = setup({
     ...TRAIL_CLICK([
       ['.explorer', 'explorer'],
     ]),
-    DATABASE_REFRESH: { actions: ['setDatabaseRefresh', 'setRefreshComplete'] },
+    SCHEMA_READ: { actions: 'setSchema' },
+    DATABASE_REPLACED: { actions: ['dropReplacedResults', 'requestSchema'] },
     QUERY_RESULT: { guard: 'answersPendingQuery', actions: 'setQueryResult' },
     QUERY_ERROR: { guard: 'answersPendingQuery', actions: 'setQueryError' },
     TRANSACTION_RESULT: { guard: 'answersPendingTransaction', actions: 'setTransactionResult' },
@@ -583,7 +582,7 @@ AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
           actions: ['generateAiQuery'],
         },
         'DATABASE.REFRESH_SCHEMA': {
-          actions: ['setRefreshing', 'refreshSchema'],
+          actions: ['setRefreshing', 'requestSchema'],
         },
         'VIEW_MODE.TOGGLE': {
           actions: ['toggleViewMode', 'requestFlowRuns'],
@@ -613,6 +612,7 @@ AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
         },
         'BACKUP.EXPORT': { actions: ['exportBackup', assign({ exporting: true })] },
         'BACKUP.IMPORT': { actions: ['importBackup', assign({ importing: true })] },
+        'BACKUP.READ_INFO': { actions: 'requestBackupInfo' },
       },
     },
   },
