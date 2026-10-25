@@ -7,6 +7,7 @@ export const claudeSettingsStats = z.object({
   view: z.enum(['Overview', 'Models']).optional(), range: z.enum(['all', '7d', '30d']).optional(), loading: z.boolean(),
   copyState: z.enum(['idle','pending','saved','error']).optional(),
   insight: z.string().max(16384).optional(),
+  calendar: z.string().max(16384).optional(),
   outcome: z.enum(['success', 'empty', 'error', 'loading']), problem: z.string().max(16384).optional(),
   data: z.object({
     totalSessions: nativeReading, totalMessages: nativeReading, totalDays: nativeReading, activeDays: nativeReading,

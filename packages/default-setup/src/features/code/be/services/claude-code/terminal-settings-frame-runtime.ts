@@ -102,6 +102,11 @@ async function readNativeSettingsFrameOnce(n,entry,signal){
     const caches=source.stats.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===102);
     if(caches?.length!==1)throw Error('Native Stats Overview producer changed');
     if(typeof caches[0][23]==='string')result.stats.insight=caches[0][23];
+    const calendar=caches[0][26]?.props?.children?.props?.children;
+    if(calendar!==undefined){
+     if(typeof calendar!=='string'||calendar.length>16384)throw Error('Native Stats calendar producer changed');
+     result.stats.calendar=stripVTControlCharacters(calendar);
+    }
    }
 
   }
