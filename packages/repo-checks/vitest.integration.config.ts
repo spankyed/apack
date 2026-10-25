@@ -13,7 +13,7 @@ export default defineConfig({
     // work in a handful of tests.
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    setupFiles: ['../../scripts/lib/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts'],
     include: ['tests/**/*.integration.spec.ts'],
     exclude: ['**/node_modules/**'],
     // No worker cap here, and none in any other package either: the repo's only cap is the root

@@ -19,7 +19,7 @@ export default defineConfig({
     // another process are `*.integration.spec.ts` and run from `vitest.integration.config.ts`.
     // `CLAUDE.md` has the rule for choosing, which is a judgement rather than a measured threshold.
     // Captures go to a per-run, per-worker store, never the developer's shared one
-    setupFiles: ['../../scripts/lib/vitest-exit-with-parent.ts', './tests/_support/compiler-store.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/compiler-store.ts'],
     globalSetup: ['./tests/_support/compiler-store-run.ts'],
     include: ['tests/**/*.spec.ts'],
     exclude: ['**/*.integration.spec.ts', '**/*.native.spec.ts', '**/node_modules/**'],

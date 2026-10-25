@@ -11,7 +11,8 @@
  * loading when its vitest died finds the channel already closed as this installs. What a launcher started is also
  * reaped by process group (`scripts/lib/bounded-spawn.ts`); this covers a vitest started any other way.
  *
- * Every host package's config lists it, and a worker loads it once per file, so it installs its listener once.
+ * Every host package's config lists it, and a pack's has it through `isolatedDataDir()` (`definePackTestConfig`). A
+ * worker loads it once per file, so it installs its listener once.
  */
 const INSTALLED = Symbol.for('apack.vitest.exitWithParent');
 const state = globalThis as { [INSTALLED]?: true };

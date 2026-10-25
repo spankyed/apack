@@ -18,7 +18,10 @@ export interface IsolatedDataDir {
   env: { APACK_ENV: 'test'; APACK_USER_DATA_DIR: string };
   /** `test.globalSetup`: removes the run's data dir when the run ends */
   globalSetup: string[];
-  /** `test.setupFiles`, first: points the worker at its own subdir before anything opens a store */
+  /**
+   * `test.setupFiles`, first: ends a worker whose vitest is gone, and points the worker at its own subdir before
+   * anything opens a store
+   */
   setupFiles: string[];
 }
 
@@ -70,7 +73,7 @@ export function isolatedDataDir(prefix = 'apack-tests-'): IsolatedDataDir {
     dir,
     env: { APACK_ENV: 'test', APACK_USER_DATA_DIR: dir },
     globalSetup: [sibling('vitest-teardown')],
-    setupFiles: [sibling('vitest-worker')],
+    setupFiles: [sibling('vitest-exit-with-parent'), sibling('vitest-worker')],
   };
 }
 
@@ -171,7 +174,7 @@ export async function definePackTestConfig(options: PackTestConfig = {}): Promis
       fileParallelism: true,
       env: dataDir.env,
       globalSetup: dataDir.globalSetup,
-      // The data dir's setup points the worker at its own subdir, before anything opens a store
+      // The data dir's setup files come first: they end an orphaned worker and point it at its own subdir
       setupFiles: [...dataDir.setupFiles, ...(options.setupFiles ?? ['./tests/setup.ts'])],
     },
   };

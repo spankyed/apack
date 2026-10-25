@@ -3,11 +3,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
-import { pathToFileURL } from 'node:url';
-import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
-const GUARD = pathToFileURL(path.join(REPO_ROOT, 'scripts', 'lib', 'vitest-exit-with-parent.ts')).href;
+const GUARD = new URL('../src/vitest-exit-with-parent.ts', import.meta.url).href;
+// Where `--import tsx` resolves from
+const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'exit-with-parent-'));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -20,7 +21,7 @@ async function workerExit(loadsGuard: 'before the channel closes' | 'after the c
   fs.writeFileSync(script, loadsGuard.startsWith('before')
     ? `await import(${JSON.stringify(GUARD)});\nprocess.send!('ready');\nsetTimeout(() => {}, 10_000);\n`
     : `process.once('disconnect', async () => { await import(${JSON.stringify(GUARD)}); });\nprocess.send!('ready');\nsetTimeout(() => {}, 10_000);\n`);
-  const worker = fork(script, { execArgv: ['--import', 'tsx'], cwd: REPO_ROOT, stdio: 'ignore' });
+  const worker = fork(script, { execArgv: ['--import', 'tsx'], cwd: PACKAGE_DIR, stdio: 'ignore' });
   try {
     const exited = once(worker, 'exit');
     await once(worker, 'message');
