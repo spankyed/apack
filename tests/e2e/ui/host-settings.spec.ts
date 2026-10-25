@@ -107,12 +107,12 @@ test('an open editor follows installed pack activation without losing its draft'
     });
     await toggle();
     await expect.poll(() => mounted.evaluate(({ exposed }) => exposed.editor?.extensionManager.extensions
-      .some(extension => extension.name === 'commandSuggestion') ?? false)).toBe(true);
+      .some(extension => extension.name === 'referenceSuggestion') ?? false)).toBe(true);
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await toggle();
     await expect.poll(() => mounted.evaluate(({ exposed }) => !!exposed.editor && !exposed.editor.extensionManager.extensions
-      .some(extension => extension.name === 'commandSuggestion'))).toBe(true);
+      .some(extension => extension.name === 'referenceSuggestion'))).toBe(true);
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await expect(appPage.locator('#live-contribution-editor .reference-pill')).toHaveText('Saved memo');
