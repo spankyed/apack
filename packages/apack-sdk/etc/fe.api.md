@@ -22,6 +22,7 @@ import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
+import { MaybeRefOrGetter } from 'vue';
 import type { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
@@ -957,6 +958,9 @@ export type TrailClickEvent<TInfo = unknown> = {
 export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEvent[]): void;
 
 // @public
+export function untypedUseView<Result = unknown>(ref: string, view: string, ...args: [] | [args: MaybeRefOrGetter<unknown>]): ViewState<Result>;
+
+// @public
 export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
 
 // @public
@@ -1004,6 +1008,32 @@ export function useTrackedMenuOpen(menuOpen: Ref<boolean>): void;
 
 // @public
 export function useUntypedSurfaceState<TSnapshot, TSelected>(ref: string, selector: (snapshot: TSnapshot) => TSelected): Readonly<Ref<TSelected | undefined>>;
+
+// @public
+export interface ViewRequest {
+    args?: unknown;
+    ref: string;
+    view: string;
+}
+
+// @public
+export interface ViewState<Result> {
+    readonly commit: number;
+    readonly data: Result | undefined;
+    readonly error: string | undefined;
+    readonly status: 'idle' | 'loading' | 'ready' | 'error';
+}
+
+// @public
+export type ViewUpdate<Result = unknown> = {
+    ok: true;
+    value: Result;
+    commit: number;
+} | {
+    ok: false;
+    error: string;
+    commit: number;
+};
 
 // (No @packageDocumentation comment for this package)
 

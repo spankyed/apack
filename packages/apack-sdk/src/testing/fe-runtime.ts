@@ -58,7 +58,18 @@ const noCatalog = new Proxy({} as PackCatalogView, {
 });
 
 /** What a test overrides of the frontend host; everything else stands in as unusable, since a test that reaches it means the test is wrong */
-export interface FeTestRuntimeOptions extends Partial<FeHostRuntime> {}
+export interface FeTestRuntimeOptions extends Partial<Omit<FeHostRuntime, 'client'>> {
+  /** The members of the API client the test uses; the others throw, naming themselves, when reached */
+  client?: Partial<FeClient>;
+}
+
+/** The client a test passed, with each member it didn't pass standing in as unusable */
+const partClient = (given: Partial<FeClient>): FeClient => new Proxy(given as FeClient, {
+  get: (target, member) => {
+    if (member in target) return target[member as keyof FeClient];
+    throw new Error(`This test's API client has no ${String(member)}: pass it in client to startFeTestRuntime`);
+  },
+});
 
 /**
  * Binds a frontend host for this test file, and returns the function that forgets it again:
@@ -75,7 +86,7 @@ export function startFeTestRuntime(options: FeTestRuntimeOptions = {}): () => vo
     application: options.application ?? noShell,
     secrets: options.secrets ?? noSecrets,
     settings: options.settings ?? noSettings,
-    client: options.client ?? noClient,
+    client: options.client ? partClient(options.client) : noClient,
     packs: options.packs ?? noFrontends,
   });
   return stopFeTestRuntime;

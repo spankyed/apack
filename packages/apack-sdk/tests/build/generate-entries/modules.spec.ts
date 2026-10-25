@@ -431,7 +431,7 @@ describe('the snapshot format', () => {
   // No `id`: a feature's id is the key its entry sits under, which is what makes a duplicate unrepresentable
   const MANIFEST_FEATURE_FIELDS: Record<keyof PackFeatureEntry, true> = {
     description: true, entities: true, designation: true, surface: true, references: true, repositories: true, services: true,
-    settings: true, system: true, types: true,
+    settings: true, system: true, types: true, views: true,
   };
     const MANIFEST_SYSTEM_FIELDS: Record<keyof PackSystemEntry, true> = { contract: true, entry: true, events: true };
   const MANIFEST_SYSTEM_EVENTS_FIELDS: Record<keyof NonNullable<PackSystemEntry['events']>, true> = { incoming: true };
@@ -449,7 +449,7 @@ describe('the snapshot format', () => {
     artifacts: true, blocks: true, contentWriters: true, appliers: true, settings: true, dependencies: true,
   };
   const REGISTRATION_FEATURE_FIELDS: Record<keyof PackFeature, true> = {
-    designation: true, system: true, surface: true, services: true, settings: true,
+    designation: true, system: true, surface: true, services: true, settings: true, views: true,
   };
   const REGISTRATION_SYSTEM_FIELDS: Record<keyof PackFeatureSystem, true> = { machine: true, receives: true };
   const REGISTRATION_SURFACE_FIELDS: Record<keyof PackFeatureSurface, true> = { receives: true };
@@ -491,7 +491,7 @@ describe('the snapshot format', () => {
       manifest: {
         fields: ['$schema', 'build', 'checks', 'consumes', 'content', 'data', 'dependencies', 'description', 'extensions', 'features', 'hostVersion', 'id', 'license', 'lifecycle', 'migrations', 'name', 'permissions', 'version'],
         extensions: ['appExtensions', 'artifacts', 'blocks', 'commands', 'dsl', 'help', 'services', 'settings', 'steps', 'textEditor'],
-        feature: ['description', 'designation', 'entities', 'references', 'repositories', 'services', 'settings', 'surface', 'system', 'types'],
+        feature: ['description', 'designation', 'entities', 'references', 'repositories', 'services', 'settings', 'surface', 'system', 'types', 'views'],
         system: ['contract', 'entry', 'events'],
         systemEvents: ['incoming'],
         surface: ['canvas', 'chat', 'contract', 'default', 'defaultVisible', 'fallbackPanel', 'hotkeys', 'icon', 'isPinned', 'label', 'options', 'panel', 'state'],
@@ -501,7 +501,7 @@ describe('the snapshot format', () => {
       },
       registration: {
         fields: ['appliers', 'artifacts', 'bindServices', 'blocks', 'contentWriters', 'declarationRevision', 'dependencies', 'ears', 'features', 'id', 'lifecycle', 'migrations', 'repositories', 'services', 'settings', 'steps'],
-        feature: ['designation', 'services', 'settings', 'surface', 'system'],
+        feature: ['designation', 'services', 'settings', 'surface', 'system', 'views'],
         system: ['machine', 'receives'],
         surface: ['receives'],
       },

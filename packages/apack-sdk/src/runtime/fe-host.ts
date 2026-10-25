@@ -4,6 +4,7 @@ import type { PackCatalogView } from '../framework/catalog-view.ts';
 // The frontend's port: what the SDK's frontend code reaches in the renderer, bound once per window
 import type { ReferenceTypeConfig, ReferenceBindings, ReferenceBinding } from '../fe/reference-types.ts';
 import type { Message } from '../events/index.ts';
+import type { ViewRequest, ViewUpdate } from '../framework/views.ts';
 import type { SecretsClient } from '../fe/secrets-client.ts';
 import type { SettingsPort } from '../fe/settings.ts';
 import type { Component } from 'vue';
@@ -13,12 +14,19 @@ import type { TextEditorExtensionsBinding } from '../fe/text-editor-extensions.t
 import type { PackExtensionsView } from './packs-view.ts';
 
 /**
- * The window's client to the API, as SDK code uses it: sending to backend systems. The host's shell extends it with
- * what only the host reads (the bus subscription, the loaded packs), in `@apackdev/host/fe`.
+ * The window's client to the API, as SDK code uses it: sending to backend systems and subscribing to views. The
+ * host's shell extends it with what only the host reads (the bus subscription, the loaded packs), in
+ * `@apackdev/host/fe`.
  */
 export interface FeClient {
   /** Delivers a message to a backend system */
   send(message: Message): void;
+  /**
+   * Subscribes this window to a view: `observer` hears its result, and each changed result after it, until the
+   * returned function is called, after which it hears nothing. A dropped connection subscribes again once it is
+   * back, so a subscription outlives a reconnect.
+   */
+  watchView(request: ViewRequest, observer: (update: ViewUpdate) => void): () => void;
 }
 
 /** The packs whose frontends the renderer registered, read-only */

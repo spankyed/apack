@@ -52,7 +52,7 @@ beforeEach(() => {
     } as never,
     secrets: {} as never,
     settings: {} as never,
-    client: { send() {} },
+    client: { send() {}, watchView: () => () => {} },
     packs: {} as never,
   });
 });
@@ -197,7 +197,7 @@ describe('_sendToLocalSurface', () => {
       application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
       secrets: {} as never,
       settings: {} as never,
-      client: { send() {} },
+      client: { send() {}, watchView: () => () => {} },
       packs: {} as never,
     });
 
@@ -241,7 +241,7 @@ describe('_sendToLocalSurface', () => {
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
       application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
-      secrets: {} as never, settings: {} as never, client: { send() {} }, packs: {} as never,
+      secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
     _runDelivery({ receiver: 'default-setup/threads' }, () => {
@@ -271,7 +271,7 @@ describe('_sendToLocalSurface', () => {
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
       application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
-      secrets: {} as never, settings: {} as never, client: { send() {} }, packs: {} as never,
+      secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
     // The call the asker sent under, which `reply` reads off the delivery rather than off the event — so an
@@ -296,7 +296,7 @@ describe('_sendToLocalSurface', () => {
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
       application: { send: (event: unknown) => sent.push(event as { answering?: string }), system: { get: () => undefined } } as never,
-      secrets: {} as never, settings: {} as never, client: { send() {} }, packs: {} as never,
+      secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
     _sendToLocalSurface('default-setup/notes', { type: 'ASK' });
@@ -312,7 +312,7 @@ describe('_sendToLocalSurface', () => {
     unbindFeHost();
     bindFeHost({ catalog: {} as never,
       application: { send: (event: unknown) => sent.push(event), system: { get: () => undefined } } as never,
-      secrets: {} as never, settings: {} as never, client: { send() {} }, packs: {} as never,
+      secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never,
     });
 
     _sendToLocalSurface('default-setup/memos', { type: 'X' });

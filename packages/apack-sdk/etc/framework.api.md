@@ -119,6 +119,9 @@ export function defineHandlers<TContext extends MachineContext, TEvent extends E
 // @public
 export function defineSystem<C extends SystemContract>(): SystemSpec<C>;
 
+// @public
+export function defineViews<const Views extends ViewDefinitions>(views: Views): Views;
+
 // @public (undocumented)
 export type DiffResult<T> = null | {
     renames: Array<{
@@ -450,6 +453,7 @@ export interface PackFeature {
     surface?: PackFeatureSurface;
     // (undocumented)
     system?: PackFeatureSystem;
+    views?: ViewDefinitions;
 }
 
 // @public
@@ -950,6 +954,39 @@ export interface TextEditorExtensionsDeclaration {
     // (undocumented)
     popups?: Record<string, string>;
 }
+
+// @public
+export type ViewArgs<Read> = Read extends () => unknown ? undefined : Read extends (args: infer Args) => unknown ? Args : never;
+
+// @public
+export type ViewDefinitions = Readonly<Record<string, ViewRead>>;
+
+// @public
+export function viewKey(request: ViewRequest): string;
+
+// @public
+export type ViewRead = (args: never) => unknown;
+
+// @public
+export interface ViewRequest {
+    args?: unknown;
+    ref: string;
+    view: string;
+}
+
+// @public
+export type ViewResult<Read> = Read extends (...args: never[]) => infer Result ? Result : never;
+
+// @public
+export type ViewUpdate<Result = unknown> = {
+    ok: true;
+    value: Result;
+    commit: number;
+} | {
+    ok: false;
+    error: string;
+    commit: number;
+};
 
 // (No @packageDocumentation comment for this package)
 

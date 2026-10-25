@@ -21,6 +21,7 @@ import { SettingsAdmin } from '@apackdev/sdk/services';
 import type { SettingsService } from '@apackdev/sdk/services';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
 import { takeSystemErrors } from '@apackdev/sdk/testing';
+import type { ViewUpdate } from '@apackdev/sdk/framework';
 
 export { addTestSecret }
 
@@ -139,6 +140,11 @@ export interface TestApp {
     settle(): Promise<void>;
     stop(): void;
     system(systemId: string): AnyActorRef;
+    viewStats(): {
+        views: number;
+        subscriptions: number;
+    };
+    watchView<Result = unknown>(feature: string, view: string, args?: unknown): TestView<Result>;
 }
 
 // @public
@@ -160,6 +166,15 @@ export interface TestShell {
 export type TestSurface = {
     state: AnyStateMachine;
 } & Partial<Omit<SurfaceDefinition, 'state'>>;
+
+// @public
+export interface TestView<Result = unknown> {
+    next(options?: {
+        timeoutMs?: number;
+    }): Promise<ViewUpdate<Result>>;
+    stop(): void;
+    readonly updates: ReadonlyArray<ViewUpdate<Result>>;
+}
 
 // @public
 export function unregisterPack(packId: string): void;

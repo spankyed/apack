@@ -491,6 +491,53 @@ import { repository } from '#generated/repository.ts';
 repository.bookmarkCommands.create({ url, title });
 ```
 
+### Views
+
+A view is a feature's data as a window shows it: a named read the window subscribes to with its own arguments. The
+app runs it on the engine and runs it again after every commit that could change its result, and sends each changed
+result to that window alone. Nothing that writes says who is looking, and no surface keeps a copy of the rows that it
+patches from events.
+
+```typescript
+// src/features/bookmarks/be/views.ts
+import { defineViews } from '@apackdev/sdk/framework';
+import { repository } from '#generated/repository.ts';
+import type { EARS } from '#generated/ears.ts';
+
+export const bookmarkViews = defineViews({
+  page: ({ page }: { page: number }) => repository.bookmarkQueries.page(page),
+  byId: ({ id }: { id: EARS.EntityId }) => repository.bookmarkQueries.byId(id) ?? null,
+});
+```
+
+Name the export in the feature's `views` (`"views": "src/features/bookmarks/be/views.ts#bookmarkViews"`), and read a
+view in a component:
+
+```typescript
+import { useView } from '#generated/fe.ts';
+
+const list = useView('bookmarks', 'page', () => ({ page: page.value }));
+const open = useView('bookmarks', 'byId', () => (selectedId.value ? { id: selectedId.value } : null));
+// list.status: 'idle' | 'loading' | 'ready' | 'error'; list.data: the result; list.error; list.commit
+```
+
+`useView` is typed by the declaration: a feature or view name it doesn't declare, or arguments that aren't the
+view's, don't compile. Arguments may be a ref or a getter; a change that asks for something different subscribes
+again, and `null` or `undefined` leaves the view idle. The subscription ends with the component.
+
+- **A view is a pure read of the engine.** What it reads elsewhere — the clock, settings, a module-level cache, a
+  file — isn't tracked, so its result would go stale without a word. It reads through your repositories and `query`,
+  and writes nothing.
+- **Arguments and results are plain data**, since they cross to the window as JSON. A view that finds nothing returns
+  `null`.
+- **Read what the window shows.** A view re-runs when anything it read changes, so a view that reads a whole table to
+  show a count re-runs on every write to that table. `count`, `pick` and the indexes keep it narrow.
+- **Windows asking for the same view with the same arguments share one read.** A pack reloading re-runs its views on
+  the new code; a view that throws, or whose pack isn't running, reaches the window as `status: 'error'` and recovers
+  on its own.
+- `untypedUseView(ref, view, args?)` from `@apackdev/sdk/fe` is the escape hatch, for a view named by data or another
+  pack's.
+
 ### Trash
 
 The engine has a trash. `write(id).trash()` puts an entity in it: it stays stored, with its edges, marked with when
