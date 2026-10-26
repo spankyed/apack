@@ -31,16 +31,17 @@ export function declarationRecord(keyOrValue: z.ZodType, value?: z.ZodType): z.Z
       if (result.success) ctx.issues.push({ code: 'invalid_type', expected: 'record', input: raw, message: 'Expected a dictionary' });
       return z.NEVER;
     }
-    // Each entry on its own, so the valid ones still reach a refinement that runs despite these issues
-    // (`declaration-schema.ts`'s name checks): the parse fails either way
-    const valid: [string, unknown][] = [];
+    // Each entry on its own, and every entry kept, parsed where it parsed and as written where it didn't: a
+    // refinement that runs despite these issues sees each name the author wrote (`declaration-schema.ts`'s name
+    // checks, which find a name declared twice even when the name itself is refused). The parse fails either way
+    const entries: [string, unknown][] = [];
     for (const [name, member] of Object.entries(raw)) {
       const result = entry.safeParse([name, member], nested);
-      if (result.success) valid.push(result.data);
+      entries.push(result.success ? result.data : [name, member]);
       // An entry's issue is at [0 (key) | 1 (value), ...]: report it under the key, as a record would
-      else for (const issue of result.error.issues) ctx.issues.push(reported(issue, raw, [name, ...issue.path.slice(1)]));
+      if (!result.success) for (const issue of result.error.issues) ctx.issues.push(reported(issue, raw, [name, ...issue.path.slice(1)]));
     }
-    return Object.fromEntries(valid);
+    return Object.fromEntries(entries);
   });
   // A copy made by describe() or meta() shares this definition, so formatters find the grammar through either
   Object.assign(schema._zod.def, { [recordGrammar]: grammar });
