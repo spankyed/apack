@@ -33,18 +33,19 @@ async function readNativeSettings(n,entry,signal){
   else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||row.key==='language'||row.key==='theme'||row.key==='model'||row.key==='agentsView'||row.key==='notifChannel'||row.key==='showExternalIncludesDialog'||row.key==='autoUpdatesChannel'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}}
  }
 
- let problem;
+ let problem,savedKey;
  const commit=entry.settingsCommit;
  if(commit){
   const row=rows.find(row=>row.key===commit.key);
-  if(!row||!Object.is(row.value,commit.before))delete entry.settingsCommit;
+  if(!row){delete entry.settingsCommit;problem='The native setting is no longer available. Refresh to check its current state.';}
+  else if(!Object.is(row.value,commit.before)){if(commit.scalar)savedKey=commit.key;delete entry.settingsCommit;}
   else if(Date.now()>=commit.until){delete entry.settingsCommit;problem='Claude Code has not acknowledged the setting change. Refresh to check its current value.';}
  }
  const commitPending=!!entry.settingsCommit;
  // Timed copy feedback is presentation state, not authority to change settings or Stats controls.
  const revisionFrame=frame.stats?{...frame,stats:{...frame.stats,copyState:undefined}}:frame;
  const revision=createHash('sha256').update(JSON.stringify({rows,frame:revisionFrame,editor,commitPending})).digest('hex');
- return {snapshot:{revision,rows,frame,...editor?{editor}:{},...commitPending?{commitPending:true}:{}},...problem?{problem}:{},handles,api};
+ return {snapshot:{revision,rows,frame,...editor?{editor}:{},...commitPending?{commitPending:true}:{}},...problem?{problem}:{},...savedKey?{savedKey}:{},handles,api};
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
@@ -58,7 +59,7 @@ async function nativeSettings(n,request,abort){
   }else if(request.operation!=='read')throw Error('A native Settings editor operation is pending');
  }
  const read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
- if(request.operation==='read')return {snapshot:read.snapshot,...read.problem?{problem:read.problem}:{}};
+ if(request.operation==='read')return {snapshot:read.snapshot,...read.problem?{problem:read.problem}:{},...read.savedKey?{savedKey:read.savedKey}:{}};
  if(entry.settingsCommit&&request.operation!=='editor')throw Error('A native setting change is pending');
  if(request.operation==='open'||request.operation==='editor'){
   if(entry.settingsCommit&&!isEditorCancel)throw Error('A native setting change is pending');
@@ -147,21 +148,15 @@ async function nativeSettings(n,request,abort){
   }});
   controller.signal.throwIfAborted();nativeSettingsPanel(request);
   const acknowledged=result&&result.deny===undefined&&Object.hasOwn(result,'value');
-  let pending=false;
-  if(acknowledged&&!Object.is(result.value,handle.row.value)){
-   // Original toggle callbacks may return before their queued atomic write invalidates merged settings.
-   const until=Date.now()+1500;
-   while(true){
-    controller.signal.throwIfAborted();nativeSettingsPanel(request);
-    const fresh=read.api.configRowHandles(entry.context).find(item=>item.row.key===request.key);
-    pending=!!fresh&&Object.is(fresh.row.value,handle.row.value);
-    if(!pending||Date.now()>=until)break;
-    await new Promise(resolve=>setTimeout(resolve,40));
-   }
+  if(acknowledged&&!Object.is(result.value,handle.row.value)&&['boolean','choice','number'].includes(handle.row.kind)){
+   // An accepted callback may precede native cache refresh; the existing read loop owns acknowledgement.
+   entry.settingsCommit={key:request.key,before:visible.value,until:Date.now()+5000,scalar:true};
   }
   const after=await readNativeSettings(n,entry,controller.signal);nativeSettingsPanel(request);
-  const waiting=pending&&['boolean','choice','number'].includes(handle.row.kind);
-  return {snapshot:after.snapshot,...(acknowledged&&!waiting?{savedKey:request.key}:{problem:waiting?'Claude Code acknowledged the write, but its current value has not updated. Refresh to check it.':typeof result?.deny==='string'?result.deny:'Claude Code did not acknowledge this setting'})};
+  if(!acknowledged)return {snapshot:after.snapshot,problem:typeof result?.deny==='string'?result.deny:'Claude Code did not acknowledge this setting'};
+  if(after.problem)return {snapshot:after.snapshot,problem:after.problem};
+  return {snapshot:after.snapshot,...after.snapshot.commitPending?{}:{savedKey:request.key}};
+
  }finally{entry.settingsBusy=false;abort.signal.removeEventListener('abort',cancel);}
 }
 `

@@ -47,11 +47,20 @@ it('refuses a native hook-held write after its panel closes', async () => {
   await expect(result).rejects.toThrow('expired'); expect(f.writer).not.toHaveBeenCalled()
 })
 
-it('waits for the original settings cache to observe a queued write before publishing saved state', async () => {
-  const f = fixture(), before = await f.read()
-  f.writer.mockImplementationOnce(async next => { setTimeout(() => f.setValue(next), 20) })
-  const result = await f.run(f.n, { ...f.request, operation: 'write', revision: before.snapshot.revision, key: 'tips', value: true }, new AbortController())
-  expect(result.savedKey).toBe('tips'); expect(result.snapshot.rows[0].value).toBe(true)
+it('keeps an accepted scalar write pending until native value acknowledgement without replay', async () => {
+  const f=fixture(),before=await f.read();let land!:()=>void
+  f.writer.mockImplementationOnce(async next=>{land=()=>f.setValue(next)})
+  const result=await f.run(f.n,{...f.request,operation:'write',revision:before.snapshot.revision,key:'tips',value:true},new AbortController())
+  expect(result.snapshot.commitPending).toBe(true);expect(result.savedKey).toBeUndefined();expect(result.problem).toBeUndefined();expect(result.snapshot.rows[0].value).toBe(false)
+  await expect(f.run(f.n,{...f.request,operation:'write',revision:result.snapshot.revision,key:'tips',value:true},new AbortController())).rejects.toThrow('pending')
+  land();const acknowledged=await f.read();expect(acknowledged.snapshot.commitPending).toBeUndefined();expect(acknowledged.savedKey).toBe('tips');expect(acknowledged.snapshot.rows[0].value).toBe(true);expect(f.writer).toHaveBeenCalledOnce()
+})
+it('expires scalar acknowledgement honestly and never marks a withdrawn row saved',async()=>{
+ const f=fixture(),before=await f.read();f.writer.mockImplementation(async()=>{})
+ await f.run(f.n,{...f.request,operation:'write',revision:before.snapshot.revision,key:'tips',value:true},new AbortController())
+ ;(f.entry as any).settingsCommit.until=0;const expired=await f.read();expect(expired.snapshot.commitPending).toBeUndefined();expect(expired.savedKey).toBeUndefined();expect(expired.problem).toContain('not acknowledged');expect(f.writer).toHaveBeenCalledOnce()
+ ;(f.entry as any).settingsCommit={key:'tips',before:false,until:Date.now()+5000,scalar:true};f.n.runtime.p_r.mockResolvedValue(undefined)
+ const removed=await f.read();expect(removed.savedKey).toBeUndefined();expect(removed.problem).toContain('no longer available')
 })
 
 it('keeps timed copy feedback out of action authority while retaining selected-tab fences', async () => {
