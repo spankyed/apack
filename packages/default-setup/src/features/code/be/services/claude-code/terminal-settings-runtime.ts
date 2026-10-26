@@ -16,11 +16,13 @@ async function readNativeSettings(n,entry,signal){
  await waitForNativeSettingsConfig(n,entry,signal);
  const api=await import('/$bunfs/root/chunk-1ghyy712.js');
  const context=entry.context;let handles=api.configRowHandles(context);
- if(await refreshNativeSettingsUpdateCallbacks(n,entry,handles,signal)){
+ if(await refreshNativeSettingsConfigCallbacks(n,entry,handles,signal)){
   handles=api.configRowHandles(context);
-  const expected=handles.find(handle=>handle.row.key==='autoUpdatesChannel')?.row;
-  const mounted=nativeSettingsMountedDescriptors(n,entry).find(row=>row.id==='autoUpdatesChannel');
-  if(!expected||!mounted||!Object.is(expected.value,mounted.value))throw Error('Native Settings changed during refresh; refresh before editing');
+  const descriptors=nativeSettingsMountedDescriptors(n,entry);
+  for(const expected of handles.map(handle=>handle.row).filter(row=>['autoUpdatesChannel','remoteHomeSettings'].includes(row.key))){
+   const mounted=descriptors.filter(row=>row.id===expected.key);
+   if(mounted.length!==1||!Object.is(expected.value,mounted[0].value))throw Error('Native Settings changed during refresh; refresh before editing');
+  }
  }
  if(!Array.isArray(handles)||handles.length>256)throw Error('Native Settings row limit exceeded');
  const rows=[];

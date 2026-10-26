@@ -47,14 +47,16 @@ function nativeSettingsMountedConsentRows(n,entry){
  if(row.type!=='managedEnum'||!['true','false'].includes(row.value)||row.label.length>16384||row.lock!==undefined&&(typeof row.lock!=='object'||typeof row.lock.reason!=='string'||row.lock.reason.length>16384))throw Error('Native Config consent descriptor changed');
  return [{key:row.id,label:row.label,kind:'text',value:row.value,isLocked:row.lock!==undefined,...row.lock?{lockReason:row.lock.reason}:{}}];
 }
-async function refreshNativeSettingsUpdateCallbacks(n,entry,handles,signal){
- const expected=handles.find(handle=>handle.row.key==='autoUpdatesChannel')?.row;
- if(!expected)return false;
- const frame=nativeSettingsFrame(n,entry);
- if(frame.panel.selectedTab!=='Config'||frame.panel.hidden||entry.settingsEditorLease||entry.settingsCommit||entry.settingsBusy)return false;
- const mounted=nativeSettingsMountedDescriptors(n,entry).filter(row=>row.id===expected.key);
- if(mounted.length!==1)throw Error('Native Config update descriptor is unavailable');
- if(Object.is(mounted[0].value,expected.value))return false;
+async function refreshNativeSettingsConfigCallbacks(n,entry,handles,signal){
+ const expected=handles.map(handle=>handle.row).filter(row=>['autoUpdatesChannel','remoteHomeSettings'].includes(row.key));
+ if(!expected.length)return false;
+ const frame=nativeSettingsFrame(n,entry),commit=entry.settingsCommit;
+ // A scalar commit is recorded only after the original coordinator returns. Its changed source value is acknowledgement.
+ const scalarAcknowledged=commit?.scalar===true&&handles.some(handle=>handle.row.key===commit.key&&!Object.is(handle.row.value,commit.before));
+ if(frame.panel.selectedTab!=='Config'||frame.panel.hidden||entry.settingsEditorLease||commit&&!scalarAcknowledged||entry.settingsBusy&&!scalarAcknowledged)return false;
+ const descriptors=nativeSettingsMountedDescriptors(n,entry);
+ const stale=expected.some(row=>{const mounted=descriptors.filter(item=>item.id===row.key);if(mounted.length>1)throw Error('Native Config descriptor is ambiguous');return mounted.length!==1||!Object.is(mounted[0].value,row.value);});
+ if(!stale)return false;
  if(entry.settingsConfigRefresh)throw Error('Native Settings refresh is already pending');
  entry.settingsConfigRefresh=true;
  try{
