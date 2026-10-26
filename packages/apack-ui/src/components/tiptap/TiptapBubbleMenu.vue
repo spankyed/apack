@@ -38,10 +38,8 @@ const linkInput = ref<InstanceType<typeof BubbleMenuLinkInput>>()
 const menuKey = new PluginKey('textBubbleMenu')
 const editorElement = props.editor.view.dom
 const ownerDocument = editorElement.ownerDocument
-const composerBoundary = editorElement.closest('form')
 const menuOptions = {
   placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
-  ...(composerBoundary ? { shift: { boundary: composerBoundary, padding: 8 }, flip: { boundary: composerBoundary, padding: 8 } } : {}),
 }
 
 // A private host preserves the menu's blur boundary while escaping editor scroll clipping.
@@ -62,6 +60,12 @@ function onMouseDown() { rightClicked = false }
 
 onMounted(() => {
   ownerDocument.body.appendChild(menuHost)
+  // EditorContent attaches the editor DOM during mount; setup may still see a detached view.
+  const boundary = editorElement.closest('form')
+  if (boundary) props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, {
+    type: 'updateOptions', options: { options: { shift: { boundary, padding: 8 }, flip: { boundary, padding: 8 } } },
+  }))
+
   ownerDocument.addEventListener('scroll', onAncestorScroll, true)
   const el = editorElement
   el.addEventListener('contextmenu', onContextMenu)

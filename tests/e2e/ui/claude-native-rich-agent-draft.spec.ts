@@ -116,7 +116,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   }
   const formattingObservations:any[]=[]
   async function observeFormatting(editor:typeof composer,phase:string){
-    formattingObservations.push({phase,...await snapshot(editor),...await editor.evaluate(element=>({html:element.innerHTML,selected:window.getSelection()?.toString()??'',focused:element===document.activeElement}))})
+    formattingObservations.push({phase,...await snapshot(editor),...await editor.evaluate(element=>({html:element.innerHTML,selected:window.getSelection()?.toString()??'',focused:element===document.activeElement,form:element.closest('form')?.getBoundingClientRect().toJSON(),menus:Array.from(document.querySelectorAll('.bubble-menu')).map(menu=>({rect:menu.getBoundingClientRect().toJSON(),style:menu.getAttribute('style')}))}))})
     await writeFile(join(workspace!,'native-rich-roundtrip-formatting.json'),JSON.stringify(formattingObservations,null,2))
   }
   async function markSelected(editor:typeof composer){
