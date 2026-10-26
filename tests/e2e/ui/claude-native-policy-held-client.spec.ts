@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -122,8 +122,22 @@ test('retires a focused held Client press across native policy restriction and r
   await expect.poll(async()=>(await readClient())?.pressed).toBe(1)
   const freshDraft=await receipt('native-policy-fresh-draft.json');expect(freshDraft).toEqual(parent)
   const afterFresh=await readClient(),after=await context()
-  expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,heldRetired,afterHeld,afterFresh,freshDraft,borrowedPolicyClient:!!borrowedPolicyClient,noPhantomTurn:true}))
+  expect(after.turns).toBe(before.turns);expect(after.native.state.nativePid).toBe(boundNativePid)
+  let originalPolicyNotes:any[]=[]
+  if(borrowedPolicyClient){
+    const projects=join(workspace!,'.claude/projects'),paths=(await readdir(projects,{recursive:true})).filter(path=>path.split('/').at(-1)===sessionId+'.jsonl')
+    expect(paths).toHaveLength(1)
+    const rows=(await readFile(join(projects,paths[0]),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+    const unique=[...new Map(rows.filter(row=>row.uuid).map(row=>[row.uuid,row])).values()] as any[]
+    expect(unique.filter(row=>row.type==='user'&&row.isMeta!==true)).toHaveLength(1)
+    const beforeIds=new Set(before.messages.map((message:any)=>message.id))
+    expect(after.messages.filter((message:any)=>beforeIds.has(message.id)).map((message:any)=>message.id)).toEqual(before.messages.map((message:any)=>message.id))
+    const added=after.messages.filter((message:any)=>!beforeIds.has(message.id))
+    const notes=unique.filter(row=>row.type==='system'&&row.subtype==='informational'&&typeof row.content==='string'&&row.content.startsWith('native-history-fixture: '))
+    for(const message of added){const note=notes.find(row=>row.uuid===message.context?.cliUuid);expect(note,'New history rows must come from original native policy diagnostics').toBeTruthy();expect(message.text).toContain(note.content)}
+    originalPolicyNotes=notes.map(row=>({uuid:row.uuid,text:row.content}))
+  }else expect(after.messages.map((message:any)=>message.id)).toEqual(before.messages.map((message:any)=>message.id))
+  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,heldRetired,originalPolicyNotes,afterHeld,afterFresh,freshDraft,borrowedPolicyClient:!!borrowedPolicyClient,noPhantomTurn:true}))
   await composer.focus()
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
