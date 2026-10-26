@@ -162,7 +162,7 @@ describe('isolated editing sessions', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/doesn't hold the pinned commit 0{40}.*Checkout retained/);
     expect(fs.existsSync(path.join(dir, 'commands'))).toBe(false);
-    expect(await git(path.join(dir, 'repo-worktrees', 'review'), 'branch', '--show-current')).toBe('session/review');
+    expect(await git(path.join(dir, 'repo-worktrees.noindex', 'review'), 'branch', '--show-current')).toBe('session/review');
   });
 
   it('runs dependency installation and the full strict gate in the candidate', async () => {
