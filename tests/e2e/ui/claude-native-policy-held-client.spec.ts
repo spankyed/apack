@@ -5,10 +5,15 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async({appPage},testInfo)=>{if(testInfo.status!==testInfo.expectedStatus)await appPage.screenshot({path:testInfo.outputPath('native-policy-held-failure.png')}).catch(()=>{})})
-test('retires a focused held Client press across native policy restriction and restoration', async ({ app, appPage }, testInfo) => {
+test('retires a focused held Client press across native policy restriction and restoration', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
+  async function capture(file:string){
+    const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+    const png=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+    await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'))
+  }
   expect(process.env.HOME).toBe(workspace)
-  const { restriction, transition, heldPolicyClient } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const { restriction, transition, heldPolicyClient, borrowedPolicyClient } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   expect(transition).toBe(true);expect(heldPolicyClient).toBe(true)
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -56,14 +61,14 @@ test('retires a focused held Client press across native policy restriction and r
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('AppNativeMain ' + sessionId)
   await appPage.setViewportSize({ width: 680, height: 600 })
-  await appPage.screenshot({ path: testInfo.outputPath('apack-managed-composer-status.png') })
+  await capture('apack-managed-composer-status.png')
 
   const policyFile=join(workspace!,'policy/managed-settings.json'),policy=JSON.parse(await readFile(policyFile,'utf8'))
   const before=await context(),composer=card.locator('[contenteditable="true"]')
   const parent={text:'Keep policy review notes while this extension refreshes.',cursor:9}
   await composer.fill(parent.text);await composer.press(process.platform==='darwin'?'Meta+ArrowLeft':'Home')
   for(let i=0;i<9;i++)await composer.press('ArrowRight')
-  const client=card.locator('[data-native-client]').first(),tools=card.getByRole('button',{name:'Session tools',exact:true})
+  const client=(borrowedPolicyClient?appPage.locator('[data-native-placement="InfoNotice"] [data-native-client]'):card.locator('[data-native-client]')).first(),tools=card.getByRole('button',{name:'Session tools',exact:true})
   if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
   await expect(client).toContainText('Policy action count=0')
   await client.focus();await client.press('p')
@@ -76,6 +81,7 @@ test('retires a focused held Client press across native policy restriction and r
   await expect.poll(async()=>(await receipt('native-policy-held-start.json'))?.nonce,{message:'Original managed observer enters the native Client ui.press chain'}).toBe(nonce)
   const heldStarted=await receipt('native-policy-held-start.json')
   expect(heldStarted.draft).toEqual(parent)
+  if(borrowedPolicyClient){expect(heldStarted.event.component).toBe('InfoNotice');expect(heldStarted.event.surface).toBe('terminal')}
   await writeFile(policyFile,JSON.stringify({...policy,allowManagedHooksOnly:true}))
   await expect(client).toHaveCount(0,{timeout:10000})
   await expect(composer).toHaveText(parent.text)
@@ -94,7 +100,7 @@ test('retires a focused held Client press across native policy restriction and r
   const freshDraft=await receipt('native-policy-fresh-draft.json');expect(freshDraft).toEqual(parent)
   const afterFresh=await readClient(),after=await context()
   expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,afterHeld,afterFresh,freshDraft,noPhantomTurn:true}))
+  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,afterHeld,afterFresh,freshDraft,borrowedPolicyClient:!!borrowedPolicyClient,noPhantomTurn:true}))
   await composer.focus()
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
@@ -107,7 +113,7 @@ test('retires a focused held Client press across native policy restriction and r
     })
     await writeFile(join(workspace!,'native-policy-held-layout-'+width+'.json'),JSON.stringify(layout))
     await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))
-    await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-policy-held-restored-'+width+'.png')})
+    await capture('native-policy-held-restored-'+width+'.png')
   }
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   await section.getByRole('button',{name:'Stop session',exact:true}).click()
@@ -118,5 +124,5 @@ test('retires a focused held Client press across native policy restriction and r
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);expect(resizeErrors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePolicyHeldClient:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors,resizeErrors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePolicyHeldClient:true,...(borrowedPolicyClient?{nativeBorrowedPolicyHeldClient:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors,resizeErrors}))
 })
