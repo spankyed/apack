@@ -189,6 +189,19 @@ async function waitForPackBackend(app: ElectronApplication, packId: string, time
   }
 }
 
+/** The pid of the API serving this app, from the `{ port, pid }` file the API writes about itself as it starts */
+function apiPidOf(app: ElectronApplication): number | undefined {
+  const userDataDir = userDataDirs.get(app);
+  if (!userDataDir) return undefined;
+  const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
+  try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
+  catch (error) {
+    // No file is no API yet (or one that has exited); a file that cannot be read is a fault worth hearing about
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
 const ERROR_LINE = /error|exception|failed|cannot|not found|no machine export/i;
 
 function describeFailure(message: string, app: ElectronApplication, rendererErrors: string[] = []): Error {
@@ -514,9 +527,7 @@ export function createTest(options: CreateTestOptions = {}) {
         }
 
         await use(app);
-        const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
-        const apiPid: number | undefined = fs.existsSync(endpointFile)
-          ? JSON.parse(fs.readFileSync(endpointFile, 'utf8')).pid : undefined;
+        const apiPid = apiPidOf(app);
         if (process.env.DEBUG_E2E) console.log('[e2e shutdown] calling close');
         const inspectShutdown = process.env.DEBUG_E2E ? setTimeout(() => {
           console.log('[e2e shutdown] still waiting', {
@@ -561,7 +572,7 @@ export function createTest(options: CreateTestOptions = {}) {
       }
     }, { scope: 'worker' }],
 
-    appPage: async ({ electronApp }, use) => {
+    appPage: async ({ electronApp }, use, testInfo) => {
       const page = await findMainWindow(electronApp);
       // Deterministic for a suite, and the window's own size for a run someone is watching — see `pinsViewport`
       if (pinsViewport(process.env)) await page.setViewportSize(E2E_VIEWPORT);
@@ -646,7 +657,20 @@ export function createTest(options: CreateTestOptions = {}) {
         }
       }
 
+      const apiPidAtStart = apiPidOf(electronApp);
       await use(page);
+
+      // An API that restarted under a failing test is the cause to name: the window reconnects, the shell replaces
+      // every surface's actor, and whatever their components held (typed text among it) is reset — so the failure
+      // describes that restart rather than the code under test. A test that passed through one is left alone.
+      const apiPidAtEnd = apiPidOf(electronApp);
+      if (testInfo.status !== testInfo.expectedStatus && apiPidAtStart !== undefined && apiPidAtEnd !== apiPidAtStart) {
+        const description = `The app's API restarted during this test (pid ${apiPidAtStart} → ${apiPidAtEnd ?? 'none'}). `
+          + 'A reconnect replaces every surface\'s actor, which resets what its components held; see '
+          + (appLogs.get(electronApp) ?? 'the app output') + ' for why the API exited.';
+        testInfo.annotations.push({ type: 'api-restarted', description });
+        console.error(`[e2e] ${description}`);
+      }
 
       page.removeListener('pageerror', onPageError);
       page.removeListener('console', onConsole);

@@ -423,7 +423,12 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 
 ### Teardown
 
-- Per-test: `pageerror` and `console` listeners are removed
+- Per-test: `pageerror` and `console` listeners are removed. A test that failed while the app's API restarted under
+  it (the API's pid in its `api-port` file differs from the test's start) gets an `api-restarted` annotation and an
+  `[e2e]` line naming both pids: the window reconnects and the shell replaces every surface's actor, which resets
+  what their components held, so that restart is the cause to read first
+  ([reconnect without remount](../../docs/plans/reconnect-without-remount.md)). A test that passed through one is
+  left alone
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
 
 ## API reference
