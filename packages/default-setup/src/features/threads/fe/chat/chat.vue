@@ -544,6 +544,35 @@ function handleToggleCompacted(markerId: string, compacted: boolean) {
 
 const prevThreadId = ref(currentThread.value?.id)
 
+/**
+ * Brings the message opened from the panel's search into view once it is drawn, and says whether that takes the place
+ * of a load's scroll: it does when the message was shown, and while its page isn't loaded, when the machine is still
+ * asking for older pages. One listed and not drawn, hidden as compacted, is as shown as it can be
+ */
+function showFocusedMessage(messages: MessageEntity[]): boolean {
+  const focused = focusMessageId.value
+  if (!focused) return false
+  const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
+  if (el) {
+    el.scrollIntoView({ block: 'center' })
+    el.classList.add(style.focused)
+    setTimeout(() => el.classList.remove(style.focused), 1600)
+    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+    return true
+  }
+  if (!messages.some((m) => m.id === focused)) return true
+  actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+  return false
+}
+
+// A message the chat already lists changes none of its messages when it is opened from search, so its focus is
+// shown as it is set, not only as the messages change
+watch(focusMessageId, async (focused) => {
+  if (!focused) return
+  await nextTick()
+  showFocusedMessage(allMessages.value)
+})
+
 watch(allMessages, async (newMsgs, oldMsgs) => {
   await nextTick()
 
@@ -561,21 +590,8 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
     showInlineDashboard.value = false
   }
 
-  // A message opened from the panel's search is brought into view in place of a load's scroll, once its page is
-  // loaded; until then the machine is asking for older pages. One hidden as compacted is as shown as it can be
-  const focused = focusMessageId.value
-  if (focused) {
-    const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
-    if (el) {
-      el.scrollIntoView({ block: 'center' })
-      el.classList.add(style.focused)
-      setTimeout(() => el.classList.remove(style.focused), 1600)
-      actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
-      return
-    }
-    if (!newMsgs.some((m) => m.id === focused)) return
-    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
-  }
+  // A message opened from the panel's search is brought into view in place of a load's scroll
+  if (showFocusedMessage(newMsgs)) return
 
   const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
