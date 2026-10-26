@@ -96,8 +96,13 @@ test('retires completed but unsettled Workflow controls after stopping native wo
       await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({stage,width,file,task:await currentTask()})
     }
   }
+  // Prepare a real pointer before the short native phase; continuous native redraw need not stop for a user click.
+  await stop.scrollIntoViewIfNeeded();await expect(stop).toBeEnabled();await expect(stop).toBeInViewport({ratio:1})
+  const bounds=(await stop.boundingBox())!;expect(bounds).toBeTruthy()
+  const point={x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2}
   await expect.poll(async()=>((await tasks()).find((task:any)=>task.id===taskId)?.logs??[]).some((line:string)=>line.includes('Release reviewer ready to settle')),{timeout:15000,intervals:[50]}).toBe(true)
-  await stop.click({timeout:2000})
+  expect(await appPage.evaluate(({x,y})=>{const button=document.elementFromPoint(x,y)?.closest('button');return button?.textContent?.trim()==='Stop Workflow'&&!button.disabled},point)).toBe(true)
+  await appPage.mouse.click(point.x,point.y)
   const receipts=async()=>(await readFile(join(workspace!,'native-workflow-stop-receipts.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
   await expect.poll(async()=>(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true),{timeout:10000}).toBeTruthy()
   const receipt=(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true)
