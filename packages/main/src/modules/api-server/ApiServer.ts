@@ -26,6 +26,11 @@ export class ApiServer implements AppModule {
   private shutdownComplete = false;
   private shutdown?: Promise<void>;
   private restartAttempts = 0;
+  /**
+   * The current startup's readiness, which `waitForReady` hands out. A crash before the API is ready restarts it
+   * within the same startup, so the promise is renewed only once it has settled: the launch that becomes ready
+   * resolves what the window waits on, and running out of restarts rejects it with the API's own error
+   */
   private serverReady: Promise<void>;
   private serverReadyResolve?: () => void;
   private serverReadyReject?: (error: Error) => void;
@@ -57,10 +62,13 @@ export class ApiServer implements AppModule {
   }
 
   private createReadyPromise(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
+    const ready = new Promise<void>((resolve, reject) => {
       this.serverReadyResolve = resolve;
       this.serverReadyReject = reject;
     });
+    // A startup that fails before anyone waits is reported through `waitForReady` later, not as unhandled
+    ready.catch(() => {});
+    return ready;
   }
 
   enable(context: MainModuleScope): void {
@@ -129,7 +137,8 @@ export class ApiServer implements AppModule {
     if (this.isShuttingDown || this.processManager.isRunning()) return;
 
     this.lastError = undefined; // Clear stale error so getStatus() doesn't report old crashes during restart
-    this.serverReady = this.createReadyPromise(); // Reset promise so waitForReady() works across restarts
+    // A launch after the last one settled starts a new startup; a restart after a crash continues the current one
+    if (!this.serverReadyResolve) this.serverReady = this.createReadyPromise();
     logInfo('[MAIN] Starting API server...');
     broadcastEvent(API_EVENTS.STARTING);
 
@@ -254,6 +263,7 @@ export class ApiServer implements AppModule {
     if (this.serverReadyResolve) {
       this.serverReadyResolve();
       this.serverReadyResolve = undefined;
+      this.serverReadyReject = undefined;
     }
   }
 
@@ -287,10 +297,13 @@ export class ApiServer implements AppModule {
 
       setTimeout(() => this.startApiServer(), API_CONFIG.RESTART_DELAY);
     } else if (this.restartAttempts >= API_CONFIG.MAX_RESTART_ATTEMPTS) {
-      this.lastError = { message: 'Max restart attempts reached' };
-      logError('[MAIN] Max restart attempts reached');
-      broadcastEvent(API_EVENTS.ERROR, { error: 'Max restart attempts reached' });
-      this.serverReadyReject?.(new Error('Max restart attempts reached'));
+      // What the API said as it exited is what the user is shown: an unreadable database names its fix there
+      const failure = this.lastError.message;
+      logError(`[MAIN] Max restart attempts reached: ${failure}`);
+      broadcastEvent(API_EVENTS.ERROR, { error: failure });
+      this.serverReadyReject?.(new Error(failure));
+      this.serverReadyResolve = undefined;
+      this.serverReadyReject = undefined;
     }
   }
 
@@ -318,11 +331,9 @@ export class ApiServer implements AppModule {
    * shell's terminal `error` state, and main refusing to start the API again. `ProcessManager.stop()` is
    * what keeps it off that path, and it waits for the exit, which is what makes the next launch correct.
    *
-   * **It does not wait for readiness, deliberately.** `waitForReady` reads `serverReady`, which
-   * `startApiServer` replaces on every launch — so if this launch crashed before it was ready, the crash
-   * path's own restart would orphan the promise this was holding and the wait would run to
-   * `READY_TIMEOUT`, keeping the loop silent for a minute. Nothing needs it either: a rebuild arriving
-   * while the previous API is still booting *should* replace it, because that API is already stale.
+   * **It does not wait for readiness, deliberately.** Nothing needs it: the window follows the API through
+   * `api:started`, and a rebuild arriving while the previous API is still booting *should* replace it, because
+   * that API is already stale.
    */
   public reloadApiServer(): Promise<void> {
     this.reloading ??= (async () => {
