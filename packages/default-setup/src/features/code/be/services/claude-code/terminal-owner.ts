@@ -21,6 +21,7 @@ import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
 import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
+import { stripVTControlCharacters } from 'node:util'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
@@ -71,7 +72,7 @@ export interface ClaudeNativeTerminalOwner {
   controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
   renameSession(title: string): Promise<{ title: string; message: string }>
-  setModel(model: string): Promise<string>
+  setModel(model: string): Promise<{ selection: string; notice: string }>
   setPermissionMode(mode: PermissionMode): Promise<PermissionMode>
   submit(text: string, images?: readonly ClaudeNativeImage[], phase?: 'Plan' | 'Edit'): Promise<ClaudeNativeSubmissionReceipt>
   close(): Promise<void>
@@ -471,13 +472,15 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         changingModel = true; changed()
         const sessionId = bridge.projection.sessionId
         try {
-          const result = await bridge.uiTransport.request({ subtype: 'apack_set_model', model }) as { selection?: unknown }
+          const result = await bridge.uiTransport.request({ subtype: 'apack_set_model', model }) as { selection?: unknown; notice?: unknown }
           if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while changing model')
           if (typeof result?.selection !== 'string' || !result.selection) throw new Error('Native model selection was not acknowledged')
+          if (typeof result.notice !== 'string') throw new Error('Native model notice was not acknowledged')
           modelSelection = result.selection
           // Carry the acknowledged original selection until the next authoritative native snapshot.
           if (bridge.session.metadata) bridge.session.update({ ...bridge.session.metadata, modelSelection })
-          return modelSelection
+          // Native notices explain session-only changes, fast mode and defaults applied on restart.
+          return { selection: modelSelection, notice: stripVTControlCharacters(result.notice) }
         } finally { changingModel = false; changed() }
       },
       async setPermissionMode(mode) {

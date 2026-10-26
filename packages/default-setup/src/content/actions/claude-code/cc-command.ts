@@ -234,8 +234,8 @@ async function handleModel(
     const sessionId = native.state.sessionId;
     const accepted = await native.setModel(selection);
     if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId) return { text: 'Claude conversation changed while choosing the model.' };
-    persistClaudeState(services, threadId, { modelOverride: accepted });
-    return { text: `Model selection accepted: ${accepted}. The next turn will report the effective model.` };
+    persistClaudeState(services, threadId, { modelOverride: accepted.selection });
+    return { text: `${accepted.notice}\n\nModel selection accepted: ${accepted.selection}. The next turn will report the effective model.` };
   }
   const conversation = services.cli.claudeCode.getConversation(threadId);
   if (conversation) {

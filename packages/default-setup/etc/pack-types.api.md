@@ -1354,7 +1354,10 @@ interface ClaudeNativeTerminalOwner {
         title: string;
         message: string;
     }>;
-    setModel(model: string): Promise<string>;
+    setModel(model: string): Promise<{
+        selection: string;
+        notice: string;
+    }>;
     setPermissionMode(mode: PermissionMode): Promise<PermissionMode>;
     submit(text: string, images?: readonly ClaudeNativeImage[], phase?: 'Edit' | 'Plan'): Promise<ClaudeNativeSubmissionReceipt>;
     close(): Promise<void>;

@@ -94,10 +94,27 @@ it('carries original Config selections and default reset into continuation witho
   expect(owner.modelSelection).toBe('opus')
   f.metadata.modelSelection='sonnet';expect(owner.modelSelection).toBe('sonnet')
   f.metadata.modelSelection='default';expect(owner.modelSelection).toBe('default')
-  f.request.mockResolvedValue({selection:'haiku'})
+  f.request.mockResolvedValue({selection:'haiku',notice:'Set model to Haiku for this session only'})
   f.update.mockImplementation(value=>Object.assign(f.metadata,value))
-  await expect(owner.setModel('haiku')).resolves.toBe('haiku')
+  await expect(owner.setModel('haiku')).resolves.toEqual({selection:'haiku',notice:'Set model to Haiku for this session only'})
   expect(owner.modelSelection).toBe('haiku')
   f.metadata.modelSelection='sonnet';expect(owner.modelSelection).toBe('sonnet')
+ }finally{await prepared.dispose()}
+})
+
+it('retains the native model notice and restart warnings as desktop text', async () => {
+ const {prepared,owner}=await fixture()
+ try {
+  f.request.mockResolvedValue({selection:'haiku',notice:'Set model to \u001b[1mHaiku\u001b[0m for this session only\n     Managed settings pins Sonnet — that applies on restart'})
+  await expect(owner.setModel('haiku')).resolves.toEqual({selection:'haiku',notice:'Set model to Haiku for this session only\n     Managed settings pins Sonnet — that applies on restart'})
+ }finally{await prepared.dispose()}
+})
+
+it('refuses a missing model notice without claiming a complete acknowledgement', async () => {
+ const {prepared,owner}=await fixture({model:'opus'})
+ try {
+  f.request.mockResolvedValue({selection:'haiku'})
+  await expect(owner.setModel('haiku')).rejects.toThrow('model notice was not acknowledged')
+  expect(owner.modelSelection).toBe('opus');expect(f.update).not.toHaveBeenCalled();expect(owner.busy).toBe(false)
  }finally{await prepared.dispose()}
 })

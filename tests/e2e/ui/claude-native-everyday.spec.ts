@@ -173,6 +173,42 @@ test('completes an everyday native review across Agent, approval, question and i
   await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, boundNativePid }))
   await appPage.setViewportSize({ width: 1100, height: 900 })
   }
+  if(combinedAcceptance) {
+    const beforeModels = await context()
+    const settingsPath = join(workspace!, '.claude/settings.json')
+    const settingsBefore = await readFile(settingsPath, 'utf8')
+    const notices: {selection:string;text:string;screenshots:string[]}[] = []
+    for(const selection of ['haiku','default']) {
+      await replaceDraft(composer,'')
+      await composer.pressSequentially('/cc-model')
+      await appPage.locator('.command-suggestion-popup').getByText('/cc-model',{exact:true}).click()
+      await composer.pressSequentially(selection)
+      await send.click()
+      await expect(composer).toHaveText('')
+      const acknowledgement = `Model selection accepted: ${selection}. The next turn will report the effective model.`
+      await expect.poll(async () => (await context()).messages.some((message:any) => message.sender==='assistant' && message.text.includes(acknowledgement) && message.text.includes('for this session only'))).toBe(true)
+      const current = await context()
+      expect(current.claude.modelOverride).toBe(selection)
+      expect(current.sessionId).toBe(beforeModels.sessionId)
+      expect(current.turns).toBe(beforeModels.turns)
+      expect(current.native.state.nativePid).toBe(boundNativePid)
+      const message = current.messages.findLast((message:any) => message.sender==='assistant' && message.text.includes(acknowledgement))
+      expect(message.text).not.toContain('\u001b')
+      const files:string[] = []
+      for(const [width,height] of [[1100,900],[680,600]]) {
+        await appPage.setViewportSize({width,height})
+        const notice = appPage.getByText('for this session only',{exact:false}).last()
+        await notice.scrollIntoViewIfNeeded()
+        await expect(notice).toBeInViewport()
+        const file = `apack-native-model-${selection}-${width}-${height}.png`
+        await capturePage(file,width,height);files.push(file)
+      }
+      notices.push({selection,text:message.text,screenshots:files})
+    }
+    expect(await readFile(settingsPath,'utf8')).toBe(settingsBefore)
+    await writeFile(join(workspace!,'native-model-notice-app.json'),JSON.stringify({sessionId:beforeModels.sessionId,nativePid:boundNativePid,turns:beforeModels.turns,settingsUnchanged:true,notices}))
+    await appPage.setViewportSize({width:1100,height:900})
+  }
   await replaceDraft(composer,'Review the release notes with a worker.')
   await send.click()
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'running'), { timeout: 15000 }).toBe(true)

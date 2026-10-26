@@ -67,14 +67,15 @@ it.each([true, false])('replays input queued during a model acknowledgement (acc
 
 it('uses the native terminal owner and saves its canonical acknowledgement', async () => {
   const f = setup();
-  let acknowledge!: (value: string) => void;
-  const native = { state: { cwd: '/selected', sessionId: 'session' }, busy: false, setModel: vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; })) };
+  let acknowledge!: (value: {selection:string;notice:string}) => void;
+  const native = { state: { cwd: '/selected', sessionId: 'session' }, busy: false, setModel: vi.fn(() => new Promise<{selection:string;notice:string}>(resolve => { acknowledge = resolve; })) };
   f.getNativeTerminal.mockReturnValue(native as never);
   const changing = run(f.id, 'HAIKU');
   await vi.waitFor(() => expect(native.setModel).toHaveBeenCalledWith('HAIKU'));
   expect(f.state()?.modelOverride).toBe('sonnet');
-  acknowledge('haiku');
-  expect((await changing).text).toContain('selection accepted: haiku');
+  const notice = 'Set model to Haiku for this session only\n     Managed settings pins Sonnet — that applies on restart';
+  acknowledge({selection:'haiku',notice});
+  expect((await changing).text).toBe(`${notice}\n\nModel selection accepted: haiku. The next turn will report the effective model.`);
   expect(f.state()).toMatchObject({ modelOverride: 'haiku', model: 'observed-sonnet' });
   expect(f.settings).not.toHaveBeenCalled();
 });
@@ -83,7 +84,7 @@ it.each(['busy', 'refusal', 'replacement'])('retains selection when native model
   const native = { state: { cwd: '/selected', sessionId: 'session' }, busy: kind === 'busy', setModel: vi.fn(async () => {
     if (kind === 'refusal') throw new Error('Native model policy refused');
     f.getNativeTerminal.mockReturnValue(undefined);
-    return 'haiku';
+    return {selection:'haiku',notice:'Set model to Haiku for this session only'};
   }) };
   f.getNativeTerminal.mockReturnValue(native as never);
   await run(f.id, 'haiku');
