@@ -18,13 +18,11 @@ describe('a prompt\'s output schema', () => {
   it('is stored when the prompt is created and updated', async () => {
     const app = await promptsApp()
     await app.send('prompts', { type: 'CREATE_PROMPT', label: 'Summarize', inputs: {}, templateFn: 'return "hi"', outputSchema: schema })
-    await app.nextEmit('prompts', 'PROMPT_CREATED')
     const created = byLabel('Summarize')!
     expect(created.outputSchema).toEqual(schema)
 
     const changed = { type: 'object', properties: { title: { type: 'string' } } }
     await app.send('prompts', { type: 'UPDATE_PROMPT', promptId: created.id, outputSchema: changed })
-    await app.nextEmit('prompts', 'PROMPT_UPDATED')
     expect(repository.promptQueries.byId(created.id as EARS.EntityId)!.outputSchema).toEqual(changed)
   })
 

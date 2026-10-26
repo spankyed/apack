@@ -49,7 +49,7 @@ export type Event =
   | { type: 'search.ERROR'; message: string }
   | { type: 'search.CLEAR_ERROR' }
   | { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
-  | { type: 'CODE_STARTUP' };
+  | { type: 'CODE_STARTED' };
 
 export const searchState = setup({
   types: {
@@ -199,7 +199,7 @@ export const searchState = setup({
         'search.DIRECTORY_CHANGED': {
           actions: 'handleDirectoryChanged'
         },
-        'CODE_STARTUP': {
+        'CODE_STARTED': {
           actions: 'handleCodeStartup'
         }
       }

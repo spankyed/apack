@@ -9,7 +9,7 @@ import { repository } from '#generated/repository.ts'
 import type { Services } from '#generated/services.ts'
 import { actionLabel, writeDefaultFlows } from '../../_support/flows.ts'
 
-it("pauses a running Claude Code turn: CC: Pause Turn's event, log entry and thread row", async () => {
+it("pauses a running Claude Code turn: CC: Pause Turn's log entry and thread row", async () => {
   writeDefaultFlows()
   // No CLI process runs in the test
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: () => undefined, clearHandle: vi.fn() } } as never)
@@ -28,11 +28,6 @@ it("pauses a running Claude Code turn: CC: Pause Turn's event, log entry and thr
   const run = await app.runFlow('Claude Code', { event: 'user.thread.pause', data: { threadId } }).finally(stopLogs)
 
   expect(run.steps.map((step) => [actionLabel(step), step.status])).toEqual([['CC: Pause Turn', 'completed']])
-  expect(app.emitted('threads')).toContainEqual(expect.objectContaining({
-    type: 'THREAD_UPDATED',
-    threadId,
-    updates: expect.objectContaining({ context: { claudeCode: expect.objectContaining({ sessionId: 'session-1', isRunning: false }) } }),
-  }))
   expect(logs).toContainEqual(expect.objectContaining({
     level: 'info',
     source: 'action:CC: Pause Turn',

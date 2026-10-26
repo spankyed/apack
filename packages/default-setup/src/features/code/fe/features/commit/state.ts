@@ -134,7 +134,8 @@ export type Event =
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
-  | { type: 'CODE_STARTUP' };
+  | { type: 'CODE_STARTED' }
+  | { type: 'commit.REPOSITORY_CHANGED' };
 
 export const commitState = setup({
   types: {
@@ -412,6 +413,7 @@ export const commitState = setup({
         self.send({ type: 'commit.REFRESH_STATUS' })
         sendToSystem('code', { type: 'commit.STASH_LIST' })
         sendToSystem('code', { type: 'commit.WORKTREE_LIST' })
+        sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' })
         sendToSystem('code', { type: 'commit.LOG_LIST' })
       }
     },
@@ -718,8 +720,12 @@ export const commitState = setup({
         'commit.RESET_COMMIT_SUCCESS': {
           actions: ['refreshGitStatus', 'requestLogList']
         },
-        'CODE_STARTUP': {
+        'CODE_STARTED': {
           actions: 'handleCodeStartup'
+        },
+        // The repository changed, on disk or by a write from any window: ask again for what the panel shows of it
+        'commit.REPOSITORY_CHANGED': {
+          actions: ['refreshGitStatus', 'requestLogList', 'requestStashList', 'requestWorktreeList']
         }
       }
     }

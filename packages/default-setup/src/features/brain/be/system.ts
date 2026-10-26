@@ -6,7 +6,7 @@ import { defineSystem } from '@apackdev/sdk/framework';
 
 import { EARS } from '#generated/ears.ts';
 import type { Contract } from './contract.ts';
-import type { BrainContext, FlowRunNodeData } from './types.ts';
+import type { BrainContext, FlowRunNodeData, OutgoingBrainEvents } from './types.ts';
 import type { RunNodeId } from '@apackdev/sdk/steps';
 import { repository } from '#generated/repository.ts';
 import { createLogger, reportError, setDebugEnabled, isDebugEnabled } from '@apackdev/sdk/logger';
@@ -29,7 +29,7 @@ const rootFlowToRun = (): EARS.EntityId | undefined => repository.flowsQueries.r
 /** The error the brain can't start with: flows exist but none has the root role. Undefined with a root flow or no flows */
 function noRootFlowError(): Error | undefined {
   if (repository.flowsQueries.rootFlow()) return undefined;
-  const flowCount = repository.flowsQueries.connectedData().flows.length;
+  const flowCount = repository.flowsQueries.list().flows.length;
   if (flowCount === 0) return undefined;
   return new Error(`No flow has the root role (${flowCount} flows exist): mark one \`root: true\` in its flow source, or make one the root flow in Flows`);
 }
@@ -51,6 +51,27 @@ function stopWithoutRootFlow({ clientConnected }: BrainContext): Partial<BrainCo
   return { brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, startError, startErrorReported: clientConnected };
 }
 
+/** The brain's state, which every window may hear: what it is doing, never a run's data */
+type BrainStateNewsType = 'BRAIN_STARTED' | 'BRAIN_KILLED' | 'BRAIN_PAUSED' | 'INSPECT_TOGGLED'
+type BrainStateNews = Extract<OutgoingBrainEvents, { type: BrainStateNewsType }>
+
+/**
+ * The brain's state as a window shows it: running or stopped (and why), paused, and whether its steps are inspected.
+ * Inspection is restored from the settings, on by default in development so steps are visible out of the box.
+ */
+function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; startError?: Error }, paused: boolean): BrainStateNews[] {
+  const brainSettings = featureSettings.forFeature('brain').get();
+  const inspectEnabled = brainSettings?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
+  setDebugEnabled('brain', inspectEnabled);
+  return [
+    context.brainActor && context.runningRootFlowId
+      ? { type: 'BRAIN_STARTED', rootFlowId: context.runningRootFlowId }
+      : { type: 'BRAIN_KILLED', startError: context.startError?.message },
+    ...(paused ? [{ type: 'BRAIN_PAUSED' } as const] : []),
+    { type: 'INSPECT_TOGGLED', enabled: inspectEnabled },
+  ];
+}
+
 export const brainSystem = setup({
   types: brainSpec.types,
   actions: brainSpec.actions({
@@ -67,7 +88,7 @@ export const brainSystem = setup({
       if (context.brainActor) {
         enqueue.stopChild(context.brainActor);
       }
-      
+
       // Starts unpaused (a pause from an earlier run doesn't carry over)
       setBrainPausedState(false);
 
@@ -84,9 +105,9 @@ export const brainSystem = setup({
         const actor = spawn(machine, {
           input: {}
         });
-        
+
         logger.info('Started brain root flow', { flowId: currentRootFlowId });
-        
+
         // Return the updated context with the actor reference
         return {
           brainActor: actor,
@@ -95,23 +116,15 @@ export const brainSystem = setup({
           startError: undefined,
         };
       });
-      
-      // Send BRAIN_STARTED before surface data so frontend resets brainIsDead before processing data
+
+      // News for every window, each of which asks for the new run's tree
       enqueue(({ context }) => {
-        // Send current brain state first
         if (context.brainActor && context.runningRootFlowId) {
           broadcastToSurface('brain', {
             type: 'BRAIN_STARTED',
             rootFlowId: context.runningRootFlowId,
           });
         }
-
-        const data = repository.brainQueries.rootData(context.rootRunId);
-
-        broadcastToSurface('brain', {
-          type: 'RECEIVE_SURFACE_DATA',
-          data
-        });
       });
       enqueue('notifyClientReady');
     }),
@@ -164,11 +177,11 @@ export const brainSystem = setup({
         broadcastToSurface('brain', {
             type: 'BRAIN_KILLED'
         });
-        
+
         logger.info('Brain flow machine killed and its runs stopped');
       }
     }),
-    
+
     restartBrain: enqueueActions(({ context, enqueue }) => {
       logger.info('Restarting brain flow machine');
 
@@ -196,17 +209,6 @@ export const brainSystem = setup({
       // async work interrupted that path, stale entries would leak here.
       clearFlowActorRegistry();
 
-      // Send empty data to clear the UI temporarily
-      broadcastToSurface('brain', {
-        type: 'RECEIVE_SURFACE_DATA',
-        data: {
-          flowRunNodeId: '' as EARS.EntityId,
-          runNodeTree: [],
-          possibleEvents: [],
-          flowHierarchy: [],
-        }
-      });
-      
       const currentRootFlowId = rootFlowToRun();
       // Nothing to run: `running` leaves for `stopped` without a brain actor
       if (!currentRootFlowId) {
@@ -214,29 +216,22 @@ export const brainSystem = setup({
         return;
       }
 
-      
+
       // Start new brain and assign to context
       enqueue.assign(({ spawn, self }) => {
         const { machine, runNodeId } = createFlowNodeSystem(self)
         const actor = spawn(machine, {
           input: {}
         });
-        
-        // Send fresh data after starting new brain
-        const data = repository.brainQueries.rootData(runNodeId);
-        broadcastToSurface('brain', { 
-          type: 'RECEIVE_SURFACE_DATA',
-          data
-        });
-        
-        // Send BRAIN_STARTED event
-        broadcastToSurface('brain', { 
+
+        // News for every window, each of which asks for the new run's tree
+        broadcastToSurface('brain', {
           type: 'BRAIN_STARTED',
           rootFlowId: currentRootFlowId,
         });
-        
+
         logger.info('Restarted brain with root flow', { flowId: currentRootFlowId });
-        
+
         return {
           brainActor: actor,
           runningRootFlowId: currentRootFlowId,
@@ -246,7 +241,12 @@ export const brainSystem = setup({
       });
       enqueue('notifyClientReady');
     }),
-    sendSurfaceData: ({ context, event, self }) => {
+    /**
+     * A window's ask for a run's tree — the root run's, or the flow it shows — answered to it alone with the tree and
+     * the brain's state, which a window just started has not heard yet
+     */
+    sendSurfaceData: ({ context, event, self, reply }) => {
+      if (!reply) return;
       // Use provided flowRunNodeId or fall back to root
       const flowId = event.type === 'REQUEST_SURFACE_DATA' && event.flowRunNodeId
         ? event.flowRunNodeId as RunNodeId
@@ -262,39 +262,14 @@ export const brainSystem = setup({
         data = { flowRunNodeId: '' as EARS.EntityId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] };
       }
 
-      broadcastToSurface('brain', {
-        type: 'RECEIVE_SURFACE_DATA',
-        data
-      });
-
-      // Send current brain state
-      if (context.brainActor && context.runningRootFlowId) {
-        broadcastToSurface('brain', {
-          type: 'BRAIN_STARTED',
-          rootFlowId: context.runningRootFlowId,
-        });
-      } else {
-        broadcastToSurface('brain', {
-          type: 'BRAIN_KILLED',
-          startError: context.startError?.message,
-        });
-      }
-
-      // Sync pause state
-      const snapshot = self.getSnapshot();
-      if (snapshot.matches({ running: 'paused' })) {
-        broadcastToSurface('brain', { type: 'BRAIN_PAUSED' });
-      }
-
-      // Restore inspect state from persisted settings. Default ON in dev so
-      // switch/action/flow transitions are visible out of the box; the
-      // persisted setting wins once the user has toggled it.
-      const brainSettings = featureSettings.forFeature('brain').get();
-      const inspectEnabled = brainSettings?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
-      setDebugEnabled('brain', inspectEnabled);
-      broadcastToSurface('brain', { type: 'INSPECT_TOGGLED', enabled: inspectEnabled });
+      reply({ type: 'RECEIVE_SURFACE_DATA', data });
+      for (const state of brainState(context, self.getSnapshot().matches({ running: 'paused' }))) reply(state);
     },
-    openRunNode: ({ event }) => {
+    /** The brain's state, news for every window whenever it is asked to publish: none of it is a row */
+    publishBrainState: ({ context, self }) => {
+      for (const state of brainState(context, self.getSnapshot().matches({ running: 'paused' }))) broadcastToSurface('brain', state);
+    },
+    openRunNode: ({ event, reply }) => {
       const ev = brainSpec.typeOf('OPEN_RUN_NODE', event);
       const runNodeId = ev.runNodeId as RunNodeId;
 
@@ -307,13 +282,13 @@ export const brainSystem = setup({
 
       const data = repository.brainQueries.extendedRunNodeData(runNodeId);
 
-      broadcastToSurface('brain', {
+      reply?.({
         type: 'RUN_NODE_OPENED',
         runNodeId,
         data
       });
     },
-    goBackRunNode: ({ context, event }) => {
+    goBackRunNode: ({ context, event, reply }) => {
       const currentFlowRunNodeId = brainSpec.typeOf('GO_BACK_RUN_NODE', event).currentFlowRunNodeId as RunNodeId | undefined;
       const parentFlow = currentFlowRunNodeId ? repository.brainQueries.parentFlowOf(currentFlowRunNodeId) : undefined;
 
@@ -321,20 +296,20 @@ export const brainSystem = setup({
         ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
         : repository.brainQueries.rootData(context.rootRunId);
 
-      broadcastToSurface('brain', {
+      reply?.({
         type: 'RUN_NODE_OPENED',
         runNodeId: data.flowRunNodeId,
         data
       });
     },
-    getRunNodeDetails: ({ event }) => {
+    getRunNodeDetails: ({ event, reply }) => {
       const ev = brainSpec.typeOf('GET_RUN_NODE_DETAILS', event);
       const runNodeId = ev.runNodeId as RunNodeId;
-      
+
       const runNode = repository.brainQueries.runNodeById(runNodeId);
       const revealIn = repository.brainQueries.revealIn(runNodeId);
-      
-      broadcastToSurface('brain', {
+
+      reply?.({
         type: 'RUN_NODE_DETAILS',
         runNodeId,
         // An event is JSON, where a missing RunNode has to be said: null
@@ -439,7 +414,7 @@ export const brainSystem = setup({
     }),
     on: {
       SEND_STATE: {
-        actions: 'sendSurfaceData',
+        actions: 'publishBrainState',
       },
       // Kept as a fact: whether a client is attached is not something publishing can say
       CLIENT_CONNECTED: {
@@ -458,7 +433,7 @@ export const brainSystem = setup({
           // Stopped, describing itself means working out why it will not start and saying so once. The
           // root's CLIENT_CONNECTED still runs: only the ask is shadowed here
           SEND_STATE: {
-            actions: ['refreshStartError', 'sendSurfaceData', 'reportStartError'],
+            actions: ['refreshStartError', 'publishBrainState', 'reportStartError'],
           },
           START_BRAIN: {
             target: 'running',

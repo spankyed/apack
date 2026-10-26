@@ -1,5 +1,6 @@
 import { assign, setup, type ActorRefFrom } from 'xstate';
 import { safeEvents } from '@apackdev/sdk/fe';
+import type { SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { breadcrumbList } from '@apackdev/sdk/fe';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { Activity, Play, RefreshCw, Power, PlayCircle, Pause } from 'lucide-vue-next';
@@ -46,9 +47,7 @@ type UIEvent =
   // The event pulse's animation ended
   | { type: 'CLEAR_PULSE' }
 
-type SurfaceEvent =
-  | { type: 'SURFACE_ACTIVATED' }
-  | { type: 'SURFACE_DEACTIVATED' }
+type SurfaceEvent = SurfaceLifecycleEvent
 
 export type BrainEvents = UIEvent | SystemEvent | SurfaceEvent | TrailClickEvent
 const typeOf = safeEvents<BrainEvents>()
@@ -186,11 +185,15 @@ const brainState = setup({
         currentFlowRunNodeId: context.flowRunNodeId,
       });
     },
+    /** The tree of the flow this window shows, or the root run's; the system answers this window alone */
     requestSurfaceData: ({ context }) => {
       sendToSystem(id, {
         type: 'REQUEST_SURFACE_DATA',
         ...(context.flowRunNodeId && { flowRunNodeId: context.flowRunNodeId }),
       });
+    },
+    requestRootData: () => {
+      sendToSystem(id, { type: 'REQUEST_SURFACE_DATA' });
     },
     toggleLeftPanel: assign({
       showLeftPanel: ({ context }) => !context.showLeftPanel
@@ -392,6 +395,10 @@ const brainState = setup({
     runtimeErrors: [],
   },
   initial: 'loading',
+  on: {
+    // Where the surface asks for what it starts from: the shell hands it this in a delivery naming the surface
+    SURFACE_STARTED: { actions: 'requestSurfaceData' },
+  },
   states: {
     loading: {
       on: {
@@ -487,19 +494,13 @@ const brainState = setup({
           actions: ['updateRunNodeInTree', 'refreshNodeDetailsIfSelected']
         },
         EVENT_PULSE: {
-          actions: ['pulseEvent', ({ self, context }) => {
+          // The event's runs arrive as the run's feed (RUN_NODE_SPAWNED); the tree is asked for again here, in the
+          // delivery of the pulse, since an ask from a timer carries no sender and could not be answered
+          actions: ['pulseEvent', 'requestSurfaceData', ({ self }) => {
             // Clear pulse after animation
             setTimeout(() => {
               self.send({ type: 'CLEAR_PULSE' });
             }, 400);
-            // Request fresh data for the current flow to show new events
-            // Pass the current flowRunNodeId to maintain the current view
-            setTimeout(() => {
-              sendToSystem(id, {
-                type: 'REQUEST_SURFACE_DATA',
-                ...(context.flowRunNodeId && { flowRunNodeId: context.flowRunNodeId }),
-              });
-            }, 100);
           }]
         },
         CLEAR_PULSE: {
@@ -517,8 +518,9 @@ const brainState = setup({
         BRAIN_KILLED: {
           actions: 'setBrainKilled'
         },
+        // A new run: its tree is the root's, asked for again in this window
         BRAIN_STARTED: {
-          actions: 'setBrainStarted'
+          actions: ['setBrainStarted', 'requestRootData']
         },
         PAUSE_BRAIN: {
           actions: 'pauseBrain'

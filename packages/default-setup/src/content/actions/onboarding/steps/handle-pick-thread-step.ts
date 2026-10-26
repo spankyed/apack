@@ -22,7 +22,7 @@ export async function action(
   if (!state) return { success: false, reason: 'no-state' };
 
   if (response && response !== 'skip') {
-    services.chat.openThreadChatAndRefreshRecent(response as EntityId);
+    services.chat.showThread(response as EntityId);
     finishOnboarding(services, state, threadId, { skipCompletionMessage: true });
   } else {
     showChooseModeOrFinish(services, state, threadId);

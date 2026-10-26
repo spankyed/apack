@@ -180,7 +180,8 @@ A pack's unit tests run its code without the app: content, repositories and cont
 - **Dependency runtimes load on the pack's SDK.** `withModuleBridge` (`@apackdev/host/packs`, shared with the API's pack loader) maps every export of the shared-instance packages (`@apackdev/sdk`, `@apackdev/ears`: `sharedInstanceSpecifiers` from `@apackdev/host/build/shared-deps`), `xstate` and `zod` to the namespaces the test process imported. A subpath whose optional peer isn't installed maps to a module that throws on use. npm packages the runtime keeps external that the pack doesn't install (default-setup's `node-pty`, `playwright`, …) load as modules that throw on use.
 - **`importContent({ keys?, mode? })`** — compiles the chosen content sources (by default every entry naming a format and no pack applier) with `compilePack` (with the registry's steps as its definitions), registering tsx's loader while the SDK's compilers import pack TypeScript (`#generated/*`), and writes them with `importCompiledContent`. Returns the counts of the compiled keys.
 - **`startApp({ systems })`** (`src/app.ts`) — the named registered systems under `@apackdev/host/bus`'s `createBusMachine` (the API's bus core), on `testRootEvents`.
-  - Members: `connect`, `send`, `emitted`, `nextEmit` (5 s default), `settle`, `runFlow` (10 s default), `flowSteps`, `system`, `stop`. Bare system ids resolve as given, then as `<packId>.<id>` for the pack under test; an external dependency's systems need their full bus id.
+  - Members: `connect`, `send`, `emitted`, `nextEmit` (5 s default), `settle`, `runFlow` (10 s default), `flowSteps`, `system`, `watchView`, `viewStats`, `stop`. Bare system ids resolve as given, then as `<packId>.<id>` for the pack under test; an external dependency's systems need their full bus id.
+  - `watchView(feature, view, args?)` subscribes to a feature's view as a window's `useView` does, over the test file's view host (`createViewHost` from `@apackdev/host/views`, created by `setAppPacks` on the bound engine, which a test's reset replaces); each call is one subscriber, so two stand in for two windows, and the app's stop ends them. The harness's shell client subscribes to the same host, so a component's `useView` and a spec's `watchView` share watches as two windows would.
   - `connect` sends `CLIENT_CONNECTED` and then `SEND_STATE` to every running system, as the app's bus does: the test bus sets no `clientLoadedPacks`, so no pack waits for `PACK_CLIENT_CONNECTED`. `send` routes whether or not a client connected. `broadcastToSurface` goes through the bus (`OUTGOING`; the bus hears it through `testRootEvents.onSurfaceSend`), delivered only once connected, so `emitted` holds nothing sent before a client connected (`apack-cli/tests/harness/dependency-runtime.integration.spec.ts`).
   - Events for systems (client events, `sendToSystem`, `fire` steps, schedule ticks) reach them from `startApp`, as in the app; only sends to surfaces wait for a client (`connect`, or `CLIENT_CONNECTED` from any app's `connect`, which reaches every running bus). The bus's state (`awaitingClient`, `clientSeen`) is its own.
   - The first app to start (none running) calls every registered pack's `lifecycle.onInit` (the registry's `getLifecycleHooks`, registration order: dependencies first) before its bus starts, as the API does at boot after loading the packs and before starting the systems. A failing `onInit` shuts the packs down again and fails `startApp`.
@@ -422,7 +423,12 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 
 ### Teardown
 
-- Per-test: `pageerror` and `console` listeners are removed
+- Per-test: `pageerror` and `console` listeners are removed. A test that failed while the app's API restarted under
+  it (the API's pid in its `api-port` file differs from the test's start) gets an `api-restarted` annotation and an
+  `[e2e]` line naming both pids: the window reconnects and the shell replaces every surface's actor, which resets
+  what their components held, so that restart is the cause to read first
+  ([reconnect without remount](../../docs/plans/reconnect-without-remount.md)). A test that passed through one is
+  left alone
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
 
 ## API reference

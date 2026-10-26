@@ -8,7 +8,7 @@ import threadsState from '#features/threads/fe/state.ts'
 // The surface's module tracks the mouse for its hotkeys as it loads; the test setup's window is a bare stand-in
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
 
-afterAll(startFeTestRuntime({ client: { send() {} } }))
+afterAll(startFeTestRuntime({ client: { send() {}, watchView: () => () => {} } }))
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
@@ -20,8 +20,10 @@ function startThreads() {
 
 it('drops the new-thread timer once it clears the flag', () => {
   const actor = startThreads()
-  actor.send({ type: 'THREAD_CREATED', id: 'Thread-t1', shortCode: 'T1', entityType: 'Thread', timestamp: 0 })
+  actor.send({ type: 'THREADS.READ', threads: [{ id: 'Thread-t1', topic: 'New' } as never] })
+  actor.send({ type: 'THREAD_CREATED', id: 'Thread-t1' })
   expect(children(actor)).toContain('clear-new-thread-flag-Thread-t1')
+  expect(actor.getSnapshot().context.threadMap['Thread-t1']?.isNew).toBe(true)
 
   vi.advanceTimersByTime(1000)
 

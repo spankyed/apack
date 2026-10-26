@@ -239,7 +239,7 @@ import { useSurface } from '@apackdev/sdk/fe'
 import { ref, computed, watch, nextTick } from 'vue'
 import { openEntity } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import { useSurfaceState } from '#generated/fe.ts'
+import { useView } from '#generated/fe.ts'
 import { ExternalLink, Plus, X, Pencil, Trash2, Sparkle, Search, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
@@ -257,16 +257,18 @@ import Button from '@apackdev/ui/design/button'
 import uFuzzy from '@leeoniya/ufuzzy'
 import { codeChild } from '../children.ts';
 
-// Get actors - use main prompts surface for state, codePrompts for tab management
+// The code surface's actor, and its codePrompts child for tab management
 const codeActor: CodeState = useSurface()
 const codePromptsActor = codeChild(codeActor, 'codePrompts')!
 
-// State - the prompts surface's list (single source of truth)
-const prompts = useSurfaceState('prompts', (s) => s.prompts)
-const page = useSurfaceState('prompts', (s) => s.page)
-const totalPages = useSurfaceState('prompts', (s) => s.totalPages)
-const loadingMore = useSurfaceState('prompts', (s) => s.loadingMore)
-const hasMore = computed(() => page.value < totalPages.value)
+// The prompts, as the prompts feature's list view reads them: this panel's own page of it, a page more each time it's
+// read to the end and all of it while searching
+const PAGE_SIZE = 20
+const limit = ref<number | null>(PAGE_SIZE)
+const list = useView('prompts', 'list', () => ({ limit: limit.value, categories: [] }), { keepPrevious: true })
+const prompts = computed(() => list.data?.prompts ?? [])
+const hasMore = computed(() => prompts.value.length < (list.data?.totalCount ?? 0))
+const loadingMore = computed(() => list.status === 'loading')
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
@@ -280,9 +282,7 @@ const fuzzy = new uFuzzy({ intraMode: 1, interLft: 2, intraSub: 1, intraTrn: 1, 
 
 const handleSearchClick = () => {
   isSearchMode.value = true
-  if (hasMore.value) {
-    codePromptsActor.send({ type: 'codePrompts.LOAD_ALL' })
-  }
+  if (hasMore.value) limit.value = null
   nextTick(() => searchInput.value?.focus())
 }
 
@@ -463,7 +463,7 @@ function deletePrompt(prompt: PromptEntity) {
 const { onScroll } = useInfiniteScroll({
   hasMore,
   loading: loadingMore,
-  onLoadMore: () => codePromptsActor.send({ type: 'codePrompts.LOAD_MORE' }),
+  onLoadMore: () => { if (limit.value !== null) limit.value += PAGE_SIZE },
 })
 
 // Event handlers

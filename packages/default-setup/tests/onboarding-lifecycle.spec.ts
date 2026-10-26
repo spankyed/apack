@@ -24,7 +24,7 @@ async function start(withRoot = true) {
 async function initializedOnce(app: TestApp) {
   await expect.poll(() => initialized(app).length).toBe(1);
   expect(progress()).toMatchObject({ step: 'welcome', threadId: thread() });
-  expect(app.emitted('threads').some(event => event.type === 'LOAD_CHAT_THREAD')).toBe(true);
+  expect(app.emitted('threads').some(event => event.type === 'SHOW_THREAD')).toBe(true);
 }
 
 it('starts on readiness without keys, once across connections and preference reset', async () => {
@@ -53,7 +53,7 @@ it('waits for a usable root when the client arrives first', async () => {
   await app.connect();
   expect(thread()).toBeUndefined();
   expect(takeSystemErrors()).toHaveLength(1);
-  const flow = repository.flowsQueries.connectedData().flows.find(flow => flow.label === 'Root Flow');
+  const flow = repository.flowsQueries.list().flows.find(flow => flow.label === 'Root Flow');
   expect(flow).toBeDefined();
   repository.flowsCommands.grantRootFlowRole(flow!.id!);
   await app.send('brain', { type: 'START_BRAIN' });

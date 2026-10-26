@@ -13,6 +13,7 @@ export const meta: ActionMeta = {
   description: 'Generate an EARS database transaction using Claude CLI',
   category: 'claude-code',
   input: {
+    client: { type: 'string', description: 'The connection of the window that asked, which the result answers alone' },
     prompt: { type: 'string', description: 'Natural language transaction request from the user', required: true },
   },
 };
@@ -23,17 +24,20 @@ export async function action(
   _z: Z,
   _flowId: string,
 ) {
-  const { prompt: userPrompt } = params;
+  const { prompt: userPrompt, client } = params;
+  // The window that asked: a flow run has no return address, so the ask carried its connection. With none, no
+  // window asked, and there is nobody to tell what this would make
+  if (!client) return { success: false, error: 'No window asked' };
 
   if (!userPrompt?.trim()) {
-    services.emitter.broadcastToSurface('default-setup/database', {
+    services.emitter.sendToWindow(client, 'default-setup/database', {
       type: 'AI_QUERY_ERROR',
       error: 'Please provide a valid prompt',
     });
     return { success: false, error: 'Empty prompt' };
   }
 
-  services.emitter.broadcastToSurface('default-setup/database', { type: 'AI_QUERY_LOADING' });
+  services.emitter.sendToWindow(client, 'default-setup/database', { type: 'AI_QUERY_LOADING' });
 
   try {
     const { schema, topology } = services.database.buildQueryContext();
@@ -41,7 +45,7 @@ export async function action(
     const systemPrompt = services.prompt.usePrompt('DB Transaction System', { schema, topology });
 
     if (!systemPrompt) {
-      services.emitter.broadcastToSurface('default-setup/database', {
+      services.emitter.sendToWindow(client, 'default-setup/database', {
         type: 'AI_QUERY_ERROR',
         error: 'DB Transaction prompt template not found. Import the pack content.',
       });
@@ -56,14 +60,14 @@ export async function action(
     const query = result.stdout.trim().replace(/^```(?:typescript|ts|javascript|js)?\n?/, '').replace(/\n?```$/, '').trim();
 
     if (!query) {
-      services.emitter.broadcastToSurface('default-setup/database', {
+      services.emitter.sendToWindow(client, 'default-setup/database', {
         type: 'AI_QUERY_ERROR',
         error: 'Claude returned an empty response.',
       });
       return { success: false, error: 'Empty response' };
     }
 
-    services.emitter.broadcastToSurface('default-setup/database', {
+    services.emitter.sendToWindow(client, 'default-setup/database', {
       type: 'AI_QUERY_GENERATED',
       query,
     });
@@ -71,7 +75,7 @@ export async function action(
     return { success: true };
   } catch (error: any) {
     const message = formatProviderError(error, 'Claude Code');
-    services.emitter.broadcastToSurface('default-setup/database', {
+    services.emitter.sendToWindow(client, 'default-setup/database', {
       type: 'AI_QUERY_ERROR',
       error: message,
     });

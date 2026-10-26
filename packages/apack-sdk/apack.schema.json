@@ -601,6 +601,11 @@
             },
             "description": "Repository objects. Keys are repository names on `repository` (from #generated/repository), values are \"path#exportName\" of the object in a source file."
           },
+          "views": {
+            "type": "string",
+            "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$",
+            "description": "The feature's views: \"path#exportName\" of the object `defineViews` returns, from @apackdev/sdk/framework. A window subscribes to one with `useView` from #generated/fe; each is a pure read of the engine, run again after every commit that could change its result."
+          },
           "references": {
             "type": "object",
             "properties": {

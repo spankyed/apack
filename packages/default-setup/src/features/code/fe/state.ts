@@ -17,6 +17,7 @@ import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, Promp
 export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
+import { sendToSystem } from '#generated/events.ts';
 
 // Import child state machines
 import { explorerState } from './features/explorer/state.ts';
@@ -451,7 +452,7 @@ const codeState = setup({
       error: null
     }),
     initializeSurface: ({ self }) => {
-      // Explorer is initialized via the CODE_CONNECTED broadcast — no re-init needed here.
+      // Explorer is initialized by the CODE_STARTED answer — no re-init needed here.
       codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
     },
 
@@ -679,7 +680,7 @@ const codeState = setup({
     },
 
     handleCodeConnected: assign(({ event, context }) => {
-      const ev = event as { type: 'CODE_CONNECTED'; data: { baseDirectory: string | null; settings?: CodeSettings } }
+      const ev = event as { type: 'CODE_STARTED'; data: { baseDirectory: string | null; settings?: CodeSettings } }
 
       // Extract hotkeys from settings - filter out undefined values
       const hotkeys: HotkeysMap = {};
@@ -692,7 +693,7 @@ const codeState = setup({
       }
 
       // Update directory state from backend
-      // Explorer child will receive CODE_CONNECTED via broadcastToAllFeatures and initialize itself
+      // Explorer child will receive CODE_STARTED via broadcastToAllFeatures and initialize itself
       const baseDirectory = ev.data.baseDirectory || ''
 
       return {
@@ -1274,8 +1275,16 @@ const codeState = setup({
     canvas: {
       meta: breadcrumb('canvas', 'Code', true),
       on: {
-        // Broadcast CODE_CONNECTED to all features
-        CODE_CONNECTED: {
+        // What the surface starts from, asked as the shell starts it, in a delivery naming the surface
+        SURFACE_STARTED: {
+          actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+        },
+        // The directory moved, in every window: ask again for what the surface starts from
+        BASE_DIRECTORY_CHANGED: {
+          actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+        },
+        // The answer, handed to every feature, each of which asks for what its panel shows
+        CODE_STARTED: {
           actions: ['handleCodeConnected', 'broadcastToAllFeatures']
         },
         // Handle settings updates

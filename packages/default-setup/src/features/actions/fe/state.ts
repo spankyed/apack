@@ -1,6 +1,6 @@
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
+import { and, assign, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -8,15 +8,13 @@ import {
   TRAIL_CLICK,
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
-import type { ActionsSettings } from '#generated/types.ts'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
 import type { OutgoingActionEvents } from '#features/actions/be/types.ts'
-import type { ActionParameter } from '@apackdev/sdk'
+import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
+import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
-import { answersCall, newCall } from '@apackdev/sdk/events'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
-import type { ActionEntity } from '@apackdev/sdk'
 
 /* ─────────────────────────────────────────────────────────── */
 /* Machine Types                                               */
@@ -24,30 +22,28 @@ import type { ActionEntity } from '@apackdev/sdk'
 export const id = 'actions' as const;
 export type ActionsState = ActorRefFrom<typeof actionsState>
 
-
-type SystemEvent = OutgoingActionEvents
-  | { type: 'ACTIONS_PAGE_LOADED'; data: { actions: ActionEntity[]; page: number; totalPages: number } }
-  | { type: 'ACTIONS_ALL_LOADED'; data: { actions: ActionEntity[] } }
-  | { type: 'ACTIONS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'ACTIONS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'ACTIONS_EXPORTED'; filePath: string; actionCount: number }
-  | { type: 'ACTIONS_EXPORT_FAILED'; errors: string[] }
+/** How many more actions the list shows each time the user reaches its end */
+export const ACTIONS_PAGE_SIZE = 20
 
 type UIEvent =
   | ActionsInboxEvent
   | { type: 'ACTION.SAVE' }
+  /**
+   * What the open action's view read, which the canvas hands on: the action, or `null` once it's gone (deleted here
+   * or in another window). About the UI, not the data — it fills the form once and keeps the breadcrumb's label.
+   */
+  | { type: 'ACTION.LOADED'; actionId: EARS.EntityId; action: ActionEntity | null }
+  | { type: 'ACTIONS.LOAD_MORE' }
+  | { type: 'FORM.UPDATE_CATEGORY'; category: string }
   | { type: 'FORM.UPDATE_LABEL'; label: string }
   | { type: 'FORM.UPDATE_DESCRIPTION'; description: string }
   | { type: 'FORM.UPDATE_PARAMETERS'; input: Record<string, ActionParameter> }
   | { type: 'FORM.UPDATE_ACTION'; actionFn: string }
   | { type: 'FORM.UPDATE_OUTPUT'; output: any }
-  | { type: 'FORM.UPDATE_CATEGORY'; category: string }
   | { type: 'VIEW_LIST' }
-  | { type: 'SURFACE_DEACTIVATED' }
   | { type: 'TOGGLE_PARAMETERS_SECTION'; show: boolean }
   | { type: 'TOGGLE_OUTPUT_SECTION'; show: boolean }
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
-  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ActionsSettings }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
   // Import/Export events
@@ -56,7 +52,7 @@ type UIEvent =
   | { type: 'ACTIONS.EXPORT'; directory: string }
   | { type: 'ACTIONS.RESET_EXPORT_STATUS' }
 
-export type ActionsEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent
+export type ActionsEvents = OpenEntity | UIEvent | OutgoingActionEvents | TrailClickEvent
 const typeOf = safeEvents<ActionsEvents>()
 
 const actionsState = setup({
@@ -65,52 +61,32 @@ const actionsState = setup({
     events: {} as ActionsEvents,
   },
   actions: {
-    /* ── bootstrap ─────────────────────────────────────── */
-    setSurfaceData: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_LISTED', event);
-      return {
-        actions: ev.data.actions,
-        totalCount: ev.data.totalCount,
-        page: ev.data.page,
-        totalPages: ev.data.totalPages,
-        categories: ev.data.categories || [],
-      }
-    }),
-
-    cancelSelection: assign({ pendingActionCall: null }),
-    // The list shows no action, so reopening one asks for it again rather than showing a form that may be stale
-    clearSelectedAction: assign({ selectedActionId: undefined, selectedAction: undefined }),
+    // The list shows no action, so reopening one fills its form afresh from what its view reads then
+    clearSelectedAction: assign({ selectedActionId: undefined, selectedLabel: undefined, formFor: undefined }),
 
     /* ── action interactions ────────────────────────────── */
-    /**
-     * **`enqueueActions`, so the call is stored before the ask is sent.** A send made from inside an
-     * `assign` producer runs before the assign is applied, so an answer that arrives synchronously is
-     * matched against a slot the ask has not written yet. Against a backend in another process the race
-     * never shows; against one that answers in the same turn it always does.
-     */
-    selectAction: enqueueActions(({ event, context, enqueue }) => {
-      const actionId = event.type === 'OPEN_ENTITY' ? event.id : typeOf('ACTION.SELECT', event).actionId;
-      if (context.selectedActionId === actionId) return;
-      const call = newCall();
-      // Recorded before the ask, so the answer can be told from one for a selection since replaced
-      enqueue.assign({ pendingActionCall: call });
-      enqueue(() => sendToSystem(id, { type: 'ACTION_SELECT', actionId }, { call }));
+    selectAction: assign(({ event, context }) => {
+      const actionId = event.type === 'OPEN_ENTITY' ? event.id as EARS.EntityId : typeOf('ACTION.SELECT', event).actionId;
+      if (context.selectedActionId === actionId) return {};
+      return { selectedActionId: actionId, selectedLabel: undefined, formFor: undefined };
     }),
 
-    loadActionData: assign(({ event }) => {
-      const ev = typeOf('ACTION_SELECTED', event);
+    showLoadedAction: assign(({ event, context }) => {
+      const { actionId, action } = typeOf('ACTION.LOADED', event);
+      if (!action) return {};
+      // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
+      // user is typing alone, and saving writes the form as it stands
+      if (context.formFor === actionId) return { selectedLabel: action.label };
       return {
-        // Settled: nothing is outstanding, so a later answer for an abandoned ask has no call to match
-        pendingActionCall: null,
-        selectedActionId: ev.actionId,
-        selectedAction: ev.data,
+        selectedLabel: action.label,
+        formFor: actionId,
         formData: {
-          label: ev.data.label,
-          description: ev.data.description,
-          category: ev.data.category,
-          input: ev.data.input,
-          actionFn: ev.data.actionFn,
-          output: ev.data.output,
+          label: action.label,
+          description: action.description,
+          category: action.category,
+          input: action.input,
+          actionFn: action.actionFn,
+          output: action.output,
         },
       };
     }),
@@ -125,13 +101,14 @@ const actionsState = setup({
         output: undefined,
       },
       selectedActionId: undefined,
-      selectedAction: undefined,
+      selectedLabel: undefined,
+      formFor: undefined,
     }),
 
     sendSaveAction: ({ context }) => {
       // Determine if creating or updating based on selectedActionId
       const isCreating = !context.selectedActionId;
-      
+
       if (isCreating) {
         // Create new action
         sendToSystem(id, {
@@ -183,28 +160,6 @@ const actionsState = setup({
         label: ev.label,
       });
     },
-
-    // News every window hears, whoever created it: it adds the action and selects nothing, so opening it fetches it
-    addCreatedAction: assign(({ context, event }) => ({ actions: [...context.actions, typeOf('ACTION_CREATED', event).action] })),
-
-    updateActionInList: assign(({ context, event }) => {
-      const ev = typeOf('ACTION_UPDATED', event);
-      return {
-        actions: context.actions.map(a => 
-          a.id === ev.actionId ? ev.action : a
-        ),
-        selectedAction: ev.action,
-      };
-    }),
-
-    removeDeletedAction: assign(({ context, event }) => {
-      const ev = typeOf('ACTION_DELETED', event);
-      return {
-        actions: context.actions.filter(a => a.id !== ev.actionId),
-        selectedActionId: undefined,
-        selectedAction: undefined,
-      };
-    }),
 
     /* ── form updates ────────────────────────────────────── */
     updateFormLabel: assign(({ event, context }) => {
@@ -266,13 +221,6 @@ const actionsState = setup({
         },
       };
     }),
-    
-    handleSettingsUpdate: assign(({ event }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event);
-      return {
-        categories: ev.settings?.categories || [],
-      };
-    }),
 
     toggleParametersSection: assign(({ event, context }) => {
       const ev = typeOf('TOGGLE_PARAMETERS_SECTION', event);
@@ -302,59 +250,6 @@ const actionsState = setup({
           metadataExpanded: ev.show,
         },
       };
-    }),
-
-    /* ── pagination ────────────────────────────────────────── */
-    requestNextPage: assign(({ context }) => {
-      sendToSystem(id, {
-        type: 'FETCH_ACTIONS_PAGE',
-        page: context.page + 1,
-      });
-      return { loadingMore: true };
-    }),
-
-    appendPageData: assign(({ context, event }) => {
-      const ev = typeOf('ACTIONS_PAGE_LOADED', event);
-      return {
-        actions: [...context.actions, ...ev.data.actions],
-        page: ev.data.page,
-        totalPages: ev.data.totalPages,
-        loadingMore: false,
-      };
-    }),
-
-    requestAllItems: assign(() => {
-      sendToSystem(id, {
-        type: 'FETCH_ALL_ACTIONS',
-      });
-      return { loadingMore: true };
-    }),
-
-    setAllItems: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_ALL_LOADED', event);
-      return {
-        actions: ev.data.actions,
-        page: 1,
-        totalPages: 1,
-        loadingMore: false,
-      };
-    }),
-
-    /* ── filter actions ──────────────────────────────────── */
-    toggleCategoryFilter: assign(({ event, context }) => {
-      const ev = typeOf('FILTER.TOGGLE_CATEGORY', event);
-      const categoryName = ev.categoryName;
-      const isSelected = context.selectedCategories.includes(categoryName);
-
-      return {
-        selectedCategories: isSelected
-          ? context.selectedCategories.filter(c => c !== categoryName)
-          : [...context.selectedCategories, categoryName]
-      };
-    }),
-
-    clearCategoryFilters: assign({
-      selectedCategories: []
     }),
 
     /* ── Actions Import actions ────────────────────────────── */
@@ -442,33 +337,42 @@ const actionsState = setup({
     resetExportActionsStatus: assign({
       actionsExport: { status: 'idle' as const, errors: [], filePath: '', actionCount: 0 },
     }),
+
+    /* ── the list ─────────────────────────────────────────── */
+    showMore: assign(({ context }) => ({ listLimit: context.listLimit + ACTIONS_PAGE_SIZE })),
+
+    /* ── filter actions ──────────────────────────────────── */
+    toggleCategoryFilter: assign(({ event, context }) => {
+      const ev = typeOf('FILTER.TOGGLE_CATEGORY', event);
+      const categoryName = ev.categoryName;
+      const isSelected = context.selectedCategories.includes(categoryName);
+
+      return {
+        selectedCategories: isSelected
+          ? context.selectedCategories.filter(c => c !== categoryName)
+          : [...context.selectedCategories, categoryName]
+      };
+    }),
+
+    clearCategoryFilters: assign({
+      selectedCategories: []
+    }),
   },
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
-    /** Whether this answer is the one the outstanding ask is waiting for, and false when none is */
-    answersPendingAction: ({ context, event }) => answersCall(event, context.pendingActionCall),
-    /**
-     * Whether this page is the one just asked for.
-     *
-     * `requestNextPage` sends `context.page + 1` and `page` only moves when a reply lands, so two
-     * clicks both ask for the same page — and appending whatever arrives appended it twice.
-     */
-    isNextPage: ({ context, event }) =>
-      (event as { data?: { page?: number } }).data?.page === context.page + 1,
+    /** Whether what was loaded is the action open now, rather than one the user has since moved on from */
+    loadsSelected: ({ context, event }) => (event as { actionId?: string }).actionId === context.selectedActionId,
+    /** Whether the open action is gone */
+    loadsNothing: ({ event }) => (event as { action?: unknown }).action === null,
   },
 }).createMachine({
   id,
   initial: 'list',
   context: {
     selectedActionId: undefined,
-    pendingActionCall: null,
-    actions: [],
-    selectedAction: undefined,
-    totalCount: 0,
-    page: 1,
-    totalPages: 1,
-    loadingMore: false,
-    categories: [], // Will be populated from settings
+    selectedLabel: undefined,
+    formFor: undefined,
+    listLimit: ACTIONS_PAGE_SIZE,
     selectedCategories: [], // Filter state
     actionsImport: {
       status: 'idle',
@@ -491,32 +395,15 @@ const actionsState = setup({
     },
   },
   on: {
-    SURFACE_DEACTIVATED: { actions: 'cancelSelection' },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },
-    ACTIONS_LISTED: { actions: 'setSurfaceData' },
-    ACTION_SELECTED: { guard: 'answersPendingAction', actions: 'loadActionData' },
-    FEATURE_SETTINGS_UPDATED: { actions: 'handleSettingsUpdate' },
-    ACTION_CREATED: {
-      actions: 'addCreatedAction'
-    },
-    ACTION_UPDATED: {
-      actions: 'updateActionInList'
-    },
-    ACTION_DELETED: {
-      actions: 'removeDeletedAction',
-      target: '.list'
-    },
-    VIEW_LIST: {
-      target: '.list'
+    'VIEW_LIST': {
+      target: '.list',
     },
     TOGGLE_PARAMETERS_SECTION: { actions: 'toggleParametersSection' },
     TOGGLE_OUTPUT_SECTION: { actions: 'toggleOutputSection' },
     TOGGLE_METADATA_SECTION: { actions: 'toggleMetadataSection' },
-    'ACTIONS.LOAD_MORE': { actions: 'requestNextPage' },
-    'ACTIONS.LOAD_ALL': { actions: 'requestAllItems' },
-    ACTIONS_PAGE_LOADED: { guard: 'isNextPage', actions: 'appendPageData' },
-    ACTIONS_ALL_LOADED: { actions: 'setAllItems' },
+    'ACTIONS.LOAD_MORE': { actions: 'showMore' },
     'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
     'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
     // Import events
@@ -586,20 +473,24 @@ const actionsState = setup({
       },
     },
     detail: {
-      exit: 'cancelSelection',
       tags: ['detail-action'],
       meta: {
         ...breadcrumbWithParams<ActionsContext>({
           target: 'detail',
           getLabel: (ctx) => {
-            return ctx.selectedAction?.label || ctx.selectedActionId || '';
+            return ctx.selectedLabel || ctx.selectedActionId || '';
           }
         }),
         ...contextMenuFn<ActionsContext>((ctx) => [
-          { label: 'Delete Action', icon: Trash2, event: { type: 'ACTION.DELETE' as const, actionId: ctx.selectedActionId! }, iconColor: 'text-red-400', confirm: 'Are you sure you want to delete this action?' },
+          { label: 'Delete Action', icon: Trash2, event: { type: 'ACTION.DELETE' as const, actionId: ctx.selectedActionId! }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.selectedLabel || 'this action'}"?` },
         ]),
       },
       on: {
+        // The open action deleted, here or in another window: there is nothing left to show
+        'ACTION.LOADED': [
+          { guard: and(['loadsSelected', 'loadsNothing']), target: 'list' },
+          { guard: 'loadsSelected', actions: 'showLoadedAction' },
+        ],
         'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
         'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
         'FORM.UPDATE_PARAMETERS': { actions: 'updateFormParameters' },

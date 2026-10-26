@@ -563,6 +563,7 @@ export const FeatureEntrySchema: z.ZodObject<{
     surface: z.ZodOptional<z.ZodType<SurfaceDeclaration, z.ZodTypeDef, SurfaceDeclaration>>;
     services: z.ZodOptional<z.ZodType<Record<string, string>, z.ZodTypeDef, Record<string, string>>>;
     repositories: z.ZodOptional<z.ZodType<Record<string, string>, z.ZodTypeDef, Record<string, string>>>;
+    views: z.ZodOptional<z.ZodString>;
     references: z.ZodOptional<z.ZodType<ReferenceDeclarations, z.ZodTypeDef, ReferenceDeclarations>>;
 }, "strict", z.ZodTypeAny, {
     description: string;
@@ -592,6 +593,7 @@ export const FeatureEntrySchema: z.ZodObject<{
         } | undefined;
     } | undefined;
     repositories?: Record<string, string> | undefined;
+    views?: string | undefined;
 }, {
     description: string;
     references?: ReferenceDeclarations | undefined;
@@ -613,6 +615,7 @@ export const FeatureEntrySchema: z.ZodObject<{
         } | undefined;
     } | undefined;
     repositories?: Record<string, string> | undefined;
+    views?: string | undefined;
 }>;
 
 // @public
@@ -768,6 +771,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }>, z.ZodTypeDef, Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
@@ -789,6 +793,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }>>>;
     extensions: z.ZodOptional<z.ZodObject<{
         textEditor: z.ZodOptional<z.ZodType<Record<string, {
@@ -1404,6 +1409,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }> | undefined;
     $schema?: string | undefined;
     hostVersion?: string | undefined;
@@ -1585,6 +1591,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }> | undefined;
     $schema?: string | undefined;
     hostVersion?: string | undefined;
@@ -1766,6 +1773,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }> | undefined;
     $schema?: string | undefined;
     hostVersion?: string | undefined;
@@ -1947,6 +1955,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }> | undefined;
     $schema?: string | undefined;
     hostVersion?: string | undefined;
@@ -2128,6 +2137,7 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
         } | undefined;
         repositories?: Record<string, string> | undefined;
+        views?: string | undefined;
     }> | undefined;
     $schema?: string | undefined;
     hostVersion?: string | undefined;

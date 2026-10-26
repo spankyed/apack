@@ -1,4 +1,3 @@
-import { featureSettings } from '#generated/settings.ts';
 // [SEARCH_INDEX_FF] The search index is dormant: ./search-index/README.md lists its call sites and how to turn it on
 import type { Contract } from './contract.ts';
 
@@ -17,21 +16,57 @@ import * as symlink from './repository/symlink.ts'
 import { toMap, toIdentifierSet, mapArray } from '@apackdev/sdk/utils'
 import { exportLibrary } from './export-library.ts'
 import { importLibrary } from './import-library.ts'
+import type { Reply } from '@apackdev/sdk/events';
+import type { OutgoingLibraryEvents } from './types.ts';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
+
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'LIBRARY_EXPORT_FAILED' | 'LIBRARY_EXPORTED' | 'LIBRARY_IMPORT_FAILED' | 'LIBRARY_IMPORTED'
+type Outcome = Extract<OutgoingLibraryEvents, { type: OutcomeType }>
 
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
  * An import's or an export's *outcome* belongs to the window that started it — another window showing a
- * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
- * data the import changed is separate news and stays a broadcast.
+ * result for work it did not do, and flipping its own status to success, is what broadcasting it did. What
+ * the import stored reaches every window through the library's views.
  */
-const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: OutgoingLibraryEvents): void =>
+const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('library', event));
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingLibraryEvents } from './types.ts';
-import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 export const librarySpec = defineSystem<Contract>();
+
+/**
+ * One of a window's writes to the library, answered to whoever asked: with the folder it made, or that it landed, or
+ * why it was refused. The write runs whether or not anybody asked — an applier's or a migration's has no `reply`.
+ */
+async function answerWrite(reply: Reply<OutgoingLibraryEvents> | undefined, label: string, write: () => Promise<OutgoingLibraryEvents | void> | OutgoingLibraryEvents | void): Promise<void> {
+  let answer: OutgoingLibraryEvents
+  try {
+    answer = (await write()) ?? { type: 'LIBRARY_WRITTEN' }
+  } catch (error) {
+    reply?.({ type: 'LIBRARY_WRITE_FAILED', error: errorMessage(error) || `${label} failed` })
+    return
+  }
+  reply?.(answer)
+}
+
+/**
+ * Tells every window that something on disk under a symlinked folder changed, which no view can see: `folderId`'s
+ * contents, or with `null`, a symlinked folder's not known. A notification — whoever is showing one fetches it again.
+ */
+const diskChanged = (folderId: string | null) => broadcastToSurface('library', { type: 'FOLDER_CHANGED', folderId })
+
+/** The folder on disk an item on disk sits in, or `null` when that can't be worked out */
+function diskParentOf(id: string): string | null {
+  const parsed = symlink.parseSymlinkId(id)
+  if (!parsed) return null
+  const resolved = symlink.resolveSymlinkPath(id)
+  const basePath = symlink.getSymlinkCollectionPath(parsed.collectionId)
+  if (!resolved || !basePath) return parsed.collectionId
+  const parentRelPath = path.dirname(path.relative(basePath, resolved.absolutePath))
+  return parentRelPath && parentRelPath !== '.' ? symlink.buildSymlinkId(parsed.collectionId, parentRelPath) : parsed.collectionId
+}
 
 function resolveHomePath(inputPath: string): string {
   const trimmed = inputPath.trim()
@@ -43,176 +78,109 @@ function resolveHomePath(inputPath: string): string {
 export const librarySystem = setup({
   types: librarySpec.types,
   actions: librarySpec.actions({
-    createDocument: async ({ event }) => {
+    createDocument: async ({ event, reply }) => {
       const ev = event as { type: 'CREATE_DOCUMENT'; name: string; content: any[]; tags: string[]; collectionId?: string; documentType?: string }
-      const document = await libraryService.create({
-        name: ev.name,
-        content: ev.content,
-        tags: ev.tags,
-        parentId: ev.collectionId,
-        documentType: ev.documentType,
-      })
-      if (ev.collectionId && symlink.resolveSymlinkPath(ev.collectionId)) {
-        const folderContents = await repository.libraryQueries.getFolderContents(ev.collectionId as EARS.EntityId)
-        broadcastToSurface('library', { type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
-      } else {
-        broadcastToSurface('library', { type: 'DOCUMENT_CREATED' as const, data: { document } })
-      }
-
-    },
-    updateDocument: async ({ event }) => {
-      const ev = event as { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: any[]; tags: string[]; collectionId?: string }
-      const document = await libraryService.update({
-        id: ev.id,
-        name: ev.name,
-        content: ev.content,
-        tags: ev.tags,
-      })
-      broadcastToSurface('library', { type: 'DOCUMENT_UPDATED' as const, data: { document } })
-
-    },
-    deleteDocument: async ({ event }) => {
-      const ev = event as { type: 'DELETE_DOCUMENT'; id: string }
-      repository.libraryCommands.deleteDocument(ev.id as EARS.EntityId)
-      broadcastToSurface('library', {
-          type: 'DOCUMENT_DELETED' as const,
-          data: { documentId: ev.id },
+      await answerWrite(reply, 'Creating a document', async () => {
+        await libraryService.create({
+          name: ev.name,
+          content: ev.content,
+          tags: ev.tags,
+          parentId: ev.collectionId,
+          documentType: ev.documentType,
         })
+        if (ev.collectionId && repository.libraryQueries.isDiskFolder(ev.collectionId)) diskChanged(ev.collectionId)
+      })
     },
-    getDocument: async ({ event }) => {
+    updateDocument: async ({ event, reply }) => {
+      const ev = event as { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: any[]; tags: string[]; collectionId?: string }
+      await answerWrite(reply, 'Saving a document', async () => {
+        await libraryService.update({
+          id: ev.id,
+          name: ev.name,
+          content: ev.content,
+          tags: ev.tags,
+        })
+        if (repository.libraryQueries.isDiskDocument(ev.id)) diskChanged(diskParentOf(ev.id))
+      })
+    },
+    deleteDocument: async ({ event, reply }) => {
+      const ev = event as { type: 'DELETE_DOCUMENT'; id: string }
+      await answerWrite(reply, 'Deleting a document', () => { repository.libraryCommands.deleteDocument(ev.id as EARS.EntityId) })
+    },
+    getDocument: async ({ event, reply }) => {
       const ev = event as { type: 'GET_DOCUMENT'; id: string }
       const document = await libraryService.find(ev.id as EARS.EntityId)
-      if (document) {
-        broadcastToSurface('library', { type: 'DOCUMENT_LOADED' as const, data: { document } })
-      } else {
-        broadcastToSurface('library', { type: 'LIBRARY_ERROR' as const, data: { error: 'Document not found' } })
-      }
+      reply?.(document
+        ? { type: 'DOCUMENT_LOADED' as const, data: { document } }
+        : { type: 'LIBRARY_WRITE_FAILED' as const, error: 'Document not found' })
     },
-    sendIndex: () => {
-      broadcastToSurface('library', {
-          type: 'LIBRARY_INDEX_LOADED' as const,
-          data: { index: repository.libraryQueries.getIndex() },
-        })
-    },
-    createCollection: async ({ event }) => {
+    createCollection: async ({ event, reply }) => {
       const ev = event as { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
-      const isSymlink = ev.parentId ? !!symlink.resolveSymlinkPath(ev.parentId) : false
-      if (isSymlink) {
-        await libraryService.createFolder({
-          name: ev.name,
-          parentId: ev.parentId,
-        })
-        const folderContents = await repository.libraryQueries.getFolderContents(ev.parentId as EARS.EntityId)
-        broadcastToSurface('library', { type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
-      } else {
+      await answerWrite(reply, 'Creating a folder', async () => {
+        if (ev.parentId && repository.libraryQueries.isDiskFolder(ev.parentId)) {
+          await libraryService.createFolder({ name: ev.name, parentId: ev.parentId })
+          diskChanged(ev.parentId)
+          return
+        }
         const collection = repository.libraryCommands.createCollection(
           ev.name,
           ev.description,
           ev.parentId ? ev.parentId as EARS.EntityId : undefined
         )
-        broadcastToSurface('library', { type: 'COLLECTION_CREATED' as const, data: { collection } })
-      }
+        // Only the window that asked names it; every window's folder shows it through the folder view
+        return { type: 'COLLECTION_CREATED' as const, data: { collection } }
+      })
     },
-    updateCollection: async ({ event }) => {
+    updateCollection: async ({ event, reply }) => {
       const ev = event as { type: 'UPDATE_COLLECTION'; id: string; name: string; description?: string }
-      const collection = repository.libraryCommands.updateCollection(
-        ev.id as EARS.EntityId,
-        ev.name,
-        ev.description
-      )
-      broadcastToSurface('library', {
-          type: 'COLLECTION_UPDATED' as const,
-          data: { collection },
-        })
+      await answerWrite(reply, 'Renaming a folder', () => { repository.libraryCommands.updateCollection(ev.id as EARS.EntityId, ev.name, ev.description) })
     },
-    deleteCollection: async ({ event }) => {
+    deleteCollection: async ({ event, reply }) => {
       const ev = event as { type: 'DELETE_COLLECTION'; id: string }
-      repository.libraryCommands.deleteCollection(ev.id as EARS.EntityId)
-      broadcastToSurface('library', {
-          type: 'COLLECTION_DELETED' as const,
-          data: { collectionId: ev.id },
-        })
+      await answerWrite(reply, 'Deleting a folder', () => { repository.libraryCommands.deleteCollection(ev.id as EARS.EntityId) })
     },
-    moveDocument: async ({ event }) => {
+    moveDocument: async ({ event, reply }) => {
       const ev = event as { type: 'MOVE_DOCUMENT'; documentId: string; collectionId?: string }
-      const document = repository.libraryCommands.moveDocument(
-        ev.documentId as EARS.EntityId,
-        ev.collectionId ? ev.collectionId as EARS.EntityId : undefined
-      )
-      broadcastToSurface('library', {
-          type: 'DOCUMENT_UPDATED' as const,
-          data: { document },
-        })
-    },
-    sendInitialData: async () => {
-      const librarySettings = featureSettings.forFeature('library').get()
-
-      broadcastToSurface('library', {
-          type: 'LIBRARY_CONNECTED' as const,
-          data: {
-            index: repository.libraryQueries.getIndex(),
-            settings: librarySettings || null
-          },
-        })
+      await answerWrite(reply, 'Moving a document', () => {
+        repository.libraryCommands.moveDocument(ev.documentId as EARS.EntityId, ev.collectionId ? ev.collectionId as EARS.EntityId : undefined)
+      })
     },
     // File browser actions
-    getFolderContents: async ({ event }) => {
+    getFolderContents: async ({ event, reply }) => {
       const ev = event as { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
       const folderContents = await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null)
-      broadcastToSurface('library', {
-          type: 'FOLDER_CONTENTS_LOADED' as const,
-          data: folderContents,
-        })
+      reply?.({ type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
     },
-    navigateToFolder: async ({ event }) => {
-      const ev = event as { type: 'NAVIGATE_TO_FOLDER'; folderId: string | null }
-      const folderContents = await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null)
-      broadcastToSurface('library', {
-          type: 'FOLDER_CONTENTS_LOADED' as const,
-          data: folderContents,
-        })
-      broadcastToSurface('library', {
-          type: 'NAVIGATION_CHANGED' as const,
-          data: { folderId: ev.folderId, path: folderContents.currentPath },
-        })
+    checkSymlinks: async ({ event, reply }) => {
+      const ev = event as { type: 'CHECK_SYMLINKS'; ids: string[] }
+      reply?.({ type: 'SYMLINKS_CHECKED' as const, ids: ev.ids, broken: await repository.libraryQueries.brokenSymlinks(ev.ids) })
     },
-    renameItem: async ({ event }) => {
+    renameItem: async ({ event, reply }) => {
       const ev = event as { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
-      if (symlink.isSymlinkId(ev.id)) {
-        await libraryService.rename(ev.id, ev.name)
-        // Compute parent folder ID and refresh its contents
-        const parsed = symlink.parseSymlinkId(ev.id)
-        let parentFolderId: string | null = null
-        if (parsed) {
-          const resolved = symlink.resolveSymlinkPath(ev.id)
-          const basePath = symlink.getSymlinkCollectionPath(parsed.collectionId)
-          if (resolved && basePath) {
-            const parentRelPath = path.dirname(path.relative(basePath, resolved.absolutePath))
-            parentFolderId = parentRelPath && parentRelPath !== '.'
-              ? symlink.buildSymlinkId(parsed.collectionId, parentRelPath)
-              : parsed.collectionId
-          } else {
-            parentFolderId = parsed.collectionId
-          }
+      await answerWrite(reply, 'Renaming', async () => {
+        if (symlink.isSymlinkId(ev.id)) {
+          // Worked out before the rename, while the path still resolves
+          const parent = diskParentOf(ev.id)
+          await libraryService.rename(ev.id, ev.name)
+          diskChanged(parent)
+          return
         }
-        const folderContents = await repository.libraryQueries.getFolderContents(
-          parentFolderId ? parentFolderId as EARS.EntityId : null
-        )
-        broadcastToSurface('library', { type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
-      } else {
-        const item = repository.libraryCommands.renameItem(ev.id as EARS.EntityId, ev.name, ev.itemType)
-        broadcastToSurface('library', { type: 'ITEM_RENAMED' as const, data: { item } })
-      }
+        repository.libraryCommands.renameItem(ev.id as EARS.EntityId, ev.name, ev.itemType)
+      })
     },
-    deleteItems: async ({ event }) => {
+    deleteItems: async ({ event, reply }) => {
       const ev = event as { type: 'DELETE_ITEMS'; ids: string[] }
-      await libraryService.remove(ev.ids)
-      broadcastToSurface('library', { type: 'ITEMS_DELETED' as const, data: { ids: ev.ids } })
+      await answerWrite(reply, 'Deleting', async () => {
+        await libraryService.remove(ev.ids)
+        if (ev.ids.some(symlink.isSymlinkId)) diskChanged(null)
+      })
     },
-    moveItems: async ({ event }) => {
+    moveItems: async ({ event, reply }) => {
       const ev = event as { type: 'MOVE_ITEMS'; ids: string[]; targetFolderId: string | null }
-      await libraryService.move(ev.ids, ev.targetFolderId)
-      broadcastToSurface('library', { type: 'ITEMS_MOVED' as const, data: { ids: ev.ids, targetFolderId: ev.targetFolderId } })
+      await answerWrite(reply, 'Moving', async () => {
+        await libraryService.move(ev.ids, ev.targetFolderId)
+        if (ev.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(ev.targetFolderId)) diskChanged(null)
+      })
     },
     // [SEARCH_INDEX_FF] Search index actions — commented out
     // listSearchIndices: async ({ system, event }) => {
@@ -258,45 +226,32 @@ export const librarySystem = setup({
     //   broadcastToSurface('library', { type: 'SEARCH_RESULTS', data: { results } })
     // },
     // Symlink actions
-    createSymlinkCollection: async ({ event }) => {
+    createSymlinkCollection: async ({ event, reply }) => {
       const ev = event as { type: 'CREATE_SYMLINK_COLLECTION'; name: string; symlinkPath: string; parentId?: string }
-      const resolvedPath = resolveHomePath(ev.symlinkPath)
-      const collection = repository.libraryCommands.createSymlinkCollection(
-        ev.name,
-        resolvedPath,
-        ev.parentId ? ev.parentId as EARS.EntityId : undefined
-      )
-      broadcastToSurface('library', {
-          type: 'COLLECTION_CREATED' as const,
-          data: { collection },
-        })
-
+      await answerWrite(reply, 'Linking a folder', () => {
+        const collection = repository.libraryCommands.createSymlinkCollection(
+          ev.name,
+          resolveHomePath(ev.symlinkPath),
+          ev.parentId ? ev.parentId as EARS.EntityId : undefined
+        )
+        return { type: 'COLLECTION_CREATED' as const, data: { collection } }
+      })
     },
-    updateSymlinkPath: async ({ event }) => {
+    updateSymlinkPath: async ({ event, reply }) => {
       const ev = event as { type: 'UPDATE_SYMLINK_PATH'; collectionId: string; newPath: string }
       const resolvedPath = resolveHomePath(ev.newPath)
-
-      // Validate the new path exists and is a directory
-      try {
-        const stat = await fs.stat(resolvedPath)
-        if (!stat.isDirectory()) throw new Error('Not a directory')
-      } catch {
-        broadcastToSurface('library', {
-            type: 'LIBRARY_ERROR' as const,
-            data: { error: `Path does not exist: ${resolvedPath}` },
-          })
-        return
-      }
-
-      const collection = repository.libraryCommands.updateSymlinkPath(
-        ev.collectionId as EARS.EntityId,
-        resolvedPath
-      )
-
-      broadcastToSurface('library', {
-          type: 'SYMLINK_UPDATED' as const,
-          data: { collection },
-        })
+      await answerWrite(reply, 'Relinking a folder', async () => {
+        // Validate the new path exists and is a directory
+        let isDirectory = false
+        try {
+          isDirectory = (await fs.stat(resolvedPath)).isDirectory()
+        } catch {
+          // Missing: refused below
+        }
+        if (!isDirectory) throw new Error(`Path does not exist: ${resolvedPath}`)
+        repository.libraryCommands.updateSymlinkPath(ev.collectionId as EARS.EntityId, resolvedPath)
+        diskChanged(ev.collectionId)
+      })
     },
     // Import/Export actions
     importLibraryItems: async ({ event, reply }) => {
@@ -319,16 +274,6 @@ export const librarySystem = setup({
             ...(result.errors.length > 0 ? { errors: result.errors } : {}),
           })
 
-        // Refresh library data
-        const librarySettings = featureSettings.forFeature('library').get()
-
-        broadcastToSurface('library', {
-            type: 'LIBRARY_CONNECTED' as const,
-            data: {
-              index: repository.libraryQueries.getIndex(),
-              settings: librarySettings || null,
-            },
-          })
       } catch (err) {
         const message = errorMessage(err)
         answer(reply, {
@@ -374,16 +319,7 @@ export const librarySystem = setup({
       for (const doc of repository.libraryQueries.getAllDocuments()) {
         const { next: nextTags, changed } = mapArray(doc.tags, renames, removed)
         
-        if (changed) {
-          repository.libraryCommands.updateDocumentTags(doc.id, nextTags)
-          const updated = repository.libraryQueries.findDocument(doc.id)
-          if (updated) {
-            broadcastToSurface('library', {
-                type: 'DOCUMENT_UPDATED' as const,
-                data: { document: updated },
-              })
-          }
-        }
+        if (changed) repository.libraryCommands.updateDocumentTags(doc.id, nextTags)
       }
     },
   }),
@@ -392,9 +328,6 @@ export const librarySystem = setup({
   initial: 'idle',
   context: {},
   on: {
-    SEND_STATE: {
-      actions: ['sendInitialData'],
-    },
     FEATURE_SETTINGS_UPDATED: {
       actions: ['handleSettingsUpdate'],
     },
@@ -414,9 +347,6 @@ export const librarySystem = setup({
         GET_DOCUMENT: {
           actions: ['getDocument'],
         },
-        GET_LIBRARY_INDEX: {
-          actions: ['sendIndex'],
-        },
         CREATE_COLLECTION: {
           actions: ['createCollection'],
         },
@@ -433,8 +363,8 @@ export const librarySystem = setup({
         GET_FOLDER_CONTENTS: {
           actions: ['getFolderContents'],
         },
-        NAVIGATE_TO_FOLDER: {
-          actions: ['navigateToFolder'],
+        CHECK_SYMLINKS: {
+          actions: ['checkSymlinks'],
         },
         RENAME_ITEM: {
           actions: ['renameItem'],

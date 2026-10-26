@@ -59,7 +59,7 @@ function sendsAsItself(actor: AnyActorRef): AnyActorRef {
       const kept = bound.get(prop)
       if (kept !== undefined) return kept
       const value = prop === 'send'
-        ? (event: unknown) => _runDelivery({ receiver: target.id }, () => target.send(event))
+        ? (event: unknown) => _runDelivery({ receiver: target.id, event: event as object }, () => target.send(event))
         : Reflect.get(target, prop, receiver)
       if (typeof value !== 'function') return value
       const fn = prop === 'send' ? value : (value as (...args: unknown[]) => unknown).bind(target)

@@ -1,5 +1,3 @@
-import { featureSettings } from '#generated/settings.ts';
-
 import { broadcastToSurface } from '#generated/events.ts';
 import { setup } from 'xstate';
 import type { Reply } from '@apackdev/sdk/events';
@@ -13,14 +11,18 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { toMap, toIdentifierSet, mapScalar } from '@apackdev/sdk/utils';
 import { exportPrompts } from './repository/export-prompts.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'PROMPTS_EXPORT_FAILED' | 'PROMPTS_EXPORTED' | 'PROMPTS_IMPORT_FAILED' | 'PROMPTS_IMPORTED'
+type Outcome = Extract<OutgoingPromptEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
  * An import's or an export's *outcome* belongs to the window that started it — another window showing a
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
- * data the import changed is separate news and stays a broadcast.
+ * prompts the import wrote reach every window through its views.
  */
-const answer = (reply: Reply<OutgoingPromptEvents> | undefined, event: OutgoingPromptEvents): void =>
+const answer = (reply: Reply<OutgoingPromptEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('prompts', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -28,46 +30,16 @@ const logger = createLogger('prompts');
 
 export const promptsSpec = defineSystem<Contract>();
 
+/**
+ * The prompts system writes prompts. What a window shows of them is the feature's views (`views.ts`), which run
+ * again after each of these writes, so nothing here says who is looking.
+ */
 export const promptsSystem = setup({
   types: promptsSpec.types,
   actions: promptsSpec.actions({
-    sendPromptsConnectedData: () => {
-      const connectedData = repository.promptQueries.connectedData();
-      const promptsSettings = featureSettings.forFeature('prompts').get();
-      
-      broadcastToSurface('prompts', { 
-        type: 'PROMPTS_CONNECTED',
-        data: {
-          ...connectedData,
-          categories: promptsSettings?.categories || []
-        }
-      });
-    },
-    /**
-     * **Answered, not broadcast**, because a broadcast cannot be correlated by anything this event carries.
-     * Sent to every window's prompts surface it would be admitted on the prompt id alone, so two windows
-     * looking at the same prompt would each accept the other's answer, and a window that had moved on since
-     * asking would take an answer it was no longer waiting for. `reply` sends to the asker on the connection
-     * they asked from, and the call names the ask within it.
-     *
-     * `promptId` stays on the event because the view needs it — it is the row's identity, not the
-     * correlation. What tells one answer from another is `Message.answering`.
-     */
-    sendPromptData: ({ event, reply }) => {
-      const ev = promptsSpec.typeOf('PROMPT_SELECT', event);
-      const prompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId);
-
-      if (prompt) {
-        reply?.({
-          type: 'PROMPT_SELECTED',
-          promptId: ev.promptId as EARS.EntityId,
-          data: prompt
-        });
-      }
-    },
     createPrompt: ({ event }) => {
       const ev = promptsSpec.typeOf('CREATE_PROMPT', event);
-      const prompt = repository.promptCommands.create({
+      repository.promptCommands.create({
         label: ev.label,
         inputs: ev.inputs,
         templateFn: ev.templateFn,
@@ -75,67 +47,26 @@ export const promptsSystem = setup({
         description: ev.description,
         category: ev.category
       });
-
-      broadcastToSurface('prompts', {
-        type: 'PROMPT_CREATED',
-        prompt: prompt,
-        promptId: prompt.id,
-      });
     },
     updatePrompt: ({ event }) => {
       const ev = promptsSpec.typeOf('UPDATE_PROMPT', event);
       const updates: Record<string, any> = {};
-      
+
       if (ev.label !== undefined) updates.label = ev.label;
       if (ev.inputs !== undefined) updates.inputs = ev.inputs;
       if (ev.templateFn !== undefined) updates.templateFn = ev.templateFn;
       if (ev.outputSchema !== undefined) updates.outputSchema = ev.outputSchema;
       if (ev.description !== undefined) updates.description = ev.description;
       if (ev.category !== undefined) updates.category = ev.category;
-      
-      repository.promptCommands.update(ev.promptId as EARS.EntityId, updates);
 
-      const updatedPrompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId);
-      if (updatedPrompt) {
-        broadcastToSurface('prompts', {
-          type: 'PROMPT_UPDATED',
-          prompt: updatedPrompt,
-          promptId: updatedPrompt.id,
-        });
-      }
+      repository.promptCommands.update(ev.promptId as EARS.EntityId, updates);
     },
     deletePrompt: ({ event }) => {
       const ev = promptsSpec.typeOf('DELETE_PROMPT', event);
       repository.promptCommands.delete(ev.promptId as EARS.EntityId);
-      
-      broadcastToSurface('prompts', {
-        type: 'PROMPT_DELETED',
-        promptId: ev.promptId as EARS.EntityId,
-      });
-    },
-    fetchPromptsPage: ({ event }) => {
-      const ev = promptsSpec.typeOf('FETCH_PROMPTS_PAGE', event);
-      const data = repository.promptQueries.connectedData(ev.page || 1);
-
-      broadcastToSurface('prompts', {
-        type: 'PROMPTS_PAGE_LOADED',
-        data: {
-          prompts: data.prompts,
-          page: data.page,
-          totalPages: data.totalPages
-        }
-      });
-    },
-    fetchAllPrompts: () => {
-      const allPrompts = repository.promptQueries.all();
-      broadcastToSurface('prompts', {
-        type: 'PROMPTS_ALL_LOADED',
-        data: { prompts: allPrompts }
-      });
     },
     importPrompts: ({ event, reply }) => {
       const { prompts: importData } = promptsSpec.typeOf('IMPORT_PROMPTS', event);
-      const surfaceId = 'prompts' as const;
 
       logger.info('Importing prompts', { count: Array.isArray(importData) ? importData.length : 0 });
 
@@ -158,7 +89,7 @@ export const promptsSystem = setup({
         }
 
         try {
-          const prompt = repository.promptCommands.create({
+          repository.promptCommands.create({
             label: item.label,
             inputs: item.inputs || {},
             templateFn: item.templateFn,
@@ -166,13 +97,6 @@ export const promptsSystem = setup({
             description: item.description,
             category: item.category,
           });
-
-          broadcastToSurface(surfaceId, {
-            type: 'PROMPT_CREATED',
-            prompt,
-            promptId: prompt.id,
-          });
-
           count++;
         } catch (err) {
           const message = errorMessage(err);
@@ -192,17 +116,6 @@ export const promptsSystem = setup({
         type: 'PROMPTS_IMPORTED',
         count,
         ...(errors.length > 0 ? { errors } : {}),
-      });
-
-      // Refresh the full prompts list
-      const connectedData = repository.promptQueries.connectedData();
-      const promptsSettings = featureSettings.forFeature('prompts').get();
-      broadcastToSurface(surfaceId, {
-        type: 'PROMPTS_CONNECTED',
-        data: {
-          ...connectedData,
-          categories: promptsSettings?.categories || [],
-        },
       });
 
       logger.info('Prompts import complete', { count, errors: errors.length });
@@ -237,33 +150,21 @@ export const promptsSystem = setup({
     handleSettingsUpdate: ({ event }) => {
       const { changes } = promptsSpec.typeOf('FEATURE_SETTINGS_UPDATED', event);
       const categoryChanges = changes?.categories;
-      
+
       if (!categoryChanges) return;
-      
+
       const renames = toMap(categoryChanges.renames);
       // Categories use 'name' property as identifier
       const removed = toIdentifierSet(categoryChanges.removed, (item: any) => item.name);
-      
+
       if (!renames.size && !removed.size) return;
-      
-      // Fallback to first available category or 'General'
+
+      // A removed category leaves its prompts in none
       const emptyCategoryName = (): string | undefined => '';
-      
-      
+
       for (const p of repository.promptQueries.all()) {
         const nextCategory = mapScalar(p.category, renames, removed, emptyCategoryName);
-        
-        if (nextCategory !== p.category) {
-          repository.promptCommands.update(p.id, { category: nextCategory });
-          const updated = repository.promptQueries.byId(p.id);
-          if (updated) {
-            broadcastToSurface('prompts', {
-              type: 'PROMPT_UPDATED', 
-              prompt: updated, 
-              promptId: updated.id
-            });
-          }
-        }
+        if (nextCategory !== p.category) repository.promptCommands.update(p.id, { category: nextCategory });
       }
     },
   }),
@@ -273,9 +174,6 @@ export const promptsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
-      PROMPT_SELECT: {
-        actions: 'sendPromptData',
-      },
       CREATE_PROMPT: {
         actions: 'createPrompt',
       },
@@ -284,12 +182,6 @@ export const promptsSystem = setup({
       },
       DELETE_PROMPT: {
         actions: 'deletePrompt',
-      },
-      FETCH_PROMPTS_PAGE: {
-        actions: 'fetchPromptsPage',
-      },
-      FETCH_ALL_PROMPTS: {
-        actions: 'fetchAllPrompts',
       },
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
@@ -302,13 +194,7 @@ export const promptsSystem = setup({
       },
     },
     states: {
-      idle: {
-        on: {
-          SEND_STATE: {
-            actions: 'sendPromptsConnectedData',
-          },
-        },
-      },
+      idle: {},
     },
   }
 );

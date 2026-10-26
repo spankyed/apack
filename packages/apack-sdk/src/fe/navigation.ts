@@ -41,7 +41,10 @@ export function openLink(url: string): void {
   // surface that isn't here waits and then tells the user, where this has somewhere better to go. The delivery is
   // opened anyway, so a send the browser makes while handling carries its own ref — the thing every other path to
   // a surface's actor gets from the host's `notifySurfaceActor`, and the one reason this bypass still had to change.
-  if (browser && ref) _runDelivery({ receiver: ref }, () => browser.send({ type: 'LINK.OPEN', url }));
+  if (browser && ref) {
+    const event = { type: 'LINK.OPEN', url };
+    _runDelivery({ receiver: ref, event }, () => browser.send(event));
+  }
   else window.electronAPI?.shell?.openExternal(url);
 }
 

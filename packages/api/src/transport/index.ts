@@ -5,8 +5,9 @@ import { packsRouter } from './packs';
 import { secretsRouter } from './secrets';
 import { settingsRouter } from './settings';
 import { entitiesRouter } from './entities';
+import { viewsRouter } from './views';
 import { router } from './trpc';
 
-export const appRouter = router({ entities: entitiesRouter, bus: systemBusRouter, packs: packsRouter, secrets: secretsRouter, settings: settingsRouter });
+export const appRouter = router({ entities: entitiesRouter, bus: systemBusRouter, packs: packsRouter, secrets: secretsRouter, settings: settingsRouter, views: viewsRouter });
 
 export type AppRouter = typeof appRouter;

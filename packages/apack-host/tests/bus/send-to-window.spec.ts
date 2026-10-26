@@ -36,7 +36,7 @@ const addressed = () => sent.map(({ to, client }) => ({ to, client }));
 
 describe('a system serving one window', () => {
   it('reaches that window alone', () => {
-    deliverAs(FROM_A_WINDOW, () => {
+    deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       untypedSendToWindow('c-main', MEMOS, { type: 'MEMO_ADDED' });
     });
 
@@ -45,7 +45,7 @@ describe('a system serving one window', () => {
 
   // The pair: the same send, broadcast, names no connection — which is how the bus reaches every window
   it('reaches every window when it broadcasts instead', () => {
-    deliverAs(FROM_A_WINDOW, () => {
+    deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       untypedBroadcastToSurface(MEMOS, { type: 'MEMO_ADDED' });
     });
 
@@ -54,7 +54,7 @@ describe('a system serving one window', () => {
 
   // It is a send like any other, so it still says who made it — the window can answer it
   it('carries the handling feature as its sender', () => {
-    deliverAs(FROM_A_WINDOW, () => {
+    deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       untypedSendToWindow('c-main', MEMOS, { type: 'MEMO_ADDED' });
     });
 
@@ -63,7 +63,7 @@ describe('a system serving one window', () => {
 
   /** A reply goes to the asker; this goes to a surface of the sender's choosing in that same window */
   it('addresses a different surface on that connection', () => {
-    deliverAs({ to: MEMOS, sender: MEMOS, client: 'c-popout' }, () => {
+    deliverAs({ to: MEMOS, sender: MEMOS, client: 'c-popout' }, { type: 'ASKED' }, () => {
       untypedSendToWindow('c-popout', 'memo-pack/sidebar', { type: 'MEMO_ADDED' });
     });
 
@@ -73,7 +73,7 @@ describe('a system serving one window', () => {
   // Two windows asking the same thing are served separately, which is what one-answer-per-ask means
   it('serves each window on its own connection', () => {
     for (const client of ['c-main', 'c-popout']) {
-      deliverAs({ to: MEMOS, sender: MEMOS, client }, () => {
+      deliverAs({ to: MEMOS, sender: MEMOS, client }, { type: 'ASKED' }, () => {
         untypedSendToWindow(client, MEMOS, { type: 'MEMO_ADDED' });
       });
     }
@@ -94,7 +94,7 @@ describe('a system serving one window', () => {
 describe('after the delivery has ended', () => {
   it('still reaches the window it was serving', async () => {
     let later: (() => void) | undefined;
-    deliverAs(FROM_A_WINDOW, () => {
+    deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       const client = 'c-main';
       later = () => untypedSendToWindow(client, MEMOS, { type: 'MEMO_ADDED' });
     });
@@ -107,7 +107,7 @@ describe('after the delivery has ended', () => {
 
   it('carries no sender, so that window cannot answer it', async () => {
     let later: (() => void) | undefined;
-    deliverAs(FROM_A_WINDOW, () => {
+    deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       later = () => untypedSendToWindow('c-main', MEMOS, { type: 'MEMO_ADDED' });
     });
 
@@ -128,7 +128,7 @@ describe('after the delivery has ended', () => {
  */
 describe('given no connection', () => {
   it('refuses rather than reaching every window', () => {
-    expect(() => deliverAs(FROM_A_WINDOW, () => {
+    expect(() => deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
       untypedSendToWindow(undefined as unknown as string, MEMOS, { type: 'MEMO_ADDED' });
     })).toThrow(/was given no connection/);
 

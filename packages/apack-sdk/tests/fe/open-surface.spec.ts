@@ -16,7 +16,7 @@ beforeEach(() => {
     subscribe: () => ({ unsubscribe() {} }),
   };
   bindFeHost({ catalog: {} as never, application: application as never, secrets: {} as never,
-    settings: {} as never, client: { send() {} }, packs: {} as never });
+    settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never });
 });
 
 afterEach(() => unbindFeHost());

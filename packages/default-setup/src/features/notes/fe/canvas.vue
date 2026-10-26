@@ -271,7 +271,7 @@
             :key="editingNote.id"
             mode="editor"
             show-gutter
-            :model-value="editingNote.content"
+            :model-value="editingContent"
             :entity-id="editingNote.id"
             placeholder="Start writing..."
             class="h-full"
@@ -294,7 +294,9 @@
 import { ref, computed, watch, provide, nextTick, onMounted } from 'vue'
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import { useSelector } from '@xstate/vue'
-import type { NoteDTO } from '#generated/types.ts'
+import type { NoteSummary } from '#generated/types.ts'
+import { useView } from '#generated/fe.ts'
+import { useSettings } from '#generated/settings-fe.ts'
 import { type NotesState } from './state.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { EXTRA_BLOCK_ITEMS_KEY, type BlockItem, useSurface } from '@apackdev/sdk/fe'
@@ -314,9 +316,27 @@ const currentNote = useSelector(actor, (s) => s.context.currentNote)
 const notes = useSelector(actor, (s) => s.context.notes)
 const selectedTaskId = useSelector(actor, (s) => s.context.selectedTaskId)
 const selectedTask = useSelector(actor, (s) => s.context.selectedTask)
-const notesSettings = useSelector(actor, (s) => s.context.settings)
+const currentNoteId = useSelector(actor, (s) => s.context.currentNoteId)
+const settings = useSettings('notes')
+const notesSettings = computed(() => settings.value.value ?? { tasklistPanelPosition: 'left' as const, showCollapseIcon: false })
 const isTaskList = computed(() => currentNote.value?.noteType === 'tasklist')
 const editingNote = computed(() => selectedTask.value ?? currentNote.value!)
+const contents = useSelector(actor, (s) => s.context.contents)
+const editingContent = computed(() => (editingNote.value ? contents.value[editingNote.value.id] ?? '' : ''))
+
+// The tree, and the text of the open note and of the selected task: each its view's result, which the machine applies,
+// or holds behind this window's own writes until they're answered. It reads them again when the machine asks.
+const tree = useView('notes', 'tree')
+const openNote = useView('notes', 'note', () => (currentNoteId.value ? { id: currentNoteId.value as never } : null))
+const openTask = useView('notes', 'note', () => (selectedTaskId.value ? { id: selectedTaskId.value as never } : null))
+watch(() => tree.data, (notes) => { if (notes) actor.send({ type: 'NOTES.READ', notes }) }, { immediate: true })
+for (const [view, id] of [[openNote, currentNoteId], [openTask, selectedTaskId]] as const) {
+  watch(() => [view.status, view.data] as const, ([status, note]) => {
+    if (status === 'ready' && id.value) actor.send({ type: 'NOTE.READ', noteId: id.value, note: note ?? null })
+  })
+}
+const refreshes = useSelector(actor, (s) => s.context.writes.refreshes)
+watch(refreshes, () => { tree.refresh(); openNote.refresh(); openTask.refresh() })
 
 const localTitle = ref(editingNote.value?.title ?? '')
 
@@ -333,7 +353,7 @@ const taskChildren = computed(() =>
 const taskDescendants = computed(() => {
   if (!currentNote.value) return []
   const rootId = currentNote.value.id
-  const result: NoteDTO[] = [currentNote.value]
+  const result: NoteSummary[] = [currentNote.value]
   const queue = [rootId]
   while (queue.length > 0) {
     const parentId = queue.shift()!
@@ -348,7 +368,9 @@ const taskDescendants = computed(() => {
 })
 
 const searchQuery = ref('')
-const searchResults = useSelector(actor, (s) => s.context.searchResults)
+const searchText = ref('')
+const search = useView('notes', 'search', () => (searchText.value ? { text: searchText.value } : null), { keepPrevious: true })
+const searchResults = computed(() => search.data ?? [])
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -370,23 +392,19 @@ function formatRelativeTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const recentNotes = computed(() =>
-  notes.value
-    .filter(n => n.lastSeen > 0)
-    .sort((a, b) => b.lastSeen - a.lastSeen)
-    .slice(0, 20)
-)
-
-const favoriteNotes = computed(() => notes.value.filter(n => n.favorite))
+// What the welcome page lists, read only while it shows: its view reads when each note changed, which typing moves
+const recent = useView('notes', 'recent', () => (state.value.hasTag('welcome') ? { limit: 20 } : null))
+const recentNotes = computed(() => recent.data?.recent ?? [])
+const favoriteNotes = computed(() => recent.data?.favorites ?? [])
 
 const SEARCH_DEBOUNCE_MS = 50
 const { debounced: debouncedSearch } = useDebounce((query: string) => {
-  actor.send({ type: 'NOTE.SEARCH', query })
+  searchText.value = query.trim()
 }, SEARCH_DEBOUNCE_MS)
 
 watch(searchQuery, (query) => {
   if (!query.trim()) {
-    actor.send({ type: 'NOTE.SEARCH', query: '' })
+    searchText.value = ''
   } else {
     debouncedSearch(query)
   }
@@ -532,7 +550,7 @@ const isSyncingSubDocumentLinks = ref(false)
 function handleContentUpdate(content: string) {
   const note = editingNote.value
   if (!note) return
-  if (content === note.content) return
+  if (content === editingContent.value) return
   if (isSyncingSubDocumentLinks.value) return
   if (selectedTask.value) {
     debouncedUpdateTaskContent(selectedTask.value.id, content)

@@ -2936,6 +2936,62 @@ The proof reuses the existing native fixture and cleanup ownership. Its fresh No
 declared in the subprocess inventory. CLI types, focused lint and diff checks pass; native behavior
 and any implementation correction await this focused hosted run. No native test was executed locally.
 
+### Electron exit hang in linked worktrees (2026-10-25)
+
+Observed in `test:external-pack:app` (the `bundled-ui-pack` fixture) on the developer's Mac, in freshly installed
+linked worktrees only. Electron logged `before-quit`, `will-quit` and `quit`, the API child had exited, and the process
+did not exit before Playwright's 60s worker teardown expired. The same fixture also failed, in the same worktrees, with
+text Playwright typed into the editor never reaching its model.
+
+Where the time goes, from `DEBUG_E2E=sample` captures symbolicated against Electron 37.2.4's published dSYM (the
+binary's UUID matched): the browser process's main thread is in Chromium's own shutdown, nowhere in this repo's code.
+
+- 5s into teardown: `BrowserMainLoop::ShutdownThreadsAndCleanUp` → `BrowserProcessIOThread::ProcessHostCleanUp` →
+  `Process::WaitForExitWithTimeout`, which waits up to 10s for the network service process to exit so cookies and
+  cache are flushed (`content/browser/browser_process_io_thread.cc`).
+- 22s into teardown, after that: `TaskTracker::CompleteShutdown` → `WaitableEvent::Wait`, which waits without a timeout
+  for every `BLOCK_SHUTDOWN` task — the profile's must-land file writes. Every thread-pool worker was idle at that
+  instant and the processes were niced (`ps` `RNs`), and they exited after 22–60s: slow, not deadlocked.
+
+Conditions: it hung on four of eleven runs across two fresh worktrees and on six of six in one run with
+`--trace retain-on-failure`, and never in the main checkout, three apps at once included. Repeated minutes later in
+the same worktree, the identical run exited cleanly. Spotlight's `mdworker_shared` processes were busy over a fresh
+worktree's `node_modules`, and a suite there took 23.3s against 8.9s for the same run in a `.noindex` worktree, where
+neither hung.
+
+The comparison, run as four pairs of fresh worktrees set up identically (`npm ci`, `build:default-setup`,
+`build:runtime`, `test:external-pack:contract`, then three apps at once with `--trace retain-on-failure`), alternating
+which went first: every worktree Spotlight indexed took 23–65s and two of the four hung; every one in a `.noindex`
+directory took 8.6–9.0s and none hung. So Spotlight indexing a fresh `node_modules` makes the slow writes
+Chromium blocks exit on far more likely. It is not the whole cause: on 2026-10-26 a freshly installed `.noindex`
+worktree, gating `da805a5d1` through the whole chain, hit the same teardown timeout on three apps, beside two other
+E2E waits timing out (`step-palette`, `settings-ownership`) — so a fresh install under the chain's full load can
+still stall it. The `.noindex` location stays, since it removes the largest measured contributor. `session:new` and `session:check` create worktrees under `<repository>-worktrees.noindex`
+(`worktreesRoot`, `scripts/session.mjs`). No timeout or assertion was changed.
+
+Two things this does not establish. **The lost input is not explained by it**: on 2026-10-25, after a restart, one
+fresh `.noindex` worktree on a machine `check:idle` called quiet, running one app at a time, lost the typed text on one
+of three tests; no teardown hung. That failure has only been seen in freshly installed worktrees and never in the main
+checkout, and its cause is open. Attempts to reproduce it afterwards all passed: 12 tests in a fresh `.noindex`
+worktree one app at a time, 6 in the main checkout with the renderer's CPU throttled 6x, and 9 in a fresh worktree
+three apps at once with `console.info` in `@apackdev/ui`'s editor rebuild, reset, model watch and `onUpdate`. The one
+failure since the restart came minutes after boot, while `fseventsd` was catching up; before it, the failures came
+while the machine was degrading toward running out of memory. **The mechanism is a reconnect, reproduced deterministically**: in the main checkout, a probe typed into the editor,
+confirmed the model held it, then terminated the API child by the pid in its own `api-port` file; Electron main
+restarted it, the window reconnected, and afterwards the editor and the model both read "Bundled editor" — the
+failure exactly. A reconnect sets `packFrontendsNeedRefresh` (`disconnectPackFrontends`,
+`@apackdev/host` `features/application/fe/machine.ts`), so the next load re-accepts every pack, unchanged ones
+included, and replaces their surface actors; `SurfaceScope` remounts on a new actor, and the fixture keeps its text
+in component-local state. Neither the client nor the `ws` server sets a keepalive, so a connection does not drop
+for load alone: what the failing runs had was most likely an API child that went away on a machine running out of
+memory. Their app logs went with the restart, so that trigger is unconfirmed; a second `CLIENT_CONNECTED` in a
+failing run's `app-<n>.log` would confirm it. The E2E fixture now names an API restart under a failing test
+(`api-restarted`). Fixed by keeping the remount and moving the draft out of its reach: `useSurfaceDraft`
+(`@apackdev/sdk/fe`), which the fixture's editor holds its text in; the same probe, run again, reads the typed text
+after the restart ([unsaved state across a reconnect](../../plans/reconnect-without-remount.md)). **No same-files test of the indexing was made**: moving a built worktree between an
+indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
+startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
+
 ### Versioned override reproducer and launch admission (2026-10-17)
 
 Run `39079991483` on `99c910914` confirms the library-path omission in 22.13 seconds: ordinary Node

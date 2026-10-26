@@ -49,6 +49,20 @@ export type SurfaceInbox<T extends SurfaceInboxAudiences> = T;
  */
 export type SurfaceStateOf<C> = C extends { state: infer State } ? State : never;
 
+/**
+ * What the app's shell hands every surface's machine about the surface itself, each in a delivery naming that
+ * surface — so a send its handler makes carries the surface's ref and can be answered:
+ *
+ * - `SURFACE_STARTED`, once, as soon as the surface's actor is spawned (each time it is, a pack's reload included).
+ *   It is where a surface asks for what it starts from: a send made from the machine's own entry runs in no delivery,
+ *   carries no sender, and so cannot be answered.
+ * - `SURFACE_ACTIVATED` and `SURFACE_DEACTIVATED`, as the surface becomes the one shown and stops being it.
+ */
+export type SurfaceLifecycleEvent =
+  | { type: 'SURFACE_STARTED' }
+  | { type: 'SURFACE_ACTIVATED' }
+  | { type: 'SURFACE_DEACTIVATED' }
+
 /** A registered surface: its definition, at its ref */
 export interface Surface {
   /** The surface's ref, `<packId>/<featureId>` (the host's own under `host`) */

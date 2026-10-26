@@ -16,7 +16,7 @@ export type Event =
   // Tab restoration
   | { type: 'codeActions.OPEN_TABS'; actionIds: string[] }
   /**
-   * What the panel asks of the **actions surface**, which owns the list and the rows.
+   * What the panel asks of the **actions surface**: its edits, which that surface sends its system.
    *
    * The panel used to send these straight to that surface from its click handlers. Two things were wrong
    * with that and the second is why they are here rather than merely tidier: a component is not inside any
@@ -27,8 +27,6 @@ export type Event =
    * The names match what they forward, so the hand-off reads as one; the `codeActions.` prefix is how the
    * code surface routes an event to this child.
    */
-  | { type: 'codeActions.LOAD_ALL' }
-  | { type: 'codeActions.LOAD_MORE' }
   | { type: 'codeActions.UPDATE_INPUT'; actionId: string; input: Record<string, unknown> }
   | { type: 'codeActions.UPDATE_LABEL'; actionId: string; label: string }
   | { type: 'codeActions.DELETE'; actionId: EARS.EntityId }
@@ -102,8 +100,6 @@ export const actionsState = setup({
     },
 
     // The panel's asks of the actions surface, forwarded from here so each one carries a sender
-    loadAllActions: () => { sendToSurface('actions', { type: 'ACTIONS.LOAD_ALL' }) },
-    loadMoreActions: () => { sendToSurface('actions', { type: 'ACTIONS.LOAD_MORE' }) },
 
     updateActionInput: ({ event }) => {
       const ev = event as { type: 'codeActions.UPDATE_INPUT'; actionId: string; input: Record<string, unknown> }
@@ -156,8 +152,6 @@ export const actionsState = setup({
       actions: 'updateActionInOpenFiles'
     },
     // The panel's asks of the actions surface
-    'codeActions.LOAD_ALL': { actions: 'loadAllActions' },
-    'codeActions.LOAD_MORE': { actions: 'loadMoreActions' },
     'codeActions.UPDATE_INPUT': { actions: 'updateActionInput' },
     'codeActions.UPDATE_LABEL': { actions: 'updateActionLabel' },
     'codeActions.DELETE': { actions: 'deleteAction' },

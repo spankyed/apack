@@ -64,6 +64,9 @@ export function backendBindingProblem(manifest: PackManifest, registration: unkn
       if ((feature[kind] !== undefined) !== (declaration[kind] !== undefined)) return problem(`features.${id}.${kind}`);
       if (declaration[kind] && !isPlainObject(feature[kind])) return problem(`features.${id}.${kind}`);
     }
+    if ((feature.views !== undefined) !== (declaration.views !== undefined)) return problem(`features.${id}.views`);
+    if (feature.views !== undefined && (!isPlainObject(feature.views)
+      || Object.values(feature.views).some(view => typeof view !== 'function'))) return problem(`features.${id}.views`);
   }
   const eventsProblem = eventBindingProblem(eventContracts, features);
   if (eventsProblem) return problem(eventsProblem);

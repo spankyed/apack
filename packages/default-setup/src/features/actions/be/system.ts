@@ -1,7 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
 import { broadcastToSurface } from '#generated/events.ts';
-// Cross-surface send: the flows surface also receives action events
 import { setup } from 'xstate';
 import type { Reply } from '@apackdev/sdk/events';
 import { defineSystem } from '@apackdev/sdk/framework';
@@ -14,14 +13,18 @@ import { createLogger } from '@apackdev/sdk/logger';
 import { toMap, toIdentifierSet, mapScalar } from '@apackdev/sdk/utils';
 import { exportActions } from './repository/export-actions.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+type OutcomeType = 'ACTIONS_EXPORT_FAILED' | 'ACTIONS_EXPORTED' | 'ACTIONS_IMPORT_FAILED' | 'ACTIONS_IMPORTED'
+type Outcome = Extract<OutgoingActionEvents, { type: OutcomeType }>
+
 /**
  * Answers whoever asked for this, and tells every window when nobody did.
  *
  * An import's or an export's *outcome* belongs to the window that started it — another window showing a
  * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
- * data the import changed is separate news and stays a broadcast.
+ * actions the import wrote reach every window through its views.
  */
-const answer = (reply: Reply<OutgoingActionEvents> | undefined, event: OutgoingActionEvents): void =>
+const answer = (reply: Reply<OutgoingActionEvents> | undefined, event: Outcome): void =>
   (reply ? reply(event) : broadcastToSurface('actions', event));
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -30,77 +33,16 @@ const logger = createLogger('actions');
 export const actionsSpec = defineSystem<Contract>();
 
 /**
- * Broadcasts an action event to the actions surface, and to the flows surface the three it declares it takes: the
- * flows editor keeps its action list current from these. The other eight are between this system and its own
- * surface, so narrowing here is what the contract asks for rather than a special case.
+ * The actions system writes actions. What a window shows of them is the feature's views (`views.ts`) — the actions
+ * surface's list and open action, and the flows editor's palette — which run again after each of these writes, so
+ * nothing here says who is looking.
  */
-const FLOWS_TAKES = ['ACTION_CREATED', 'ACTION_UPDATED', 'ACTION_DELETED'] as const;
-type FlowsAction = Extract<OutgoingActionEvents, { type: (typeof FLOWS_TAKES)[number] }>;
-const broadcastActionEvent = (system: any, event: OutgoingActionEvents) => {
-  broadcastToSurface('actions', event);
-  if ((FLOWS_TAKES as readonly string[]).includes(event.type)) broadcastToSurface('flows', event as FlowsAction);
-};
-
 export const actionsSystem = setup({
   types: actionsSpec.types,
   actions: actionsSpec.actions({
-    sendActionsStartupData: () => {
-      const connectedData = repository.actionQueries.connectedData();
-      const actionsSettings = featureSettings.forFeature('actions').get();
-      
-      broadcastToSurface('actions', { 
-        type: 'ACTIONS_LISTED',
-        data: {
-          ...connectedData,
-          categories: actionsSettings?.categories || []
-        }
-      });
-    },
-    fetchActionsPage: ({ event }) => {
-      const ev = actionsSpec.typeOf('FETCH_ACTIONS_PAGE', event);
-      const data = repository.actionQueries.connectedData(ev.page || 1);
-
-      broadcastToSurface('actions', {
-        type: 'ACTIONS_PAGE_LOADED',
-        data: {
-          actions: data.actions,
-          page: data.page,
-          totalPages: data.totalPages
-        }
-      });
-    },
-    fetchAllActions: () => {
-      const allActions = repository.actionQueries.all();
-      broadcastToSurface('actions', {
-        type: 'ACTIONS_ALL_LOADED',
-        data: { actions: allActions }
-      });
-    },
-    /**
-     * **Answered, not broadcast**, because a broadcast cannot be correlated by anything this event carries.
-     * Sent to every window's actions surface it would be admitted on the action id alone, so two windows
-     * looking at the same action would each accept the other's answer, and a window that had moved on since
-     * asking would take an answer it was no longer waiting for. `reply` sends to the asker on the connection
-     * they asked from, and the call names the ask within it.
-     *
-     * `actionId` stays on the event because the view needs it — it is the row's identity, not the
-     * correlation. What tells one answer from another is `Message.answering`.
-     */
-    sendActionData: ({ event, reply }) => {
-      const ev = actionsSpec.typeOf('ACTION_SELECT', event);
-      const action = repository.actionQueries.byId(ev.actionId as EARS.EntityId);
-
-      if (action) {
-        reply?.({
-          type: 'ACTION_SELECTED',
-          actionId: ev.actionId as EARS.EntityId,
-          data: action
-        });
-      }
-    },
-    createAction: ({ system, event }) => {
+    createAction: ({ event }) => {
       const ev = actionsSpec.typeOf('CREATE_ACTION', event);
-      const action = repository.actionCommands.create({
+      repository.actionCommands.create({
         label: ev.label,
         input: ev.input,
         actionFn: ev.actionFn,
@@ -108,14 +50,8 @@ export const actionsSystem = setup({
         description: ev.description,
         category: ev.category
       });
-
-      broadcastActionEvent(system, {
-        type: 'ACTION_CREATED',
-        action,
-        actionId: action.id,
-      });
     },
-    updateAction: ({ system, event }) => {
+    updateAction: ({ event }) => {
       const ev = actionsSpec.typeOf('UPDATE_ACTION', event);
       repository.actionCommands.update(ev.actionId as EARS.EntityId, {
         label: ev.label,
@@ -125,28 +61,13 @@ export const actionsSystem = setup({
         description: ev.description,
         category: ev.category
       });
-
-      const updatedAction = repository.actionQueries.byId(ev.actionId as EARS.EntityId);
-      if (updatedAction) {
-        broadcastActionEvent(system, {
-          type: 'ACTION_UPDATED',
-          action: updatedAction,
-          actionId: updatedAction.id,
-        });
-      }
     },
-    deleteAction: ({ system, event }) => {
+    deleteAction: ({ event }) => {
       const ev = actionsSpec.typeOf('DELETE_ACTION', event);
       repository.actionCommands.delete(ev.actionId as EARS.EntityId);
-
-      broadcastActionEvent(system, {
-        type: 'ACTION_DELETED',
-        actionId: ev.actionId as EARS.EntityId,
-      });
     },
-    importActions: ({ system, event, reply }) => {
+    importActions: ({ event, reply }) => {
       const { actions: importData } = actionsSpec.typeOf('IMPORT_ACTIONS', event);
-      const surfaceId = 'actions' as const;
 
       logger.info('Importing actions', { count: Array.isArray(importData) ? importData.length : 0 });
 
@@ -169,7 +90,7 @@ export const actionsSystem = setup({
         }
 
         try {
-          const action = repository.actionCommands.create({
+          repository.actionCommands.create({
             label: item.label,
             input: item.input || {},
             actionFn: item.actionFn,
@@ -177,13 +98,6 @@ export const actionsSystem = setup({
             description: item.description,
             category: item.category,
           });
-
-          broadcastActionEvent(system, {
-            type: 'ACTION_CREATED',
-            action,
-            actionId: action.id,
-          });
-
           count++;
         } catch (err) {
           const message = errorMessage(err);
@@ -203,17 +117,6 @@ export const actionsSystem = setup({
         type: 'ACTIONS_IMPORTED',
         count,
         ...(errors.length > 0 ? { errors } : {}),
-      });
-
-      // Refresh the full actions list
-      const connectedData = repository.actionQueries.connectedData();
-      const actionsSettings = featureSettings.forFeature('actions').get();
-      broadcastToSurface(surfaceId, {
-        type: 'ACTIONS_LISTED',
-        data: {
-          ...connectedData,
-          categories: actionsSettings?.categories || [],
-        },
       });
 
       logger.info('Actions import complete', { count, errors: errors.length });
@@ -245,7 +148,7 @@ export const actionsSystem = setup({
       }
     },
 
-    handleSettingsUpdate: ({ system, event }) => {
+    handleSettingsUpdate: ({ event }) => {
       const { changes } = actionsSpec.typeOf('FEATURE_SETTINGS_UPDATED', event);
       const categoryChanges = changes?.categories;
       
@@ -264,17 +167,7 @@ export const actionsSystem = setup({
       for (const a of repository.actionQueries.all()) {
         const nextCategory = mapScalar(a.category, renames, removed, firstCategoryName);
 
-        if (nextCategory !== a.category) {
-          repository.actionCommands.update(a.id, { category: nextCategory });
-          const updated = repository.actionQueries.byId(a.id);
-          if (updated) {
-            broadcastActionEvent(system, {
-              type: 'ACTION_UPDATED',
-              action: updated,
-              actionId: updated.id
-            });
-          }
-        }
+        if (nextCategory !== a.category) repository.actionCommands.update(a.id, { category: nextCategory });
       }
     },
   }),
@@ -284,9 +177,6 @@ export const actionsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
-      ACTION_SELECT: {
-        actions: 'sendActionData',
-      },
       CREATE_ACTION: {
         actions: 'createAction',
       },
@@ -295,12 +185,6 @@ export const actionsSystem = setup({
       },
       DELETE_ACTION: {
         actions: 'deleteAction',
-      },
-      FETCH_ACTIONS_PAGE: {
-        actions: 'fetchActionsPage',
-      },
-      FETCH_ALL_ACTIONS: {
-        actions: 'fetchAllActions',
       },
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
@@ -313,13 +197,7 @@ export const actionsSystem = setup({
       },
     },
     states: {
-      idle: {
-        on: {
-          SEND_STATE: {
-            actions: 'sendActionsStartupData',
-          },
-        },
-      },
+      idle: {},
     },
   }
 );

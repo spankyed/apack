@@ -80,6 +80,7 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   ['@apackdev/host/secrets', 'host store of API key values, never handed to packs'],
   // The app's HostRuntime, which the API binds; packs reach its services through services (appData, runHistory, inference, secrets)
   ['@apackdev/host/services', 'host implementations of SDK services, bound by the API'],
+  ['@apackdev/host/views', 'host-only — the API and the harness run views for windows; a pack declares them (defineViews) and a window reads them (useView)'],
   // The app's migrations runners: the API's boot and appData.reset() run them; packs declare migrations, never run them
   ['@apackdev/host/migrations', 'the app migrations runners, run by the host'],
   // The app's own state (AppState): the host alone reads and writes it; packs learn of onboarding through services.appData

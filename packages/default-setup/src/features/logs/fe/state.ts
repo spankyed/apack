@@ -1,5 +1,5 @@
 import { setup, type ActorRefFrom, assign } from 'xstate';
-import { safeEvents } from '@apackdev/sdk/fe';
+import { safeEvents, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
 import type { LogsSettings } from '#generated/types.ts';
 import type { LogsContext } from './contract.ts';
@@ -23,6 +23,7 @@ type LogsEvents =
   | { type: 'SET_SEARCH'; search: string }
   | { type: 'CLEAR_LOGS' }
   | OutgoingLogsEvents
+  | SurfaceLifecycleEvent
   // The app's, when the logs surface's settings change; the canvas sends one itself to show a change at once
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: LogsSettings };
 
@@ -36,15 +37,13 @@ const logsState = setup({
     events: {} as LogsEvents,
   },
   actions: {
-    setConnectedLogs: assign(({ event }) => {
-      const ev = typeOf('LOGS_CONNECTED', event);
-      return {
-        logs: ev.logs,
-        settings: ev.settings ? ev.settings : undefined
-      };
-    }),
-    updateLogs: assign({
-      logs: ({ event }) => typeOf('LOGS_UPDATE', event).logs,
+    /** The buffer, which the system answers this window alone; asked in a delivery naming the surface */
+    requestLogs: () => {
+      sendToSystem(id, { type: 'GET_LOGS' });
+    },
+    setLogs: assign(({ event }) => {
+      const ev = typeOf('LOGS_READ', event);
+      return { logs: ev.logs, settings: ev.settings };
     }),
     addLog: assign({
       logs: ({ context, event }) => {
@@ -75,13 +74,7 @@ const logsState = setup({
       }),
     }),
     updateSettings: assign({
-      settings: ({ event }) => {
-        sendToSystem(id, {
-          type: 'REQUEST_LOGS_UPDATE',
-        });
-
-        return typeOf('FEATURE_SETTINGS_UPDATED', event).settings
-      },
+      settings: ({ event }) => typeOf('FEATURE_SETTINGS_UPDATED', event).settings,
     }),
   },
 }).createMachine({
@@ -101,11 +94,11 @@ const logsState = setup({
   states: {
     active: {
       on: {
-        'LOGS_CONNECTED': {
-          actions: 'setConnectedLogs',
+        SURFACE_STARTED: {
+          actions: 'requestLogs',
         },
-        'LOGS_UPDATE': {
-          actions: 'updateLogs',
+        'LOGS_READ': {
+          actions: 'setLogs',
         },
         'LOG_ADDED': {
           actions: 'addLog',
@@ -122,8 +115,9 @@ const logsState = setup({
         CLEAR_LOGS: {
           actions: ['clearLogs', 'sendClearLogsToBackend'],
         },
+        // The settings filter the buffer, so the surface asks for it again as they now filter it
         FEATURE_SETTINGS_UPDATED: {
-          actions: 'updateSettings',
+          actions: ['updateSettings', 'requestLogs'],
         },
       },
     },

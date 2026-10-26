@@ -39,17 +39,6 @@ features carry about 150 such broadcasts.
 The design does not depend on memory: #273's units know what they wrote, and reads can record what they touched.
 It is a new public contract and a migration of six systems, so it is a plan of its own, not a follow-up to #273.
 
-### `apack db` through the running app
-
-#274 serves `apack db query`, `exec`, `script` and `runs` from the running app (`POST /db`, with the API token), and
-runs them offline when no app answers. A tool then sees the app's data and writes through its engine, with no write
-lock.
-
-On #273 half of this is free: LMDB is multi-process, so an offline read already sees what the running app has
-committed. Writes are the other half: a tool's write reaches the files but not the app's systems, which publish only
-when told. Serving through the app fixes that, at the cost of publishing the API token on every run (today only in
-development, or when the API made up its own).
-
 ## Taken already
 
 ### The correctness harness
@@ -138,7 +127,13 @@ data, not a description of it.
 - **The rolled-back destroy fix**: a destroy undone put the entity back last in its type's order. On #273 a unit that
   throws leaves the store as it found it, the entity's place included (`tests/engine/transact.spec.ts`).
 - **The memory budget** (`admin.memoryStats()`, the heap gate): measures what #273 does not hold.
+- **`apack db` through the running app** (#274's `POST /db`, which serves `query`, `exec`, `script` and `runs` from the
+  app and runs them offline when none answers). Reads need nothing: the store is multi-process, so an offline read
+  sees what the app has committed. A write to the live data goes through the app already, by the drive server's
+  `/transact`. Serving `apack db` too would run a tool's code in the app's process and still need an offline path for
+  when no app answers. What a terminal write beside the running app would need instead — the tool writes the files and
+  tells the app, which re-runs every watch — is [a deferred plan](../plans/deferred/db-writes-beside-the-running-app.md).
 
 ## Order
 
-Live queries and the served database are designs to plan, after #273 lands.
+Live queries are a design to plan, after #273 lands.

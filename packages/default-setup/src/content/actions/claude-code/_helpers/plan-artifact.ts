@@ -59,7 +59,7 @@ export function createPlanDraft(
     ...(opts?.branch && { branch: opts.branch }),
     ...(opts?.prNumber && { prNumber: opts.prNumber }),
   };
-  const { artifactId } = services.artifact.createAndNotify({
+  const { artifactId } = services.artifact.create({
     artifactType: 'plan',
     title: resolvedTitle,
     content,
@@ -98,8 +98,7 @@ export function resolvePlanDraft(
     status: nextStatus,
   };
 
-  services.artifact.updateAndNotify(draft.id, {
+  services.artifact.update(draft.id, {
     content: nextContent,
-    threadId,
   });
 }

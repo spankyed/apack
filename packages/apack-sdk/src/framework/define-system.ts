@@ -145,9 +145,18 @@ const handing = <F>(handler: F): F => {
   if (typeof handler !== 'function' || isCreatorResult(handler)) return handler;
   const run = handler as unknown as (args: object, params: unknown) => void;
   return ((args: object, params: unknown) => {
-    const delivery = _currentDelivery();
+    const delivery = answerable(args);
     return run({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) }, params);
   }) as unknown as F;
+};
+
+/**
+ * The delivery a handler may answer: the one in scope when the event it handles is the message delivered (`_Delivery`'s
+ * `event`), and none for an event its machine made while handling that message.
+ */
+const answerable = (args: object): ReturnType<typeof _currentDelivery> => {
+  const delivery = _currentDelivery();
+  return delivery !== undefined && delivery.event === (args as { event?: unknown }).event ? delivery : undefined;
 };
 
 /**
@@ -185,7 +194,7 @@ export function defineHandlers<
       Object.entries(defs).map(([name, handler]) => [name, handing(handler)]),
     ) as never,
     input: (build) => (args) => {
-      const delivery = _currentDelivery();
+      const delivery = answerable(args);
       return build({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) });
     },
   };

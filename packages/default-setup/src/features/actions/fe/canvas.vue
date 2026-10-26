@@ -6,7 +6,7 @@
       :actions="filteredActions"
       :categories="categories"
       :selected-categories="selectedCategories"
-      :has-actions="actions.length > 0"
+      :has-actions="totalCount > 0"
       :has-more="hasMore"
       :loading-more="loadingMore"
       @select="handleSelectAction"
@@ -20,7 +20,7 @@
     <!-- Create/Edit View -->
     <ActionDetail
       v-else-if="state.hasTag('create-action') || state.hasTag('detail-action')"
-      :action="state.hasTag('detail-action') ? selectedAction : undefined"
+      :action="state.hasTag('detail-action') ? (open.data ?? undefined) : undefined"
       :form-data="formData"
       :categories="categories"
       @update-label="handleUpdateLabel"
@@ -38,40 +38,42 @@
 <script setup lang="ts">
 import { useSurface } from '@apackdev/sdk/fe'
 
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useSelector } from '@xstate/vue';
 import type { ActionsState } from './state.ts';
 import ActionsList from './components/ActionsList.vue';
 import ActionDetail from './components/ActionDetail.vue';
 import type { EARS } from '@apackdev/sdk';
 import type { ActionParameter } from '@apackdev/sdk';
+import { useView } from '#generated/fe.ts';
+import { useSettings } from '#generated/settings-fe.ts';
 
 const actor: ActionsState = useSurface();
 const state = useSelector(actor, (state) => state);
-const actions = useSelector(actor, (state) => state.context.actions);
-const selectedAction = useSelector(actor, (state) => state.context.selectedAction);
 const formData = useSelector(actor, (state) => state.context.formData);
-const categories = useSelector(actor, (state) => state.context.categories);
 const selectedCategories = useSelector(actor, (state) => state.context.selectedCategories);
-const page = useSelector(actor, (state) => state.context.page);
-const totalPages = useSelector(actor, (state) => state.context.totalPages);
-const loadingMore = useSelector(actor, (state) => state.context.loadingMore);
+const listLimit = useSelector(actor, (state) => state.context.listLimit);
+const selectedActionId = useSelector(actor, (state) => state.context.selectedActionId);
+const showingList = computed(() => state.value.hasTag('list-actions'));
+const showingDetail = computed(() => state.value.hasTag('detail-action'));
 
-const hasMore = computed(() => page.value < totalPages.value);
+const settings = useSettings('actions');
+const categories = computed(() => settings.value.value?.categories ?? []);
 
-// Filter actions based on selected categories
-const filteredActions = computed(() => {
-  // If no categories selected, show all actions
-  if (selectedCategories.value.length === 0) {
-    return actions.value;
-  }
+// The list this window shows, and the action it has open: each the view's result for what this window asked, kept
+// up to date by the backend, so a change in another window reaches this one without anyone sending it
+const list = useView('actions', 'list', () => (showingList.value ? { limit: listLimit.value, categories: selectedCategories.value } : null), { keepPrevious: true });
+const open = useView('actions', 'byId', () => (showingDetail.value && selectedActionId.value ? { id: selectedActionId.value } : null));
 
-  // Filter actions that match selected categories
-  return actions.value.filter(action => {
-    // If action has no category, don't show it when filters are active
-    if (!action.category) return false;
-    return selectedCategories.value.includes(action.category);
-  });
+const filteredActions = computed(() => list.data?.actions ?? []);
+const totalCount = computed(() => list.data?.totalCount ?? 0);
+const hasMore = computed(() => filteredActions.value.length < totalCount.value);
+const loadingMore = computed(() => list.status === 'loading');
+
+// The machine fills its form from the open action once, and leaves the detail view when the action is gone
+watch(() => [open.status, open.data] as const, ([status, action]) => {
+  if (status !== 'ready' || !selectedActionId.value) return;
+  actor.send({ type: 'ACTION.LOADED', actionId: selectedActionId.value, action: action ?? null });
 });
 
 // List handlers

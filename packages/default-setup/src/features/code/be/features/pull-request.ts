@@ -1,3 +1,4 @@
+import { answering } from '../answer.ts'
 import type { OutgoingPullRequestEvents } from '../contract.ts'
 import { broadcastToSurface } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
@@ -58,22 +59,22 @@ function humanizeBranchName(branch: string): string {
     .trim()
 }
 
-function emitToFrontend(event: OutgoingPullRequestEvents) {
-  broadcastToSurface(surfaceId, event)
+/** How a handler answers: to the window that asked, and nowhere when nobody did (`answering`) */
+type Emit = (event: OutgoingPullRequestEvents) => void
+
+function emitError(emit: Emit, message: string) {
+  emit({ type: 'pr.ERROR', message })
 }
 
-function emitError(message: string) {
-  emitToFrontend({ type: 'pr.ERROR', message })
-}
-
-/** Run async work that requires a git repository. Guards null repo, handles errors. */
+/** Run async work that requires a git repository, answering through \`emit\`. Guards null repo, handles errors. */
 function withRepo<T>(
   context: CodePullRequestSystemContext,
+  emit: Emit,
   work: (repo: GitRepository) => Promise<T>,
   onSuccess: (result: T) => void,
-  onError: (error: any) => void = (e) => emitError(e.message)
+  onError: (error: any) => void = (e) => emitError(emit, e.message)
 ) {
-  if (!context.gitRepository) { emitError('No git repository available'); return }
+  if (!context.gitRepository) { emitError(emit, 'No git repository available'); return }
   work(context.gitRepository).then(onSuccess).catch(onError)
 }
 
@@ -87,23 +88,26 @@ export const pullRequestSystem = setup({
     input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; code?: AnyActorRef }
   },
   actions: handlers.actions({
-    getBaseBranch: ({ context }) => {
-      withRepo(context,
+    getBaseBranch: ({ context, reply }) => {
+      const emit = answering(reply)
+      withRepo(context, emit,
         repo => repo.getBaseBranch({ preferUpstream: false }),
-        branch => emitToFrontend({ type: 'pr.BASE_BRANCH_RECEIVED', data: { branch } })
+        branch => emit({ type: 'pr.BASE_BRANCH_RECEIVED', data: { branch } })
       )
     },
 
-    getSmartBaseBranch: ({ context }) => {
-      withRepo(context,
+    getSmartBaseBranch: ({ context, reply }) => {
+      const emit = answering(reply)
+      withRepo(context, emit,
         repo => repo.getPRBaseBranch(),
-        branch => emitToFrontend({ type: 'pr.SMART_BASE_BRANCH_RECEIVED', data: { branch } })
+        branch => emit({ type: 'pr.SMART_BASE_BRANCH_RECEIVED', data: { branch } })
       )
     },
 
-    getBranchDiff: ({ event, context }) => {
+    getBranchDiff: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const base = ev.baseBranch ? Promise.resolve(ev.baseBranch) : repo.getBaseBranch({ preferUpstream: false })
           const head = ev.headBranch ? `origin/${ev.headBranch}` : undefined
@@ -114,14 +118,15 @@ export const pullRequestSystem = setup({
           const files = await repo.getBranchDiff(baseBranch, head)
           return { files, baseBranch }
         },
-        ({ files, baseBranch }) => emitToFrontend({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } })
+        ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } })
       )
     },
 
-    getBranchFileDiff: ({ event, context }) => {
+    getBranchFileDiff: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
       const target = ev.headBranch ? `origin/${ev.headBranch}` : 'HEAD'
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           if (ev.headBranch) {
             await repo.fetchRemoteBranch(ev.headBranch)
@@ -137,7 +142,7 @@ export const pullRequestSystem = setup({
           ])
           return { diff, originalContent, modifiedContent, isImage }
         },
-        ({ diff, originalContent, modifiedContent, isImage }) => emitToFrontend({
+        ({ diff, originalContent, modifiedContent, isImage }) => emit({
           type: 'pr.FILE_DIFF_RECEIVED',
           data: { path: ev.path, diff, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
         })
@@ -146,29 +151,32 @@ export const pullRequestSystem = setup({
 
     // --- GitHub CLI actions ---
 
-    checkGhAuth: ({ context }) => {
+    checkGhAuth: ({ context, reply }) => {
+      const emit = answering(reply)
       if (!context.gitRepository) {
-        emitToFrontend({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
+        emit({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
         return
       }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.checkAuth(repo.getWorkingDir()),
-        result => emitToFrontend({ type: 'pr.GH_AUTH_CHECKED', data: result }),
-        () => emitToFrontend({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
+        result => emit({ type: 'pr.GH_AUTH_CHECKED', data: result }),
+        () => emit({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
       )
     },
 
-    listOpenPRs: ({ context }) => {
-      withRepo(context,
+    listOpenPRs: ({ context, reply }) => {
+      const emit = answering(reply)
+      withRepo(context, emit,
         repo => ghCli.listOpenPRs(repo.getWorkingDir()),
-        prs => emitToFrontend({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs } }),
-        () => emitToFrontend({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs: [] } })
+        prs => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs } }),
+        () => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs: [] } })
       )
     },
 
-    selectPR: ({ event, context }) => {
+    selectPR: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.SELECT_PR'; number: number }
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
           const details = await ghCli.fetchPRDetailsSettled(cwd, ev.number)
@@ -181,27 +189,29 @@ export const pullRequestSystem = setup({
           return { pr, comments }
         },
         ({ pr, comments }) => {
-          emitToFrontend({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
+          emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
         }
       )
     },
 
-    createPR: ({ event, context }) => {
+    createPR: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-      withRepo(context,
+      withRepo(context, emit,
         repo => repo.getCurrentBranch().then(head =>
           ghCli.createPR(repo.getWorkingDir(), { title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
         ),
-        pr => emitToFrontend({ type: 'pr.PR_CREATED', data: { pr } })
+        pr => emit({ type: 'pr.PR_CREATED', data: { pr } })
       )
     },
 
-    mergePR: ({ event, context }) => {
+    mergePR: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase' }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.mergePR(repo.getWorkingDir(), ev.number, ev.method),
         () => {
-          emitToFrontend({ type: 'pr.PR_MERGED', data: { number: ev.number } })
+          emit({ type: 'pr.PR_MERGED', data: { number: ev.number } })
           context.code?.send({ type: 'commit.GET_ALL_BRANCHES' })
         },
         async err => {
@@ -215,27 +225,29 @@ export const pullRequestSystem = setup({
               const { comments = [], ...pr } = details
               pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
               for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
-              emitToFrontend({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
+              emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
             }
           } catch { /* swallow — we still want to surface the merge error below */ }
-          emitError(err.message)
+          emitError(emit, err.message)
         }
       )
     },
 
-    closePR: ({ event, context }) => {
+    closePR: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.CLOSE_PR'; number: number }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.closePR(repo.getWorkingDir(), ev.number),
-        () => emitToFrontend({ type: 'pr.PR_CLOSED', data: { number: ev.number } })
+        () => emit({ type: 'pr.PR_CLOSED', data: { number: ev.number } })
       )
     },
 
-    toggleDraft: ({ event, context }) => {
+    toggleDraft: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
       // ev.isDraft is the CURRENT state, so true = draft → ready, false = ready → draft.
       const goingReady = ev.isDraft
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
           if (goingReady) {
@@ -258,18 +270,19 @@ export const pullRequestSystem = setup({
           return null
         },
         result => {
-          emitToFrontend({ type: 'pr.PR_DRAFT_TOGGLED', data: { number: ev.number, isDraft: !ev.isDraft } })
-          if (result) emitToFrontend({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
+          emit({ type: 'pr.PR_DRAFT_TOGGLED', data: { number: ev.number, isDraft: !ev.isDraft } })
+          if (result) emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
         }
       )
     },
 
-    checkBranchPR: ({ context }) => {
+    checkBranchPR: ({ context, reply }) => {
+      const emit = answering(reply)
       if (!context.gitRepository) {
-        emitToFrontend({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
+        emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
         return
       }
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
           const branch = await repo.getCurrentBranch()
@@ -279,13 +292,14 @@ export const pullRequestSystem = setup({
           }
           return pr
         },
-        pr => emitToFrontend({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
-        () => emitToFrontend({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
+        pr => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
+        () => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
       )
     },
 
-    getPRAutofill: ({ context }) => {
-      withRepo(context,
+    getPRAutofill: ({ context, reply }) => {
+      const emit = answering(reply)
+      withRepo(context, emit,
         repo => Promise.all([repo.getPRBaseBranch(), repo.getCurrentBranch()])
           .then(([baseBranch, currentBranch]) =>
             repo.getCommitsBetweenBranches(baseBranch).then(commits => ({ currentBranch, commits }))
@@ -300,15 +314,16 @@ export const pullRequestSystem = setup({
             title = humanizeBranchName(currentBranch)
             body = commits.map(c => `- ${c.subject}`).join('\n')
           }
-          emitToFrontend({ type: 'pr.AUTOFILL_RECEIVED', data: { title, body } })
+          emit({ type: 'pr.AUTOFILL_RECEIVED', data: { title, body } })
         },
-        () => emitToFrontend({ type: 'pr.AUTOFILL_RECEIVED', data: { title: '', body: '' } })
+        () => emit({ type: 'pr.AUTOFILL_RECEIVED', data: { title: '', body: '' } })
       )
     },
 
-    updatePR: ({ event, context }) => {
+    updatePR: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
           await ghCli.updatePR(cwd, ev.number, { title: ev.title, body: ev.body, base: ev.base })
@@ -331,48 +346,52 @@ export const pullRequestSystem = setup({
           }
         },
         result => {
-          emitToFrontend({ type: 'pr.PR_UPDATED', data: { number: ev.number, title: ev.title, body: ev.body, base: ev.base } })
-          if (result) emitToFrontend({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
+          emit({ type: 'pr.PR_UPDATED', data: { number: ev.number, title: ev.title, body: ev.body, base: ev.base } })
+          if (result) emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
         }
       )
     },
 
     // --- Comment actions ---
 
-    createComment: ({ event, context }) => {
+    createComment: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_COMMENT'; number: number; body: string }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.createPRComment(repo.getWorkingDir(), ev.number, ev.body),
-        () => emitToFrontend({ type: 'pr.COMMENT_CREATED', data: { number: ev.number } })
+        () => emit({ type: 'pr.COMMENT_CREATED', data: { number: ev.number } })
       )
     },
 
-    editComment: ({ event, context }) => {
+    editComment: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.editPRComment(repo.getWorkingDir(), ev.commentId, ev.body),
-        () => emitToFrontend({ type: 'pr.COMMENT_EDITED', data: { commentId: ev.commentId } })
+        () => emit({ type: 'pr.COMMENT_EDITED', data: { commentId: ev.commentId } })
       )
     },
 
-    deleteComment: ({ event, context }) => {
+    deleteComment: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_COMMENT'; commentId: number }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.deletePRComment(repo.getWorkingDir(), ev.commentId),
-        () => emitToFrontend({ type: 'pr.COMMENT_DELETED', data: { commentId: ev.commentId } })
+        () => emit({ type: 'pr.COMMENT_DELETED', data: { commentId: ev.commentId } })
       )
     },
 
-    getComments: ({ event, context }) => {
+    getComments: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.GET_COMMENTS'; number: number }
-      withRepo(context,
+      withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
           const comments = await ghCli.getPRComments(cwd, ev.number)
           for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
           return comments
         },
-        comments => emitToFrontend({ type: 'pr.COMMENTS_RECEIVED', data: { number: ev.number, comments } }),
+        comments => emit({ type: 'pr.COMMENTS_RECEIVED', data: { number: ev.number, comments } }),
         // Swallow errors — this is the post-mutation refresh. The mutation itself
         // already succeeded; a transient refetch failure shouldn't surface as a red
         // error banner for the user. Next mutation or manual refresh re-populates.
@@ -380,64 +399,72 @@ export const pullRequestSystem = setup({
       )
     },
 
-    getReviewThreads: ({ event, context }) => {
+    getReviewThreads: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.GET_REVIEW_THREADS'; number: number }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.getReviewThreads(repo.getWorkingDir(), ev.number),
-        threads => emitToFrontend({ type: 'pr.REVIEW_THREADS_RECEIVED', data: { threads } })
+        threads => emit({ type: 'pr.REVIEW_THREADS_RECEIVED', data: { threads } })
       )
     },
 
-    replyToThread: ({ event, context }) => {
+    replyToThread: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.REPLY_TO_THREAD'; prNumber: number; commentId: number; body: string }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.replyToReviewThread(repo.getWorkingDir(), ev.prNumber, ev.commentId, ev.body),
-        () => emitToFrontend({ type: 'pr.THREAD_REPLIED', data: { prNumber: ev.prNumber } })
+        () => emit({ type: 'pr.THREAD_REPLIED', data: { prNumber: ev.prNumber } })
       )
     },
 
-    resolveThread: ({ event, context }) => {
+    resolveThread: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.RESOLVE_THREAD'; threadId: string }
-      withRepo(context,
+      withRepo(context, emit,
         _repo => ghCli.resolveReviewThread(_repo.getWorkingDir(), ev.threadId),
-        () => emitToFrontend({ type: 'pr.THREAD_RESOLVED', data: { threadId: ev.threadId } })
+        () => emit({ type: 'pr.THREAD_RESOLVED', data: { threadId: ev.threadId } })
       )
     },
 
-    unresolveThread: ({ event, context }) => {
+    unresolveThread: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.UNRESOLVE_THREAD'; threadId: string }
-      withRepo(context,
+      withRepo(context, emit,
         _repo => ghCli.unresolveReviewThread(_repo.getWorkingDir(), ev.threadId),
-        () => emitToFrontend({ type: 'pr.THREAD_UNRESOLVED', data: { threadId: ev.threadId } })
+        () => emit({ type: 'pr.THREAD_UNRESOLVED', data: { threadId: ev.threadId } })
       )
     },
 
-    editReviewComment: ({ event, context }) => {
+    editReviewComment: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.EDIT_REVIEW_COMMENT'; commentId: number; body: string }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.editReviewComment(repo.getWorkingDir(), ev.commentId, ev.body),
-        () => emitToFrontend({ type: 'pr.REVIEW_COMMENT_EDITED', data: { commentId: ev.commentId } })
+        () => emit({ type: 'pr.REVIEW_COMMENT_EDITED', data: { commentId: ev.commentId } })
       )
     },
 
-    deleteReviewComment: ({ event, context }) => {
+    deleteReviewComment: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
-      withRepo(context,
+      withRepo(context, emit,
         repo => ghCli.deleteReviewComment(repo.getWorkingDir(), ev.commentId),
-        () => emitToFrontend({ type: 'pr.REVIEW_COMMENT_DELETED', data: { commentId: ev.commentId } })
+        () => emit({ type: 'pr.REVIEW_COMMENT_DELETED', data: { commentId: ev.commentId } })
       )
     },
 
-    deleteBranch: ({ event, context }) => {
+    deleteBranch: ({ event, context, reply }) => {
+      const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_BRANCH'; branch: string }
-      withRepo(context,
+      withRepo(context, emit,
         repo => repo.deleteRemoteBranch(ev.branch),
-        () => emitToFrontend({ type: 'pr.BRANCH_DELETED', data: { branch: ev.branch } })
+        () => emit({ type: 'pr.BRANCH_DELETED', data: { branch: ev.branch } })
       )
     },
 
+    // News for every window: the repository changed under them
     handleGitStatusChanged: () => {
-      emitToFrontend({ type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
+      broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
     },
 
     updateBaseDirectory: assign({
@@ -447,13 +474,6 @@ export const pullRequestSystem = setup({
       }
     }),
 
-    selfRefreshPrStatus: ({ self }) => {
-      // Notify frontend to show "Checking..." before backend checks resolve (prevents UI flash on directory switch)
-      emitToFrontend({ type: 'pr.STATUS_CHANGED', data: { timestamp: new Date() } })
-      self.send({ type: 'pr.CHECK_GH_AUTH' })
-      self.send({ type: 'pr.LIST_OPEN_PRS' })
-      self.send({ type: 'pr.CHECK_BRANCH_PR' })
-    }
   })
 }).createMachine({
   id: 'pull-request',
@@ -491,7 +511,7 @@ export const pullRequestSystem = setup({
         'pr.CHECK_GH_AUTH': { actions: 'checkGhAuth' },
         'pr.GET_PR_AUTOFILL': { actions: 'getPRAutofill' },
         'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
-        'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory', 'selfRefreshPrStatus'] }
+        'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory'] }
       }
     }
   }

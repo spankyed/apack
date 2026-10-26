@@ -24,12 +24,15 @@ const spec = defineSystem<Contract>();
 /** What this system's `reply` takes: its contract's outgoing events, which is the bound the compiler now holds it to */
 type Answer = Reply<Contract['outgoing']>;
 
-/** The arguments XState would hand an action, as far as these cases care */
-const args = () => ({ context: { count: 0 }, event: { type: 'ASK' } } as never);
+/** The event a door delivers: the very object the machine then hands its actions */
+const message = { type: 'ASK' };
+
+/** The arguments XState would hand an action handling that event, as far as these cases care */
+const args = () => ({ context: { count: 0 }, event: message } as never);
 
 /** A message that named who sent it, and one that did not */
-const asked = { receiver: 'pack/feature', asker: { kind: 'connection', ref: 'pack/asker', client: 'c-1' } } as const;
-const unasked = { receiver: 'pack/feature' };
+const asked = { receiver: 'pack/feature', asker: { kind: 'connection', ref: 'pack/asker', client: 'c-1' }, event: message } as const;
+const unasked = { receiver: 'pack/feature', event: message };
 
 let sent: Array<{ to?: string; type: string; client?: string }>;
 let stopListening: () => void;
@@ -52,6 +55,21 @@ describe('an action built from the spec', () => {
     _runDelivery(asked, () => table.answer(args(), undefined));
 
     expect(sent).toEqual([{ to: 'pack/asker', type: 'ANSWERED', client: 'c-1' }]);
+  });
+
+  /**
+   * An event the machine made while handling the message is not the message: a system telling its children something
+   * of its own, inside the delivery of another system's ask, would otherwise answer that asker about it.
+   */
+  it('is handed nothing for an event its machine made while handling the message', () => {
+    let had: Answer | undefined = (() => {}) as Answer;
+    const table = spec.actions({
+      answer: ({ reply }) => { had = reply; },
+    });
+
+    _runDelivery(asked, () => table.answer({ context: { count: 0 }, event: { type: 'TELL', note: 'of its own' } } as never, undefined));
+
+    expect(had).toBeUndefined();
   });
 
   /**
