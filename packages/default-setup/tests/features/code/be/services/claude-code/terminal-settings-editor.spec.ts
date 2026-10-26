@@ -4,14 +4,14 @@ import { claudeTerminalSettingsEditorRuntime } from '#features/code/be/services/
 
 function fixture(){
   const noCommitted=Symbol('NO_COMMITTED_ROW'),Se=function OriginalUpdateModal(){},Xe=function OriginalUpdatePicker(){}
-  const qh={Field:()=>{},Button:()=>{},Link:()=>{}},Config=()=>{},onClose=()=>{},open=vi.fn()
+  const qh={Field:()=>{},Button:()=>{},Link:()=>{},Toggle:()=>{}},Config=()=>{},onClose=()=>{},open=vi.fn()
   const field={type:qh.Field,key:'model',props:{label:'Model',children:{type:qh.Button,props:{onPress:open}}}}
   const config:any={type:Config,memoizedProps:{onClose,setTabsHidden:()=>{},children:[field]}}
   const selectTab=vi.fn(async(_n:unknown,_entry:unknown,tab:string,signal?:AbortSignal)=>{signal?.throwIfAborted();frame.panel.selectedTab=tab}),owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value)),palette=vi.fn(()=>({text:'#eeeeee',inverseText:'#111111'}))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
   const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection').replaceAll("await import('/$bunfs/root/chunk-35cyt9ex.js')",'originalModal')+';({refreshNativeSettingsUpdateCallbacks,nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{selectNativeSettingsTab:selectTab,originalSelection:{Fi:noCommitted,Xe},originalModal:{Se},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
-  return {selectTab,refresh:(value:string,signal?:AbortSignal)=>run.refreshNativeSettingsUpdateCallbacks({},entry,[{row:{key:'autoUpdatesChannel',value}}],signal),Se,Xe,noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  return {activateKey:(key:string)=>run.activateNativeSettingsEditor({},entry,key,new Set([key])),selectTab,refresh:(value:string,signal?:AbortSignal)=>run.refreshNativeSettingsUpdateCallbacks({},entry,[{row:{key:'autoUpdatesChannel',value}}],signal),Se,Xe,noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -313,4 +313,26 @@ it('bounds callback refresh and cleans its lease after cancellation or native fa
  f.selectTab.mockRejectedValueOnce(Error('Native panel replaced'))
  await expect(f.refresh('disabled')).rejects.toThrow('replaced');expect((f.entry as any).settingsConfigRefresh).toBeUndefined()
  ;(f.entry as any).settingsConfigRefresh=true;await expect(f.refresh('disabled')).rejects.toThrow('already pending')
+})
+
+
+it('opens cloud forwarding only through its original false Toggle and preserves native refusal notices',async()=>{
+ const f=fixture(),change=vi.fn();f.field.key='remoteHomeSettings'
+ f.field.props={label:'Use this machine settings',description:'Original grant blocker',children:{type:f.qh.Toggle,props:{value:false,onChange:change}}} as any
+ const before=await f.read();expect(before.notices.get('remoteHomeSettings')).toBe('Original grant blocker');expect(change).not.toHaveBeenCalled()
+ const source=f.field.props.children.props as any;expect(before.openers.get('remoteHomeSettings').callback).toBe(change)
+ expect(before.openers.get('remoteHomeSettings').toggle).toBe(true);await f.activateKey('remoteHomeSettings');expect(change).toHaveBeenCalledExactlyOnceWith(true)
+ source.value=true;expect((await f.read()).openers.has('remoteHomeSettings')).toBe(false)
+ source.value=false;source.disabled=true;expect((await f.read()).openers.has('remoteHomeSettings')).toBe(false)
+ expect(change).toHaveBeenCalledOnce()
+})
+it('waits for the original cloud decision completion before reporting its native result',async()=>{
+ const f=fixture();(f.entry as any).settingsEditorKey='remoteHomeSettings';f.frame.panel.hidden=true
+ let finish!:()=>void;const change=vi.fn(()=>{finish=()=>{f.frame.panel.hidden=false}}),cancel=vi.fn(()=>{f.frame.panel.hidden=false})
+ const Cloud=function OriginalCloudConsent(){};f.setFunctionHash(Cloud,'98c08a861f9d6cecbda8fd2efee1bf136038c5e7fbab447e2ecd843cb6d90794')
+ f.config.child={type:Cloud,memoizedProps:{origin:'config_panel',onDone:()=>{}},child:{type:f.Se,memoizedProps:{title:"Use this machine's settings in cloud sessions?",onCancel:cancel,children:{type:f.Xe,props:{options:[{value:'forward',label:'Yes'},{value:'not_now',label:'Not now'}],defaultFocusValue:'not_now',onChange:change}}}}}
+ const before=await f.editor(),action=f.act({action:'select',revision:before.revision,value:'forward'})
+ await vi.waitFor(()=>expect(change).toHaveBeenCalledExactlyOnceWith('forward'))
+ let complete=false;void action.then(()=>{complete=true});await new Promise(resolve=>setTimeout(resolve,10));expect(complete).toBe(false)
+ finish();await action;expect(complete).toBe(true);expect(cancel).not.toHaveBeenCalled()
 })

@@ -100,7 +100,7 @@ async function nativeSettingsEditorOpeners(n,entry){
  const {qh}=await import('/$bunfs/root/chunk-07y7va8x.js');
  const {frame,owner}=nativeSettingsConfig(n,entry);if(frame.panel.hidden)throw Error('Native Config editor is unavailable');
  const owners=[owner];
- const nodes=[owners[0]],fibers=new Set(),elements=new Set(),openers=new Map();
+ const nodes=[owners[0]],fibers=new Set(),elements=new Set(),openers=new Map(),notices=new Map();
  while(nodes.length){
   const item=nodes.pop();if(!item||typeof item!=='object')continue;
   if(fibers.size+elements.size>=8192)throw Error('Native Config elements exceeded bound');
@@ -111,6 +111,11 @@ async function nativeSettingsEditorOpeners(n,entry){
   if(elements.has(item))continue;elements.add(item);
   if(item.type===qh.Field&&typeof item.key==='string'){
    const control=item.props?.children;
+   if(item.key==='remoteHomeSettings'&&typeof item.props?.description==='string'){if(item.props.description.length>16384)throw Error('Native cloud settings notice exceeded bound');notices.set(item.key,item.props.description);}
+   if(item.key==='remoteHomeSettings'&&control?.type===qh.Toggle&&control.props?.value===false&&!control.props.disabled&&typeof control.props.onChange==='function'){
+    if(openers.has(item.key))throw Error('Native Config editor is ambiguous');
+    openers.set(item.key,{callback:control.props.onChange,label:item.props?.label,toggle:true});
+   }
    if(control&&!control.props?.disabled&&(control.type===qh.Button||control.type===qh.Link)){
     const callback=control.type===qh.Button?control.props?.onPress:control.props?.onOpen;
     if(typeof callback==='function'){
@@ -123,7 +128,7 @@ async function nativeSettingsEditorOpeners(n,entry){
  }
  entry.current();const current=nativeSettingsFrame(n,entry);
  if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,frame.owner)||current.panel!==frame.panel)throw Error('Native Config owner changed');
- return {owner:owners[0],openers};
+ return {owner:owners[0],openers,notices};
 }
 async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  signal?.throwIfAborted();
@@ -134,10 +139,10 @@ async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  signal?.throwIfAborted();entry.current();
  if(entry.closed||entry.answered||!sameNativeSettingsFiber(current.owner,before.owner)||current.openers.get(key)?.callback!==candidate.callback)throw Error('Native Config editor changed before opening');
  // The original row callback owns locks, consent and editor selection. Never call a row writer here.
- return await awaitNativeSettingsReading(candidate.callback(),signal);
+ return await awaitNativeSettingsReading(candidate.toggle?candidate.callback(true):candidate.callback(),signal);
 }
 async function readNativeSettingsEditor(n,entry,signal){
- if(entry.settingsEditorKey==='autoUpdatesChannel')return readNativeSettingsUpdate(n,entry,signal);
+ if(['autoUpdatesChannel','remoteHomeSettings'].includes(entry.settingsEditorKey))return readNativeSettingsUpdate(n,entry,signal);
  if(['agentsView','notifChannel'].includes(entry.settingsEditorKey))return readNativeSettingsGroup(n,entry,signal);
  signal?.throwIfAborted();const {frame,owner}=nativeSettingsConfig(n,entry);
  if(!frame.panel.hidden)return;
@@ -240,9 +245,18 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  }else throw Error('Native Settings editor action is unavailable');
  const current=await readNativeSettingsEditor(n,entry,signal);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.updateChoice!==before.updateChoice||before.typedConsent&&(current.typedConsent?.cache!==before.typedConsent.cache||current.typedConsent?.root!==before.typedConsent.root||current.typedConsent?.submit!==before.typedConsent.submit||current.typedConsent?.keyDown!==before.typedConsent.keyDown)||entry.settingsEditorKey==='autoUpdatesChannel'&&(current.actions.onChange!==before.actions.onChange||current.actions.onCancel!==before.actions.onCancel)||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
+ if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.updateChoice!==before.updateChoice||before.typedConsent&&(current.typedConsent?.cache!==before.typedConsent.cache||current.typedConsent?.root!==before.typedConsent.root||current.typedConsent?.submit!==before.typedConsent.submit||current.typedConsent?.keyDown!==before.typedConsent.keyDown)||['autoUpdatesChannel','remoteHomeSettings'].includes(entry.settingsEditorKey)&&(current.actions.onChange!==before.actions.onChange||current.actions.onCancel!==before.actions.onCancel)||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
  if(validationProblem!==undefined)return {problem:validationProblem};
  await awaitNativeSettingsReading(callback(...args),signal);
+ if(entry.settingsEditorKey==='remoteHomeSettings'){
+  // The native guarded handler returns before its async persistence result calls onDone.
+  const until=Date.now()+5000;
+  while(nativeSettingsFrame(n,entry).panel.hidden){
+   signal?.throwIfAborted();entry.current();if(entry.closed||entry.answered)throw Error('Native cloud settings owner expired');
+   if(Date.now()>=until)throw Error('Claude Code has not completed the cloud settings decision. Refresh to check its result.');
+   await new Promise(resolve=>setTimeout(resolve,40));
+  }
+ }
  return {};
 }
 async function saveNativeSettingsEditor(n,entry,revision,values,signal){

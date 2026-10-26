@@ -36,7 +36,7 @@ async function readNativeSettings(n,entry,signal){
  if(frame.selectedTab==='Config'){
   for(const row of nativeSettingsMountedConsentRows(n,entry)){if(!rows.some(existing=>existing.key===row.key))rows.push(row);}
   if(frame.hidden){const native=await waitForNativeSettingsEditor(n,entry,signal);if(native)editor={...native.snapshot,revision:native.revision};}
-  else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||row.key==='language'||row.key==='theme'||row.key==='model'||row.key==='agentsView'||row.key==='notifChannel'||row.key==='showExternalIncludesDialog'||row.key==='autoUpdatesChannel'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;}}
+  else {delete entry.settingsEditorLabel;const controls=await nativeSettingsEditorOpeners(n,entry);for(const row of rows){const provider=handles.find(handle=>handle.row.key===row.key)?.row.provider;const supported=row.key==='outputStyle'||row.key==='language'||row.key==='theme'||row.key==='model'||row.key==='agentsView'||row.key==='notifChannel'||row.key==='showExternalIncludesDialog'||row.key==='autoUpdatesChannel'||row.key==='remoteHomeSettings'||typeof provider?.plugin==='string'&&provider.plugin!=='engine';if(supported&&controls.openers.has(row.key)&&!row.isLocked)row.editorAvailable=true;if(row.key==='remoteHomeSettings'&&controls.notices?.has(row.key))row.description=controls.notices.get(row.key);}}
  }
 
  let problem,savedKey;
@@ -119,7 +119,7 @@ async function nativeSettings(n,request,abort){
     const sameChoice=command.action==='select'&&read.snapshot.editor?.kind==='choice'&&Object.is(read.snapshot.editor.value,selected);
     // This only identifies a no-op draft; the original submit callback owns normalization and writes.
     const sameLanguage=language&&typeof selected==='string'&&read.snapshot.editor?.kind==='form'&&selected.trim()===(read.snapshot.editor.fields.find(field=>field.key==='language')?.value??'').trim();
-    if(row&&!read.snapshot.editor?.consent&&selected!==undefined&&!sameChoice&&!sameLanguage&&!Object.is(row.value,proposed))entry.settingsCommit={key:row.key,before:row.value,until:Date.now()+5000};
+    if(row&&entry.settingsEditorKey!=='remoteHomeSettings'&&!read.snapshot.editor?.consent&&selected!==undefined&&!sameChoice&&!sameLanguage&&!Object.is(row.value,proposed))entry.settingsCommit={key:row.key,before:row.value,until:Date.now()+5000};
    }
    controller.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,40));nativeSettingsPanel(request);
    return {snapshot:(await readNativeSettings(n,entry,controller.signal)).snapshot};

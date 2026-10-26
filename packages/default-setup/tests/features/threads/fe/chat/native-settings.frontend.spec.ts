@@ -191,3 +191,15 @@ it('focuses the original typed consent answer, preserves exact input and shows n
   state.state.status='pending';await nextTick();const cancel=[...root.querySelectorAll('button')].find(button=>button.textContent==='Original No')!;expect(cancel.disabled).toBe(false);cancel.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
  }finally{app.unmount();root.remove()}
 })
+
+
+it('reviews cloud forwarding consent instead of writing true from a checkbox',async()=>{
+ const root=document.createElement('div');document.body.append(root);const operations:ClaudeSettingsOperation[]=[]
+ const app=createApp(NativeSettingsPanel,{state:{requestId:'cloud',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[{key:'remoteHomeSettings',label:"Use this machine settings in cloud sessions",kind:'boolean',value:false,isLocked:false,editorAvailable:true,description:'Original refusal notice'}]}},onOperate:(event:ClaudeSettingsOperation)=>operations.push(event)})
+ app.mount(root)
+ try{
+  await nextTick();expect(root.textContent).toContain('Not forwarding');expect(root.textContent).toContain('Original refusal notice');expect(root.querySelector('input[type="checkbox"]')).toBeNull()
+  const review=[...root.querySelectorAll('button')].find(button=>button.textContent==='Review cloud settings…')!;review.click();await nextTick()
+  expect(operations.at(-1)).toEqual({kind:'open',revision:'a'.repeat(64),key:'remoteHomeSettings'});expect(operations.some(event=>event.kind==='write')).toBe(false)
+ }finally{app.unmount();root.remove()}
+})

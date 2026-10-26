@@ -23,7 +23,8 @@
         </label>
         <span v-if="row.key === 'autoUpdatesChannel'" class="text-xs text-neutral-400">{{ row.value }}</span>
         <span v-if="row.key === 'showExternalIncludesDialog'" class="text-xs text-neutral-400">{{ row.value === 'true' ? 'Allowed' : 'Not allowed' }}</span>
-        <button v-if="row.editorAvailable" type="button" :disabled="pending || row.isLocked" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @click="openEditor(row.key)">{{ row.key === 'showExternalIncludesDialog' ? row.value === 'true' ? 'Disable external imports' : 'Review external imports…' : 'Change…' }}</button>
+        <span v-if="row.key === 'remoteHomeSettings' && row.editorAvailable" class="text-xs text-neutral-400">Not forwarding</span>
+        <button v-if="row.editorAvailable" type="button" :disabled="pending || row.isLocked" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @click="openEditor(row.key)">{{ row.key === 'remoteHomeSettings' ? 'Review cloud settings…' : row.key === 'showExternalIncludesDialog' ? row.value === 'true' ? 'Disable external imports' : 'Review external imports…' : 'Change…' }}</button>
         <input v-else-if="row.kind === 'boolean'" :id="controlId(row.key)" type="checkbox" :checked="row.value === true" :disabled="pending || row.isLocked" class="size-4 shrink-0 accent-blue-500 disabled:opacity-40" @change="changeBoolean(row.key, row.value, $event)" />
         <select v-else-if="row.kind === 'choice' && row.options?.length" :id="controlId(row.key)" :value="row.value" :disabled="pending || row.isLocked" class="max-w-full rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @change="changeChoice(row.key, row.value, $event)">
           <option v-if="row.value === null" value="" disabled>Select a value</option>
