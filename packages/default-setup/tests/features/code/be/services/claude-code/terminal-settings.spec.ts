@@ -14,10 +14,11 @@ function fixture() {
   const api = { configRowHandles: vi.fn(handles) }
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
+  const selectTab=vi.fn(async(_n:unknown,_entry:unknown,tab:string)=>{frame={...frame,selectedTab:tab}})
   const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()').replaceAll('await nativeSettingsEditorOpeners(n,entry)','settingsEditors()')
-  const run = vm.runInNewContext(source + ';nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;activateNativeSettingsEditor=editorOpening;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { editorOpening,editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({openers}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
+  const run = vm.runInNewContext(source + ';selectNativeSettingsTab=selectTab;nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;activateNativeSettingsEditor=editorOpening;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { selectTab,editorOpening,editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({openers}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
-  return { editorOpening,setOpeners:(next:Map<string,unknown>)=>{openers=next},setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
+  return { selectTab,editorOpening,setOpeners:(next:Map<string,unknown>)=>{openers=next},setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }
 it('uses original description visibility and config.set coordinator instead of writing directly', async () => {
   const f = fixture(), before = await f.read()
@@ -174,4 +175,16 @@ it('does not hold update picker admission as a pending channel write',async()=>{
  f.editorOpening.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Config'],hidden:true});f.setNativeEditor({revision:'a'.repeat(64),snapshot:{kind:'choice',title:'Switch to Stable Channel',options:[],disabled:false}})})
  const result=await f.run(f.n,{...f.request,operation:'open',revision:before.snapshot.revision,key:'autoUpdatesChannel'},new AbortController())
  expect(result.snapshot.commitPending).toBeUndefined();expect(result.snapshot.editor.title).toBe('Switch to Stable Channel');expect(f.editorOpening).toHaveBeenCalledOnce()
+})
+
+
+it('allows same-panel navigation after a background row update while retaining stale write and owner fences',async()=>{
+ const f=fixture(),before=await f.read();f.setValue(true)
+ await expect(f.run(f.n,{...f.request,operation:'write',revision:before.snapshot.revision,key:'tips',value:false},new AbortController())).rejects.toThrow('changed')
+ expect(f.writer).not.toHaveBeenCalled()
+ const next=await f.run(f.n,{...f.request,operation:'tab',revision:before.snapshot.revision,tab:'Status'},new AbortController())
+ expect(next.snapshot.frame.selectedTab).toBe('Status');expect(f.selectTab).toHaveBeenCalledOnce()
+ f.entry.closed=true
+ await expect(f.run(f.n,{...f.request,operation:'tab',revision:before.snapshot.revision,tab:'Config'},new AbortController())).rejects.toThrow('expired')
+ expect(f.selectTab).toHaveBeenCalledOnce()
 })

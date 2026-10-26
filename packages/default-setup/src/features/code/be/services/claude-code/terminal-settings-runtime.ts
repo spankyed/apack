@@ -134,7 +134,7 @@ async function nativeSettings(n,request,abort){
   return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
  }
  if(request.operation==='tab'){
-  if(request.revision!==read.snapshot.revision)throw Error('Native Settings changed; refresh before switching tabs');
+  // Navigation carries no row value. The live panel/hidden-tab fences own it, even after background updates.
   await selectNativeSettingsTab(n,entry,request.tab,abort.signal);nativeSettingsPanel(request);
   return {snapshot:(await readNativeSettings(n,entry,abort.signal)).snapshot};
  }
