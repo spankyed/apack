@@ -124,10 +124,23 @@ test('completes an everyday native review across Agent, approval, question and i
         return rectangles.every(rect => rect.inside)
       }, { timeout: 1500, intervals: [100, 250] }).toBe(true)
       if (reading) await checkpoint.poll(() => reading.evaluate(element => element.clientHeight), { timeout: 1500, intervals: [100, 250] }).toBeGreaterThanOrEqual(stage === 'approval' ? 48 : 80)
-      if(combinedAcceptance&&['composer','recovered'].includes(stage))await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
+      let sendPaint: unknown
+      if(combinedAcceptance&&['composer','recovered'].includes(stage)) {
+        const send = card.getByRole('button',{name:'Send',exact:true})
+        await expect(send).toBeEnabled()
+        // Enabled state precedes the shared button's colour transition; capture its settled paint.
+        sendPaint = await send.evaluate(async element => {
+          const before = getComputedStyle(element).backgroundColor
+          const animations = element.getAnimations()
+          await Promise.all(animations.map(animation => animation.finished.catch(() => undefined)))
+          return { before, transitions: animations.length, backgroundColor: getComputedStyle(element).backgroundColor, disabled: (element as HTMLButtonElement).disabled, activeAnimations: element.getAnimations().filter(animation => animation.playState === 'running').length }
+        })
+        expect(sendPaint).toMatchObject({disabled:false,activeAnimations:0})
+        expect((sendPaint as {backgroundColor:string}).backgroundColor).toMatch(/^rgb\((37, 99, 235|29, 78, 216)\)$/)
+      }
       const file = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '.png'
       await capturePage(file,width,height); screenshots.push(file)
-      geometry.push({ stage, width, height, sessionId:(await context()).sessionId, nativePid:(await context()).native?.state?.nativePid, sendDisabled:['composer','recovered'].includes(stage)?await card.getByRole('button',{name:'Send',exact:true}).isDisabled():null, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
+      geometry.push({ stage, width, height, sendPaint, sessionId:(await context()).sessionId, nativePid:(await context()).native?.state?.nativePid, sendDisabled:['composer','recovered'].includes(stage)?await card.getByRole('button',{name:'Send',exact:true}).isDisabled():null, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ geometry, screenshots }))
     }
   }
