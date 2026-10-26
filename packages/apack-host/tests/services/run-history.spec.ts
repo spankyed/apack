@@ -142,6 +142,27 @@ describe('the app\'s run history', () => {
     expect(createRunHistory(onDisk(dir).engine).get(left)?.status).toBe('stopped');
   });
 
+  it('orders and pages by id when ids were not made in that order, as after the clock was set back', () => {
+    const runs = onDisk();
+    // Inserted newest id first, so the order the store holds them in is not the order of their ids
+    const ids = ['RunNode-c', 'RunNode-b', 'RunNode-a'] as RunNodeId[];
+    const parent = recorded(runs, { kind: 'flow', startedAt: Date.now() });
+    for (const id of ids) {
+      runs.engine.create('RunNode', {
+        id: id as unknown as EARS.EntityId, kind: 'flow', label: 'flow', status: 'completed', startedAt: Date.now(), rootId: parent, parentId: parent,
+      });
+    }
+    const history = createRunHistory(runs.engine);
+    const pages = (find: (cursor?: RunNodeId) => RunNode[]) => {
+      const seen: RunNodeId[] = [];
+      for (let page = find(); page.length > 0; page = find(seen.at(-1))) seen.push(...page.map((each) => each.id));
+      return seen;
+    };
+    expect(pages((cursor) => history.findChildren(parent, { limit: 1, cursor }))).toEqual(['RunNode-a', 'RunNode-b', 'RunNode-c']);
+    // The parent's id, `RunNode-old…`, sorts after the others
+    expect(pages((cursor) => history.findRuns({ limit: 1, cursor }))).toEqual([parent, 'RunNode-c', 'RunNode-b', 'RunNode-a']);
+  });
+
   it('removes a session that ended past the retention period, with everything it ran', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
     const runs = openRunHistory(dir);

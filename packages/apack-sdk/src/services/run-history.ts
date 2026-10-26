@@ -166,9 +166,13 @@ function idClock(): () => RunNodeId {
   };
 }
 
-/** The ids after `cursor` in their order (before it, read newest first), up to `limit` */
+/**
+ * The ids after `cursor` in id order (before it, read newest first), up to `limit`. Sorted here, since the order an
+ * index answers in is the order ids were made in, which a clock set back between two runs of the app makes another
+ */
 function paged(ids: readonly RunNodeId[], { reverse = false, limit, cursor }: RunPage): RunNodeId[] {
-  const ordered = reverse ? [...ids].reverse() : ids;
+  const sorted = [...ids].sort();
+  const ordered = reverse ? sorted.reverse() : sorted;
   const after = cursor === undefined ? ordered : ordered.filter((id) => (reverse ? id < cursor : id > cursor));
   return limit === undefined ? [...after] : after.slice(0, limit);
 }
