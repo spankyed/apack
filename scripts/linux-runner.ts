@@ -35,8 +35,23 @@ if (RUST_TOOLCHAIN === undefined) {
 }
 /** Keyed by the Dockerfile's bytes and the toolchain it installs, so either changing builds a new image */
 const IMAGE = `apack-linux-test:${short(`${fs.readFileSync(DOCKERFILE, 'utf8')}\n${RUST_TOOLCHAIN}`)}`;
-/** The container's copy of the elmdb checkout and its builds, kept across runs as the work volume is */
+/**
+ * The container's copy of the elmdb checkout and its builds, kept across runs as the work volume is. Keyed by the
+ * elmdb checkout, so every worktree linking that checkout shares it — and one Rust release build serves them all,
+ * which is why it is not per worktree. `ELMDB_LOCK` is what makes sharing it safe
+ */
 const ELMDB_VOLUME = `apack-linux-elmdb-${short(ELMDB_CHECKOUT)}`;
+/**
+ * The elmdb volume's lock, at its root: the sync's copy, install and build take it, waiting for one another's, since
+ * the run lock below covers only a checkout's own work volume and every checkout's runs share this one
+ */
+const ELMDB_LOCK = '.apack-elmdb.lock';
+/**
+ * Written at the elmdb volume's root once a build of what the volume holds finished, and removed before one starts:
+ * a copy that changed nothing, onto a finished build, builds nothing, so a sync never rewrites the binding a run in
+ * another checkout has loaded unless elmdb's source moved
+ */
+const ELMDB_BUILT = '.apack-elmdb-built';
 /** Cargo's downloaded crates, shared by every checkout's builds */
 const CARGO_REGISTRY_VOLUME = 'apack-linux-cargo-registry';
 /** One working copy per checkout, so two worktrees never share a container `node_modules` */
@@ -192,14 +207,25 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
 const sync = [
   // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
   `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb ${FILTERS.map(quote).join(' ')} /src/ /work/`,
-  "rsync -a --delete --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/",
+  `exec 8>/elmdb/${ELMDB_LOCK}`,
+  'if ! flock -n 8; then',
+  '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
+  '  flock 8',
+  'fi',
+  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
   'ln -sfn /elmdb /work/vendor/elmdb',
   'elmdbLock=$(sha256sum /elmdb/package-lock.json | cut -d" " -f1)',
   'if [ "$(cat /elmdb/node_modules/.apack-installed-lock 2>/dev/null)" != "$elmdbLock" ]; then',
   '  (cd /elmdb && npm ci --no-audit --no-fund)',
   '  echo "$elmdbLock" > /elmdb/node_modules/.apack-installed-lock',
+  '  elmdbChanged=installed',
   'fi',
-  '(cd /elmdb && npm run -s build >/dev/null)',
+  `if [ -n "$elmdbChanged" ] || [ ! -f /elmdb/${ELMDB_BUILT} ]; then`,
+  `  rm -f /elmdb/${ELMDB_BUILT}`,
+  '  (cd /elmdb && npm run -s build >/dev/null)',
+  `  touch /elmdb/${ELMDB_BUILT}`,
+  'fi',
+  'exec 8>&-',
   // Whose volume this is, for the prune that cannot otherwise tell: see CHECKOUT_FILE
   `printf '%s' ${quote(REPO_ROOT)} > /work/${CHECKOUT_FILE}`,
   // What the rsync exemption would otherwise keep for ever: see CONTAINER_CACHES
