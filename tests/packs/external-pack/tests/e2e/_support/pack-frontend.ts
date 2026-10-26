@@ -16,3 +16,14 @@ export async function frontendAccepted(page: Page, packId: string, previous: str
     return current !== undefined && current !== previous;
   }, { timeout: 30_000, message: `${packId} frontend accepted after reactivation` }).toBe(true);
 }
+
+/**
+ * Waits until the window has unloaded the pack's frontend. Disabling a pack tears it down in the API and then tells
+ * each window, which unloads its frontend and with it what that frontend bound (its steps' implementations among them)
+ * — after the toggle answers, by however long the teardown takes on this machine.
+ */
+export async function frontendUnloaded(page: Page, packId: string): Promise<void> {
+  await expect.poll(async () => await acceptedRuntime(page, packId), {
+    timeout: 30_000, message: `${packId} frontend unloaded after disabling`,
+  }).toBeUndefined();
+}
