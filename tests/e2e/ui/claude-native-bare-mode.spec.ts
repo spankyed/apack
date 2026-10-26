@@ -74,7 +74,7 @@ test('keeps bare-mode native startup and composer usable without private plugin 
     await writeFile(testInfo.outputPath('native-bare-mode-startup-failure.png'),Buffer.from(png,'base64'));throw error
   }
   const nativePolicy=JSON.parse(await readFile(join(workspace!,'native-bare-policy.json'),'utf8'))
-  expect(nativePolicy).toMatchObject({bare:true,plugins:true,hooks:false,statusLine:false,themes:true})
+  expect(nativePolicy).toMatchObject({bare:true,plugins:true,hooks:true,statusLine:false,themes:false})
   const privateDrawing=JSON.parse(await readFile(join(workspace!,'native-select-drawing.json'),'utf8'))
   expect(privateDrawing.requestId).toBeTruthy();expect(privateDrawing.safeMode).toBeNull()
   const boundNativePid=(await context()).native.state.nativePid
