@@ -10,6 +10,15 @@ Regenerate from the research checkout after committing its tools:
 python3 tools/export-ci-replay.py /absolute/path/to/apack/tests/fixtures/claude-research
 ```
 
+The current runner includes Settings freshness observation and cloud-consent saved verification.
+Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
+feature gates unchanged. Its profile requires the owned offline-container receipt at
+`/control/offline-verified` and the pinned executable mounted read-only at `/frozen-claude/claude`;
+setting `CLAUDE_RESEARCH_SETTINGS_REMOTE_HOME=1` without that boundary fails closed. The accepted
+scope covers withdrawal, complete disclosure/choices, Not now/header cancellation, keep-local,
+native eligibility refusal and recovery. Successful forwarding and actual cloud sending remain
+unverified. These milestones use local Linux execution; no CI is dispatched.
+
 The exporter uses committed Git blobs, normalized archive metadata and per-file SHA-256 hashes.
 The replay launcher verifies the archive and every file, downloads the explicitly pinned official
 native package and checks both package and binary hashes before execution. Local native execution
