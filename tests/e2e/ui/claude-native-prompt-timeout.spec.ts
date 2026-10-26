@@ -78,6 +78,7 @@ test('retires an expired reverse read without letting its late reply satisfy a f
   }
   async function draft(value:typeof old){
     if(brokerFailure){
+      await expect(composer).toBeVisible();await composer.click();await expect(composer).toBeFocused()
       await observeDraft('before select all');await composer.press('ControlOrMeta+a');await observeDraft('after select all')
       await appPage.keyboard.insertText(value.text);await observeDraft('after typing')
       await expect(composer).toHaveText(value.text)
