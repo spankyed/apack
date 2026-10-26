@@ -227,6 +227,7 @@ test('edits original Settings through desktop controls and retains composing', a
     const disableByLiveConfig=async()=>{
       const before=await global();await writeFile(globalPath+'.research-temp',JSON.stringify({...before,autoUpdates:false}));await rename(globalPath+'.research-temp',globalPath)
       await expect.poll(async()=>{await panel.getByRole('button',{name:'Refresh',exact:true}).click();return row.innerText()},{timeout:15000}).toMatch(/disabled/i)
+      await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0);await open();await search.fill('');await expect(row).toContainText(/disabled/i)
     }
     await disableByLiveConfig();const beforeEnable=await user()
     for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await openUpdate('Enable Auto-Updates');await expect(editor.locator('[data-native-settings-option="latest"]')).toHaveText('Enable with latest channel');await expect(editor.locator('[data-native-settings-option="stable"]')).toHaveText('Enable with stable channel');await capture('enable',width,height);await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect((await global()).autoUpdates).toBe(false);expect(await user()).toEqual(beforeEnable)}
