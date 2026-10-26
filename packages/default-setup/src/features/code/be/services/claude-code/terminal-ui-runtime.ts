@@ -746,7 +746,9 @@ async function control(request,abort){
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
-  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
+  const limits=await import('/$bunfs/root/chunk-2bb0j573.js');
+  const billing=limits.xme()?{info:limits.ha(),observedAt:limits.HFs()}:null;
+  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,transcriptPath:n.runtime.Cf(sessionId),activity,workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:effective.disableAllHooks===true};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   const helpers=(policy.allowManagedHooksOnly||effective.disableAllHooks&&!policy.disableAllHooks)?policy:effective;
   const command=value=>value?.type==='command'&&typeof value.command==='string'?value.command:null;
@@ -1240,13 +1242,15 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false,reportedView,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0;
+let ownerReading=false,ownerIndependent=false,reportedView,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,reportedBilling,billingSequence=0;
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
   const gate=await control({subtype:'apack_owner_snapshot',policy_only:true,follow_native_session:true},new AbortController());
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   if(viewKey!==reportedView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;}
+  const billingKey=JSON.stringify([gate.sessionId,gate.billing]);
+  if(gate.billing&&billingKey!==reportedBilling&&await ownerPost('/native-billing',{sessionId:gate.sessionId,pid:process.pid,sequence:++billingSequence,...gate.billing}))reportedBilling=billingKey;
   const previewKey=JSON.stringify([gate.sessionId,gate.sequence,gate.preview]);
   if(previewKey!==reportedPreview&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
   const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);

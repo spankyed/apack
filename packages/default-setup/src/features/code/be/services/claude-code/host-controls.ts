@@ -1,3 +1,4 @@
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { ClaudeProtocolError } from './errors.ts'
@@ -71,10 +72,11 @@ interface PendingControl {
   resolve(value: unknown): void
   reject(error: Error): void
   timer: ReturnType<typeof setTimeout>
+  trace: ReturnType<typeof createClaudeLifecycleTrace>
 }
 
 /** Host-to-CLI requests are independent of CLI-to-host tool permission requests. */
-export function createHostControls(write: (value: unknown) => boolean) {
+export function createHostControls(write: (value: unknown) => boolean, pid?: number) {
   const pending = new Map<string, PendingControl>()
   let closed: Error | undefined
 
@@ -82,6 +84,8 @@ export function createHostControls(write: (value: unknown) => boolean) {
     const waiter = pending.get(id)
     if (!waiter) return
     pending.delete(id)
+    waiter.trace('control_end', {outcome:'error' in response ? 'error' : 'ok'})
+    waiter.trace('exit', {outcome:'error' in response ? 'error' : 'ok'})
     clearTimeout(waiter.timer)
     if ('error' in response) waiter.reject(response.error)
     else waiter.resolve(response.value)
@@ -95,12 +99,12 @@ export function createHostControls(write: (value: unknown) => boolean) {
       }
       if (pending.size >= 128) return Promise.reject(new ClaudeProtocolError('too many pending control requests'))
       const id = randomUUID()
+      const trace = createClaudeLifecycleTrace('control', undefined, pid)
+      trace('control_start')
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => finish(id, {
-          error: new ClaudeProtocolError(`control request ${request.subtype} timed out after ${timeoutMs}ms`),
-        }), timeoutMs)
+        const timer = setTimeout(() => { trace('control_end', {outcome:'timeout'}); trace('exit', {outcome:'timeout'}); finish(id, {error:new ClaudeProtocolError(`control request ${request.subtype} timed out after ${timeoutMs}ms`)}) }, timeoutMs)
         timer.unref()
-        pending.set(id, { resolve, reject, timer })
+        pending.set(id, { resolve, reject, timer, trace })
         try {
           if (!write({ type: 'control_request', request_id: id, request })) {
             finish(id, { error: new ClaudeProtocolError(`could not send control request ${request.subtype}`) })

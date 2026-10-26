@@ -3,6 +3,7 @@ import {ClaudeNativeLaunchSchema,snapshotClaudeNativeLaunch} from './native-laun
 import type { ClaudePreparedNativeTerminal, ClaudeNativeTerminalOwner, ClaudeNativeTerminalOptions } from './terminal-owner.ts'
 import type { QueryHandle } from './query.ts'
 import { createClaudeConversation, type ClaudeConversation, type ClaudeTurnConsumer } from './conversation.ts'
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { registerThreadTeardown } from '#features/threads/be/thread-teardown.ts'
 
@@ -137,6 +138,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
   if (signal?.aborted) throw new Error('Native terminal startup was cancelled')
   const previous = conversations.get(key), retained = terminalResumes.get(key), resume = saved ? ClaudeNativeLaunchSchema.parse(saved) : retained
   if ((!previous && (!resume || !readResume)) || previous?.owner.closing || previous && !previous.owner.sessionId || isConversationBusy(key) || terminals.has(key) || terminalTransitions.has(key)) throw new Error('Native terminal handoff needs an idle live Claude conversation or a stopped native session')
+  const trace = createClaudeLifecycleTrace('handoff'); trace('handoff_start')
   const ticket = {}, abort = new AbortController()
   const cancel = () => abort.abort()
   signal?.addEventListener('abort', cancel, {once: true})
@@ -172,6 +174,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     const owner = await prepared.start()
     if (abort.signal.aborted || starting.get(key) !== ticket) { owner.kill(); await owner.done; throw new Error('Native terminal startup was cancelled') }
     terminals.set(key, owner); terminalResumes.set(key, launch); published = true
+    trace('handoff_end', {outcome:'ok',pid:owner.state.nativePid ?? owner.state.pid})
     owner.beforeRelease(async () => {
       if (terminalResumes.get(key) !== launch) return
       const state = owner.state
@@ -183,6 +186,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     void owner.done.finally(() => { if (terminals.get(key) === owner) terminals.delete(key) })
     return owner
   } finally {
+    trace('exit', {outcome: published ? 'ok' : abort.signal.aborted ? 'cancelled' : 'error'})
     try { if (!published) await prepared?.dispose() } finally {
       if (starting.get(key) === ticket) starting.delete(key)
       if (terminalTransitions.get(key) === abort) terminalTransitions.delete(key)

@@ -1,3 +1,5 @@
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
+import { createClaudeBillingState, type ClaudeBillingObservation } from '../../../common/native-billing.ts'
 import { parseMcpElicitationForm, validateMcpElicitationForm } from '#features/code/common/mcp-elicitation-form.ts'
 import { createClaudeNestedActivity, type ClaudeNestedActivity } from './nested-activity.ts'
 import { ClaudeProtocolError, ClaudeResultError } from './errors.ts'
@@ -15,6 +17,7 @@ export interface ClaudeConversationTurn {
 }
 export type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>
 export interface ClaudeConversation {
+  readonly billing?: ClaudeBillingObservation
   readonly handle: QueryHandle
   readonly busy: boolean
   readonly closing: boolean
@@ -69,6 +72,8 @@ class ConversationQueue<T> implements AsyncIterable<T> {
 export function createClaudeConversation(native: QueryHandle, consumeAutonomous: ClaudeTurnConsumer, accountedCostUsd = 0): ClaudeConversation {
   type ActiveTurn = { turn: ClaudeConversationTurn; queue: ConversationQueue<StreamLine>; consumed: Promise<void>; released: Promise<void>; resolveRelease(): void; terminal: boolean; resolve(result: QueryResult): void; reject(error: unknown): void }
   const activity = createClaudeNestedActivity()
+  const billing = createClaudeBillingState()
+  const trace = createClaudeLifecycleTrace('conversation', undefined, native.pid)
   let active: ActiveTurn | undefined
   let pending: { inputId: string; consume: ClaudeTurnConsumer } | undefined
   let closing = false
@@ -161,6 +166,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
     let resolveRelease!: () => void
     const released = new Promise<void>(resolve => { resolveRelease = resolve })
     const current: ActiveTurn = { turn, queue, resolve, reject, released, resolveRelease, terminal: false, consumed: Promise.resolve() }
+    trace('turn_start')
     active = current
     current.consumed = Promise.resolve().then(() => consume(turn)).catch(error => {
       consumerFailure = error
@@ -182,11 +188,13 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
             throw new ClaudeProtocolError('native conversation reset has no identity')
           }
           // Native resets its cost ledger independently of the later session/init identity.
+          trace('reset')
+          billing.reset(line.new_conversation_id)
           cumulativeCost = 0
           if (active) active.turn.costBaseline = 0
         }
         if (line.type === 'system' && line.subtype === 'init') {
-          if (typeof line.session_id === 'string' && line.session_id) sessionId = line.session_id
+          if (typeof line.session_id === 'string' && line.session_id) { sessionId = line.session_id; billing.reset(sessionId) }
           if (typeof line.cwd === 'string' && line.cwd) sessionCwd = line.cwd
         }
         if (pending && line.type === 'command_lifecycle' && line.command_uuid === pending.inputId && line.state === 'started') {
@@ -207,6 +215,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
           for (const listener of listeners) { try { listener(event) } catch { /* isolate observers */ } }
           continue
         }
+        if (line.type === 'rate_limit_event' && typeof line.session_id === 'string') billing.observe(line.session_id, line.rate_limit_info)
         const nested = activity.receive(event)
         for (const listener of listeners) { try { listener(event) } catch { /* isolate raw observers */ } }
         if (nested) continue
@@ -259,6 +268,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         cumulativeCost = Math.max(cumulativeCost, normalized.totalCostUsd)
         if (raw.subtype === 'success' && raw.is_error !== true) current.resolve(normalized)
         else current.reject(new ClaudeResultError(raw.subtype, raw.errors?.length ? raw.errors : raw.result ? [raw.result] : [], raw.session_id))
+        trace('turn_end', {outcome:raw.subtype === 'success' && raw.is_error !== true ? 'ok' : 'error'})
         current.terminal = true
         current.queue.close()
         // A released terminal consumer may close this process while replaying a queued input.
@@ -282,6 +292,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
         await current.consumed.catch(() => {})
         if (active === current) active = undefined
       }
+      trace('exit', {outcome: failure ? 'error' : stopped ? 'cancelled' : 'closed'})
       activity.close()
       clearPermissions()
       listeners.clear()
@@ -292,6 +303,7 @@ export function createClaudeConversation(native: QueryHandle, consumeAutonomous:
 
   return {
     handle: processHandle,
+    get billing() { return closing || exited ? undefined : billing.value },
     get busy() { return changingModel || active !== undefined || pending !== undefined || permissionRequests.size > 0 },
     get closing() { return closing || exited },
     get sessionId() { return sessionId },

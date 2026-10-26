@@ -19,6 +19,7 @@ import type * as pty from 'node-pty'
 import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
 import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
 import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv } from './runner.ts'
@@ -117,6 +118,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   // consumer uses Claude's explicit custom-terminal opt-in; never spoof that identity.
   terminalEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES ??= '1'
   const readJournal = createClaudeNativeJournalReader()
+  const trace = createClaudeLifecycleTrace('terminal')
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
@@ -175,6 +177,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   async function finish(code: number, signal?: number) {
     if (closed) return
     imageTransport.close(); imageCache.close(); imageListeners.clear()
+    trace('exit', {outcome:outputFailed ? 'error' : stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code});
     closed = true; clearTimeout(hardStop); status = outputFailed ? 'error' : stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code
     try { await bridge.close() } finally {
       releasing = true
@@ -183,6 +186,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   }
   function kill() {
     if (closed || stopping || !terminal) return
+    trace('cancel_requested')
     stopping = true
     imageTransport.close()
     const pid = terminal.pid, nativePid = bridge.nativePid
@@ -207,6 +211,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
 
   let started = false
   async function start(): Promise<ClaudeNativeTerminalOwner> {
+    trace('launch')
     if (started || closed) throw new Error('Native terminal startup is no longer available')
     started = true
     try {
@@ -229,6 +234,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           if (!closed && !stopping && pendingOutput === 0) terminal?.resume?.()
         })
       })
+      trace('ready', {pid:terminal.pid})
       terminal.onExit(({ exitCode, signal }) => { options.signal?.removeEventListener('abort', kill); void finish(exitCode, signal).catch(() => {}) })
       options.signal?.addEventListener('abort', kill, { once: true })
       if (options.signal?.aborted) kill()
@@ -261,7 +267,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     return {
-      get state() { return { mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },

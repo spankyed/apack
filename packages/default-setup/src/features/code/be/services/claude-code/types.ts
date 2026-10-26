@@ -12,6 +12,7 @@ import type { ClaudeHooks } from './hooks.ts'
  */
 
 import { z } from 'zod'
+import { ClaudeRateLimitInfoSchema } from '../../../common/native-billing.ts'
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ export interface SystemInitLine extends SystemLine {
 /** Rate limit warnings. */
 export const RateLimitLineSchema = withUuid.extend({
   type: z.literal('rate_limit_event'),
-  rate_limit_info: z.object({}).passthrough(),
+  rate_limit_info: ClaudeRateLimitInfoSchema,
 }).passthrough()
 export type RateLimitLine = z.infer<typeof RateLimitLineSchema>
 

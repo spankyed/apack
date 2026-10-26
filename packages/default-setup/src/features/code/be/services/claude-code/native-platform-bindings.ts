@@ -72,7 +72,8 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-9gw2deqq.js",
       "exports": {
         "dOe": "dIe",
-        "kae": "Eae"
+        "kae": "Eae",
+        "ha": "ha", "xme": "Cme", "HFs": "K$s"
       }
     },
     "chunk-3m4t81ea.js": {

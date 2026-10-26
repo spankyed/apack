@@ -26,6 +26,7 @@ import type { Readable, Writable } from 'stream'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
+import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
 import {
@@ -263,6 +264,9 @@ export async function spawnStream(
     throw wrapSpawnError(err, cliPath)
   }
 
+  const trace = createClaudeLifecycleTrace('print', undefined, child.pid)
+  trace('launch')
+  child.once('spawn', () => trace('ready', {pid: child.pid}))
   // Drain throughout the process lifetime, retaining only bounded diagnostics.
   const stderrTail = createStderrTail()
   child.stderr.on('data', c => stderrTail.append(c))
@@ -276,6 +280,7 @@ export async function spawnStream(
   const terminate = (signal: NodeJS.Signals = 'SIGTERM') => {
     // A failed spawn can still be awaiting its error event, with no child PID.
     if (exited || child.pid === undefined) return
+    trace('cancel_requested')
     child.kill(signal)
     // A successful signal send does not prove that the child exited.
     if (signal !== 'SIGKILL' && !killTimer) {
@@ -309,8 +314,9 @@ export async function spawnStream(
   // calls are idempotent.
   const exitPromise = new Promise<{ exitCode: number; signal: NodeJS.Signals | null; stderr: string }>(
     (resolve, reject) => {
-      child.once('error', err => { cleanup(); reject(wrapSpawnError(err, cliPath)) })
+      child.once('error', err => { trace('exit', {outcome:'error'}); cleanup(); reject(wrapSpawnError(err, cliPath)) })
       child.once('close', (code, sig) => {
+        trace('exit', {outcome: code === 0 ? 'ok' : sig ? 'cancelled' : 'error', code: code ?? undefined, discardedBytes: stderrTail.discardedBytes})
         cleanup()
         resolve({
           exitCode: code ?? -1,
