@@ -1379,14 +1379,12 @@ const threadsState = setup({
         }
       };
     }),
+    // Behind `canLoadOlderMessages`, which holds both; read here so the types do too
     requestOlderMessages: ({ context }) => {
-      const { hasMore, nextCursor, isLoading } = context.messagePagination;
-      if (!context.currentThread?.id || !hasMore || !nextCursor || isLoading) return;
-      sendToSystem(id, {
-        type: 'LOAD_MORE_MESSAGES',
-        threadId: context.currentThread.id,
-        cursor: nextCursor,
-      });
+      const threadId = context.currentThread?.id;
+      const cursor = context.messagePagination.nextCursor;
+      if (!threadId || !cursor) return;
+      sendToSystem(id, { type: 'LOAD_MORE_MESSAGES', threadId, cursor });
     },
     setLoadingMore: assign(({ context }) => ({
       messagePagination: { ...context.messagePagination, isLoading: true },
@@ -1461,6 +1459,10 @@ const threadsState = setup({
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
     quickPromptsOpen: ({ context }) => context.quickPromptCursor !== null,
+    canLoadOlderMessages: ({ context }) => {
+      const { hasMore, nextCursor, isLoading } = context.messagePagination;
+      return Boolean(context.currentThread?.id && hasMore && nextCursor && !isLoading);
+    },
   }
 }).createMachine({
   id,
@@ -1765,7 +1767,7 @@ const threadsState = setup({
     },
     UPDATE_MESSAGE_STATE: { actions: 'updateMessageState' },
     MESSAGE_ADDED: { actions: 'addMessageToThread' },
-    LOAD_MORE_MESSAGES: { actions: ['setLoadingMore', 'requestOlderMessages'] },
+    LOAD_MORE_MESSAGES: { guard: 'canLoadOlderMessages', actions: ['requestOlderMessages', 'setLoadingMore'] },
     OLDER_MESSAGES_LOADED: { actions: ['prependOlderMessages', 'seekFocusedMessage'] },
     SEARCH_MESSAGES: { actions: 'searchMessages' },
     MESSAGES_FOUND: { actions: 'setMessagesFound' },

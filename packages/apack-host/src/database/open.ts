@@ -51,11 +51,15 @@ export interface RunsDatabase {
   engine: EarsEngine;
 }
 
+/** elmdb's codes for files no open of them will read: not elmdb's, in another format, or damaged */
+const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 'CORRUPTED'];
+
 /**
  * The run history's database at `dir` (`runs`), held to the run history's schema. Opened to write, files that can't be
- * opened — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
+ * read — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
  * new database is started: the history is a log, so what that costs is past runs, and refusing would keep the whole app
- * from starting over it. Opened read-only, it refuses as any database does.
+ * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
+ * files and throws, as it does opened read-only.
  */
 export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
   const open = (): RunsDatabase => {
@@ -65,7 +69,7 @@ export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean }
   try {
     return open();
   } catch (error) {
-    if (readOnly || !fs.existsSync(dir)) throw error;
+    if (readOnly || !fs.existsSync(dir) || !UNREADABLE_CODES.includes((error as { code?: unknown })?.code)) throw error;
     const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.renameSync(dir, aside);
     logger.warn(`The run history at ${dir} couldn't be opened (${errorMessage(error)}): it was moved to ${aside}, and a new one started`);
