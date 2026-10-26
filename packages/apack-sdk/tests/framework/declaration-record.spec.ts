@@ -1,11 +1,13 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import { declarationRecord, declarationRecordGrammar } from '../../src/framework/declaration-record.ts';
-import { zodToJsonSchema, parseDef, ignoreOverride } from 'zod-to-json-schema';
 
 const own = <T>(value: T) => Object.fromEntries([['__proto__', value]]);
-const leaves = (issues: z.ZodIssue[]): z.ZodIssue[] => issues.flatMap(issue => issue.code === 'invalid_union'
-  ? issue.unionErrors.flatMap(error => leaves(error.issues)) : [issue]);
+// A union's alternatives report paths relative to the union, so a leaf's full path is the union's and its own
+const leaves = (issues: z.core.$ZodIssue[], at: PropertyKey[] = []): z.core.$ZodIssue[] => issues.flatMap(issue =>
+  issue.code === 'invalid_union' && issue.errors.length > 0
+    ? issue.errors.flatMap(alternative => leaves(alternative, [...at, ...issue.path]))
+    : [{ ...issue, path: [...at, ...issue.path] }]);
 
 describe('declaration dictionary decoding', () => {
   it('preserves own keys, parses values once and retains record input/output types', () => {
@@ -32,12 +34,15 @@ describe('declaration dictionary decoding', () => {
 
   it('keeps nested union diagnostic paths identical to record grammar paths', () => {
     const value = z.object({ value: z.union([z.string(), z.number()]) });
-    const input = { groups: own({ value: true }) };
-    const ordinary = z.object({ groups: z.record(value) }).safeParse(input);
+    // An ordinary key, since a record drops an own __proto__ key without a word
+    const input = { groups: { group: { value: true } } };
+    const ordinary = z.object({ groups: z.record(z.string(), value) }).safeParse(input);
     const owned = z.object({ groups: declarationRecord(value) }).safeParse(input);
     if (ordinary.success || owned.success) throw new Error('Invalid union accepted');
     expect(leaves(owned.error.issues).map(issue => issue.path)).toEqual(leaves(ordinary.error.issues).map(issue => issue.path));
-    expect(leaves(owned.error.issues).every(issue => issue.path.join('.') === 'groups.__proto__.value')).toBe(true);
+    const proto = z.object({ groups: declarationRecord(value) }).safeParse({ groups: own({ value: true }) });
+    if (proto.success) throw new Error('Invalid union under __proto__ accepted');
+    expect(leaves(proto.error.issues).map(issue => issue.path.join('.'))).toEqual(['groups.__proto__.value', 'groups.__proto__.value']);
   });
 
   it('retains nested dictionary paths in union errors', () => {
@@ -54,10 +59,12 @@ describe('declaration dictionary decoding', () => {
     const value = z.object({ count: z.number().int() });
     const ordinary = z.object({ groups: z.record(key, value).describe('Declared groups.').optional() });
     const owned = z.object({ groups: declarationRecord(key, value).describe('Declared groups.').optional() });
-    const rendered = zodToJsonSchema(owned, { $refStrategy: 'none', override(def, refs) {
-      const grammar = declarationRecordGrammar(def);
-      return grammar ? parseDef({ ...grammar._def, description: def.description }, refs) : ignoreOverride;
-    } });
-    expect(rendered).toEqual(zodToJsonSchema(ordinary, { $refStrategy: 'none' }));
+    const options: Parameters<typeof z.toJSONSchema>[1] = { io: 'input', unrepresentable: 'any', override({ zodSchema, jsonSchema }) {
+      const grammar = declarationRecordGrammar(zodSchema);
+      if (!grammar) return;
+      const { $schema: _, ...rendered } = z.toJSONSchema(grammar, options);
+      Object.assign(jsonSchema, rendered);
+    } };
+    expect(z.toJSONSchema(owned, options)).toEqual(z.toJSONSchema(ordinary, { io: 'input' }));
   });
 });

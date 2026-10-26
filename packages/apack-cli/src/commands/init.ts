@@ -106,7 +106,7 @@ const PACKAGE_JSON_TEMPLATE = (name: string) => JSON.stringify({
     // The generated facades import the EARS engine; it's released with the SDK at the same version
     '@apackdev/ears': SDK_RANGE(),
     '@apackdev/sdk': SDK_RANGE(),
-    zod: '^3.25.76',
+    zod: '^4.6.7',
   },
   devDependencies: {
     // Pinned per project: a global, Homebrew or app-bundled `apack` hands off to this one

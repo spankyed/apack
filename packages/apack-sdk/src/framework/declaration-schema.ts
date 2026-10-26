@@ -27,11 +27,12 @@ import type { StepFrontendDeclaration, StepLayoutDeclaration } from './step-fron
 export { FEATURE_ID_PATTERN };
 
 /** Rejects a pack's entries that use a name or value the SDK owns, naming each */
-const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx) => {
+const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx, path: PropertyKey[] = []) => {
   const taken = _reservedEntries(declared, owned);
   if (taken.length === 0) return;
   ctx.addIssue({
-    code: z.ZodIssueCode.custom,
+    code: 'custom',
+    path,
     message: `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} defined by the SDK and available to every pack: remove ${taken.length === 1 ? 'it' : 'them'}`,
   });
 };
@@ -43,10 +44,7 @@ function checkDeclaredNames(raw: unknown, ctx: z.RefinementCtx): unknown {
   try {
     for (const { name, owner } of _packEntities(declaration)) {
       const path = [...owner.split('.'), 'entities'];
-      notSdkOwned(SDK_ENTITIES)({ [name]: name }, {
-        path: [...ctx.path, ...path],
-        addIssue: issue => ctx.addIssue({ ...issue, path: [...path, ...(issue.path ?? [])] }),
-      });
+      notSdkOwned(SDK_ENTITIES)({ [name]: name }, ctx, path);
       if ((Object.values(RESERVED_ENTITY_TYPES) as string[]).includes(name)) {
         ctx.addIssue({
           code: 'custom',
@@ -724,7 +722,7 @@ const ServicesSchema = declarationRecord(z.string().regex(_SERVICE_NAME_PATTERN,
  */
 const FEATURE_ID_SCHEMA = z.string()
   .regex(FEATURE_ID_PATTERN, 'Must start with a lowercase letter and contain only letters and digits (e.g. "notes", "calendarEvents")')
-  .refine((id) => !RESERVED_FEATURE_IDS.has(id), (id) => ({ message: `"${id}" is reserved in generated code: pick another feature id` }));
+  .refine((id) => !RESERVED_FEATURE_IDS.has(id), { error: (issue) => `"${String(issue.input)}" is reserved in generated code: pick another feature id` });
 
 export const FeatureEntrySchema = z.object({
   description: FeatureDescriptionSchema,
