@@ -189,7 +189,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
-  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any
+  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any,updateDecisions:any
   const externalDisableRoutes:string[]=[]
   const disableExternalConsent=async()=>{
     await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
@@ -201,6 +201,23 @@ test('edits original Settings through desktop controls and retains composing', a
     await expect(editor).toHaveCount(0);await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false)
   }
 
+  if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATE_DECISIONS==='1'){
+    const editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="autoUpdatesChannel"]'),samples:any[]=[]
+    const global=async()=>JSON.parse(await readFile(join(workspace!,'.claude/.claude.json'),'utf8'))
+    const originalTurns=(await context()).turns,initialUser=await user();expect((await global()).autoUpdates).toBe(false)
+    await search.fill('')
+    const openUpdate=async(title:string)=>{await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('heading',{name:title,exact:true})).toBeVisible()}
+    const capture=async(kind:string,width:number,height:number)=>{await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport();for(const option of await editor.locator('[data-native-settings-option]').all())await expect(option).toBeInViewport();await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))));const path=testInfo.outputPath(`native-settings-updates-${kind}-${width}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(path,Buffer.from(image,'base64'));samples.push({kind,width,height,text:await editor.innerText(),capture:path})}
+    for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await openUpdate('Enable Auto-Updates');await expect(editor.locator('[data-native-settings-option="latest"]')).toHaveText('Enable with latest channel');await expect(editor.locator('[data-native-settings-option="stable"]')).toHaveText('Enable with stable channel');await capture('enable',width,height);await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect((await global()).autoUpdates).toBe(false);expect(await user()).toEqual(initialUser)}
+    await openUpdate('Enable Auto-Updates');await editor.locator('[data-native-settings-option="latest"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await global()).autoUpdates).toBe(true);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('latest')
+    for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await openUpdate('Switch to Stable Channel');await expect(editor).toContainText('2.1.302');await expect(editor.locator('[data-native-settings-option="stay"]')).toContainText('Stay on current version (2.1.302) until stable catches up');await capture('downgrade',width,height);const before=await user();await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect(await user()).toEqual(before)}
+    await openUpdate('Switch to Stable Channel');await editor.locator('[data-native-settings-option="stay"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('stable');await expect.poll(async()=>(await user()).minimumVersion).toBe('2.1.302');await expect(row).toContainText('stable')
+    await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBeUndefined();await expect.poll(async()=>(await user()).minimumVersion).toBeUndefined();await expect(row).toContainText('latest')
+    await openUpdate('Switch to Stable Channel');await editor.locator('[data-native-settings-option="downgrade"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('stable');expect((await user()).minimumVersion).toBeUndefined();await expect(row).toContainText('stable')
+    expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    updateDecisions={samples,enableCancelPreserved:true,enabledLatest:true,downgradeCancelPreserved:true,stayPinsCurrentVersion:true,switchLatestClearsPin:true,downgradeAllowsOlder:true,noPhantomTurn:true,finalUser:await user()}
+    await appPage.setViewportSize({width:1100,height:900});await search.fill('')
+  }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATES==='1'){
     const editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="autoUpdatesChannel"]')
     const globalUpdateSetting=async()=>JSON.parse(await readFile(join(workspace!,'.claude/.claude.json'),'utf8')).autoUpdates
@@ -533,7 +550,7 @@ test('edits original Settings through desktop controls and retains composing', a
   }
   await tabs.getByRole('button',{name:'Config',exact:true}).click();await expect(search).toBeVisible()
   await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0);await expect(composer).toHaveText(draft)
-  if(externalConsentProfile||updateEditor){expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);if(externalConsent)externalConsent.exactParentDocumentSelection=true;if(updateEditor)updateEditor.exactParentDocumentSelection=true}
+  if(externalConsentProfile||updateEditor||updateDecisions){expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);if(externalConsent)externalConsent.exactParentDocumentSelection=true;if(updateEditor)updateEditor.exactParentDocumentSelection=true;if(updateDecisions)updateDecisions.exactParentDocumentSelection=true}
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -553,6 +570,6 @@ test('edits original Settings through desktop controls and retains composing', a
 
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...updateEditor?{updateEditor}:{},...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...updateDecisions?{updateDecisions}:{},...updateEditor?{updateEditor}:{},...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
