@@ -2,7 +2,7 @@
   <BubbleMenu
     v-if="editor"
     :editor="editor"
-    :options="{ placement: 'top', offset: 8, strategy: 'fixed', inline: true }"
+    :options="menuOptions"
     :plugin-key="menuKey"
     :append-to="menuHost"
     :should-show="shouldShow"
@@ -38,6 +38,12 @@ const linkInput = ref<InstanceType<typeof BubbleMenuLinkInput>>()
 const menuKey = new PluginKey('textBubbleMenu')
 const editorElement = props.editor.view.dom
 const ownerDocument = editorElement.ownerDocument
+const composerBoundary = editorElement.closest('form')
+const menuOptions = {
+  placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
+  ...(composerBoundary ? { shift: { boundary: composerBoundary, padding: 8 }, flip: { boundary: composerBoundary, padding: 8 } } : {}),
+}
+
 // A private host preserves the menu's blur boundary while escaping editor scroll clipping.
 const menuHost = ownerDocument.createElement('div')
 let positionFrame: number | undefined
