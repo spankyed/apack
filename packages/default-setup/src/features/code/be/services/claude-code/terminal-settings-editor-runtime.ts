@@ -1,3 +1,4 @@
+import { claudeTerminalSettingsUpdateRuntime } from './terminal-settings-update-runtime.ts'
 import { claudeTerminalSettingsConsentRuntime } from './terminal-settings-consent-runtime.ts'
 import { claudeTerminalSettingsGroupRuntime } from './terminal-settings-group-runtime.ts'
 import { claudeTerminalSettingsModelRuntime } from './terminal-settings-model-runtime.ts'
@@ -7,6 +8,7 @@ export const claudeTerminalSettingsEditorRuntime = String.raw`
 ${claudeTerminalSettingsModelRuntime}
 ${claudeTerminalSettingsGroupRuntime}
 ${claudeTerminalSettingsConsentRuntime}
+${claudeTerminalSettingsUpdateRuntime}
 function nativeSettingsConfig(n,entry){
  const frame=nativeSettingsFrame(n,entry);
  if(frame.panel.selectedTab!=='Config')throw Error('Native Config editor is unavailable');
@@ -113,6 +115,7 @@ async function activateNativeSettingsEditor(n,entry,key,visibleKeys,signal){
  return await awaitNativeSettingsReading(candidate.callback(),signal);
 }
 async function readNativeSettingsEditor(n,entry,signal){
+ if(entry.settingsEditorKey==='autoUpdatesChannel')return readNativeSettingsUpdate(n,entry,signal);
  if(['agentsView','notifChannel'].includes(entry.settingsEditorKey))return readNativeSettingsGroup(n,entry,signal);
  signal?.throwIfAborted();const {frame,owner}=nativeSettingsConfig(n,entry);
  if(!frame.panel.hidden)return;
@@ -214,7 +217,7 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  }else throw Error('Native Settings editor action is unavailable');
  const current=await readNativeSettingsEditor(n,entry,signal);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
+ if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.updateChoice!==before.updateChoice||entry.settingsEditorKey==='autoUpdatesChannel'&&(current.actions.onChange!==before.actions.onChange||current.actions.onCancel!==before.actions.onCancel)||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
  if(validationProblem!==undefined)return {problem:validationProblem};
  await awaitNativeSettingsReading(callback(...args),signal);
  return {};

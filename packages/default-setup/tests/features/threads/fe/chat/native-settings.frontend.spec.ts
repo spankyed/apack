@@ -169,3 +169,14 @@ it('shows original external approval state and distinguishes review from native 
   state.state.snapshot!.rows[0].isLocked=true;await nextTick();expect(disable.disabled).toBe(true)
  }finally{app.unmount();root.remove()}
 })
+
+it('shows native read-only update restrictions without an editable field or Save control',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'update-info',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'information',revision:'b'.repeat(64),title:'Enable Auto-Updates',description:'Original restriction: controlled by the original environment variable.'}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action)})});app.mount(root)
+ try{
+  await nextTick();const editor=root.querySelector('[aria-label="Claude Code setting editor"]')!;expect(editor.textContent).toContain('Original restriction');expect(editor.querySelector('input,select,form')).toBeNull()
+  state.state.status='pending';await nextTick();const close=[...editor.querySelectorAll('button')].find(button=>button.textContent==='Close')!;expect(close.disabled).toBe(false);close.click()
+  expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
+ }finally{app.unmount();root.remove()}
+})

@@ -21,6 +21,7 @@
           <span v-if="row.description" class="mt-1 block text-xs leading-relaxed text-neutral-500">{{ row.description }}</span>
           <span v-if="row.isLocked" class="mt-1 block text-xs text-amber-200/80">{{ row.lockReason || 'Managed by Claude Code policy' }}</span>
         </label>
+        <span v-if="row.key === 'autoUpdatesChannel'" class="text-xs text-neutral-400">{{ row.value }}</span>
         <span v-if="row.key === 'showExternalIncludesDialog'" class="text-xs text-neutral-400">{{ row.value === 'true' ? 'Allowed' : 'Not allowed' }}</span>
         <button v-if="row.editorAvailable" type="button" :disabled="pending || row.isLocked" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-200 disabled:opacity-40" @click="openEditor(row.key)">{{ row.key === 'showExternalIncludesDialog' ? row.value === 'true' ? 'Disable external imports' : 'Review external imports…' : 'Change…' }}</button>
         <input v-else-if="row.kind === 'boolean'" :id="controlId(row.key)" type="checkbox" :checked="row.value === true" :disabled="pending || row.isLocked" class="size-4 shrink-0 accent-blue-500 disabled:opacity-40" @change="changeBoolean(row.key, row.value, $event)" />

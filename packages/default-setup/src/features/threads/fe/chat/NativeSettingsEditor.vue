@@ -2,9 +2,10 @@
   <section ref="editorRoot" aria-label="Claude Code setting editor" class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
       <h3 class="min-w-0 break-words text-sm font-medium text-neutral-200">{{ editor.title || 'Choose a value' }}</h3>
-      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ editor.kind === 'group' ? 'Close' : editor.kind === 'choice' && editor.consent ? editor.consent.cancelLabel : 'Cancel' }}</button>
+      <button type="button" class="rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('cancel')">{{ editor.kind === 'group' || editor.kind === 'information' ? 'Close' : editor.kind === 'choice' && editor.consent ? editor.consent.cancelLabel : 'Cancel' }}</button>
     </header>
     <div v-if="editor.kind === 'choice'" data-native-settings-editor-body class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4" role="group" :aria-label="editor.title || 'Available values'">
+      <p v-if="editor.description" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-300">{{ editor.description }}</p>
       <p v-if="editor.consent" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-200">{{ editor.consent.description }}</p>
       <p v-if="editor.model" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.model.description }}</p>
       <div v-for="option in editor.options" :key="option.value" class="flex items-start gap-2">
@@ -33,6 +34,7 @@
       </label>
       <p v-if="!editor.rows.length" role="status" class="text-xs text-neutral-400">Claude Code has provided no available controls.</p>
     </div>
+    <div v-else-if="editor.kind === 'information'" data-native-settings-editor-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"><p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-300">{{ editor.description }}</p></div>
     <form v-else data-native-settings-editor-body class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" @submit.prevent="emit('save', { ...drafts })">
       <p v-if="editor.description" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.description }}</p>
       <label v-for="field in editor.fields" :key="field.key" class="block text-xs text-neutral-300">

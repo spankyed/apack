@@ -3,15 +3,15 @@ import { createHash } from 'node:crypto'
 import { claudeTerminalSettingsEditorRuntime } from '#features/code/be/services/claude-code/terminal-settings-editor-runtime.ts'
 
 function fixture(){
-  const noCommitted=Symbol('NO_COMMITTED_ROW')
+  const noCommitted=Symbol('NO_COMMITTED_ROW'),Se=function OriginalUpdateModal(){},Xe=function OriginalUpdatePicker(){}
   const qh={Field:()=>{},Button:()=>{},Link:()=>{}},Config=()=>{},onClose=()=>{},open=vi.fn()
   const field={type:qh.Field,key:'model',props:{label:'Model',children:{type:qh.Button,props:{onPress:open}}}}
   const config:any={type:Config,memoizedProps:{onClose,setTabsHidden:()=>{},children:[field]}}
   const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value)),palette=vi.fn(()=>({text:'#eeeeee',inverseText:'#111111'}))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalSelection:{Fi:noCommitted},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
-  return {noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection').replaceAll("await import('/$bunfs/root/chunk-35cyt9ex.js')",'originalModal')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalSelection:{Fi:noCommitted,Xe},originalModal:{Se},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  return {Se,Xe,noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -248,4 +248,14 @@ it('uses only original mounted Config consent descriptors omitted by the generic
 it('accepts only the exact original uncommitted-row sentinel and preserves native default selection',async()=>{
  const f=consentFixture();expect((await f.editor()).snapshot.value).toBeUndefined()
  f.pc[31].props.selectedValue=Symbol('NO_COMMITTED_ROW');await expect(f.editor()).rejects.toThrow('selection changed');expect(f.write).not.toHaveBeenCalled()
+})
+
+it('routes native update information Close and original update choices through the guarded editor',async()=>{
+ const f=fixture(),cancel=vi.fn(),change=vi.fn();(f.entry as any).settingsEditorKey='autoUpdatesChannel';f.frame.panel.hidden=true
+ f.config.child={type:f.Se,memoizedProps:{title:'Enable Auto-Updates',onCancel:cancel,children:'Original environment restriction'}}
+ const info=await f.editor();expect(info.snapshot.kind).toBe('information')
+ await expect(f.act({action:'select',revision:info.revision,value:'latest'})).rejects.toThrow('unavailable');expect(change).not.toHaveBeenCalled()
+ await f.act({action:'cancel',revision:info.revision});expect(cancel).toHaveBeenCalledExactlyOnceWith()
+ f.config.child.memoizedProps={title:'Enable Auto-Updates',onCancel:cancel,children:{type:f.Xe,props:{options:[{value:'original-latest',label:'Original latest'}],onChange:change}}}
+ await f.act({action:'select',revision:(await f.editor()).revision,value:'original-latest'});expect(change).toHaveBeenCalledExactlyOnceWith('original-latest')
 })
