@@ -91,7 +91,13 @@ async function nativeSettings(n,request,abort){
    if(request.operation==='open'){
     const visible=new Set(read.snapshot.rows.filter(row=>row.editorAvailable&&!row.isLocked).map(row=>row.key));
     entry.settingsEditorLabel=read.snapshot.rows.find(row=>row.key===request.key)?.label;entry.settingsEditorKey=request.key;
+    const openingRow=read.snapshot.rows.find(row=>row.key===request.key);
     await activateNativeSettingsEditor(n,entry,request.key,visible,controller.signal);
+    // Stable/slow opens perform the original direct switch instead of mounting a picker.
+    if(request.key==='autoUpdatesChannel'&&['stable','slow'].includes(openingRow?.value)){
+     const opened=await readNativeSettings(n,entry,controller.signal);
+     if(!opened.snapshot.editor&&!opened.snapshot.frame.hidden)entry.settingsCommit={key:request.key,before:openingRow.value,until:Date.now()+5000};
+    }
    }else{
     const command=request.command;
     if(!command||!['select','save','preview','toggleSyntax','focusModel','adjustEffort','setGroup'].includes(command.action))throw Error('Native Settings editor command changed');

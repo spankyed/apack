@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto'
 import { claudeTerminalSettingsRuntime } from '#features/code/be/services/claude-code/terminal-settings-runtime.ts'
 
 function fixture() {
-  let nativeEditor:any
+  let nativeEditor:any,openers=new Map()
+  const editorOpening=vi.fn(async()=>{})
   const editorReading=vi.fn(async()=>nativeEditor),editorSaving=vi.fn(async(_signal:AbortSignal)=>({})),editorAction=vi.fn(async(_n:unknown,_entry:unknown,_request:unknown,_signal:AbortSignal)=>({}))
   let value = false
   let frame: any = {selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false}
@@ -14,9 +15,9 @@ function fixture() {
   const commit = vi.fn(async (request: any) => { await request.write(request.value); return { value: request.value } })
   const n = { gate: { _Jo: vi.fn() }, runtime: { p_r: vi.fn(async (row: any) => row.key === 'hidden' ? undefined : row), Ims: commit } }
   const source = claudeTerminalSettingsRuntime.replace("await import('/$bunfs/root/chunk-1ghyy712.js')", 'nativeSettingsApi').replace('await readNativeSettingsFrame(n,entry,signal)', 'settingsFrame()').replaceAll('await nativeSettingsEditorOpeners(n,entry)','settingsEditors()')
-  const run = vm.runInNewContext(source + ';nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({openers:new Map()}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
+  const run = vm.runInNewContext(source + ';nativeSettingsMountedConsentRows=()=>[];waitForNativeSettingsConfig=async()=>{};readNativeSettingsEditor=editorReading;activateNativeSettingsEditor=editorOpening;saveNativeSettingsEditor=(_n,_entry,_revision,_values,signal)=>editorSaving(signal);actNativeSettingsEditor=editorAction;nativeSettings', { editorOpening,editorReading,editorSaving,editorAction,settingsFrame: () => frame, settingsEditors:()=>({openers}), nativeSettingsApi: api, agentCommandDialogs: new Map([['panel', entry]]), createHash, AbortController, setTimeout })
   const request = { client_id: 'client', panel_id: 'panel' }
-  return { setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
+  return { editorOpening,setOpeners:(next:Map<string,unknown>)=>{openers=next},setNativeEditor:(next:any)=>{nativeEditor=next},editorSaving,editorAction,setFrame: (next: any) => { frame = next }, setValue: (next: boolean) => { value = next }, n, entry, writer, commit, request, read: () => run(n, { ...request, operation: 'read' }, new AbortController()), run }
 }
 it('uses original description visibility and config.set coordinator instead of writing directly', async () => {
   const f = fixture(), before = await f.read()
@@ -148,4 +149,20 @@ it('does not turn a declined consent into a pending scalar write or bypass its o
  const before=await f.read();f.editorAction.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false});return {}})
  const result=await f.run(f.n,{...f.request,operation:'editor',revision:before.snapshot.revision,editor_revision:editor.revision,command:{action:'select',value:'cancel'}},new AbortController())
  expect(result.snapshot.commitPending).toBeUndefined();expect(f.editorAction).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled();expect(f.commit).not.toHaveBeenCalled()
+})
+
+it('follows delayed native acknowledgement for direct stable-to-latest opens without replaying the callback',async()=>{
+ const f=fixture();let channel='stable'
+ f.n.runtime.p_r.mockImplementation(async(row:any)=>row.key==='tips'?{...row,key:'autoUpdatesChannel',kind:'text',value:channel}:undefined)
+ f.setOpeners(new Map([['autoUpdatesChannel',{}]]));const before=await f.read()
+ const result=await f.run(f.n,{...f.request,operation:'open',revision:before.snapshot.revision,key:'autoUpdatesChannel'},new AbortController())
+ expect(result.snapshot.commitPending).toBe(true);expect(result.snapshot.rows[0].value).toBe('stable');expect(f.editorOpening).toHaveBeenCalledOnce();expect(f.writer).not.toHaveBeenCalled()
+ channel='latest';const settled=await f.read();expect(settled.snapshot.commitPending).toBeUndefined();expect(settled.snapshot.rows[0].value).toBe('latest');expect(f.editorOpening).toHaveBeenCalledOnce()
+})
+it('does not hold update picker admission as a pending channel write',async()=>{
+ const f=fixture();f.n.runtime.p_r.mockImplementation(async(row:any)=>row.key==='tips'?{...row,key:'autoUpdatesChannel',kind:'text',value:'latest'}:undefined)
+ f.setOpeners(new Map([['autoUpdatesChannel',{}]]));const before=await f.read()
+ f.editorOpening.mockImplementationOnce(async()=>{f.setFrame({selectedTab:'Config',tabs:['Config'],hidden:true});f.setNativeEditor({revision:'a'.repeat(64),snapshot:{kind:'choice',title:'Switch to Stable Channel',options:[],disabled:false}})})
+ const result=await f.run(f.n,{...f.request,operation:'open',revision:before.snapshot.revision,key:'autoUpdatesChannel'},new AbortController())
+ expect(result.snapshot.commitPending).toBeUndefined();expect(result.snapshot.editor.title).toBe('Switch to Stable Channel');expect(f.editorOpening).toHaveBeenCalledOnce()
 })
