@@ -1,6 +1,6 @@
 # EARS persistence reliability and write batching
 
-**Status:** superseded, not implemented: the engine moved onto elmdb ([ears-on-elmdb.md](../../plans/ears-on-elmdb.md)), which keeps no copy of the data in memory and holds both databases.
+**Status:** superseded, not implemented: the engine moved onto elmdb ([ears-on-elmdb.md](ears-on-elmdb.md)), which keeps no copy of the data in memory and holds both databases.
 **Audit date:** 2026-10-19.
 **Decision:** retain LMDB behind the in-memory EARS engine. Improve durability and transaction batching
 before considering another database.

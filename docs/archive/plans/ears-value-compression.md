@@ -1,6 +1,8 @@
 # EARS value compression
 
-Status: planned, 2026-10-24. Not started.
+**Status:** superseded, not implemented, 2026-10-25: apack's engine moved onto elmdb ([ears-on-elmdb.md](ears-on-elmdb.md)),
+so there is no `kv.ts` seam to compress in. Compression belongs to elmdb's value format, deferred there
+(`elmdb/docs/roadmap.md`, Later).
 
 Large values are most of the database, and they are text that compresses to about a quarter of its size. This plan
 compresses each value above a threshold in the seam's value codec (`kv.ts`), with zstd from `node:zlib`, as storage

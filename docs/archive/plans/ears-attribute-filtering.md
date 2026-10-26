@@ -1,6 +1,6 @@
 # Optimize EARS attribute filtering without changing the API
 
-**Status:** superseded, not implemented: the engine moved onto elmdb ([ears-on-elmdb.md](../../plans/ears-on-elmdb.md)), which keeps no copy of the data in memory and holds both databases.
+**Status:** superseded, not implemented: the engine moved onto elmdb ([ears-on-elmdb.md](ears-on-elmdb.md)), which keeps no copy of the data in memory and holds both databases.
 **Scope:** in-memory `query(...).where(X).where(Y)` execution, preserving the public API and current
 evaluation behavior. Database persistence and trace-history indexing are outside this plan.
 
