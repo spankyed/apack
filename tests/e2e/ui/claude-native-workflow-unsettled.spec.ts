@@ -96,12 +96,12 @@ test('retires completed but unsettled Workflow controls after stopping native wo
       await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({stage,width,file,task:await currentTask()})
     }
   }
-  await capture('running')
-  await expect.poll(async()=>((await tasks()).find((task:any)=>task.id===taskId)?.logs??[]).some((line:string)=>line.includes('Release reviewer ready to settle')),{timeout:15000}).toBe(true)
-  await stop.click()
+  await expect.poll(async()=>((await tasks()).find((task:any)=>task.id===taskId)?.logs??[]).some((line:string)=>line.includes('Release reviewer ready to settle')),{timeout:15000,intervals:[50]}).toBe(true)
+  await stop.click({timeout:2000})
   const receipts=async()=>(await readFile(join(workspace!,'native-workflow-stop-receipts.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
   await expect.poll(async()=>(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true),{timeout:10000}).toBeTruthy()
   const receipt=(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true)
+  expect(receipt.after.stoppedByUser).toBe(true)
   expect(receipt.task).toMatchObject({id:taskId,status:'completed',settled:false,result:{reviewQueued:true}})
   expect(receipt.pid).toBe(boundNativePid);expect(receipt.ownerPid).toBe(boundNativePid);expect(receipt.sessionId).toBe(sessionId)
   const before=receipt.task
