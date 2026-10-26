@@ -159,9 +159,11 @@ than of the result. That is the asymptotic optimum, and the wrong trade here, fo
 - **Our re-runs are already cheap.** IVM wins when a re-run is expensive — a large join, an aggregate over a big table —
   and no view here is. A view that becomes one is the case for it, measured, in elmdb.
 
-**Not seen:** writes from another process (`apack db exec` run offline against the files). Those reach the files and
-not the app's engine. The follow-up that serves `apack db` through the running app closes this; until then the guide
-says so.
+**A view hears only its own process's commits.** Nothing else writes behind one today: `apack db` refuses a change
+while the app runs on its data (`apack-cli/src/commands/db/target.ts`), and the app refuses to start while a tool
+holds the database's write lock (`assertNoDatabaseWriter`, `@apackdev/host/database`). A tool that must write to the
+live data goes through the app, by the drive server's `/transact`. Letting `apack db` write beside the running app is
+[a deferred plan](deferred/db-writes-beside-the-running-app.md): the tool tells the app, which re-runs every watch.
 
 ### The move to elmdb
 
@@ -615,8 +617,11 @@ and `threads`' streaming tokens are notifications.
 
 - **Re-run cost on hot writes.** A streaming message is rewritten every 80 ms (`stream-writer.ts`); every view whose
   read set holds it re-runs at that rate. Coalescing bounds it to one re-run per scheduling turn per view, and the
-  equality check stops it reaching the window when nothing it shows changed. Step 1's readings decide whether views
-  need a minimum interval.
+  equality check stops it reaching the window when nothing it shows changed. **Views have no minimum interval**: a
+  page view re-runs in about 0.5 ms (Step 1's readings), and the hottest writer, the stream writer's 80 ms throttle,
+  re-runs one view about 13 times a second (Step 4, threads) — well under 1% of a core. The writer's throttle is the
+  bound; a view host interval would only delay what the window shows. What would reopen it is a view
+  whose re-run is measured taking longer than its writer's interval.
 - **A view that reads too much** (a whole table to show a count) re-runs on every write to that table. That's correct
   but expensive. The cure is a narrower read, which the engine already offers (`count`, `pick`, the indexes).
 - **Two channels.** A reply and a view result can arrive in either order. The sequence makes that explicit instead of
@@ -632,11 +637,9 @@ and `threads`' streaming tokens are notifications.
   writes (`ViewWrites`) and reads them again once they are answered. The commit sequence on `reply` stays unbuilt.
 - **A contract that declares its answers apart from its news** (`answers` beside `outgoing`): what would make the step 5
   pack rule statable, and type `reply` against the asker's incoming events rather than the answerer's outgoing.
-- The minimum re-run interval, from Step 1's readings.
 
 ## Out of scope
 
-- Writes from another process (above), until `apack db` goes through the running app.
 - Diffs instead of whole results.
 - Incremental view maintenance (above, Re-running), unless a measured view needs it, and then in elmdb.
 - Live queries over the run history's record store, which has its own reader (`services.runHistory`).
