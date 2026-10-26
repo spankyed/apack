@@ -163,7 +163,7 @@ than of the result. That is the asymptotic optimum, and the wrong trade here, fo
 while the app runs on its data (`apack-cli/src/commands/db/target.ts`), and the app refuses to start while a tool
 holds the database's write lock (`assertNoDatabaseWriter`, `@apackdev/host/database`). A tool that must write to the
 live data goes through the app, by the drive server's `/transact`. Letting `apack db` write beside the running app is
-[a deferred plan](deferred/db-writes-beside-the-running-app.md): the tool tells the app, which re-runs every watch.
+[a deferred plan](../../plans/deferred/db-writes-beside-the-running-app.md): the tool tells the app, which re-runs every watch.
 
 ### The move to elmdb
 
