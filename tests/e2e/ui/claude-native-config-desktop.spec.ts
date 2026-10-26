@@ -210,7 +210,7 @@ test('edits original Settings through desktop controls and retains composing', a
     const global=async()=>JSON.parse(await readFile(join(workspace!,'.claude/.claude.json'),'utf8')),originalTurns=(await context()).turns
     expect((await global()).remoteHomeSettingsMode).toBe('forward')
     await search.fill('Use this machine');const initialToggle=row.getByRole('checkbox'),initiallyForwarding=await initialToggle.count()>0&&await initialToggle.isChecked()
-    if(initiallyForwarding){await initialToggle.click();await expect.poll(async()=>(await global()).remoteHomeSettingsMode).toBe('keep_local');await expect(initialToggle).not.toBeChecked()}
+    if(initiallyForwarding){await initialToggle.click();await expect.poll(async()=>(await global()).remoteHomeSettingsMode).toBe('keep_local');await expect(row.getByRole('button',{name:'Review cloud settings…',exact:true})).toBeEnabled();await expect(row).toContainText('Not forwarding')}
     const preservedMode=(await global()).remoteHomeSettingsMode
     const review=async()=>{await search.fill("Use this machine");await row.getByRole('button',{name:'Review cloud settings…',exact:true}).click();await expect(editor.getByRole('heading',{name:"Use this machine's settings in cloud sessions?",exact:true})).toBeVisible()}
     for(const [width,height]of [[1100,900],[680,600]]){
