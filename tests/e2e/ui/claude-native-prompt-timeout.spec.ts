@@ -1,11 +1,19 @@
 import { readFile, writeFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
+import { stripVTControlCharacters } from 'node:util'
 import { test, expect } from '@apackdev/testing'
 const brokerFailure=process.env.CLAUDE_RESEARCH_PROMPT_BROKER_FAILURE==='1'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test.afterEach(async({appPage},testInfo)=>{if(testInfo.status!==testInfo.expectedStatus)await appPage.screenshot({path:testInfo.outputPath('native-prompt-timeout-failure.png')}).catch(()=>{})})
+test.afterEach(async({appPage,electronApp},testInfo)=>{
+  if(testInfo.status===testInfo.expectedStatus)return
+  await writeFile(join(workspace!,'native-prompt-timeout-failure.txt'),await appPage.locator('body').innerText().catch(()=>'<page unavailable>'))
+  const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+  const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+  await writeFile(testInfo.outputPath('native-prompt-timeout-failure.png'),Buffer.from(image,'base64'))
+})
 test('retires an expired reverse read without letting its late reply satisfy a fresh read', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(brokerFailure?150000:90000)
   expect(process.env.HOME).toBe(workspace)
@@ -85,7 +93,22 @@ test('retires an expired reverse read without letting its late reply satisfy a f
       const capture=async(file:string)=>{const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!;const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size);await writeFile(testInfo.outputPath(file),Buffer.from(image,'base64'))}
       for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(composer).toHaveText(old.text);await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeInViewport();await capture('native-prompt-broker-disconnected-'+width+'.png')}
       await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-      await expect.poll(async()=>(await context()).native.state.status,{timeout:20000}).toBe('live')
+      const resize=async()=>{const ownerId=(await context()).native.state.ownerId,log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);const cols=row?.match(/columns:\s*(\d+)/)?.[1],rows=row?.match(/rows:\s*(\d+)/)?.[1];return cols&&rows?{cols:Number(cols),rows:Number(rows)}:undefined}
+      await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!
+      ;(globalThis as any).self??=globalThis
+      const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm'),screen=new Terminal({cols:dimensions.cols,rows:dimensions.rows,allowProposedApi:true})
+      let sequence=0,navigation=false,confirmed=false,selectedAt=0
+      try{await expect.poll(async()=>{
+        const native=(await context()).native,fit=await resize();if(fit)screen.resize(fit.cols,fit.rows)
+        const chunks=native.output.filter((chunk:any)=>chunk.sequence>sequence);if(chunks.length){await new Promise<void>(resolve=>screen.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));sequence=chunks.at(-1).sequence}
+        const buffer=screen.buffer.active,text=Array.from({length:screen.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n'),prompt=recognizeOnboardingPrompt(text,workspace)
+        await writeFile(join(workspace!,'native-prompt-broker-onboarding.json'),JSON.stringify({prompt,navigation,confirmed,text,dimensions:fit}))
+        if(prompt==='workspace-trust'&&!navigation){navigation=true;selectedAt=Date.now();await input.press('ArrowDown')}
+        else if(prompt==='workspace-trust-selected'&&!navigation){navigation=true;selectedAt=Date.now()}
+        else if(prompt==='workspace-trust-selected'&&navigation&&!confirmed&&Date.now()-selectedAt>1200){confirmed=true;await input.press('Enter')}
+        return native.state.status==='live'
+      },{timeout:25000,intervals:[250]}).toBe(true)}finally{screen.dispose()}
+
       const freshPid=(await context()).native.state.nativePid;expect(freshPid).not.toBe(boundNativePid)
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(old.text)
       await unlink(join(workspace!,'native-timeout-read-1.json')).catch(error=>{if(error.code!=='ENOENT')throw error})
