@@ -123,7 +123,7 @@ test('completes an everyday native review across Agent, approval, question and i
       if(combinedAcceptance&&['composer','recovered'].includes(stage))await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
       const file = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '.png'
       await capturePage(file,width,height); screenshots.push(file)
-      geometry.push({ stage, width, height, sessionId:(await context()).sessionId, nativePid:(await context()).native?.state?.nativePid, sendDisabled:await card.getByRole('button',{name:'Send',exact:true}).isDisabled(), readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
+      geometry.push({ stage, width, height, sessionId:(await context()).sessionId, nativePid:(await context()).native?.state?.nativePid, sendDisabled:['composer','recovered'].includes(stage)?await card.getByRole('button',{name:'Send',exact:true}).isDisabled():null, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ geometry, screenshots }))
     }
   }
