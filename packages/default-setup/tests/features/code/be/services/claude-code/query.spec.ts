@@ -1162,3 +1162,50 @@ it('sends typed MCP answers independently of permission and generic-dialog outco
   expect(() => handle.respondElicitation('native-elicitation', { action: 'cancel' })).toThrow('stdin is closed')
   await handle.close()
 })
+
+describe('query cold initialization lifecycle', () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+  it('allows cold initialization past the warm control deadline and keeps later controls bounded', async () => {
+    vi.useFakeTimers()
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    let state = 'pending'
+    handle.initialized.then(() => { state = 'ready' }, () => { state = 'failed' })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(state).toBe('pending')
+    const init = mock.writes[0] as { request_id: string }
+    mock.pushEvent({ type: 'control_response', response: { subtype: 'success', request_id: init.request_id, response: { commands: [], agents: [], models: [] } } })
+    await expect(handle.initialized).resolves.toMatchObject({ commands: [] })
+    const context = handle.getContextUsage()
+    const expired = expect(context).rejects.toThrow('timed out after 10000ms')
+    await vi.advanceTimersByTimeAsync(10_000)
+    await expired
+    mock.forceExit()
+  })
+
+  it('retains a finite cold initialization deadline', async () => {
+    vi.useFakeTimers()
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const expired = expect(handle.initialized).rejects.toThrow('initialize timed out after 30000ms')
+    await vi.advanceTimersByTimeAsync(30_000)
+    await expired
+    expect(mock.killed).toBe(true)
+    mock.forceExit()
+  })
+  it('closes pending cold initialization immediately when its owner closes', async () => {
+    vi.useFakeTimers()
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const handle = await query({})
+    const closed = expect(handle.initialized).rejects.toThrow('control channel closed')
+    await handle.close()
+    await closed
+    expect(mock.endInputCalls).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+})

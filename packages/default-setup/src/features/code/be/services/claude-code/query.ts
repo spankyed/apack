@@ -194,9 +194,14 @@ export async function query(opts: QueryOptions): Promise<QueryHandle> {
   // Verified against pinned 2.1.299/2.1.300 binaries: initialization returns native metadata
   // without a user prompt. Route the response independently from the public event consumer.
   let mcpControlActive = false
-  const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations })
+  // Cold initialization loads native settings/plugins before it can answer a control request.
+  const initialized = hostControls.request({ subtype: 'initialize', hooks: hooks.registrations }, 30_000)
     .then(value => ClaudeInitializationSchema.parse(value))
-  initialized.catch(() => {})
+  initialized.catch(error => {
+    hostControls.close(error)
+    try { stream.kill('SIGTERM') }
+    catch { logger.debug('Could not terminate Claude CLI after initialization failed') }
+  })
   logger.debug('initialize control_request sent')
 
   // Wire child exit into the result promise. This is the single place that
