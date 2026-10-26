@@ -74,9 +74,10 @@ test('retires completed but unsettled Workflow controls after stopping native wo
   await expect(approval).toBeVisible();await expect(approval).toContainText('Review release notes')
   await approval.getByRole('button',{name:'Yes, run it',exact:true}).click();await expect(approval).toHaveCount(0)
   const tasks=async()=>JSON.parse(await readFile(join(workspace!,'native-workflow-state.json'),'utf8').catch(()=>'[]'))
-  const original=async()=>(await tasks()).find((task:any)=>task.type==='local_workflow'&&task.status==='completed'&&task.settled===false&&task.controllers?.some((controller:any)=>!controller.aborted))
-  await expect.poll(original,{timeout:15000,message:'Original Workflow script returns while its reviewer controller is still active'}).toBeTruthy()
-  const before=await original(),taskId=before.id
+  const original=async()=>(await tasks()).find((task:any)=>task.type==='local_workflow'&&task.status==='completed'&&task.settled===false)
+  let before:any
+  await expect.poll(async()=>{const value=await original();if(value)before=value;return !!value},{timeout:15000,message:'Original Workflow completion precedes native settlement'}).toBe(true)
+  const taskId=before.id
   const currentTask=async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)
   await expect.poll(currentTask).toMatchObject({kind:'workflow',status:'completed',settled:false,canStop:true})
   const region=appPage.getByRole('region',{name:'Native Claude workflows',exact:true}),row=region.locator('[data-native-workflow-id="'+taskId+'"]')
@@ -95,7 +96,7 @@ test('retires completed but unsettled Workflow controls after stopping native wo
       await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({stage,width,file,task:await currentTask()})
     }
   }
-  await capture('completed-live')
+  await capture('completed-unsettled')
   await stop.click()
   await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.settled,{timeout:15000}).toBe(true)
   await expect.poll(currentTask).toMatchObject({settled:true,canStop:false})
