@@ -203,7 +203,8 @@ test('edits original Settings through desktop controls and retains composing', a
 
   if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATES==='1'){
     const editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="autoUpdatesChannel"]')
-    const originalTurns=(await context()).turns,beforeUser=await user(),beforeLocal=await local(),samples:any[]=[]
+    const globalUpdateSetting=async()=>JSON.parse(await readFile(join(workspace!,'.claude/.claude.json'),'utf8')).autoUpdates
+    const originalTurns=(await context()).turns,beforeUser=await user(),beforeLocal=await local(),beforeGlobalUpdate=await globalUpdateSetting(),samples:any[]=[]
     await search.fill('');await expect(row).toBeVisible()
     for(const [width,height]of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height});await row.getByRole('button',{name:'Change…',exact:true}).click()
@@ -220,7 +221,7 @@ test('edits original Settings through desktop controls and retains composing', a
       const capture=testInfo.outputPath(`native-settings-updates-information-${width}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
       await writeFile(capture,Buffer.from(image,'base64'));samples.push({width,height,text:await description.innerText(),geometry,capture,realWheel:true})
       await editor.getByRole('button',{name:'Close',exact:true}).click();await expect(editor).toHaveCount(0);await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
-      expect(await user()).toEqual(beforeUser);expect(await local()).toEqual(beforeLocal);await expect(panel.getByRole('alert')).toHaveCount(0)
+      expect(await user()).toEqual(beforeUser);expect(await local()).toEqual(beforeLocal);expect(await globalUpdateSetting()).toEqual(beforeGlobalUpdate);await expect(panel.getByRole('alert')).toHaveCount(0)
     }
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
     updateEditor={samples,readOnly:true,cancelPreservesSettings:true,reopened:true,noPhantomTurn:true,decisionVariants:'not admitted under original updater-disabled environment'}
