@@ -223,9 +223,18 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
   } });
   const client = createTRPCUntypedClient({ links: [wsLink({ client: ws })] });
   let subscription: { unsubscribe(): void } | undefined;
+  // An install answers with its outcome, complete or failed with its error, however long it takes on this machine
+  const installs = new Map<string, (outcome: Record<string, unknown>) => void>();
+  const outcomeOf = (packSlug: string) => new Promise<Record<string, unknown>>(resolve => installs.set(packSlug, resolve));
   const ready = new Promise<void>((resolve, reject) => {
     subscription = client.subscription('bus.sub', undefined, { onStarted: () => resolve(), onError: reject,
-      onData: message => messages.push(message as (typeof messages)[number]) });
+      onData: data => {
+        const message = data as (typeof messages)[number];
+        messages.push(message);
+        if (message.event.type === 'PACK_INSTALL_COMPLETE' || message.event.type === 'PACK_INSTALL_FAILED') {
+          installs.get(message.event.packSlug as string)?.(message.event);
+        }
+      } });
   });
   const loaded = async () => await client.query('packs.loaded') as { id: string; registrationId: string; declarationRevision: string; buildRevision: string }[];
   const credential = async (packId: string) => {
@@ -277,10 +286,12 @@ shared.set({ path: ['name'], value: 2 });
     execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', dependent], {
       cwd: dependent, stdio: 'pipe', timeout: 20_000,
     });
+    const outcome = outcomeOf(dependent);
     await appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
       type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
     }), dependent);
-    await expect.poll(async () => (await loaded()).map(pack => pack.id)).toContain(id);
+    expect(await outcome).toMatchObject({ type: 'PACK_INSTALL_COMPLETE', packId: id });
+    expect((await loaded()).map(pack => pack.id)).toContain(id);
     installed = true;
     const owner = await credential('bundled-ui-fixture');
     const access = await credential(id);
