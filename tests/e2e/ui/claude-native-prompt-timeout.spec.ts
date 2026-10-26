@@ -71,9 +71,20 @@ test('retires an expired reverse read without letting its late reply satisfy a f
   const receipt=async(call:number)=>JSON.parse(await readFile(join(workspace!,'native-timeout-read-'+call+'.json'),'utf8').catch(()=>'null'))
   const old={text:'Keep the earlier release review draft.',cursor:9}
   const current={text:'Keep the newer release review draft.',cursor:9}
+  const draftObservations:any[]=[]
+  async function observeDraft(phase:string){
+    draftObservations.push({phase,...await composer.evaluate(element=>{const editor=(element as any).editor;return {text:element.textContent,doc:editor.state.doc.toJSON(),selection:editor.state.selection.toJSON(),visibleSelection:window.getSelection()?.toString(),focused:document.activeElement===element}})})
+    await writeFile(join(workspace!,'native-prompt-broker-draft-observations.json'),JSON.stringify(draftObservations,null,2))
+  }
   async function draft(value:typeof old){
-    await composer.fill(value.text);await composer.press(process.platform==='darwin'?'Meta+ArrowLeft':'Home')
+    if(brokerFailure){
+      await observeDraft('before select all');await composer.press('ControlOrMeta+a');await observeDraft('after select all')
+      await appPage.keyboard.insertText(value.text);await observeDraft('after typing')
+      await expect(composer).toHaveText(value.text)
+    }else await composer.fill(value.text)
+    await composer.press(process.platform==='darwin'?'Meta+ArrowLeft':'Home')
     for(let i=0;i<value.cursor;i++)await composer.press('ArrowRight')
+    if(brokerFailure)await observeDraft('after cursor movement')
   }
   try{
     await draft(old);await hold.arm();await read.click()
