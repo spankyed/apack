@@ -1,6 +1,6 @@
 // The link to the elmdb checkout `@apackdev/ears` builds against: `vendor/elmdb`, a gitignored symlink, beside the
 // commit it is pinned to, `vendor/elmdb.rev`. Plain Node with no dependencies, since it runs before `npm ci`: npm
-// resolves the `file:` dependency through the link. The checkout is `ELMDB_DIR`, or `~/Develop/Projects/elmdb`.
+// resolves the `file:` dependency through the link. The checkout is `ELMDB_DIR`, or `~/Develop/Projects/apack/elmdb`.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 /** The elmdb checkout the link points at @param {NodeJS.ProcessEnv} [env] */
 export function elmdbCheckout(env = process.env) {
-  return path.resolve(env.ELMDB_DIR ?? path.join(os.homedir(), 'Develop', 'Projects', 'elmdb'));
+  return path.resolve(env.ELMDB_DIR ?? path.join(os.homedir(), 'Develop', 'Projects', 'apack', 'elmdb'));
 }
 
 /**
