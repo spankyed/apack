@@ -189,7 +189,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Reduce motion');await expect(panel.getByRole('checkbox',{name:'Reduce motion',exact:true})).toBeChecked()
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
-  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any
+  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any
   const externalDisableRoutes:string[]=[]
   const disableExternalConsent=async()=>{
     await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
@@ -201,6 +201,31 @@ test('edits original Settings through desktop controls and retains composing', a
     await expect(editor).toHaveCount(0);await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false)
   }
 
+  if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATES==='1'){
+    const editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="autoUpdatesChannel"]')
+    const originalTurns=(await context()).turns,beforeUser=await user(),beforeLocal=await local(),samples:any[]=[]
+    await search.fill('');await expect(row).toBeVisible()
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await row.getByRole('button',{name:'Change…',exact:true}).click()
+      await expect(editor.getByRole('heading',{name:'Enable Auto-Updates',exact:true})).toBeVisible()
+      const description=editor.locator('[data-native-settings-editor-body] p')
+      await expect(description).toContainText('Auto-updates are controlled by an environment variable and cannot be changed here.')
+      await expect(description).toContainText('to re-enable auto-updates.')
+      expect(await editor.locator('input,select,textarea,form,[data-native-settings-option]').count()).toBe(0)
+      const body=editor.locator('[data-native-settings-editor-body]');await body.hover()
+      const bounds=()=>description.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.bottom-b.bottom}})
+      for(let step=0;step<12;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,Math.sign(state.shift)*Math.min(80,Math.max(2,Math.abs(state.shift))));await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+      const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'Close',exact:true})).toBeInViewport()
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+      const capture=testInfo.outputPath(`native-settings-updates-information-${width}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+      await writeFile(capture,Buffer.from(image,'base64'));samples.push({width,height,text:await description.innerText(),geometry,capture,realWheel:true})
+      await editor.getByRole('button',{name:'Close',exact:true}).click();await expect(editor).toHaveCount(0);await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled()
+      expect(await user()).toEqual(beforeUser);expect(await local()).toEqual(beforeLocal);await expect(panel.getByRole('alert')).toHaveCount(0)
+    }
+    expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    updateEditor={samples,readOnly:true,cancelPreservesSettings:true,reopened:true,noPhantomTurn:true,decisionVariants:'not admitted under original updater-disabled environment'}
+    await appPage.setViewportSize({width:1100,height:900});await search.fill('')
+  }
   if(externalConsentProfile){
     const originalTurns=(await context()).turns,editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="showExternalIncludesDialog"]'),projectConfig=consentProject
     const begin=async()=>{await search.fill('External');await expect(row.getByRole('button',{name:'Review external imports…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Review external imports…',exact:true}).click();await expect(editor).toBeVisible();await expect(editor.getByRole('heading',{name:'Allow external CLAUDE.md file imports?',exact:true})).toBeVisible()}
@@ -507,7 +532,7 @@ test('edits original Settings through desktop controls and retains composing', a
   }
   await tabs.getByRole('button',{name:'Config',exact:true}).click();await expect(search).toBeVisible()
   await panel.getByRole('button',{name:'Close settings',exact:true}).click();await expect(panel).toHaveCount(0);await expect(composer).toHaveText(draft)
-  if(externalConsentProfile){expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);externalConsent.exactParentDocumentSelection=true}
+  if(externalConsentProfile||updateEditor){expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);if(externalConsent)externalConsent.exactParentDocumentSelection=true;if(updateEditor)updateEditor.exactParentDocumentSelection=true}
   const before=(await context()).turns
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns,{timeout:15000}).toBeGreaterThan(before)
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -527,6 +552,6 @@ test('edits original Settings through desktop controls and retains composing', a
 
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...updateEditor?{updateEditor}:{},...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true},local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:true,lockedControl:true}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
