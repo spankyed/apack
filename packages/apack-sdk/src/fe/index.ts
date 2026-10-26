@@ -12,6 +12,7 @@ export type { SpeechEvent } from './speech-event.ts';
 export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceLifecycleEvent, SurfaceStateOf, RouteComponents } from './surface.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
 export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
+export { useSurfaceDraft } from './surface-draft.ts'
 export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
 export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } from './surface-state.ts'

@@ -1015,6 +1015,9 @@ export function useStepDeclarations(): ComputedRef<readonly StepCatalogEntry[]>;
 export function useSurface<T>(): T;
 
 // @public
+export function useSurfaceDraft<T>(name: string, initial: T): Ref<T>;
+
+// @public
 export function useSurfaceStorage(): SurfaceStorage;
 
 // @public (undocumented)
