@@ -86,6 +86,28 @@ export function publishedSpec(spec: string, dir: string): string {
   return String(linked.version);
 }
 
+/** A dependency a published manifest names, as a registry install of it resolves one */
+export interface RegistryDependency {
+  /** The published package that depends on it */
+  dependent: string;
+  name: string;
+  spec: string;
+}
+
+/**
+ * What a registry install of `manifests` asks the registry for: every dependency they name but one on a package among
+ * them, which the same publish puts there. A linked dependency is among these as the version it links, and a registry
+ * holding no such version — a private package, as elmdb's binding is, or one never published — is what a real publish
+ * refuses, since everything published depending on it would fail to install
+ */
+export function registryDependencies(manifests: readonly Manifest[]): RegistryDependency[] {
+  const publishing = new Set(manifests.map((manifest) => String(manifest.name)));
+  return manifests.flatMap((manifest) => DEPENDENCY_FIELDS.flatMap((field) =>
+    Object.entries((manifest[field] ?? {}) as Record<string, string>)
+      .filter(([name]) => !publishing.has(name))
+      .map(([name, spec]) => ({ dependent: String(manifest.name), name, spec }))));
+}
+
 function publishedExports(exports: unknown): unknown {
   if (exports === null || typeof exports !== 'object' || Array.isArray(exports)) return exports;
   const kept = Object.entries(exports).flatMap(([subpath, target]) => {
