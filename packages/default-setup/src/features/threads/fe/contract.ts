@@ -69,7 +69,7 @@ export interface ThreadsContext {
   /** The panel's message search: the query typed, and the results answering it once they arrive */
   messageSearch: { query: string; results: MessageSearchResult[]; searching: boolean };
   /** A message the chat brings into view once its thread has loaded it, older pages included */
-  focusMessageId: string | null;
+  focusMessage: { threadId: string; messageId: string } | null;
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */
