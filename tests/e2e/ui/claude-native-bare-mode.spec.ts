@@ -50,7 +50,7 @@ test('keeps bare-mode native startup and composer usable without private plugin 
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0
   let theme = false, security = false, navigated = false, trusted = false, trustSelectedAt = 0, trustAttempts = 0
-  let currentScreen=''
+  let currentScreen='',apiKeyNavigated=false,apiKeyConfirmed=false
   try{await expect.poll(async () => {
     const current = await context(), native = current.native
     const chunks = native?.output?.filter((chunk: any) => chunk.sequence > lastSequence) ?? []
@@ -59,9 +59,11 @@ test('keeps bare-mode native startup and composer usable without private plugin 
     const text = Array.from({ length: terminalScreen!.rows }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '').join('\n')
     currentScreen=text
     if (native?.state?.status === 'live') return true
-    const screen = recognizeOnboardingPrompt(text, workspace)
+    const screen = recognizeOnboardingPrompt(text, workspace,{apiKeySuffix:'research-fixture-key'})
     await writeFile(join(workspace!, 'native-capability-onboarding.json'), JSON.stringify({ screen, theme, security, navigated, trusted, trustAttempts, dimensions, output: text }))
-    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
+    if(screen==='environment-api-key'&&!apiKeyNavigated){apiKeyNavigated=true;await input.press('ArrowUp')}
+    else if(screen==='environment-api-key-selected'&&apiKeyNavigated&&!apiKeyConfirmed){apiKeyConfirmed=true;await input.press('Enter')}
+    else if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; trustSelectedAt = Date.now(); await input.press('ArrowDown') }
     else if (screen === 'workspace-trust-selected' && !navigated) { navigated = true; trustSelectedAt = Date.now() }
@@ -73,6 +75,7 @@ test('keeps bare-mode native startup and composer usable without private plugin 
     const png=await win.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
     await writeFile(testInfo.outputPath('native-bare-mode-startup-failure.png'),Buffer.from(png,'base64'));throw error
   }
+  expect(apiKeyNavigated).toBe(true);expect(apiKeyConfirmed).toBe(true)
   const nativePolicy=JSON.parse(await readFile(join(workspace!,'native-bare-policy.json'),'utf8'))
   expect(nativePolicy).toMatchObject({bare:true,plugins:true,hooks:true,statusLine:false,themes:false})
   const privateDrawing=JSON.parse(await readFile(join(workspace!,'native-select-drawing.json'),'utf8'))
@@ -103,7 +106,7 @@ test('keeps bare-mode native startup and composer usable without private plugin 
   await composer.click();await composer.press('ControlOrMeta+A');await appPage.keyboard.insertText(continuation);await expect(composer).toHaveText(continuation);await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-bare-mode-proof.json'),JSON.stringify({sessionId,boundNativePid,nativePolicy,nativePrompt,continuation,captures}))
+  await writeFile(join(workspace!,'native-bare-mode-proof.json'),JSON.stringify({sessionId,boundNativePid,nativePolicy,nativePrompt,continuation,captures,credentialConsent:{navigated:apiKeyNavigated,confirmed:apiKeyConfirmed}}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativeBareMode:true,nativePrivateControlsSuppressed:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,captures,browserErrors:errors}))
 })
 
