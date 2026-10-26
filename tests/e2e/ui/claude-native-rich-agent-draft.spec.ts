@@ -15,6 +15,12 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async({appPage},info)=>{if(!roundTripJourney||info.status===info.expectedStatus)return;await writeFile(join(workspace!,'native-rich-roundtrip-failure.txt'),await appPage.locator('body').innerText({timeout:2000}).catch(()=>'<page unavailable>'));await appPage.screenshot({caret:'initial',path:info.outputPath('native-rich-roundtrip-failure.png'),timeout:5000}).catch(()=>{});})
 test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(roundTripJourney?240000:90000)
+  async function capture(file:string){
+    const window=await _electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+    const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+    await writeFile(testInfo.outputPath(file),Buffer.from(image,'base64'))
+  }
+
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
@@ -156,7 +162,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8').catch(()=>'{}'))).toMatchObject({text:agentFill.after.text,cursor:roundTripJourney?agentNativeBefore.cursor:agentFill.after.text.indexOf('Review changes.')+2})
   if(roundTripJourney){const value=JSON.parse(await readFile(join(workspace!,'native-rich-draft-read.json'),'utf8'));expect(value.view?.agentId).toBe(taskId);roundtripReads.push({agentId:taskId,value});await writeFile(join(workspace!,'native-agent-roundtrip-reads.json'),JSON.stringify(roundtripReads))}
   await tools.click();await agentComposer.focus();await expect.poll(selected).toBe('Re')
-  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);const selectionLine=agentComposer.locator('p').filter({hasText:'Review changes.'});await selectionLine.scrollIntoViewIfNeeded();await expect(selectionLine).toBeInViewport();await expect.poll(selected).toBe('Re');await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();await appPage.screenshot({path:testInfo.outputPath('native-rich-agent-draft-'+size.width+'.png')});if(roundTripJourney)roundtripCaptures.push({owner:'agent-draft',width:size.width,height:size.height,file:'native-rich-agent-draft-'+size.width+'.png'})}
+  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);const selectionLine=agentComposer.locator('p').filter({hasText:'Review changes.'});await selectionLine.scrollIntoViewIfNeeded();await expect(selectionLine).toBeInViewport();await expect.poll(selected).toBe('Re');await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();await capture('native-rich-agent-draft-'+size.width+'.png');if(roundTripJourney)roundtripCaptures.push({owner:'agent-draft',width:size.width,height:size.height,file:'native-rich-agent-draft-'+size.width+'.png'})}
   if(imeJourney){
     await agentComposer.locator('p').filter({hasText:'Review changes.'}).click();await agentComposer.press('End')
     const cdp=await appPage.context().newCDPSession(appPage),preview='にほん',commit='日本語'
@@ -195,7 +201,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
           const bounds=()=>human.evaluate((element,needle)=>{const walk=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),chars:string[]=[],positions:{node:Node;offset:number}[]=[];let node:Node|null;while((node=walk.nextNode())){const value=node.textContent!;for(let offset=0;offset<value.length;offset++){const char=/\s/.test(value[offset])?' ':value[offset];if(char===' '&&chars.at(-1)===' ')continue;chars.push(char);positions.push({node,offset})}}const index=chars.join('').indexOf(needle);if(index<0)throw Error('Visible original Agent text missing: '+needle);const first=positions[index],last=positions[index+needle.length-1],range=document.createRange();range.setStart(first.node,first.offset);range.setEnd(last.node,last.offset+1);const r=range.getBoundingClientRect(),b=element.closest('[aria-label="Agent transcript"]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}},needle)
           await transcript.hover();let wheels=0
           for(let step=0;step<30;step++){const value=await bounds();if(value.visible)break;await appPage.mouse.wheel(0,value.shift);wheels++;await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
-          const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();const file=`native-rich-agent-sent-${width}-${part}.png`;await appPage.screenshot({path:testInfo.outputPath(file)});roundtripCaptures.push({owner:'agent-transcript',width,height,part,file,geometry,wheels,visibleUuid:await human.getAttribute('data-native-agent-message')})
+          const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(form.getByRole('button',{name:'Send to Agent',exact:true})).toBeInViewport();const file=`native-rich-agent-sent-${width}-${part}.png`;await capture(file);roundtripCaptures.push({owner:'agent-transcript',width,height,part,file,geometry,wheels,visibleUuid:await human.getAttribute('data-native-agent-message')})
         }
       }
     }
@@ -206,7 +212,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
     expect(await snapshot(composer)).toEqual(parentState);await expect(card.locator('img[src^="data:image/"]')).toHaveAttribute('src',parentImage!)
     await expect.poll(async()=>(await context()).native.state.view?.kind).toBe('main')
     const restored=await nativeRead(card,composer);expect(restored.text).toBe(parentFill.after.text)
-    for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(card.locator('img[src^="data:image/"]')).toBeInViewport();await expect(composer.locator('p').filter({hasText:'Review changes.'})).toBeInViewport();const file=`native-rich-parent-roundtrip-${width}.png`;await appPage.screenshot({caret:'initial',path:testInfo.outputPath(file)});roundtripCaptures.push({owner:'parent',width,height,file})}
+    for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(card.locator('img[src^="data:image/"]')).toBeInViewport();await expect(composer.locator('p').filter({hasText:'Review changes.'})).toBeInViewport();const file=`native-rich-parent-roundtrip-${width}.png`;await capture(file);roundtripCaptures.push({owner:'parent',width,height,file})}
     const sent=parentFill.after.text,before=(await context()).messages.length;await card.getByRole('button',{name:'Send',exact:true}).click();await expect(card.locator('img[src^="data:image/"]')).toHaveCount(0);await expect(composer).toHaveText('')
     await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&message.text.includes(sent))).toBe(true)
     const message=(await context()).messages.slice(before).find((message:any)=>message.sender==='user'&&message.text.includes(sent));expect(message.references.images).toHaveLength(1);expect(message.references.context).toEqual(expect.arrayContaining([expect.objectContaining({refType:'thread',refId:(await context()).threadId})]))
