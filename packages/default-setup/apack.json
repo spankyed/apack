@@ -526,6 +526,7 @@
         "chatQueries": "src/features/threads/be/repository/index.ts#chatQueries",
         "chatCommands": "src/features/threads/be/repository/index.ts#chatCommands"
       },
+      "views": "src/features/threads/be/views.ts#threadViews",
       "references": {
         "types": {
           "thread": {
@@ -901,6 +902,7 @@
         "noteQueries": "src/features/notes/be/repository/index.ts#noteQueries",
         "noteCommands": "src/features/notes/be/repository/index.ts#noteCommands"
       },
+      "views": "src/features/notes/be/views.ts#noteViews",
       "references": {
         "types": {
           "note": {
@@ -1169,6 +1171,7 @@
         "libraryQueries": "src/features/library/be/repository/index.ts#libraryQueries",
         "libraryCommands": "src/features/library/be/repository/index.ts#libraryCommands"
       },
+      "views": "src/features/library/be/views.ts#libraryViews",
       "references": {
         "types": {
           "document": {
@@ -1267,7 +1270,8 @@
       "repositories": {
         "flowsQueries": "src/features/flows/be/repository/index.ts#flowsQueries",
         "flowsCommands": "src/features/flows/be/repository/index.ts#flowsCommands"
-      }
+      },
+      "views": "src/features/flows/be/views.ts#flowViews"
     },
     "actions": {
       "description": "Manage reusable executable actions.",
@@ -1349,7 +1353,8 @@
       "repositories": {
         "actionQueries": "src/features/actions/be/repository/index.ts#actionQueries",
         "actionCommands": "src/features/actions/be/repository/index.ts#actionCommands"
-      }
+      },
+      "views": "src/features/actions/be/views.ts#actionViews"
     },
     "prompts": {
       "description": "Manage reusable prompt templates.",
@@ -1431,7 +1436,8 @@
       "repositories": {
         "promptQueries": "src/features/prompts/be/repository/index.ts#promptQueries",
         "promptCommands": "src/features/prompts/be/repository/index.ts#promptCommands"
-      }
+      },
+      "views": "src/features/prompts/be/views.ts#promptViews"
     },
     "brain": {
       "description": "Execute flows and coordinate their running steps.",

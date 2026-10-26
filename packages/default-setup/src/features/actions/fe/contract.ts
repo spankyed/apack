@@ -3,33 +3,23 @@
 // A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears` — which is what lets
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
+//
+// What the surface holds is what the user is doing: which action is open, how far down the list they've read, the
+// form they're filling. The actions themselves are the feature's views (`be/views.ts`), which a component reads with
+// `useView`, so nothing here is a copy of a row.
 import type { SurfaceInbox } from '@apackdev/sdk/fe'
-import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
+import type { ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
-import type { Category } from '#generated/types.ts'
 
 export interface ActionsContext {
+  /** The action open in the detail view */
   selectedActionId?: EARS.EntityId;
-  /**
-   * The call the outstanding `ACTION_SELECT` was asked under, or absent when nothing is outstanding.
-   *
-   * `selectedActionId` cannot do this job: it is written *from* the answer, so until one lands there is
-   * nothing to compare an arriving one against, and two quick selections are decided by whichever answer
-   * arrives last.
-   *
-   * **A domain id cannot do this job, for two independent reasons.** It does not distinguish windows, so
-   * another window's answer for the same action satisfies it; and it does not distinguish asks, so a slot
-   * holding one is only ever overwritten, never emptied — which names the last ask for the life of the
-   * surface. A call is per ask and per window, and the slot is cleared when its answer lands.
-   */
-  pendingActionCall: string | null;
-  actions: ActionEntity[];
-  selectedAction?: ActionEntity;
-  totalCount: number;
-  page: number;
-  totalPages: number;
-  loadingMore: boolean;
-  categories: Category[]; // Categories from settings
+  /** The open action's label, for the breadcrumb, as its view last read it */
+  selectedLabel?: string;
+  /** The action the form was filled from, so its view changing doesn't overwrite what the user has typed */
+  formFor?: EARS.EntityId;
+  /** How many actions the list shows: a page more each time the user scrolls to its end */
+  listLimit: number;
   selectedCategories: string[]; // Filter state
 
   // Import/Export state
@@ -59,16 +49,14 @@ export interface ActionsContext {
   };
 }
 
-/** Paging and editing, which the code surface's actions panel asks of it */
+/** Opening and editing, which the code surface's actions panel and the action step's form ask of it */
 export type ActionsInboxEvent =
-  | { type: 'ACTION.SELECT'; actionId: EARS.EntityId }
   | { type: 'ACTION.CREATE' }
-  | { type: 'ACTION.DELETE'; actionId: EARS.EntityId }
   | { type: 'ACTION.UPDATE_INPUT'; actionId: string; input: Record<string, any> }
-  | { type: 'ACTION.CREATE_INLINE'; label: string; actionFn: string; input: Record<string, any> }
   | { type: 'ACTION.UPDATE_LABEL'; actionId: string; label: string }
-  | { type: 'ACTIONS.LOAD_MORE' }
-  | { type: 'ACTIONS.LOAD_ALL' }
+  | { type: 'ACTION.DELETE'; actionId: EARS.EntityId }
+  | { type: 'ACTION.CREATE_INLINE'; label: string; actionFn: string; input: Record<string, any> }
+  | { type: 'ACTION.SELECT'; actionId: EARS.EntityId }
 
 export type Contract = {
   opens: 'Action'

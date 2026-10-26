@@ -210,10 +210,10 @@ const style = useCssModule();
 const savedScrollHeight = ref(0);
 const isPrependPending = ref(false);
 
-// Asks only when the machine takes the ask (`canLoadOlderMessages`): one it dropped would leave the page already loading,
+// Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
 // a focused message's seek's, handled as this prepend
 function requestLoadMore() {
-  if (messagePagination.value.isLoading || !messagePagination.value.nextCursor) return;
+  if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
   const el = messagesContainer.value;
   if (el) savedScrollHeight.value = el.scrollHeight;
   isPrependPending.value = true;

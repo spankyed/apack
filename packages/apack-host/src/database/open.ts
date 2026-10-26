@@ -27,7 +27,7 @@ export interface DatabaseStoreOptions {
 /**
  * The elmdb database at `path` and a new engine reading and writing it. The database keeps the schema it was last
  * held to; opened to write, it is held to what `schema` names too (`admin.declare`), and again each time those names
- * change (`onRegistrationsChanged`: the app's registry, as packs register), so a declaration another pack made stays
+ * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
 export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
@@ -40,7 +40,7 @@ export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStor
       database.close();
       throw error;
     }
-    schema.onRegistrationsChanged?.(() => { if (database.isOpen) engine.admin.declare(engineSchemaOf(schema)); });
+    schema.onRegistrationChanged?.(() => { if (database.isOpen) engine.admin.declare(engineSchemaOf(schema)); });
   }
   return { database, engine };
 }

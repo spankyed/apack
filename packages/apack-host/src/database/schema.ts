@@ -28,8 +28,8 @@ export interface DatabaseSchema {
   getRowRules?(type: string): RowRules | undefined;
   /** What a relation kind's edges are held to; none when the kind declares no rule */
   getRelationRules?(kind: string): RelationRules | undefined;
-  /** Calls `listener` after the names change — the app's registry, as packs register — returning the unsubscribe */
-  onRegistrationsChanged?(listener: () => void): () => void;
+  /** Calls `listener` after the names change — the app's registry, as a pack registers — returning the unsubscribe */
+  onRegistrationChanged?(listener: (packId: string) => void): () => void;
 }
 
 /**

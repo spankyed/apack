@@ -968,6 +968,20 @@ ${items.join('\n')}
     return { type, kind: entry.kind, dsl: entry.dsl, entry, types, helpers };
   });
 
+  /** The local name a feature's views are imported as, in the pack entry and in `fe.ts` */
+  const viewsBinding = (featureId: string) => `__views_${featureId}`;
+
+  /** Each feature's views (`features.<id>.views`): the object `defineViews` returned, checked to be one */
+  function viewEntries(): Array<{ featureId: string; source: string; exportName: string }> {
+    return packFeatures(manifest).flatMap((f) => {
+      if (!f.views) return [];
+      const label = `Feature "${f.id}": views`;
+      const { source, exportName, value } = valueExport(label, f.views);
+      if (value !== 'object') throw new Error(`${label}: "${exportName}" in ${source} must export the object defineViews returns (export const ${exportName} = defineViews({ … }))`);
+      return [{ featureId: f.id, source, exportName }];
+    });
+  }
+
   // ── Backend entry ──────────────────────────────────────────────
 
   function generateBackendEntry(): string {
@@ -995,6 +1009,9 @@ ${items.join('\n')}
       `import { ${exportName} as ${binding} } from '${toImportPath(root, source)}';`).join('\n');
 
     const writerEntries = contentWriterEntries();
+    const views = viewEntries();
+    const viewsImport = views.map(({ featureId, source, exportName }) =>
+      `import { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n');
 
     const featuresLiteral = features.map(f => {
       const parts: string[] = [];
@@ -1004,6 +1021,7 @@ ${items.join('\n')}
       parts.push(`      services: [${Object.keys(f.services ?? {}).map(s => `'${s}'`).join(', ')}]`);
       // JSON.parse preserves own __proto__ keys, which an object literal would treat as a prototype setter.
       if (f.settings) parts.push(`      settings: JSON.parse(${dataLiteral(JSON.stringify(f.settings))})`);
+      if (f.views) parts.push(`      views: ${viewsBinding(f.id)}`);
       return `    '${f.id}': {\n${parts.join(',\n')},\n    }`;
     }).join(',\n');
     const blocks = blockDefinitions();
@@ -1033,6 +1051,7 @@ ${contracted.length ? "import type { MachineMatchesContract } from '@apackdev/sd
 ${systemImports}
 import { featureServices, bindServices } from './services.ts';
 ${hooksImport}
+${viewsImport}
 ${writerEntries.map(([, path, exportName], i) => `import { ${exportName} as __contentWriter_${i} } from '${path}';`).join('\n')}
 ${migrations.imports.join('\n')}
 ${steps.imports.join('\n')}
@@ -1401,10 +1420,76 @@ export const getDataDirPath = (name: string): string => _packDataDir('${manifest
   // Frontend helpers that take the names this pack's code writes: its own surfaces by feature id, those its
   // dependencies declare as `<packId>/<featureId>`. Kept apart from events.ts, which backend systems import,
   // because these reach the frontend SDK.
+  /**
+   * `useView`, typed by the views this pack's features declare: a feature's name and a view's, with its arguments
+   * and its result read off the declaration. Type-only imports of the views' modules, so no backend code reaches
+   * the frontend's bundle.
+   */
+  function viewsFe(): { imports: string; code: string } | undefined {
+    const views = viewEntries();
+    if (views.length === 0) return undefined;
+    const imports = `import { untypedFromView, untypedUseView, type UseViewOptions, type ViewState, type ViewUpdate } from '@apackdev/sdk/fe';
+import type { ViewArgs, ViewResult } from '@apackdev/sdk/framework';
+import type { MaybeRefOrGetter } from 'vue';
+${views.map(({ featureId, source, exportName }) => `import type { ${exportName} as ${viewsBinding(featureId)} } from '${toImportPath(root, source)}';`).join('\n')}`;
+    const code = `
+/** Feature id → the views it declares (apack.json \`features.<id>.views\`) */
+export type PackViews = {
+${views.map(({ featureId }) => `  '${featureId}': typeof ${viewsBinding(featureId)};`).join('\n')}
+};
+
+/** A feature of this pack that declares views */
+export type ViewFeatureName = keyof PackViews & string;
+
+/**
+ * What \`useView\` takes after the names: nothing for a view without arguments, else its arguments, or \`null\` or
+ * \`undefined\` for none yet, and how to follow them
+ */
+export type ViewArgsParameter<Read> = ViewArgs<Read> extends undefined ? [] : [args: MaybeRefOrGetter<ViewArgs<Read> | null | undefined>, options?: UseViewOptions];
+
+/**
+ * One of this pack's views, live: its result now, and again after every commit that changes it, until the calling
+ * scope is disposed — so it runs in a component's setup or an effect scope. Arguments may be a ref or a getter; a
+ * change subscribes again, and \`null\` or \`undefined\` leaves the view idle until there is something to ask for.
+ *
+ * \`untypedUseView\` from \`@apackdev/sdk/fe\` is the escape hatch, for a view named by data or another pack's.
+ */
+export function useView<Feature extends ViewFeatureName, View extends keyof PackViews[Feature] & string>(
+  feature: Feature,
+  view: View,
+  ...args: ViewArgsParameter<PackViews[Feature][View]>
+): ViewState<ViewResult<PackViews[Feature][View]>> {
+  return untypedUseView(ref(feature), view, ...args) as ViewState<ViewResult<PackViews[Feature][View]>>;
+}
+
+/**
+ * One of this pack's views, followed by a surface machine: actor logic to spawn with the view's arguments as its
+ * input, which sends the machine \`read(update, args)\` for the view's result and each changed result after it until
+ * it is stopped. For a surface drawn in more than one area, where no one component holds the view for all of them.
+ *
+ * \`untypedFromView\` from \`@apackdev/sdk/fe\` is the escape hatch, for a view named by data or another pack's.
+ */
+export function fromView<Feature extends ViewFeatureName, View extends keyof PackViews[Feature] & string, TEvent extends { type: string }>(
+  feature: Feature,
+  view: View,
+  read: (update: ViewUpdate<ViewResult<PackViews[Feature][View]>>, args: ViewArgs<PackViews[Feature][View]>) => TEvent,
+): ReturnType<typeof untypedFromView<ViewResult<PackViews[Feature][View]>, ViewArgs<PackViews[Feature][View]>, TEvent>> {
+  return untypedFromView(ref(feature), view, read);
+}
+`;
+    return { imports, code };
+  }
+
   function generateFe(): string {
     const features = packFeatures(manifest);
     const surfaceFeatures = features.filter(f => f.surface);
-    if (!publishesSurfaceState(manifest, manifest.id)) return '';
+    const views = viewsFe();
+    if (!publishesSurfaceState(manifest, manifest.id)) {
+      return views ? `${HEADER}
+${views.imports}
+import { ref } from './ref.ts';
+${views.code}` : '';
+    }
     const own = surfaceFeatures.map(f => f.id);
     const surfaces = [...own, ...Object.keys(_mergeProvenance('surfaces', [...depSnapshots])).sort()].map(name => `'${name}'`);
 
@@ -1427,6 +1512,7 @@ import type { SendableSurfaceEvents } from './events.ts';
 import { ref } from './ref.ts';
 ${stateImports}
 ${depState.imports.join('\n')}
+${views ? views.imports : ''}
 
 /**
  * A surface as this pack's code names it: its own by feature id, a dependency's as \`<packId>/<featureId>\`.
@@ -1507,7 +1593,7 @@ export function readSurfaceState<Name extends DependencySurfaceName, TSelected>(
 export function readSurfaceState(name: SurfaceName, selector: (state: never) => unknown): unknown {
   return readUntypedSurfaceState(ownSurface(name), (snapshot: { context: never }) => selector(snapshot.context));
 }
-`;
+${views ? views.code : ''}`;
   }
 
 

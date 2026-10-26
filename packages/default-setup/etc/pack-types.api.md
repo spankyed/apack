@@ -10,7 +10,7 @@ import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS 
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import { HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
-import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup } from '@apackdev/sdk/fe';
+import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -54,27 +54,14 @@ interface ActionTab {
 }
 
 interface ActionsContext {
+    /** The action open in the detail view */
     selectedActionId?: EARS.EntityId;
-    /**
-     * The call the outstanding `ACTION_SELECT` was asked under, or absent when nothing is outstanding.
-     *
-     * `selectedActionId` cannot do this job: it is written *from* the answer, so until one lands there is
-     * nothing to compare an arriving one against, and two quick selections are decided by whichever answer
-     * arrives last.
-     *
-     * **A domain id cannot do this job, for two independent reasons.** It does not distinguish windows, so
-     * another window's answer for the same action satisfies it; and it does not distinguish asks, so a slot
-     * holding one is only ever overwritten, never emptied — which names the last ask for the life of the
-     * surface. A call is per ask and per window, and the slot is cleared when its answer lands.
-     */
-    pendingActionCall: string | null;
-    actions: ActionEntity[];
-    selectedAction?: ActionEntity;
-    totalCount: number;
-    page: number;
-    totalPages: number;
-    loadingMore: boolean;
-    categories: Category[];
+    /** The open action's label, for the breadcrumb, as its view last read it */
+    selectedLabel?: string;
+    /** The action the form was filled from, so its view changing doesn't overwrite what the user has typed */
+    formFor?: EARS.EntityId;
+    /** How many actions the list shows: a page more each time the user scrolls to its end */
+    listLimit: number;
     selectedCategories: string[];
     actionsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
@@ -100,55 +87,35 @@ interface ActionsContext {
     };
 }
 
-/** Paging and editing, which the code surface's actions panel asks of it */
+/** Opening and editing, which the code surface's actions panel and the action step's form ask of it */
 type ActionsInboxEvent = {
-    type: 'ACTION.SELECT';
-    actionId: EARS.EntityId;
-} | {
     type: 'ACTION.CREATE';
-} | {
-    type: 'ACTION.DELETE';
-    actionId: EARS.EntityId;
 } | {
     type: 'ACTION.UPDATE_INPUT';
     actionId: string;
-    input: Record<string, any>;
-} | {
-    type: 'ACTION.CREATE_INLINE';
-    label: string;
-    actionFn: string;
     input: Record<string, any>;
 } | {
     type: 'ACTION.UPDATE_LABEL';
     actionId: string;
     label: string;
 } | {
-    type: 'ACTIONS.LOAD_MORE';
+    type: 'ACTION.DELETE';
+    actionId: EARS.EntityId;
 } | {
-    type: 'ACTIONS.LOAD_ALL';
+    type: 'ACTION.CREATE_INLINE';
+    label: string;
+    actionFn: string;
+    input: Record<string, any>;
+} | {
+    type: 'ACTION.SELECT';
+    actionId: EARS.EntityId;
 };
-
-interface ActionsStartupData {
-    actions: ActionEntity[];
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    categories?: Category[];
-}
 
 interface ActiveTokenInfo {
     source: TokenSource;
     kind: TokenKind;
     prefix: string;
 }
-
-type AgentConnectedData = {
-    currentThread: AgentThreadData | null;
-    threads: Partial<ThreadEntity>[];
-    recentThreads: Partial<ThreadEntity>[];
-    tabs: Tab[];
-    settings?: AgentSettings;
-};
 
 interface AgentMode {
     id: string;
@@ -181,8 +148,6 @@ type AgentThreadData = {
     pinned?: boolean;
     chatState?: string;
     context?: ThreadContext;
-    hasMore?: boolean;
-    nextCursor?: string | null;
 };
 
 type ApprovalDecision = 'accept' | 'acceptForSession' | 'cancel' | 'decline';
@@ -333,7 +298,8 @@ interface BlockConfig {
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
- * mixed and matched to create complex interactions.
+ * mixed and matched to create complex interactions. Every write here reaches a window through the threads views
+ * (`be/views.ts`): the chat page lists the message, and its own view carries what it says.
  */
 interface BlockMessageBase {
     threadId: EARS.EntityId;
@@ -549,10 +515,29 @@ interface CanUseToolRequest {
     description?: string;
 }
 
-interface Category {
-    name: string;
-    color: string;
-}
+/**
+ * A thread as the chat shows it, without its messages: the \`chat\` view. The page of messages it lists is ids in
+ * display order (queued last); each message's content is its own \`message\` view, so streaming text into one re-runs
+ * that view alone and leaves the page, which reads no message's content, where it is.
+ */
+type ChatPage = Omit<AgentThreadData, 'artifacts' | 'id' | 'messages'> & {
+    id: ThreadEntity['id'];
+    messageIds: EARS.EntityId[];
+    /** Whether messages older than the page's first exist */
+    hasMore: boolean;
+};
+
+/** What a window's chat starts from: the thread to open, the tabs every window opens, and the settings */
+type ChatStart = {
+    currentThreadId: ThreadEntity['id'] | null;
+    tabs: Array<{
+        id: ThreadEntity['id'];
+        label: string;
+        pinned?: boolean;
+    }>;
+    /** The threads feature's settings now; each change after reaches the surface as \`FEATURE_SETTINGS_UPDATED\` */
+    settings: ThreadsSettings;
+};
 
 type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 
@@ -1106,8 +1091,8 @@ declare const ControlResponseLineSchema: z.ZodObject<{
 /**
  * Artifact Service
  *
- * Provides primitives for creating and managing artifacts across the application.
- * Follows a pure vs side-effect pattern similar to chat service.
+ * Creates and updates the artifacts a thread holds. A window sees them through the thread's `tab` view, which runs
+ * again after each of these writes, so nothing here tells a window anything.
  */
 
 interface CreateArtifactOptions {
@@ -1204,10 +1189,6 @@ interface DatabaseSchemaInfo {
 }
 
 type DatabaseSettings = SettingsOf<'database'>;
-
-interface DatabaseStartupData {
-    schema: DatabaseSchemaInfo;
-}
 
 interface DirectoryContent {
     path: string;
@@ -1473,36 +1454,12 @@ interface FlowRunNodeData {
     }>;
 }
 
-interface FlowsConnectedData {
-    selectedFlowId: EARS.EntityId;
-    graph: {
-        nodes: NodeEntity[];
-        edges: EdgeEntity[];
-    };
-    flows: Partial<FlowEntity>[];
-    rootFlow?: Partial<FlowEntity>;
-    models: ModelCatalogEntry[];
-    prompts: PromptEntity[];
-    actions: ActionEntity[];
-    settings?: any;
-}
-
 interface FlowsContext {
-    /** A flow the user asked to open; what the user does next (open another, edit a node, leave) cancels it */
+    /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
     pendingFlow?: {
-        call: string;
         flowId: EARS.EntityId;
         nodeId?: string;
         recordHistory: boolean;
-    };
-    /**
-     * The shown flow asked for again because the backend published (a reconnect, a pack change, data replaced).
-     * Its own slot, so nothing that cancels a user's selection drops it; its answer keeps the node selection, the
-     * editor and any node still being added.
-     */
-    pendingRefresh?: {
-        call: string;
-        flowId: EARS.EntityId;
     };
     selectedNodeId?: EARS.EntityId;
     editingNodeId?: EARS.EntityId;
@@ -1511,6 +1468,10 @@ interface FlowsContext {
         nodeId: string;
         handleId?: string;
     };
+    /**
+     * The open flow as the editor shows it: its graph view's last result, with the user's edits applied at once on top
+     * of it. Positions are the editor's own layout, never stored.
+     */
     graph: {
         nodes: NodeEntity[];
         edges: EdgeEntity[];
@@ -1519,14 +1480,18 @@ interface FlowsContext {
             y: number;
         }>;
     };
-    flows: FlowEntity[];
-    prompts: PromptEntity[];
+    /**
+     * The editor's graph writes, and the graph view's results held behind those still unanswered (`ViewWrites`,
+     * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads the view
+     * again on each of its `refreshes`.
+     */
+    writes: ViewWrites;
+    /** The models a node may name, which the flows system sends when it publishes */
     models: ModelCatalogEntry[];
-    actions: ActionEntity[];
     tempIdMap: Record<string, string>;
-    /** The root flow the brain runs (the flow with the root role), as the flows system last sent it */
-    rootFlowId?: string;
-    settings?: any;
+    /** The root flow the brain runs and each flow's label, from the list view: what the breadcrumb and history read */
+    rootFlowId?: EARS.EntityId;
+    flowLabels: Record<string, string>;
     showEditLabelDialog?: boolean;
     showDeleteFlowDialog?: boolean;
     canvasError?: string;
@@ -1546,19 +1511,8 @@ interface FlowsContext {
     navHistory: NavHistory<string | null>;
 }
 
-/** The actions system keeps the flows editor's action list current, and the brain opens a flow or a node in it */
+/** What the brain asks of the flows editor: to open a flow, or a node in it */
 type FlowsInboxEvent = {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
-} | {
     type: 'FLOW.SELECT';
     flowId: EARS.EntityId;
 } | {
@@ -1569,6 +1523,12 @@ type FlowsInboxEvent = {
     flowId: EARS.EntityId;
     nodeId: string;
 };
+
+/** The flows a window lists, newest first, and which of them the brain runs */
+interface FlowsList {
+    flows: Partial<FlowEntity>[];
+    rootFlowId?: EARS.EntityId;
+}
 
 interface FolderContents {
     items: LibraryItem[];
@@ -1841,9 +1801,6 @@ interface ImageReference {
 }
 
 type IncomingActionEvents = {
-    type: 'ACTION_SELECT';
-    actionId: string;
-} | {
     type: 'CREATE_ACTION';
     label: string;
     input: Record<string, any>;
@@ -1863,11 +1820,6 @@ type IncomingActionEvents = {
 } | {
     type: 'DELETE_ACTION';
     actionId: string;
-} | {
-    type: 'FETCH_ACTIONS_PAGE';
-    page?: number;
-} | {
-    type: 'FETCH_ALL_ACTIONS';
 } | {
     type: 'IMPORT_ACTIONS';
     actions: any;
@@ -1927,6 +1879,10 @@ type IncomingBrowserEvents = {
 } | {
     type: 'SYNC_BOOKMARKS';
     bookmarks: SavedBookmark[];
+}
+/** The tabs and bookmarks a window restores as it starts: answered with \`SAVED_SESSION_READ\` */
+ | {
+    type: 'GET_SAVED_SESSION';
 };
 
 type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | {
@@ -1938,6 +1894,13 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  | {
     type: 'TEST_CLI_PROVIDER';
     provider: string;
+}
+/**
+ * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
+ * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
+ */
+ | {
+    type: 'GET_CODE_START';
 };
 
 type IncomingCommitEvents = {
@@ -2035,8 +1998,10 @@ type IncomingDatabaseEvents = {
     type: 'GENERATE_AI_QUERY';
     prompt: string;
     mode?: 'query' | 'transaction';
-} | {
-    type: 'REFRESH_SCHEMA';
+}
+/** The schema as the data is now: answered with `SCHEMA_READ` */
+ | {
+    type: 'GET_SCHEMA';
 } | {
     type: 'GET_FLOW_RUNS';
 } | {
@@ -2106,9 +2071,10 @@ type IncomingExplorerEvents = {
     targetDir: string;
 };
 
-type IncomingFlowsEvents = {
-    type: 'FLOW_SELECT';
-    flowId: string;
+type IncomingFlowsEvents = 
+/** The models the editor offers: answered with \`MODEL_CATALOG_READ\` */
+{
+    type: 'GET_MODEL_CATALOG';
 } | {
     type: 'CREATE_FLOW';
 } | {
@@ -2189,11 +2155,11 @@ type IncomingLibraryEvents = {
 } | {
     type: 'DELETE_DOCUMENT';
     id: string;
-} | {
+}
+/** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
+ | {
     type: 'GET_DOCUMENT';
     id: string;
-} | {
-    type: 'GET_LIBRARY_INDEX';
 } | {
     type: 'CREATE_COLLECTION';
     name: string;
@@ -2211,12 +2177,16 @@ type IncomingLibraryEvents = {
     type: 'MOVE_DOCUMENT';
     documentId: string;
     collectionId?: string;
-} | {
+}
+/** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
+ | {
     type: 'GET_FOLDER_CONTENTS';
     folderId: string | null;
-} | {
-    type: 'NAVIGATE_TO_FOLDER';
-    folderId: string | null;
+}
+/** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
+ | {
+    type: 'CHECK_SYMLINKS';
+    ids: string[];
 } | {
     type: 'RENAME_ITEM';
     id: string;
@@ -2249,8 +2219,10 @@ type IncomingLibraryEvents = {
 
 type IncomingLogEvents = {
     type: 'CLEAR_LOGS';
-} | {
-    type: 'REQUEST_LOGS_UPDATE';
+}
+/** The buffer as the settings filter it, and the settings: answered with \`LOGS_READ\` */
+ | {
+    type: 'GET_LOGS';
 };
 
 type IncomingNoteEvents = {
@@ -2294,11 +2266,6 @@ type IncomingNoteEvents = {
     type: 'VIEW_NOTE';
     id: string;
 } | {
-    type: 'SEARCH_NOTES';
-    query: string;
-} | {
-    type: 'GET_TRASHED_NOTES';
-} | {
     type: 'PERMANENTLY_DELETE_NOTE';
     id: string;
 } | {
@@ -2313,9 +2280,6 @@ type IncomingNoteEvents = {
 };
 
 type IncomingPromptEvents = {
-    type: 'PROMPT_SELECT';
-    promptId: string;
-} | {
     type: 'CREATE_PROMPT';
     label: string;
     inputs: Record<string, any>;
@@ -2335,11 +2299,6 @@ type IncomingPromptEvents = {
 } | {
     type: 'DELETE_PROMPT';
     promptId: string;
-} | {
-    type: 'FETCH_PROMPTS_PAGE';
-    page?: number;
-} | {
-    type: 'FETCH_ALL_PROMPTS';
 } | {
     type: 'IMPORT_PROMPTS';
     prompts: any;
@@ -2489,9 +2448,6 @@ type IncomingTerminalEvents = {
 };
 
 type IncomingThreadsEvents = {
-    type: 'SEARCH_MESSAGES';
-    query: string;
-} | {
     type: 'CREATE_THREAD';
     topic: string;
     tags?: string[];
@@ -2557,11 +2513,6 @@ type IncomingThreadsEvents = {
     threadId: string;
     restore?: boolean;
 } | {
-    type: 'OPEN_THREAD_TAB';
-    threadId: string;
-    label: string;
-    pinned?: boolean;
-} | {
     type: 'PAUSE_TURN';
     threadId: string;
 } | {
@@ -2621,14 +2572,10 @@ type IncomingThreadsEvents = {
     type: 'FORWARD_BRAIN_EVENT';
     eventType: string;
     payload?: any;
-} | {
-    type: 'GET_ARCHIVED_THREADS';
-} | {
-    type: 'REFRESH_THREADS';
-} | {
-    type: 'LOAD_MORE_MESSAGES';
-    threadId: string;
-    cursor: string;
+}
+/** What a window's chat starts from: answered with \`CHAT_STARTED\` */
+ | {
+    type: 'GET_CHAT_START';
 } | {
     type: 'CLIENT_CONNECTED';
 } | {
@@ -2686,7 +2633,7 @@ interface LibraryContext {
     expandedFolderIds: string[];
     expandedFolderChildren: Record<string, LibraryItem[]>;
     loadingFolderIds: string[];
-    index: LibraryIndex;
+    diskFolderIds: (string | null)[];
     searchIndices: SearchIndex[];
     editingIndexId?: string;
     editingIndex?: SearchIndex;
@@ -2700,7 +2647,7 @@ interface LibraryContext {
     symlinkBasePath: string | null;
     isBroken: boolean;
     lastKnownPath: string | null;
-    settings?: any;
+    writeError: string | null;
     libraryImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];
@@ -2897,6 +2844,11 @@ interface MessageSearchResult {
     clippedEnd: boolean;
 }
 
+/** What the flows surface starts from that isn't a row: the models a node may name */
+interface ModelCatalog {
+    models: ModelCatalogEntry[];
+}
+
 type NodeCreateInput = Partial<NodeEntity> & {
     actionId?: string;
     promptTemplateId?: string;
@@ -2951,29 +2903,39 @@ interface NoteEntity extends BaseEntity {
     linkTargets?: string[];
 }
 
-interface NotesConnectedData {
-    notes: NoteDTO[];
-    settings?: NotesSettings;
-}
+/**
+ * A note as the tree shows it: its place and its flags, without its text and without the times every write moves.
+ * What the tree view reads, so typing in a note re-runs the view showing that note and not the one showing every note.
+ */
+type NoteSummary = Omit<NoteDTO, 'content' | 'lastSeen' | 'updatedAt'>;
 
 interface NotesContext {
-    notes: NoteDTO[];
+    /** Every note as the tree shows it: the tree view's last result, with this window's edits on top */
+    notes: NoteSummary[];
+    /**
+     * The text of the notes open in the editor (the open note, the selected task), by id: each one's note view's last
+     * result, with this window's typing on top
+     */
+    contents: Record<string, string>;
+    /**
+     * This window's writes, and the notes views' results held behind those still unanswered (`ViewWrites`,
+     * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads its views
+     * again on each of its `refreshes`.
+     */
+    writes: ViewWrites;
+    /** The note this window last created, which opens with its title selected */
+    createdNoteId: string | null;
     currentNoteId: string | null;
-    currentNote: NoteDTO | null;
+    currentNote: NoteSummary | null;
     expandedNodeIds: string[];
     taskExpandedNodeIds: string[];
     pendingSubDocumentInsert: {
         cursorPos: number;
     } | null;
     lastSubDocumentInsertChildId: string | null;
-    searchResults: NoteDTO[];
     selectedNoteIds: string[];
     selectedTaskId: string | null;
-    selectedTask: NoteDTO | null;
-    settings: {
-        tasklistPanelPosition: 'left' | 'right';
-        showCollapseIcon: boolean;
-    };
+    selectedTask: NoteSummary | null;
     notesImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];
@@ -2986,7 +2948,6 @@ interface NotesContext {
         itemCount: number;
     };
     showTrash: boolean;
-    trashedNotes: NoteDTO[];
     noteScrollPositions: Record<string, number>;
     panelSearchActive: boolean;
     navHistory: NavHistory<string | null>;
@@ -2998,8 +2959,6 @@ type NotesInboxEvent = {
     type: 'NOTE.OPEN';
     noteId: string;
 };
-
-type NotesSettings = SettingsOf<'notes'>;
 
 interface OpenFile {
     path: string;
@@ -3023,37 +2982,8 @@ interface OpenFile {
     isPreview?: boolean;
 }
 
+/** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
 type OutgoingActionEvents = {
-    type: 'ACTIONS_LISTED';
-    data: ActionsStartupData;
-} | {
-    type: 'ACTION_SELECTED';
-    actionId: EARS.EntityId;
-    data: ActionEntity;
-} | {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTIONS_PAGE_LOADED';
-    data: {
-        actions: ActionEntity[];
-        page: number;
-        totalPages: number;
-    };
-} | {
-    type: 'ACTIONS_ALL_LOADED';
-    data: {
-        actions: ActionEntity[];
-    };
-} | {
     type: 'ACTIONS_IMPORTED';
     count: number;
     errors?: string[];
@@ -3086,6 +3016,12 @@ type OutgoingActionsEvents = {
     };
 };
 
+/**
+ * What the brain system sends the Brain surface. A run's tree and a run node's details are in the run history, which no
+ * view can watch, so they are answers to the window that asked (\`REQUEST_SURFACE_DATA\`, \`OPEN_RUN_NODE\`,
+ * \`GO_BACK_RUN_NODE\`, \`GET_RUN_NODE_DETAILS\`). The rest is news for every window: the brain's state, an event's
+ * pulse, and the run's live feed, which patches the tree a window holds as streaming tokens patch a message.
+ */
 type OutgoingBrainEvents = {
     type: 'RECEIVE_SURFACE_DATA';
     data: FlowRunNodeData;
@@ -3131,15 +3067,28 @@ type OutgoingBrainEvents = {
     type: 'BRAIN_RESUMED';
 };
 
+/**
+ * What the browser system sends: the saved session, to the window that asked. It is a snapshot the window takes once
+ * and then owns — each window syncs its own tabs back — so it is fetched rather than followed as a view, where every
+ * window's sync would replace the tabs another window is using.
+ */
 type OutgoingBrowserEvents = {
-    type: 'BROWSER_CONNECTED';
+    type: 'SAVED_SESSION_READ';
     savedTabs: SavedTab[];
     savedBookmarks: SavedBookmark[];
 };
 
 type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
-    type: 'CODE_CONNECTED';
+    type: 'CODE_STARTED';
     data: CodeConnectedData;
+}
+/**
+ * The code surface's directory moved, for every window, which all show the one directory: each asks again for what
+ * it starts from and for what its panels show. News, with no listing on it.
+ */
+ | {
+    type: 'BASE_DIRECTORY_CHANGED';
+    baseDirectory: string;
 }
 /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
  | {
@@ -3224,6 +3173,10 @@ type OutgoingCommitEvents = {
     data: {
         message: string;
     };
+}
+/** The repository changed, on disk or by a write from any window: news for every window, each of which asks again for what it shows of it */
+ | {
+    type: 'commit.REPOSITORY_CHANGED';
 } | {
     type: 'commit.STASH_LIST_RECEIVED';
     data: {
@@ -3274,9 +3227,25 @@ type OutgoingCommitEvents = {
     };
 };
 
+/**
+ * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
+ * news for every window, and the generated query, which a flow sends to the asking window by its connection.
+ *
+ * **The schema is fetched, not a view.** It is a walk over the whole store (`getSchemaStats`), so a view of it would
+ * re-run that walk after every commit anyone makes; a window asks for it when it opens, when the user refreshes, and
+ * after its own transaction or a replacement.
+ */
 type OutgoingDatabaseEvents = {
-    type: 'DATABASE_REFRESH';
-    data: DatabaseStartupData;
+    type: 'SCHEMA_READ';
+    schema: DatabaseSchemaInfo;
+}
+/**
+ * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
+ * history it holds, which name rows that may be gone, and asks for the schema again. A notification; the window that
+ * asked has its own outcome too.
+ */
+ | {
+    type: 'DATABASE_REPLACED';
 }
 /**
  * The four replies to `EXECUTE_QUERY`/`EXECUTE_TRANSACTION`.
@@ -3305,7 +3274,12 @@ type OutgoingDatabaseEvents = {
 } | {
     type: 'TRANSACTION_ERROR';
     error: string;
-} | {
+}
+/**
+ * The three a flow sends (`db-query`, `db-transaction`) to the window that asked: a flow run is no delivery, so it
+ * has no sender to reply to, and the ask carries the window's connection for the action to answer instead.
+ */
+ | {
     type: 'AI_QUERY_LOADING';
 } | {
     type: 'AI_QUERY_GENERATED';
@@ -3429,94 +3403,48 @@ type OutgoingExplorerEvents = {
     };
 };
 
-type OutgoingFlowsEvents = {
-    type: 'FLOWS_CONNECTED';
-    data: FlowsConnectedData;
-} | {
-    type: 'FLOW_SELECTED';
-    flowId: EARS.EntityId;
-    data: FlowExtendedData;
-} | {
-    type: 'FLOW_REFRESHED';
-    flowId: EARS.EntityId;
-    data: FlowExtendedData;
-}
-/** A flow exists — news for every window, so every list grows. It opens nothing: see `FLOW_OPENED` */
- | {
-    type: 'FLOW_CREATED';
-    flow: FlowEntity;
-    flowId: EARS.EntityId;
-    data: {
-        nodes: any[];
-        edges: any[];
-    };
+/**
+ * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
+ * flows themselves are its views.
+ */
+type OutgoingFlowsEvents = 
+/** The models the editor offers, answered to the window that asked as its surface starts */
+{
+    type: 'MODEL_CATALOG_READ';
+    data: ModelCatalog;
 }
 /**
- * The flow *you* asked to create, answered to the window that asked, which then opens it.
- *
- * Its id is minted by the create, so nothing the asker sent could identify it. While the navigation hung
- * off the broadcast above, every open window jumped to a flow it had not created.
+ * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
+ * create, so nothing the asker sent could identify it.
  */
  | {
     type: 'FLOW_OPENED';
-    flow: FlowEntity;
     flowId: EARS.EntityId;
-    data: {
-        nodes: any[];
-        edges: any[];
-    };
-} | {
-    type: 'FLOW_DELETED';
-    flowId: EARS.EntityId;
-} | {
+}
+/** The node a `CREATE_NODE` made, for the editor to put in place of the one it added under `tempId` */
+ | {
     type: 'NODE_CREATED';
     tempId: string;
     nodeId: EARS.EntityId;
-    node: any;
-} | {
-    type: 'NODE_UPDATED';
-    nodeId: EARS.EntityId;
-    node: any;
-} | {
-    type: 'NODE_DELETED';
-    nodeId: string;
-} | {
+    node: NodeEntity;
+}
+/** The relation a `CREATE_EDGE` made, for the editor to give the edge it drew */
+ | {
     type: 'EDGE_CREATED';
     sourceId: EARS.EntityId;
     targetId: EARS.EntityId;
     relId: EARS.RelationId;
     sourceHandle?: string;
     targetHandle?: string;
-} | {
-    type: 'EDGE_CREATE_FAILED';
-    sourceId: string;
-    targetId: string;
+}
+/** Any other write landed */
+ | {
+    type: 'FLOW_WRITTEN';
+}
+/** A write was refused, and why: the editor puts back the flow as stored */
+ | {
+    type: 'FLOW_WRITE_FAILED';
     error: string;
-} | {
-    type: 'EDGE_DELETED';
-    edgeId: string;
-} | {
-    type: 'EDGE_UPDATED';
-    edgeId: EARS.RelationId;
-    source: EARS.EntityId;
-    target: EARS.EntityId;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
-    type: 'EDGE_UPDATE_FAILED';
-    edgeId: string;
-    error: string;
-} | {
-    type: 'ACTION_CREATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: EARS.EntityId;
-} | {
-    type: 'ACTION_DELETED';
-    actionId: EARS.EntityId;
 } | {
     type: 'DSL_IMPORTED';
     flowIds: EARS.EntityId[];
@@ -3534,87 +3462,53 @@ type OutgoingFlowsEvents = {
     errors: string[];
 };
 
-type OutgoingLibraryEvents = {
-    type: 'LIBRARY_CONNECTED';
-    data: {
-        index: LibraryIndex;
-        settings: any;
-    };
-} | {
-    type: 'DOCUMENT_CREATED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
-    type: 'DOCUMENT_UPDATED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
-    type: 'DOCUMENT_DELETED';
-    data: {
-        documentId: string;
-    };
-} | {
-    type: 'DOCUMENT_LOADED';
-    data: {
-        document: DocumentDTO;
-    };
-} | {
+/**
+ * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
+ * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
+ * on disk is fetched, since a view watches the engine and nothing else.
+ */
+type OutgoingLibraryEvents = 
+/** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
+{
     type: 'COLLECTION_CREATED';
     data: {
         collection: CollectionDTO;
     };
-} | {
-    type: 'COLLECTION_UPDATED';
-    data: {
-        collection: CollectionDTO;
-    };
-} | {
-    type: 'COLLECTION_DELETED';
-    data: {
-        collectionId: string;
-    };
-} | {
-    type: 'LIBRARY_INDEX_LOADED';
-    data: {
-        index: LibraryIndex;
-    };
-} | {
-    type: 'LIBRARY_ERROR';
-    data: {
-        error: string;
-    };
-} | {
-    type: 'SYMLINK_UPDATED';
-    data: {
-        collection: CollectionDTO;
-    };
-} | {
+}
+/** Any other write landed */
+ | {
+    type: 'LIBRARY_WRITTEN';
+}
+/** A write or a fetch was refused, and why */
+ | {
+    type: 'LIBRARY_WRITE_FAILED';
+    error: string;
+}
+/** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
+ | {
     type: 'FOLDER_CONTENTS_LOADED';
     data: FolderContents;
-} | {
-    type: 'NAVIGATION_CHANGED';
+}
+/** A document on disk, as `GET_DOCUMENT` asked */
+ | {
+    type: 'DOCUMENT_LOADED';
     data: {
-        folderId: string | null;
-        path: string[];
+        document: DocumentDTO;
     };
-} | {
-    type: 'ITEM_RENAMED';
-    data: {
-        item: LibraryItem;
-    };
-} | {
-    type: 'ITEMS_DELETED';
-    data: {
-        ids: string[];
-    };
-} | {
-    type: 'ITEMS_MOVED';
-    data: {
-        ids: string[];
-        targetFolderId: string | null;
-    };
+}
+/** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
+ | {
+    type: 'SYMLINKS_CHECKED';
+    ids: string[];
+    broken: string[];
+}
+/**
+ * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
+ * for every window showing such a folder to fetch it again. A notification: no window asked for it.
+ */
+ | {
+    type: 'FOLDER_CHANGED';
+    folderId: string | null;
 } | {
     type: 'LIBRARY_IMPORTED';
     count: number;
@@ -3631,13 +3525,14 @@ type OutgoingLibraryEvents = {
     errors: string[];
 };
 
+/**
+ * What the logs system sends: the buffer, to the window that asked for it (as it starts, and when the settings that
+ * filter it change); and to every window, each entry as it is logged — a feed — and that the buffer was cleared.
+ */
 type OutgoingLogsEvents = {
-    type: 'LOGS_CONNECTED';
+    type: 'LOGS_READ';
     logs: LogEntry[];
-    settings?: LogsSettings;
-} | {
-    type: 'LOGS_UPDATE';
-    logs: LogEntry[];
+    settings: LogsSettings;
 } | {
     type: 'LOG_ADDED';
     log: LogEntry;
@@ -3645,25 +3540,25 @@ type OutgoingLogsEvents = {
     type: 'LOGS_CLEARED';
 };
 
-type OutgoingNotesEvents = {
-    type: 'NOTES_CONNECTED';
-    data: NotesConnectedData;
-} | {
+/**
+ * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
+ * themselves are its views.
+ */
+type OutgoingNotesEvents = 
+/** The note a `CREATE_NOTE` made, for the window that asked to open */
+{
     type: 'NOTE_CREATED';
-    note: NoteDTO;
+    note: NoteSummary;
+}
+/** Any other write landed */
+ | {
+    type: 'NOTE_WRITTEN';
+}
+/** A write was refused, and why: the window puts back the notes as stored */
+ | {
+    type: 'NOTE_WRITE_FAILED';
+    error: string;
 } | {
-    type: 'NOTE_UPDATED';
-    note: NoteDTO;
-} | {
-    type: 'NOTE_DELETED';
-    noteId: string;
-} | {
-    type: 'NOTE_RESTORED';
-    note: NoteDTO;
-} | {
-    type: 'TRASHED_NOTES';
-    notes: NoteDTO[];
-} | OutgoingNotesSearchEvent | {
     type: 'NOTES_IMPORTED';
     count: number;
     errors?: string[];
@@ -3679,42 +3574,8 @@ type OutgoingNotesEvents = {
     errors: string[];
 };
 
-type OutgoingNotesSearchEvent = {
-    type: 'NOTES_SEARCH_RESULTS';
-    results: NoteDTO[];
-};
-
+/** What the prompts system answers with: an import's or an export's outcome. The prompts themselves are its views. */
 type OutgoingPromptEvents = {
-    type: 'PROMPTS_CONNECTED';
-    data: PromptsConnectedData;
-} | {
-    type: 'PROMPT_SELECTED';
-    promptId: EARS.EntityId;
-    data: PromptEntity;
-} | {
-    type: 'PROMPT_CREATED';
-    prompt: PromptEntity;
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPT_UPDATED';
-    prompt: PromptEntity;
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPT_DELETED';
-    promptId: EARS.EntityId;
-} | {
-    type: 'PROMPTS_PAGE_LOADED';
-    data: {
-        prompts: PromptEntity[];
-        page: number;
-        totalPages: number;
-    };
-} | {
-    type: 'PROMPTS_ALL_LOADED';
-    data: {
-        prompts: PromptEntity[];
-    };
-} | {
     type: 'PROMPTS_IMPORTED';
     count: number;
     errors?: string[];
@@ -3930,12 +3791,15 @@ type OutgoingSearchEvents = {
 
 type OutgoingTerminalEvents = 
 /**
- * A terminal exists — news for every window, so every list grows. It carries no instruction: a window that
- * did not ask for it must not open it, which is what `terminal.OPENED` is for.
+ * A terminal exists — news for every window, each of which asks for the list again (\`terminal.REFRESH_LIST\`, answered
+ * with \`terminal.TERMINALS_LISTED\`). It names the terminal and carries no instruction: a window that did not ask for
+ * it must not open it, which is what \`terminal.OPENED\` is for.
  */
 {
     type: 'terminal.CREATED';
-    data: TerminalInfo;
+    data: {
+        terminalId: string;
+    };
 }
 /**
  * The terminal *you* asked for, answered to the window that asked.
@@ -3991,33 +3855,40 @@ type OutgoingTerminalEvents =
     data: TerminalInfo;
 };
 
-type OutgoingThreadsEvents = {
-    type: 'MESSAGES_FOUND';
-    query: string;
-    results: MessageSearchResult[];
-} | {
-    type: 'THREAD_CONNECTED';
-    data: ThreadConnectedData;
-} | {
-    type: 'SET_VIEW_DATA';
-    id: EARS.EntityId;
-    data: ThreadExtendedData;
-} | {
+/**
+ * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
+ * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
+ */
+type OutgoingThreadsEvents = 
+/** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
+{
     type: 'THREAD_CREATED';
     id: EARS.EntityId;
-    shortCode: string;
-    entityType: EARS.Entity;
-    timestamp: number;
-    topic?: string;
-    instructions?: string;
-    status?: string;
+}
+/** Any other write landed */
+ | {
+    type: 'THREAD_WRITTEN';
+}
+/** A write was refused, and why */
+ | {
+    type: 'THREAD_WRITE_FAILED';
+    error: string;
+}
+/**
+ * Open this thread in the chat: to the window that asked (a message that started a thread, a fork), or, from a flow,
+ * which has no window to answer, to every window. It names the thread; its content is the thread's views.
+ */
+ | {
+    type: 'SHOW_THREAD';
+    threadId: EARS.EntityId;
+    restore?: boolean;
 } | {
-    type: 'THREAD_UPDATED';
-    threadId: string;
-    updates: Partial<Pick<ThreadEntity, 'context' | 'instructions' | 'pinned' | 'status' | 'tags' | 'topic'>>;
+    type: 'CHAT_STARTED';
+    data: ChatStart;
 } | {
-    type: 'THREAD_DELETED';
+    type: 'THREAD_CHAT_ERROR';
     threadId: string;
+    error: string;
 } | {
     type: 'THREADS_EXPORTED';
     filePath: string;
@@ -4033,77 +3904,16 @@ type OutgoingThreadsEvents = {
     type: 'THREADS_IMPORT_FAILED';
     errors: string[];
 } | {
-    type: 'ARCHIVED_THREADS_DATA';
-    threads: Partial<ThreadEntity>[];
-} | {
-    type: 'AGENT_CONNECTED';
-    data: AgentConnectedData;
-} | {
-    type: 'LOAD_CHAT_THREAD';
-    data: AgentThreadData;
-    restore?: boolean;
-} | {
-    type: 'REFRESH_RECENT_THREADS';
-    data: RecentThreadRefreshData;
-} | {
-    type: 'ARTIFACT_ADDED';
-    tabId: string;
-    artifact: any;
-} | {
-    type: 'ARTIFACT_UPDATED';
-    tabId: string;
-    artifact: any;
-} | {
-    type: 'THREAD_TAB_REQUESTED';
-    threadId: string;
-    topic: string;
-    artifacts: any[];
-    pinned?: boolean;
-} | {
-    type: 'AGENT_SETTINGS_UPDATED';
-    settings: AgentSettings;
-} | {
-    type: 'UPDATE_MESSAGE_STATE';
-    messageId: string;
-    text?: string;
-    blocks?: BlockConfig[];
-    responseTimestamp?: number;
-    blockResponse?: BlockResponse;
-    forkable?: boolean;
-    status?: 'cancelled' | 'queued' | null;
-    context?: Record<string, unknown>;
-    asideText?: string;
-    asideContext?: string;
-    compacted?: boolean;
-} | {
-    type: 'MESSAGE_ADDED';
-    threadId: string;
-    message: MessageEntity;
-} | {
     type: 'SET_MODE';
     mode: string;
 } | {
     type: 'SET_PHASE';
     phase: string;
 } | {
-    type: 'SET_CHAT_STATE';
-    threadId: string;
-    chatState: string;
-} | {
     type: 'FLASH_CHAT_STATE';
     threadId: string;
     stateId: string;
     durationMs?: number;
-} | {
-    type: 'THREAD_CHAT_ERROR';
-    threadId: string;
-    error: string;
-} | {
-    type: 'OLDER_MESSAGES_LOADED';
-    threadId: string;
-    messages: Partial<MessageEntity>[];
-    hasMore: boolean;
-    nextCursor: string | null;
 };
 
 /** Entity shapes this pack declares */
@@ -4371,38 +4181,15 @@ interface PromptTab {
     isPreview?: boolean;
 }
 
-/**
- * Data sent on prompts system connection
- */
-interface PromptsConnectedData {
-    prompts: PromptEntity[];
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    categories?: Category[];
-}
-
 interface PromptsContext {
+    /** The prompt open in the detail view */
     selectedPromptId?: EARS.EntityId;
-    /**
-     * The call the outstanding `PROMPT_SELECT` was asked under, or absent when nothing is outstanding.
-     *
-     * `selectedPromptId` cannot do this job: it is written *from* the answer, so two quick selections are
-     * otherwise decided by whichever answer arrives last.
-     *
-     * **A domain id cannot do this job, for two independent reasons.** It does not distinguish windows, so
-     * another window's answer for the same prompt satisfies it; and it does not distinguish asks, so a slot
-     * holding one is only ever overwritten, never emptied — which names the last ask for the life of the
-     * surface. A call is per ask and per window, and the slot is cleared when its answer lands.
-     */
-    pendingPromptCall: string | null;
-    prompts: PromptEntity[];
-    selectedPrompt?: PromptEntity;
-    totalCount: number;
-    page: number;
-    totalPages: number;
-    loadingMore: boolean;
-    categories: Category[];
+    /** The open prompt's label, for the breadcrumb, as its view last read it */
+    selectedLabel?: string;
+    /** The prompt the form was filled from, so its view changing doesn't overwrite what the user has typed */
+    formFor?: EARS.EntityId;
+    /** How many prompts the list shows: a page more each time the user scrolls to its end */
+    listLimit: number;
     selectedCategories: string[];
     promptsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
@@ -4428,12 +4215,8 @@ interface PromptsContext {
     };
 }
 
-/** Paging and editing, which the code surface's prompts panel asks of it */
+/** Editing, which the code surface's prompts panel asks of it */
 type PromptsInboxEvent = {
-    type: 'PROMPTS.LOAD_ALL';
-} | {
-    type: 'PROMPTS.LOAD_MORE';
-} | {
     type: 'PROMPT.UPDATE_INPUTS';
     promptId: string;
     inputs: Record<string, any>;
@@ -4670,9 +4453,11 @@ declare const RateLimitLineSchema: z.ZodObject<{
     rate_limit_info: z.ZodObject<{}, "passthrough", z.ZodTypeAny, z.objectOutputType<{}, z.ZodTypeAny, "passthrough">, z.objectInputType<{}, z.ZodTypeAny, "passthrough">>;
 }, z.ZodTypeAny, "passthrough">>;
 
-type RecentThreadRefreshData = {
-    recentThreads: Partial<ThreadEntity>[];
-};
+/** A note as the welcome page shows it, with when it last changed */
+type RecentNote = Pick<NoteDTO, 'icon' | 'id' | 'noteType' | 'title' | 'updatedAt'>;
+
+/** How the chat's settings order recent and archived threads */
+type RecentThreadsSortOrder = 'created' | 'message' | 'visited';
 
 /** Every repository this pack can use: its own and its dependencies' */
 type Repositories = OwnRepositories;
@@ -5042,13 +4827,6 @@ type Thinking = z.infer<typeof ThinkingSchema>;
 
 declare const ThinkingSchema: z.ZodEnum<["enabled", "adaptive", "disabled"]>;
 
-type ThreadConnectedData = {
-    threads: ThreadExtended[];
-    availableTags: ThreadTagOption[];
-    settings?: ThreadsSettings | null;
-    chatStates?: Record<string, string>;
-};
-
 /**
  * Free-form per-thread scratchpad for features that need to persist small
  * amounts of state alongside a thread. Keys are namespaced by feature name
@@ -5080,6 +4858,12 @@ type ThreadCreateData = Simplify<ThreadEditFields & {
     forcedMode?: string;
     pinned?: boolean;
 }>;
+
+/** A thread as its detail page shows it: its fields, its links, and its messages' ids (the \`detail\` view) */
+type ThreadDetailView = Omit<ThreadExtendedData, 'messages'> & {
+    id: ThreadEntity['id'];
+    messageIds: EARS.EntityId[];
+};
 
 type ThreadEditFields = Simplify<Pick<ThreadEntity, 'instructions' | 'topic'> & {
     status?: ThreadEntity['status'];
@@ -5192,6 +4976,13 @@ interface ThreadTabGroup {
     isPinned?: boolean;
 }
 
+/** An open tab's thread: its label, whether it is pinned, and its artifacts (the \`tab\` view) */
+type ThreadTabView = {
+    topic: string;
+    pinned?: boolean;
+    artifacts: ArtifactItem[];
+};
+
 interface ThreadTagOption {
     name: string;
     color?: string;
@@ -5271,7 +5062,6 @@ interface ThreadsContext {
     navHistory: NavHistory<string>;
     messagePagination: {
         hasMore: boolean;
-        nextCursor: string | null;
         isLoading: boolean;
     };
     sidebarArchivedThreads: ThreadListItem[];
@@ -5286,6 +5076,30 @@ interface ThreadsContext {
         threadId: string;
         messageId: string;
     } | null;
+    lists: {
+        list: ThreadExtended[];
+        recent: Partial<ThreadEntity>[];
+        archived: Partial<ThreadEntity>[];
+    };
+    /** How many of the open thread's messages the chat's view asks for */
+    chatLimit: number;
+    /** The messages the chat and the detail page list, by id, in display order */
+    chatMessageIds: string[];
+    detailMessageIds: string[];
+    /** Each listed message as its own view last gave it */
+    messageContents: Record<string, Partial<MessageEntity>>;
+    /** The messages a view is followed for */
+    messageViews: string[];
+    /** The open tabs a view is followed for */
+    tabViews: string[];
+    /** The open tabs whose view has given a result, so a new artifact in one is selected */
+    tabsRead: string[];
+    /** The thread this window just opened, whose first read applies its forced mode */
+    openedThreadId: string | null;
+    /** The threads this window just created, marked new in the list for its animation */
+    freshThreadIds: string[];
+    /** This window's thread writes, which hold the views back until they are answered */
+    writes: ViewWrites;
 }
 
 interface ThreadsContext$1 {
@@ -5414,8 +5228,6 @@ declare const UnknownLineSchema: z.ZodObject<{
 interface UpdateArtifactOptions {
     title?: string;
     content?: unknown;
-    /** Thread to emit the ARTIFACT_UPDATED event for. If omitted, no event is sent. */
-    threadId?: EARS.EntityId;
 }
 
 interface UpdateNode extends NodeBase {
@@ -5753,32 +5565,23 @@ declare const actionCommands: {
 
 /**
  * Action Repository: the SDK's action repository (`actionRepository`), which owns their reads and writes, as the
- * actions surface uses it, and the surface's views. The SDK's methods are taken as they are, not wrapped.
+ * actions surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
  */
 declare const actionQueries: {
     readonly byId: (id: _apackdev_sdk.EARS.EntityId) => ActionEntity | undefined;
     readonly all: () => ActionEntity[];
     readonly byLabel: (label: string) => ActionEntity | undefined;
-    readonly byCategory: (category: string) => ActionEntity[];
-    readonly paginated: (page?: number, pageSize?: number) => {
-        items: ActionEntity[];
-        page: number;
-        pageSize: number;
-        totalCount: number;
-        totalPages: number;
-    };
-    readonly connectedData: (page?: number) => {
+    /**
+     * The first `limit` actions in `categories` (every category when it's empty), or all of them without a limit, and
+     * how many there are. An action without a category is in none, so a filter leaves it out.
+     */
+    readonly list: (limit: number | null, categories: readonly string[]) => {
         actions: ActionEntity[];
-        page: number;
-        totalPages: number;
         totalCount: number;
     };
 };
 
-/**
- * Add multiple messages to a thread without emitting per-message frontend events.
- * Caller is responsible for refreshing the frontend afterwards (e.g. via LOAD_CHAT_THREAD).
- */
+/** Add several messages to a thread at once, leaving queued messages where they are (a bulk import) */
 declare function addMessagesToThread(params: {
     threadId: EARS.EntityId;
     messages: Array<{
@@ -5975,10 +5778,22 @@ declare const chatQueries: {
     readonly searchMessages: typeof searchMessages;
     readonly threadArtifacts: (threadId: EARS.EntityId) => ArtifactItem<unknown>[];
     readonly threadData: (threadId: EARS.EntityId) => AgentThreadData | null;
-    readonly threadDataPaginated: (threadId: EARS.EntityId, cursor?: string | null) => AgentThreadData | null;
-    readonly paginatedMessages: typeof paginatedMessages;
-    readonly refreshThreadsData: () => RecentThreadRefreshData;
-    readonly connectedData: () => AgentConnectedData;
+    /**
+     * A thread as the chat shows it, or `null` once it is gone: its fields and the ids of its last \`limit\` messages
+     * and its queued ones, in display order
+     */
+    readonly chatPage: (threadId: EARS.EntityId, limit: number) => ChatPage | null;
+    /** An open tab's thread, or `null` once it is gone */
+    readonly tab: (threadId: EARS.EntityId) => ThreadTabView | null;
+    /** The recent threads, at most \`limit\`, in \`sortOrder\` */
+    readonly recentThreads: (limit: number, sortOrder: RecentThreadsSortOrder) => Partial<ThreadEntity>[];
+    /** The recent-thread limit and order the settings hold now */
+    readonly configuredRecentThreads: typeof configuredRecentThreads;
+    /**
+     * What a window's chat starts from: the most recent thread, opened; the tabs every window opens — that thread's
+     * and each pinned one's; and the threads settings
+     */
+    readonly chatStart: () => ChatStart;
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
@@ -5989,27 +5804,18 @@ declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
 
+/** The recent-thread limit and order the threads settings hold, read where no view is asking */
+declare function configuredRecentThreads(): {
+    limit: number;
+    sortOrder: RecentThreadsSortOrder;
+};
+
 /**
- * Create a new artifact and notify the frontend (with side effects)
- *
- * This function creates an artifact and automatically sends ARTIFACT_ADDED event
- * to the frontend when a threadId is provided. Use this in flow actions where
- * you want immediate UI updates.
- *
- * @param options - Options for creating the artifact
- * @returns Object containing the created artifact ID
- *
+ * Create an artifact, linked to `threadId` when it names one
  * @example
- * // Create artifact with automatic FE notification
- * const { artifactId } = createAndNotify({
- *   artifactType: 'todo',
- *   title: 'Tasks',
- *   content: { tasks: [...] },
- *   threadId: 'thread-123'
- * });
- * // Frontend automatically receives ARTIFACT_ADDED event
+ * const { artifactId } = create({ artifactType: 'todo', title: 'Tasks', content: { tasks: [...] }, threadId });
  */
-declare function createAndNotify(options: CreateArtifactOptions): {
+declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
 };
 
@@ -6026,21 +5832,17 @@ declare function createMarkerMessage(params: {
 };
 
 /**
- * Create a new thread and notify the frontend
- * Use this in flow actions that need automatic frontend updates
- *
- * @param options - Thread creation options
- * @returns Object with thread id, shortCode, timestamp, and status
+ * Create a new thread
  *
  * @example
- * const { id: threadId, shortCode, timestamp, status } = createThreadAndNotify({
+ * const { id: threadId, shortCode, timestamp, status } = createThread({
  *   topic: 'Assistant Birth',
  *   instructions: 'Welcome!',
  *   role: EARS.RoleKind.ASSISTANT_BIRTH,
  *   forcedMode: 'birth'
  * });
  */
-declare function createThreadAndNotify(options: ThreadCreateData): {
+declare function createThread(options: ThreadCreateData): {
     id: EARS.EntityId;
     shortCode: string;
     timestamp: number;
@@ -6056,15 +5858,14 @@ declare const featureServices: {
         updateMessageState: typeof updateMessageState;
         createMarkerMessage: typeof createMarkerMessage;
         addMessagesToThread: typeof addMessagesToThread;
-        createThreadAndNotify: typeof createThreadAndNotify;
-        openThreadChatAndRefreshRecent: typeof openThreadChatAndRefreshRecent;
-        openThreadTabAndRefresh: typeof openThreadTabAndRefresh;
-        sendRecentThreadsRefresh: typeof sendRecentThreadsRefresh;
+        createThread: typeof createThread;
+        showThread: typeof showThread;
+        visitThread: typeof visitThread;
         resolveReferences: typeof resolveReferences;
     };
     artifact: {
-        createAndNotify: typeof createAndNotify;
-        updateAndNotify: typeof updateAndNotify;
+        create: typeof create;
+        update: typeof update;
         findOrCreateByType: typeof findOrCreateByType;
     };
     threads: {
@@ -6208,7 +6009,10 @@ declare const flowsQueries: {
     readonly node: (nodeId: EARS.EntityId) => NodeEntity | undefined;
     readonly flowNodes: (flowId: EARS.EntityId) => NodeEntity[];
     readonly extendedData: (flowId: EARS.EntityId, include?: keyof FlowExtendedData | (keyof FlowExtendedData)[]) => FlowExtendedData;
-    readonly connectedData: () => FlowsConnectedData;
+    /** Every flow, newest first, and the root flow the brain runs (the flow with the root role) */
+    readonly list: () => FlowsList;
+    /** A flow's nodes and edges, or `null` for a flow that doesn't exist */
+    readonly graph: (flowId: EARS.EntityId) => FlowExtendedData | null;
 };
 
 declare function getHandle(key: string): CodexTurnHandle | undefined;
@@ -6240,7 +6044,20 @@ declare const libraryQueries: {
     /** Every document and folder by name, for the reference picker and the panel's stats */
     readonly getIndex: () => LibraryIndex;
     readonly getCollections: () => CollectionDTO[];
+    /** Whether a document is a file on disk under a symlinked folder, rather than one the library stores */
+    readonly isDiskDocument: (id: string) => boolean;
+    /** Whether a folder's contents are on disk: a symlinked collection, or a folder inside one */
+    readonly isDiskFolder: (folderId: string | null) => boolean;
+    /** A folder's contents wherever they are: on disk for a symlinked folder, else in the library */
     readonly getFolderContents: (folderId: EARS.EntityId | null) => Promise<FolderContents>;
+    /** The symlinked collections among `ids` whose folder on disk is gone */
+    readonly brokenSymlinks: (ids: readonly string[]) => Promise<string[]>;
+    /**
+     * A folder's contents as the library stores them: its folders and documents, its path and breadcrumbs. It reads the
+     * engine and nothing else, so a view can watch it; whether a symlinked folder still reaches its disk is
+     * `brokenSymlinks`', and a symlinked folder's own contents are `getFolderContents`'.
+     */
+    readonly engineFolderContents: (folderId: EARS.EntityId | null) => FolderContents;
     readonly getFolderPath: (folderId: EARS.EntityId | null) => BreadcrumbItem[];
     readonly getParentFolderId: (folderId: EARS.EntityId) => EARS.EntityId | null;
     readonly getDocumentsInCollection: (collectionId: EARS.EntityId) => DocumentDTO[];
@@ -6303,6 +6120,19 @@ declare const noteCommands: {
 };
 
 declare const noteQueries: {
+    /** One note as the tree shows it */
+    readonly summary: (id: EARS.EntityId) => NoteSummary | undefined;
+    /** Every note as the tree shows it */
+    readonly summaries: () => NoteSummary[];
+    /** The notes in the trash, as the trash lists them */
+    readonly trashedSummaries: () => NoteSummary[];
+    /** The notes whose title holds `text`, ignoring case, as a search lists them */
+    readonly search: (text: string) => NoteSummary[];
+    /** What the welcome page lists: the `limit` notes seen last, and the favourites */
+    readonly recent: (limit: number) => {
+        recent: RecentNote[];
+        favorites: RecentNote[];
+    };
     readonly byId: (id: EARS.EntityId) => NoteEntity | undefined;
     readonly byIdDTO: (id: EARS.EntityId) => NoteDTO | undefined;
     readonly all: () => NoteEntity[];
@@ -6313,47 +6143,13 @@ declare const noteQueries: {
     readonly referencedBy: (noteId: EARS.EntityId) => EARS.EntityId[];
     readonly trashedDTOs: () => NoteDTO[];
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
-    readonly connectedData: () => {
-        notes: NoteDTO[];
-    };
-};
-
-/**
- * Open thread chat and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread data for chat
- * - Refresh recent threads list
- */
-declare function openThreadChatAndRefreshRecent(threadId: EARS.EntityId, options?: {
-    restore?: boolean;
-    reply?: Reply<OutgoingThreadsEvents>;
-}): void;
-
-/**
- * Open thread tab and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread tab data with artifacts
- * - Refresh recent threads list
- */
-declare function openThreadTabAndRefresh(threadId: EARS.EntityId, options?: {
-    reply?: Reply<OutgoingThreadsEvents>;
-}): void;
-
-declare function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
-    messages: Partial<MessageEntity>[];
-    hasMore: boolean;
-    nextCursor: string | null;
 };
 
 /** The flow node a node ran under: the nearest flow above it, or undefined for a session's root */
 declare function parentFlowOf(id: RunNodeId): RunNode | undefined;
 
 declare const promptCommands: {
-    create: (data: _apackdev_sdk_repositories.PromptInput) => _apackdev_sdk.PromptEntity;
+    create: (data: _apackdev_sdk_repositories.PromptInput) => PromptEntity;
     update: (id: _apackdev_sdk.EARS.EntityId, updates: Partial<_apackdev_sdk_repositories.PromptInput>) => void;
     /** Marks the prompt deleted */
     delete: (id: _apackdev_sdk.EARS.EntityId) => void;
@@ -6361,16 +6157,18 @@ declare const promptCommands: {
 
 /**
  * Prompts Repository: the SDK's prompt repository (`promptRepository`), which owns their reads and writes, as the
- * prompts surface uses it, and the surface's views. The SDK's methods are taken as they are, not wrapped.
+ * prompts surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
  */
 declare const promptQueries: {
-    byId: (id: _apackdev_sdk.EARS.EntityId) => _apackdev_sdk.PromptEntity | undefined;
-    all: () => _apackdev_sdk.PromptEntity[];
-    byLabel: (label: string) => _apackdev_sdk.PromptEntity | undefined;
-    connectedData: (page?: number, pageSize?: number) => {
-        prompts: _apackdev_sdk.PromptEntity[];
-        page: number;
-        totalPages: number;
+    byId: (id: _apackdev_sdk.EARS.EntityId) => PromptEntity | undefined;
+    all: () => PromptEntity[];
+    byLabel: (label: string) => PromptEntity | undefined;
+    /**
+     * The first `limit` prompts in `categories` (every category when it's empty), or all of them without a limit, and
+     * how many there are. A prompt without a category is in none, so a filter leaves it out.
+     */
+    list: (limit: number | null, categories: readonly string[]) => {
+        prompts: PromptEntity[];
         totalCount: number;
     };
 };
@@ -6401,10 +6199,7 @@ declare function resolveReferences(references: MessageReferences | undefined): P
  */
 declare function searchMessages(text: string, limit?: number): MessageSearchResult[];
 
-/**
- * Send a message with custom blocks and emit MESSAGE_ADDED event
- * Use this for flow actions that need automatic frontend updates
- */
+/** Send a message with custom blocks */
 declare function sendBlockMessage(options: BlockMessageOptions): {
     messageId: EARS.EntityId;
 };
@@ -6459,25 +6254,22 @@ declare function sendQuestionBlock(options: {
     messageId: EARS.EntityId;
 };
 
-/**
- * Send recent threads refresh to frontend
- *
- * Use this helper after any operation that affects thread ordering:
- * - Thread creation
- * - Message creation (updates lastMessageTimestamp)
- * - Thread visits (updates lastVisitedTimestamp)
- */
-declare function sendRecentThreadsRefresh(): void;
-
-/**
- * Send a system message (non-interactive aside) and emit MESSAGE_ADDED event
- */
+/** Send a system message (non-interactive aside) */
 declare function sendSystemMessage(options: {
     threadId: EARS.EntityId;
     text: string;
 }): {
     messageId: EARS.EntityId;
 };
+
+/**
+ * Open a thread in the chat: visited (`visitThread`), and the chat told to show it — the window that asked, or, from an action, which has no asker, every
+ * window, as `answer` decides.
+ */
+declare function showThread(threadId: EARS.EntityId, options?: {
+    restore?: boolean;
+    reply?: Reply<OutgoingThreadsEvents>;
+}): void;
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
 
@@ -6562,8 +6354,12 @@ declare const threadQueries: {
         relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
     }[];
     readonly extendedData: (threadId: EARS.EntityId, include?: keyof ThreadExtendedData | (keyof ThreadExtendedData)[]) => ThreadExtendedData;
-    readonly archivedThreads: () => Partial<ThreadEntity>[];
-    readonly connectedData: () => ThreadConnectedData;
+    /** The archived threads, in the order the chat's settings sort recent threads */
+    readonly archivedThreads: (sortOrder: RecentThreadsSortOrder) => Partial<ThreadEntity>[];
+    /** The threads the list and the board show: every one not archived, newest first, each with its parent's id */
+    readonly listed: () => ThreadExtended[];
+    /** A thread as its detail page shows it, or `null` once it is gone */
+    readonly detail: (threadId: EARS.EntityId) => ThreadDetailView | null;
     /**
      * Compatibility alias for persisted action code compiled before artifact
      * helpers moved under chatCommands.
@@ -6584,35 +6380,30 @@ declare function unlisten(id: string): boolean;
 declare function unregisterByPrefix(prefix: string): void;
 
 /**
- * Patch an existing artifact's title and/or content in place, and notify
- * the frontend so the panel re-renders with the new data.
- *
- * Used for artifacts that mutate across turns (e.g. the Claude Code session
- * card, which tracks live status/cost/turn count). The `ARTIFACT_UPDATED`
- * event mirrors `ARTIFACT_ADDED` but carries only the fields that changed.
+ * Patch an artifact's title and/or content in place: for artifacts that change across turns (the Claude Code session
+ * card, which tracks live status, cost and turn count)
  */
-declare function updateAndNotify(artifactId: EARS.EntityId, options: UpdateArtifactOptions): void;
+declare function update(artifactId: EARS.EntityId, options: UpdateArtifactOptions): void;
 
 /**
  * Threads Service
  *
- * Provides primitives for updating thread-level state with automatic
- * frontend notification, following the same pattern as artifact service.
+ * Thread-level state writes for actions and systems. A window sees each through the threads views.
  */
 
 /**
- * Update a thread's chatState and notify the frontend.
+ * Update a thread's chatState.
  *
  * This is the canonical service-level write for chatState. The DSL helper
  * `updateChatState()` in thread-context.ts handles the thread context side,
- * then delegates here for the thread write + emit.
+ * then delegates here for the thread write.
  */
 declare function updateChatState(threadId: EARS.EntityId, chatState: string): void;
 
 /**
  * Update message state with any mutable fields
- * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp)
- * Automatically emits UPDATE_MESSAGE_STATE event to frontend
+ * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
+ * the message sees it through the message's view, the one view a streamed reply re-runs
  *
  * @example
  * // Re-enable interactive blocks by clearing response
@@ -6634,6 +6425,14 @@ declare function viewByFile(filePath: string, opts?: {
     limit?: number;
     offset?: number;
 }): Promise<any[]>;
+
+/**
+ * What opening a thread writes, for a window that opened it itself: marked visited (unless this restores the window's
+ * chat), and a finished turn's `success` flash cleared. Throws for a thread that is gone.
+ */
+declare function visitThread(threadId: EARS.EntityId, options?: {
+    restore?: boolean;
+}): void;
 
 export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemEvents, Repositories, Services };
 ```

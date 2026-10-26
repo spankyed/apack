@@ -1,7 +1,7 @@
 import { query } from '#generated/ears.ts';
 import { EARS } from '#generated/ears.ts';
 
-import type { NoteDTO } from '../types.ts';
+import type { NoteDTO, NoteSummary, RecentNote } from '../types.ts';
 import type { NoteEntity } from '#features/notes/be/types.ts';
 
 function toDTO(note: NoteEntity): NoteDTO {
@@ -32,7 +32,57 @@ function toDTO(note: NoteEntity): NoteDTO {
   };
 }
 
+/** The fields a summary reads: never `content`, `updatedAt` or `lastSeen`, which typing in a note moves */
+const SUMMARY_FIELDS = ['title', 'icon', 'noteType', 'completed', 'hideCompletedChildren', 'displayOrder', 'savedDisplayOrder', 'favorite', 'createdAt', 'trashedAt'] as const;
+
+function toSummary(note: Pick<NoteEntity, 'id' | (typeof SUMMARY_FIELDS)[number]> & { trashedAt?: number }): NoteSummary {
+  const parents = query.ids(note.id).in(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids();
+  return {
+    id: note.id,
+    title: note.title,
+    icon: note.icon ?? null,
+    noteType: note.noteType ?? 'document',
+    completed: note.completed ?? false,
+    hideCompletedChildren: note.hideCompletedChildren ?? false,
+    parentId: parents.length > 0 ? parents[0] : null,
+    displayOrder: note.displayOrder,
+    savedDisplayOrder: note.savedDisplayOrder ?? null,
+    childCount: query.ids(note.id).out(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids().length,
+    createdAt: note.createdAt,
+    favorite: note.favorite ?? false,
+    ...(note.trashedAt ? { trashedAt: note.trashedAt } : {}),
+  };
+}
+
 export const noteQueries = {
+  /** One note as the tree shows it */
+  summary: (id: EARS.EntityId): NoteSummary | undefined => {
+    const note = query.ids(id).ofType(EARS.Entity.Note).pickOne([...SUMMARY_FIELDS]);
+    return note ? toSummary(note as never) : undefined;
+  },
+
+  /** Every note as the tree shows it */
+  summaries: (): NoteSummary[] => query(EARS.Entity.Note).pick([...SUMMARY_FIELDS]).map((note) => toSummary(note as never)),
+
+  /** The notes in the trash, as the trash lists them */
+  trashedSummaries: (): NoteSummary[] => query.trashed(EARS.Entity.Note).pick([...SUMMARY_FIELDS]).map((note) => toSummary(note as never)),
+
+  /** The notes whose title holds `text`, ignoring case, as a search lists them */
+  search: (text: string): NoteSummary[] => {
+    const wanted = text.trim().toLowerCase();
+    return wanted ? noteQueries.summaries().filter((note) => (note.title || '').toLowerCase().includes(wanted)) : [];
+  },
+
+  /** What the welcome page lists: the `limit` notes seen last, and the favourites */
+  recent: (limit: number): { recent: RecentNote[]; favorites: RecentNote[] } => {
+    const notes = query(EARS.Entity.Note).pick(['title', 'icon', 'noteType', 'updatedAt', 'lastSeen', 'favorite']) as Array<Pick<NoteEntity, 'id' | 'title' | 'icon' | 'noteType' | 'updatedAt' | 'lastSeen' | 'favorite'>>;
+    const shown = (note: (typeof notes)[number]): RecentNote => ({ id: note.id, title: note.title, icon: note.icon ?? null, noteType: note.noteType ?? 'document', updatedAt: note.updatedAt });
+    return {
+      recent: notes.filter((note) => (note.lastSeen ?? 0) > 0).sort((a, b) => b.lastSeen - a.lastSeen).slice(0, limit).map(shown),
+      favorites: notes.filter((note) => note.favorite).map(shown),
+    };
+  },
+
   byId: (id: EARS.EntityId): NoteEntity | undefined =>
     query.ids(id).ofType(EARS.Entity.Note).pickOne() ?? undefined,
 
@@ -71,7 +121,4 @@ export const noteQueries = {
       .where('trashedAt', (at) => typeof at === 'number' && at < Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
       .pickAll() as NoteEntity[],
 
-  connectedData: () => ({
-    notes: noteQueries.allDTOs(),
-  }),
 } as const;

@@ -121,9 +121,14 @@ export type BrainInternalEvents =
   | { type: 'RUN_NODE_UPDATED'; data: RunNodeUpdate }
   | { type: 'CHILD_COMPLETED'; stepId?: EARS.EntityId; runNodeId?: RunNodeId; stepLabel?: string; result?: any; final?: boolean; eventRunNodeId?: RunNodeId; isFlow?: boolean }
 
+/**
+ * What the brain system sends the Brain surface. A run's tree and a run node's details are in the run history, which no
+ * view can watch, so they are answers to the window that asked (\`REQUEST_SURFACE_DATA\`, \`OPEN_RUN_NODE\`,
+ * \`GO_BACK_RUN_NODE\`, \`GET_RUN_NODE_DETAILS\`). The rest is news for every window: the brain's state, an event's
+ * pulse, and the run's live feed, which patches the tree a window holds as streaming tokens patch a message.
+ */
 export type OutgoingBrainEvents =
   | { type: 'RECEIVE_SURFACE_DATA'; data: FlowRunNodeData }
-  // | { type: 'BRAIN_CONNECTED'; data: FlowRunNodeData }
   | { type: 'RUN_NODE_OPENED'; runNodeId: EARS.EntityId; data: FlowRunNodeData }
   | { type: 'RUN_NODE_SPAWNED'; runNode: RunNode; parentId?: EARS.EntityId; eventRunNodeId?: RunNodeId; flowRunNodeId: EARS.EntityId }
   | { type: 'RUN_NODE_UPDATED'; data: RunNodeUpdate }

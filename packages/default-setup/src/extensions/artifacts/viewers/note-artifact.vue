@@ -34,7 +34,7 @@ import { StickyNote } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import CopyButton from '@apackdev/ui/design/CopyButton'
-import { useSurfaceState } from '#generated/fe.ts'
+import { useView } from '#generated/fe.ts'
 
 const props = defineProps<{
   artifact: ArtifactItem<string | { noteId?: string }>
@@ -47,11 +47,9 @@ const noteId = computed(() =>
     : props.artifact.content?.noteId ?? ''
 )
 
-const allNotes = useSurfaceState('notes', (s) => s.notes)
-
-const note = computed(() =>
-  allNotes.value.find((n: any) => n.id === noteId.value)
-)
+// The note with its text, as the notes feature's note view reads it, kept current by the backend
+const noteView = useView('notes', 'note', () => (noteId.value ? { id: noteId.value as never } : null))
+const note = computed(() => noteView.data ?? undefined)
 
 const noteContent = computed(() => note.value?.content ?? '')
 </script>

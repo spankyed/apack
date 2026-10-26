@@ -96,6 +96,12 @@ export interface FolderContents {
   lastKnownPath?: string
 }
 
+/** The library's `folder` view: a folder's contents as stored, or that they are on disk and fetched instead */
+export type FolderView = { onDisk: true } | { onDisk: false; contents: FolderContents }
+
+/** The library's `document` view: a document as stored, `null` once it's gone, or that it is a file on disk */
+export type DocumentView = { onDisk: true } | { onDisk: false; document: DocumentDTO | null }
+
 /**
  * Every document and folder in the library, by name: what the reference picker offers and the
  * panel counts. The file browser reads one folder at a time through `FolderContents` instead.
@@ -127,15 +133,17 @@ export type IncomingLibraryEvents =
   | { type: 'CREATE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: string; documentType?: string }
   | { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: ContentSection[]; tags: string[]; collectionId?: string }
   | { type: 'DELETE_DOCUMENT'; id: string }
+  /** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
   | { type: 'GET_DOCUMENT'; id: string }
-  | { type: 'GET_LIBRARY_INDEX' }
   | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
   | { type: 'UPDATE_COLLECTION'; id: string; name: string; description?: string }
   | { type: 'DELETE_COLLECTION'; id: string }
   | { type: 'MOVE_DOCUMENT'; documentId: string; collectionId?: string }
   // File browser events
+  /** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
   | { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
-  | { type: 'NAVIGATE_TO_FOLDER'; folderId: string | null }
+  /** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
+  | { type: 'CHECK_SYMLINKS'; ids: string[] }
   | { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
   | { type: 'DELETE_ITEMS'; ids: string[] }
   | { type: 'MOVE_ITEMS'; ids: string[]; targetFolderId: string | null }
@@ -147,25 +155,29 @@ export type IncomingLibraryEvents =
   | { type: 'IMPORT_LIBRARY'; directory: string }
   | { type: 'EXPORT_LIBRARY'; directory: string; format: 'markdown' | 'json' }
 
+/**
+ * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
+ * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
+ * on disk is fetched, since a view watches the engine and nothing else.
+ */
 export type OutgoingLibraryEvents =
-  | { type: 'LIBRARY_CONNECTED'; data: { index: LibraryIndex; settings: any } }
-  | { type: 'DOCUMENT_CREATED'; data: { document: DocumentDTO } }
-  | { type: 'DOCUMENT_UPDATED'; data: { document: DocumentDTO } }
-  | { type: 'DOCUMENT_DELETED'; data: { documentId: string } }
-  | { type: 'DOCUMENT_LOADED'; data: { document: DocumentDTO } }
+  /** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
   | { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
-  | { type: 'COLLECTION_UPDATED'; data: { collection: CollectionDTO } }
-  | { type: 'COLLECTION_DELETED'; data: { collectionId: string } }
-  | { type: 'LIBRARY_INDEX_LOADED'; data: { index: LibraryIndex } }
-  | { type: 'LIBRARY_ERROR'; data: { error: string } }
-  // Symlink events
-  | { type: 'SYMLINK_UPDATED'; data: { collection: CollectionDTO } }
-  // File browser events
+  /** Any other write landed */
+  | { type: 'LIBRARY_WRITTEN' }
+  /** A write or a fetch was refused, and why */
+  | { type: 'LIBRARY_WRITE_FAILED'; error: string }
+  /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
   | { type: 'FOLDER_CONTENTS_LOADED'; data: FolderContents }
-  | { type: 'NAVIGATION_CHANGED'; data: { folderId: string | null; path: string[] } }
-  | { type: 'ITEM_RENAMED'; data: { item: LibraryItem } }
-  | { type: 'ITEMS_DELETED'; data: { ids: string[] } }
-  | { type: 'ITEMS_MOVED'; data: { ids: string[]; targetFolderId: string | null } }
+  /** A document on disk, as `GET_DOCUMENT` asked */
+  | { type: 'DOCUMENT_LOADED'; data: { document: DocumentDTO } }
+  /** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
+  | { type: 'SYMLINKS_CHECKED'; ids: string[]; broken: string[] }
+  /**
+   * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
+   * for every window showing such a folder to fetch it again. A notification: no window asked for it.
+   */
+  | { type: 'FOLDER_CHANGED'; folderId: string | null }
   // [SEARCH_INDEX_FF] Search index events — commented out
   // | { type: 'SEARCH_INDICES_LOADED'; data: { indices: SearchIndex[] } }
   // | { type: 'SEARCH_INDEX_CREATED'; data: { index: SearchIndex } }

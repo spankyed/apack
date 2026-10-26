@@ -59,18 +59,14 @@ export const logsSystem = setup({
         return updatedLogs;
       }
     }),
-    sendLogsConnected: ({ context }) => {
-      // Get current settings
+    /** The buffer as the settings filter it, answered to the window that asked */
+    sendLogs: ({ context, reply }) => {
       const settings = featureSettings.forFeature('logs').get();
-      const excludedSources = effectiveExcludedSources(settings);
-
-      // Filter logs by excluded sources before sending
-      const filteredLogs = filterLogsByExcludedSources(context.logs, excludedSources);
-
-      broadcastToSurface('logs', {
-        type: 'LOGS_CONNECTED',
+      const filteredLogs = filterLogsByExcludedSources(context.logs, effectiveExcludedSources(settings));
+      reply?.({
+        type: 'LOGS_READ',
         logs: filteredLogs,
-        settings: settings ?? { maxLogs: 1000, excludedSources: [], showAppEvents: false }
+        settings: settings ?? { maxLogs: 1000, excludedSources: [], showAppEvents: false },
       });
     },
     broadcastNewLog: ({ context }) => {
@@ -88,19 +84,6 @@ export const logsSystem = setup({
       broadcastToSurface('logs', {
         type: 'LOG_ADDED',
         log: newLog,
-      });
-    },
-    broadcastLogsUpdate: ({ context }) => {
-      // Get current settings from repository
-      const settings = featureSettings.forFeature('logs').get();
-      const excludedSources = effectiveExcludedSources(settings);
-
-      // Filter logs by excluded sources before sending
-      const filteredLogs = filterLogsByExcludedSources(context.logs, excludedSources);
-
-      broadcastToSurface('logs', {
-        type: 'LOGS_UPDATE',
-        logs: filteredLogs,
       });
     },
     broadcastLogsCleared: () => {
@@ -129,11 +112,9 @@ export const logsSystem = setup({
   },
   entry: ['setupEventListeners'],
   on: {
-    SEND_STATE: {
-      actions: ['sendLogsConnected'],
-    },
+    // Each window showing the logs asks for them again, filtered by what the settings now say
     FEATURE_SETTINGS_UPDATED: {
-      actions: ['truncateLogsIfNeeded', 'broadcastLogsUpdate'],
+      actions: ['truncateLogsIfNeeded'],
     },
   },
   states: {
@@ -145,8 +126,8 @@ export const logsSystem = setup({
         CLEAR_LOGS: {
           actions: ['clearLogs', 'broadcastLogsCleared'],
         },
-        REQUEST_LOGS_UPDATE: {
-          actions: ['truncateLogsIfNeeded', 'broadcastLogsUpdate'],
+        GET_LOGS: {
+          actions: ['truncateLogsIfNeeded', 'sendLogs'],
         },
       },
     },

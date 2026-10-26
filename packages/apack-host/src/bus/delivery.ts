@@ -39,8 +39,8 @@ function askerOf({ sender, client }: Pick<Message, 'sender' | 'client'>): _Asker
 }
 
 /**
- * Runs `body` as the handling of `message`: a send made inside it carries the handler's ref as
- * `Message.sender`, and a handler entered inside it is handed the answer for this message.
+ * Runs `body` as the handling of `message`, whose event the receiver is handed as `event`: a send made inside it
+ * carries the handler's ref as `Message.sender`, and a handler of that event is handed the answer for this message.
  *
  * It takes the envelope rather than a prepared delivery so that reading a return address happens in one place
  * (`askerOf`), which is what stops the bus's two doors from drifting apart.
@@ -48,6 +48,6 @@ function askerOf({ sender, client }: Pick<Message, 'sender' | 'client'>): _Asker
  * Synchronous by design — see the header. A send a handler makes after an `await` carries no sender, which
  * `tests/bus/delivery-is-synchronous.spec.ts` pins, so the limit is a decision rather than a surprise.
  */
-export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call'>, body: () => T): T {
-  return _runDelivery({ receiver: message.to, asker: askerOf(message), ...(message.call === undefined ? {} : { call: message.call }) }, body);
+export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call'>, event: object, body: () => T): T {
+  return _runDelivery({ receiver: message.to, asker: askerOf(message), event, ...(message.call === undefined ? {} : { call: message.call }) }, body);
 }

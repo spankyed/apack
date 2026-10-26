@@ -38,7 +38,7 @@ transport, boot or composition belongs in `@apackdev/host`, which the same guard
   once per socket, so the id identifies the connection rather than the call, and it is never read from the wire —
   which is what makes it a return address a sender cannot forge. `closed` is the adapter's per-connection abort
   signal (it fires from `client.once('close')`), and is how anything holding per-connection state gives it back.
-- `index.ts` — `appRouter = router({ bus, packs, secrets })`; `AppRouter` is its type.
+- `index.ts` — `appRouter = router({ entities, bus, packs, secrets, settings, views })`; `AppRouter` is its type.
 - `packs.ts` (`packs.*`) — `loaded` reports accepted executable runtimes for frontend reconciliation.
   `catalog` streams the existing common declaration catalog, including disabled/activation-failed packs,
   without loading their modules. Each frame carries a backend-run ID and committed catalog revision;
@@ -58,6 +58,7 @@ transport, boot or composition belongs in `@apackdev/host`, which the same guard
     (the bus's `CLIENT_CONNECTED`). It filters on the connection: a message whose `client` is absent goes to every
     subscription, and one that names a connection goes only to that one. The filter is here rather than in the
     renderer, so a window never receives a message that was not for it (`tests/transport/sub-scope.spec.ts`).
+- `views.ts` (`views.*`) — `watch({ ref, view, args? })` (subscription): one window's subscription to one view, delegating to `appViews` (`createViewHost`, `@apackdev/host/views`, created in `openAppStore()` over the app's engine and registry). It lasts as long as the subscription, and the adapter ends every subscription on a socket that closes, so nothing watches for a window going away (`tests/transport/views.spec.ts`, over a real adapter).
 - `secrets.ts` (`secrets.*`) — `list` (query), `add`, `replaceValue`, `select`, `rename`, `delete`, `allowUnprotected`. Each calls `secretsStore` (`@apackdev/host/secrets`) directly, never the bus, and returns `secretsSnapshot()` (metadata and status, no values). `provider` is validated against `providerLabels` plus `custom`. The boot calls host's `forwardSecretsChanges()`, which sends the `settings` designation `SECRETS_CHANGED` on every store change, once that system is registered.
 - `encoder.ts` — what the ws adapter serialises with (`experimental_encoder`), in place of its default bare
   `JSON.stringify`. Only two values make that throw — a `BigInt` anywhere, and a circular structure — and it throws

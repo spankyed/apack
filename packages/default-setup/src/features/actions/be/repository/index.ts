@@ -1,10 +1,9 @@
-import { EARS, query } from '#generated/ears.ts';
 import { actionRepository } from '@apackdev/sdk/repositories';
 import type { ActionEntity } from '@apackdev/sdk';
 
 /**
  * Action Repository: the SDK's action repository (`actionRepository`), which owns their reads and writes, as the
- * actions surface uses it, and the surface's views. The SDK's methods are taken as they are, not wrapped.
+ * actions surface uses it, and what its views read. The SDK's methods are taken as they are, not wrapped.
  */
 
 // Queries
@@ -13,29 +12,14 @@ export const actionQueries = {
   all: actionRepository.all,
   byLabel: actionRepository.byLabel,
 
-  byCategory: (category: string): ActionEntity[] => query(EARS.Entity.Action).where('category', category).pickAll(),
-
-  // Simple pagination
-  paginated: (page = 1, pageSize = 20) => {
-    const all = actionQueries.all();
-    const start = (page - 1) * pageSize;
-    return {
-      items: all.slice(start, start + pageSize),
-      page,
-      pageSize,
-      totalCount: all.length,
-      totalPages: Math.ceil(all.length / pageSize),
-    };
-  },
-
-  connectedData: (page = 1) => {
-    const result = actionQueries.paginated(page, 20);
-    return {
-      actions: result.items,
-      page: result.page,
-      totalPages: result.totalPages,
-      totalCount: result.totalCount,
-    };
+  /**
+   * The first `limit` actions in `categories` (every category when it's empty), or all of them without a limit, and
+   * how many there are. An action without a category is in none, so a filter leaves it out.
+   */
+  list: (limit: number | null, categories: readonly string[]): { actions: ActionEntity[]; totalCount: number } => {
+    const wanted = new Set(categories);
+    const matching = wanted.size === 0 ? actionQueries.all() : actionQueries.all().filter((a) => a.category !== undefined && wanted.has(a.category));
+    return { actions: limit === null ? matching : matching.slice(0, limit), totalCount: matching.length };
   },
 } as const;
 

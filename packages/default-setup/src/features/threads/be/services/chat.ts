@@ -1,4 +1,3 @@
-import { broadcastToSurface } from '#generated/events.ts';
 import type { Reply } from '@apackdev/sdk/events';
 import { answer } from '../answer.ts';
 import { EARS } from '#generated/ears.ts';
@@ -17,7 +16,8 @@ const logger = createLogger('chat');
  * Block-based interaction helpers for creating composable messages
  *
  * These helpers make it easy to create messages using reusable blocks that can be
- * mixed and matched to create complex interactions.
+ * mixed and matched to create complex interactions. Every write here reaches a window through the threads views
+ * (`be/views.ts`): the chat page lists the message, and its own view carries what it says.
  */
 
 interface BlockMessageBase {
@@ -74,26 +74,12 @@ function createBlockMessage(options: BlockMessageOptions): {
   return { messageId: result.id, threadId, message };
 }
 
-/**
- * Send a message with custom blocks and emit MESSAGE_ADDED event
- * Use this for flow actions that need automatic frontend updates
- */
+/** Send a message with custom blocks */
 export function sendBlockMessage(options: BlockMessageOptions): { messageId: EARS.EntityId } {
-  const result = createBlockMessage(options);
-
-  // Emit granular event - only new message data (not entire thread)
-  broadcastToSurface('threads', {
-    type: 'MESSAGE_ADDED',
-    threadId: result.threadId,
-    message: result.message
-  });
-
-  return { messageId: result.messageId };
+  return { messageId: createBlockMessage(options).messageId };
 }
 
-/**
- * Send a system message (non-interactive aside) and emit MESSAGE_ADDED event
- */
+/** Send a system message (non-interactive aside) */
 export function sendSystemMessage(options: {
   threadId: EARS.EntityId;
   text: string;
@@ -104,22 +90,6 @@ export function sendSystemMessage(options: {
     threadId,
     text,
     sender: 'system',
-  });
-
-  const message: MessageEntity = {
-    id: result.id,
-    entityType: EARS.Entity.Message,
-    text: result.text,
-    sender: 'system',
-    timestamp: result.timestamp,
-    createdAt: result.timestamp,
-    updatedAt: result.timestamp,
-  };
-
-  broadcastToSurface('threads', {
-    type: 'MESSAGE_ADDED',
-    threadId,
-    message,
   });
 
   return { messageId: result.id };
@@ -237,8 +207,8 @@ export function updateMessageBlockResponse(
 
 /**
  * Update message state with any mutable fields
- * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp)
- * Automatically emits UPDATE_MESSAGE_STATE event to frontend
+ * Main interface for ad hoc message state updates (text, blocks, blockResponse, responseTimestamp): a window showing
+ * the message sees it through the message's view, the one view a streamed reply re-runs
  *
  * @example
  * // Re-enable interactive blocks by clearing response
@@ -257,23 +227,14 @@ export function updateMessageState(
   messageId: EARS.EntityId,
   updates: Partial<Pick<MessageEntity, 'text' | 'blocks' | 'blockResponse' | 'responseTimestamp' | 'status' | 'context' | 'forkable' | 'compacted'>>
 ): void {
-  let result;
   try {
-    result = repository.chatCommands.updateMessageState({
+    repository.chatCommands.updateMessageState({
       messageId,
       updates
     });
   } catch (err) {
     logger.error(`updateMessageState failed for ${messageId}`, { error: errorMessage(err) });
-    return;
   }
-
-  // Emit UPDATE_MESSAGE_STATE event to frontend with all updated fields
-  broadcastToSurface('threads', {
-    type: 'UPDATE_MESSAGE_STATE',
-    messageId: result.messageId,
-    ...result.updates
-  });
 }
 
 /**
@@ -285,35 +246,10 @@ export function createMarkerMessage(params: {
   text: string;
 }): { messageId: EARS.EntityId; compactedMessageIds: EARS.EntityId[] } {
   const result = repository.chatCommands.createMarkerMessage(params);
-
-  // Notify frontend: add the marker message
-  broadcastToSurface('threads', {
-    type: 'MESSAGE_ADDED',
-    threadId: params.threadId,
-    message: {
-      id: result.id,
-      text: result.text,
-      sender: result.sender,
-      timestamp: result.timestamp,
-    } as MessageEntity,
-  });
-
-  // Notify frontend: mark each compacted message
-  for (const id of result.compactedMessageIds) {
-    broadcastToSurface('threads', {
-      type: 'UPDATE_MESSAGE_STATE',
-      messageId: id,
-      compacted: true,
-    });
-  }
-
   return { messageId: result.id, compactedMessageIds: result.compactedMessageIds };
 }
 
-/**
- * Add multiple messages to a thread without emitting per-message frontend events.
- * Caller is responsible for refreshing the frontend afterwards (e.g. via LOAD_CHAT_THREAD).
- */
+/** Add several messages to a thread at once, leaving queued messages where they are (a bulk import) */
 export function addMessagesToThread(params: {
   threadId: EARS.EntityId;
   messages: Array<{
@@ -333,135 +269,43 @@ export function addMessagesToThread(params: {
 }
 
 /**
- * Create a new thread and notify the frontend
- * Use this in flow actions that need automatic frontend updates
- *
- * @param options - Thread creation options
- * @returns Object with thread id, shortCode, timestamp, and status
+ * Create a new thread
  *
  * @example
- * const { id: threadId, shortCode, timestamp, status } = createThreadAndNotify({
+ * const { id: threadId, shortCode, timestamp, status } = createThread({
  *   topic: 'Assistant Birth',
  *   instructions: 'Welcome!',
  *   role: EARS.RoleKind.ASSISTANT_BIRTH,
  *   forcedMode: 'birth'
  * });
  */
-export function createThreadAndNotify(
+export function createThread(
   options: ThreadCreateData
 ): { id: EARS.EntityId; shortCode: string; timestamp: number; status: string } {
-  const result = repository.threadCommands.create(options);
-
-  // Notify threads surface about new thread
-  broadcastToSurface('threads', {
-    type: 'THREAD_CREATED',
-    id: result.id,
-    shortCode: result.shortCode,
-    entityType: EARS.Entity.Thread,
-    timestamp: result.timestamp,
-    topic: options.topic,
-    instructions: options.instructions,
-    status: result.status,
-    ...(options.pinned && { pinned: true }),
-  });
-
-  // Refresh recent threads list (thread creation affects ordering)
-  sendRecentThreadsRefresh();
-
-  return result;
+  return repository.threadCommands.create(options);
 }
 
 /**
- * Open thread chat and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread data for chat
- * - Refresh recent threads list
+ * Open a thread in the chat: visited (`visitThread`), and the chat told to show it — the window that asked, or, from an action, which has no asker, every
+ * window, as `answer` decides.
  */
-export function openThreadChatAndRefreshRecent(
+export function showThread(
   threadId: EARS.EntityId,
   options: { restore?: boolean; reply?: Reply<OutgoingThreadsEvents> } = {},
-) {
-  const { restore, reply } = options;
-  if (!restore) {
-    repository.threadCommands.markAsVisited(threadId);
-  }
-
-  const thread = repository.threadQueries.byId(threadId);
-  if (thread?.chatState === 'success') {
-    threadsService.updateChatState(threadId, 'idle');
-  }
-
-  const data = repository.chatQueries.threadDataPaginated(threadId);
-  if (!data) {
-    throw new Error(`Thread ${threadId} not found`);
-  }
-
-  // The window that asked, not every window: this broadcast is what pulled a window showing another thread
-  // over to this one. An action that opens a thread has no asker, and `answerThreads` broadcasts for it.
-  answer(reply, {
-    type: 'LOAD_CHAT_THREAD',
-    data,
-    ...(restore && { restore }),
-  });
-
-  if (!restore) {
-    sendRecentThreadsRefresh();
-  }
+): void {
+  visitThread(threadId, options);
+  answer(options.reply, { type: 'SHOW_THREAD', threadId, ...(options.restore && { restore: options.restore }) });
 }
 
 /**
- * Open thread tab and refresh recent threads list
- *
- * Bundles:
- * - Mark thread as visited
- * - Load thread tab data with artifacts
- * - Refresh recent threads list
+ * What opening a thread writes, for a window that opened it itself: marked visited (unless this restores the window's
+ * chat), and a finished turn's `success` flash cleared. Throws for a thread that is gone.
  */
-export function openThreadTabAndRefresh(
-  threadId: EARS.EntityId,
-  options: { reply?: Reply<OutgoingThreadsEvents> } = {},
-) {
-  // Mark thread as visited when opening tab
-  repository.threadCommands.markAsVisited(threadId);
-
-  // Query thread data and artifacts from repository
+export function visitThread(threadId: EARS.EntityId, options: { restore?: boolean } = {}): void {
   const thread = repository.threadQueries.byId(threadId);
-  const artifacts = repository.chatQueries.threadArtifacts(threadId);
-
-  // Reset 'success' state when the user revisits the thread
-  if (thread?.chatState === 'success') {
-    threadsService.updateChatState(threadId, 'idle');
-  }
-
-  // A tab belongs to one window — the window's own list, persisted in its own storage — so this is the
-  // asker's answer and never news. The recent-threads refresh below is the news half, and stays a broadcast.
-  answer(options.reply, {
-    type: 'THREAD_TAB_REQUESTED',
-    threadId,
-    topic: thread?.topic || `Thread ${threadId}`,
-    artifacts,
-    ...(thread?.pinned && { pinned: true }),
-  });
-
-  // Send updated recent threads list
-  sendRecentThreadsRefresh();
-}
-
-/**
- * Send recent threads refresh to frontend
- *
- * Use this helper after any operation that affects thread ordering:
- * - Thread creation
- * - Message creation (updates lastMessageTimestamp)
- * - Thread visits (updates lastVisitedTimestamp)
- */
-export function sendRecentThreadsRefresh() {
-  broadcastToSurface('threads', {
-    type: 'REFRESH_RECENT_THREADS',
-    data: repository.chatQueries.refreshThreadsData()
-  });
+  if (!thread) throw new Error(`Thread ${threadId} not found`);
+  if (!options.restore) repository.threadCommands.markAsVisited(threadId);
+  if (thread.chatState === 'success') threadsService.updateChatState(threadId, 'idle');
 }
 
 // ─── Reference resolution ─────────────────────────────────────────────────
@@ -679,9 +523,8 @@ export const chatService = {
   updateMessageState,
   createMarkerMessage,
   addMessagesToThread,
-  createThreadAndNotify,
-  openThreadChatAndRefreshRecent,
-  openThreadTabAndRefresh,
-  sendRecentThreadsRefresh,
+  createThread,
+  showThread,
+  visitThread,
   resolveReferences,
 };

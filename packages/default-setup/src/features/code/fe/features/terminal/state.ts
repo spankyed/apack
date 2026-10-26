@@ -65,7 +65,7 @@ export type Event =
   | { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
   | { type: 'terminal.OPEN_TABS'; terminalIds: string[] }
   | { type: 'terminal.TERMINALS_LISTED'; data: TerminalInfo[] }
-  | { type: 'terminal.CREATED'; data: TerminalInfo }
+  | { type: 'terminal.CREATED'; data: { terminalId: string } }
   | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
@@ -210,12 +210,6 @@ export const terminalState = setup({
       })
     }),
 
-    assignTerminalCreated: assign({
-      terminals: ({ context, event }) => {
-        const ev = event as { type: 'terminal.CREATED'; data: TerminalInfo }
-        return [...context.terminals, ev.data]
-      }
-    }),
 
     removeTerminal: assign({
       terminals: ({ context, event }) => {
@@ -466,8 +460,9 @@ export const terminalState = setup({
       actions: ['clearTerminalError', 'assignTerminals']
     },
     // The news, which every window takes: the list grows and nothing else happens
+    // A terminal exists, in some window: ask for the list again, which the system answers this window alone
     'terminal.CREATED': {
-      actions: ['clearTerminalError', 'assignTerminalCreated']
+      actions: ['clearTerminalError', 'listTerminals']
     },
     // The answer, which only the window that asked is sent
     'terminal.OPENED': {

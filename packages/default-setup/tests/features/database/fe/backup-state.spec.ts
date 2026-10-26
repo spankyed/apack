@@ -33,7 +33,8 @@ it('retains the import result instructions for the backup view', () => {
   actor.stop();
 });
 
-it.each(['IMPORT_DATABASE_SUCCESS', 'RESET_DATABASE_SUCCESS'] as const)(
+// The asker's own outcome, and the notification every window hears when any one of them replaced the data
+it.each(['IMPORT_DATABASE_SUCCESS', 'RESET_DATABASE_SUCCESS', 'DATABASE_REPLACED'] as const)(
   '%s discards old database results and late replies without restarting the window', type => {
     const actor = createActor(databaseState).start();
     actor.send({ type: 'QUERY.UPDATE', code: 'return "keep this editor"' });
@@ -117,4 +118,25 @@ it.each([
   actor.send({ type: 'DATABASE.RESET' });
 
   expect(sendToSystem).toHaveBeenCalledWith('database', { type: 'RESET_DATABASE' });
+});
+
+// The schema walks the whole store, so it is fetched rather than watched: once the shell starts the surface (in a
+// delivery naming it, so the ask can be answered), again whenever the data is replaced in any window, and after a
+// transaction this window ran
+it('asks for the schema when it starts, when the data is replaced, and after its own transaction', () => {
+  const actor = createActor(databaseState).start();
+  const asks = () => sendToSystem.mock.calls.filter(([, event]) => event.type === 'GET_SCHEMA').length;
+  expect(asks(), 'nothing from the machine\'s own entry, which no delivery names').toBe(0);
+  actor.send({ type: 'SURFACE_STARTED' });
+  expect(asks()).toBe(1);
+  actor.send({ type: 'SCHEMA_READ', schema: { entities: [{ type: 'Note' }], attributes: [], relations: [] } });
+  expect(actor.getSnapshot().context.schema.entities).toEqual([{ type: 'Note' }]);
+
+  actor.send({ type: 'DATABASE_REPLACED' });
+  expect(asks()).toBe(2);
+
+  actor.send({ type: 'TRANSACTION.EXECUTE', code: 'return 1' });
+  actor.send(answerTo(sentCall(sendToSystem, 'EXECUTE_TRANSACTION'), { type: 'TRANSACTION_RESULT', result: 1, executionTime: 1 }));
+  expect(asks()).toBe(3);
+  actor.stop();
 });

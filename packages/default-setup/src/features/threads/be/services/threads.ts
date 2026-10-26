@@ -1,21 +1,19 @@
 /**
  * Threads Service
  *
- * Provides primitives for updating thread-level state with automatic
- * frontend notification, following the same pattern as artifact service.
+ * Thread-level state writes for actions and systems. A window sees each through the threads views.
  */
 
-import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 
 import { repository } from '#generated/repository.ts';
 
 /**
- * Update a thread's chatState and notify the frontend.
+ * Update a thread's chatState.
  *
  * This is the canonical service-level write for chatState. The DSL helper
  * `updateChatState()` in thread-context.ts handles the thread context side,
- * then delegates here for the thread write + emit.
+ * then delegates here for the thread write.
  */
 export function updateChatState(
   threadId: EARS.EntityId,
@@ -24,15 +22,9 @@ export function updateChatState(
   try {
     repository.threadCommands.update(threadId, { chatState });
   } catch { /* thread may have been deleted */ }
-
-  broadcastToSurface('threads', {
-    type: 'SET_CHAT_STATE',
-    threadId: threadId as string,
-    chatState,
-  });
 }
 
-/** `services.threads`: thread-level state writes with frontend notification */
+/** `services.threads`: thread-level state writes */
 export const threadsService = {
   updateChatState,
 };

@@ -92,11 +92,6 @@ export function persistCodexState(services: Services, threadId: string, state: C
   const nextTags = tagAdded ? [...existingTags, CODEX_TAG] : existingTags;
 
   services.repository.threadCommands.update(threadId as any, { context: nextContext, tags: nextTags });
-  services.emitter.broadcastToSurface('default-setup/threads', {
-    type: 'THREAD_UPDATED',
-    threadId,
-    updates: { ...(tagAdded ? { tags: nextTags } : {}), context: nextContext },
-  });
 }
 
 export function updateCodexState(

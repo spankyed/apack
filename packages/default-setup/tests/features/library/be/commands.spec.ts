@@ -208,7 +208,6 @@ describe('slash commands from the library commands folder', () => {
     const app = await appliedApp()
     const published = app.emitted('host/application').filter((event) => event.type === 'COMMANDS_UPDATED').length
     await app.send('library', { type: 'CREATE_DOCUMENT', name: 'notes', content: field('not-a-command', 'x'), tags: [] })
-    await app.nextEmit('library', 'DOCUMENT_CREATED')
     await app.settle()
     // The owner compares the list before and after its own write, so a document that is not a command list
     // never reaches the app at all — the one dedupe left, and the only place that can make it
@@ -254,19 +253,15 @@ describe('slash commands from the library commands folder', () => {
     expect(commandNames(sent.at(-1))).toContain('pr2md')
   })
 
-  it("sends the library surface its index again when asked to publish, with what the pack written", async () => {
+  it("shows the library index what a pack written while the app runs brings, with nobody asking", async () => {
     const app = await appliedApp()
+    const index = app.watchView<{ documents: Array<{ name: string }> }>('library', 'index')
+    await index.next()
+
     importCompiledContent({ compiledDir: dependentPackCommands('Team commands', 'team-standup') })
 
-    const sentBefore = app.emitted('library').filter((event) => event.type === 'LIBRARY_CONNECTED').length
-
-    // What a pack change comes down to for this system: the bus asks every system to publish after one
-    await app.send('library', { type: 'SEND_STATE' })
-    await app.settle()
-
-    const sent = app.emitted('library').filter((event) => event.type === 'LIBRARY_CONNECTED') as unknown as Array<{ data: { index: { documents: Array<{ name: string }> } } }>
-    expect(sent).toHaveLength(sentBefore + 1)
-    expect(sent.at(-1)!.data.index.documents.map((document) => document.name)).toContain('Team commands')
+    const update = await index.next()
+    expect(update.ok && update.value.documents.map((document) => document.name)).toContain('Team commands')
   })
 
 

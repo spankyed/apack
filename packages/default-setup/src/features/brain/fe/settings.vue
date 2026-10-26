@@ -149,7 +149,7 @@ import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import { sendToSystem } from '#generated/events.ts'
 import { useSelector } from '@xstate/vue'
 import type { BrainState } from '#features/brain/fe/state.ts'
-import { useSurfaceState } from '#generated/fe.ts'
+import { useView } from '#generated/fe.ts'
 
 interface Props {
   settings?: SettingsOf<'brain'>
@@ -164,8 +164,9 @@ const brainActor: BrainState = useSurface();
 const brainIsDead = useSelector(brainActor, (state) => state.context.brainIsDead)
 const startError = useSelector(brainActor, (state) => state.context.startError)
 const runningRootFlowId = useSelector(brainActor, (state) => state.context.runningRootFlowId)
-// The root flow is the flows surface's (the flow with the root role)
-const rootFlowId = useSurfaceState('flows', (s) => s.rootFlowId)
+// The root flow is the flows feature's (the flow with the root role), as its list view reads it
+const flowList = useView('flows', 'list')
+const rootFlowId = computed(() => flowList.data?.rootFlowId)
 
 // Compute if restart is needed by comparing root flow IDs
 const needsRestart = computed(() => {

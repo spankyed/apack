@@ -284,14 +284,14 @@ export default {
                   steps: [
                     action("CDX: DB Transaction", {
                       label: "db-transaction",
-                      map: { prompt: "$.event.data.payload.prompt" },
+                      map: { prompt: "$.event.data.payload.prompt", client: "$.event.data.payload.client" },
                     }),
                   ],
                 },
               ], [
                 action("CDX: DB Query", {
                   label: "db-query",
-                  map: { prompt: "$.event.data.payload.prompt" },
+                  map: { prompt: "$.event.data.payload.prompt", client: "$.event.data.payload.client" },
                 }),
               ], "DB Mode Router"),
             ],
@@ -314,6 +314,7 @@ export default {
                   diff: "$.event.data.payload.diff",
                   branch: "$.event.data.payload.branch",
                   repoName: "$.event.data.payload.repoName",
+                  client: "$.event.data.payload.client",
                 },
               }),
             ],

@@ -176,7 +176,7 @@ export async function action(
       const parsed = parseUnifiedDiff(unified);
       if (parsed.files.length > 0) {
         const diffTitle = deriveDiffTitle(parsed.files);
-        const result = services.artifact.createAndNotify({
+        const result = services.artifact.create({
           artifactType: 'diff',
           title: diffTitle,
           content: parsed,

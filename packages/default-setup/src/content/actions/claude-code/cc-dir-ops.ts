@@ -127,11 +127,11 @@ async function handleSetDir(
     const state = getClaudeState(services, threadId);
     if (state?.sessionId) {
       const topic = `New session — ${shortenPath(dirPath)}`;
-      const { id: newThreadId } = services.chat.createThreadAndNotify({
+      const { id: newThreadId } = services.chat.createThread({
         topic,
         instructions: '',
       });
-      services.chat.openThreadChatAndRefreshRecent(newThreadId as any);
+      services.chat.showThread(newThreadId as any);
       return { text: `Working directory set to: ${dirPath} (new thread created)` };
     }
   }

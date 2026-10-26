@@ -61,7 +61,7 @@ export async function action(
   resolvePlanDraft(services, threadId as EntityId, 'approved');
 
   // 4. Create new thread
-  const { id: newThreadId } = services.chat.createThreadAndNotify({
+  const { id: newThreadId } = services.chat.createThread({
     topic: planTitle,
     instructions: '',
   });
@@ -80,7 +80,7 @@ export async function action(
   persistClaudeState(services, newThreadId as string, { permissionMode: 'acceptEdits' });
 
   // 7. Switch frontend to new thread and set edit phase
-  services.chat.openThreadChatAndRefreshRecent(newThreadId);
+  services.chat.showThread(newThreadId);
   services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
   updateChatState(services, newThreadId as EntityId, 'working');
 

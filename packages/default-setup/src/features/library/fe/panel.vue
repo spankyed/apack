@@ -247,11 +247,13 @@ import { computed, ref } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { FieldContent, ListContent, MarkdownContent, TextContent } from '#features/library/be/types.ts'
 import type { LibraryActor } from './state.ts'
+import { useView } from '#generated/fe.ts'
 
 const actor = useSurface<LibraryActor>()
 
 // Individual selectors for each context property
-const index = useSelector(actor, (state) => state.context.index)
+const indexView = useView('library', 'index')
+const index = computed(() => indexView.data ?? { documents: [], folders: [] })
 const selectedDocument = useSelector(actor, (state) => state.context.selectedDocument)
 // [SEARCH_INDEX_FF] const searchIndices = useSelector(actor, (state) => state.context.searchIndices)
 const items = useSelector(actor, (state) => state.context.items)

@@ -215,7 +215,7 @@ async function handleResume(
   let targetThreadId = threadId;
 
   if (hasRealMessages) {
-    const created = services.chat.createThreadAndNotify({ topic: title, instructions: '' });
+    const created = services.chat.createThread({ topic: title, instructions: '' });
     targetThreadId = created.id as string;
   } else {
     services.repository.threadCommands.update(threadId as EntityId, { topic: title });
@@ -247,12 +247,10 @@ async function handleResume(
       text: confirmText,
       blocks: [],
     });
-    services.chat.openThreadChatAndRefreshRecent(targetThreadId as EntityId);
+    services.chat.showThread(targetThreadId as EntityId);
     return { text: confirmText, skipMessage: true };
   }
 
-  const threadData = services.repository.chatQueries.threadData(targetThreadId as EntityId);
-  if (threadData) services.emitter.broadcastToSurface('default-setup/threads', { type: 'LOAD_CHAT_THREAD', data: threadData });
-
+  // Same thread: the chat showing it lists the imported messages through its view
   return { text: confirmText };
 }

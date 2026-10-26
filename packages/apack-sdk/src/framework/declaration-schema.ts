@@ -738,6 +738,8 @@ export const FeatureEntrySchema = z.object({
     .describe('Services. Keys are service names on `services`, values are "path#exportName" of the service object (an object literal or a class instance, not a factory) in a source file.').optional(),
   repositories: declarationRecord(IdentifierSchema, ExportTargetSchema)
     .describe('Repository objects. Keys are repository names on `repository` (from #generated/repository), values are "path#exportName" of the object in a source file.').optional(),
+  views: ExportTargetSchema
+    .describe('The feature\'s views: "path#exportName" of the object `defineViews` returns, from @apackdev/sdk/framework. A window subscribes to one with `useView` from #generated/fe; each is a pure read of the engine, run again after every commit that could change its result.').optional(),
   references: ReferencesSchema.describe('Reference identities and presentation, with reactive item-provider exports. Entity opening is declared separately by the destination surface contract.').optional(),
 }).strict();
 

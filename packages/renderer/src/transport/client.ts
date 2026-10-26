@@ -1,6 +1,7 @@
 // The window's client to the API: the SDK's sends and the shell's subscription, over tRPC and the Electron main
 // process's report of the API's status. Nothing else in the renderer calls the bus or reads the loaded packs.
 import type { ShellClient, ShellFailure } from '@apackdev/host/fe';
+import type { ViewUpdate } from '@apackdev/sdk/fe';
 import { trpc, reconnectApiClient } from '@/transport';
 import { globalToast } from '@/adapters/toast';
 import { windowSettings, connectWindowSettings, disconnectWindowSettings } from '@/runtime/settings';
@@ -17,6 +18,13 @@ function failureOf(event: ApiStatusEvent): ShellFailure {
   const message = (typeof error === 'object' ? error?.message : error) || 'The backend process stopped unexpectedly.';
   return { message, stack: typeof error === 'object' ? error?.stack : undefined };
 }
+
+/**
+ * The views this window is subscribed to. A subscription survives the socket dropping (the client subscribes it
+ * again when the socket is back), but not the API moving to another port, where the client is rebuilt: each is
+ * subscribed again then, as the bus subscription is.
+ */
+const views = new Set<{ subscribe(): void; unsubscribe(): void }>();
 
 export const feClient: ShellClient = {
   send: (message) => {
@@ -92,6 +100,7 @@ export const feClient: ShellClient = {
           subscriptionEpoch++;
           subscription.unsubscribe();
           subscription = subscribeToBus();
+          for (const view of views) view.subscribe();
         }
         return;
       }
@@ -110,6 +119,29 @@ export const feClient: ShellClient = {
       disconnectWindowSettings();
       windowCatalog.disconnect();
       stopStatus?.();
+    };
+  },
+
+  watchView: (request, observer) => {
+    let subscription: { unsubscribe(): void } | undefined;
+    const view = {
+      subscribe: () => {
+        subscription?.unsubscribe();
+        subscription = trpc.views.watch.subscribe(request, {
+          // tRPC types a frame as JSON delivers it, where a member typed `unknown` may be absent; the API sends
+          // `ViewUpdate`s, so what arrives is one, a result of `undefined` being one JSON can't carry anyway
+          onData: (update) => observer(update as ViewUpdate),
+          // The subscription failed rather than the view: a request the API refused, or the socket gone for good
+          onError: (error: unknown) => observer({ ok: false, error: errorMessage(error), commit: 0 }),
+        });
+      },
+      unsubscribe: () => subscription?.unsubscribe(),
+    };
+    views.add(view);
+    view.subscribe();
+    return () => {
+      views.delete(view);
+      view.unsubscribe();
     };
   },
 

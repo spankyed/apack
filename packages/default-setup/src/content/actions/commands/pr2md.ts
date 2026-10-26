@@ -133,7 +133,7 @@ export async function action(
     const markdown = formatPRMarkdown(pr, pr.comments || [], threads);
 
     if (threadId) {
-      services.artifact.createAndNotify({
+      services.artifact.create({
         artifactType: 'markdown',
         title: `PR #${pr.number}: ${pr.title}`,
         content: markdown,

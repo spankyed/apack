@@ -28,6 +28,7 @@ export function fakeClient() {
     // A test gives only the fields of a loaded pack the shell reads
     loadedPacks: vi.fn<() => Promise<Array<Partial<LoadedPackEntry> & { id: string }>>>(() => Promise.resolve([])),
     describeConnection: vi.fn<() => Promise<string>>(() => Promise.resolve('')),
+    watchView: vi.fn<ShellClient['watchView']>(() => () => {}),
   };
   const client: ShellClient = {
     ...mocks,

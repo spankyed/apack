@@ -1,7 +1,14 @@
 <template>
-  <div class="h-full">
+  <div class="h-full flex flex-col">
+    <FolderReader v-for="folderId in shownFolders" :key="folderId ?? ''" :folder-id="folderId" />
+    <div v-if="context.writeError" class="flex items-center justify-between gap-2 px-3 py-2 text-sm text-red-400 bg-red-500/10 border-b border-red-500/20">
+      <span>{{ context.writeError }}</span>
+      <button type="button" class="text-xs opacity-70 hover:opacity-100" @click="send({ type: 'CLEAR_WRITE_ERROR' })">Dismiss</button>
+    </div>
     <component
       v-if="currentComponent"
+      :key="context.currentView === 'edit' ? context.editingDocumentId : context.currentView"
+      class="flex-1 min-h-0"
       :is="currentComponent"
       v-bind="currentProps"
       v-on="currentEvents"
@@ -12,8 +19,10 @@
 <script setup lang="ts">
 import { useSurface } from '@apackdev/sdk/fe'
 
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
+import { useView } from '#generated/fe.ts'
+import FolderReader from './components/FolderReader.vue'
 import type { LibraryEvents } from './state.ts'
 import DocumentEditor from './components/DocumentEditor.vue'
 // [SEARCH_INDEX_FF] import CreateIndexView from './components/search-index/CreateIndexView.vue'
@@ -25,11 +34,24 @@ const actor: LibraryActor = useSurface()
 const context = useSelector(actor, (state) => state.context)
 const send = (event: LibraryEvents) => actor.send(event)
 
+// The folder open and each one expanded, each watched by its own reader
+const shownFolders = computed(() => [...new Set([context.value.currentFolderId, ...context.value.expandedFolderIds])])
+// The document open in the editor, and every document's name and tags
+const editing = useView('library', 'document', () => (context.value.currentView === 'edit' && context.value.editingDocumentId ? { id: context.value.editingDocumentId } : null))
+watch(() => editing.data, (document) => {
+  const documentId = context.value.editingDocumentId
+  if (document && documentId) send({ type: 'DOCUMENT.READ', documentId, document })
+})
+const index = useView('library', 'index')
+watch(() => index.data, (data) => { if (data) send({ type: 'INDEX.READ', index: data }) }, { immediate: true })
+
 const currentComponent = computed(() => {
   switch (context.value.currentView) {
     case 'create':
-    case 'edit':
       return DocumentEditor
+    // The editor takes its document once, when it opens, so it waits for the document to arrive
+    case 'edit':
+      return context.value.editingDocument ? DocumentEditor : null
     // [SEARCH_INDEX_FF] search index views — commented out
     // case 'create-index': return CreateIndexView
     // case 'edit-index': return CreateIndexView
@@ -149,7 +171,7 @@ const currentEvents = computed(() => {
       send({ type: 'RELINK_SYMLINK', ...payload })
     },
     REMOVE_BROKEN_SYMLINK: (payload: { collectionId: string }) => {
-      send({ type: 'REMOVE_BROKEN_SYMLINK', ...payload } as any)
+      send({ type: 'REMOVE_BROKEN_SYMLINK', ...payload })
       send({ type: 'NAVIGATE_TO_FOLDER', folderId: null })
     },
   }

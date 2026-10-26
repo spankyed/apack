@@ -57,7 +57,7 @@ async function handleFork(
   const forkCount = services.repository.threadCommands.forkCount(threadId as any);
   const forkTopic = `Fork ${forkCount + 1} - ${topic}`;
 
-  const { id: newThreadId } = services.chat.createThreadAndNotify({ topic: forkTopic, instructions: '' });
+  const { id: newThreadId } = services.chat.createThread({ topic: forkTopic, instructions: '' });
   services.repository.threadCommands.linkFork(threadId as any, newThreadId);
   services.repository.chatCommands.copyMessagesUpTo({
     sourceThreadId: threadId as any,

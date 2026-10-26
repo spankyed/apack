@@ -11,10 +11,16 @@ function git(root, args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 
-/** Worktrees live outside the main checkout; dependencies and generated output are never shared. @param {string} root */
+/**
+ * Worktrees live outside the main checkout; dependencies and generated output are never shared. The directory's
+ * `.noindex` suffix keeps Spotlight from indexing each fresh `node_modules`: on macOS that indexing slowed a new
+ * worktree's runs severalfold and held Electron's shutdown past Playwright's teardown deadline
+ * (docs/references/evidence/build-input-snapshot-proof.md, "Electron exit hang in linked worktrees").
+ * @param {string} root
+ */
 function worktreesRoot(root) {
   const main = primaryWorktree(root);
-  const dir = path.join(path.dirname(main), `${path.basename(main)}-worktrees`);
+  const dir = path.join(path.dirname(main), `${path.basename(main)}-worktrees.noindex`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }

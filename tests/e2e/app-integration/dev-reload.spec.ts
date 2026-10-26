@@ -1,6 +1,6 @@
 // `apack pack dev` and the built-in pack's watcher rebuild a pack and then POST /dev/reload. The reload has to
 // leave the pack as a boot would: its runtime pointed at the compiled content, and content a rebuild changed
-// imported. This drives the real endpoint against the running app, and the library's index is what shows it:
+// imported. This drives the real endpoint against the running app, and the library's tree is what shows it:
 // the document it renames is one of default-setup's command documents, compiled under its `commands` key.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -16,11 +16,24 @@ const REBUILT_DOCUMENT = 'Codex commands after a rebuild';
 
 interface LibraryRecord { entity?: string; name?: string; children?: LibraryRecord[] }
 
-/** The names in the library surface's index, as its actor holds them */
+interface ShownItem { id: string; type: 'folder' | 'document'; name: string }
+interface LibraryShown { items: ShownItem[]; expandedFolderIds: string[]; expandedFolderChildren: Record<string, ShownItem[]> }
+
+/**
+ * The documents the library's tree shows, as its actor holds them. Each call expands every folder shown and not yet
+ * expanded, as a user opening the tree would, so polling it reaches a document however deep its folder is.
+ */
 async function libraryDocuments(appPage: Page): Promise<string[]> {
   return appPage.evaluate(() => {
-    const actor = (window as { applicationState?: { system?: { get(id: string): { getSnapshot(): { context: { index?: { documents: Array<{ name: string }> } } } } | undefined } } }).applicationState?.system?.get('default-setup/library');
-    return (actor?.getSnapshot().context.index?.documents ?? []).map((document) => document.name);
+    type Actor = { getSnapshot(): { context: LibraryShown }; send(event: { type: 'EXPAND_FOLDER'; folderId: string }): void };
+    const actor = (window as { applicationState?: { system?: { get(id: string): Actor | undefined } } }).applicationState?.system?.get('default-setup/library');
+    if (!actor) return [];
+    const { items, expandedFolderIds, expandedFolderChildren } = actor.getSnapshot().context;
+    const shown = [...items, ...Object.values(expandedFolderChildren).flat()];
+    for (const item of shown) {
+      if (item.type === 'folder' && !expandedFolderIds.includes(item.id)) actor.send({ type: 'EXPAND_FOLDER', folderId: item.id });
+    }
+    return shown.filter((item) => item.type === 'document').map((item) => item.name);
   });
 }
 
@@ -78,6 +91,6 @@ test('a rebuilt built-in pack reloads with the content the rebuild changed', asy
   });
   expect(response.status, await response.text()).toBe(200);
 
-  // The reload re-applies, its systems get CLIENT_CONNECTED again, and the surface's index carries the change
+  // The reload re-applies the content, and the library's views carry the change to the tree
   await expect.poll(() => libraryDocuments(appPage), { timeout: 15_000 }).toContain(REBUILT_DOCUMENT);
 });

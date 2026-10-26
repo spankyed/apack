@@ -206,6 +206,7 @@ import { resolveName } from '@apackdev/sdk/ids'
 const HOST_SETTINGS = resolveName('settings', 'host')
 import { useSurfaceState } from '#generated/fe.ts'
 import { ref, computed, watch } from 'vue'
+import { useView } from '#generated/fe.ts'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
 import { useSelector } from '@xstate/vue'
@@ -229,9 +230,10 @@ const enableFlowPreview = useSettingsDraft(() => props.settings?.enableFlowPrevi
 
 // Get flows actor and state via selectors
 const flowsActor: FlowsState = useSurface()
-const flows = useSelector(flowsActor, (state) => state.context.flows || [])
-// The root flow is the flows system's (the flow with the root role), not a setting
-const rootFlowId = useSelector(flowsActor, (state) => state.context.rootFlowId)
+// The flows, and the root flow among them (the flow with the root role, not a setting): the list view
+const flowList = useView('flows', 'list')
+const flows = computed(() => flowList.data?.flows ?? [])
+const rootFlowId = computed(() => flowList.data?.rootFlowId)
 const selectedRootFlowId = ref<string>(rootFlowId.value || '')
 const isImporting = useSelector(flowsActor, (state) => state.context.dslImport.status === 'importing')
 const importStatus = useSelector(flowsActor, (state) => state.context.dslImport.status)

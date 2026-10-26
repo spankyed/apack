@@ -213,6 +213,11 @@ export interface PackRegistry extends PackRegistryView {
   registerContentRuntime(runtime: ContentRuntime, origin: PackOrigin, appliers?: ContentApplier[]): void;
   unregisterPack(packId: string): void;
   /**
+   * Hears a pack registering, being replaced or unregistering, once the change has committed: what its code is now
+   * is what `getPackRegistration` answers by then. Returns the unsubscribe.
+   */
+  onRegistrationChanged(listener: (packId: string) => void): () => void;
+  /**
    * Notes why an installed pack isn't running: the loader skipped it, or its registration was refused. The Packs
    * view shows it in place of the pack's enabled state. Cleared when the pack registers or is torn down.
    */
@@ -260,11 +265,6 @@ export interface PackRegistry extends PackRegistryView {
   getRowRules(type: string): RowRules | undefined;
   /** What a relation kind's edges are held to, as the SDK or the registered pack declaring it says; none when it declares no rule */
   getRelationRules(kind: string): RelationRules | undefined;
-  /**
-   * Calls `listener` after each change to the registrations — a pack registered, replaced or unregistered — once the
-   * change is complete; what it throws, the change's caller does. Returns the unsubscribe
-   */
-  onRegistrationsChanged(listener: () => void): () => void;
   /** Lifecycle hooks of the currently registered packs, in registration order. */
   getLifecycleHooks(): PackLifecycleHooks[];
   /** A registered pack's registration, as it was registered */
@@ -399,16 +399,24 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   const catalog = createContributionCatalog(appSettingsDefinition);
   catalog.setNative(nativeDeclarations);
   let changing = false;
-  const registrationListeners = new Set<() => void>();
   function mutate<T>(operation: () => T): T {
     if (changing) throw new Error('A pack registration change is already in progress');
     changing = true;
-    const before = revision;
-    let result: T;
-    try { result = operation(); }
+    try { return operation(); }
     finally { changing = false; }
-    if (revision !== before) for (const listener of registrationListeners) listener();
-    return result;
+  }
+  const registrationListeners = new Set<(packId: string) => void>();
+  /**
+   * `operation`, then every listener told `packId` once the registry takes changes again — when it committed, which
+   * `changed()` marks, so a refused registration tells nobody and an unregistration whose cleanup then failed does
+   */
+  function mutateAndTell<T>(packId: string, operation: () => T): T {
+    const before = revision;
+    try {
+      return mutate(operation);
+    } finally {
+      if (revision !== before) for (const listener of registrationListeners) listener(packId);
+    }
   }
   const shutdownHooks = createShutdownHooks();
 
@@ -520,7 +528,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   }
 
   function registerPack(registration: PackRegistration, origin?: PackOrigin): void {
-    mutate(() => registerContributions(registration, origin, backendBindingProblem));
+    mutateAndTell(registration.id, () => registerContributions(registration, origin, backendBindingProblem));
   }
 
   /** Register the content facet without claiming backend actors, roles or services. */
@@ -529,7 +537,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     if (!manifest) throw new Error(`Pack "${origin.id}" content runtime needs accepted manifest declarations`);
     const problem = _packDeclarationProblem(origin, runtime);
     if (problem) throw new Error(problem);
-    mutate(() => registerContributions({
+    mutateAndTell(runtime.id, () => registerContributions({
       id: runtime.id, declarationRevision: runtime.declarationRevision,
       settings: manifest.extensions?.settings,
       features: Object.fromEntries(Object.entries(manifest.features ?? {})
@@ -712,7 +720,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   }
 
   function unregisterPack(packId: string): void {
-    mutate(() => {
+    mutateAndTell(packId, () => {
       if (!registrations.has(packId)) throw new Error(`Pack "${packId}" is not registered`);
       const candidate = new Map(admitted);
       candidate.delete(packId);
@@ -797,12 +805,16 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     catalog,
     refreshCatalog,
     registerPack,
-    replacePack: (registration, origin, options) => mutate(() => {
+    replacePack: (registration, origin, options) => mutateAndTell(registration.id, () => {
       if (!registrations.has(registration.id)) throw new Error(`Pack "${registration.id}" is not registered`);
       return registerContributions(registration, origin, backendBindingProblem, true, options);
     }),
     registerContentRuntime,
     unregisterPack,
+    onRegistrationChanged(listener) {
+      registrationListeners.add(listener);
+      return () => { registrationListeners.delete(listener); };
+    },
 
     recordLoadProblem(packId, problem) {
       loadProblems.set(packId, problem);
@@ -865,10 +877,6 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     getRegisteredRoles: roles,
     getRowRules: (type) => rowRules().get(type),
     getRelationRules: (kind) => relationRules().get(kind),
-    onRegistrationsChanged(listener) {
-      registrationListeners.add(listener);
-      return () => { registrationListeners.delete(listener); };
-    },
     entityTypeOfShortCode: (code) => shortCodeTypes()(code),
     getRegisteredServices: services,
 

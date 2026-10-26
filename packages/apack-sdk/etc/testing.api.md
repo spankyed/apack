@@ -148,7 +148,8 @@ export interface FakeTextCall {
 }
 
 // @public
-export interface FeTestRuntimeOptions extends Partial<FeHostRuntime> {
+export interface FeTestRuntimeOptions extends Partial<Omit<FeHostRuntime, 'client'>> {
+    client?: Partial<FeClient>;
 }
 
 // @public

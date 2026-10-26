@@ -26,7 +26,7 @@ export async function action(
       await services.logger.info('Birth thread already exists, skipping onboarding init', {
         threadId: existingBirthThreadId,
       });
-      services.chat.openThreadChatAndRefreshRecent(existingBirthThreadId);
+      services.chat.showThread(existingBirthThreadId);
       return { threadId: existingBirthThreadId, success: true, created: false };
     }
     await services.logger.info('Stale birth thread reference found, cleaning up', {
@@ -36,7 +36,7 @@ export async function action(
   }
 
   // Create the onboarding thread; progress lives in its context.
-  const { id: threadId } = services.chat.createThreadAndNotify({
+  const { id: threadId } = services.chat.createThread({
     topic: 'Getting Started',
     instructions: '',
     tags: [],
@@ -69,14 +69,14 @@ export async function action(
   persistOnboardingState(services, threadId, onboardingState);
 
   // Open the thread first so the frontend is listening for artifact events
-  services.chat.openThreadChatAndRefreshRecent(threadId);
+  services.chat.showThread(threadId);
 
   // Create note artifact pointing to the welcome note (after thread is open)
   const notes = services.repository.noteQueries.allDTOs();
   const welcomeNote = notes.find((n: any) => n.title === 'welcome');
 
   if (welcomeNote) {
-    services.artifact.createAndNotify({
+    services.artifact.create({
       artifactType: 'note',
       title: 'Welcome',
       content: welcomeNote.id,

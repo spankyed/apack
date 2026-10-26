@@ -9,12 +9,17 @@ export type { _HostBridge } from './electron-api.ts';
 // it too — they reached it through a `types/speech.d.ts` at the repo root until 2026-10-02, which no
 // manifest could describe, so nothing could derive that they compile this file
 export type { SpeechEvent } from './speech-event.ts';
-export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceStateOf, RouteComponents } from './surface.ts'
+export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceLifecycleEvent, SurfaceStateOf, RouteComponents } from './surface.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
 export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
+export { useSurfaceDraft } from './surface-draft.ts'
 export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
 export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } from './surface-state.ts'
+export { untypedUseView, type UseViewOptions, type ViewState } from './views.ts'
+export { untypedFromView } from './view-actor.ts'
+export { viewRead, viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from './view-writes.ts'
+export type { ViewRequest, ViewUpdate } from '../framework/views.ts'
 export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type ShellPanelSizes } from './shell.ts'
 export { isAnyMenuOpen, onMenuOpenChange, useTrackedMenuOpen } from './menu-state.ts'
 export { getDslDeclaration, getDslDeclarations, onDslDeclarationsChanged, useDslDeclarations } from './dsl-reader.ts'

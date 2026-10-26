@@ -1,13 +1,13 @@
 import { watch, type Ref } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { NotesState } from '../state.ts'
-import type { NoteDTO } from '#generated/types.ts'
+import type { NoteSummary } from '#generated/types.ts'
 import type TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 
 export function useSubDocumentInsert(
   actor: NotesState,
   editorRef: Ref<InstanceType<typeof TiptapEditor> | null>,
-  editingNote: Ref<NoteDTO | null>,
+  editingNote: Ref<NoteSummary | null>,
 ) {
   const pendingSubDocumentInsert = useSelector(actor, (s) => s.context.pendingSubDocumentInsert)
 

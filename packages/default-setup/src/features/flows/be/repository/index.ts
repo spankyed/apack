@@ -5,16 +5,14 @@ import type {
   NodeEntity,
   FlowExtendedData,
   NodeCreateInput,
-  FlowsConnectedData
+  FlowsList
 } from '../types.ts';
-import { availableModels } from '@apackdev/sdk/models';
-import { repository } from '#generated/repository.ts';
 import type { FlowEntity } from '@apackdev/sdk';
 
 /**
  * Flow Repository: the SDK's flow repository (`flowRepository`), which owns the reads and writes of flows, nodes
  * and edges, as the flows surface uses it. Its methods are taken as they are, not wrapped; this adds nodes typed as
- * this pack's step nodes, the connected data the surface shows (the root flow included: the flow with the root role,
+ * this pack's step nodes, the list and the graph its views read (the root flow included: the flow with the root role,
  * which is the only record of it), and a flow created with its entry node.
  */
 
@@ -58,30 +56,15 @@ export const flowsQueries = {
     };
   },
 
-  connectedData: (): FlowsConnectedData => {
-    const flows = query(EARS.Entity.Flow)
-      .orderBy('createdAt', 'desc')
-      .pick(FLOW_QUERY_FIELDS.LIST);
+  /** Every flow, newest first, and the root flow the brain runs (the flow with the root role) */
+  list: (): FlowsList => ({
+    flows: query(EARS.Entity.Flow).orderBy('createdAt', 'desc').pick(FLOW_QUERY_FIELDS.LIST),
+    rootFlowId: flowRepository.rootFlow(),
+  }),
 
-    const rootFlow = query(EARS.Entity.Flow)
-      .withRole(EARS.RoleKind.ROOT_FLOW)
-      .pickOne(FLOW_QUERY_FIELDS.LIST) ?? undefined;
-      
-    const flowId = rootFlow?.id ?? 'Flow-1';
-
-    return {
-      graph: {
-        nodes: flowsQueries.flowNodes(flowId),
-        edges: flowsQueries.flowEdges(flowId),
-      },
-      flows,
-      rootFlow,
-      selectedFlowId: flowId,
-      models: availableModels,
-      prompts: repository.promptQueries.all(),
-      actions: repository.actionQueries.all(),
-    };
-  },
+  /** A flow's nodes and edges, or `null` for a flow that doesn't exist */
+  graph: (flowId: EARS.EntityId): FlowExtendedData | null =>
+    (query.ids(flowId).ofType(EARS.Entity.Flow).exists() ? flowsQueries.extendedData(flowId) : null),
 } as const;
 
 // Commands

@@ -466,3 +466,47 @@ it('typechecks only consumed host APIs and directly owned dependency service mem
   expect(diagnostics.join('\n')).toContain("Property 'appData' does not exist");
   expect(diagnostics.join('\n')).toContain("Property 'hidden' does not exist");
 });
+
+describe('generated views compile', () => {
+  it("type useView and fromView by each feature's declaration: its names, its arguments and its result", async () => {
+    write('src/features/notes/be/views.ts', [
+      "import { defineViews } from '@apackdev/sdk/framework';",
+      'export const noteViews = defineViews({',
+      "  all: () => ['a'],",
+      '  page: ({ page }: { page: number }) => ({ page, titles: [] as string[] }),',
+      '});',
+    ].join('\n'));
+    const files = await generatePackFiles(manifest({ features: [{
+      ...withSurface(system('notes')),
+      views: 'src/features/notes/be/views.ts#noteViews',
+    }] }), { packRoot: root });
+    expect(files['src/__generated__/pack-entry.ts']).toContain("import { noteViews as __views_notes } from '../features/notes/be/views.ts';");
+    expect(files['src/__generated__/pack-entry.ts']).toContain('      views: __views_notes');
+    expect(files['src/__generated__/fe.ts'], 'the frontend names the views module for its types alone')
+      .toContain("import type { noteViews as __views_notes } from '../features/notes/be/views.ts';");
+    write('src/probe.ts', [
+      "import { useView } from './__generated__/fe.ts';",
+      "const all: string[] | undefined = useView('notes', 'all').data;",
+      "const page: number | undefined = useView('notes', 'page', { page: 1 }).data?.page;",
+      "useView('notes', 'page', () => null);",
+      '// @ts-expect-error a view with arguments needs them',
+      "useView('notes', 'page');",
+      '// @ts-expect-error and takes the ones it declares',
+      "useView('notes', 'page', { page: 'one' });",
+      '// @ts-expect-error a view the feature does not declare',
+      "useView('notes', 'missing');",
+      "import { fromView } from './__generated__/fe.ts';",
+      "fromView('notes', 'page', (update, args) => ({ type: 'PAGE.READ', page: args.page, titles: update.ok ? update.value.titles : [] }));",
+      '// @ts-expect-error a machine reads the result the view declares',
+      "fromView('notes', 'all', (update) => ({ type: 'ALL.READ', count: update.ok ? update.value.length + update.value.nope : 0 }));",
+      'void all; void page;',
+    ].join('\n'));
+    expect(typecheck(files, ['src/probe.ts', 'src/__generated__/pack-entry.ts'])).toEqual([]);
+  });
+
+  it('refuses a views export that is not the object defineViews returns', async () => {
+    write('src/features/notes/be/views.ts', 'export function noteViews() { return {}; }\n');
+    await expect(generatePackFiles(manifest({ features: [{ ...system('notes'), views: 'src/features/notes/be/views.ts#noteViews' }] }), { packRoot: root }))
+      .rejects.toThrow('Feature "notes": views: "noteViews" in src/features/notes/be/views.ts must export the object defineViews returns');
+  });
+});
