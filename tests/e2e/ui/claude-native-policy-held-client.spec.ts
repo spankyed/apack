@@ -66,8 +66,14 @@ test('retires a focused held Client press across native policy restriction and r
   const policyFile=join(workspace!,'policy/managed-settings.json'),policy=JSON.parse(await readFile(policyFile,'utf8'))
   const before=await context(),composer=card.locator('[contenteditable="true"]')
   const parent={text:'Keep policy review notes while this extension refreshes.',cursor:9}
+  if(borrowedPolicyClient){await expect(composer).toBeVisible();await composer.click();await expect(composer).toBeFocused()}
   await composer.fill(parent.text);await composer.press(process.platform==='darwin'?'Meta+ArrowLeft':'Home')
   for(let i=0;i<9;i++)await composer.press('ArrowRight')
+  if(borrowedPolicyClient){
+    const snapshot=()=>composer.evaluate(element=>{const editor=(element as any).editor,selection=window.getSelection();return {text:element.textContent,doc:editor.state.doc.toJSON(),selection:editor.state.selection.toJSON(),focused:document.activeElement===element,domAnchor:selection?.anchorOffset,domFocus:selection?.focusOffset}})
+    await writeFile(join(workspace!,'native-policy-parent-selection-before-client.json'),JSON.stringify(await snapshot()))
+    await expect.poll(async()=>(await snapshot()).selection.head,{message:'Fixture plain-text editor caret reaches requested offset before native Client focus'}).toBe(parent.cursor+1)
+  }
   const client=(borrowedPolicyClient?appPage.locator('[data-native-placement="InfoNotice"] [data-native-client]'):card.locator('[data-native-client]')).first(),tools=card.getByRole('button',{name:'Session tools',exact:true})
   if(!borrowedPolicyClient&&await tools.getAttribute('aria-expanded')!=='true')await tools.click()
   await expect(client).toContainText('Policy action count=0')
