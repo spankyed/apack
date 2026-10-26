@@ -95,6 +95,12 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     intent(); key = observedKey; selectionKey = observedKey
     synchronizeSelection()
   }
+  // Formatting may precede Chromium's deferred selectionchange after Shift+Arrow.
+  // Use the visible range before a mark shortcut consumes the model selection.
+  const formattingKey = (event: KeyboardEvent) => {
+    if (!event.isComposing && !event.altKey && (event.ctrlKey || event.metaKey) && ['b', 'i'].includes(event.key.toLowerCase())) synchronizeSelection()
+  }
+  dom.addEventListener('keydown', formattingKey, true)
   dom.ownerDocument.addEventListener('selectionchange', selectionChanged, true)
 
   function finishPending(accepted: boolean) {
@@ -281,6 +287,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       if (!editor.isDestroyed) { editor.unregisterPlugin(decorations.key); editor.unregisterPlugin(suggestion.key) }
       for (const event of events) dom.removeEventListener(event, intent, true)
       dom.ownerDocument.removeEventListener('selectionchange', selectionChanged, true)
+      dom.removeEventListener('keydown', formattingKey, true)
       dom.removeEventListener('compositionend', compositionEnd)
       dom.removeEventListener('compositionstart', dismissSuggestion)
       dom.removeEventListener('keydown', acceptSuggestion, true)

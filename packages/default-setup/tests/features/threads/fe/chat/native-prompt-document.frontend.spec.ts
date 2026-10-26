@@ -591,3 +591,22 @@ it('does not adopt a pending browser selection because an unrelated native reply
     expect(document.getSelection()!.focusOffset).toBe(3)
   } finally { bridge.dispose() }
 })
+
+
+it.each(['b', 'i'])('formats the visible browser selection before deferred selectionchange (%s)', key => {
+  editor.commands.setContent('Review changes.')
+  document.body.append(editor.view.dom)
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  editor.view.focus()
+  const bridge = bindClaudePromptEditor(editor, vi.fn(), vi.fn())
+  try {
+    const text = editor.view.dom.querySelector('p')!.firstChild!
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 2)
+    expect(editor.state.selection.empty).toBe(true)
+    editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'Key'+key.toUpperCase(), ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(editor.state.doc.firstChild!.firstChild!.text).toBe('Re')
+    expect(editor.state.doc.firstChild!.firstChild!.marks.map(mark => mark.type.name)).toEqual([key === 'b' ? 'bold' : 'italic'])
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(3)
+  } finally { bridge.dispose() }
+})
