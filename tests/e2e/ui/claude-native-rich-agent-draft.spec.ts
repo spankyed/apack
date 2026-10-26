@@ -12,6 +12,7 @@ const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'||ro
 const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async({appPage},info)=>{if(!roundTripJourney||info.status===info.expectedStatus)return;await writeFile(join(workspace!,'native-rich-roundtrip-failure.txt'),await appPage.locator('body').innerText({timeout:2000}).catch(()=>'<page unavailable>'));await appPage.screenshot({caret:'initial',path:info.outputPath('native-rich-roundtrip-failure.png'),timeout:5000}).catch(()=>{});})
 test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(roundTripJourney?240000:90000)
   expect(process.env.HOME).toBe(workspace)
