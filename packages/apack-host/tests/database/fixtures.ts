@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { untypedCreate, _bindEars } from '@apackdev/sdk/ears';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { openDatabaseStore } from '../../src/database/open.ts';
-import { readInstalledSchema } from '../../src/database/schema.ts';
+import { readInstalledSchema, type DatabaseSchema } from '../../src/database/schema.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
 
 export const tempDirs: string[] = [];
@@ -37,7 +37,7 @@ export function dataDirWithPacks({ external = [] as Array<{ id: string; entities
   const dir = tempDir('host-database-');
   writeInstalledPackFixture(path.join(_appDirOf(dir), 'packs', 'core'), {
     id: 'core', name: 'Core', version: '1.0.0',
-    data: { entities: { Note: {}, Trace: {} }, relations: ['mentions'], roles: ['pinned'] },
+    data: { entities: { Note: {}, Trace: {} }, relations: { mentions: {} }, roles: ['pinned'] },
   });
   for (const pack of external) {
     writeInstalledPackFixture(path.join(_appDirOf(dir), 'packs', pack.id), {
@@ -62,7 +62,7 @@ const context = (userDataDir: string) => ({
 /** Writes through a store opened on the data dir, as the app writes (the engine installed meanwhile) */
 export async function writeData(userDataDir: string, write: () => void): Promise<void> {
   const paths = _appDataPaths(userDataDir);
-  const { store, engine } = openDatabaseStore({
+  const { database, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(context(userDataDir)),
   });
@@ -71,8 +71,21 @@ export async function writeData(userDataDir: string, write: () => void): Promise
     write();
   } finally {
     _bindEars(previous);
-    store.close();
+    database.close();
   }
+}
+
+/** The names `schema` gives, and the entity types `types` besides: what a spec writing rows of its own types opens with */
+export function schemaWith(schema: DatabaseSchema, types: readonly string[]): DatabaseSchema {
+  return { ...schema, getRegisteredEntityTypes: () => new Set([...schema.getRegisteredEntityTypes(), ...types]) };
+}
+
+/** The database at `dir` and an engine over it, its schema declaring `types` too */
+export function openWithTypes(dir: string, types: readonly string[]) {
+  return openDatabaseStore({
+    path: dir,
+    schema: { getRegisteredEntityTypes: () => new Set(types), getRegisteredRelationKinds: () => new Set(), getRegisteredRoles: () => new Set() },
+  });
 }
 
 export { context as schemaContext, untypedCreate };

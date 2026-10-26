@@ -6,7 +6,7 @@
  */
 
 import type { AnyStateMachine } from 'xstate';
-import type { RowRules } from '@apackdev/ears';
+import type { RelationRules, RowRules } from '@apackdev/ears';
 
 /** A versioned change: declared target/description with a checked executable function. */
 export interface PackMigration {
@@ -52,6 +52,8 @@ export interface PackEARS {
    * read off its shape, and the prefix it numbers a short code with, from its manifest entry's `shortCode`; none when absent
    */
   rowRules?: Record<string, RowRules>;
+  /** What each of the pack's relation kinds that declares a rule holds its edges to (`data.relations`); none when absent */
+  relationRules?: Record<string, RelationRules>;
 }
 
 /** A feature's backend system, which the app runs at the feature's ref, `<packId>/<featureId>` */

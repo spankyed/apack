@@ -128,7 +128,7 @@ export default /** @type import('electron-builder').Configuration */
   },
   
   // Native modules configuration
-  npmRebuild: false, // Selective rebuild in build.sh (lmdb uses NAPI prebuilds, only node-pty needs rebuild)
+  npmRebuild: false, // Selective rebuild in build.sh (elmdb is N-API, only node-pty needs rebuild)
   nodeGypRebuild: false, // Use npmRebuild instead
   
   // Files configuration
@@ -185,6 +185,11 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/**/docs/**',
     '!**/node_modules/**/CHANGELOG*',
     '!**/node_modules/**/.eslintrc*',
+    // elmdb is linked from a checkout of its repository, so its crate sits beside what it publishes (its package.json
+    // `files`: index.js, the protocol and the binding); only what it publishes ships
+    '!**/node_modules/elmdb/{src,target}/**',
+    '!**/node_modules/elmdb/{build.rs,Cargo.toml}',
+    '!**/node_modules/elmdb/protocol/*.js',
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),
@@ -197,13 +202,6 @@ export default /** @type import('electron-builder').Configuration */
   
   // Extra resources
   extraResources: [
-    // [SEARCH_INDEX_FF] FastEmbed weights for the dormant library search index (the path is the API's old cache):
-    // packages/default-setup/src/features/library/be/search-index/README.md
-    // {
-    //   from: 'packages/api/local_cache',
-    //   to: 'api/local_cache',
-    //   filter: ['**/*']
-    // }
     {from: path.join(buildRoot, 'build-manifest.json'), to: 'app/build-manifest.json'},
     ...speechResources,
     // `apack` launcher for "Install 'apack' command in PATH"; runs packages/apack-cli/dist/package

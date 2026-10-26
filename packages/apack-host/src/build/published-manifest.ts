@@ -42,9 +42,14 @@ const DROPPED_FIELDS = ['scripts', 'devDependencies'];
 /** The manifest fields whose values are paths into the package. `files` holds globs, and is npm's business */
 const PATH_FIELDS = ['exports', 'main', 'module', 'types', 'typings', 'browser', 'bin', 'typesVersions'];
 
+/** The dependency fields, whose `file:` specs name a directory only this checkout has */
+const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'];
+
 /**
  * The workspace manifest as it is published: without the source condition, without an entry that condition was
- * the whole of, and without the fields above.
+ * the whole of, and without the fields above. A dependency on a linked directory (`file:`, as `@apackdev/ears`
+ * depends on the elmdb checkout `vendor/elmdb` links to) is published as the version of the package there, which is
+ * what a registry install resolves; `dir` is the directory the specs are relative to, and one is refused without it.
  *
  * An emptied entry is dropped rather than left as `{}`, and must not be given a published target instead.
  * `@apackdev/sdk`'s `./runtime/internals` is the case: `facade-gate.ts` reports a pack whose facade imports
@@ -52,13 +57,55 @@ const PATH_FIELDS = ['exports', 'main', 'module', 'types', 'typings', 'browser',
  * published target. Give it one and the gate goes quiet; drop the entry and the gate still reports, because an
  * absent entry is not resolvable either.
  */
-export function publishedManifest(manifest: Manifest): Manifest {
+export function publishedManifest(manifest: Manifest, dir?: string): Manifest {
   const published: Manifest = {};
   for (const [field, value] of Object.entries(manifest)) {
     if (DROPPED_FIELDS.includes(field)) continue;
-    published[field] = field === 'exports' ? publishedExports(value) : value;
+    published[field] = field === 'exports' ? publishedExports(value)
+      : DEPENDENCY_FIELDS.includes(field) ? publishedDependencies(value as Record<string, string>, String(manifest.name), dir)
+        : value;
   }
   return published;
+}
+
+function publishedDependencies(dependencies: Record<string, string>, name: string, dir: string | undefined): Record<string, string> {
+  return Object.fromEntries(Object.entries(dependencies).map(([dependency, spec]) => {
+    if (!spec.startsWith('file:')) return [dependency, spec];
+    if (dir === undefined) throw new Error(`${name}'s dependency ${dependency} is ${spec}: publishing it needs the directory the path is relative to`);
+    return [dependency, publishedSpec(spec, dir)];
+  }));
+}
+
+/**
+ * A dependency spec as a published manifest carries it: a `file:` one, relative to `dir`, as the version of the package
+ * it links, and any other as it is
+ */
+export function publishedSpec(spec: string, dir: string): string {
+  if (!spec.startsWith('file:')) return spec;
+  const linked = JSON.parse(fs.readFileSync(path.join(dir, spec.slice('file:'.length), 'package.json'), 'utf8')) as Manifest;
+  return String(linked.version);
+}
+
+/** A dependency a published manifest names, as a registry install of it resolves one */
+export interface RegistryDependency {
+  /** The published package that depends on it */
+  dependent: string;
+  name: string;
+  spec: string;
+}
+
+/**
+ * What a registry install of `manifests` asks the registry for: every dependency they name but one on a package among
+ * them, which the same publish puts there. A linked dependency is among these as the version it links, and a registry
+ * holding no such version — a private package, as elmdb's binding is, or one never published — is what a real publish
+ * refuses, since everything published depending on it would fail to install
+ */
+export function registryDependencies(manifests: readonly Manifest[]): RegistryDependency[] {
+  const publishing = new Set(manifests.map((manifest) => String(manifest.name)));
+  return manifests.flatMap((manifest) => DEPENDENCY_FIELDS.flatMap((field) =>
+    Object.entries((manifest[field] ?? {}) as Record<string, string>)
+      .filter(([name]) => !publishing.has(name))
+      .map(([name, spec]) => ({ dependent: String(manifest.name), name, spec }))));
 }
 
 function publishedExports(exports: unknown): unknown {
@@ -240,7 +287,7 @@ export function stagePublishTree(pkgDir: string, manifest: Manifest): string {
   }
   // After the copy, because `package.json` is in that list: this is the one file the staged tree does not share
   // with the source tree
-  const published = publishedManifest(manifest);
+  const published = publishedManifest(manifest, pkgDir);
   fs.writeFileSync(path.join(staged, 'package.json'), `${JSON.stringify(published, null, 2)}\n`);
   // Checked before the swap, never after: a tree that failed this must not be the one readers find, and
   // swapping first would leave a short tree reading as the published one

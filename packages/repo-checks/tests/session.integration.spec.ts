@@ -10,6 +10,7 @@ import { checkoutProfile, withCheckoutProfile } from '../../../scripts/lib/dev-p
 
 let dir: string;
 let repo: string;
+let elmdb: string;
 const execFileAsync = promisify(execFile);
 const RUN = { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 } as const;
 const git = async (root: string, ...args: string[]) => (await execFileAsync('git', args, { cwd: root, ...RUN })).stdout.trim();
@@ -20,7 +21,19 @@ beforeEach(async () => {
   await git(repo, 'init', '-b', 'main');
   await git(repo, 'config', 'user.name', 'Session test');
   await git(repo, 'config', 'user.email', 'session@example.invalid');
+  // The elmdb checkout a session links: one commit, a manifest naming elmdb and a built binding
+  elmdb = path.join(dir, 'elmdb');
+  fs.mkdirSync(path.join(elmdb, 'crates', 'elmdb-node'), { recursive: true });
+  fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'package.json'), JSON.stringify({ name: 'elmdb' }));
+  fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'elmdb.node'), '');
+  await git(elmdb, 'init', '-b', 'main');
+  await git(elmdb, 'add', '.');
+  await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'elmdb');
   fs.writeFileSync(path.join(repo, 'base.txt'), 'base');
+  fs.mkdirSync(path.join(repo, 'vendor'));
+  fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);
+  // As the repo's own does: the link is the checkout's, never a change to it
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\n');
   await git(repo, 'add', '.');
   await git(repo, 'commit', '-m', 'Base');
 });
@@ -55,7 +68,7 @@ if (process.argv[3] === 'chain') {
     const { stdout, stderr } = await execFileAsync(process.execPath, [path.join(REPO_ROOT, 'scripts/session.mjs'), ...args], {
       cwd: repo, ...RUN, env: {
         ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo,
+        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb,
       },
     });
     return { status: 0, stdout, stderr };
@@ -138,7 +151,18 @@ describe('isolated editing sessions', () => {
     expect(result.stdout).not.toContain('Ready.');
     const session = path.join(dir, 'repo-worktrees.noindex', 'review');
     expect(await git(session, 'branch', '--show-current')).toBe('session/review');
+    expect(fs.realpathSync(path.join(session, 'vendor', 'elmdb'))).toBe(fs.realpathSync(elmdb));
     expect(await git(repo, 'status', '--porcelain')).toBe('');
+  });
+
+  it('retains a new session whose elmdb checkout does not hold the pinned commit, before installing anything', async () => {
+    fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${'0'.repeat(40)}\n`);
+    await git(repo, 'commit', '-am', 'Pin a commit elmdb lacks');
+    const result = await check('', ['new', 'review']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/doesn't hold the pinned commit 0{40}.*Checkout retained/);
+    expect(fs.existsSync(path.join(dir, 'commands'))).toBe(false);
+    expect(await git(path.join(dir, 'repo-worktrees.noindex', 'review'), 'branch', '--show-current')).toBe('session/review');
   });
 
   it('runs dependency installation and the full strict gate in the candidate', async () => {

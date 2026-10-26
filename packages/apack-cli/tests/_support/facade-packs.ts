@@ -65,7 +65,7 @@ const BASE_PACK = {
   'tsconfig.json': tsconfig,
   'apack.json': JSON.stringify({
     id: 'base-pack', name: 'Base', version: '1.0.0',
-    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: ['tagged'], roles: ['featured'] },
+    data: { entities: { Tag: { shape: "src/types.ts#TagEntity" }, Item: { shape: "src/types.ts#ItemEntity" } }, relations: { tagged: {} }, roles: ['featured'] },
 
     features: {
       calendar: { description: 'Feature declaration fixture.',
@@ -129,7 +129,7 @@ const APP_PACK = {
     id: 'app-pack', name: 'App', version: '1.0.0',
     dependencies: { 'base-pack': 'file:../base-pack' },
     consumes: { services: ['base-pack/search'] },
-    data: { entities: { Memo: { shape: "src/types.ts#ItemEntity" } }, relations: ['related'], roles: ['pinned'] },
+    data: { entities: { Memo: { shape: "src/types.ts#ItemEntity" } }, relations: { related: {} }, roles: ['pinned'] },
     // Same type name as the dependency's Item shape
 
     features: { memos: { description: 'Feature declaration fixture.', system: { entry: 'src/system.ts', contract: 'src/system.contract.ts#Contract' }, surface: { label: 'Fixture', state: 'src/surface.ts' } } },
@@ -387,6 +387,10 @@ query('Memo').lacks('|lacks|');
 query('Memo').orderBy('|orderBy|');
 query('Memo').distinct('|distinct|');
 query('Memo').groupBy('|groupBy|');
+query('Memo').search('x', { fields: ['|searchFields|'] });
+query('Memo').search('x', { recency: { field: '|recencyField|', halfLife: 1 } });
+query('Memo').search('x').hits({ fields: ['|hitsFields|'] });
+query('Memo').hybrid('x', [1], { fields: ['|hybridFields|'] });
 getAttr(memoId, '|getAttr|');
 newId('|newId|');
 query.ids(memoId).out('related', '|out|');
@@ -412,7 +416,7 @@ query.all().withRole('|withRole|');
 write(memoId).grant('pinnned');
 create('Memo', { |createRow| });
 `;
-const FIELD_POSITIONS = ['pick', 'pickOne', 'outPick', 'where', 'has', 'lacks', 'orderBy', 'distinct', 'groupBy', 'getAttr'];
+const FIELD_POSITIONS = ['pick', 'pickOne', 'outPick', 'where', 'has', 'lacks', 'orderBy', 'distinct', 'groupBy', 'searchFields', 'recencyField', 'hitsFields', 'hybridFields', 'getAttr'];
 /** The fields a write may name: the declared ones, without the engine's own (`createdAt`, `updatedAt`, …) */
 const WRITE_POSITIONS = ['set', 'append', 'removeAt'];
 /** Relation kinds: the pack's own, its dependency's and the SDK's */

@@ -84,7 +84,6 @@ import ScopeSection from './ScopeSection.vue'
 import SectionsConfig from './SectionsConfig.vue'
 import type { SearchIndexFormData } from '../../types/search-index.ts'
 import type { SearchIndex } from '#generated/types.ts'
-import { DEFAULT_EMBEDDING_MODEL } from '../../../embedding-models.ts'
 
 const props = defineProps<{
   editMode?: boolean
@@ -110,9 +109,6 @@ const formData = reactive<SearchIndexFormData>({
   // Details
   name: '',
   description: '',
-  embeddingModel: DEFAULT_EMBEDDING_MODEL,
-  indexMetric: 'cosine',
-  connectors: 16,
   
   // Scope
   excludeAllSubfolders: false,
@@ -156,9 +152,6 @@ onMounted(() => {
     Object.assign(formData, {
       name: props.initialData.name,
       description: props.initialData.description,
-      embeddingModel: props.initialData.embeddingModel,
-      indexMetric: props.initialData.indexMetric,
-      connectors: props.initialData.connectors,
       excludeAllSubfolders: props.initialData.excludeAllSubfolders,
       excludedFolderIds: props.initialData.excludedFolderIds,
       excludedDocumentIds: props.initialData.excludedDocumentIds,

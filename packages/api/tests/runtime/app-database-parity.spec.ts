@@ -51,7 +51,8 @@ async function bootApi() {
 function closeApi(app: Awaited<ReturnType<typeof bootApi>>) {
   app.packs.runShutdownHooks();
   for (const pack of app.packs.loadedPacks()) app.packs.unregisterPack(pack.id);
-  app.store.close();
+  app.database.close();
+  app.runHistory.database.close();
   unbindHost();
 }
 
@@ -62,7 +63,7 @@ function closeApi(app: Awaited<ReturnType<typeof bootApi>>) {
 async function installExternalPack(id: string, entityType: string): Promise<void> {
   const source = fs.mkdtempSync(path.join(os.tmpdir(), `${id}-`));
   const ears = { entities: { [entityType]: entityType }, relKinds: {}, roles: {} };
-  fs.writeFileSync(path.join(source, 'apack.json'), JSON.stringify({ id, name: id, version: '1.0.0', data: { entities: { [entityType]: {} }, relations: [] }, }));
+  fs.writeFileSync(path.join(source, 'apack.json'), JSON.stringify({ id, name: id, version: '1.0.0', data: { entities: { [entityType]: {} }, relations: {} }, }));
   fs.mkdirSync(path.join(source, 'dist', 'runtime'), { recursive: true });
   fs.mkdirSync(path.join(source, 'dist', 'types'), { recursive: true });
   fs.writeFileSync(path.join(source, 'dist', PACK_LAYOUT.snapshot), JSON.stringify({ declarationRevision: _declarationRevision(JSON.parse(fs.readFileSync(path.join(source, 'apack.json'), 'utf-8'))), format: PACK_SNAPSHOT_FORMAT, manifest: JSON.parse(fs.readFileSync(path.join(source, 'apack.json'), 'utf-8')), types: { entities: {}, relKinds: {}, roles: {} }, entityDestinations: {}, facades: {} }));
@@ -104,15 +105,17 @@ describe('a data dir opened by the API and by openAppDatabase', () => {
   });
 });
 
-// The tool writes through the schema it reconstructs, so a row it creates has to land in the partition the API reads
-// it from — the direction a schema drift would corrupt
+// The tool writes through the schema the app declared, so a row it creates is held to the rules the API's packs hold
+// theirs to, and lands where the API reads it
 describe('what the tool writes', () => {
   it('lands where the API reads it', async () => {
     const booted = await bootApi();
     closeApi(booted);
 
     const db = await openAppDatabase({ env: 'test', userDataDir: dataDir });
-    untypedCreate('Note', { id: 'Note-tool' }).set('title', 'from the tool').grant('assistant_birth');
+    // Every field a Note holds, as the app's schema requires
+    expect(() => untypedCreate('Note', { id: 'Note-bare' })).toThrow(expect.objectContaining({ code: 'REQUIRED_FIELD' }));
+    untypedCreate('Note', { id: 'Note-tool', title: 'from the tool', content: '', icon: null, noteType: 'document', completed: false, hideCompletedChildren: false, displayOrder: 0, lastSeen: 0 }).grant('assistant_birth');
     db.close();
 
     const api = await bootApi();

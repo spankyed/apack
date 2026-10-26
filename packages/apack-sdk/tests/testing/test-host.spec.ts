@@ -67,10 +67,11 @@ describe('the test host', () => {
     const before = ears();
     await boundHost().services.appData.reset();
     expect(entityIds()).toEqual([]);
-    // A reset replaces the engine; the repositories are the registered packs', which it keeps
+    // A reset replaces the engine, closing the database the one replaced was on; the repositories are the registered
+    // packs', which it keeps
     expect(ears()).not.toBe(before);
     expect(repository.memoQueries).toBe(memoQueries);
-    expect(before.query.ids(id).exists()).toBe(true);
+    expect(() => before.query.ids(id).exists()).toThrow(expect.objectContaining({ code: 'CLOSED' }));
     await expect(boundHost().services.appData.exportBackup('/tmp')).rejects.toThrow("isn't supported in unit tests");
     resetTestData();
     testPacks.repositories.delete('memoQueries');

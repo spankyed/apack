@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import { untypedQuery, untypedCreate } from '@apackdev/sdk/ears';
 import { repository } from '@apackdev/sdk/services';
 import { bindHost, unbindHost, boundHost, type HostRuntime } from '../../src/runtime/host-runtime.ts';
@@ -31,7 +31,7 @@ import { testPacksView } from '../../src/testing/packs.ts';
 const serviceAccess = (settings: SettingsService): PackServiceAccess => ({ services: { settings }, servicesForAction: () => ({ settings }) });
 
 const unused = () => { throw new Error('unused'); };
-const engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === 'Memo' });
+const engine = _createTestEngine({ entityTypes: ['Memo'] });
 const runtime: HostRuntime = {
   transport: { rootEvents: _rootEvents },
   ears: engine,

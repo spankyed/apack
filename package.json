@@ -19,6 +19,7 @@
   "scripts": {
     "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
     "postinstall": "node scripts/postinstall.mjs",
+    "link:elmdb": "node scripts/link-elmdb.mjs",
     "session:new": "node scripts/session.mjs new",
     "session:check": "node scripts/session.mjs check",
     "dev": "node packages/dev-mode.js",

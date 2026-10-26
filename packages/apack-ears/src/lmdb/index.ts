@@ -1,14 +1,9 @@
 /**
- * The LMDB store behind an app's EARS engine. It needs the `lmdb` package, an optional peer the app
- * installs; `@apackdev/ears` itself never loads it. Packs and pack tests don't use this entry.
+ * The databases behind an app's EARS engines, the app's own and its run history's: elmdb databases (`openDatabase`),
+ * the one thing in `@apackdev/ears` that loads elmdb. Packs don't use this entry; a pack's tests reach it through
+ * `@apackdev/sdk/testing`, whose test runtime opens temporary databases.
  *
  * @packageDocumentation
  */
 
-export {
-  openLmdbStore, openEnvironment, LMDB_FORMAT_VERSION, COMPACT_COPIES, SYNC_IDLE_MS, SYNC_INTERVAL_MS,
-  type LmdbStore, type LmdbStoreOptions, type LmdbEnvironment,
-} from './store.ts';
-export { createLmdbKVBackend, type LmdbKVHooks } from './kv-backend.ts';
-export { compactEnvironment, convertToCurrentFormat, convertToFormat2, type Compaction, convertToFormat3, convertToFormat4, type FormatConversion, type Format3Conversion, type Format4Conversion, type FormatSteps } from './convert.ts';
-export { openRecordStore, RECORD_STORE_FORMAT_VERSION, RECORD_STORE_KIND, type RecordStoreOptions } from './record-store.ts';
+export { openDatabase, createTemporaryDatabases, DATABASE_FORMAT, type DatabaseOptions, type TemporaryDatabases } from './database.ts';

@@ -7,7 +7,10 @@
 import type { AnyActorRef } from 'xstate';
 import { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { EmbedDeclaration } from '@apackdev/ears';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
+import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public (undocumented)
@@ -245,12 +248,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     }>>>;
     media: z.ZodOptional<z.ZodString>;
 }, "strict", z.ZodTypeAny, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -261,12 +264,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -277,12 +280,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }>, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -293,12 +296,12 @@ export const ContentFormatSchema: z.ZodEffects<z.ZodObject<{
     } | undefined;
     media?: string | undefined;
 }, {
-    entity?: string | string[] | undefined;
     fields?: Record<string, {
         from: string;
         type?: "string" | undefined;
         default?: unknown;
     }> | undefined;
+    entity?: string | string[] | undefined;
     format?: "markdown-tree" | "json" | undefined;
     compiler?: string | undefined;
     identity?: string[] | undefined;
@@ -501,10 +504,30 @@ export const FeatureEntrySchema: z.ZodObject<{
         shape?: string | undefined;
         shortCode?: string | undefined;
         indexes?: readonly string[] | undefined;
+        search?: {
+            fields: Record<string, number>;
+            stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+        } | undefined;
+        embed?: {
+            model: EmbeddingModelId;
+            from: readonly string[];
+            dims: number;
+            chunk?: "whole" | "paragraph" | "heading" | undefined;
+        } | undefined;
     }>, z.ZodTypeDef, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
         indexes?: readonly string[] | undefined;
+        search?: {
+            fields: Record<string, number>;
+            stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+        } | undefined;
+        embed?: {
+            model: string;
+            from: readonly string[];
+            dims: number;
+            chunk?: "whole" | "paragraph" | "heading" | undefined;
+        } | undefined;
     }>>>;
     designation: z.ZodOptional<z.ZodString>;
     settings: z.ZodOptional<z.ZodEffects<z.ZodObject<{
@@ -575,6 +598,16 @@ export const FeatureEntrySchema: z.ZodObject<{
         shape?: string | undefined;
         shortCode?: string | undefined;
         indexes?: readonly string[] | undefined;
+        search?: {
+            fields: Record<string, number>;
+            stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+        } | undefined;
+        embed?: {
+            model: EmbeddingModelId;
+            from: readonly string[];
+            dims: number;
+            chunk?: "whole" | "paragraph" | "heading" | undefined;
+        } | undefined;
     }> | undefined;
     designation?: string | undefined;
     settings?: {
@@ -604,6 +637,16 @@ export const FeatureEntrySchema: z.ZodObject<{
         shape?: string | undefined;
         shortCode?: string | undefined;
         indexes?: readonly string[] | undefined;
+        search?: {
+            fields: Record<string, number>;
+            stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+        } | undefined;
+        embed?: {
+            model: string;
+            from: readonly string[];
+            dims: number;
+            chunk?: "whole" | "paragraph" | "heading" | undefined;
+        } | undefined;
     }> | undefined;
     designation?: string | undefined;
     settings?: unknown;
@@ -719,28 +762,86 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }>, z.ZodTypeDef, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }>>>;
-        relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
+        relations: z.ZodOptional<z.ZodEffects<z.ZodType<Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, z.ZodTypeDef, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
     }, "strict", z.ZodTypeAny, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     }, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     }>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
@@ -753,6 +854,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -782,6 +893,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1184,12 +1305,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }>>>;
         formats: z.ZodOptional<z.ZodType<Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1200,12 +1321,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             } | undefined;
             media?: string | undefined;
         }>, z.ZodTypeDef, Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1231,12 +1352,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1262,12 +1383,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1336,12 +1457,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1359,12 +1493,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1391,6 +1525,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1525,12 +1669,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1548,12 +1705,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1580,6 +1737,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1700,12 +1867,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1723,12 +1903,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1755,6 +1935,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1889,12 +2079,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -1912,12 +2115,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -1944,6 +2147,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2064,12 +2277,25 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     name: string;
     version: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     description?: string | undefined;
@@ -2087,12 +2313,12 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             applier?: string | undefined;
         }> | undefined;
         formats?: Record<string, {
-            entity?: string | string[] | undefined;
             fields?: Record<string, {
                 from: string;
                 type?: "string" | undefined;
                 default?: unknown;
             }> | undefined;
+            entity?: string | string[] | undefined;
             format?: "markdown-tree" | "json" | undefined;
             compiler?: string | undefined;
             identity?: string[] | undefined;
@@ -2119,6 +2345,16 @@ export const ManifestSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2397,28 +2633,86 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }>, z.ZodTypeDef, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }>>>;
-        relations: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
+        relations: z.ZodOptional<z.ZodEffects<z.ZodType<Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, z.ZodTypeDef, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>, Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }>>>;
         roles: z.ZodOptional<z.ZodEffects<z.ZodArray<z.ZodString, "many">, string[], string[]>>;
     }, "strict", z.ZodTypeAny, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     }, {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     }>>;
     lifecycle: z.ZodOptional<z.ZodLazy<z.ZodObject<{
@@ -2603,6 +2897,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2623,6 +2927,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2631,12 +2945,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, "strict", z.ZodTypeAny, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2661,6 +2988,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -2773,12 +3110,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2803,6 +3153,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -2901,12 +3261,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }>, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -2931,6 +3304,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -3043,12 +3426,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -3073,6 +3469,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: string;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -3171,12 +3577,25 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
 }>, {
     id: string;
     data?: {
-        relations?: string[] | undefined;
+        relations?: Record<string, {
+            acyclic?: boolean | undefined;
+            unique?: boolean | undefined;
+        }> | undefined;
         roles?: string[] | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
     } | undefined;
     content?: {
@@ -3201,6 +3620,16 @@ export const _NativePackDeclarationSchema: z.ZodEffects<z.ZodEffects<z.ZodObject
             shape?: string | undefined;
             shortCode?: string | undefined;
             indexes?: readonly string[] | undefined;
+            search?: {
+                fields: Record<string, number>;
+                stem?: "ar" | "da" | "de" | "el" | "en" | "es" | "fi" | "fr" | "hu" | "it" | "nl" | "no" | "pt" | "ro" | "ru" | "sv" | "ta" | "tr" | undefined;
+            } | undefined;
+            embed?: {
+                model: EmbeddingModelId;
+                from: readonly string[];
+                dims: number;
+                chunk?: "whole" | "paragraph" | "heading" | undefined;
+            } | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -3370,7 +3799,7 @@ export interface PackDataDeclarations {
     // (undocumented)
     data?: {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
-        relations?: readonly string[];
+        relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
     };
     // (undocumented)
@@ -3416,18 +3845,22 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
 
 // @public
 export interface PackEntityDeclaration {
+    readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
+    readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
 }
 
 // @internal
 export interface _PackEntityDeclaration {
+    embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)
     name: string;
     // (undocumented)
     owner: string;
+    search?: SearchDeclaration;
     // (undocumented)
     shape: string | null;
     shortCode?: string;
@@ -3476,6 +3909,15 @@ export const PackPermissionSchema: z.ZodEnum<["ears", "llm", "filesystem", "netw
 
 // @public
 export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, string>>>;
+
+// @public
+export interface PackRelationDeclaration {
+    readonly acyclic?: boolean;
+    readonly unique?: boolean;
+}
+
+// @internal
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules>;
 
 // @internal
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string>;

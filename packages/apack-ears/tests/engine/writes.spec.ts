@@ -1,7 +1,7 @@
 // The engine's contract: create, upsert and write create, change and delete entities, each held to the claim it
 // makes about its argument, with the ids and fields they return
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { engine, isEntityType, isRelationKind, isRole, type Id } from './helpers.ts';
+import { engine, NAMES, type Id } from './helpers.ts';
 import { freshEngine, type EngineUnderTest } from './engine-under-test.ts';
 import type { WriteBuilder } from '../../src/index.ts';
 
@@ -44,8 +44,8 @@ describe('create', () => {
     expect(e.admin.getAllEntities()).toEqual([]);
   });
 
-  it("refuses the engine's own types, which its ids are written with, whatever its creator registers", () => {
-    const everything = freshEngine({ isEntityType: () => true, isRelationKind, isRole });
+  it("refuses the engine's own types, which its ids are written with, which no schema may declare", () => {
+    const everything = engine();
     for (const type of ['Relation']) {
       expect(() => everything.create(type), type).toThrow(expect.objectContaining({ code: 'RESERVED_ENTITY_TYPE' }));
       expect(() => everything.upsert(type, { id: `${type}-1` as Id }), type).toThrow(expect.objectContaining({ code: 'RESERVED_ENTITY_TYPE' }));
@@ -103,10 +103,7 @@ describe('create', () => {
 });
 
 /** An engine whose Project rows are numbered `PRO-<n>` and Person rows `P-<n>`, a Person requiring its title */
-const numbered = () => freshEngine({
-  isEntityType, isRelationKind, isRole,
-  rowRules: (type) => ({ Project: { required: [], shortCode: 'PRO' }, Person: { required: ['title'], shortCode: 'P' } })[type],
-});
+const numbered = () => engine({ rowRules: { Project: { required: [], shortCode: 'PRO' }, Person: { required: ['title'], shortCode: 'P' } } });
 const code = (e: EngineUnderTest, fields: Record<string, unknown> = {}) => e.getRow(e.create('Project', fields).id())?.shortCode;
 
 describe('numbering', () => {
@@ -171,7 +168,7 @@ describe('write', () => {
 });
 
 describe('required fields', () => {
-  const strict = () => freshEngine({ isEntityType, isRelationKind, isRole, rowRules: (type) => (type === 'Task' ? { required: ['title', 'done'] } : undefined) });
+  const strict = () => engine({ rowRules: { Task: { required: ['title', 'done'] } } });
 
   it('refuses a created row without a field its type requires, before the entity exists', () => {
     const e = strict();
@@ -292,11 +289,14 @@ describe('attribute writes', () => {
     expect(e.getRow(id)).toEqual(before);
   });
 
-  it('null is a value, undefined leaves an attribute alone in setMany and is refused by set', () => {
+  it('null is a value, undefined leaves an attribute alone in setMany and is refused by every other attribute write', () => {
     const id = e.create('Task').setMany({ title: 'A', gone: 1 }).id();
     e.write(id).setMany({ title: null, gone: undefined, list: [3] });
     expect(e.getRow(id)).toMatchObject({ title: null, gone: 1, list: [3] });
     expect(() => e.write(id).set('title', undefined)).toThrow(expect.objectContaining({ code: 'NO_VALUE' }));
+    for (const write of [() => e.write(id).append('tags', undefined), () => e.write(id).merge('meta', undefined as never), () => e.write(id).removeValue('tags', undefined)]) {
+      expect(write).toThrow(expect.objectContaining({ code: 'NO_VALUE' }));
+    }
     e.write(id).delete('gone');
     expect(e.getRow(id)).not.toHaveProperty('gone');
   });
@@ -440,6 +440,32 @@ describe('rows', () => {
     expect(Object.getPrototypeOf(row)).toBe(Object.prototype);
     e.write(id).delete('__proto__');
     expect(e.getAttr(id, '__proto__')).toBeUndefined();
+  });
+
+  it('a value holding a __proto__ key reads back as stored, whichever read answers it', () => {
+    const value = JSON.parse('{"__proto__": {"x": 1}, "a": 2}') as Record<string, unknown>;
+    const holds = (read: unknown) => {
+      expect(Object.keys(read as object)).toEqual(['__proto__', 'a']);
+      expect(Object.getOwnPropertyDescriptor(read, '__proto__')?.value).toEqual({ x: 1 });
+      expect(Object.getPrototypeOf(read)).toBe(Object.prototype);
+    };
+    const id = e.create('Task').set('meta', value).set('n', 1).id();
+    const other = e.create('Task').id();
+    e.write(id).link('refs', other, { info: value });
+    holds(e.getRow(id)!.meta);
+    holds(e.getAttr(id, 'meta'));
+    holds(e.findRelations({ source: id })[0]!.info);
+    // A warned engine has an unindexed `where` answered inside the count of rows it walked
+    const warned = freshEngine({ ...NAMES, warn: () => {} });
+    warned.create('Task').set('meta', value).set('n', 1);
+    holds(warned.query('Task').where('n', 1).pickAll()[0]!.meta);
+  });
+
+  it('a schema naming a type __proto__ is refused for that name, which the database holds PascalCase', () => {
+    // A computed key, since a literal's `__proto__:` sets the prototype
+    const rules = { ['__proto__']: { required: ['title'], indexes: ['title'] } };
+    expect(() => freshEngine({ types: ['__proto__'], relationKinds: [], roles: [], rowRules: rules }))
+      .toThrow(/^The schema has 1 problem:\ntypes\.__proto__: a type's name is PascalCase, which "__proto__" isn't$/);
   });
 });
 

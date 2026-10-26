@@ -66,7 +66,7 @@ it('replaces deliberately, survives boot refresh, then restores a removed defaul
   const settingsId = 'Settings-app' as EARS.EntityId;
   const choices = { app: { personal: { name: 'Keep' } }, packs: { 'default-pack': { assistant: { name: 'Keep override' } } } };
   const paths = _appDataPaths(context.userDataDir);
-  const { store, engine } = openDatabaseStore({ path: paths.lmdb,
+  const { database: store, engine } = openDatabaseStore({ path: paths.lmdb,
     schema: readInstalledSchema(context),
   });
   const previousEngine = _bindEars(engine);

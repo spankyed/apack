@@ -2,8 +2,9 @@
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
 // a view's code changing is.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createEarsEngine, type EarsEngine } from '@apackdev/ears';
+import type { EarsEngine } from '@apackdev/ears';
 import { defineViews, type PackRegistration, type ViewUpdate } from '@apackdev/sdk/framework';
+import { _createTestEngine } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
 import { createViewHost, type ViewHost } from '../../src/views/index.ts';
 
@@ -12,7 +13,7 @@ let packs: ReturnType<typeof createNativePackTestRegistry>;
 let views: ViewHost;
 
 beforeEach(() => {
-  engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === 'Note' });
+  engine = _createTestEngine({ entityTypes: ['Note'] });
   packs = createNativePackTestRegistry();
   views = createViewHost({ ears: () => engine, packs });
   return () => views.close();

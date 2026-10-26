@@ -24,27 +24,6 @@ export interface BaseEntity {
 }
 
 // @public
-export interface ByteReader {
-    get(key: Uint8Array): Uint8Array | undefined;
-    scan(low: Uint8Array, high: Uint8Array | undefined, reverse: boolean, values: boolean, visit: (key: Uint8Array, value: Uint8Array | undefined) => boolean): void;
-}
-
-// @public
-export interface ByteWriter extends ByteReader {
-    clear(): void;
-    // (undocumented)
-    del(key: Uint8Array): void;
-    // (undocumented)
-    put(key: Uint8Array, value: Uint8Array): void;
-}
-
-// @public
-export interface Commit {
-    readonly keys: ReadonlySet<string> | 'all';
-    readonly number: number;
-}
-
-// @public
 export interface Create {
     // (undocumented)
     <E extends string>(type: TypeName<E>, row?: Record<string, unknown> & RowIdentity): WriteBuilder<E>;
@@ -61,22 +40,6 @@ E
 } & {
     [K in keyof ShapeOf<S, E> as K extends OptionalField<S, E> ? K : never]?: ShapeOf<S, E>[K];
 } : Record<string, unknown>;
-
-// @public
-export function createMemoryKV(options?: OrderedKVOptions): OrderedKV;
-
-// @public
-export function createMemoryKVBackend(): KvBackend;
-
-// @public
-export function createMemoryRecordStore<R extends {
-    id: string;
-} = StoredRecord>(input: {
-    indexes: RecordIndexes<R>;
-}): RecordStore<R>;
-
-// @public
-export function createOrderedKV(backend: KvBackend, input?: OrderedKVOptions): OrderedKV;
 
 // @public
 export function defineEars<D extends EarsSchema>(engine: () => Ears): TypedEars<D>;
@@ -134,6 +97,11 @@ export namespace EARS {
 // @public
 export interface Ears {
     create: Create;
+    embed(embeddings: readonly Embedding[]): {
+        stored: number;
+        stale: number;
+    };
+    embeddedTypes(): string[];
     findRelations(match?: RelationMatch): RelationRow[];
     getAttr(id: EARS.EntityId, field: EARS.AttrKind): EARS.AttributeValue | undefined;
     getRelation(relId: EARS.RelationId): RelationRow | undefined;
@@ -146,6 +114,9 @@ export interface Ears {
     isRole(name: string): boolean;
     lastCommit(): number;
     nextLabel(type: EARS.Entity, base: string): string;
+    pendingEmbeddings(type: EARS.Entity, options?: {
+        limit?: number;
+    }): PendingEmbeddings;
     query: Query;
     removeRelation(relId: EARS.RelationId): void;
     transact<T>(fn: () => T, options?: UnitOptions): T;
@@ -168,10 +139,13 @@ export interface EarsAdmin {
     bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown): void;
     clear(): void;
     countEntities(): Record<string, number>;
+    declare(schema: EngineSchema): SchemaChange[];
     deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
     getAllEntities(): EARS.EntityId[];
     getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
     putAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
+    replaceWith(source: string): void;
+    setSchema(schema: EngineSchema): SchemaChange[];
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
         target?: EARS.EntityId;
@@ -183,6 +157,50 @@ export interface EarsAdmin {
         keys: number;
         ranges: number;
     };
+}
+
+// @public
+export interface EarsDatabase {
+    backup(target: string): void;
+    // (undocumented)
+    begin(): EarsUnit;
+    // (undocumented)
+    bulkLoad(loads: Uint8Array): void;
+    // (undocumented)
+    close(): void;
+    // (undocumented)
+    durable(): Promise<void>;
+    // (undocumented)
+    readonly isOpen: boolean;
+    // (undocumented)
+    readonly path: string;
+    // (undocumented)
+    readonly readOnly: boolean;
+    // (undocumented)
+    readSync(reads: Uint8Array): Uint8Array;
+    replaceWith(source: string): void;
+    reset(): void;
+    readonly schema: unknown;
+    readonly sequence: number;
+    // (undocumented)
+    setSchema(schema: object): SchemaChange[];
+    // (undocumented)
+    stats(): {
+        types: Record<string, {
+            live: number;
+            trashed: number;
+        }>;
+        relations: Record<string, number>;
+        fileBytes: number;
+    };
+    trackStats(): {
+        owners: number;
+        keys: number;
+        ranges: number;
+    };
+    untrack(token: number): void;
+    // (undocumented)
+    write(batch: Uint8Array, durable?: boolean | null): Uint8Array;
 }
 
 // @public
@@ -230,15 +248,22 @@ export type EarsErrorCode =
 */
 | 'INVALID_SHORT_CODE'
 /** A created row brought a short code another entity holds */
-| 'SHORT_CODE_IN_USE';
+| 'SHORT_CODE_IN_USE'
+/** `link` named the entity it links from as its target */
+| 'SELF_LINK'
+/** `link` would close a cycle through a relation kind its declaration makes acyclic */
+| 'CYCLE'
+/** A write's value is one the database doesn't store: a function, a symbol, `undefined` in a list, or a number that isn't finite */
+| 'VALUE_INVALID'
+/** `search` was on a type with no text index (no `search` in its manifest entry), or `near`, `like`, `hybrid` or `pendingEmbeddings` on one with no vector index (no `embed`) */
+| 'UNKNOWN_INDEX'
+/** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
+| 'NO_SEARCH';
 
 // @public
 export interface EARSRuntimeDeps {
-    isEntityType: (v: string) => boolean;
-    isRelationKind: (v: string) => boolean;
-    isRole: (v: string) => boolean;
-    kv?: OrderedKV;
-    rowRules?: (type: string) => RowRules | undefined;
+    database: EarsDatabase;
+    freeze?: boolean;
     warn?: (message: string) => void;
 }
 
@@ -248,6 +273,56 @@ export interface EarsSchema {
     relKinds: string;
     roles: string;
     shapes: EntityShapes;
+}
+
+// @public
+export interface EarsUnit {
+    // (undocumented)
+    abort(): void;
+    // (undocumented)
+    commit(durable?: boolean | null): Uint8Array;
+    // (undocumented)
+    readonly isOpen: boolean;
+    // (undocumented)
+    read(reads: Uint8Array): Uint8Array;
+    // (undocumented)
+    release(depth: number): void;
+    // (undocumented)
+    rollbackTo(depth: number): void;
+    // (undocumented)
+    savepoint(): number;
+    // (undocumented)
+    write(batch: Uint8Array): Uint8Array;
+}
+
+// @public
+export interface EmbedDeclaration {
+    readonly chunk?: 'whole' | 'paragraph' | 'heading';
+    readonly dims: number;
+    readonly from: readonly string[];
+    readonly model: string;
+}
+
+// @public
+export interface Embedding {
+    // (undocumented)
+    chunk: number;
+    // (undocumented)
+    hash: string;
+    // (undocumented)
+    id: EARS.EntityId;
+    // (undocumented)
+    model: string;
+    // (undocumented)
+    vector: readonly number[];
+}
+
+// @public
+export interface EngineSchema {
+    relations: Readonly<Record<string, RelationRules>>;
+    // (undocumented)
+    roles: readonly string[];
+    types: Readonly<Record<string, RowRules>>;
 }
 
 // @public
@@ -279,62 +354,12 @@ E
     [K in keyof ShapeOf<S, E> as K extends (typeof RESERVED_ATTRIBUTES)[number] ? never : K]?: ShapeOf<S, E>[K];
 } : Record<string, unknown>;
 
-// @public
-export interface FindByOptions {
-    cursor?: string;
-    // (undocumented)
-    limit?: number;
-    reverse?: boolean;
-}
-
 // @public (undocumented)
 export function getTimestamp(): number;
 
-// @internal
-export function _idClock(): (prefix: string) => string;
-
-// @internal
-export function _indexEntries<R extends {
-    id: string;
-}>(indexes: RecordIndexes<R>, record: R): Array<[string, IndexValue]>;
-
 // @public
-export type IndexValue = string | number | boolean;
-
-// @public
-export type Key = readonly KeyPart[];
-
-// @public
-export type KeyPart = string | number | boolean | null;
-
-// @public
-export interface KvBackend {
-    durable(): Promise<void>;
-    // (undocumented)
-    read<T>(fn: (reader: ByteReader) => T): T;
-    // (undocumented)
-    write<T>(fn: (writer: ByteWriter) => T, options?: UnitOptions): T;
-}
-
-// @public
-export interface KvReader {
-    get(key: Key): unknown;
-    range(options: RangeOptions, visit: Visit): void;
-}
-
-// @public
-export interface KvWriter extends KvReader {
-    clear(): void;
-    del(key: Key): void;
-    // (undocumented)
-    put(key: Key, value: unknown): void;
-}
-
-// @public
-export interface LinkOptions<R extends string = string> {
-    acyclicIn?: readonly R[];
+export interface LinkOptions {
     info?: unknown;
-    replace?: boolean;
 }
 
 // @public
@@ -348,23 +373,18 @@ E
 }[keyof ShapeOf<S, E>], WritableField<S, E>> : string;
 
 // @public
-export interface OrderedKV {
-    durable(): Promise<void>;
-    readonly lastCommit: number;
-    onCommit(listener: (commit: Commit) => void): () => void;
-    read<T>(fn: (reader: KvReader) => T): T;
-    replaceAll(entries: Iterable<{
-        key: Uint8Array;
-        value: Uint8Array;
-    }, unknown, undefined>, options?: UnitOptions): void;
-    track<T>(fn: () => T): Tracked<T>;
-    write<T>(fn: (writer: KvWriter) => T, options?: UnitOptions): T;
-    readonly writing: boolean;
-}
-
-// @public
-export interface OrderedKVOptions {
-    freeze?: boolean;
+export interface PendingEmbeddings {
+    chunks: Array<{
+        id: EARS.EntityId;
+        chunk: number;
+        hash: string;
+        text: string;
+    }>;
+    count: number;
+    // (undocumented)
+    dims: number;
+    // (undocumented)
+    model: string;
 }
 
 // @public
@@ -377,6 +397,7 @@ export interface Query extends QueryEntries {
 
 // @public
 export interface QueryBuilder<E extends string = string, D extends EarsSchema = UntypedSchema> {
+    after(id: EARS.EntityId): QueryBuilder<E, D>;
     ancestors<T extends string>(kinds: D['relKinds'] | readonly D['relKinds'][], type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined): QueryBuilder<T, D>;
     // (undocumented)
     ancestors(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
@@ -394,6 +415,21 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     forEach(fn: (id: EARS.EntityId<E>) => void): QueryBuilder<E, D>;
     groupBy(field: keyof ShapeOf<D['shapes'], E> & string): Map<unknown, EARS.EntityId<E>[]>;
     has<K extends keyof ShapeOf<D['shapes'], E> & string>(k: K): QueryBuilder<E, D>;
+    hits<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(options: {
+        fields: A;
+        highlights?: boolean;
+    }): Array<SearchHit<E> & {
+        row: {
+            id: EARS.EntityId<E>;
+        } & Pick<ShapeOf<D['shapes'], E>, A[number]>;
+    }>;
+    // (undocumented)
+    hits(options?: {
+        highlights?: boolean;
+    }): SearchHit<E>[];
+    hybrid(query: string, vector: readonly number[], options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string> & {
+        k?: number;
+    }): QueryBuilder<E, D>;
     // (undocumented)
     ids(): EARS.EntityId<E>[];
     in<T extends string>(kinds: D['relKinds'] | readonly D['relKinds'][], type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined): QueryBuilder<T, D>;
@@ -402,6 +438,9 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     inEdges<K extends D['relKinds'], T extends string = string>(kinds: K | readonly K[], type?: EntityNameArg<D['names'], T> | EntityNameArg<D['names'], T>[]): Array<RelationEdge<K, NoInferType<T>, E>>;
     lacks<K extends keyof ShapeOf<D['shapes'], E> & string>(k: K): QueryBuilder<E, D>;
     last(): EARS.EntityId<E> | undefined;
+    like(id: EARS.EntityId, options?: {
+        k?: number;
+    }): QueryBuilder<E, D>;
     // (undocumented)
     limit(n: number): QueryBuilder<E, D>;
     linkedFrom(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
@@ -409,6 +448,9 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     linkedWith(other: EARS.EntityId): QueryBuilder<E, D>;
     // (undocumented)
     map<T>(fn: (id: EARS.EntityId<E>) => T): T[];
+    near(vector: readonly number[], options?: {
+        k?: number;
+    }): QueryBuilder<E, D>;
     // (undocumented)
     ofType<T extends string>(t: EntityNameArg<D['names'], T>): QueryBuilder<T, D>;
     // (undocumented)
@@ -431,53 +473,13 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     reduce<T>(fn: (acc: T, id: EARS.EntityId<E>) => T, init: T): T;
     // (undocumented)
     reverse(): QueryBuilder<E, D>;
+    search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
     unlinkedFrom(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
     unlinkedTo(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
     where<K extends keyof ShapeOf<D['shapes'], E> & string>(k: K, v: WhereValue<D['shapes'], E, K>): QueryBuilder<E, D>;
     within(ids: readonly EARS.EntityId[]): QueryBuilder<E, D>;
     // (undocumented)
     withRole(r: D['roles']): QueryBuilder<E, D>;
-}
-
-// @public
-export interface RangeOptions {
-    end?: Key;
-    limit?: number;
-    prefix?: Key;
-    reverse?: boolean;
-    start?: Key;
-    values?: boolean;
-}
-
-// @public
-export interface ReadSet {
-    readonly keys: ReadonlySet<string>;
-    readonly ranges: ReadonlyArray<readonly [low: string, high: string | undefined]>;
-}
-
-// @public
-export type RecordIndexes<R extends {
-    id: string;
-} = StoredRecord> = Readonly<Record<string, (record: R) => unknown>>;
-
-// @public
-export interface RecordStore<R extends {
-    id: string;
-} = StoredRecord> {
-    close(): void;
-    copyTo(targetDir: string): Promise<void>;
-    delete(id: string): void;
-    findBy(index: string, value: IndexValue, options?: FindByOptions): R[];
-    get(id: string): R | undefined;
-    newId(prefix: string): string;
-    readonly path: string;
-    put(record: R): void;
-    // (undocumented)
-    readonly readOnly: boolean;
-    // (undocumented)
-    reopen(): void;
-    replaceWith(dir: string): void;
-    reset(): Promise<void>;
 }
 
 // @public
@@ -508,6 +510,12 @@ export interface RelationMatch {
 export type RelationRow = RelationEdge;
 
 // @public
+export interface RelationRules {
+    acyclic?: boolean;
+    unique?: boolean;
+}
+
+// @public
 export interface RelationStats {
     total: number;
     uniqueSources: number;
@@ -536,9 +544,21 @@ export interface RowIdentity {
 
 // @public
 export interface RowRules {
+    embed?: EmbedDeclaration;
     indexes?: readonly string[];
     required: readonly string[];
+    search?: SearchDeclaration;
     shortCode?: string;
+}
+
+// @public
+export interface SchemaChange {
+    // (undocumented)
+    change: string;
+    // (undocumented)
+    effect: string;
+    // (undocumented)
+    path: string;
 }
 
 // @public
@@ -550,6 +570,39 @@ export interface SchemaStats {
     entities: Record<string, number>;
     relations: Record<string, RelationStats>;
     roles: Record<string, number>;
+}
+
+// @public
+export interface SearchDeclaration {
+    readonly fields: Readonly<Record<string, number>>;
+    readonly stem?: string;
+}
+
+// @public
+export type SearchHighlights = Record<string, ReadonlyArray<readonly [element: number, start: number, end: number]>>;
+
+// @public
+export interface SearchHit<E extends string = string> {
+    highlights?: SearchHighlights;
+    // (undocumented)
+    id: EARS.EntityId<E>;
+    score: number;
+    terms: string[];
+}
+
+// @public
+export interface SearchOptions<F extends string = string> {
+    any?: boolean;
+    // (undocumented)
+    fields?: readonly F[];
+    fuzzy?: boolean;
+    prefix?: boolean;
+    // (undocumented)
+    recency?: {
+        field: F;
+        halfLife: number;
+        now?: number;
+    };
 }
 
 // @public
@@ -572,22 +625,6 @@ E
 } : {}) : {
     shortCode?: string;
 };
-
-// @public
-export type StoredRecord = {
-    id: string;
-} & Record<string, unknown>;
-
-// @public
-export type Tracked<T> = {
-    reads: ReadSet;
-} & ({
-    ok: true;
-    value: T;
-} | {
-    ok: false;
-    error: unknown;
-});
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {
@@ -675,9 +712,6 @@ export interface Upsert {
 }
 
 // @public
-export type Visit = (key: Key, value: unknown) => boolean | void;
-
-// @public
 export interface Watching {
     stop(): void;
 }
@@ -712,7 +746,7 @@ export interface WriteBuilder<E extends string = string, D extends EarsSchema = 
     grantExclusive(role: D['roles'], among: readonly EARS.EntityId[]): WriteBuilder<E, D>;
     // (undocumented)
     id(): EARS.EntityId<E>;
-    link(kind: D['relKinds'], target: EARS.EntityId, options?: LinkOptions<D['relKinds']>): WriteBuilder<E, D>;
+    link(kind: D['relKinds'], target: EARS.EntityId, options?: LinkOptions): WriteBuilder<E, D>;
     merge<K extends WritableField<D['shapes'], E>>(k: K, v: Partial<FieldValue<D['shapes'], E, K>>): WriteBuilder<E, D>;
     removeAt(k: WritableField<D['shapes'], E>, index: number): WriteBuilder<E, D>;
     removeValue<K extends WritableField<D['shapes'], E>>(k: K, v: ListElement<FieldValue<D['shapes'], E, K>>): WriteBuilder<E, D>;

@@ -17,7 +17,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-host-data-services-')
 process.env.APACK_ENV = 'test';
 process.env.APACK_USER_DATA_DIR = dataDir;
 const { openAppStore } = await import('../../src/runtime/index.ts');
-const { store, runHistory, engine, packs } = openAppStore();
+const { database: store, runHistory, engine, packs } = openAppStore();
 const { untypedQuery, untypedCreate, untypedUpsert, untypedWrite } = await import('@apackdev/sdk/ears');
 const { boundHost } = await import('@apackdev/sdk/runtime/internals');
 const { services } = boundHost();
@@ -25,7 +25,7 @@ const settingsAdmin = () => boundHost().services.settings;
 
 afterAll(() => {
   store.close();
-  runHistory.close();
+  runHistory.database.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
@@ -49,7 +49,7 @@ describe('services.appData', () => {
         timestamp: expect.any(Number), databases: ['lmdb'], size: expect.any(Number), hasMedia: false, appVersion: '0.4.1',
       });
       const metadata = JSON.parse(fs.readFileSync(path.join(backup, 'metadata.json'), 'utf-8'));
-      expect(metadata).toMatchObject({ appVersion: '0.4.1', storageFormats: { lmdb: expect.any(Number) } });
+      expect(metadata).toMatchObject({ appVersion: '0.4.1', storageFormats: { lmdb: 'elmdb/2' } });
     } finally {
       version.current = undefined;
     }

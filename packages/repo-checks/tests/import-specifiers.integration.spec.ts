@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findReservedEventKeys, findInternalPackageImports, findLmdbImports, findRepositoryCasts, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, LMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSharedPackageLists, findSyncSpawnsInSlowSpecs, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -477,60 +477,60 @@ describe('filesUnder', () => {
   });
 });
 
-describe('findLmdbImports', () => {
+describe('findElmdbImports', () => {
   // The rules with their directories under the temp root's src/
-  const rules = LMDB_RULES.map((rule) => ({
+  const rules = ELMDB_RULES.map((rule) => ({
     ...rule,
     dirs: rule.dirs.map((dir) => `src/${dir}`),
     except: rule.except && `src/${rule.except}`,
   }));
   const allowed = () => {
-    write('packages/apack-ears/src/lmdb/envs.ts', "import { open } from 'lmdb';\nimport type { Partition } from '../persistence/policy.ts';\n");
+    write('packages/apack-ears/src/lmdb/database.ts', "import { Database } from 'elmdb';\nimport type { EarsDatabase } from '../database.ts';\n");
     write('packages/apack-ears/src/index.ts', "export { untypedWrite } from './write.ts';\n");
-    write('packages/apack-host/src/services/app-data.ts', "import type { LmdbStore } from '@apackdev/ears/lmdb';\n");
-    write('packages/api/src/setup/backend.ts', "import { openLmdbStore } from '@apackdev/ears/lmdb';\n");
+    write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@apackdev/ears/lmdb';\n");
+    write('packages/api/src/setup/backend.ts', "import { openDatabase } from '@apackdev/ears/lmdb';\n");
     write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
   };
 
-  it('allows the LMDB store to load lmdb, and the host and the API to open it', () => {
+  it('allows @apackdev/ears/lmdb to load elmdb, and the host and the API to open a database through it', () => {
     allowed();
-    expect(findLmdbImports(rules, root)).toEqual([]);
+    expect(findElmdbImports(rules, root)).toEqual([]);
   });
 
   it.each([
-    ['packages/apack-host/src/services/run-history.ts', "import { open } from 'lmdb';"],
-    ['packages/apack-host/tests/store.spec.ts', "const lmdb = await import('lmdb');"],
-    ['packages/api/src/setup/backend.ts', "import type { Database } from 'lmdb';"],
-    ['packages/api/scripts/db/fix.ts', "const { open } = require('lmdb/dist/index.cjs');"],
-    ['packages/apack-ears/src/index.ts', "export { openLmdbStore } from './lmdb/index.ts';"],
-    ['packages/apack-ears/src/persistence/policy.ts', "import type { LmdbDbs } from '../lmdb/envs.ts';"],
-    ['packages/apack-ears/src/query.ts', "import { open } from 'lmdb';"],
-    ['packages/default-setup/src/features/notes/be/system.ts', "import { openLmdbStore } from '@apackdev/ears/lmdb';"],
-    ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('lmdb');"],
+    ['packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';"],
+    ['packages/apack-host/tests/store.spec.ts', "const elmdb = await import('elmdb');"],
+    ['packages/api/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
+    ['packages/api/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
+    ['packages/apack-ears/src/index.ts', "export { openDatabase } from './lmdb/index.ts';"],
+    ['packages/apack-ears/src/engine.ts', "import type { DatabaseOptions } from './lmdb/database.ts';"],
+    ['packages/apack-ears/src/query.ts', "import { Database } from 'elmdb';"],
+    ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@apackdev/ears/lmdb';"],
+    ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {
     allowed();
     rewrite(file, code);
-    expect(findLmdbImports(rules, root)).toEqual([expect.stringMatching(new RegExp(`^src/${file}:1: `))]);
+    expect(findElmdbImports(rules, root)).toEqual([expect.stringMatching(new RegExp(`^src/${file}:1: `))]);
   });
 
   /**
-   * The one repo-only rule that *runs* a pack rule: `LMDB_RULES`' pack entry names a key and `findLmdbImports`
+   * The one repo-only rule that *runs* a pack rule: `ELMDB_RULES`' pack entry names a key and `findElmdbImports`
    * delegates to it, so that key and the one the parity table advertises are two records of one fact. The case
    * that puts the offence in a pack cannot see them diverge — `packRule(by)` still fires on the fixture when the
    * routing is changed — so this compares the two records directly.
    */
   it('routes its pack population to the pack rule the parity table names', () => {
-    const parity = CHECKS.find((rule) => rule.id === 'findLmdbImports')?.repoOnly;
-    if (parity?.kind !== 'covered') throw new Error('findLmdbImports no longer names a pack rule that covers it');
-    const routed = [...new Set(LMDB_RULES.flatMap((rule) => (rule.rule === undefined ? [] : [rule.rule])))];
-    expect(routed, 'no LMDB_RULES entry delegates to a pack rule, so the parity note names a rule nothing runs')
+    const parity = CHECKS.find((rule) => rule.id === 'findElmdbImports')?.repoOnly;
+    if (parity?.kind !== 'covered') throw new Error('findElmdbImports no longer names a pack rule that covers it');
+    const routed = [...new Set(ELMDB_RULES.flatMap((rule) => (rule.rule === undefined ? [] : [rule.rule])))];
+    expect(routed, 'no ELMDB_RULES entry delegates to a pack rule, so the parity note names a rule nothing runs')
       .not.toEqual([]);
     expect(routed, `the pack population is checked by these, while --list tells a pack author it is \`${parity.by}\``)
       .toEqual([parity.by]);
   });
 
   it('holds for the repo', () => {
-    expect(findLmdbImports()).toEqual([]);
+    expect(findElmdbImports()).toEqual([]);
   });
 });
 
@@ -681,14 +681,14 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     writeAt('packages/demo/src/index.ts', 'export const x = 1;\n');
     return findUnimportedDependencies(root, new Map());
   },
-  findLmdbImports: () => {
-    const rules = LMDB_RULES.map((rule) => ({
+  findElmdbImports: () => {
+    const rules = ELMDB_RULES.map((rule) => ({
       ...rule,
       dirs: rule.dirs.map((dir) => `src/${dir}`),
       except: rule.except && `src/${rule.except}`,
     }));
-    write('packages/apack-host/src/services/run-history.ts', "import { open } from 'lmdb';");
-    return findLmdbImports(rules, root);
+    write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
+    return findElmdbImports(rules, root);
   },
   findRawGitListings: () => {
     write('caller.ts', "execFileSync('git', ['ls-files']);");
@@ -753,12 +753,12 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
  * The offence each `covered` rule is about, written as pack code, and what the pack rule it names must report.
  *
  * `covered: { by }` claims an external pack is held to this rule's subject under another name, and `by:
- * PackRuleKey` checks only that the key exists — pointing `findLmdbImports` at `backend-console` compiled, printed
+ * PackRuleKey` checks only that the key exists — pointing `findElmdbImports` at `backend-console` compiled, printed
  * in `--list` and left all 243 cases green. So the claim is shown rather than asserted: the offence goes into a
  * pack, and the named rule has to be the one that reports it.
  *
  * Keyed by `CoveredRuleId`, derived from the entries, so a rule that starts claiming coverage without evidence
- * does not compile. The three relationships underneath differ — `lmdb-imports` is run by its repo rule for the
+ * does not compile. The three relationships underneath differ — `elmdb-imports` is run by its repo rule for the
  * pack population, `own-modules` takes over a population its repo rule excludes, and `source-resolution` refuses
  * the same pack config from outside this repo — but what has to hold is one thing, so it is one table.
  */
@@ -768,9 +768,9 @@ const COVERED_BY: Record<CoveredRuleId, { files: Record<string, string>; finding
     files: { 'src/f.ts': "import { sibling } from './sibling.js';\n" },
     finding: "packages/demo-pack/src/f.ts:1: './sibling.js' names no file — write './sibling.ts'",
   },
-  findLmdbImports: {
-    files: { 'src/f.ts': "import { open } from 'lmdb';\n" },
-    finding: 'packages/demo-pack/src/f.ts:1: lmdb',
+  findElmdbImports: {
+    files: { 'src/f.ts': "import { Database } from 'elmdb';\n" },
+    finding: 'packages/demo-pack/src/f.ts:1: elmdb',
   },
   // Its config route, which reads the pack root's own listing — so the config goes there, not under a subdirectory
   findMissingSourceConditions: {
@@ -1125,7 +1125,7 @@ describe('CHECKS', () => {
   /** One offending line per rule, in `#` subpaths so the same text means the same thing at every place */
   const OFFENCES: Record<string, string> = {
     'host-imports': "import { edgeStore } from '@apackdev/host/ears';",
-    'lmdb-imports': "import { open } from 'lmdb';",
+    'elmdb-imports': "import { Database } from 'elmdb';",
     'internal-package-imports': "import { _getMediaPath } from '@apackdev/sdk/utils';",
     'untyped-sends': "import { untypedSendToSystem } from '@apackdev/sdk/events';",
     'raw-transport': '_rootEvents.emitOutgoing(event);',

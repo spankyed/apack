@@ -39,6 +39,7 @@ jobs:
           node -p 'JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions})'
           test -f "$(dirname "$(command -v node)")/../include/node/node_api.h"
           cc --version
+      - uses: ./.github/actions/elmdb
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

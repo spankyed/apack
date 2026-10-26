@@ -12,7 +12,7 @@ import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import { HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
 import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
-import { EmbeddingModelId, ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
+import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
 import { FlowEdge } from '@apackdev/sdk/repositories';
 import { HostServices } from '@apackdev/sdk/services';
@@ -1338,17 +1338,6 @@ type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<["low", "medium", "high", "max"]>;
 
-type EmbeddingModel = SearchEmbeddingModelId;
-
-interface EmbeddingModelInfo {
-    displayName: string;
-    description: string;
-    dimensions: number;
-    maxTokens?: number;
-    speed: 'fast' | 'medium' | 'slow';
-    quality: 'best' | 'better' | 'good';
-}
-
 /** ── Brain-local types ──────────────────────────────────────────────────── */
 interface EventListenerEntity {
     id: EARS.EntityId;
@@ -2594,14 +2583,6 @@ type IncomingThreadsEvents = {
     threadId: string;
 };
 
-type IndexMetric = 'cosine' | 'dot_product';
-
-/** A model services.inference runs, named by its provider:model id */
-interface InferenceEmbeddingModel extends EmbeddingModelInfo {
-    kind: 'inference';
-    id: EmbeddingModelId;
-}
-
 type KeepAliveLine = z.infer<typeof KeepAliveLineSchema>;
 
 /** `keep_alive` — NDJSON heartbeat, silently ignored by readers. */
@@ -2633,15 +2614,6 @@ interface LLMNode extends NodeBase {
     maxTokens?: number;
     systemPrompt?: string;
 }
-
-declare const LOCAL_EMBEDDING_MODELS: {
-    readonly MINILM_L6_V2: "minilm-l6-v2";
-    readonly BGE_SMALL_EN: "bge-small-en";
-    readonly BGE_SMALL_EN_V15: "bge-small-en-v1.5";
-    readonly BGE_BASE_EN: "bge-base-en";
-    readonly BGE_BASE_EN_V15: "bge-base-en-v1.5";
-    readonly E5_LARGE_MULTILINGUAL: "e5-large-multilingual";
-};
 
 interface LibraryContext {
     currentView: 'browser' | 'create' | 'create-index' | 'edit' | 'edit-index' | 'test-index';
@@ -2772,16 +2744,6 @@ interface ListenerNode extends NodeBase {
     debounceMs?: number;
 }
 
-/** A model FastEmbed runs in the app; its weights download to the models cache on first use */
-interface LocalEmbeddingModel extends EmbeddingModelInfo {
-    kind: 'local';
-    id: LocalEmbeddingModelId;
-    /** FastEmbed's name for the model */
-    fastEmbedModel: string;
-}
-
-type LocalEmbeddingModelId = (typeof LOCAL_EMBEDDING_MODELS)[keyof typeof LOCAL_EMBEDDING_MODELS];
-
 interface LogEntry {
     id: string;
     timestamp: number;
@@ -2863,6 +2825,23 @@ interface MessageReferences {
     images?: ImageReference[];
     files?: FileReference[];
     context?: ContextReference[];
+}
+
+/**
+ * A message a search of the threads matched: where it is, and a window of its text around the first match, with each
+ * match's place in the window, start and end in UTF-16 units, as a string's indexes count them
+ */
+interface MessageSearchResult {
+    messageId: string;
+    threadId: string;
+    topic: string;
+    sender: MessageEntity['sender'];
+    timestamp: number;
+    snippet: string;
+    marks: Array<[start: number, end: number]>;
+    /** Whether the window starts after the text does, or ends before it */
+    clippedStart: boolean;
+    clippedEnd: boolean;
 }
 
 /** What the flows surface starts from that isn't a row: the models a node may name */
@@ -4559,7 +4538,8 @@ interface RunNodeUpdate {
 interface SavedBookmark {
     url: string;
     title: string;
-    favicon: string;
+    /** None for a page that has no favicon */
+    favicon?: string;
     displayOrder: number;
 }
 
@@ -4578,25 +4558,21 @@ interface ScheduleNode extends NodeBase {
     cronExpression: string;
 }
 
-type SearchEmbeddingModel = LocalEmbeddingModel | InferenceEmbeddingModel;
-
-type SearchEmbeddingModelId = SearchEmbeddingModel['id'];
-
 interface SearchIndex extends SearchIndexConfig {
     id: EARS.EntityId;
     folderId: EARS.EntityId | null;
     documentCount: number;
-    vectorDimensions: number;
     createdAt: number;
     updatedAt: number;
 }
 
+/**
+ * What a search index holds and how it splits documents. Every index's chunks are embedded with the one model
+ * `IndexedDoc`'s vector index names (default-setup's `apack.json`).
+ */
 interface SearchIndexConfig {
     name: string;
     description: string;
-    embeddingModel: EmbeddingModel;
-    indexMetric: IndexMetric;
-    connectors: number;
     excludeAllSubfolders: boolean;
     excludedFolderIds: EARS.EntityId[];
     excludedDocumentIds: EARS.EntityId[];
@@ -5089,6 +5065,17 @@ interface ThreadsContext {
         isLoading: boolean;
     };
     sidebarArchivedThreads: ThreadListItem[];
+    /** The panel's message search: the query typed, and the results answering it once they arrive */
+    messageSearch: {
+        query: string;
+        results: MessageSearchResult[];
+        searching: boolean;
+    };
+    /** A message the chat brings into view once its thread has loaded it, older pages included */
+    focusMessage: {
+        threadId: string;
+        messageId: string;
+    } | null;
     lists: {
         list: ThreadExtended[];
         recent: Partial<ThreadEntity>[];
@@ -5788,6 +5775,7 @@ declare const chatCommands: {
 };
 
 declare const chatQueries: {
+    readonly searchMessages: typeof searchMessages;
     readonly threadArtifacts: (threadId: EARS.EntityId) => ArtifactItem<unknown>[];
     readonly threadData: (threadId: EARS.EntityId) => AgentThreadData | null;
     /**
@@ -6204,6 +6192,12 @@ declare function resolveReferences(references: MessageReferences | undefined): P
     imageBlocks: any[];
     addDirs: string[];
 }>;
+
+/**
+ * The messages a query matches, most relevant first and newer before older, with their threads: what the threads
+ * panel's search lists. A compaction marker is no message a person wrote or read, and is left out
+ */
+declare function searchMessages(text: string, limit?: number): MessageSearchResult[];
 
 /** Send a message with custom blocks */
 declare function sendBlockMessage(options: BlockMessageOptions): {

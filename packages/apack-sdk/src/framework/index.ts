@@ -21,7 +21,7 @@ export type { PackCatalogView, FeatureEventCatalogEntry, DslCatalogEntry, DslDec
 
 export { formatReferenceHref, parseReferenceHref, type ReferenceTarget } from './reference-link.ts';
 
-export { _packEntities, _packEntityTypes, _packShortCodes, _shortCodeTypes, _SHORT_CODE_PATTERN, _packRelationTypes, _packRoles, type PackDataDeclarations, type PackEntityDeclaration, type _PackEntityDeclaration } from './data-declaration.ts';
+export { _packEntities, _packEntityTypes, _packShortCodes, _shortCodeTypes, _SHORT_CODE_PATTERN, _packRelationTypes, _packRelationRules, _packRoles, type PackDataDeclarations, type PackEntityDeclaration, type PackSearchDeclaration, type PackEmbedDeclaration, type SearchStemLanguage, type PackRelationDeclaration, type _PackEntityDeclaration } from './data-declaration.ts';
 
 export { LIFECYCLE_HOOK_NAMES, type PackLifecycleDeclaration } from './lifecycle-declaration.ts';
 export type { FrontendDeclaration, TextEditorExtensionsDeclaration } from './frontend-declaration.ts';

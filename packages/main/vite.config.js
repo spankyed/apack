@@ -11,6 +11,9 @@ export default defineConfig(({mode}) => /** @type {import('vite').UserConfig} */
   // Bundle SDK and host source into main: packaged builds strip .ts files, so they can't be imported at runtime
   ssr: {
     noExternal: [/^@apackdev\/(sdk|host)/],
+    // A native module, loaded where it is installed rather than bundled; linked from the elmdb checkout, which Vite
+    // would otherwise read as source
+    external: ['elmdb'],
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     resolve: {conditions: ['@apackdev/source', ...defaultServerConditions]},
   },

@@ -7,7 +7,7 @@
 //
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
 // resolving each module from packages/api as the API does:
-//   lmdb              opens an environment in a temp dir, writes, closes, opens it again and reads the write back
+//   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   node-pty          spawns a shell and waits for it to exit
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 import fs from 'node:fs';
@@ -54,16 +54,16 @@ const [appDir, dataDir] = process.argv.slice(2);
 const load = createRequire(path.join(appDir, 'packages', 'api', 'package.json'));
 
 async function main() {
-  const { open } = load('lmdb');
-  const at = path.join(dataDir, 'lmdb');
-  let env = open({ path: at, compression: true });
-  env.putSync('smoke', { written: 42 });
-  await env.close();
-  env = open({ path: at, compression: true });
-  const read = env.get('smoke');
-  await env.close();
-  if (read?.written !== 42) throw new Error('lmdb read back ' + JSON.stringify(read) + ' after reopening');
-  console.log('lmdb: wrote, closed, reopened and read back');
+  const { Database } = load('elmdb');
+  const at = path.join(dataDir, 'elmdb');
+  let db = Database.open(at);
+  db.setSchema({ $schema: 'https://elmdb.dev/schema/1.json', roles: {}, relations: {}, types: { Smoke: { fields: {}, additionalFields: 'allow', indexes: {} } } });
+  db.close();
+  db = Database.open(at, { readOnly: true });
+  const read = db.schema;
+  db.close();
+  if (!read?.types?.Smoke) throw new Error('elmdb read back the schema ' + JSON.stringify(read) + ' after reopening');
+  console.log('elmdb: wrote, closed, reopened and read back');
 
   const pty = load('node-pty');
   const [shell, args] = process.platform === 'win32' ? ['cmd.exe', ['/c', 'exit 0']] : ['/bin/sh', ['-c', 'exit 0']];

@@ -4,153 +4,30 @@
 
 ```ts
 
-import { Database } from 'lmdb';
-import { RootDatabase } from 'lmdb';
+// @public
+export function createTemporaryDatabases(): TemporaryDatabases;
 
 // @public
-export const COMPACT_COPIES = false;
-
-// @public
-export function compactEnvironment(basePath: string): Promise<Compaction>;
-
-// @public
-export interface Compaction {
-    after: number;
-    before: number;
-}
-
-// @public
-export function convertToCurrentFormat(basePath: string): FormatSteps;
-
-// @public
-export function convertToFormat2(basePath: string): FormatConversion;
-
-// @public
-export function convertToFormat3(basePath: string): Format3Conversion;
-
-// @public
-export function convertToFormat4(basePath: string): Format4Conversion;
-
-// @public
-export function createLmdbKVBackend(root: RootDatabase, db: Database<Uint8Array, Uint8Array>, hooks: LmdbKVHooks): KvBackend;
-
-// @public
-export interface Format3Conversion {
-    joinedLists: number;
-    singleValues: number;
-    trashed: number;
-}
+export const DATABASE_FORMAT = "elmdb/2";
 
 // @public (undocumented)
-export interface Format4Conversion {
-    // (undocumented)
-    attributes: number;
-    emptyAttributes: number;
-    // (undocumented)
-    entities: number;
-    invalidRelations: number;
-    orphanedAttributes: number;
-    // (undocumented)
-    relations: number;
-    sequences: number;
-}
-
-// @public
-export interface FormatConversion {
-    addedRows: number;
-    entityTypeAttrs: number;
-    orphanRows: number;
-    relationDetailAttrs: number;
-    relationRows: number;
-    rewrittenRows: number;
-}
-
-// @public
-export type FormatSteps = Array<{
-    to: 2;
-    result: FormatConversion;
-} | {
-    to: 3;
-    result: Format3Conversion;
-} | {
-    to: 4;
-    result: Format4Conversion;
-}>;
-
-// @public
-export const LMDB_FORMAT_VERSION = 4;
-
-// @public
-export interface LmdbEnvironment {
-    // (undocumented)
-    db: Database<Uint8Array, Uint8Array>;
-    // (undocumented)
-    root: RootDatabase;
-}
-
-// @public
-export interface LmdbKVHooks {
-    committed(): void;
-    durable(): Promise<void>;
-    synced(): void;
-}
-
-// @public
-export interface LmdbStore {
-    close(): void;
-    copyTo(targetDir: string): Promise<void>;
-    durable(): Promise<void>;
-    readonly kv: OrderedKV;
-    readonly path: string;
-    readers(): number;
-    // (undocumented)
-    readonly readOnly: boolean;
-    replaceWith(dir: string): void;
-    reset(): void;
-    readonly syncs: number;
-}
-
-// @public (undocumented)
-export interface LmdbStoreOptions {
+export interface DatabaseOptions {
     path: string;
     readOnly?: boolean;
-    syncIdleMs?: number;
-    syncIntervalMs?: number;
+    schema?: EngineSchema;
+    syncs?: boolean;
 }
 
 // @public
-export function openEnvironment(dir: string, input?: {
-    readOnly?: boolean;
-}): LmdbEnvironment;
+export function openDatabase(input: DatabaseOptions): EarsDatabase;
 
 // @public
-export function openLmdbStore(input: LmdbStoreOptions): LmdbStore;
-
-// @public
-export function openRecordStore<R extends {
-    id: string;
-} = StoredRecord>(input: RecordStoreOptions<R>): RecordStore<R>;
-
-// @public
-export const RECORD_STORE_FORMAT_VERSION = 1;
-
-// @public (undocumented)
-export const RECORD_STORE_KIND = "records";
-
-// @public (undocumented)
-export interface RecordStoreOptions<R extends {
-    id: string;
-} = StoredRecord> {
-    indexes: RecordIndexes<R>;
-    path: string;
-    // (undocumented)
-    readOnly?: boolean;
+export interface TemporaryDatabases {
+    disposeAll(): void;
+    open(schema: EngineSchema): {
+        database: EarsDatabase;
+        dispose(): void;
+    };
 }
-
-// @public
-export const SYNC_IDLE_MS = 100;
-
-// @public
-export const SYNC_INTERVAL_MS = 1000;
 
 ```

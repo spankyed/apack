@@ -9,8 +9,10 @@
 //   tsx scripts/publish-packages.ts [--dry-run]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { publishedTreeDirs } from '@apackdev/host/build/packages-built';
+import { registryDependencies, type Manifest } from '@apackdev/host/build/published-manifest';
 
 const dryRun = process.argv.includes('--dry-run');
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -22,6 +24,40 @@ function isPublished(name: string, version: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Whether the registry holds a version of `name` that `spec` accepts */
+async function onRegistry(name: string, spec: string): Promise<boolean> {
+  try {
+    const { stdout } = await promisify(execFile)('npm', ['view', `${name}@${spec}`, 'version', '--json'], { timeout: 60_000 });
+    return stdout.trim() !== '';
+  } catch {
+    return false;
+  }
+}
+
+// A real publish refuses, before publishing anything, when what it publishes depends on something no registry holds:
+// published, it could not be installed. The dry run publishes nothing, so it goes ahead and says what it found
+const manifests = Object.values(publishedTreeDirs()).flatMap((dir) => {
+  const file = path.join(dir, 'package.json');
+  return fs.existsSync(file) ? [JSON.parse(fs.readFileSync(file, 'utf-8')) as Manifest] : [];
+});
+const wanted = registryDependencies(manifests);
+const asked = [...new Set(wanted.map(({ name, spec }) => `${name}@${spec}`))];
+const held = new Set<string>();
+// Eight lookups at a time: each is an npm process
+for (let at = 0; at < asked.length; at += 8) {
+  await Promise.all(asked.slice(at, at + 8).map(async (each) => {
+    const split = each.lastIndexOf('@');
+    if (await onRegistry(each.slice(0, split), each.slice(split + 1))) held.add(each);
+  }));
+}
+const missing = wanted.filter(({ name, spec }) => !held.has(`${name}@${spec}`));
+if (missing.length > 0) {
+  const lines = missing.map(({ dependent, name, spec }) => `  ${dependent} depends on ${name}@${spec}`).join('\n');
+  const what = `The registry holds no version of what these depend on (a private or unpublished package, such as a linked one):\n${lines}`;
+  if (!dryRun) throw new Error(`${what}\nPublish it first, or nothing published here can be installed.`);
+  console.warn(`${what}\nA real publish refuses this.`);
 }
 
 for (const packageDir of Object.values(publishedTreeDirs())) {

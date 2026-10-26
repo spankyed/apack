@@ -1,10 +1,10 @@
-// Live reads: `watch` runs a read, records what it read (`OrderedKV.track`), and runs it again after each commit that
-// wrote into that, handing the listener the result when it changed. A commit's keys find the watches they touch
-// through the read-set index, the re-runs wait until the writing code has returned (a microtask), so a burst of commits
-// costs one, and a result equal to the last delivered is not delivered. A read that consults anything but the store
-// isn't tracked, and goes stale when that changes: a watched read is a pure read of the engine.
-import type { Commit, OrderedKV } from './kv.ts';
-import { createReadSetIndex } from './read-set-index.ts';
+// Live reads: `watch` runs a read with every database read it makes tracked under a token of its own, which elmdb files
+// in its interval index (`elmdb/docs/architecture/engine.md`, Change sets and watch), and runs it again after each
+// commit that names the token, handing the listener the result when it changed. Re-runs wait until the writing code
+// has returned (a microtask), so a burst of commits costs one, and a result equal to the last delivered is not
+// delivered. A read that consults anything but the database isn't tracked, and goes stale when that changes: a watched
+// read is a pure read of the engine.
+import type { Commit, Connection } from './database.ts';
 
 /** What a watch delivers to: each changed result, and what a read threw, with the commit it reflects */
 export interface WatchObserver<T> {
@@ -22,6 +22,7 @@ export interface Watching {
 
 /** A watch as the registry holds it */
 interface Watch {
+  token: number;
   read: () => unknown;
   observer: WatchObserver<unknown>;
   /** What was last delivered: a value, an error, or nothing yet */
@@ -43,9 +44,10 @@ const later = (fn: () => void) => {
   else setTimeout(fn, 0);
 };
 
-export function createWatches(kv: OrderedKV): Watches {
-  const index = createReadSetIndex<Watch>();
-  const open = new Set<Watch>();
+export function createWatches(connection: Connection): Watches {
+  const open = new Map<number, Watch>();
+  /** Tokens name watches to elmdb; one is never reused, so a commit naming a stopped watch's names nothing */
+  let nextToken = 1;
   /** Watches waiting to run, and whether a flush is scheduled */
   let dirty = new Set<Watch>();
   let scheduled = false;
@@ -61,24 +63,37 @@ export function createWatches(kv: OrderedKV): Watches {
   };
 
   const onCommit = (commit: Commit) => {
-    for (const watch of index.touchedBy(commit.keys)) dirty.add(watch);
-    // A commit made while a flush runs (a read building an index) runs on a later turn, so a read that writes every
-    // time it runs can't keep the microtask queue from ever emptying
+    if (commit.touched === 'all') for (const watch of open.values()) dirty.add(watch);
+    else for (const token of commit.touched) {
+      const watch = open.get(token);
+      if (watch) dirty.add(watch);
+    }
+    // A commit made while a flush runs (a read writing) runs on a later turn, so a read that writes every time it runs
+    // can't keep the microtask queue from ever emptying
     if (dirty.size > 0) schedule(!flushing);
   };
 
   const run = (watch: Watch) => {
-    const outcome = kv.track(watch.read);
-    if (watch.stopped) return;
-    index.set(watch, outcome.reads);
-    const commit = kv.lastCommit;
+    // What the token held was the last run's: this run's reads replace it
+    connection.untrack(watch.token);
+    let outcome: { ok: true; value: unknown } | { ok: false; error: unknown };
+    try {
+      outcome = { ok: true, value: connection.track(watch.token, watch.read) };
+    } catch (error) {
+      outcome = { ok: false, error };
+    }
+    if (watch.stopped) {
+      connection.untrack(watch.token);
+      return;
+    }
+    const commit = connection.lastCommit();
     const last = watch.last;
     if (outcome.ok) {
       if (last?.ok && sameValue(last.value, outcome.value)) return;
-      watch.last = { ok: true, value: outcome.value };
+      watch.last = outcome;
       watch.observer.next(outcome.value, commit);
     } else {
-      watch.last = { ok: false, error: outcome.error };
+      watch.last = outcome;
       watch.observer.error?.(outcome.error, commit);
     }
   };
@@ -112,22 +127,23 @@ export function createWatches(kv: OrderedKV): Watches {
   return {
     watch(read, observer) {
       const watch: Watch = {
+        token: nextToken++,
         read,
         observer: (typeof observer === 'function' ? { next: observer } : observer) as WatchObserver<unknown>,
         last: undefined,
         stopped: false,
       };
-      open.add(watch);
-      unlisten ??= kv.onCommit(onCommit);
+      open.set(watch.token, watch);
+      unlisten ??= connection.onCommit(onCommit);
       dirty.add(watch);
       schedule(!flushing);
       return {
         stop() {
           if (watch.stopped) return;
           watch.stopped = true;
-          open.delete(watch);
+          open.delete(watch.token);
           dirty.delete(watch);
-          index.remove(watch);
+          connection.untrack(watch.token);
           if (open.size === 0) {
             unlisten?.();
             unlisten = undefined;
@@ -139,11 +155,14 @@ export function createWatches(kv: OrderedKV): Watches {
       if (!scheduled && dirty.size === 0) return Promise.resolve();
       return new Promise((resolve) => { waiting.push(resolve); });
     },
-    stats: () => ({ watches: open.size, ...index.size() }),
+    stats: () => {
+      const { keys, ranges } = connection.trackStats();
+      return { watches: open.size, keys, ranges };
+    },
   };
 }
 
-/** Whether two results are the same data: primitives, lists, plain objects, bytes and dates, compared through */
+/** Whether two results are the same data: primitives, lists, plain objects, maps, sets, bytes and dates, compared through */
 export function sameValue(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
@@ -162,6 +181,17 @@ export function sameValue(a: unknown, b: unknown): boolean {
     return true;
   }
   if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+  // Keys of a map and members of a set are compared as the collection itself finds them, by identity
+  if (a instanceof Map && b instanceof Map) {
+    if (a.size !== b.size) return false;
+    for (const [key, value] of a) if (!b.has(key) || !sameValue(value, b.get(key))) return false;
+    return true;
+  }
+  if (a instanceof Set && b instanceof Set) {
+    if (a.size !== b.size) return false;
+    for (const member of a) if (!b.has(member)) return false;
+    return true;
+  }
   const keys = Object.keys(a);
   if (keys.length !== Object.keys(b).length) return false;
   for (const key of keys) {

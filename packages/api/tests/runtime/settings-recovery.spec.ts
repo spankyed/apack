@@ -5,7 +5,6 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@apackdev/sdk/build';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
-import { createEarsEngine } from '@apackdev/ears';
 import { bindSettingsRequest } from '@apackdev/host/settings';
 import type { Message } from '@apackdev/sdk/events';
 import { rootEvents } from '../../src/transport/emitter.ts';
@@ -14,18 +13,18 @@ import { _settingsAdmin } from '@apackdev/sdk/services';
 import type { EARS } from '@apackdev/sdk';
 
 const fixture = vi.hoisted(() => ({ data: { app: { projects: 'invalid' }, features: { 'memo/notes': { limit: 'invalid' } } } as unknown }));
-vi.mock('@apackdev/host/database', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/host/database')>(),
-  openDatabaseStore: ({ schema }: import('@apackdev/host/database').DatabaseStoreOptions) => {
-    const engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: name => schema.getRegisteredEntityTypes().has(name) });
-    // The store as the app reads it: an engine over the database, holding the settings row
-    engine.admin.bulkLoad(() => {
-      engine.admin.bulkLoadAttr('Settings-app' as EARS.EntityId, 'entityType' as EARS.AttrKind, 'Settings');
+vi.mock('@apackdev/host/database', async importOriginal => {
+  const { _openTestDatabase } = await import('@apackdev/sdk/testing');
+  return {
+    ...await importOriginal<typeof import('@apackdev/host/database')>(),
+    openDatabaseStore: ({ schema }: import('@apackdev/host/database').DatabaseStoreOptions) => {
+      const { database, engine } = _openTestDatabase({ entityTypes: [...schema.getRegisteredEntityTypes()] });
+      // The database as the app reads it: an engine over it, holding the settings row
       engine.admin.bulkLoadAttr('Settings-app' as EARS.EntityId, 'data' as EARS.AttrKind, fixture.data);
-    });
-    return { engine, store: { close: () => {} } };
-  },
-}));
+      return { engine, database };
+    },
+  };
+});
 vi.mock('@apackdev/host/packs/runtime', async importOriginal => ({
   ...await importOriginal<typeof import('@apackdev/host/packs/runtime')>(),
   loadAppPacks: vi.fn(() => ({ loaded: [] })),
@@ -95,6 +94,8 @@ it('boots host recovery before loading external modules, repairs, and starts nor
   expect(startPacks).not.toHaveBeenCalled();
   fixture.data = settings.getOverrides();
   backend.backendActor.stop();
+  // The run history's database, which the next boot opens again, as a restarted app's process does
+  backend.appRunHistory?.database.close();
   unbindHost();
   await backend.setupBackend();
   expect(loadAppPacks).toHaveBeenCalledTimes(1);

@@ -185,9 +185,8 @@ describe('CC: Handle Fork — stress tests', () => {
     expect(result).toMatchObject({ success: true, copied: true, cliUuid: undefined });
 
     const state = getState(t('new'));
-    expect(state).toMatchObject({
-      forkFrom: { sessionId: 'S1', cliUuid: undefined },
-    });
+    // A field holding undefined is absent once stored
+    expect(state?.forkFrom).toEqual({ sessionId: 'S1' });
   });
 
   // ── 4. Nested fork at pre-fork message ──────────────────────────────────────
@@ -271,10 +270,9 @@ describe('CC: Handle Fork — stress tests', () => {
     expect(result).toMatchObject({ success: true, copied: true, cliUuid: undefined });
 
     const state = getState(t('threadC'));
-    expect(state).toMatchObject({
-      sessionId: 'S3',
-      forkFrom: { sessionId: 'S3', cliUuid: undefined },
-    });
+    expect(state).toMatchObject({ sessionId: 'S3' });
+    // A field holding undefined is absent once stored
+    expect(state?.forkFrom).toEqual({ sessionId: 'S3' });
   });
 
   // ── 6. viewSession throws — graceful degradation ───────────────────────────
@@ -391,9 +389,8 @@ describe('CC: Handle Fork — stress tests', () => {
     expect(result).toMatchObject({ success: true, copied: true, cliUuid: undefined });
 
     const state = getState(t('new'));
-    expect(state).toMatchObject({
-      forkFrom: { sessionId: 'S1', cliUuid: undefined },
-    });
+    // A field holding undefined is absent once stored
+    expect(state?.forkFrom).toEqual({ sessionId: 'S1' });
   });
 
 });

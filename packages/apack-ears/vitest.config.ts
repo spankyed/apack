@@ -5,18 +5,17 @@ import { defineConfig } from 'vitest/config';
 // @apackdev/sdk crossed it and reported a hang where the size had headroom to spare.
 //
 // One project, as every host config is: the host pool runs this package as the project its workspace names, and
-// a `projects` list here would be ignored there. The engine's contract on an LMDB store is the integration half's.
+// a `projects` list here would be ignored there. The package has no integration half.
 export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
     // A worker exits when its vitest does, rather than running on orphaned
     setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts'],
-    // Test files run in parallel: each worker's tests create their own EARS engines
+    // Test files run in parallel: each worker's tests create their own EARS engines, each on a database of its own
     fileParallelism: true,
     benchmark: { include: ['bench/**/*.bench.ts'] },
-    // The harness's LMDB and process halves run in the integration pool (vitest.integration.config.ts)
     include: ['tests/**/*.spec.ts'],
-    exclude: ['**/*.integration.spec.ts', '**/node_modules/**'],
+    exclude: ['**/node_modules/**'],
   },
 });

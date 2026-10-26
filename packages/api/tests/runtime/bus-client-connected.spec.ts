@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createActor, setup, type AnyActorRef } from 'xstate';
 import type { Message } from '@apackdev/sdk/events';
-import { _memoryRunHistoryStore } from '@apackdev/sdk/testing';
+import { _openTestRunHistory } from '@apackdev/sdk/testing';
 
 vi.mock('@apackdev/host/app-state', async (importOriginal) => ({
   ...await importOriginal<typeof import('@apackdev/host/app-state')>(),
@@ -24,10 +24,10 @@ const { rootEvents } = await import('../../src/transport/emitter.ts');
 // The app's bus on the api's transport, as setup/backend.ts binds it (the services reach the store only when called)
 const { bindHost } = await import('@apackdev/sdk/runtime');
 const { createHostRuntime } = await import('@apackdev/host/services');
-const { createEarsEngine } = await import('@apackdev/ears');
+const { _createTestEngine } = await import('@apackdev/sdk/testing');
 const { untypedBroadcastToSurface } = await import('@apackdev/sdk/events');
-type LmdbStore = import('@apackdev/ears/lmdb').LmdbStore;
-bindHost(createHostRuntime({ runHistory: _memoryRunHistoryStore(), store: {} as LmdbStore, engine: createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: () => false }), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
+type EarsDatabase = import('@apackdev/ears').EarsDatabase;
+bindHost(createHostRuntime({ runHistory: _openTestRunHistory(), database: {} as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
 const backendSystem = createAppBus(registry);
 
 const received: string[] = [];

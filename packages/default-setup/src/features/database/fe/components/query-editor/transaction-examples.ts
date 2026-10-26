@@ -97,14 +97,13 @@ const root = thread('Root Thread');
 const child = thread('Child Thread');
 const grandchild = thread('Grandchild Thread');
 
-// Link, refusing any link that would form a parent_of cycle
-const acyclicIn = [EARS.RelKind.PARENT_OF];
-write(root).link(EARS.RelKind.PARENT_OF, child, { acyclicIn });
-write(child).link(EARS.RelKind.PARENT_OF, grandchild, { acyclicIn });
+// parent_of is declared acyclic: a link that would form a cycle through it is refused
+write(root).link(EARS.RelKind.PARENT_OF, child);
+write(child).link(EARS.RelKind.PARENT_OF, grandchild);
 
 // This would fail due to cycle prevention
 try {
-  write(grandchild).link(EARS.RelKind.PARENT_OF, root, { acyclicIn });
+  write(grandchild).link(EARS.RelKind.PARENT_OF, root);
 } catch (error) {
   return {
     hierarchy: {

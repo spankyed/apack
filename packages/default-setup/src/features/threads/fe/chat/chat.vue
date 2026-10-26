@@ -7,6 +7,7 @@
         v-if="showThreadSidebar && !isOnboarding"
         :style="{ width: sidebarWidthPx + 'px' }"
         @select-thread="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
         @close="showThreadSidebar = false"
       />
       <PanelResizer
@@ -147,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 
 const quotes = [
   '"If a chatbot speaks in a forest and no one reads the output, does it still hallucinate?"',
@@ -189,7 +190,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import { openSurface } from '#generated/fe.ts'
 import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
-import type { MessageEntity, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
+import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
@@ -200,12 +201,19 @@ const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
+// The message to bring into view, while the thread shown is its own
+const focusMessageId = useSelector(actor, ({ context }) =>
+  context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null);
+const style = useCssModule();
 
 // Scroll preservation for prepending older messages
 const savedScrollHeight = ref(0);
 const isPrependPending = ref(false);
 
+// Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
+// a focused message's seek's, handled as this prepend
 function requestLoadMore() {
+  if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
   const el = messagesContainer.value;
   if (el) savedScrollHeight.value = el.scrollHeight;
   isPrependPending.value = true;
@@ -536,6 +544,35 @@ function handleToggleCompacted(markerId: string, compacted: boolean) {
 
 const prevThreadId = ref(currentThread.value?.id)
 
+/**
+ * Brings the message opened from the panel's search into view once it is drawn, and says whether that takes the place
+ * of a load's scroll: it does when the message was shown, and while its page isn't loaded, when the machine is still
+ * asking for older pages. One listed and not drawn, hidden as compacted, is as shown as it can be
+ */
+function showFocusedMessage(messages: MessageEntity[]): boolean {
+  const focused = focusMessageId.value
+  if (!focused) return false
+  const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
+  if (el) {
+    el.scrollIntoView({ block: 'center' })
+    el.classList.add(style.focused)
+    setTimeout(() => el.classList.remove(style.focused), 1600)
+    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+    return true
+  }
+  if (!messages.some((m) => m.id === focused)) return true
+  actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+  return false
+}
+
+// A message the chat already lists changes none of its messages when it is opened from search, so its focus is
+// shown as it is set, not only as the messages change
+watch(focusMessageId, async (focused) => {
+  if (!focused) return
+  await nextTick()
+  showFocusedMessage(allMessages.value)
+})
+
 watch(allMessages, async (newMsgs, oldMsgs) => {
   await nextTick()
 
@@ -552,6 +589,9 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
     prevThreadId.value = currentThread.value?.id
     showInlineDashboard.value = false
   }
+
+  // A message opened from the panel's search is brought into view in place of a load's scroll
+  if (showFocusedMessage(newMsgs)) return
 
   const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
@@ -595,6 +635,12 @@ watch(messagesContent, (el, _, onCleanup) => {
     pointer-events: none;
     z-index: 5;
   }
+}
+
+.focused {
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px rgb(234 179 8 / 0.6);
+  transition: box-shadow 0.4s ease-out;
 }
 
 .messagesContainer {

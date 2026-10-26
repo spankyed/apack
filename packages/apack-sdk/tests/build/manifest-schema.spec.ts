@@ -115,14 +115,17 @@ describe('parseManifest', () => {
     expect(errorsOf({ data: { entities: { Flow: {}, Memo: {} } } })).toEqual([
       'apack.json "data.entities": "Flow" is defined by the SDK and available to every pack: remove it',
     ]);
-    expect(errorsOf({ data: { relations: ['contains', 'transitions_to', 'holds', 'pinned'] } })).toEqual([
+    expect(errorsOf({ data: { relations: { contains: {}, transitions_to: {}, holds: {}, pinned: {} } } })).toEqual([
       'apack.json "data.relations": "CONTAINS": "contains", "TRANSITIONS_TO": "transitions_to" are defined by the SDK and available to every pack: remove them',
     ]);
-    expect(errorsOf({ data: { relations: ['holds'] } })).toEqual([]);
-    // A name only an object's prototype has is a pack's to use
-    expect(errorsOf({ data: { entities: { constructor: {}, toString: {} } } })).toEqual([]);
+    expect(errorsOf({ data: { relations: { holds: {} } } })).toEqual([]);
+    // A name only an object's prototype has isn't the SDK's: it is refused for its case alone
+    expect(errorsOf({ data: { entities: { constructor: {}, toString: {} } } })).toEqual([
+      'apack.json "data.entities.constructor": Must be a PascalCase entity wire name',
+      'apack.json "data.entities.toString": Must be a PascalCase entity wire name',
+    ]);
     // Settings is not an SDK-reserved entity name
-    expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: ['pinned'] }, })).toEqual([]);
+    expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: { pinned: {} } }, })).toEqual([]);
   });
 
   it("rejects an entity type the engine's own ids are written with: a relation's", () => {
@@ -145,6 +148,30 @@ describe('parseManifest', () => {
     // One entity per prefix, and the SDK's are taken
     expect(refused({ entities: { Memo: { shortCode: 'MEM' }, Tag: { shortCode: 'MEM' } } })).toContain('declared for both "Memo" and "Tag"');
     expect(refused({ entities: { Memo: { shortCode: 'DOC' } } })).toContain("the SDK's Document prefix");
+  });
+
+  it("refuses a text or vector index over the engine's fields, a model's size past elmdb's, and a field index named as one of them", () => {
+    const pack = { id: 'test-pack', name: 'Test', version: '0.1.0' };
+    const refused = (memo: object) => messagesOf(parseManifest({ ...pack, data: { entities: { Memo: memo } } })).join('\n');
+    const embed = { from: ['body'], model: 'openai:text-embedding-3-small', dims: 1536 };
+    expect(refused({ indexes: ['search', 'embedding'], search: { fields: { body: 1 } } })).toContain('"search" names this entity\'s text index');
+    expect(refused({ indexes: ['embedding'], embed })).toContain('"embedding" names this entity\'s vector index');
+    expect(refused({ indexes: ['search', 'embedding'] }), 'a field may be called either where no index takes the name').toBe('');
+    expect(refused({ search: { fields: { body: 1, createdAt: 1 } } })).toContain('"createdAt" is written by the engine');
+    expect(refused({ embed: { ...embed, from: ['body', 'id'] } })).toContain('"id" is written by the engine');
+    expect(refused({ embed: { ...embed, dims: 4097 } })).not.toBe('');
+    expect(refused({ embed: { ...embed, dims: 4096 } })).toBe('');
+  });
+
+  it.each(['memo', 'memo_entry', 'Memo-entry', '_Memo', '__proto__', ''])
+  ('refuses an entity name the database does not hold, which is PascalCase: %j', (name) => {
+    const result = parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities: Object.fromEntries([[name, {}]]) } });
+    expect(messagesOf(result).join('\n')).toContain('Must be a PascalCase entity wire name');
+  });
+
+  it.each(['Status', 'due_at', 'due-at', ''])('refuses an index on a field the database does not hold, which is lowerCamelCase: %j', (field) => {
+    const result = parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities: { Memo: { indexes: [field] } } } });
+    expect(messagesOf(result).join('\n')).toContain('Must be a lowerCamelCase field name');
   });
 
 

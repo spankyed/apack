@@ -2,11 +2,9 @@
 // editor): the author writes `{{segment 1}}`, `{{segment 2}}` … and each is replaced by the segment its rule
 // selected. The search index is dormant: see be/search-index/README.md.
 //
-// It lives here, beside embedding-models.ts, rather than in the backend, for two reasons. The index editor needs
-// the same rule to preview a template, and a value imported from `be/` would pull backend modules into the
-// renderer bundle — every cross-half import in this pack is `import type` for that reason. And backend's
-// search-index/service.ts is excluded from tsconfig.json, since it imports fastembed and usearch which no
-// workspace installs, so logic left in there is neither typechecked nor reachable by a test.
+// It lives here rather than in the backend because the index editor needs the same rule to preview a template, and a
+// value imported from `be/` would pull backend modules into the renderer bundle — every cross-half import in this
+// pack is `import type` for that reason.
 //
 // Nothing here may log or otherwise reach the SDK's host binding: the pack FE bundler refuses an inlined module
 // that does, and the index editor imports this.

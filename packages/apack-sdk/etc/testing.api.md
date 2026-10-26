@@ -10,8 +10,11 @@ import type { AnyStateMachine } from 'xstate';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import { EarsDatabase } from '@apackdev/ears';
+import { EarsEngine } from '@apackdev/ears';
 import type { EditorState } from '@tiptap/pm/state';
 import type { embed } from 'ai';
+import type { EmbedDeclaration } from '@apackdev/ears';
 import type { embedMany } from 'ai';
 import type { FlexibleSchema } from 'ai';
 import type { generateImage } from 'ai';
@@ -21,10 +24,11 @@ import type { InferSchema } from 'ai';
 import type { JSONSchema7 } from 'ai';
 import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
-import { RecordStore } from '@apackdev/ears';
 import type { Ref } from 'vue';
+import { RelationRules } from '@apackdev/ears';
 import type { rerank } from 'ai';
 import { RowRules } from '@apackdev/ears';
+import type { SearchDeclaration } from '@apackdev/ears';
 import type { SnapshotFrom } from 'xstate';
 import type { streamText } from 'ai';
 import type { ToolLoopAgent } from 'ai';
@@ -40,6 +44,9 @@ export function addTestSecret(provider: SecretProvider, label: string): SecretMe
 export function answerTo<E extends {
     type: string;
 }>(call: string, event: E): E;
+
+// @internal
+export const _createTestEngine: (options?: Parameters<typeof _openTestDatabase>[0]) => EarsEngine;
 
 // @public
 export function dropAttribute(id: EARS.EntityId, kind: string): void;
@@ -145,14 +152,23 @@ export interface FeTestRuntimeOptions extends Partial<Omit<FeHostRuntime, 'clien
     client?: Partial<FeClient>;
 }
 
-// @internal
-export function _memoryRunHistoryStore(): RecordStore<RunNode>;
-
 // @public
 export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): NativePackDeclaration;
 
 // @public
 export function nativePackDeclarationFixture(fixture: PackRegistration, metadata?: Pick<NativePackDeclaration, 'version'>): NativePackDeclaration;
+
+// @internal
+export function _openTestDatabase(input?: Pick<TestRuntimeStartOptions, 'entityTypes' | 'relationKinds' | 'roles' | 'rowRules'>): {
+    database: EarsDatabase;
+    engine: EarsEngine;
+};
+
+// @internal
+export function _openTestRunHistory(): {
+    database: EarsDatabase;
+    engine: EarsEngine;
+};
 
 // @public
 export function population<T>(what: string, xs: readonly T[], opts?: {
@@ -222,6 +238,7 @@ export interface TestRuntimeStartOptions {
     onboarding?: OnboardingService;
     packs?: PackRegistryView;
     relationKinds?: readonly string[];
+    relationRules?: Readonly<Record<string, RelationRules>>;
     roles?: readonly string[];
     rowRules?: Readonly<Record<string, RowRules>>;
     serviceOverrides?: ReadonlyMap<string, unknown>;

@@ -13,8 +13,8 @@ Every process resolves its environment and data paths through `resolveAppEnviron
 |---|---|
 | `packs/` | Installed packs, one directory per pack id — every pack, the ones the app ships included |
 | `installed-packs.json` | Installed packs' install state and their `enabled` state |
-| `ears-db/` | The LMDB database the engine's data is kept in |
-| `run-history/` | The run history: every flow run's record, kept 30 days |
+| `ears-db/` | The elmdb database the engine's data is kept in |
+| `run-history/` | The run history's elmdb database: every flow run's nodes, kept 30 days |
 | `secrets.json` | API keys: metadata plain, values encrypted |
 | `media/` | Media assets |
 | `api-port` | The API's port (development only) |
@@ -28,7 +28,7 @@ The app is built from packages whose imports point down only (`npm run check:spe
 
 | Package | Holds | Imports |
 |---|---|---|
-| `@apackdev/ears` | The EARS engine (`createEarsEngine`), its types, the persistence port; `@apackdev/ears/lmdb`, the LMDB store | No `@apackdev/*` package |
+| `@apackdev/ears` | The EARS engine (`createEarsEngine`), its types, the database port; `@apackdev/ears/lmdb`, which opens elmdb databases | No `@apackdev/*` package |
 | `@apackdev/sdk` | The pack contract and pack runtime: the lookups of what packs registered, service contracts, event sends, logging and error reports over the bound bus, the SDK entities and their repositories, the `HostRuntime` port | `@apackdev/ears` |
 | `@apackdev/host` (private) | The app runtime: the five app services (`/services`), the app's own state (`/app-state`), the registered packs and pack runtime (`/packs`, `/packs/runtime`), the bus (`/bus`), migrations (`/migrations`), API keys (`/secrets`) | `@apackdev/sdk`, `@apackdev/ears` |
 | `packages/api` | Transport (`node:http`, `ws`, tRPC routers, the log stream), process boot and composition | All of the above |
@@ -316,14 +316,14 @@ The user's API keys live in `@apackdev/host/secrets`, which is host-only and not
 
 ## Persistence
 
-The app keeps two LMDB stores, both opened from `@apackdev/ears/lmdb`; `lmdb` is an optional peer of `@apackdev/ears` that only the app installs, so packs and pack tests never load it:
+The app keeps two [elmdb](https://github.com/spankyed/elmdb) databases, both opened from `@apackdev/ears/lmdb`, each with an engine of its own; packs and pack tests never load elmdb:
 
-| Store | Directory | Holds | In memory |
+| Database | Directory | Holds | Opened by |
 |---|---|---|---|
-| The database (`openLmdbStore({ path })`) | `ears-db/` | Every entity and relation | Yes: the engine reads and writes it directly (`kv: store.kv`), keeping no copy in memory |
-| The run history (`openRecordStore`) | `run-history/` | Every flow run's record: each node a run made, with what it was given and returned | No: `services.runHistory` reads and writes it directly |
+| The app's | `ears-db/` | Every entity and relation, held to the schema the registered packs declare | `openDatabaseStore` (`@apackdev/host/database`); the engine reads and writes it directly, keeping no copy in memory |
+| The run history's | `run-history/` | Every flow run's nodes, as `RunNode` entities: each node a run made, with what it was given and returned | `openRunHistory`; `services.runHistory` reads and writes it through its own engine |
 
-A flow run is not an entity: the engine never holds one, so a run's record is never undone by a unit (`transact`) that throws and never waits on one. As the run history opens it marks what the last session left running as `stopped`, and removes every session that ended more than 30 days ago, with everything it ran.
+A flow run is not in the app's database: no unit (`transact`) on the app's engine reaches one, so a run's record is never undone by a unit that throws and never waits on one. As the run history opens it marks what the last session left running as `stopped`, and removes every session that ended more than 30 days ago, with everything it ran.
 
 ## Backups
 

@@ -5,10 +5,12 @@
 ```ts
 
 import type { DeepPartial } from 'ai';
+import type { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
 import type { embed } from 'ai';
 import type { EmbeddingModel } from 'ai';
 import type { embedMany } from 'ai';
+import type { EngineSchema } from '@apackdev/ears';
 import type { FlexibleSchema } from 'ai';
 import type { generateImage } from 'ai';
 import type { generateSpeech } from 'ai';
@@ -19,8 +21,6 @@ import type { JSONSchema7 } from 'ai';
 import type { LanguageModel } from 'ai';
 import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
-import type { RecordIndexes } from '@apackdev/ears';
-import type { RecordStore } from '@apackdev/ears';
 import type { rerank } from 'ai';
 import type { RerankingModel } from 'ai';
 import type { SpeechModel } from 'ai';
@@ -97,7 +97,24 @@ export function _createPackServices(): {
 };
 
 // @internal
-export function _createRunHistory(records: RecordStore<RunNode>): RunHistory;
+export function _createRunHistory(runs: Ears): RunHistory;
+
+// @public
+export function embedPending(input?: {
+    types?: readonly string[];
+    batch?: number;
+}): Promise<EmbedPendingResult>;
+
+// @public
+export interface EmbedPendingResult {
+    // (undocumented)
+    stale: number;
+    // (undocumented)
+    stored: number;
+}
+
+// @public
+export function embedSearchText(type: string, text: string): Promise<number[]>;
 
 // @public
 export const entityTypeOfShortCode: (code: string) => string | undefined;
@@ -263,7 +280,7 @@ export const repository: Record<string, unknown>;
 export type _ResolveModel = <K extends ModelKind>(kind: K, id: ModelIdOf<K>) => _InferenceModels[K] | Promise<_InferenceModels[K]>;
 
 // @internal
-export const _RUN_HISTORY_INDEXES: RecordIndexes<RunNode>;
+export const _RUN_HISTORY_SCHEMA: EngineSchema;
 
 // @public
 export interface RunHistory {

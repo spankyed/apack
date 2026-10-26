@@ -1,4 +1,4 @@
-// The app-only exports (the LMDB store) stay out of what pack code shares: the app's bridge and the harness's
+// The app-only exports (the elmdb databases) stay out of what pack code shares: the app's bridge and the harness's
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

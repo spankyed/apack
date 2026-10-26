@@ -16,6 +16,12 @@ reconnect remounted its surface (`c06a97a38`, with the E2E fixture naming an API
 `b43926dc0`).
 Step 1's readings and the decisions each step made are below.
 
+On elmdb, where this branch is merged with `session/ears-on-elmdb` (`session/live-queries-on-elmdb`): `engine.watch`
+keeps this contract over elmdb's tracked reads, so the read recorder, the write log and the read-set index are gone, as
+The move to elmdb says; `watch.spec.ts` and the harness's watch property run there against elmdb. The threads panel's
+message search, which the elmdb branch added, is a view (`messageSearch`), and a message opened from it grows the chat
+view's page until the page lists it.
+
 Final checks, 2026-10-26: `npm run chain -- --no-native --all` passed uncached on `live-queries` at `5f91ea551` (934 s).
 The streaming measurement taken again on that tree, against the clock as below: 16 flushes in 1.20–1.21 s, about 13.2
 a second, the message's view re-running once per flush and the chat page, detail, list, recent and tab views 0

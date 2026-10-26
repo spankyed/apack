@@ -30,7 +30,17 @@ export type EarsErrorCode =
    */
   | 'INVALID_SHORT_CODE'
   /** A created row brought a short code another entity holds */
-  | 'SHORT_CODE_IN_USE';
+  | 'SHORT_CODE_IN_USE'
+  /** `link` named the entity it links from as its target */
+  | 'SELF_LINK'
+  /** `link` would close a cycle through a relation kind its declaration makes acyclic */
+  | 'CYCLE'
+  /** A write's value is one the database doesn't store: a function, a symbol, `undefined` in a list, or a number that isn't finite */
+  | 'VALUE_INVALID'
+  /** `search` was on a type with no text index (no `search` in its manifest entry), or `near`, `like`, `hybrid` or `pendingEmbeddings` on one with no vector index (no `embed`) */
+  | 'UNKNOWN_INDEX'
+  /** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
+  | 'NO_SEARCH';
 
 /** An engine refusal, with its code */
 export class EarsError extends Error {

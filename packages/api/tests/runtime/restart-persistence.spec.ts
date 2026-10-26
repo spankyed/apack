@@ -20,7 +20,8 @@ describe('the API store across a restart', () => {
     const first = openAppStore();
     expect(_getLmdbPath().startsWith(dataDir)).toBe(true);
     untypedCreate('Prompt', { id: 'Prompt-restart', label: 'written before the restart', inputs: {}, templateFn: 'return ""' });
-    first.store.close();
+    first.database.close();
+    first.runHistory.database.close();
     // A new process starts with nothing bound, and a new engine
     unbindHost();
 
@@ -31,7 +32,8 @@ describe('the API store across a restart', () => {
       expect(untypedQuery.withTrashed('Prompt').ids()).toEqual(['Prompt-restart']);
       expect(second.engine.getRow('Prompt-restart')?.label).toBe('written before the restart');
     } finally {
-      second.store.close();
+      second.database.close();
+      second.runHistory.database.close();
     }
   });
 });

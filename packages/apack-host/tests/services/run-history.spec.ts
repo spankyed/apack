@@ -1,28 +1,35 @@
-// services.runHistory: one implementation over two record stores — the app's on disk, a test's in memory — so every
-// case runs against both, and the test double can't drift from what the app runs
+// services.runHistory: one implementation over the run history's database — the app's, opened by `openRunHistory`, and
+// the test runtime's in a temporary directory — so every case runs against both, and the test double can't drift from
+// what the app runs
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import type { RecordStore } from '@apackdev/ears';
-import { openEnvironment } from '@apackdev/ears/lmdb';
+import type { EARS } from '@apackdev/ears';
 import type { RunHistory, RunNode, RunNodeId, RunNodeStart } from '@apackdev/sdk/services';
-import { _memoryRunHistoryStore } from '@apackdev/sdk/testing';
-import { openRunHistoryStore } from '../../src/database/open.ts';
+import { _openTestRunHistory } from '@apackdev/sdk/testing';
+import { openRunHistory, type RunsDatabase } from '../../src/database/open.ts';
 import { createRunHistory, RUN_HISTORY_RETENTION_MS } from '../../src/services/run-history.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'run-history-'));
-const open: RecordStore<RunNode>[] = [];
-afterEach(() => { for (const store of open.splice(0)) store.close(); });
+const open: RunsDatabase[] = [];
+afterEach(() => { for (const runs of open.splice(0)) runs.database.close(); });
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
+/** The app's run history at a directory of its own */
+const onDisk = (dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history')): RunsDatabase => {
+  const runs = openRunHistory(dir);
+  open.push(runs);
+  return runs;
+};
+
 const STORES: Record<string, () => RunHistory> = {
-  'on disk': () => {
-    const store = openRunHistoryStore(path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history'));
-    open.push(store);
-    return createRunHistory(store);
+  'on disk': () => createRunHistory(onDisk().engine),
+  'of the test runtime': () => {
+    const runs = _openTestRunHistory();
+    open.push(runs);
+    return createRunHistory(runs.engine);
   },
-  'in memory': () => createRunHistory(_memoryRunHistoryStore()),
 };
 
 /** Starts a node and returns its id */
@@ -30,11 +37,12 @@ function node(history: RunHistory, fields: { kind: RunNode['kind'] } & Record<st
   return history.start({ label: fields.kind, ...fields } as RunNodeStart).id;
 }
 
-/** A node as a run long ago left it, written to the store directly: times a running app would never give it */
-function recorded(store: RecordStore<RunNode>, fields: { kind: RunNode['kind']; startedAt: number; parentId?: RunNodeId } & Record<string, unknown>): RunNodeId {
-  const id = store.newId('RunNode') as RunNodeId;
-  const parent = fields.parentId === undefined ? undefined : store.get(fields.parentId);
-  store.put({ label: fields.kind, status: 'completed', ...fields, id, rootId: parent?.rootId ?? id } as RunNode);
+let made = 0;
+/** A node as a run long ago left it, written to the database directly: times a running app would never give it */
+function recorded(runs: RunsDatabase, fields: { kind: RunNode['kind']; startedAt: number; parentId?: RunNodeId } & Record<string, unknown>): RunNodeId {
+  const id = `RunNode-old${String(made++).padStart(6, '0')}` as RunNodeId;
+  const parent = fields.parentId === undefined ? undefined : runs.engine.getRow(fields.parentId as unknown as EARS.EntityId);
+  runs.engine.create('RunNode', { label: fields.kind, status: 'completed', ...fields, id: id as unknown as EARS.EntityId, rootId: (parent?.rootId as string | undefined) ?? id });
   return id;
 }
 
@@ -127,61 +135,86 @@ describe.each(Object.keys(STORES))('the run history %s', (where) => {
 describe('the app\'s run history', () => {
   it('stops what the last session left active as it opens', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
-    const store = openRunHistoryStore(dir);
-    const before = createRunHistory(store);
-    const left = node(before, { kind: 'flow' });
-    store.close();
+    const first = openRunHistory(dir);
+    const left = node(createRunHistory(first.engine), { kind: 'flow' });
+    first.database.close();
 
-    const reopened = openRunHistoryStore(dir);
-    open.push(reopened);
-    expect(createRunHistory(reopened).get(left)?.status).toBe('stopped');
+    expect(createRunHistory(onDisk(dir).engine).get(left)?.status).toBe('stopped');
+  });
+
+  it('orders and pages by id when ids were not made in that order, as after the clock was set back', () => {
+    const runs = onDisk();
+    // Inserted newest id first, so the order the store holds them in is not the order of their ids
+    const ids = ['RunNode-c', 'RunNode-b', 'RunNode-a'] as RunNodeId[];
+    const parent = recorded(runs, { kind: 'flow', startedAt: Date.now() });
+    for (const id of ids) {
+      runs.engine.create('RunNode', {
+        id: id as unknown as EARS.EntityId, kind: 'flow', label: 'flow', status: 'completed', startedAt: Date.now(), rootId: parent, parentId: parent,
+      });
+    }
+    const history = createRunHistory(runs.engine);
+    const pages = (find: (cursor?: RunNodeId) => RunNode[]) => {
+      const seen: RunNodeId[] = [];
+      for (let page = find(); page.length > 0; page = find(seen.at(-1))) seen.push(...page.map((each) => each.id));
+      return seen;
+    };
+    expect(pages((cursor) => history.findChildren(parent, { limit: 1, cursor }))).toEqual(['RunNode-a', 'RunNode-b', 'RunNode-c']);
+    // The parent's id, `RunNode-old…`, sorts after the others
+    expect(pages((cursor) => history.findRuns({ limit: 1, cursor }))).toEqual([parent, 'RunNode-c', 'RunNode-b', 'RunNode-a']);
   });
 
   it('removes a session that ended past the retention period, with everything it ran', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
-    const store = openRunHistoryStore(dir);
+    const runs = openRunHistory(dir);
     const old = Date.now() - RUN_HISTORY_RETENTION_MS - 60_000;
-    const session = recorded(store, { kind: 'flow', startedAt: old, completedAt: old });
-    const event = recorded(store, { kind: 'event', parentId: session, startedAt: old });
-    const subflow = recorded(store, { kind: 'flow', parentId: event, startedAt: old });
-    const step = recorded(store, { kind: 'step', parentId: subflow, startedAt: old });
-    store.close();
+    const session = recorded(runs, { kind: 'flow', startedAt: old, completedAt: old });
+    const event = recorded(runs, { kind: 'event', parentId: session, startedAt: old });
+    const subflow = recorded(runs, { kind: 'flow', parentId: event, startedAt: old });
+    const step = recorded(runs, { kind: 'step', parentId: subflow, startedAt: old });
+    runs.database.close();
 
-    const reopened = openRunHistoryStore(dir);
-    open.push(reopened);
-    const history = createRunHistory(reopened);
+    const history = createRunHistory(onDisk(dir).engine);
     expect([session, event, subflow, step].map((id) => history.get(id))).toEqual([undefined, undefined, undefined, undefined]);
   });
 
   it('keeps a running session and one that ended within the period whole, their oldest nodes included', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
-    const store = openRunHistoryStore(dir);
+    const runs = openRunHistory(dir);
     const old = Date.now() - RUN_HISTORY_RETENTION_MS - 60_000;
     // A long session: it started before the period and ended within it, so what it ran first is as old as it is
-    const ended = recorded(store, { kind: 'flow', startedAt: old, completedAt: Date.now() });
-    const endedStep = recorded(store, { kind: 'step', parentId: ended, startedAt: old });
-    const running = recorded(store, { kind: 'flow', status: 'active', startedAt: old });
-    const runningStep = recorded(store, { kind: 'step', parentId: running, startedAt: old });
-    store.close();
+    const ended = recorded(runs, { kind: 'flow', startedAt: old, completedAt: Date.now() });
+    const endedStep = recorded(runs, { kind: 'step', parentId: ended, startedAt: old });
+    const running = recorded(runs, { kind: 'flow', status: 'active', startedAt: old });
+    const runningStep = recorded(runs, { kind: 'step', parentId: running, startedAt: old });
+    runs.database.close();
 
-    const reopened = openRunHistoryStore(dir);
-    open.push(reopened);
-    const history = createRunHistory(reopened);
+    const history = createRunHistory(onDisk(dir).engine);
     expect([ended, endedStep, running, runningStep].every((id) => history.get(id) !== undefined)).toBe(true);
   });
 
-  it('moves a store it cannot read aside and starts a new one, rather than keeping the app from starting', () => {
+  it('moves files it cannot read aside and starts a new history, rather than keeping the app from starting', () => {
     const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
-    // Files that aren't a run history: an EARS database where the record store should be
-    openEnvironment(dir).root.close();
-    expect(() => openRunHistoryStore(dir, { readOnly: true })).toThrow('are an EARS database, not a record store');
+    // Files elmdb can't read where the history should be, as damage or another program's leave them
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'data.mdb'), Buffer.alloc(16384, 7));
+    expect(() => openRunHistory(dir, { readOnly: true })).toThrow(/isn't a file this LMDB reads/);
 
-    const store = openRunHistoryStore(dir);
-    open.push(store);
-    const history = createRunHistory(store);
+    const history = createRunHistory(onDisk(dir).engine);
     expect(history.get(node(history, { kind: 'flow' }))).toBeDefined();
     const aside = fs.readdirSync(path.dirname(dir)).filter((name) => name.startsWith('run-history.unreadable-'));
     expect(aside).toHaveLength(1);
     expect(fs.existsSync(path.join(path.dirname(dir), aside[0], 'data.mdb'))).toBe(true);
+  });
+
+  it('throws for a failure that says nothing about the files, and leaves the history where it is', () => {
+    const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
+    const held = openRunHistory(dir);
+    try {
+      // The process has it open already: a refusal of this open, not of what the files hold
+      expect(() => openRunHistory(dir)).toThrow(expect.objectContaining({ code: 'ALREADY_OPEN' }));
+      expect(fs.readdirSync(path.dirname(dir))).toEqual(['run-history']);
+    } finally {
+      held.database.close();
+    }
   });
 });

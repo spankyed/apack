@@ -120,19 +120,19 @@ if $IS_MAC; then
   else
     echo "  Code signing: disabled (set APPLE_TEAM_ID to enable)"
   fi
-  # Selectively rebuild only node-pty against Electron (lmdb uses NAPI prebuilds)
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
   npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --mac --arm64
   validate_api_package "dist/mac-arm64/${APP_NAME}.app/Contents/Resources/app"
 elif $IS_WIN; then
   echo "  Platform: Windows (unsigned)"
-  # Selectively rebuild only node-pty against Electron (lmdb uses NAPI prebuilds)
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
   npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --win --x64
   validate_api_package "dist/win-unpacked/resources/app"
 else
   echo "  Platform: Linux"
-  # Selectively rebuild only node-pty against Electron (lmdb uses NAPI prebuilds)
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
   npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --linux --x64
   validate_api_package "dist/linux-unpacked/resources/app"

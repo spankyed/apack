@@ -1,7 +1,7 @@
 // Flow compiling and decompiling use a private engine and the step definitions they're given: they work with no
 // engine bound and no app bound, and leave a bound one (the app's, a test's) as it was
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../src/testing/index.ts';
 import { _bindEars, boundEars, untypedQuery } from '@apackdev/sdk/ears';
 import { SDK_ROLES } from '../../src/types/sdk-entities.ts';
 import { EARS } from '../../src/types/entities.ts';
@@ -27,7 +27,7 @@ describe('a flow compile', () => {
   });
 
   it("leaves the bound engine's data untouched, and compiles into its own", () => {
-    const installed = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === EARS.Entity.Flow });
+    const installed = _createTestEngine();
     _bindEars(installed);
     const appFlow = untypedQuery(EARS.Entity.Flow).count() === 0 && installed.create(EARS.Entity.Flow).set('label', 'Mine').id();
     const before = installed.admin.getAllEntities();

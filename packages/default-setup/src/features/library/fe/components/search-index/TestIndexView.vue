@@ -176,9 +176,7 @@
                   <div v-if="expandedChunks.has(getChunkId(result, index))" class="mt-3 pt-3 border-t border-neutral-800">
                     <div class="flex items-center justify-between text-xs text-neutral-500">
                       <div class="flex items-center gap-3">
-                        <span>Distance: {{ result.score.toFixed(4) }}</span>
-                        <span class="text-neutral-700">•</span>
-                        <span>Metric: {{ testingIndex?.indexMetric || 'cosine' }}</span>
+                        <span>Similarity: {{ result.score.toFixed(4) }}</span>
                       </div>
                       <div class="flex items-center gap-2">
                         <span>{{ result.text.length }} chars</span>
@@ -214,12 +212,11 @@ import { useSelector } from '@xstate/vue'
 import { type LibraryEvents } from '../../state.ts'
 import { FileText, Search, Hash, Copy, ChevronRight } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
-import type { IndexSearchResult, SearchIndex } from '#generated/types.ts'
+import type { IndexSearchResult } from '#generated/types.ts'
 import type { LibraryActor } from '../../state.ts'
 
 const actor = useSurface<LibraryActor>()
 
-const testingIndex = useSelector(actor, (state) => state.context.testingIndex) as Ref<SearchIndex | null>
 const testQuery = useSelector(actor, (state) => state.context.testQuery) as Ref<string>
 const testResults = useSelector(actor, (state) => state.context.testResults) as Ref<IndexSearchResult[]>
 const isSearching = useSelector(actor, (state) => state.context.isSearching) as Ref<boolean>
@@ -310,13 +307,8 @@ const collapseAll = () => {
   expandedDocuments.value.clear()
 }
 
-const getSimilarityPercentage = (score: number): string => {
-  const metric = testingIndex.value?.indexMetric || 'cosine'
-  const similarity = metric === 'cosine'
-    ? Math.max(0, Math.min(100, (1 - score / 2) * 100))
-    : Math.max(0, Math.min(100, (score + 1) * 50))
-  return similarity.toFixed(1)
-}
+// A result's score is its similarity, from 0 to 1
+const getSimilarityPercentage = (score: number): string => Math.max(0, Math.min(100, score * 100)).toFixed(1)
 
 const getScoreBadgeClass = (score: number): string => {
   const percentage = parseFloat(getSimilarityPercentage(score))

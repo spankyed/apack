@@ -4,7 +4,7 @@ import { backendBindingProblem } from '../../src/packs/declaration-binding.ts';
 
 const manifest = ManifestSchema.parse({
   id: 'contributions', name: 'Contributions', version: '1.0.0',
-  data: { entities: { Item: {} }, relations: ['item_link'] },
+  data: { entities: { Item: {} }, relations: { item_link: {} } },
   extensions: {
     steps: { execute: { node: { label: 'Execute' }, build: { compile: 'build.ts#compile', validate: 'build.ts#validate', getLabel: 'build.ts#getLabel' }, runtime: { handler: 'runtime.ts#handler', waits: true } } },
     blocks: { answer: { kind: 'input', be: 'block.ts#block' } },
