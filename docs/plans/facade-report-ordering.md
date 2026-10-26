@@ -1,6 +1,6 @@
 # Stable facade reports across source and build routes
 
-Status: implementing the authorized narrow normalization repair; repository acceptance pending.
+Status: repair implemented and accepted on master; separately owned Claude branch integration remains a handoff.
 Created: 2026-10-26.
 
 ## Problem and evidence
@@ -118,4 +118,11 @@ comparator. All 27 focused declaration/report unit cases pass, including meaning
 contract mutations, comment changes and idempotence. All 16 focused command/gate integration cases pass, including source and verified-build
 routes and stale/tampered-build refusals. The supported default-setup source update
 reported the committed facade current; no derived report changed. The required full
-repository gate is running with two cores and bounded Node heaps.
+repository gate passed on repair commit `e34dff3ff`, with two cores and bounded Node
+heaps: `npm run chain -- --cores 2` completed all 32 steps (one cached), including
+Linux native tests and packaged-authoring app checks. Evidence:
+`node_modules/.cache/apack-chain/runs/2026-10-26T18-04-21Z-100`.
+
+The repair is accepted on master. The separately owned Claude branch was not
+modified: its owner can integrate this commit and close its original gate against
+that branch's current sources. This does not claim completion of the larger parity goal.
