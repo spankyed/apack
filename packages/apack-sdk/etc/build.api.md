@@ -585,7 +585,7 @@ export function loadFlowsFromDir(flowsDir: string, importModule?: PackModuleLoad
 }>;
 
 // @public (undocumented)
-export const ManifestSchema: z.ZodPreprocess<z.ZodObject<{
+export const ManifestSchema: z.ZodObject<{
     $schema: z.ZodOptional<z.ZodString>;
     id: z.ZodString;
     name: z.ZodString;
@@ -1255,7 +1255,7 @@ export const ManifestSchema: z.ZodPreprocess<z.ZodObject<{
             "repository-casts": "repository-casts";
         }>>>;
     }, z.core.$strict>>;
-}, z.core.$strict>, unknown>;
+}, z.core.$strict>;
 
 // @public
 export interface MarkdownItem {
@@ -1341,7 +1341,7 @@ export const MigrationsSchema: z.ZodObject<{
 export const _namingRefusedValue: z.core.$ZodErrorMap;
 
 // @public (undocumented)
-export const _NativePackDeclarationSchema: z.ZodPreprocess<z.ZodObject<{
+export const _NativePackDeclarationSchema: z.ZodObject<{
     id: z.ZodString;
     version: z.ZodOptional<z.ZodString>;
     migrations: z.ZodOptional<z.ZodLazy<z.ZodObject<{
@@ -1868,7 +1868,7 @@ export const _NativePackDeclarationSchema: z.ZodPreprocess<z.ZodObject<{
         settings?: unknown;
         repositories?: Record<string, string> | undefined;
     }>>>>;
-}, z.core.$strict>, unknown>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export function on(event: string, exits: DSLStepNode[][], label?: string): Track;

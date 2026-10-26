@@ -161,7 +161,7 @@ export function getSharedFeDeps(...fromDirs: string[]): Record<string, SharedDep
     Object.entries(SHARED_DEPS).filter(([, d]) => d.target !== 'be' && d.globalKey),
   ) as Record<string, SharedDep & { globalKey: string }>;
   for (const specifier of SHARED_SUBPATH_PACKAGES.flatMap((name) => exportedSubpaths(name, fromDirs))) {
-    // Libraries importing ProseMirror directly (tiptap-markdown → prosemirror-markdown) get the same
+    // Libraries importing ProseMirror directly (prosemirror-markdown → prosemirror-model) get the same
     // module as the pack that imports it through tiptap, which is what `canonical` says above
     const pmModule = specifier.match(/^@tiptap\/pm\/(.+)$/)?.[1];
     const canonical = pmModule === undefined ? undefined : `prosemirror-${pmModule}`;

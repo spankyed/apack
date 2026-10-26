@@ -23,7 +23,7 @@ export function declarationRecord(keyOrValue: z.ZodType, value?: z.ZodType): z.Z
   const grammar = key instanceof z.ZodEnum
     ? z.partialRecord(key, value ?? keyOrValue)
     : z.record(key, value ?? keyOrValue);
-  const entries = z.array(z.tuple([key, value ?? keyOrValue]));
+  const entry = z.tuple([key, value ?? keyOrValue]);
   const schema = z.unknown().transform((raw, ctx) => {
     if (!isDictionary(raw)) {
       const result = grammar.safeParse(raw, nested);
@@ -31,16 +31,16 @@ export function declarationRecord(keyOrValue: z.ZodType, value?: z.ZodType): z.Z
       if (result.success) ctx.issues.push({ code: 'invalid_type', expected: 'record', input: raw, message: 'Expected a dictionary' });
       return z.NEVER;
     }
-    const input = Object.entries(raw);
-    const result = entries.safeParse(input, nested);
-    if (!result.success) {
-      // An entry's issue is at [index, 0 (key) | 1 (value), ...]: report it under the key, as a record would
-      for (const issue of result.error.issues) {
-        ctx.issues.push(reported(issue, raw, [input[Number(issue.path[0])]![0], ...issue.path.slice(2)]));
-      }
-      return z.NEVER;
+    // Each entry on its own, so the valid ones still reach a refinement that runs despite these issues
+    // (`declaration-schema.ts`'s name checks): the parse fails either way
+    const valid: [string, unknown][] = [];
+    for (const [name, member] of Object.entries(raw)) {
+      const result = entry.safeParse([name, member], nested);
+      if (result.success) valid.push(result.data);
+      // An entry's issue is at [0 (key) | 1 (value), ...]: report it under the key, as a record would
+      else for (const issue of result.error.issues) ctx.issues.push(reported(issue, raw, [name, ...issue.path.slice(1)]));
     }
-    return Object.fromEntries(result.data);
+    return Object.fromEntries(valid);
   });
   // A copy made by describe() or meta() shares this definition, so formatters find the grammar through either
   Object.assign(schema._zod.def, { [recordGrammar]: grammar });

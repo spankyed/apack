@@ -128,6 +128,18 @@ describe('parseManifest', () => {
     expect(errorsOf({ data: { entities: { Memo: {}, Note: {}, Settings: {} }, relations: { pinned: {} } }, })).toEqual([]);
   });
 
+  it('reports a reserved entity name beside the manifest\'s other errors, its dictionary\'s own included', () => {
+    const errorsOf = (field: object) => messagesOf(parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', ...field }));
+    expect(errorsOf({ data: { entities: { Flow: {} } }, checks: { allow: ['nope'] } })).toEqual(expect.arrayContaining([
+      'apack.json "data.entities": "Flow" is defined by the SDK and available to every pack: remove it',
+      expect.stringContaining('apack.json "checks.allow.0": Invalid option'),
+    ]));
+    expect(errorsOf({ data: { entities: { lowercase: {}, Relation: {} } } })).toEqual(expect.arrayContaining([
+      'apack.json "data.entities.lowercase": Must be a PascalCase entity wire name',
+      expect.stringContaining('"Relation" is the engine\'s own'),
+    ]));
+  });
+
   it("rejects an entity type the engine's own ids are written with: a relation's", () => {
     const errorsOf = (entities: object) => messagesOf(parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities } }));
     expect(errorsOf({ Relation: {}, Sequence: {}, Memo: {} })).toEqual([
