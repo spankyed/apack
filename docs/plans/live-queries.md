@@ -16,6 +16,13 @@ reconnect remounted its surface (`c06a97a38`, with the E2E fixture naming an API
 `b43926dc0`).
 Step 1's readings and the decisions each step made are below.
 
+Final checks, 2026-10-26: `npm run chain -- --no-native --all` passed uncached on `live-queries` at `5f91ea551` (934 s).
+The streaming measurement taken again on that tree, against the clock as below: 16 flushes in 1.20–1.21 s, about 13.2
+a second, the message's view re-running once per flush and the chat page, detail, list, recent and tab views 0
+times, three runs alike. Each split commit passed the chain on its own tree on 2026-10-25 (`0061451ea` again in the
+main checkout on 2026-10-26); re-gated afterwards in a freshly installed worktree, `da805a5d1` and `ce5e05236` failed
+only end-to-end timeouts (Electron's shutdown, two E2E waits), which the evidence note records.
+
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
 own arguments, and the engine runs the read again after every commit that could change its result. Nothing that writes
 says who is looking, and no surface keeps a copy of the data that it patches from events.
