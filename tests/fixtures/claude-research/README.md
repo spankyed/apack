@@ -28,6 +28,13 @@ bytes, ten normal/compact captures and same-session recovery. It does not add Ag
 support or establish full parity. The accepted visual refinement covers full image previews,
 form-bounded formatting menus and real-wheel reading of the complete marked/reference message.
 
+The pending-read broker-loss refinement uses the original prompt-timeout fixture with
+`CLAUDE_RESEARCH_PROMPT_TIMEOUT=1` and `CLAUDE_RESEARCH_PROMPT_BROKER_FAILURE=1`. It holds genuine
+addressed WebSocket replies, kills only its owned broker, verifies original process retirement and
+fresh-owner recovery, then delivers the old frame while a new reply stays held. Four normal/compact
+captures and the original journal/model receipts support this parent-read scope; other operations,
+windows and automatic return-focus remain separate. Its saved verifier can run without native code.
+
 The exporter uses committed Git blobs, normalized archive metadata and per-file SHA-256 hashes.
 The replay launcher verifies the archive and every file, downloads the explicitly pinned official
 native package and checks both package and binary hashes before execution. Local native execution
