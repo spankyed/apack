@@ -1,6 +1,6 @@
 # Import/Export — Technical Reference
 
-How library docs, notes, actions, prompts, and flows move between the filesystem and LMDB.
+How library docs, notes, actions, prompts, and flows move between the filesystem and the database.
 
 ## Two export formats
 
@@ -172,7 +172,7 @@ entries that import rows, and what a run leaves alone it decides from that merge
 ## Media handling
 
 Two media URL formats:
-- **Internal**: `media://entityId/filename` — used in LMDB, references entity-specific media directory
+- **Internal**: `media://entityId/filename` — used in the database, references entity-specific media directory
 - **Relative**: `media/filename` — used in markdown exports, flat structure
 
 On export: internal → relative (with deduplication via `uniqueFilename`)
