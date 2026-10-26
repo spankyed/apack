@@ -3,7 +3,7 @@
 // every write is answered to the window that made it — what it made, that it landed, or why it was refused — since
 // the editor holds its graph behind its own unanswered writes.
 import { describe, expect, it } from 'vitest'
-import { startApp } from '@apackdev/testing/harness'
+import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
 import { repository } from '#generated/repository.ts'
 import type { EARS } from '#generated/ears.ts'
 
@@ -86,6 +86,12 @@ describe('a write to a flow', () => {
     // An edge from a node that doesn't exist is refused, and the refusal says why
     const refused = await app.send('flows', { type: 'CREATE_EDGE', flowId: flow.id, sourceId: 'Node-missing', targetId: entryNode.id }, asked)
     expect(await app.nextEmit('flows', 'FLOW_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.any(String) })
+    expect(takeSystemErrors(), 'the asked refusal is its window\'s to show').toEqual([])
+
+    // A refusal nobody asked for has no window to show it, so it is reported
+    await app.send('flows', { type: 'CREATE_EDGE', flowId: flow.id, sourceId: 'Node-missing', targetId: entryNode.id })
+    await app.settle()
+    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'flows' })])
   })
 
   it('answers the model catalog to the window that asks, and publishes nothing', async () => {

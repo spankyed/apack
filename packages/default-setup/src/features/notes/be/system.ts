@@ -13,7 +13,7 @@ import { repository } from '#generated/repository.ts';
 import { syncReferences } from './repository/link-utils.ts';
 import { exportNotes } from './export-notes.ts';
 import { importNotes } from './import-notes.ts';
-import { createLogger } from '@apackdev/sdk/logger';
+import { createLogger, reportError } from '@apackdev/sdk/logger';
 import type { NoteEntity } from '#features/notes/be/types.ts';
 
 /** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
@@ -38,15 +38,20 @@ const logger = createLogger('notes');
  * One of a window's writes to its notes, answered to whoever asked: with the note it made, or that it landed, or why
  * it was refused. The surface applies its own edits at once and holds the notes' views while any of its writes is
  * unanswered (`ViewWrites`, `@apackdev/sdk/fe`), so every write is answered, a refusal included. The write runs
- * whether or not anybody asked: an applier's or a migration's has no `reply`.
+ * whether or not anybody asked: an applier's or a migration's has no `reply`, and its refusal is reported, since no
+ * window shows it.
  */
 function answerWrite(reply: Reply<OutgoingNotesEvents> | undefined, label: string, write: () => OutgoingNotesEvents | void): void {
   let answer: OutgoingNotesEvents;
   try {
     answer = write() ?? { type: 'NOTE_WRITTEN' };
   } catch (error) {
-    logger.warn(`${label} failed`, { error: errorMessage(error) });
-    reply?.({ type: 'NOTE_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
+    if (reply) {
+      logger.warn(`${label} failed`, { error: errorMessage(error) });
+      reply({ type: 'NOTE_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
+    } else {
+      reportError({ error, title: `${label} failed`, source: 'notes' });
+    }
     return;
   }
   reply?.(answer);

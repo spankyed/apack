@@ -7,7 +7,7 @@ import { defineSystem } from '@apackdev/sdk/framework';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import { createLogger } from '@apackdev/sdk/logger';
+import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { availableModels } from '@apackdev/sdk/models';
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type ValidationError } from '@apackdev/sdk/build';
@@ -79,7 +79,8 @@ export const flowsSpec = defineSystem<Contract>();
  * One of the graph's writes, answered to whoever asked: with what it made (a node's or an edge's id), or that it
  * landed, or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its
  * writes is unanswered, so every write is answered, a refusal included — an unanswered one would hold the view for
- * good. What the write changed reaches every window through the `graph` view.
+ * good. A refusal nobody asked for (an applier's write, a migration's) is reported, since no window shows it. What the
+ * write changed reaches every window through the `graph` view.
  */
 function answerWrite(reply: Reply<OutgoingFlowsEvents> | undefined, label: string, write: () => OutgoingFlowsEvents | void): void {
   let answer: OutgoingFlowsEvents;
@@ -87,8 +88,12 @@ function answerWrite(reply: Reply<OutgoingFlowsEvents> | undefined, label: strin
     // Run before answering: a write nobody asked for (an applier's, a migration's) has no `reply` and still writes
     answer = write() ?? { type: 'FLOW_WRITTEN' };
   } catch (error) {
-    logger.warn(`${label} failed`, { error: errorMessage(error) });
-    reply?.({ type: 'FLOW_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
+    if (reply) {
+      logger.warn(`${label} failed`, { error: errorMessage(error) });
+      reply({ type: 'FLOW_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
+    } else {
+      reportError({ error, title: `${label} failed`, source: 'flows' });
+    }
     return;
   }
   reply?.(answer);

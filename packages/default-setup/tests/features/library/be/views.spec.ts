@@ -5,7 +5,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { startApp } from '@apackdev/testing/harness'
+import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
 import { importCompiledContent } from '@apackdev/sdk/utils'
 import { repository } from '#generated/repository.ts'
 import type { EARS } from '#generated/ears.ts'
@@ -130,5 +130,11 @@ describe('a write to the library', () => {
     await app.send('library', { type: 'CREATE_COLLECTION', name: 'Unasked' })
     await app.settle()
     expect(repository.libraryQueries.getCollections().map(each => each.name)).toContain('Unasked')
+    expect(takeSystemErrors(), 'the asked refusal is its window\'s to show').toEqual([])
+
+    // A refusal nobody asked for has no window to show it, so it is reported
+    await app.send('library', { type: 'UPDATE_SYMLINK_PATH', collectionId: linked, newPath: path.join(os.tmpdir(), 'no-such-library-folder') })
+    await app.settle()
+    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'library', message: expect.stringContaining('no-such-library-folder') })])
   })
 })

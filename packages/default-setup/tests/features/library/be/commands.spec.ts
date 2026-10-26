@@ -151,7 +151,7 @@ describe('slash commands from the library commands folder', () => {
   it('keeps a command document its commands when it moves', async () => {
     const app = await appliedApp()
     const before = commandsFromDocuments().map((command) => command.name)
-    await app.send('library', { type: 'MOVE_ITEMS', ids: [documentNamed('Codex commands').id], targetFolderId: undefined })
+    await app.send('library', { type: 'MOVE_ITEMS', ids: [documentNamed('Codex commands').id], targetFolderId: null })
     await app.settle()
     expect(commandsFromDocuments().map((command) => command.name)).toEqual(before)
   })

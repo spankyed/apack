@@ -18,6 +18,7 @@ import { importLibrary } from './import-library.ts'
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingLibraryEvents } from './types.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { reportError } from '@apackdev/sdk/logger';
 
 /** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
 type OutcomeType = 'LIBRARY_EXPORT_FAILED' | 'LIBRARY_EXPORTED' | 'LIBRARY_IMPORT_FAILED' | 'LIBRARY_IMPORTED'
@@ -37,14 +38,16 @@ export const librarySpec = defineSystem<Contract>();
 
 /**
  * One of a window's writes to the library, answered to whoever asked: with the folder it made, or that it landed, or
- * why it was refused. The write runs whether or not anybody asked — an applier's or a migration's has no `reply`.
+ * why it was refused. The write runs whether or not anybody asked — an applier's or a migration's has no `reply` —
+ * and a refusal nobody asked for is reported, since no window shows it.
  */
 async function answerWrite(reply: Reply<OutgoingLibraryEvents> | undefined, label: string, write: () => Promise<OutgoingLibraryEvents | void> | OutgoingLibraryEvents | void): Promise<void> {
   let answer: OutgoingLibraryEvents
   try {
     answer = (await write()) ?? { type: 'LIBRARY_WRITTEN' }
   } catch (error) {
-    reply?.({ type: 'LIBRARY_WRITE_FAILED', error: errorMessage(error) || `${label} failed` })
+    if (reply) reply({ type: 'LIBRARY_WRITE_FAILED', error: errorMessage(error) || `${label} failed` })
+    else reportError({ error, title: `${label} failed`, source: 'library' })
     return
   }
   reply?.(answer)
