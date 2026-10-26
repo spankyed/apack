@@ -180,3 +180,14 @@ it('shows native read-only update restrictions without an editable field or Save
   expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
  }finally{app.unmount();root.remove()}
 })
+
+it('focuses the original typed consent answer, preserves exact input and shows native refusal feedback',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'typed-consent',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'form',revision:'b'.repeat(64),title:'Original consent',description:'Original warning and y/n decision labels',submitLabel:'Submit',fields:[{key:'answer',label:'Enter y/n:',value:''}],consent:{cancelLabel:'Original No',focusField:'answer',problem:'Please answer y or n.'}}}}})
+ const operations:ClaudeSettingsOperation[]=[],root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{state:state.state,onOperate:(operation:ClaudeSettingsOperation)=>operations.push(operation)})});app.mount(root)
+ try{
+  await nextTick();await nextTick();const input=root.querySelector<HTMLInputElement>('[data-native-setting-field="answer"]')!;expect(document.activeElement).toBe(input);expect(root.querySelector('[role="alert"]')?.textContent).toBe('Please answer y or n.')
+  input.value=' YES ';input.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();root.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'save',values:{answer:' YES '}}})
+  state.state.status='pending';await nextTick();const cancel=[...root.querySelectorAll('button')].find(button=>button.textContent==='Original No')!;expect(cancel.disabled).toBe(false);cancel.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}})
+ }finally{app.unmount();root.remove()}
+})

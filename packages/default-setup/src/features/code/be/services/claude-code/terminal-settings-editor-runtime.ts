@@ -140,7 +140,7 @@ async function readNativeSettingsEditor(n,entry,signal){
   cancelFiber=match.fiber;cancelProps=p;
   controls={options:await awaitNativeSettingsReading(consumer.styleOptionsPromise,signal),defaultValue:consumer.initialStyle,onChange:p.onComplete,onCancel:p.onCancel};
  }
- if(match.kind==='consent'){if(entry.settingsEditorKey!=='showExternalIncludesDialog')throw Error('Native consent owner changed');consentControl=nativeSettingsConsentControl(match);controls={...consentControl.controls,onCancel:consentControl.cancel};match.kind='choice';}
+ if(match.kind==='consent'){if(entry.settingsEditorKey!=='showExternalIncludesDialog')throw Error('Native consent owner changed');consentControl=nativeSettingsConsentControl(match);if(consentControl.typed)return await readNativeSettingsTypedConsent(n,entry,signal,owner,match,consentControl);controls={...consentControl.controls,onCancel:consentControl.cancel};match.kind='choice';}
  if(match.kind==='model'){modelControl=nativeSettingsModelControl(match);controls={...modelControl.controls,onCancel:p.onCancel};}
  if(match.kind==='theme'){
   const caches=match.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===109);
@@ -182,7 +182,7 @@ async function readNativeSettingsEditor(n,entry,signal){
   }
   snapshot={kind:'form',title:await text(controls.title),...controls.subtitle?{description:await text(controls.subtitle)}:{},submitLabel:await text(controls.submitLabel??'Save'),fields};
  }
- if(consentControl){const description=await text(consentControl.disclosure);snapshot.title=consentControl.title;snapshot.consent={description,cancelLabel:consentControl.cancelLabel,defaultFocusValue:consentControl.controls.defaultFocusValue};}
+ if(consentControl){const description=await text(consentControl.disclosure);snapshot.title=consentControl.title;snapshot.consent={description,links:consentControl.links,cancelLabel:consentControl.cancelLabel,defaultFocusValue:consentControl.controls.defaultFocusValue};}
  if(themeCache&&(JSON.stringify(nativeThemePalette(n))!==themeCache.palette||themeCache.cache[30]!==themeCache.options||themeCache.cache[54]!==themeCache.preview||themeCache.cache[65]!==themeCache.value||themeCache.cache[72]!==themeCache.picker||themeCache.cache[84]!==themeCache.sample||themeCache.cache[15]!==themeCache.cancel||themeCache.cache[11]!==themeCache.toggle))throw Error('Native Theme changed while reading');
  if(consentControl&&(consentControl.cache[27]!==consentControl.modal||consentControl.cache[36]!==consentControl.view||consentControl.pickerCache[31]!==consentControl.picker))throw Error('Native consent changed while reading');
  signal?.throwIfAborted();entry.current();const current=nativeSettingsConfig(n,entry);
@@ -195,6 +195,7 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  if(!before||before.revision!==request.revision)throw Error('Native Settings editor changed; refresh before editing');
  const p=before.props,actions=before.actions;let callback,args=[],validationProblem;
  if(request.action==='cancel')callback=actions.onCancel;
+ else if(request.action==='answer'&&before.typedConsent&&typeof request.value==='string'&&request.value.length<=16384){callback=actions.onSubmit;args=[request.value];}
  else if(['select','preview','focusModel'].includes(request.action)&&before.snapshot.kind==='choice'){
   const option=before.snapshot.options.find(option=>option.value===request.value);
   if(before.snapshot.disabled||!option||option.disabled)throw Error('Native Settings choice is unavailable');
@@ -217,7 +218,7 @@ async function actNativeSettingsEditor(n,entry,request,signal){
  }else throw Error('Native Settings editor action is unavailable');
  const current=await readNativeSettingsEditor(n,entry,signal);
  signal?.throwIfAborted();entry.current();
- if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.updateChoice!==before.updateChoice||entry.settingsEditorKey==='autoUpdatesChannel'&&(current.actions.onChange!==before.actions.onChange||current.actions.onCancel!==before.actions.onCancel)||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
+ if(entry.closed||entry.answered||!current||!sameNativeSettingsFiber(current.owner,before.owner)||!sameNativeSettingsFiber(current.fiber,before.fiber)||current.props!==p||current.cancelProps!==before.cancelProps||current.updateChoice!==before.updateChoice||before.typedConsent&&(current.typedConsent?.cache!==before.typedConsent.cache||current.typedConsent?.root!==before.typedConsent.root||current.typedConsent?.submit!==before.typedConsent.submit||current.typedConsent?.keyDown!==before.typedConsent.keyDown)||entry.settingsEditorKey==='autoUpdatesChannel'&&(current.actions.onChange!==before.actions.onChange||current.actions.onCancel!==before.actions.onCancel)||before.consentControl&&(current.consentControl?.modal!==before.consentControl.modal||current.consentControl?.view!==before.consentControl.view||current.consentControl?.picker!==before.consentControl.picker)||current.languageInput!==before.languageInput||before.modelControl&&(current.modelControl?.root!==before.modelControl.root||current.modelControl?.controls!==before.modelControl.controls||current.modelControl?.adjust!==before.modelControl.adjust)||before.themeCache&&(current.themeCache?.picker!==before.themeCache.picker||current.themeCache?.sample!==before.themeCache.sample||current.themeCache?.cancel!==before.themeCache.cancel||current.themeCache?.toggle!==before.themeCache.toggle)||current.revision!==before.revision)throw Error('Native Settings editor changed before action');
  if(validationProblem!==undefined)return {problem:validationProblem};
  await awaitNativeSettingsReading(callback(...args),signal);
  return {};
@@ -225,6 +226,11 @@ async function actNativeSettingsEditor(n,entry,request,signal){
 async function saveNativeSettingsEditor(n,entry,revision,values,signal){
  let current=await readNativeSettingsEditor(n,entry,signal);
  if(!current||current.revision!==revision||current.snapshot.kind!=='form')throw Error('Native Settings form changed; refresh before saving');
+ // Typed source owns a guarded whole-answer handler; desktop draft editing stays local until Submit.
+ if(current.typedConsent){
+  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).length!==1||Object.keys(values)[0]!=='answer'||typeof values.answer!=='string'||values.answer.length>16384)throw Error('Native typed consent answer changed');
+  return await actNativeSettingsEditor(n,entry,{action:'answer',revision:current.revision,value:values.answer},signal);
+ }
  const fields=current.snapshot.fields,keys=new Set(fields.map(field=>field.key)),owner=current.owner;
  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).length!==keys.size||Object.keys(values).some(key=>!keys.has(key)))throw Error('Native Settings form values changed');
  for(const field of fields){

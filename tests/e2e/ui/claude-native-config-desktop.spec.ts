@@ -190,7 +190,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any,updateDecisions:any
-  const externalDisableRoutes:string[]=[]
+  const externalDisableRoutes:string[]=[],securityNavigation:any[]=[]
   const disableExternalConsent=async()=>{
     await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
     const editor=panel.getByLabel('Claude Code setting editor',{exact:true})
@@ -274,12 +274,19 @@ test('edits original Settings through desktop controls and retains composing', a
       await expect(description).toContainText(externalFixture.path);await expect(description).toContainText('Never allow this for third-party repositories.')
       for(const [index,text]of ["Never allow this for third-party repositories.",externalFixture.path,'Important: Only use Claude Code with files you trust. Accessing untrusted files may pose security risks https://code.claude.com/docs/en/security','Yes, allow external imports'].entries()){
         const target=index===3?editor.locator('[data-native-settings-option="confirm"]'):description
-        const bounds=()=>target.evaluate((element,text)=>{const walk=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node;while((node=walk.nextNode())){const raw=node.textContent!,characters:string[]=[],positions:number[]=[];for(let index=0;index<raw.length;index++){const character=/\s/.test(raw[index])?' ':raw[index];if(character===' '&&characters.at(-1)===' ')continue;characters.push(character);positions.push(index)}const needle=text.replace(/\s+/g,' '),start=characters.join('').indexOf(needle);if(start<0)continue;const range=document.createRange();range.setStart(node,positions[start]);range.setEnd(node,positions[start+needle.length-1]+1);const r=element.tagName==='BUTTON'?element.getBoundingClientRect():range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect(),delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}}throw Error('Original consent disclosure text missing')},text)
+        const bounds=()=>target.evaluate((element,text)=>{const walk=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),characters:string[]=[],positions:{node:Node;offset:number}[]=[];let node:Node|null;while((node=walk.nextNode())){const raw=node.textContent!;for(let offset=0;offset<raw.length;offset++){const character=/\s/.test(raw[offset])?' ':raw[offset];if(character===' '&&characters.at(-1)===' ')continue;characters.push(character);positions.push({node,offset})}}const needle=text.replace(/\s+/g,' '),start=characters.join('').indexOf(needle);if(start<0)throw Error('Original consent disclosure text missing');const range=document.createRange(),first=positions[start],last=positions[start+needle.length-1];range.setStart(first.node,first.offset);range.setEnd(last.node,last.offset+1);const r=element.tagName==='BUTTON'?element.getBoundingClientRect():range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect(),delta=r.top<b.top?r.top-b.top:r.bottom-b.bottom;return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,shift:Math.sign(delta)*Math.min(80,Math.max(2,Math.ceil(Math.abs(delta)))),top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom}},text)
         await body.hover();for(let step=0;step<40;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
         const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'No, disable external imports',exact:true}).first()).toBeInViewport()
         await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
         const capture=testInfo.outputPath(`native-settings-external-consent-${width}-${index}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
         await writeFile(capture,Buffer.from(image,'base64'));readings.push({index,text,geometry,realWheel:true,capture})
+        if(index===2){
+          const url='https://code.claude.com/docs/en/security',link=editor.getByRole('link',{name:url,exact:true});await expect(link).toHaveAttribute('href',url);await link.click()
+          await app.waitForSurface('default-setup/browser');await expect.poll(async()=>appPage.evaluate(url=>{const browser=(window as any).applicationState.system.get('default-setup/browser').getSnapshot().context;return browser.tabs.find((tab:any)=>tab.url===url)?.url},url)).toBe(url)
+          await app.navigate('default-setup/threads');await expect(editor).toBeVisible();expect((await context()).native.state.nativePid).toBe(boundNativePid)
+          securityNavigation.push({width,height,url,returnedToConsent:true,sameNativeOwner:true})
+        }
+
       }
       await no.click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(false);await expect(panel.getByRole('alert')).toHaveCount(0)
       samples.push({width,height,readings,declined:true,project:await projectConfig()})
@@ -288,7 +295,7 @@ test('edits original Settings through desktop controls and retains composing', a
     await disableExternalConsent()
     await begin();await editor.locator('[data-native-settings-option="confirm"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await projectConfig()).hasClaudeMdExternalIncludesApproved).toBe(true)
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    externalConsent={samples,disableRoutes:externalDisableRoutes,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
+    externalConsent={samples,securityNavigation,disableRoutes:externalDisableRoutes,startupConsentAttempts,marker:externalFixture.marker,path:externalFixture.path,approvedForLiveRequest:true,reopenedAfterDisable:true,noPhantomTurn:true,approvedProject:await projectConfig()}
     await search.fill('');await appPage.setViewportSize({width:1100,height:900})
   }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_GROUPS==='1'){

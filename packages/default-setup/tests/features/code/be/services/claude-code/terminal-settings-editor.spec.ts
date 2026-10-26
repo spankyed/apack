@@ -214,14 +214,15 @@ function consentFixture(){
  const modalProps={cancelFirst:true,focus:'cancel',refuseInput:refuse,openedAt:123,onConfirm:confirm,onCancel:cancel,cancelLabel:'No, disable external imports'},change=(value:string)=>value==='confirm'?confirm():cancel()
  const picker={type:Choice,props:{options,selectedValue:f.noCommitted,defaultFocusValue:'cancel',isDisabled:false,onChange:change,onCancel:cancel}},pc=Array(32)
  pc[21]=options;pc[22]=cancel;pc[23]=confirm;pc[24]=change;pc[31]=picker
- const modal={type:Modal,props:modalProps},view={props:{title:'Allow external CLAUDE.md file imports?',onCancel:cancel,children:['Original external import warning','Original external path disclosure','Original security note',modal]}},cache=Array(37),externalIncludes=[{path:'/outside/instructions.md',parent:'/project/CLAUDE.md'}]
- cache[4]=refuse;cache[5]=externalIncludes;cache[11]=onDone;cache[16]=cancel;cache[20]=confirm;cache[21]=cancel;cache[24]=123;cache[27]=modal;cache[36]=view
+ const security={props:{children:['Original security note',{props:{url:'https://code.claude.com/docs/en/security'}}]}}
+ const modal={type:Modal,props:modalProps},view={props:{title:'Allow external CLAUDE.md file imports?',onCancel:cancel,children:['Original external import warning','Original external path disclosure',security,modal]}},cache=Array(37),externalIncludes=[{path:'/outside/instructions.md',parent:'/project/CLAUDE.md'}]
+ cache[4]=refuse;cache[5]=externalIncludes;cache[11]=onDone;cache[16]=cancel;cache[18]=security;cache[20]=confirm;cache[21]=cancel;cache[24]=123;cache[27]=modal;cache[36]=view
  const root:any={type:Consent,memoizedProps:{onDone,externalIncludes},updateQueue:{memoCache:{data:[cache]}},child:{type:Modal,memoizedProps:modalProps,updateQueue:{memoCache:{data:[pc]}},child:{type:Choice,memoizedProps:picker.props}}}
  f.config.child=root;return {...f,root,cache,pc,write,refuse,onDone}
 }
 it('preserves original external import disclosure, cancel-first choices and guarded decisions',async()=>{
  const f=consentFixture(),before=await f.editor()
- expect(before.snapshot.title).toBe('Allow external CLAUDE.md file imports?');expect(before.snapshot.consent.description).toContain('Original external path disclosure');expect(before.snapshot.consent.defaultFocusValue).toBe('cancel');expect(before.snapshot.options.map((option:any)=>option.value)).toEqual(['cancel','confirm'])
+ expect(before.snapshot.title).toBe('Allow external CLAUDE.md file imports?');expect(before.snapshot.consent.description).toContain('Original external path disclosure');expect(before.snapshot.consent.defaultFocusValue).toBe('cancel');expect(before.snapshot.consent.links).toEqual(['https://code.claude.com/docs/en/security']);expect(before.snapshot.options.map((option:any)=>option.value)).toEqual(['cancel','confirm'])
  expect(f.write).not.toHaveBeenCalled();expect(f.refuse).not.toHaveBeenCalled()
  f.refuse.mockReturnValue(true);await f.act({action:'select',revision:before.revision,value:'confirm'});expect(f.write).not.toHaveBeenCalled()
  f.refuse.mockReturnValue(false);await f.act({action:'select',revision:before.revision,value:'confirm'});expect(f.write).toHaveBeenCalledExactlyOnceWith(true);expect(f.onDone).toHaveBeenCalledOnce()
@@ -258,4 +259,30 @@ it('routes native update information Close and original update choices through t
  await f.act({action:'cancel',revision:info.revision});expect(cancel).toHaveBeenCalledExactlyOnceWith()
  f.config.child.memoizedProps={title:'Enable Auto-Updates',onCancel:cancel,children:{type:f.Xe,props:{options:[{value:'original-latest',label:'Original latest'}],onChange:change}}}
  await f.act({action:'select',revision:(await f.editor()).revision,value:'original-latest'});expect(change).toHaveBeenCalledExactlyOnceWith('original-latest')
+})
+
+function typedConsentFixture(){
+ const f=consentFixture(),Typed=function OriginalTypedConsent(){},modal=f.cache[27],tp={confirmLabel:modal.props.confirmLabel,cancelLabel:modal.props.cancelLabel,onConfirm:modal.props.onConfirm,onCancel:modal.props.onCancel,refuseInput:modal.props.refuseInput,openedAt:modal.props.openedAt},c=Array(43)
+ f.setFunctionHash(Typed,'1ab09c3b658193cdd1ed26d457a97d40a7d6480fef6f296b4c813036ef70bc9a')
+ const guard=vi.fn(()=>f.refuse()),submit=vi.fn((answer:string)=>{const value=answer.trim().toLowerCase();if(['y','yes','n','no'].includes(value)&&guard())return;if(value==='y'||value==='yes')return tp.onConfirm();if(value==='n'||value==='no')return tp.onCancel();c[31]='Please answer y or n.';c[42]={props:{onKeyDown:keyDown}}}),keyDown=vi.fn((event:any)=>{if(event.key==='escape'){event.preventDefault();if(!guard())tp.onCancel()}})
+ c[0]=tp.refuseInput;c[3]=tp.refuseInput;c[6]=tp.onCancel;c[7]=tp.onConfirm;c[2]=guard;c[8]=guard;c[10]=submit;c[11]={current:''};c[12]=tp.onCancel;c[16]=submit;c[17]=keyDown;c[18]='Enter y/n: ';c[25]='y. Original allow label';c[29]='n. Original deny label';c[32]=c[18];c[33]={props:{children:c[18]}};c[37]=keyDown;c[42]={props:{onKeyDown:keyDown}}
+ f.pc[7]={type:Typed,props:tp};f.pc[31]=undefined;f.root.child.child={type:Typed,memoizedProps:tp,updateQueue:{memoCache:{data:[c]}}}
+ return {...f,c,tp,submit,keyDown,guard}
+}
+it('submits exact typed consent through original normalization/refusal and presents original invalid feedback',async()=>{
+ const f=typedConsentFixture(),before=await f.editor();expect(before.snapshot.kind).toBe('form');expect(before.snapshot.fields).toEqual([{key:'answer',label:'Enter y/n:',value:''}]);expect(before.snapshot.consent.cancelLabel).toBe('No, disable external imports');expect(before.snapshot.description).toContain('y. Original allow label');expect(before.snapshot.description).toContain('n. Original deny label');expect(f.guard).not.toHaveBeenCalled()
+ await f.save(before.revision,{answer:'maybe'});expect(f.submit).toHaveBeenLastCalledWith('maybe');expect(f.write).not.toHaveBeenCalled();expect((await f.editor()).snapshot.consent.problem).toBe('Please answer y or n.')
+ f.refuse.mockReturnValue(true);await f.save((await f.editor()).revision,{answer:' YES '});expect(f.write).not.toHaveBeenCalled()
+ f.refuse.mockReturnValue(false);await f.save((await f.editor()).revision,{answer:' YES '});expect(f.submit).toHaveBeenLastCalledWith(' YES ');expect(f.write).toHaveBeenCalledExactlyOnceWith(true)
+})
+it('keeps typed Escape refusal and source callback retirement authoritative',async()=>{
+ const f=typedConsentFixture();f.refuse.mockReturnValue(true);await f.act({action:'cancel',revision:(await f.editor()).revision});expect(f.keyDown).toHaveBeenCalledOnce();expect(f.write).not.toHaveBeenCalled()
+ f.refuse.mockReturnValue(false);await f.act({action:'cancel',revision:(await f.editor()).revision});expect(f.write).toHaveBeenCalledExactlyOnceWith(false)
+ const g=typedConsentFixture();g.c[10]=()=>{};await expect(g.editor()).rejects.toThrow('callbacks changed');expect(g.write).not.toHaveBeenCalled()
+ const h=typedConsentFixture();h.formatText.mockImplementationOnce(async()=>{h.c[42]={};return 'old disclosure'});await expect(h.editor()).rejects.toThrow('changed while reading');expect(h.write).not.toHaveBeenCalled()
+})
+
+it('uses the mounted choice when a retired typed renderer remains in the native memo cache',async()=>{
+ const f=consentFixture(),Typed=function RetiredTypedConsent(){};f.setFunctionHash(Typed,'1ab09c3b658193cdd1ed26d457a97d40a7d6480fef6f296b4c813036ef70bc9a');f.pc[7]={type:Typed,props:{}}
+ expect((await f.editor()).snapshot.kind).toBe('choice');expect(f.write).not.toHaveBeenCalled()
 })
