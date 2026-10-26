@@ -39,7 +39,7 @@ it('preserves native cloud consent disclosure, three choices and default Not now
  const guard=vi.fn(()=>false),options=[{value:'forward',label:'Yes, send my settings'},{value:'keep_local',label:'No, keep them on this machine'},{value:'not_now',label:'Not now'}]
  f.modal.memoizedProps={title:"Use this machine's settings in cloud sessions?",onCancel:f.cancel,children:['Original config folder and complete forwarding disclosure',{type:f.Xe,props:{options,defaultFocusValue:'not_now',refuseInput:guard,isDisabled:false,onChange:f.change,onCancel:f.cancel}}]}
  const result=await f.read()
- expect(result.snapshot).toMatchObject({kind:'choice',title:"Use this machine's settings in cloud sessions?",description:'Original config folder and complete forwarding disclosure',value:'not_now',disabled:false})
+ expect(result.snapshot).toMatchObject({kind:'choice',title:"Use this machine's settings in cloud sessions?",consent:{description:'Original config folder and complete forwarding disclosure',cancelLabel:'Not now',defaultFocusValue:'not_now'},value:'not_now',disabled:false})
  expect(result.snapshot.options.map((row:any)=>row.value)).toEqual(['forward','keep_local','not_now'])
  expect(result.actions.onChange).toBe(f.change);expect(result.actions.onCancel).toBe(f.cancel)
  expect(f.change).not.toHaveBeenCalled();expect(f.cancel).not.toHaveBeenCalled();expect(guard).not.toHaveBeenCalled()

@@ -1,5 +1,5 @@
 <template>
-  <section role="dialog" aria-label="Claude Code settings" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown.esc.stop.prevent="emit('close')">
+  <section role="dialog" aria-label="Claude Code settings" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown="handleKeydown">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
       <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">Claude Code settings</h2><p class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
       <button type="button" class="rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400" @click="emit('close')">Close settings</button>
@@ -93,6 +93,12 @@ function openEditor(key: string) {
 function editorCommand(command: Extract<ClaudeSettingsOperation,{kind:'editor'}>['command']) {
   const snapshot=props.state?.snapshot
   if (snapshot?.editor && (!pending.value || command.action === 'cancel')) emit('operate',{kind:'editor',revision:snapshot.revision,editorRevision:snapshot.editor.revision,command})
+}
+function handleKeydown(event: KeyboardEvent) {
+  if(event.key!=='Escape'||event.isComposing||event.keyCode===229)return
+  event.preventDefault();event.stopPropagation()
+  if(props.state?.snapshot?.editor)editorCommand({action:'cancel'})
+  else emit('close')
 }
 function controlId(key: string) { return 'claude-setting-' + encodeURIComponent(key) }
 function changeBoolean(key: string, previous: ClaudeSettingValue, event: Event) {

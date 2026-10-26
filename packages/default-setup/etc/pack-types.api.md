@@ -1459,8 +1459,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    cwd: string;
     revision: string;
+    cwd: string;
     command: string;
     id: string;
     sessionId: string;
@@ -1476,8 +1476,8 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason?: string | undefined;
     choiceToken?: string | undefined;
 }, {
-    cwd: string;
     revision: string;
+    cwd: string;
     command: string;
     id: string;
     sessionId: string;
@@ -1952,10 +1952,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     textInputValue: z.ZodString;
     textInputCursorOffset: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -1970,10 +1970,10 @@ declare const ClaudeNativeMcpFormSchema: z.ZodObject<{
     currentFieldIndex?: number | undefined;
     textInputCursorOffset?: number | undefined;
 }, {
-    ready: boolean;
     revision: string;
     message: string;
     values: Record<string, string | number | boolean | string[]>;
+    ready: boolean;
     id: string;
     sessionId: string;
     errors: Record<string, string>;
@@ -2037,9 +2037,9 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     }>, "many">;
     warnings: z.ZodArray<z.ZodString, "many">;
 }, "strip", z.ZodTypeAny, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2047,18 +2047,18 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     url: string;
     token: string;
     serverName: string;
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     warnings: string[];
 }, {
-    ready: boolean;
     revision: string;
     message: string;
+    ready: boolean;
     title: string;
     id: string;
     kind: "mcp_elicitation" | "mcp_elicitation_waiting" | "mcp_url_elicitation";
@@ -2066,13 +2066,13 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     url: string;
     token: string;
     serverName: string;
-    phase: "prompt" | "waiting";
-    userConfirmsCompletion: boolean;
     choices: {
         label: string;
         operation: "accept" | "cancel" | "continue" | "decline" | "open";
         selected: boolean;
     }[];
+    phase: "prompt" | "waiting";
+    userConfirmsCompletion: boolean;
     warnings: string[];
 }>;
 
@@ -2133,28 +2133,28 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<"kind", [z.ZodOb
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }, {
     revision: string;
     title: string;
     id: string;
     kind: "lsp_recommendation";
     sessionId: string;
-    choices: {
-        value: "disable" | "never" | "no" | "yes";
-        label: string;
-    }[];
     paragraphs: string[];
     pluginName: string;
     marketplaceName: string;
     fileExtension: string;
+    choices: {
+        value: "disable" | "never" | "no" | "yes";
+        label: string;
+    }[];
 }>]>;
 
 type ClaudeNativePlanDialog = z.infer<typeof ClaudeNativePlanDialogSchema>;
@@ -11305,16 +11305,16 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             links: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
             description: z.ZodString;
             cancelLabel: z.ZodString;
-            defaultFocusValue: z.ZodLiteral<"cancel">;
+            defaultFocusValue: z.ZodEnum<["cancel", "not_now"]>;
         }, "strict", z.ZodTypeAny, {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         }, {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         }>>;
         revision: z.ZodString;
@@ -11410,6 +11410,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }[];
         kind: "choice";
         disabled: boolean;
+        value?: string | undefined;
         model?: {
             description: string;
             effortText: string;
@@ -11418,13 +11419,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             focusValue?: string | undefined;
             fastModeNotice?: string | undefined;
         } | undefined;
-        value?: string | undefined;
         title?: string | undefined;
         description?: string | undefined;
         consent?: {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         } | undefined;
         previewValue?: string | undefined;
@@ -11451,6 +11451,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }[];
         kind: "choice";
         disabled: boolean;
+        value?: string | undefined;
         model?: {
             description: string;
             effortText: string;
@@ -11459,13 +11460,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             focusValue?: string | undefined;
             fastModeNotice?: string | undefined;
         } | undefined;
-        value?: string | undefined;
         title?: string | undefined;
         description?: string | undefined;
         consent?: {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         } | undefined;
         previewValue?: string | undefined;
@@ -11779,6 +11779,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }[];
         kind: "choice";
         disabled: boolean;
+        value?: string | undefined;
         model?: {
             description: string;
             effortText: string;
@@ -11787,13 +11788,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             focusValue?: string | undefined;
             fastModeNotice?: string | undefined;
         } | undefined;
-        value?: string | undefined;
         title?: string | undefined;
         description?: string | undefined;
         consent?: {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         } | undefined;
         previewValue?: string | undefined;
@@ -11957,6 +11957,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }[];
         kind: "choice";
         disabled: boolean;
+        value?: string | undefined;
         model?: {
             description: string;
             effortText: string;
@@ -11965,13 +11966,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             focusValue?: string | undefined;
             fastModeNotice?: string | undefined;
         } | undefined;
-        value?: string | undefined;
         title?: string | undefined;
         description?: string | undefined;
         consent?: {
             description: string;
             cancelLabel: string;
-            defaultFocusValue: "cancel";
+            defaultFocusValue: "cancel" | "not_now";
             links?: string[] | undefined;
         } | undefined;
         previewValue?: string | undefined;
@@ -12411,6 +12411,7 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 }[];
                 kind: "choice";
                 disabled: boolean;
+                value?: string | undefined;
                 model?: {
                     description: string;
                     effortText: string;
@@ -12419,13 +12420,12 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     focusValue?: string | undefined;
                     fastModeNotice?: string | undefined;
                 } | undefined;
-                value?: string | undefined;
                 title?: string | undefined;
                 description?: string | undefined;
                 consent?: {
                     description: string;
                     cancelLabel: string;
-                    defaultFocusValue: "cancel";
+                    defaultFocusValue: "cancel" | "not_now";
                     links?: string[] | undefined;
                 } | undefined;
                 previewValue?: string | undefined;

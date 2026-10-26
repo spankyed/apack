@@ -193,7 +193,7 @@ test('edits original Settings through desktop controls and retains composing', a
   await search.fill('Time format');await expect(panel.getByRole('combobox',{name:'Time format',exact:true})).toHaveValue('24-hour')
   await search.fill('Language');await openLanguage();await expect(languageInput).toHaveValue('French');await languageEditor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(languageEditor).toHaveCount(0)
   }
-  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any,updateDecisions:any
+  let outputStyleEditor:any,themeEditor:any,modelEditor:any,groupEditors:any,externalConsent:any,updateEditor:any,updateDecisions:any,remoteHomeEditor:any
   const externalDisableRoutes:string[]=[],securityNavigation:any[]=[]
   const disableExternalConsent=async()=>{
     await panel.locator('[data-native-setting="showExternalIncludesDialog"]').getByRole('button',{name:'Disable external imports',exact:true}).click()
@@ -203,6 +203,50 @@ test('edits original Settings through desktop controls and retains composing', a
     externalDisableRoutes.push(outcome)
     if(outcome==='confirmation')await editor.locator('[data-native-settings-option="cancel"]').click()
     await expect(editor).toHaveCount(0);await expect.poll(async()=>(await consentProject()).hasClaudeMdExternalIncludesApproved).toBe(false)
+  }
+
+  if(process.env.CLAUDE_RESEARCH_SETTINGS_REMOTE_HOME==='1'){
+    const editor=panel.getByLabel('Claude Code setting editor',{exact:true}),row=panel.locator('[data-native-setting="remoteHomeSettings"]'),samples:any[]=[]
+    const global=async()=>JSON.parse(await readFile(join(workspace!,'.claude/.claude.json'),'utf8')),originalTurns=(await context()).turns
+    expect((await global()).remoteHomeSettingsMode).toBe('forward')
+    await search.fill('Use this machine');const initialToggle=row.getByRole('checkbox'),initiallyForwarding=await initialToggle.count()>0&&await initialToggle.isChecked()
+    if(initiallyForwarding){await initialToggle.uncheck();await expect.poll(async()=>(await global()).remoteHomeSettingsMode).toBe('keep_local')}
+    const preservedMode=(await global()).remoteHomeSettingsMode
+    const review=async()=>{await search.fill("Use this machine");await row.getByRole('button',{name:'Review cloud settings…',exact:true}).click();await expect(editor.getByRole('heading',{name:"Use this machine's settings in cloud sessions?",exact:true})).toBeVisible()}
+    for(const [width,height]of [[1100,900],[680,600]]){
+      await appPage.setViewportSize({width,height});await review()
+      const body=editor.locator('[data-native-settings-editor-body]'),description=body.locator('p').first(),text=await description.innerText(),readings:any[]=[],captures:string[]=[]
+      expect(text).toContain("Send the CLAUDE.md, rules, output styles, and preferences")
+      expect(text).toContain('never sends hooks, environment variables, MCP servers, or plugins')
+      expect(text).toContain('encrypted at rest');expect(text).toContain('Yes and No are saved for this machine')
+      await expect(editor.locator('[data-native-settings-option="not_now"]')).toHaveAttribute('aria-pressed','true');await expect(editor.locator('[data-native-settings-option="not_now"]')).toBeFocused()
+      const lines=await description.evaluate(element=>{
+        const node=document.createTreeWalker(element,NodeFilter.SHOW_TEXT).nextNode()!,text=node.textContent!,lines:{start:number;end:number;top:number}[]=[]
+        for(const word of text.matchAll(/\S+/g)){const range=document.createRange();range.setStart(node,word.index!);range.setEnd(node,word.index!+word[0].length);const rect=range.getBoundingClientRect(),last=lines.at(-1);if(last&&Math.abs(last.top-rect.top)<1)last.end=word.index!+word[0].length;else lines.push({start:word.index!,end:word.index!+word[0].length,top:rect.top})}return lines.map(({start,end})=>({start,end}))
+      })
+      const capture=async()=>{await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))));const path=testInfo.outputPath(`native-settings-cloud-${width}-${captures.length}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(path,Buffer.from(image,'base64'));captures.push(path)}
+      for(const [index,line]of lines.entries()){
+        const bounds=()=>description.evaluate((element,line)=>{const range=document.createRange();const node=document.createTreeWalker(element,NodeFilter.SHOW_TEXT).nextNode()!;range.setStart(node,line.start);range.setEnd(node,line.end);const r=range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}},line)
+        let wheels=0;await body.hover()
+        for(let step=0;step<30;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,Math.sign(state.shift)*Math.max(Math.abs(state.shift),Math.min(80,(state.viewportBottom-state.viewportTop)/2)));wheels++;await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+        const geometry=await bounds();expect(geometry.visible).toBe(true);readings.push({index,text:text.slice(line.start,line.end),geometry,wheels});if(index===0||wheels)await capture()
+      }
+      for(const value of ['forward','keep_local','not_now']){
+        const target=editor.locator(`[data-native-settings-option="${value}"]`),bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}})
+        await body.hover();for(let step=0;step<30;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,state.shift);await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+        const geometry=await bounds();expect(geometry.visible).toBe(true);readings.push({option:value,text:await target.innerText(),geometry});await expect(editor.getByRole('button',{name:'Not now',exact:true}).first()).toBeInViewport();await capture()
+      }
+      if(width===1100)await editor.locator('[data-native-settings-option="not_now"]').click();else await editor.getByRole('button',{name:'Not now',exact:true}).first().click()
+      await expect(editor).toHaveCount(0);expect((await global()).remoteHomeSettingsMode).toBe(preservedMode);samples.push({width,height,text,readings,captures})
+    }
+    await review();await editor.locator('[data-native-settings-option="keep_local"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await global()).remoteHomeSettingsMode).toBe('keep_local')
+    await review();await editor.locator('[data-native-settings-option="forward"]').click();await expect(editor).toHaveCount(0)
+    await expect.poll(async()=>{const mode=(await global()).remoteHomeSettingsMode;return mode==='forward'?'enabled':(await row.innerText()).includes('not enabled for you right now')?'native-flag-refused':'pending'}).not.toBe('pending')
+    const outcome=(await global()).remoteHomeSettingsMode==='forward'?'enabled':'native-flag-refused'
+    if(outcome==='native-flag-refused'){await expect(row).toContainText('Could not turn this on: forwarding settings to cloud sessions is not enabled for you right now');expect((await global()).remoteHomeSettingsMode).toBe('keep_local')}
+    expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
+    remoteHomeEditor={samples,outcome,initiallyForwarding,notNowPreserved:true,cancelPreserved:true,keepLocalPersisted:true,noPhantomTurn:true,finalMode:(await global()).remoteHomeSettingsMode,nativeGatesUnchanged:true}
+    await appPage.setViewportSize({width:1100,height:900});await search.fill('')
   }
 
   if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATE_DECISIONS==='1'){
@@ -604,6 +648,6 @@ test('edits original Settings through desktop controls and retains composing', a
 
   await composer.fill('Continue the same session after desktop settings.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...updateDecisions?{updateDecisions}:{},...updateEditor?{updateEditor}:{},...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},...(!externalConsentProfile?{languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true}}:{consentOnly:true}),local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:!externalConsentProfile,lockedControl:!externalConsentProfile}))
+  await writeFile(join(workspace!,'native-config-desktop-proof.json'),JSON.stringify({sessionId,boundNativePid,...remoteHomeEditor?{remoteHomeEditor}:{},...updateDecisions?{updateDecisions}:{},...updateEditor?{updateEditor}:{},...externalConsent?{externalConsent}:{},...groupEditors?{groupEditors}:{},...modelEditor?{modelEditor}:{},...themeEditor?{themeEditor}:{},...(!externalConsentProfile?{languageEditor:{cancelPreserved:true,emptyDefaultReset:true,trimmedReopen:true}}:{consentOnly:true}),local:await local(),user:await user(),captures,frameCaptures,...(outputStyleEditor?{nativeSettingsEditors:true,outputStyleEditor}:{}),...(statusOnly?{nativeStatusRows:true,nativeStatusDiagnostics:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',nativeStatusDiagnosticList:process.env.CLAUDE_RESEARCH_STATUS_DIAGNOSTICS==='1',statusSamples}:{statsCompleteness}),desktopFrameTabs:!statusOnly,nativeStatsDates:!statusOnly,retainedDraft:true,reopenedValues:!externalConsentProfile,lockedControl:!externalConsentProfile}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeConfigDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

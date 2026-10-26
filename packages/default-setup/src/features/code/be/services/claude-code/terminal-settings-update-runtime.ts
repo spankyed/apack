@@ -56,7 +56,8 @@ async function readNativeSettingsUpdate(n,entry,signal){
   }
   const value=control.selectedValue===Fi?control.defaultValue:control.selectedValue??control.defaultValue??control.defaultFocusValue;
   if(value!==undefined&&typeof value!=='string')throw Error('Native update selection changed');
-  snapshot={kind:'choice',title:p.title,...detail?{description:detail}:{},options,disabled:control.isDisabled===true||control.disableSelection===true||(remoteHome?control.refuseInput===true:!!control.refuseInput),...typeof value==='string'?{value}:{}};
+  if(remoteHome&&(!options.some(option=>option.value==='not_now')||control.defaultFocusValue!=='not_now'))throw Error('Native cloud consent default changed');
+  snapshot={kind:'choice',title:p.title,...remoteHome?{consent:{description:detail,cancelLabel:options.find(option=>option.value==='not_now').label,defaultFocusValue:control.defaultFocusValue}}:detail?{description:detail}:{},options,disabled:control.isDisabled===true||control.disableSelection===true||(remoteHome?control.refuseInput===true:!!control.refuseInput),...typeof value==='string'?{value}:{}};
   actions={...control,onCancel:p.onCancel};
  }else{
   if(!detail)throw Error('Native update explanation is absent');

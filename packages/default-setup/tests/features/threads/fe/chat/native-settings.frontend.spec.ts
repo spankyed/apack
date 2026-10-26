@@ -203,3 +203,15 @@ it('reviews cloud forwarding consent instead of writing true from a checkbox',as
   expect(operations.at(-1)).toEqual({kind:'open',revision:'a'.repeat(64),key:'remoteHomeSettings'});expect(operations.some(event=>event.kind==='write')).toBe(false)
  }finally{app.unmount();root.remove()}
 })
+
+
+it('focuses native Not now and makes Escape cancel its editor while retaining Settings',async()=>{
+ const root=document.createElement('div');document.body.append(root);const operations:ClaudeSettingsOperation[]=[],close=vi.fn()
+ const app=createApp(NativeSettingsPanel,{state:{requestId:'cloud-consent',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'choice',revision:'b'.repeat(64),title:'Cloud consent',disabled:false,consent:{description:'Original disclosure',cancelLabel:'Not now',defaultFocusValue:'not_now'},options:[{value:'forward',label:'Yes',disabled:false},{value:'not_now',label:'Not now',disabled:false}]}}},onOperate:(event:ClaudeSettingsOperation)=>operations.push(event),onClose:close})
+ app.mount(root)
+ try{
+  await nextTick();await nextTick();expect(document.activeElement).toBe(root.querySelector('[data-native-settings-option="not_now"]'))
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,isComposing:true}));expect(operations.some(event=>event.kind==='editor')).toBe(false)
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}});expect(close).not.toHaveBeenCalled()
+ }finally{app.unmount();root.remove()}
+})
