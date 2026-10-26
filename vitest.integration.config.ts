@@ -28,7 +28,6 @@ export default defineConfig({
      * asserts it is exactly the suites with a second config, so it cannot drift.
      */
     projects: [
-      'packages/apack-ears/vitest.integration.config.ts',
       'packages/apack-cli/vitest.integration.config.ts',
       'packages/repo-checks/vitest.integration.config.ts',
       'packages/publish-checks/vitest.integration.config.ts',

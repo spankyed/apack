@@ -138,8 +138,14 @@ export type OutgoingBrainEvents =
   | { type: 'INSPECT_TOGGLED'; enabled: boolean }
   /** The brain stopped; `startError` says why it couldn't start, while it stays stopped for that reason */
   | { type: 'BRAIN_KILLED'; startError?: string }
-  /** The brain is running `rootFlowId`, the root flow it started with (a root flow changed since takes a restart) */
+  /** News of a start: the brain began a run of `rootFlowId`, so a window asks for the new run's tree */
   | { type: 'BRAIN_STARTED'; rootFlowId: EARS.EntityId }
+  /**
+   * What the brain holds, as a window shows it: the root flow it runs (none while stopped, with why when a start
+   * failed), whether it is paused and whether its steps are inspected. The answer to a window's ask and what the brain
+   * publishes; the other events here are news of a change
+   */
+  | { type: 'BRAIN_STATE'; rootFlowId?: EARS.EntityId; startError?: string; paused: boolean; inspectEnabled: boolean }
   | { type: 'BRAIN_PAUSED' }
   | { type: 'BRAIN_RESUMED' }
 

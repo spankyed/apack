@@ -5,12 +5,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type EARS } from '@apackdev/ears';
+import { createEarsEngine, type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
-import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
-import { exportDatabase } from '@apackdev/host/backup';
-import { openEnvironment, LMDB_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
+import { runHistoryAt } from '../_support/run-history.ts';
+import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
+import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -57,7 +59,7 @@ function schemaContext(userDataDir: string) {
 /** Writes to the data dir's database as the app does, by the schema its installed packs declare */
 async function write(userDataDir: string, change: () => void): Promise<void> {
   const paths = _appDataPaths(userDataDir);
-  const { store, engine } = openDatabaseStore({
+  const { database: store, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(schemaContext(userDataDir)),
   });
@@ -86,7 +88,7 @@ async function appDataDir(): Promise<string> {
   });
   // A run the app recorded, in the run history's own store: a session's root and the event it heard, as a run on
   // 2026-10-01 left them
-  const store = openRunHistoryStore(_appDataPaths(dir).runHistory);
+  const store = runHistoryAt(_appDataPaths(dir).runHistory);
   store.put({ id: 'RunNode-1', rootId: 'RunNode-1', kind: 'flow', label: 'Root', status: 'completed', startedAt: Date.UTC(2026, 9, 1), flowId: 'Flow-root' });
   store.put({ id: 'RunNode-2', rootId: 'RunNode-1', kind: 'event', label: 'go', eventType: 'go', triggerType: 'listener', status: 'completed', startedAt: Date.UTC(2026, 9, 1, 0, 1), parentId: 'RunNode-1' });
   store.close();
@@ -102,15 +104,15 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
   }
   const log = { info: () => {}, warn: () => {} };
   // Through an open store, as the app backs up: LMDB copies each database itself
-  const { store } = openDatabaseStore({
+  const { database: store } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(schemaContext(userDataDir)),
     // Read-only: LMDB copies a database whose files this user can't write just as well
     readOnly: true,
   });
-  const runHistory = fs.existsSync(paths.runHistory) ? openRunHistoryStore(paths.runHistory, { readOnly: true }) : undefined;
+  const runHistory = fs.existsSync(paths.runHistory) ? runHistoryAt(paths.runHistory, { readOnly: true }) : undefined;
   try {
-    return await exportDatabase({ lmdb: store, ...(runHistory && { runHistory }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
+    return await exportDatabase({ lmdb: databaseBackupStore(store), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, tempDir('backup-'), { name: 'backup', mediaPath: paths.media, appVersion: '0.3.14', log, ...(databases && { databases }) });
   } finally {
     store.close();
     runHistory?.close();
@@ -118,13 +120,10 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
 }
 
 /** Records another storage format in a database's own files, as a newer apack would have written them */
-function writeStorageFormat(databaseDir: string, format: number): void {
-  const { root } = openEnvironment(databaseDir);
-  try {
-    root.openDB({ name: 'meta', encoding: 'json' }).putSync('format', format);
-  } finally {
-    root.close();
-  }
+/** Replaces a database's files with bytes no database holds, as files of a format this version can't read are to it */
+function writeUnreadableFiles(databaseDir: string): void {
+  fs.writeFileSync(path.join(databaseDir, 'data.mdb'), Buffer.alloc(16384, 7));
+  fs.rmSync(path.join(databaseDir, 'lock.mdb'), { force: true });
 }
 
 /** Runs `apack db <args>` and returns its stdout and stderr lines, and its error */
@@ -203,6 +202,31 @@ describe('apack db query', () => {
     const { out, err } = await ok(['query', 'return getSchemaStats().entities.Note', '--data-dir', dir]);
     expect(out).toBe('2');
     expect(err).toMatch(/Warning: apack is running on it/);
+  });
+
+  it('reads a database another process holds open in a unit it is writing, as a running app does', async () => {
+    const dir = await appDataDir();
+    // elmdb as @apackdev/ears resolves it, opened to write and holding a unit, so LMDB's one write transaction is taken
+    const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+    const holder = spawn(process.execPath, ['-e', [
+      `const { Database } = require(${JSON.stringify(elmdb)});`,
+      'const database = Database.open(process.argv[1]);',
+      'const unit = database.begin();',
+      "process.stdout.write('held\\n');",
+      "process.stdin.on('end', () => { unit.abort(); database.close(); }).resume();",
+    ].join('\n'), _appDataPaths(dir).lmdb], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const closed = new Promise((resolve) => holder.once('close', resolve));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        holder.once('error', reject);
+        holder.stdout.setEncoding('utf-8').on('data', (chunk: string) => { if (chunk.includes('held')) resolve(); });
+      });
+      const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
+      expect(out).toBe('Alpha');
+    } finally {
+      holder.stdin.end();
+      await closed;
+    }
   });
 
   it('refuses bad arguments with its usage', async () => {
@@ -772,6 +796,20 @@ describe('apack db inspect', () => {
     expect((await run(['inspect', '--type', 'Nope', '--data-dir', dir])).error?.message).toBe('Not an entity type of the installed packs: Nope');
     expect((await run(['inspect', '--depth', '0', '--data-dir', dir])).error?.message).toMatch(/--depth/);
   });
+
+  it('counts a database no app has opened, which holds no schema, as a load of a dump leaves one', async () => {
+    const dir = await appDataDir();
+    const paths = _appDataPaths(dir);
+    fs.rmSync(paths.lmdb, { recursive: true });
+    const database = openDatabase({ path: paths.lmdb });
+    const { admin } = createEarsEngine({ database });
+    admin.bulkLoadAttr(id('Note-a'), 'title', 'Alpha');
+    admin.bulkLoadAttr(id('Note-b'), 'title', 'Beta');
+    admin.addRelation(id('Note-a'), 'parent_of', id('Note-b'));
+    database.close();
+    const stats = await ok(['inspect', '--data-dir', dir]);
+    expect(stats.out.split('\n')).toContainEqual(expect.stringMatching(/^Note\s+2\s+1\s+0\.5$/));
+  });
 });
 
 describe('apack db export', () => {
@@ -951,16 +989,16 @@ describe('apack db import', () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup');
     const metadata = JSON.parse(fs.readFileSync(path.join(backup, 'metadata.json'), 'utf-8'));
-    expect(metadata).toMatchObject({ appVersion: '0.3.14', storageFormats: { lmdb: LMDB_FORMAT_VERSION } });
+    expect(metadata).toMatchObject({ appVersion: '0.3.14', storageFormats: { lmdb: DATABASE_FORMAT } });
     expect(Object.keys(metadata).sort()).toEqual(['appVersion', 'databases', 'includesMedia', 'storageFormats', 'timestamp']);
 
     const listed = await ok(['import', backup, '--data-dir', dir]);
     expect(listed.out).toMatch(/made .* by apack 0\.3\.14/);
 
-    // The databases themselves are what a newer apack would have written
-    writeStorageFormat(path.join(backup, 'lmdb'), 99);
+    // The database's files are ones this version can't read
+    writeUnreadableFiles(path.join(backup, 'lmdb'));
     const refused = await run(['import', backup, '--force', '--data-dir', dir]);
-    expect(refused.error?.message).toMatch(new RegExp(`is in storage format 99, but this version reads format ${LMDB_FORMAT_VERSION}`));
+    expect(refused.error?.message).toMatch(/isn't a file this LMDB reads/);
     expect(refused.error?.message).toContain('(backup made by apack 0.3.14)');
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
   });
@@ -971,13 +1009,13 @@ describe('apack db import', () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup', { databases: ['lmdb', 'runHistory'] });
     expect(fs.existsSync(path.join(backup, 'runHistory'))).toBe(true);
-    // Files that aren't a run history at all: an EARS database where the record store should be
+    // Files that aren't a run history at all: the app's database where the run history's should be
     fs.rmSync(path.join(backup, 'runHistory'), { recursive: true });
     fs.cpSync(path.join(backup, 'lmdb'), path.join(backup, 'runHistory'), { recursive: true });
 
     const refused = await run(['import', backup, '--force', '--data-dir', dir]);
 
-    expect(refused.error?.message).toMatch(/are an EARS database, not a record store/);
+    expect(refused.error?.message).toMatch(/is a database, but not a run history/);
     // Nothing was put in place: the import says so for each database it replaces
     expect(refused.err).not.toContain('Imported ');
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('Alpha');
@@ -986,7 +1024,7 @@ describe('apack db import', () => {
   it('brings back the run history the backup holds', async () => {
     const dir = await appDataDir();
     const backup = await backupWith('From the backup', { databases: ['lmdb', 'runHistory'] });
-    const history = () => openRunHistoryStore(_appDataPaths(dir).runHistory);
+    const history = () => runHistoryAt(_appDataPaths(dir).runHistory);
     const before = history();
     before.delete('RunNode-1');
     before.close();

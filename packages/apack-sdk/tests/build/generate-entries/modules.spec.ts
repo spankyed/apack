@@ -185,6 +185,14 @@ describe('generated EARS facade', () => {
       .rejects.toThrow(/number the entity by giving its manifest entry a "shortCode" prefix/);
   });
 
+  it('refuses a shape requiring a field the database holds no name for, and takes it optional', async () => {
+    write('src/memo.ts', 'export interface MemoEntity { text: string; due_at: number }\nexport interface LooseEntity { text: string; due_at?: number }\n');
+    await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity' } } } }))
+      .rejects.toThrow(`Entity "Memo": src/memo.ts#MemoEntity requires "due_at", which the database can't hold as a required field`);
+    const files = await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#LooseEntity' } } } });
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"]}');
+  });
+
   it("indexes the fields an entity's entry declares, and refuses one its shape doesn't", async () => {
     write('src/memo.ts', 'export interface MemoEntity { text: string; status?: string }\n');
     const files = await generate({ data: {
@@ -228,9 +236,9 @@ describe("the SDK's entities and relation kinds", () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: { TAGGED: 'tagged' }, roles: {} } };
     const withBase = (manifest: object) => generate({ ...manifest, dependencies: { 'base-pack': '*' } }, { 'base-pack': base });
     await expect(withBase({ data: { entities: { Tag: {} } } })).rejects.toThrow('entity "Tag" declared by both "demo-pack" and "base-pack"');
-    await expect(withBase({ data: { relations: ['tagged'] } })).rejects.toThrow('relKind "TAGGED" declared by both "demo-pack" and "base-pack"');
+    await expect(withBase({ data: { relations: { tagged: {} } } })).rejects.toThrow('relKind "TAGGED" declared by both "demo-pack" and "base-pack"');
     const conflictingName = { ...base, types: { entities: { Tag: 'Tag' }, relKinds: { LABELLED: 'tagged' }, roles: {} } };
-    await expect(generate({ data: { relations: ['labelled'] } }, { 'base-pack': conflictingName }))
+    await expect(generate({ data: { relations: { labelled: {} } } }, { 'base-pack': conflictingName }))
       .rejects.toThrow('relKind "LABELLED" declared by both "demo-pack" and "base-pack"');
   });
 
@@ -247,7 +255,7 @@ describe("the SDK's entities and relation kinds", () => {
 
   it("registers only the pack's own entities and relation kinds, not its dependencies' or the SDK's", async () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: { TAGGED: 'tagged' }, roles: {} } };
-    const entry = (await generate({ data: { entities: { Memo: {} }, relations: ['pinned'] }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/pack-entry.ts'];
+    const entry = (await generate({ data: { entities: { Memo: {} }, relations: { pinned: {} } }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/pack-entry.ts'];
     expect(entry).toContain('entities: {"Memo":"Memo"},');
     expect(entry).toContain('relKinds: {"PINNED":"pinned"},');
   });
@@ -255,7 +263,7 @@ describe("the SDK's entities and relation kinds", () => {
   it("rejects a pack's own declaration of the SDK's names", async () => {
     await expect(generate({ data: { entities: { Flow: {} } } })).rejects.toThrow(/entity "Flow" is defined by the SDK/);
     await expect(generate({ data: { entities: { Action: {} } } })).rejects.toThrow(/entity "Action" is defined by the SDK/);
-    await expect(generate({ data: { relations: ['transitions_to'] } })).rejects.toThrow(/relKind "TRANSITIONS_TO": "transitions_to" is defined by the SDK/);
+    await expect(generate({ data: { relations: { transitions_to: {} } } })).rejects.toThrow(/relKind "TRANSITIONS_TO": "transitions_to" is defined by the SDK/);
   });
 });
 

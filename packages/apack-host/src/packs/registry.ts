@@ -20,7 +20,7 @@ import { SYSTEM_EVENT_TYPES, type PackEventContracts } from '@apackdev/sdk/frame
 import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { AnyStateMachine } from 'xstate';
-import type { RowRules } from '@apackdev/ears';
+import type { RelationRules, RowRules } from '@apackdev/ears';
 import type { PackRegistration, PackLifecycleHooks, PackEARS, PackMigration, PackFeature, PackFeatureSystem } from '@apackdev/sdk/framework';
 import { _packDeclarationProblem, type ContentRuntime } from '@apackdev/sdk/framework';
 import type { MigrationLine, PackManifest } from '@apackdev/sdk/build';
@@ -31,7 +31,7 @@ import { assertPackServiceRequirements, packServiceDeclaration, type PackService
 import type { ContentOffer, ContentApplier } from '@apackdev/sdk/utils';
 import type { ArtifactDefinition } from '@apackdev/sdk/artifacts';
 import type { BlockDefinition } from '@apackdev/sdk/blocks';
-import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _reservedEntries } from '@apackdev/sdk/types';
+import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _reservedEntries } from '@apackdev/sdk/types';
 import { HOST_SYSTEM_EVENT_TYPES, SURFACE_EVENT_TYPES } from '@apackdev/sdk/events';
 import { HOST_PACK_ID, resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
@@ -263,6 +263,8 @@ export interface PackRegistry extends PackRegistryView {
   getRegisteredRoles(): ReadonlySet<string>;
   /** What an entity type's created row is held to, by its shape: the SDK's and the registered packs' */
   getRowRules(type: string): RowRules | undefined;
+  /** What a relation kind's edges are held to, as the SDK or the registered pack declaring it says; none when it declares no rule */
+  getRelationRules(kind: string): RelationRules | undefined;
   /** Lifecycle hooks of the currently registered packs, in registration order. */
   getLifecycleHooks(): PackLifecycleHooks[];
   /** A registered pack's registration, as it was registered */
@@ -540,7 +542,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       settings: manifest.extensions?.settings,
       features: Object.fromEntries(Object.entries(manifest.features ?? {})
         .filter(([, feature]) => feature.settings !== undefined).map(([id, feature]) => [id, { settings: feature.settings }])),
-      ears: { entities: runtime.entities, relKinds: runtime.relKinds, roles: runtime.roles, ...(runtime.rowRules && { rowRules: runtime.rowRules }) },
+      ears: { entities: runtime.entities, relKinds: runtime.relKinds, roles: runtime.roles, ...(runtime.rowRules && { rowRules: runtime.rowRules }), ...(runtime.relationRules && { relationRules: runtime.relationRules }) },
       repositories: runtime.repositories, contentWriters: runtime.contentWriters, appliers,
     }, origin, manifest => contentBindingProblem(manifest, runtime, appliers)));
   }
@@ -790,6 +792,10 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     ...Object.entries(SDK_ROW_RULES),
     ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
   ]));
+  const relationRules = derived((): ReadonlyMap<string, RelationRules> => new Map<string, RelationRules>([
+    ...Object.entries(SDK_RELATION_RULES),
+    ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.relationRules ?? {})),
+  ]));
   // Each prefix's entity type, from those same rules, so a pack's codes come and go with it
   const shortCodeTypes = derived(() => _shortCodeTypes([...rowRules()]));
   const services = derived((): Record<string, unknown> =>
@@ -870,6 +876,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     getRegisteredRelationKinds: relationKinds,
     getRegisteredRoles: roles,
     getRowRules: (type) => rowRules().get(type),
+    getRelationRules: (kind) => relationRules().get(kind),
     entityTypeOfShortCode: (code) => shortCodeTypes()(code),
     getRegisteredServices: services,
 

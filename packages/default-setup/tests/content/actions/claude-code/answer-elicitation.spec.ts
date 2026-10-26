@@ -24,7 +24,9 @@ it.each(['form', 'url'] as const)('routes and answers original %s choices indepe
     expect(await route({ ...f.params, response }, services)).toMatchObject({ success: true, elicitation: true, requestId: f.pending.requestId, messageId: f.pending.approvalMessageId });
     await expect(action({ ...f.params, response }, services)).resolves.toEqual({ success: true });
     expect(f.respondElicitation).toHaveBeenCalledExactlyOnceWith(f.pending.requestId, { action: choice, ...(response.content ? { content: response.content } : {}) });
-    expect(repository.threadQueries.byId(f.id)?.context?.claudeCode).toMatchObject({ pendingElicitation: undefined, isRunning: true, chatState: 'working' });
+    const state = repository.threadQueries.byId(f.id)?.context?.claudeCode;
+    expect(state).toMatchObject({ isRunning: true, chatState: 'working' });
+    expect(state).not.toHaveProperty('pendingElicitation');
   }
 });
 it('retains the original request for correction and refuses responses from its retired input message', async () => {

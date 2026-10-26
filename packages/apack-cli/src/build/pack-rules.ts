@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
-import { ALLOWABLE_PACK_CHECKS, PackChecksSchema } from '@apackdev/sdk/build';
+import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/sdk/build';
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses
@@ -240,11 +240,11 @@ const RULE_LIST = [
     },
   },
   {
-    key: 'lmdb-imports',
-    rule: 'A pack reaches its data through the engine the app binds: neither lmdb nor @apackdev/ears/lmdb is '
+    key: 'elmdb-imports',
+    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @apackdev/ears/lmdb is '
       + 'provided to a pack, so importing one fails at load',
     check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^lmdb(\/|$)/.test(text) || /^@apackdev\/ears\/lmdb(\/|$)/.test(text))
+      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@apackdev\/ears\/lmdb(\/|$)/.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },
@@ -484,7 +484,7 @@ export function packRuleProblems(packDir: string, dirs: readonly string[] = ['sr
   // Source-only callers need no manifest; owned packs use the same checks schema as full validation.
   const manifestFile = path.join(packDir, 'apack.json');
   const checks: unknown = fs.existsSync(manifestFile) ? (JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as { checks?: unknown }).checks : undefined;
-  const result = PackChecksSchema.safeParse(checks === undefined ? {} : checks);
+  const result = PackChecksSchema.safeParse(checks === undefined ? {} : checks, { error: _namingRefusedValue });
   if (!result.success) throw new Error(result.error.issues.map(issue =>
     `apack.json checks${issue.path.length ? '.' + issue.path.join('.') : ''}: ${issue.message}`).join('\n'));
   const allowed = new Set<PackRuleKey>(result.data.allow ?? []);

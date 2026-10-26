@@ -17,16 +17,16 @@
     ]
   },
   "data": {
-    "relations": [
-      "has",
-      "relates_to",
-      "references",
-      "forked_from",
-      "compacts",
-      "blocks",
-      "blocked_by",
-      "duplicates"
-    ],
+    "relations": {
+      "has": {},
+      "relates_to": {},
+      "references": { "unique": true },
+      "forked_from": {},
+      "compacts": {},
+      "blocks": {},
+      "blocked_by": {},
+      "duplicates": {}
+    },
     "roles": [
       "assistant_birth"
     ]
@@ -36,7 +36,7 @@
       "description": "Converse with assistants and manage threads, messages and artifacts.",
       "entities": {
         "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR", "indexes": ["pinned"] },
-        "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity" },
+        "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "search": { "fields": { "text": 1 } } },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
       "designation": "threads",
@@ -852,7 +852,7 @@
     "notes": {
       "description": "Write, organize and export notes.",
       "entities": {
-        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"] }
+        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"], "search": { "fields": { "title": 3, "content": 1 } } }
       },
       "settings": {
         "schema": {
@@ -1084,7 +1084,10 @@
       "description": "Organize documents, collections and indexed content.",
       "entities": {
         "SearchIndex": { "indexes": ["folderId"] },
-        "IndexedDoc": { "indexes": ["indexId", "chunkKey"] }
+        "IndexedDoc": {
+          "indexes": ["indexId", "chunkKey", "documentId"],
+          "embed": { "from": ["text"], "model": "openai:text-embedding-3-small", "dims": 1536 }
+        }
       },
       "settings": {
         "schema": {

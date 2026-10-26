@@ -3,7 +3,7 @@
 Reviewed 2026-10-24. [PR #274](https://github.com/spankyed/apack/pull/274) builds the in-memory engine
 (`docs/plans/ears-in-memory-engine.md`, Steps 0–8): memory is the database and LMDB is how it is made durable. This
 branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273)), builds the opposite: the engine
-reads and writes LMDB and keeps no copy of the data (`docs/plans/ears-storage-layout.md`). Several things #274 builds
+reads and writes LMDB and keeps no copy of the data (`docs/archive/plans/ears-storage-layout.md`). Several things #274 builds
 do not depend on that choice. This lists them in the order worth taking, with what each would cost here.
 
 **Status, 2026-10-24:** the harness, the durability spec, the sync policy and the prompts fix are taken (under Taken
@@ -24,7 +24,7 @@ Both engines were read on the same production backup (2026-10-17, 306 MB in form
 | A durable write | 3.5–4.8 ms | not read separately |
 | Heap as the data grows | grows; gated at 64 MB per 1× of production-shaped data | flat |
 
-#274's readings are its plan's "Judging it against Step 10" table; #273's are `docs/plans/ears-storage-layout.md`,
+#274's readings are its plan's "Judging it against Step 10" table; #273's are `docs/archive/plans/ears-storage-layout.md`,
 Step 5.
 
 ## Consider as later steps

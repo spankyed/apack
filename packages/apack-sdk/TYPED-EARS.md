@@ -36,7 +36,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
   (Incidents).
 
 **Field parameters.**
-- They're typed as `keyof ShapeOf<D['shapes'], E> & string`, and picked rows as `Pick<ShapeOf<D['shapes'], E>, K>`. This covers `where`, `pick`, `pickOne`, `orderBy`, `distinct`, `groupBy` and `getAttr`. `where` takes one value type (`WhereValue`): the field's, one element of a list field, which the value index answers, or a predicate.
+- They're typed as `keyof ShapeOf<D['shapes'], E> & string`, and picked rows as `Pick<ShapeOf<D['shapes'], E>, K>`. This covers `where`, `pick`, `pickOne`, `orderBy`, `distinct`, `groupBy`, `search`'s and `hybrid`'s `fields` and `recency.field`, `hits`' `fields` and `getAttr`. `where` takes one value type (`WhereValue`): the field's, one element of a list field, which the value index answers, or a predicate.
 - This form is what gives editors field-name completions and makes a typo's error list the valid fields.
 - `pickOne()` with no fields is the first whole row, `ShapeOf<S, E> | null`, as a write builder's `row()` is its entity's. The no-field overload is declared after the fields one, so `pickOne(['|'])` keeps its completions; `query.ids(id).pickOne()` is the row with an id, typed by a branded id or by `.ofType(type)`, which checks the entity rather than asserting a shape.
 - For a union shape, such as `Node` rows, only the fields every member has are accepted.

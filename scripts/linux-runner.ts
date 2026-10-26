@@ -7,7 +7,9 @@
 // The checkout is mounted read-only and copied into a persistent volume, because the container needs its own
 // `node_modules` (the Mac's holds macOS binaries) and its own package builds, and because the suites' live
 // watchers want an ordinary Linux filesystem rather than a bind mount. Only the first run pays for `npm ci`;
-// later runs copy what changed. The command's exit code and output pass straight through.
+// later runs copy what changed. The elmdb checkout `vendor/elmdb` links to is mounted and copied the same way, into a
+// volume of its own, where the container builds its Linux binding. The command's exit code and output pass straight
+// through.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -16,8 +18,42 @@ import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
-/** Keyed by the Dockerfile's bytes, so an edit builds a new image rather than reusing a stale one */
-const IMAGE = `apack-linux-test:${short(fs.readFileSync(DOCKERFILE))}`;
+/** The elmdb checkout `vendor/elmdb` links to (`npm run link:elmdb`), which the container builds its own binding from */
+const ELMDB_CHECKOUT = (() => {
+  try {
+    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb'));
+  } catch {
+    process.stderr.write('vendor/elmdb links to no elmdb checkout: run npm run link:elmdb first.\n');
+    process.exit(1);
+  }
+})();
+/** The Rust toolchain elmdb pins, which the image installs */
+const RUST_TOOLCHAIN = /^channel\s*=\s*"([^"]+)"/m.exec(fs.readFileSync(path.join(ELMDB_CHECKOUT, 'rust-toolchain.toml'), 'utf8'))?.[1];
+if (RUST_TOOLCHAIN === undefined) {
+  process.stderr.write(`${ELMDB_CHECKOUT}/rust-toolchain.toml names no channel\n`);
+  process.exit(1);
+}
+/** Keyed by the Dockerfile's bytes and the toolchain it installs, so either changing builds a new image */
+const IMAGE = `apack-linux-test:${short(`${fs.readFileSync(DOCKERFILE, 'utf8')}\n${RUST_TOOLCHAIN}`)}`;
+/**
+ * The container's copy of the elmdb checkout and its builds, kept across runs as the work volume is. Keyed by the
+ * elmdb checkout, so every worktree linking that checkout shares it — and one Rust release build serves them all,
+ * which is why it is not per worktree. `ELMDB_LOCK` is what makes sharing it safe
+ */
+const ELMDB_VOLUME = `apack-linux-elmdb-${short(ELMDB_CHECKOUT)}`;
+/**
+ * The elmdb volume's lock, at its root: the sync's copy, install and build take it, waiting for one another's, since
+ * the run lock below covers only a checkout's own work volume and every checkout's runs share this one
+ */
+const ELMDB_LOCK = '.apack-elmdb.lock';
+/**
+ * Written at the elmdb volume's root once a build of what the volume holds finished, and removed before one starts:
+ * a copy that changed nothing, onto a finished build, builds nothing, so a sync never rewrites the binding a run in
+ * another checkout has loaded unless elmdb's source moved
+ */
+const ELMDB_BUILT = '.apack-elmdb-built';
+/** Cargo's downloaded crates, shared by every checkout's builds */
+const CARGO_REGISTRY_VOLUME = 'apack-linux-cargo-registry';
 /** One working copy per checkout, so two worktrees never share a container `node_modules` */
 const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
@@ -99,7 +135,7 @@ if (docker(['info']).status !== 0) {
 
 if (docker(['image', 'inspect', IMAGE]).status !== 0) {
   process.stderr.write(`Building the Linux test image ${IMAGE} (once per Dockerfile change)…\n`);
-  if (docker(['build', '-t', IMAGE, '-f', DOCKERFILE, path.dirname(DOCKERFILE)], 'inherit').status !== 0) {
+  if (docker(['build', '-t', IMAGE, '--build-arg', `RUST_TOOLCHAIN=${RUST_TOOLCHAIN}`, '-f', DOCKERFILE, path.dirname(DOCKERFILE)], 'inherit').status !== 0) {
     refuse(`Building ${IMAGE} failed; its output is above.`);
   }
 }
@@ -169,7 +205,27 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
  * The containers share the Linux VM's kernel, so `flock` on a file in the volume holds across them.
  */
 const sync = [
-  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
+  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb ${FILTERS.map(quote).join(' ')} /src/ /work/`,
+  `exec 8>/elmdb/${ELMDB_LOCK}`,
+  'if ! flock -n 8; then',
+  '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
+  '  flock 8',
+  'fi',
+  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
+  'ln -sfn /elmdb /work/vendor/elmdb',
+  'elmdbLock=$(sha256sum /elmdb/package-lock.json | cut -d" " -f1)',
+  'if [ "$(cat /elmdb/node_modules/.apack-installed-lock 2>/dev/null)" != "$elmdbLock" ]; then',
+  '  (cd /elmdb && npm ci --no-audit --no-fund)',
+  '  echo "$elmdbLock" > /elmdb/node_modules/.apack-installed-lock',
+  '  elmdbChanged=installed',
+  'fi',
+  `if [ -n "$elmdbChanged" ] || [ ! -f /elmdb/${ELMDB_BUILT} ]; then`,
+  `  rm -f /elmdb/${ELMDB_BUILT}`,
+  '  (cd /elmdb && npm run -s build >/dev/null)',
+  `  touch /elmdb/${ELMDB_BUILT}`,
+  'fi',
+  'exec 8>&-',
   // Whose volume this is, for the prune that cannot otherwise tell: see CHECKOUT_FILE
   `printf '%s' ${quote(REPO_ROOT)} > /work/${CHECKOUT_FILE}`,
   // What the rsync exemption would otherwise keep for ever: see CONTAINER_CACHES
@@ -219,6 +275,7 @@ const child = spawn('docker', [
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
   'run', '--rm', '--init', ...RESOURCE_LIMITS, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
+  '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   IMAGE, 'bash', '-c', script,

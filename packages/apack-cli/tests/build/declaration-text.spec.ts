@@ -25,6 +25,27 @@ describe('sortLiteralUnions', () => {
     expect(sortLiteralUnions('type N = 3 | 1 | 2;')).toBe('type N = 1 | 2 | 3;');
   });
 
+  it('normalizes optional literal unions, including the observed copyState ordering', () => {
+    const a = 'type T = { copyState?: "error" | "idle" | "pending" | "saved" | undefined };';
+    const b = 'type T = { copyState?: "error" | "pending" | "idle" | "saved" | undefined };';
+    expect(sortLiteralUnions(a)).toBe(sortLiteralUnions(b));
+    const mixed = 'type T = undefined | "saved" | null | 1;';
+    const normalized = sortLiteralUnions(mixed);
+    expect(normalized).toBe('type T = "saved" | 1 | null | undefined;');
+    expect(sortLiteralUnions(normalized)).toBe(normalized);
+  });
+
+  it('preserves comments within unions and leaves non-literal alternatives alone', () => {
+    for (const text of [
+      'type T = "b" | /* retained explanation */ "a" | undefined;',
+      'type T = "b" | // retained explanation\n "a";',
+      'type T = Foo | "b" | undefined;',
+      'type T = void | "b" | "a";',
+    ]) expect(sortLiteralUnions(text)).toBe(text);
+    expect(sortLiteralUnions('type T = "https://b" | "https://a" | undefined;'))
+      .toBe('type T = "https://a" | "https://b" | undefined;');
+  });
+
   /**
    * Deliberately narrow: type references are left alone. Sorting them would reorder text whose order nothing
    * has measured as varying, and `check:repro` is what would report it if one ever did. If this case ever

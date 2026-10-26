@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
-import { createEarsEngine } from '@apackdev/ears';
 import { defineViews, type PackRegistration } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
+import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _byDeadline, _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { createRpcContext } from '../../src/transport/context.ts';
 
-const engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === 'Note' });
+const engine = _createTestEngine({ entityTypes: ['Note'] });
 const registration: PackRegistration = {
   id: 'notes',
   features: { notes: { views: defineViews({ titles: () => engine.query('Note').ids().map((id) => engine.getAttr(id, 'title')) }) } },

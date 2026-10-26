@@ -81,11 +81,14 @@ export function graphLines(ears: Ears, entityId: string, options: InspectOptions
   return lines;
 }
 
-/** Entities and outgoing relations per entity type, for the types that have entities */
-export function relationStatsLines(ears: Ears, entityTypes: Iterable<string>): string[] {
+/**
+ * Entities and outgoing relations per entity type, for the types that have entities. `idsOf` lists a type's ids raw,
+ * the trash included, so a type the database's own schema doesn't declare yet — a database no app has opened — is
+ * counted rather than refused
+ */
+export function relationStatsLines(ears: Ears, entityTypes: Iterable<string>, idsOf: (type: string) => EARS.EntityId[]): string[] {
   const rows = [...entityTypes].sort().flatMap((type) => {
-    // The registered types, the trash included: what the data dir holds of each
-    const ids = ears.query.withTrashed(type).ids();
+    const ids = idsOf(type);
     if (ids.length === 0) return [];
     const relations = ids.reduce((sum, id) => sum + ears.findRelations({ source: id }).length, 0);
     return [[type, String(ids.length), String(relations), (relations / ids.length).toFixed(1)]];
@@ -118,7 +121,8 @@ export async function dbInspect(args: string[], io: DbIo): Promise<void> {
       io.out(`${ids.length} ${values.type} entities${ids.length > 5 ? ', the first 5:' : ''}`);
       for (const id of ids.slice(0, 5)) graphLines(db.ears, id, { depth, directions }).forEach((line) => io.out(line));
     } else {
-      relationStatsLines(db.ears, db.schema.getRegisteredEntityTypes()).forEach((line) => io.out(line));
+      relationStatsLines(db.ears, db.schema.getRegisteredEntityTypes(), (type) => db.admin.getEntitiesOfType(type as EARS.Entity))
+        .forEach((line) => io.out(line));
     }
   });
 }

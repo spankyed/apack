@@ -103,15 +103,18 @@ describe('snapshot data reader', () => {
 
   it('checks entity grammar and SDK ownership before decoding original record keys', () => {
     const data = snapshot();
-    data.manifest.data = { entities: JSON.parse('{"__proto__":{}}') };
+    data.manifest.data = { entities: { Memo: {} } };
     data.declarationRevision = _declarationRevision(data.manifest);
     expect(parseSnapshot(data).status).toBe('valid');
-    data.manifest.data.entities = JSON.parse('{"__proto__":{"shape":"src/types.ts#"}}');
+    // An own __proto__ key is read as the name it is, and refused as one: an entity name is PascalCase
+    data.manifest.data.entities = JSON.parse('{"__proto__":{}}');
+    expect(parseSnapshot(data).diagnostics.some(issue => issue.message.includes('PascalCase entity wire name'))).toBe(true);
+    data.manifest.data.entities = { Memo: { shape: 'src/types.ts#' } };
     expect(parseSnapshot(data).diagnostics.some(issue => issue.message.includes('path#exportName'))).toBe(true);
     data.manifest.data.entities = { Flow: {} };
     expect(parseSnapshot(data).diagnostics.some(issue => issue.message.includes('defined by the SDK'))).toBe(true);
     delete data.manifest.data;
-    data.manifest.data = { relations: ['contains'] };
+    data.manifest.data = { relations: { contains: {} } };
     expect(parseSnapshot(data).diagnostics.some(issue => issue.path.join('.') === 'manifest.data.relations')).toBe(true);
   });
 

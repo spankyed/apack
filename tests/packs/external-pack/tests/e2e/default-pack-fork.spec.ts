@@ -22,8 +22,9 @@ test.beforeAll(() => {
 });
 
 if (!restarting) test('an externally built default fork refreshes both windows and survives actual dev reload', async ({ app, appPage, electronApp }) => {
-  // Replacement, reload and restoration each await a frontend publication (30s), plus windows/UI (60s).
-  // Individual value assertions retain their existing 5s limits.
+  // Replacement and restoration each await their install's outcome, however long it takes on this machine; that,
+  // the reload and restoration then await a frontend publication (30s), plus windows/UI (60s). Individual value
+  // assertions retain their existing 5s limits.
   test.setTimeout(150_000);
   await app.navigate('host/settings');
   await appPage.getByRole('button', { name: 'Personal', exact: true }).click();
@@ -48,6 +49,19 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     .context.surfaces.find((surface: any) => surface.id === 'default-setup/notes')?.label);
   const runtime = (page: typeof appPage) => page.evaluate(() => (window as any).applicationState?.getSnapshot()
     .context.acceptedPackRuntimes['default-setup'] as string | undefined);
+  // The window's Packs surface holds `installing` from an install's start until it answers, complete or failed with
+  // its error: started before the install is asked for, so neither end is missed
+  const installOutcome = (page: typeof appPage) => page.evaluate(() => new Promise<string | null>(resolve => {
+    const packs = (window as any).applicationState.system.get('host/packs');
+    let started = false;
+    const watching = packs.subscribe((snapshot: any) => {
+      if (snapshot.context.installing) started = true;
+      else if (started) {
+        watching.unsubscribe();
+        resolve(snapshot.context.error ?? null);
+      }
+    });
+  }));
   const waitForReplacement = (page: typeof appPage, previous: string | undefined) => expect.poll(async () => {
     const current = await runtime(page);
     return !!current && current !== previous;
@@ -60,7 +74,9 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     const beforeReplace = await runtime(appPage);
     expect(beforeReplace, 'the incumbent frontend has been accepted').toBeTruthy();
     replaced = true;
+    const installed = installOutcome(appPage);
     await appPage.getByTestId('pack-replace').click();
+    expect(await installed, 'the replacement installs').toBeNull();
     await Promise.all([waitForReplacement(appPage, beforeReplace), waitForReplacement(second, beforeReplace)]);
     await expect.poll(() => label(appPage)).toBe('Fork Notes');
     await expect.poll(() => label(second)).toBe('Fork Notes');
@@ -92,8 +108,10 @@ if (!restarting) test('an externally built default fork refreshes both windows a
     if (replaced && process.env.APACK_KEEP_FORK !== '1') {
       const needsFrontendRestore = await label(appPage) !== 'Notes';
       const beforeRestore = await runtime(appPage);
+      const restored = installOutcome(appPage);
       await appPage.evaluate(source => (window as any).applicationState.system.get('host/packs')
         .send({ type: 'UI.RESTORE', packId: source.id, sourceRevision: source.sourceRevision }), source);
+      expect(await restored, 'the app default is restored').toBeNull();
       if (needsFrontendRestore) await waitForReplacement(appPage, beforeRestore);
       await expect.poll(() => label(appPage)).toBe('Notes');
     }

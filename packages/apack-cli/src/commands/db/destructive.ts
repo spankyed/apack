@@ -6,8 +6,8 @@ import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/host/packs';
 import { createSettingsBackupValidator } from '@apackdev/host/settings';
 import type { EARS } from '@apackdev/ears';
-import { importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
-import { openRunHistoryStore, type AppDatabase } from '@apackdev/host/database';
+import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
+import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';
 import { _secretProviderLabel } from '@apackdev/sdk/services';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
@@ -94,8 +94,8 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
       io.out(`\n${DRY_RUN}`);
       return null;
     }
+    // Every entry but the database's format and schema
     db.admin.clear();
-    await db.store.reset();
     // The write lock is held and no app runs on the data dir, so nothing has the run history open
     if (hasHistory) fs.rmSync(db.paths.runHistory, { recursive: true, force: true });
     if (!keepKeys) secrets.clearAll();
@@ -218,11 +218,11 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
     }
     // Its progress lines go to stderr with everything else that isn't the result, so `apack db import > file` holds
     // only what the command was asked for
-    const runHistory = openRunHistoryStore(db.paths.runHistory);
+    const runHistory = openRunHistory(db.paths.runHistory);
     try {
-      await importDatabase({ lmdb: db.store, runHistory }, backupDir, db.paths.media, { skipUnknownDatabases: skipUnknown, log: backupLog(io), validate });
+      await importDatabase({ lmdb: databaseBackupStore(db.database), runHistory: databaseBackupStore(runHistory.database) }, backupDir, db.paths.media, { skipUnknownDatabases: skipUnknown, log: backupLog(io), validate });
     } finally {
-      runHistory.close();
+      runHistory.database.close();
     }
     return '\nImported.';
   });

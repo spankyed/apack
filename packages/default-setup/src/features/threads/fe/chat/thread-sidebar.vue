@@ -8,10 +8,51 @@
       </button>
     </div>
 
+    <!-- Message search -->
+    <div v-if="!showArchive" class="px-2.5 py-2 border-b border-neutral-800">
+      <div class="flex items-center gap-1.5 rounded-md bg-neutral-800/70 px-2 py-1 focus-within:ring-1 focus-within:ring-neutral-600">
+        <Search :size="12" class="shrink-0 text-neutral-500" />
+        <input
+          v-model="searchText"
+          type="text"
+          placeholder="Search messages"
+          aria-label="Search messages"
+          data-testid="message-search"
+          class="flex-1 min-w-0 bg-transparent text-xs text-neutral-200 placeholder-neutral-500 outline-none"
+          @input="debouncedSearch()"
+          @keydown.escape="clearSearch"
+        />
+        <button v-if="searchText" class="text-neutral-500 hover:text-neutral-300" aria-label="Clear search" @click="clearSearch">
+          <X :size="12" />
+        </button>
+      </div>
+    </div>
+
     <!-- Scrollable list -->
     <div class="flex-1 overflow-y-auto py-1" @scroll="onSidebarScroll">
+      <!-- Search results -->
+      <template v-if="!showArchive && messageSearch.query">
+        <div v-if="messageSearch.searching" class="py-6 text-center text-xs text-neutral-500">Searching…</div>
+        <div v-else-if="messageSearch.results.length === 0" class="py-6 text-center text-xs text-neutral-500">No messages match</div>
+        <button
+          v-for="result in messageSearch.results" :key="result.messageId"
+          class="block w-full text-left px-3 py-2 hover:bg-neutral-800 transition-colors"
+          data-testid="message-search-result"
+          @click="emit('open-message', result)"
+        >
+          <div class="flex items-baseline gap-2">
+            <span class="flex-1 min-w-0 truncate text-xs font-medium text-neutral-300">{{ result.topic || 'Untitled' }}</span>
+            <span class="shrink-0 text-[10px] text-neutral-600">{{ formatWhen(result.timestamp) }}</span>
+          </div>
+          <p class="mt-0.5 text-xs leading-snug text-neutral-500 line-clamp-3 break-words">
+            <span v-if="result.clippedStart">…</span><template v-for="(part, at) in snippetParts(result)" :key="at"><mark
+              v-if="part.marked" class="rounded-sm bg-yellow-500/25 px-0.5 text-neutral-100">{{ part.text }}</mark><span v-else>{{ part.text }}</span></template><span v-if="result.clippedEnd">…</span>
+          </p>
+        </button>
+      </template>
+
       <!-- Archive view -->
-      <template v-if="showArchive">
+      <template v-else-if="showArchive">
         <div v-if="archivedThreads.length === 0" class="py-8 text-center">
           <p class="text-sm text-neutral-500">No archived threads</p>
         </div>
@@ -168,7 +209,9 @@
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { computed, reactive, ref, watchEffect } from 'vue'
-import { X, ChevronDown, ChevronRight, ChevronLeft, Archive } from 'lucide-vue-next'
+import { X, ChevronDown, ChevronRight, ChevronLeft, Archive, Search } from 'lucide-vue-next'
+import { useDebounce } from '@apackdev/ui/composables/useDebounce'
+import type { MessageSearchResult } from '#generated/types.ts'
 import { useSelector } from '@xstate/vue'
 import type { ThreadsState, ThreadListItem } from '#features/threads/fe/state.ts'
 import { getThreadDotColor, isThreadBusy } from './thread-status.ts'
@@ -178,6 +221,7 @@ import SidebarThreadItem from './sidebar-thread-item.vue'
 
 const emit = defineEmits<{
   'select-thread': [threadId: string]
+  'open-message': [result: MessageSearchResult]
   'close': []
 }>()
 
@@ -190,6 +234,38 @@ const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const chatStates = useSelector(actor, (state) => state.context.chatStates)
 const chatStateOverrides = useSelector(actor, (state) => state.context.chatStateOverrides)
 const settings = useSelector(actor, (state) => state.context.settings)
+const messageSearch = useSelector(actor, (state) => state.context.messageSearch)
+
+// The message search box: what is typed is sent once typing pauses, and its results are the surface's
+const searchText = ref(messageSearch.value.query)
+const { debounced: debouncedSearch, cancel: cancelSearch } = useDebounce(() => {
+  actor.send({ type: 'SEARCH_MESSAGES', query: searchText.value })
+}, 200)
+function clearSearch() {
+  cancelSearch()
+  searchText.value = ''
+  actor.send({ type: 'SEARCH_MESSAGES', query: '' })
+}
+
+/** A result's snippet as runs of text, each marked where the search matched it */
+function snippetParts(result: MessageSearchResult): Array<{ text: string; marked: boolean }> {
+  const parts: Array<{ text: string; marked: boolean }> = []
+  let at = 0
+  for (const [start, end] of result.marks) {
+    if (start > at) parts.push({ text: result.snippet.slice(at, start), marked: false })
+    parts.push({ text: result.snippet.slice(start, end), marked: true })
+    at = end
+  }
+  if (at < result.snippet.length) parts.push({ text: result.snippet.slice(at), marked: false })
+  return parts
+}
+
+function formatWhen(timestamp: number): string {
+  const date = new Date(timestamp)
+  return date.toDateString() === new Date().toDateString()
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
 
 // Collapsible groups & sections (local UI state — non-overlapping key spaces)
 const collapsed = reactive(new Set<string>())

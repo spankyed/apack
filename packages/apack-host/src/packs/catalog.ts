@@ -15,7 +15,7 @@ import { packBuildRevision, shippedPackRevision, type PackIntegrity } from './la
 import { appSettingsDefinition } from '../features/settings/be/app-definition.ts';
 import { hasOwn } from '@apackdev/sdk/utils/pure';
 import { isDeepStrictEqual } from 'node:util';
-import { parseSnapshot, ManifestSchema, _declarationRevision, _helpDataProblem, type PackSnapshot, type PackManifest } from '@apackdev/sdk/build';
+import { parseSnapshot, ManifestSchema, _declarationRevision, _helpDataProblem, _namingRefusedValue, type PackSnapshot, type PackManifest } from '@apackdev/sdk/build';
 import { _compileSettingsDefinition, _settingsJsonProblems, _nativePackDeclarationProblem, type SettingsDefinition, type SettingsCatalog, type HelpDocument, type HelpCatalog, type NativePackDeclaration, type SurfaceDeclaration } from '@apackdev/sdk/framework';
 import type { FeatureRef } from '@apackdev/sdk/ids';
 import { createLogger } from '@apackdev/sdk/logger';
@@ -181,7 +181,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
     /** Source declarations persist across registration changes, like installed declarations. */
     setSources(sources: readonly SourcePackDeclaration[]): void {
       const next = sources.map(source => {
-        const result = ManifestSchema.safeParse(source.manifest);
+        const result = ManifestSchema.safeParse(source.manifest, { error: _namingRefusedValue });
         if (!result.success) throw new Error(`Source pack declarations in ${source.dir}: ${result.error.issues.map(issue => issue.message).join('; ')}`);
         if (_declarationRevision(result.data) !== source.declarationRevision) throw new Error(`Source pack "${result.data.id}" has a stale declaration identity`);
         if (source.eventContracts !== undefined) _parseEventContracts(source.eventContracts, result.data.features);

@@ -12,7 +12,7 @@ import { safeEvents } from '@apackdev/sdk/fe';
 import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject } from 'xstate';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
-import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
+import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
 import { viewRead, viewWrites, writeAnswered, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
@@ -164,6 +164,7 @@ type ViewEvent =
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
   | { type: 'TAB.READ'; threadId: string; tab: ThreadTabView | null }
+  | { type: 'SEARCH.READ'; query: string; results: MessageSearchResult[] }
   | { type: 'VIEW.FAILED'; view: string; error: string }
 
 type UIEvent =
@@ -237,6 +238,9 @@ type UIEvent =
   | { type: 'UNQUEUE_MESSAGE'; threadId: string; messageId: string }
   | { type: 'DISMISS_MESSAGE'; messageId: string }
   | { type: 'LOAD_MORE_MESSAGES' }
+  | { type: 'SEARCH_MESSAGES'; query: string }
+  | { type: 'OPEN_MESSAGE'; threadId: string; messageId: string }
+  | { type: 'FOCUSED_MESSAGE_SHOWN' }
   | { type: 'RENAME_THREAD'; threadId: string; topic: string }
   // Tab reorder & group events
   | { type: 'REORDER_TABS'; fromIndex: number; toIndex: number }
@@ -359,6 +363,7 @@ const viewChild = {
   chat: 'view.chat',
   tab: (threadId: string) => `view.tab:${threadId}`,
   message: (messageId: string) => `view.message:${messageId}`,
+  search: 'view.search',
 } as const;
 
 /** The recent threads' limit and order, as the settings hold them */
@@ -411,6 +416,8 @@ const threadsState = setup({
       (update.ok ? { type: 'MESSAGE.READ' as const, id: args.id, message: update.value } : failed('message', update.error))),
     tabView: fromView('threads', 'tab', (update, args) =>
       (update.ok ? { type: 'TAB.READ' as const, threadId: args.threadId, tab: update.value } : failed('tab', update.error))),
+    messageSearchView: fromView('threads', 'messageSearch', (update, args) =>
+      (update.ok ? { type: 'SEARCH.READ' as const, query: args.query, results: update.value } : failed('messageSearch', update.error))),
   },
   actions: {
     // ---- Following the views ----
@@ -658,6 +665,8 @@ const threadsState = setup({
           chatMessageIds: [],
           messagePagination: { hasMore: false, isLoading: true },
           openedThreadId: threadId,
+          // A message sought in another thread is no longer the one to bring into view
+          ...(context.focusMessage && context.focusMessage.threadId !== threadId && { focusMessage: null }),
         });
         enqueue('followChat');
         enqueue('followMessages');
@@ -1365,6 +1374,43 @@ const threadsState = setup({
       enqueue.assign({ chatLimit: context.chatLimit + MESSAGE_PAGE_SIZE, messagePagination: { hasMore, isLoading: true } });
       enqueue('followChat');
     }),
+    /** The search box's query: its view follows it, and an empty box follows none */
+    searchMessages: enqueueActions(({ enqueue, event }) => {
+      const query = typeOf('SEARCH_MESSAGES', event).query.trim();
+      enqueue.stopChild(viewChild.search);
+      enqueue.assign({ messageSearch: { query, results: [], searching: query !== '' } });
+      if (query) enqueue.spawnChild('messageSearchView', { id: viewChild.search, input: { query } });
+    }),
+    /** The results for the query in the box, and for no query it replaced */
+    readMessageSearch: assign(({ context, event }) => {
+      const { query, results } = typeOf('SEARCH.READ', event);
+      if (query !== context.messageSearch.query) return {};
+      return { messageSearch: { query, results, searching: false } };
+    }),
+    /** A search that failed ends as finding nothing, rather than searching on */
+    endMessageSearch: assign(({ context }) => ({ messageSearch: { ...context.messageSearch, searching: false } })),
+    /**
+     * Opens a message's thread and brings the message into view. The thread already open is sought at once; another is
+     * sought as its chat view first answers
+     */
+    openMessage: enqueueActions(({ context, enqueue, event, self }) => {
+      const { threadId, messageId } = typeOf('OPEN_MESSAGE', event);
+      enqueue.assign({ focusMessage: { threadId, messageId } });
+      enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId }));
+      if (context.currentThread?.id === threadId) enqueue('seekFocusedMessage');
+    }),
+    /**
+     * A focused message the chat's page doesn't list is an older one: the page grows a step at a time until it lists it
+     * or the thread has no more. A read of another thread, one still loading, or one held behind this window's writes
+     * leaves the seek for the next read
+     */
+    seekFocusedMessage: enqueueActions(({ context, enqueue }) => {
+      const wanted = context.focusMessage;
+      if (!wanted || context.currentThread?.id !== wanted.threadId || context.messagePagination.isLoading) return;
+      if (context.chatMessageIds.includes(wanted.messageId)) return;
+      if (context.messagePagination.hasMore) enqueue('loadMoreMessages');
+      else enqueue.assign({ focusMessage: null });
+    }),
     forkThread: ({ event }) => {
       const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
       sendToSystem(id, { type: 'FORK_THREAD', messageId, threadId, threadTopic });
@@ -1449,6 +1495,8 @@ const threadsState = setup({
     navHistory: createNavHistory(getInitialView()),
     messagePagination: { hasMore: false, isLoading: false },
     sidebarArchivedThreads: [],
+    messageSearch: { query: '', results: [], searching: false },
+    focusMessage: null,
     lists: { list: [], recent: [], archived: [] },
     chatLimit: MESSAGE_PAGE_SIZE,
     chatMessageIds: [],
@@ -1619,8 +1667,10 @@ const threadsState = setup({
     ],
     'CHAT.READ': [
       { guard: 'chatGone', actions: 'dropThread' },
-      { actions: 'readChat' },
+      { actions: ['readChat', 'seekFocusedMessage'] },
     ],
+    'SEARCH.READ': { actions: 'readMessageSearch' },
+    'VIEW.FAILED': { guard: ({ event }) => event.view === 'messageSearch', actions: 'endMessageSearch' },
     'MESSAGE.READ': { actions: 'readMessage' },
     'TAB.READ': [
       { guard: 'tabGone', actions: 'dropThread' },
@@ -1865,6 +1915,9 @@ const threadsState = setup({
       ],
     },
     LOAD_MORE_MESSAGES: { actions: 'loadMoreMessages' },
+    SEARCH_MESSAGES: { actions: 'searchMessages' },
+    OPEN_MESSAGE: { actions: 'openMessage' },
+    FOCUSED_MESSAGE_SHOWN: { actions: assign({ focusMessage: null }) },
     SEND_MESSAGE: { actions: 'sendMessage' },
     SEND_COMMAND: { actions: 'sendCommand' },
     FLASH_CHAT_STATE: {

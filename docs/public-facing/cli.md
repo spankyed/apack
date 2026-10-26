@@ -479,7 +479,7 @@ Checks:
 | `pack-own-aliases` | `@/…`, a TypeScript-only `paths` mapping no runtime reads. Name your own modules with `#` subpath imports from your `package.json` | no |
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
-| `lmdb-imports` | `lmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
+| `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
 | `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |
@@ -712,7 +712,7 @@ receipt and directory owner. `--schema-from` accepts a complete snapshot in the 
 matching declaration revision; a bare manifest or partial fragment is refused. These reads never load
 pack runtimes.
 
-**While the app runs.** The commands open the database files themselves (offline); the app keeps the whole database in memory and is its only writer. So a change (`exec`, `repl --write`, and `import`, `reset` or `clear-settings` with `--force`) refuses while an apack app runs on the data dir: the API it published is running, or (on macOS and Linux) its single-instance lock is held by a live process. Files left behind by a crash name processes that have exited, so they don't stand in the way. Quit the app first. Reading commands work, with a warning that they miss what the app hasn't written yet, and so do the dry runs: they open the database without writing to it, so they also work against a copy you have no permission to change.
+**While the app runs.** The commands open the database files themselves (offline); the app is the database's only writer while it runs. So a change (`exec`, `repl --write`, and `import`, `reset` or `clear-settings` with `--force`) refuses while an apack app runs on the data dir: the API it published is running, or (on macOS and Linux) its single-instance lock is held by a live process. Files left behind by a crash name processes that have exited, so they don't stand in the way. Quit the app first. Reading commands work, with a warning that they miss what the app hasn't written yet, and so do the dry runs: they open the database without writing to it, so they also work against a copy you have no permission to change.
 
 While a command changes the database it holds a lock on the data dir (`db-write.lock`), so a second `apack db` is refused and an apack started meanwhile refuses to open that database instead of overwriting the change. A lock left behind by a command that was killed is ignored once its process is gone.
 

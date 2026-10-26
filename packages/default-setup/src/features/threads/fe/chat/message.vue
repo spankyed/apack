@@ -3,6 +3,7 @@
     v-if="!groupedSuppressed"
     :data-chat-message="message.id"
     :data-native-selection-row="selectionRowId"
+    :data-message-id="message.id"
     :class="[
       'relative flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'

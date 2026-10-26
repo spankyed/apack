@@ -17,7 +17,7 @@ export type { AppDataService, BackupDatabase, BackupSummary } from './app-data.t
 export type { OnboardingService } from './onboarding.ts';
 export { UnknownBackupDatabasesError } from './app-data.ts';
 export {
-  _createRunHistory, _RUN_HISTORY_INDEXES, type RunHistory, type RunPage, type RunStatus, type RunTree,
+  _createRunHistory, _RUN_HISTORY_SCHEMA, type RunHistory, type RunPage, type RunStatus, type RunTree,
   type RunNode, type RunNodeBase, type FlowRunNode, type EventRunNode, type StepRunNode, type RunNodeId, type RunNodeStart, type RunNodePatch,
 } from './run-history.ts';
 export { _createInferenceService, type _InferenceModels, type InferenceService, type OutputSchema, type OutputSpec, type _ResolveModel } from './inference.ts';
@@ -26,6 +26,7 @@ export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.
 export type { SecretMetadata, SecretProvider, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus } from './secrets.ts';
 export { _secretRules, _secretProviderLabel, _toSecretMetadata } from './secrets-rules.ts';
 export type { ModelId, ProviderName } from './models.ts';
+export { embedPending, embedSearchText, type EmbedPendingResult } from './embeddings.ts';
 
 const logger = createLogger('log-service');
 

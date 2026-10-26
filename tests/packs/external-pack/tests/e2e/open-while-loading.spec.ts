@@ -4,6 +4,7 @@
 // replaces only the pack's backend.
 import type { Page } from '@playwright/test';
 import { test, expect } from '@apackdev/testing';
+import { frontendUnloaded } from './_support/pack-frontend.ts';
 
 const PACK_ID = 'e2e-fixture';
 const MEMOS = `${PACK_ID}/memos`;
@@ -19,7 +20,8 @@ test("opens a pack's surface asked for while the pack's frontend loads, once it 
   await app.waitForSurface('memos');
   await app.navigate('default-setup/threads');
   await togglePack(appPage);
-  await expect.poll(() => hasMemos(appPage), { timeout: 15_000 }).toBe(false);
+  await frontendUnloaded(appPage, PACK_ID);
+  expect(await hasMemos(appPage)).toBe(false);
 
   // The moment the shell is loading the pack's frontend without its surface registered, a link asks for the surface
   await appPage.evaluate(({ memos }) => {

@@ -8,11 +8,14 @@ import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import type { AnyStateMachine } from 'xstate';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { EmbedDeclaration } from '@apackdev/ears';
 import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
+import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public
@@ -81,6 +84,7 @@ export interface ContentRuntime {
     entities: Record<string, string>;
     // (undocumented)
     id: string;
+    relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
     // (undocumented)
@@ -391,7 +395,7 @@ export interface PackDataDeclarations {
     // (undocumented)
     data?: {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
-        relations?: readonly string[];
+        relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
     };
     // (undocumented)
@@ -408,6 +412,7 @@ export function _packDeclarationProblem(expected: {
 export interface PackEARS {
     // (undocumented)
     entities: Record<string, string>;
+    relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
     // (undocumented)
@@ -415,23 +420,32 @@ export interface PackEARS {
     rowRules?: Record<string, RowRules>;
 }
 
+// @public
+export interface PackEmbedDeclaration extends EmbedDeclaration {
+    readonly model: EmbeddingModelId;
+}
+
 // @internal
 export function _packEntities(declaration: PackDataDeclarations): _PackEntityDeclaration[];
 
 // @public
 export interface PackEntityDeclaration {
+    readonly embed?: PackEmbedDeclaration;
     readonly indexes?: readonly string[];
+    readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
 }
 
 // @internal
 export interface _PackEntityDeclaration {
+    embed?: EmbedDeclaration;
     indexes?: readonly string[];
     // (undocumented)
     name: string;
     // (undocumented)
     owner: string;
+    search?: SearchDeclaration;
     // (undocumented)
     shape: string | null;
     shortCode?: string;
@@ -517,11 +531,25 @@ export interface PackRegistration {
     steps?: StepDefinition[];
 }
 
+// @public
+export interface PackRelationDeclaration {
+    readonly acyclic?: boolean;
+    readonly unique?: boolean;
+}
+
+// @internal
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules>;
+
 // @internal
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string>;
 
 // @internal
 export function _packRoles(declaration: PackDataDeclarations): Record<string, string>;
+
+// @public
+export interface PackSearchDeclaration extends SearchDeclaration {
+    readonly stem?: SearchStemLanguage;
+}
 
 // @internal
 export interface _PackServiceDeclaration {
@@ -647,6 +675,9 @@ export interface ReferenceTypeDeclaration {
     svgElements: readonly ReferenceSvgElement[];
 }
 
+// @public
+export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+
 // @internal
 export function _serviceProviderProblem(pack: Pick<_PackServiceDeclarations, 'id' | 'dependencies'>, ref: string): string | undefined;
 
@@ -718,8 +749,8 @@ export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build'
         callbacks: {
             compile: string;
             decompile: string;
-            validate?: string | undefined;
             validateTrack?: string | undefined;
+            validate?: string | undefined;
             register?: string | undefined;
         };
     } | undefined;

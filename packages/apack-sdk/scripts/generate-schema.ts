@@ -1,17 +1,27 @@
 import { declarationRecordGrammar } from '../src/framework/declaration-record.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { zodToJsonSchema, parseDef, ignoreOverride } from 'zod-to-json-schema';
+import { z } from 'zod';
 import { ManifestSchema } from '../src/framework/declaration-schema.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROLES } from '../src/types/sdk-entities.ts';
 
-const jsonSchema = zodToJsonSchema(ManifestSchema, {
-  $refStrategy: 'none',
-  override(def, refs) {
-    const grammar = declarationRecordGrammar(def);
-    return grammar ? parseDef({ ...grammar._def, description: def.description }, refs) : ignoreOverride;
+// What an author writes, so the input side: a dictionary renders as its record grammar, not the decoding behind it
+const options: Parameters<typeof z.toJSONSchema>[1] = {
+  target: 'draft-2020-12',
+  io: 'input',
+  unrepresentable: 'any',
+  override({ zodSchema, jsonSchema }) {
+    // `.readonly()` types the parsed value; JSON Schema's readOnly would tell an editor the author may not write it
+    delete jsonSchema.readOnly;
+    const grammar = declarationRecordGrammar(zodSchema);
+    if (!grammar) return;
+    const { $schema: _, ...rendered } = z.toJSONSchema(grammar, options);
+    const description = jsonSchema.description;
+    for (const key of Object.keys(jsonSchema)) delete (jsonSchema as Record<string, unknown>)[key];
+    Object.assign(jsonSchema, rendered, description === undefined ? {} : { description });
   },
-});
+};
+const jsonSchema = z.toJSONSchema(ManifestSchema, options);
 
 // The schema's refinements aren't JSON Schema: state the SDK's reserved names here, so editors flag them too
 const properties = (jsonSchema as { properties: Record<string, Record<string, unknown>> }).properties;
@@ -30,11 +40,11 @@ for (const defaults of [settingsDefinition.properties.defaults, feature.properti
 }
 const data = properties.data.properties as { entities: Record<string, unknown>; relations: Record<string, unknown>; roles: Record<string, unknown> };
 for (const entities of [data.entities, feature.properties.entities]) {
-  Object.assign(entities, { propertyNames: { minLength: 1, not: { enum: Object.keys(SDK_ENTITIES) } } });
+  Object.assign(entities, { propertyNames: { ...(entities.propertyNames as object), not: { enum: Object.keys(SDK_ENTITIES) } } });
 }
+// A relation is a wire mapped to its rules: the SDK's wires are refused as keys
 Object.assign(data.relations, {
-  uniqueItems: true,
-  items: { ...(data.relations.items as object), not: { enum: Object.values(SDK_REL_KINDS) } },
+  propertyNames: { ...(data.relations.propertyNames as object), not: { enum: Object.values(SDK_REL_KINDS) } },
 });
 Object.assign(data.roles, {
   uniqueItems: true,

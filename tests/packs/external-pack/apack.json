@@ -14,7 +14,7 @@
   },
   "permissions": [],
   "data": {
-    "relations": []
+    "relations": {}
   },
   "features": {
     "memos": {

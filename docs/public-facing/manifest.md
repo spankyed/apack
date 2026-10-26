@@ -53,8 +53,8 @@ order. `init`, `add` and the release version editor share this writer.
 | `features` | `Record<string, PackFeatureEntry>` | no | Feature declarations (system + surface bundles), keyed by feature id |
 | `extensions` | `object` | no | What the pack contributes to the app; see [Extensions](#extensions) |
 | `migrations` | `{ app?, pack? }` | no | Data migrations, by version line; see [Migrations](#migrations) |
-| `data.entities` | `Record<string, { shape?, shortCode? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
-| `data.relations` | `string[]` | no | Pack-level snake_case relation wire names; see [Entities and relations](#entities-and-relations) |
+| `data.entities` | `Record<string, { shape?, shortCode?, indexes?, search?, embed? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
+| `data.relations` | `Record<string, { acyclic?, unique? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
 | `data.roles` | `string[]` | no | Pack-level snake_case role names; see [Entities and relations](#entities-and-relations) |
 | `dependencies` | `Record<string, string>` | no | Pack IDs mapped to a nonempty npm semver range, `github:owner/repo [range]`, or `file:path` |
 | `checks` | `{ allow?: string[] }` | no | Development conventions this pack allows; schema completion lists supported rule names. See [source checks](cli.md#apack-pack-validate---json). |
@@ -673,13 +673,34 @@ Run `apack pack fetch-deps` to pull dependency snapshots for cross-pack type int
   },
   "data": {
     "entities": { "ImportLog": {} },
-    "relations": ["tagged_with"]
+    "relations": { "tagged_with": {} }
   }
 }
 ```
 
 Declare each entity once, under its owning feature or `data.entities` when it has no feature owner.
-The key is its unchanged EARS wire name. Placement records ownership, without a feature prefix.
+The key is its unchanged EARS wire name, PascalCase (`^[A-Z][A-Za-z0-9]*$`), as the database holds a type's. A field
+the database is told of is lowerCamelCase (`^[a-z][A-Za-z0-9]*$`): each one an entry `indexes`, and each one its shape
+requires, which the build refuses otherwise. A field the shape leaves optional may be named any way.
+
+An entry's `search` declares the type's text index, which `query(type).search(text)` matches:
+`{ "fields": { "title": 3, "content": 1 }, "stem": "en" }`. Each field is one the shape declares, holding a string or a
+list of strings, and its weight counts each of its words that many times; `stem` names the language whose stems match a
+word's other forms. A search ranks by relevance, takes `"a phrase"`, `-word`, `field:word` and `a OR b`, and its
+options match the last word as a prefix while it is typed (`prefix`), forgive a typo in a longer word (on unless
+`fuzzy: false`) and rank newer first (`recency: { field, halfLife }`). `hits()` answers each match's score and
+highlights.
+
+An entry's `embed` declares the type's vector index, which `near`, `like` and `hybrid` rank by:
+`{ "from": ["text"], "chunk": "paragraph", "model": "openai:text-embedding-3-small", "dims": 1536 }`. `from` names the
+fields whose text is embedded, as `search`'s do; `chunk` splits it (`whole`, the default, `paragraph` or `heading`),
+each part embedded on its own; `model` is a `provider:model` that embeds, and `dims` its embeddings' size. A write to
+one of its fields leaves the entity's changed chunks pending, and a search doesn't find a pending chunk, until
+`embedPending()` (`@apackdev/sdk/services`) embeds them through `services.inference` with the user's key for the
+model's provider; whoever writes the text runs it after. `query(type).near(vector, { k })` ranks by cosine similarity,
+`like(id)` by an entity's own embedding, and `hybrid(text, vector)` merges a text search with `near`;
+`embedSearchText(type, text)` makes a search's vector with the index's model. Placement records ownership, without a
+feature prefix.
 A string names an exported TypeScript shape; `null` explicitly leaves the entity untyped. Paths are
 relative to the pack root, including those declared inside a feature. The build checks modules and
 exports without executing them; installed discovery reads built declarations without source files.
@@ -687,7 +708,10 @@ Duplicate entity declarations name both owners and fail validation.
 
 Keys become TypeScript constants in generated `ears.ts`. Entity constants equal their keys; a relation
 wire is declared once in `data.relations`, shared across the pack's features. Its constant name is
-uppercase (`tagged_with` → `TAGGED_WITH`). Duplicate and SDK-owned relation wires are refused. Every kind
+uppercase (`tagged_with` → `TAGGED_WITH`). Each maps to the rules its edges are held to, `{}` for none:
+`"acyclic": true` refuses a link that would close a cycle through the kind (`CYCLE`), as a tree or a folder
+hierarchy wants, and `"unique": true` keeps at most one edge of the kind from an entity to another, so linking the
+pair again replaces the edge's info. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
 the pack links with is declared: the generated `EARS.RelKind` is closed over the pack's, its dependencies' and
 the SDK's, and the engine refuses any other at runtime. Roles work the same way: `data.roles` lists every role the
 pack grants (`entry_event` → `ENTRY_EVENT`), `EARS.RoleKind` is closed over them, and an undeclared role is refused.

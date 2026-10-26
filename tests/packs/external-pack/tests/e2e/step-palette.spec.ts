@@ -1,5 +1,5 @@
 import { test, expect } from '@apackdev/testing';
-import { acceptedRuntime, frontendAccepted } from './_support/pack-frontend.ts';
+import { acceptedRuntime, frontendAccepted, frontendUnloaded } from './_support/pack-frontend.ts';
 
 /** Installed declarations remain visible while their executable frontend is disabled. */
 test('an open flow palette follows external step disable and re-enable', async ({ app, appPage }) => {
@@ -28,6 +28,7 @@ test('an open flow palette follows external step disable and re-enable', async (
   let disabled = false;
   try {
     await toggle(); disabled = true;
+    await frontendUnloaded(appPage, 'e2e-fixture');
     await expect(stamp).toBeVisible(); await expect(stamp).toBeDisabled();
     await expect(pulse).toBeVisible(); await expect(pulse).toBeDisabled();
     await expect(stamp).toHaveAttribute('draggable', 'false');

@@ -387,10 +387,10 @@
   },
   "peerDependencies": {
     "@apackdev/sdk": ">=0.1.0 <1.0.0",
-    "@tiptap/core": "^3.22.3",
-    "@tiptap/pm": "^3.22.3",
-    "@tiptap/starter-kit": "^3.22.2",
-    "@tiptap/vue-3": "^3.22.2",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@tiptap/vue-3": "^3.32.0",
     "@vue-flow/core": "^1.44.0",
     "@xstate/vue": "^4.0.2",
     "elkjs": "^0.9.0",
@@ -414,25 +414,26 @@
   },
   "dependencies": {
     "@guolao/vue-monaco-editor": "^1.5.5",
-    "@tiptap/extension-blockquote": "^3.22.2",
-    "@tiptap/extension-code": "^3.22.2",
-    "@tiptap/extension-code-block-lowlight": "^3.22.2",
-    "@tiptap/extension-color": "^3.22.3",
-    "@tiptap/extension-details": "^3.22.2",
-    "@tiptap/extension-highlight": "^3.22.3",
-    "@tiptap/extension-horizontal-rule": "^3.22.2",
-    "@tiptap/extension-image": "^3.22.2",
-    "@tiptap/extension-link": "^3.22.2",
-    "@tiptap/extension-paragraph": "^3.22.2",
-    "@tiptap/extension-placeholder": "^3.22.2",
-    "@tiptap/extension-table": "^3.22.2",
-    "@tiptap/extension-table-cell": "^3.22.2",
-    "@tiptap/extension-table-header": "^3.22.2",
-    "@tiptap/extension-table-row": "^3.22.2",
-    "@tiptap/extension-task-item": "^3.22.2",
-    "@tiptap/extension-task-list": "^3.22.2",
+    "@tiptap/extension-blockquote": "^3.32.0",
+    "@tiptap/extension-code": "^3.32.0",
+    "@tiptap/extension-code-block-lowlight": "^3.32.0",
+    "@tiptap/extension-color": "^3.32.0",
+    "@tiptap/extension-details": "^3.32.0",
+    "@tiptap/extension-highlight": "^3.32.0",
+    "@tiptap/extension-horizontal-rule": "^3.32.0",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-link": "^3.32.0",
+    "@tiptap/extension-paragraph": "^3.32.0",
+    "@tiptap/extension-placeholder": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
+    "@tiptap/extension-table-cell": "^3.32.0",
+    "@tiptap/extension-table-header": "^3.32.0",
+    "@tiptap/extension-table-row": "^3.32.0",
+    "@tiptap/extension-task-item": "^3.32.0",
+    "@tiptap/extension-task-list": "^3.32.0",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",
+    "prosemirror-markdown": "^1.13.9",
     "tiptap-markdown": "^0.9.0"
   },
   "publishConfig": {
@@ -440,6 +441,6 @@
     "provenance": true
   },
   "devDependencies": {
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   }
 }

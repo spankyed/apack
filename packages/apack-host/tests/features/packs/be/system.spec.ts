@@ -352,7 +352,7 @@ describe('pack information without activation', () => {
   it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', kind => {
     const dir = path.join(resolveAppEnvironment().packsDir, PACK_ID);
     const manifest = { id: PACK_ID, name: 'Declared pack', version: '1.0.0',
-      data: { relations: ['parent'] },
+      data: { relations: { parent: {} } },
       features: { notes: { description: 'Feature declaration fixture.', entities: { Memo: {} }, designation: 'notes', system: { entry: 'src/system.ts' },
         surface: { label: 'Fixture', state: 'src/surface.ts' }, references: referenceDeclarations, services: { notesApi: 'src/api.ts#notesApi' } } },
       extensions: { services: { packApi: 'src/api.ts#packApi' }, artifacts: { memo: { icon: 'File' } } },

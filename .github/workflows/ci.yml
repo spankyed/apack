@@ -95,6 +95,8 @@ jobs:
           node-version: 23
           cache: npm
 
+      - uses: ./.github/actions/elmdb
+
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -188,6 +190,8 @@ jobs:
         with:
           node-version: 23
           cache: npm
+
+      - uses: ./.github/actions/elmdb
 
       - name: Install dependencies
         env:

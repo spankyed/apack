@@ -13,10 +13,10 @@ export function storedSettings(ears: Pick<Ears, 'getAttr'>): unknown {
 export function readSettingsOverrides(userDataDir: string): unknown {
   const paths = _appDataPaths(userDataDir);
   if (!fs.existsSync(paths.lmdb)) return {};
-  const { store, engine } = openDatabaseStore({
+  const { database, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: { getRegisteredEntityTypes: () => new Set(['Settings']), getRegisteredRelationKinds: () => new Set(), getRegisteredRoles: () => new Set() }, readOnly: true,
   });
   try { return storedSettings(engine); }
-  finally { store.close(); }
+  finally { database.close(); }
 }

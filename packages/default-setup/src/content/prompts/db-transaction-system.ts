@@ -88,8 +88,8 @@ WRITE API (create / upsert / write):
     create its row before linking it.
     .link(EARS.RelKind.CONTAINS, targetId)         add relation
     .link(kind, targetId, { info })                add relation carrying info
-    .link(kind, targetId, { replace: true })       add relation, replacing an identical one
-    .link(kind, targetId, { acyclicIn: [kind] })   refuse a link that would form a cycle
+                                                   (a kind declared unique keeps one edge to a target,
+                                                   and one declared acyclic refuses a cycle: CYCLE)
     .unlink(kind, targetId?)                       remove relations of a kind (to one target)
     .unlinkAll()                                   remove every relation from this entity
 

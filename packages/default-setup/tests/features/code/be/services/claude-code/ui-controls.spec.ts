@@ -20,9 +20,9 @@ describe('native UI transport', () => {
   })
 
   it('retains Agent reply text and validates the original native human receipt', async () => {
-    const request = vi.fn(async () => ({ kind: 'input', messageId: '12345678-1234-1234-1234-123456789abc', previousStatus: 'completed' }))
+    const request = vi.fn(async () => ({ kind: 'input', messageId: '12345678-1234-4234-8234-123456789abc', previousStatus: 'completed' }))
     const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
-    await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ kind: 'input', messageId: '12345678-1234-1234-1234-123456789abc' })
+    await expect(ui.submitAgent({ client_id: 'agent-ui', text: '  Keep whitespace  ' })).resolves.toMatchObject({ kind: 'input', messageId: '12345678-1234-4234-8234-123456789abc' })
     expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_dispatch', client_id: 'agent-ui', text: '  Keep whitespace  ' })
     await expect(ui.submitAgent({ client_id: 'agent-ui', text: ' ' })).rejects.toThrow()
     const print = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1'] }), { request })
@@ -89,7 +89,7 @@ describe('native UI transport', () => {
   it('rejects malformed native render data and native errors instead of treating them as empty drawings', async () => {
     const f = fixture()
     const rendering = f.ui.render({ ...client, component: 'AbovePrompt', instance_id: 'fixture-above', props: {} })
-    const assertion = expect(rendering).rejects.toThrow('must contain a tree')
+    const assertion = expect(rendering).rejects.toMatchObject({ issues: expect.arrayContaining([expect.objectContaining({ path: ['tree'] })]) })
     await Promise.resolve()
     f.reply(0, { props: {}, rewritten: false, hooked: false })
     await assertion
@@ -242,7 +242,7 @@ it('preserves native scroll denial/follow-end and validates site geometry before
 })
 
 it('fences panel transport capability and refuses payload on read operations', async () => {
-  const request = vi.fn(async () => ({ open: true })), panel_id = '12345678-1234-1234-1234-123456789abc'
+  const request = vi.fn(async () => ({ open: true })), panel_id = '12345678-1234-4234-8234-123456789abc'
   const ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
   await expect(ui.agentPanel({ client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })).resolves.toEqual({ open: true })
   expect(request).toHaveBeenCalledWith({ subtype: 'apack_ui_agent_panel', client_id: 'agent-ui', panel_id, operation: 'input', text: '\x1b' })

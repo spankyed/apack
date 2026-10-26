@@ -29,10 +29,10 @@ export function createHookRegistry(hooks: ClaudeHooks = {}) {
     registrations,
     callbackIds: new Set(callbacks.keys()),
     async handle(request: Record<string, unknown>): Promise<Record<string, unknown>> {
-      const value = z.object({ callback_id: z.string(), input: z.record(z.unknown()) }).parse(request)
+      const value = z.object({ callback_id: z.string(), input: z.record(z.string(), z.unknown()) }).parse(request)
       const callback = callbacks.get(value.callback_id)
       if (!callback) throw new Error('Unknown native hook callback')
-      return z.record(z.unknown()).parse(await callback(value.input))
+      return z.record(z.string(), z.unknown()).parse(await callback(value.input))
     },
   }
 }

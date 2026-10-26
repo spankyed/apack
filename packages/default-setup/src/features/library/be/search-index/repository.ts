@@ -1,686 +1,202 @@
-import { query, create, write } from '#generated/ears.ts';
-import { Index } from 'usearch'
-
-import { EARS } from '#generated/ears.ts'
-import { getIndexFilePath } from './paths.ts'
-import { createLogger } from '@apackdev/sdk/logger'
-import type {
-  SearchIndex,
-  SearchIndexConfig,
-  IndexedDocument,
-  IndexSearchResult,
-  ChunkInfo,
-  IndexedDocEntity,
-  IndexedDocCreateData,
-  IndexedDocUpdateData
-} from './types/search-index.ts'
+// A search index is a SearchIndex row naming a folder and how its documents are split, and one IndexedDoc row per
+// chunk of each document in scope. The vectors are the engine's: IndexedDoc's vector index (`embed` in apack.json)
+// embeds each row's `text`, keeping a chunk whose text changed pending until `embedIndexedDocs` embeds it again, so
+// indexing writes rows and nothing else, and a search ranks the index's rows by `near`.
+import { query, create, write, EARS } from '#generated/ears.ts'
+import { embedPending, embedSearchText, type EmbedPendingResult } from '@apackdev/sdk/services'
+import type { SearchIndex, SearchIndexConfig, IndexSearchResult, ChunkInfo, IndexedDocEntity } from './types/search-index.ts'
 import type { DocumentDTO } from '../types.ts'
-import * as searchService from './service.ts'
+import { processDocumentContent, processDocumentContentMultiIndex } from './chunks.ts'
 import { libraryQueries } from '../repository/index.ts'
-import { errorMessage } from '@apackdev/sdk/utils/pure';
 
-const logger = createLogger('search-index')
-
-// In-memory cache for frequently accessed indices
-const indexCache = new Map<string, Index>()
-
-// Helper functions for IndexedDoc management
-function findIndexedDoc(indexId: string, chunkKey: string): IndexedDocEntity | null {
-  const results = query(EARS.Entity.IndexedDoc)
-    .where('indexId', indexId)
-    .where('chunkKey', chunkKey)
-    .pickAll()
-  
-  if (results.length === 0) return null
-  
-  // Convert to typed entity
-  return results[0] as unknown as IndexedDocEntity
+/** What one chunk of a document holds before it is filed */
+interface Chunk {
+  key: string
+  text: string
+  chunkInfo: ChunkInfo | null
 }
 
-function createIndexedDoc(data: IndexedDocCreateData): EARS.EntityId {
-  const id = create(EARS.Entity.IndexedDoc, {
-    indexId: data.indexId,
-    chunkKey: data.chunkKey,
-    documentId: data.documentId,
-    vectorId: data.vectorId,
-    text: data.text,
-    metadata: data.metadata,
-    chunkInfo: data.chunkInfo || null,
+const indexedDocs = (indexId: EARS.EntityId) => query(EARS.Entity.IndexedDoc).where('indexId', indexId)
+
+function findIndexedDoc(indexId: EARS.EntityId, chunkKey: string): IndexedDocEntity | undefined {
+  return indexedDocs(indexId).where('chunkKey', chunkKey).pickOne() as unknown as IndexedDocEntity | undefined
+}
+
+/** The chunks a document makes under an index's rules: the whole document, or one per item of a `separate` rule */
+function chunksOf(doc: DocumentDTO, searchIndex: SearchIndexConfig): Chunk[] {
+  const separates = searchIndex.enableSectionIndexing &&
+    searchIndex.segmentRules.some(r => (r.type === 'list' || r.type === 'field') && r.indexMode === 'separate')
+  if (!separates) return [{ key: doc.id, text: processDocumentContent(doc.content, searchIndex), chunkInfo: null }]
+  return processDocumentContentMultiIndex(doc.content, searchIndex).map(({ text, segmentIndex, itemIndex }) => {
+    const key = itemIndex !== undefined ? `${doc.id}-seg${segmentIndex}-item${itemIndex}` : `${doc.id}-seg${segmentIndex}`
+    return {
+      key,
+      text,
+      chunkInfo: {
+        sourceDocId: doc.id as EARS.EntityId,
+        segmentIndex,
+        itemIndex,
+        chunkType: itemIndex !== undefined ? 'segment-item' : 'full',
+        chunkKey: key,
+      },
+    }
   })
-    .id()
-  return id
-}
-
-function updateIndexedDoc(entityId: EARS.EntityId, data: IndexedDocUpdateData): void {
-  write(entityId).setMany(data as Record<string, unknown>)
-}
-
-function deleteIndexedDocsForIndex(indexId: string): void {
-  const docs = query(EARS.Entity.IndexedDoc)
-    .where('indexId', indexId)
-    .ids()
-  
-  docs.forEach(id => write(id).destroy())
-}
-
-// Helper to build chunk metadata
-function buildChunkMetadata(doc: DocumentDTO, indexedAt: number) {
-  return {
-    shortCode: doc.shortCode,
-    name: doc.name,
-    indexedAt
-  }
-}
-
-// Helper to build chunk info
-function buildChunkInfo(
-  docId: EARS.EntityId,
-  chunkKey: string,
-  segmentIndex?: number,
-  itemIndex?: number
-): ChunkInfo | undefined {
-  if (segmentIndex === undefined) return undefined
-  
-  return {
-    sourceDocId: docId,
-    segmentIndex,
-    itemIndex,
-    totalChunks: 0, // This should be calculated elsewhere if needed
-    chunkType: itemIndex !== undefined ? 'segment-item' : 'full',
-    chunkKey
-  }
 }
 
 /**
- * Index documents in batch for optimal performance
+ * Files a document's chunks in an index as its rules make them now: a chunk whose text is unchanged keeps its
+ * embedding, a changed or new one is pending, and one the document no longer makes is removed
  */
-async function indexDocumentsBatch(
-  docs: DocumentDTO[],
-  indexId: EARS.EntityId,
-  searchIndex: SearchIndex,
-  index: Index,
-  mappings: Map<string, number>,
-  startVectorId: number,
-  skipExisting = true
-): Promise<number> {
-  // Prepare all chunks
-  const chunks: Array<{
-    doc: DocumentDTO
-    key: string
-    text: string
-    segmentIndex?: number
-    itemIndex?: number
-  }> = []
-  
-  const needsMultiIndex = searchIndex.enableSectionIndexing && 
-    searchIndex.segmentRules.some(r => 
-      (r.type === 'list' || r.type === 'field') && r.indexMode === 'separate'
-    )
-  
-  for (const doc of docs) {
-    if (needsMultiIndex) {
-      const processed = searchService.processDocumentContentMultiIndex(doc.content, searchIndex)
-      for (const chunk of processed) {
-        const key = chunk.itemIndex !== undefined
-          ? `${doc.id}-seg${chunk.segmentIndex}-item${chunk.itemIndex}`
-          : `${doc.id}-seg${chunk.segmentIndex}`
-        
-        if (!skipExisting || !mappings.has(key)) {
-          chunks.push({ 
-            doc, 
-            key, 
-            text: chunk.text, 
-            segmentIndex: chunk.segmentIndex,
-            itemIndex: chunk.itemIndex 
-          })
-        }
-      }
-    } else {
-      if (!skipExisting || !mappings.has(doc.id)) {
-        chunks.push({
-          doc,
-          key: doc.id,
-          text: searchService.processDocumentContent(doc.content, searchIndex)
-        })
-      }
-    }
-  }
-  
-  if (!chunks.length) return 0
-
-  // Batch embed all texts
-  let embeddings
-  try {
-    embeddings = await searchService.embedTextsBatch(
-      chunks.map(c => c.text),
-      searchIndex.embeddingModel
-    )
-  } catch (error) {
-    logger.error('Failed to generate embeddings for documents', {
-      error: errorMessage(error),
-      modelId: searchIndex.embeddingModel,
-      chunkCount: chunks.length
-    })
-    throw new Error(`Failed to generate embeddings: ${errorMessage(error)}`)
-  }
-
-  // Prepare batch insertion arrays
-  const dim = embeddings[0].embedding.length
-  const keys = new BigUint64Array(chunks.length)
-  const vectors = new Float32Array(chunks.length * dim)
+function fileDocument(doc: DocumentDTO, searchIndex: SearchIndex): void {
   const indexedAt = Date.now()
-  
-  // Process chunks and prepare for insertion
-  chunks.forEach((chunk, i) => {
-    const id = startVectorId + i
-    keys[i] = BigInt(id)
-    vectors.set(embeddings[i].embedding, i * dim)
-    mappings.set(chunk.key, id)
-
-    // Store metadata - check if IndexedDoc already exists
-    const existing = findIndexedDoc(indexId, chunk.key)
-    if (existing) {
-      // Update existing IndexedDoc
-      updateIndexedDoc(existing.id, {
-        documentId: chunk.doc.id as EARS.EntityId,
-        vectorId: id,
-        text: chunk.text,
-        metadata: buildChunkMetadata(chunk.doc, indexedAt),
-        chunkInfo: buildChunkInfo(
-          chunk.doc.id as EARS.EntityId,
-          chunk.key,
-          chunk.segmentIndex,
-          chunk.itemIndex
-        )
-      })
-    } else {
-      // Create new IndexedDoc entity
-      createIndexedDoc({
-        indexId,
-        chunkKey: chunk.key,
-        documentId: chunk.doc.id as EARS.EntityId,
-        vectorId: id,
-        text: chunk.text,
-        metadata: buildChunkMetadata(chunk.doc, indexedAt),
-        chunkInfo: buildChunkInfo(
-          chunk.doc.id as EARS.EntityId,
-          chunk.key,
-          chunk.segmentIndex,
-          chunk.itemIndex
-        )
-      })
-    }
-  })
-
-  // Batch insert to index
-  if (chunks.length > 0) {
-    index.add(keys, vectors)
+  const chunks = chunksOf(doc, searchIndex)
+  const kept = new Set(chunks.map(({ key }) => key))
+  for (const row of indexedDocs(searchIndex.id).where('documentId', doc.id).pickAll() as unknown as IndexedDocEntity[]) {
+    if (!kept.has(row.chunkKey)) write(row.id).destroy()
   }
-  
-  return chunks.length
+  for (const { key, text, chunkInfo } of chunks) {
+    const fields = { documentId: doc.id as EARS.EntityId, text, metadata: { shortCode: doc.shortCode, name: doc.name, indexedAt }, chunkInfo }
+    const existing = findIndexedDoc(searchIndex.id, key)
+    if (existing) write(existing.id).setMany(fields)
+    else create(EARS.Entity.IndexedDoc, { indexId: searchIndex.id, chunkKey: key, ...fields })
+  }
 }
 
-/**
- * Remove all chunks for a document and return true if any were removed
- */
-function removeDocumentChunks(
-  documentId: EARS.EntityId,
-  indexId: EARS.EntityId,
-  index: Index,
-  mappings: Map<string, number>
-): boolean {
-  const keysToRemove = Array.from(mappings.keys())
-    .filter(key => key === documentId || key.startsWith(`${documentId}-`))
-  
-  keysToRemove.forEach(key => {
-    index.remove(BigInt(mappings.get(key)!))
-    mappings.delete(key)
-    // Find and destroy the IndexedDoc entity
-    const indexedDoc = findIndexedDoc(indexId, key)
-    if (indexedDoc) {
-      write(indexedDoc.id).destroy()
-    }
-  })
-  
-  return keysToRemove.length > 0
+function removeDocumentChunks(documentId: EARS.EntityId, indexId: EARS.EntityId): void {
+  for (const id of indexedDocs(indexId).where('documentId', documentId).ids()) write(id).destroy()
 }
 
-export async function createSearchIndex(
-  config: SearchIndexConfig,
-  folderId: EARS.EntityId | null
-): Promise<SearchIndex> {
+function countChunks(indexId: EARS.EntityId): void {
+  write(indexId).set('documentCount', indexedDocs(indexId).count())
+}
+
+/** Embeds every chunk the index rows hold pending, with the model IndexedDoc's vector index names */
+export function embedIndexedDocs(): Promise<EmbedPendingResult> {
+  return embedPending({ types: [EARS.Entity.IndexedDoc] })
+}
+
+export function createSearchIndex(config: SearchIndexConfig, folderId: EARS.EntityId | null): SearchIndex {
   const now = Date.now()
-
-  // Create SearchIndex entity with auto-generated ID
-  const builder = create(EARS.Entity.SearchIndex, { createdAt: now })
-  const indexId = builder.id()
-
-  const searchIndex: SearchIndex = {
-    ...config,
-    id: indexId,
-    folderId,
-    documentCount: 0,
-    vectorDimensions: searchService.getVectorDimensions(config.embeddingModel),
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  // Save to EARS
-  // The engine holds the id and creation time; the row is the rest
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...fields } = searchIndex
-  builder.setMany({
-    ...fields,
-    type: 'SearchIndex',
-  })
-  
-  // Create USearch index
-  const index = searchService.createIndex(config)
-  
-  // Save metadata and mappings
-  searchService.saveMetadata(indexId, searchIndex)
-  searchService.saveMappings(indexId, new Map())
-  
-  // Cache the index
-  indexCache.set(indexId, index)
-  
-  // Index documents in the folder
-  await indexDocumentsInFolder(indexId, folderId)
-  
-  return searchIndex
+  const indexId = create(EARS.Entity.SearchIndex, { ...config, folderId, documentCount: 0, createdAt: now }).id()
+  indexDocumentsInFolder(indexId, folderId)
+  return findSearchIndex(indexId)!
 }
 
-export async function findSearchIndex(indexId: EARS.EntityId): Promise<SearchIndex | null> {
-  const indices = query.ids(indexId).pickAll()
-  const indexData = indices[0]
-  
-  if (!indexData || indexData.type !== 'SearchIndex') {
-    return null
-  }
-  
-  return indexData as unknown as SearchIndex
+export function findSearchIndex(indexId: EARS.EntityId): SearchIndex | null {
+  return (query.ids(indexId).ofType(EARS.Entity.SearchIndex).pickOne() as unknown as SearchIndex | undefined) ?? null
 }
 
-export async function getSearchIndicesForFolder(folderId: EARS.EntityId | null): Promise<SearchIndex[]> {
-  const allIndices = query(EARS.Entity.SearchIndex)
-    .where('folderId', folderId)
-    .pickAll()
-  
-  return allIndices as unknown as SearchIndex[]
+export function getSearchIndicesForFolder(folderId: EARS.EntityId | null): SearchIndex[] {
+  return query(EARS.Entity.SearchIndex).where('folderId', folderId).pickAll() as unknown as SearchIndex[]
 }
 
-export async function updateSearchIndex(
-  indexId: EARS.EntityId,
-  config: SearchIndexConfig
-): Promise<SearchIndex> {
-  const existingIndex = await findSearchIndex(indexId)
-  if (!existingIndex) {
-    throw new Error(`Search index ${indexId} not found`)
-  }
-  
-  const now = Date.now()
-  const updatedIndex: SearchIndex = {
-    ...config,
-    id: indexId,
-    folderId: existingIndex.folderId,
-    documentCount: existingIndex.documentCount,
-    vectorDimensions: searchService.getVectorDimensions(config.embeddingModel),
-    createdAt: existingIndex.createdAt,
-    updatedAt: now,
-  }
-  
-  // Update in EARS
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...fields } = updatedIndex
-  write(indexId).setMany(fields)
-  
-  // If embedding model changed, we need to re-index everything
-  if (existingIndex.embeddingModel !== config.embeddingModel ||
-      existingIndex.indexMetric !== config.indexMetric ||
-      existingIndex.connectors !== config.connectors) {
-    
-    // Clean up all old IndexedDoc entities before changing model
-    deleteIndexedDocsForIndex(indexId)
-    
-    // Delete old index files
-    searchService.deleteIndexFiles(indexId)
-    
-    // Create new index
-    const index = searchService.createIndex(config)
-    
-    // Save metadata and mappings
-    searchService.saveMetadata(indexId, updatedIndex)
-    searchService.saveMappings(indexId, new Map())
-    
-    // Update cache
-    indexCache.set(indexId, index)
-    
-    // Re-index all documents
-    await indexDocumentsInFolder(indexId, existingIndex.folderId)
-  } else {
-    // Just update metadata
-    searchService.saveMetadata(indexId, updatedIndex)
-    
-    // Re-process documents if section rules changed
-    if (JSON.stringify(existingIndex.segmentRules) !== JSON.stringify(config.segmentRules) ||
-        existingIndex.constructTemplate !== config.constructTemplate ||
-        existingIndex.enableSectionIndexing !== config.enableSectionIndexing) {
-      await reindexAllDocuments(indexId)
-    }
-  }
-  
-  return updatedIndex
+/** Changes an index's details and rules; changed rules refile every document, keeping each chunk whose text is unchanged */
+export function updateSearchIndex(indexId: EARS.EntityId, config: SearchIndexConfig): SearchIndex {
+  const existing = findSearchIndex(indexId)
+  if (!existing) throw new Error(`Search index ${indexId} not found`)
+  write(indexId).setMany({ ...config })
+  const rulesChanged = JSON.stringify(existing.segmentRules) !== JSON.stringify(config.segmentRules) ||
+    existing.constructTemplate !== config.constructTemplate ||
+    existing.enableSectionIndexing !== config.enableSectionIndexing
+  const scopeChanged = existing.excludeAllSubfolders !== config.excludeAllSubfolders ||
+    JSON.stringify(existing.excludedFolderIds) !== JSON.stringify(config.excludedFolderIds) ||
+    JSON.stringify(existing.excludedDocumentIds) !== JSON.stringify(config.excludedDocumentIds)
+  if (rulesChanged || scopeChanged) indexDocumentsInFolder(indexId, existing.folderId)
+  return findSearchIndex(indexId)!
 }
 
-export async function deleteSearchIndex(indexId: EARS.EntityId): Promise<void> {
-  // Clean up all IndexedDoc entities for this index
-  deleteIndexedDocsForIndex(indexId)
-  
-  // Remove from cache
-  indexCache.delete(indexId)
-  
-  // Delete index files from disk
-  searchService.deleteIndexFiles(indexId)
-  
-  // Destroy the SearchIndex entity
+export function deleteSearchIndex(indexId: EARS.EntityId): void {
+  for (const id of indexedDocs(indexId).ids()) write(id).destroy()
   write(indexId).destroy()
 }
 
-export async function indexDocumentsInFolder(
-  indexId: EARS.EntityId,
-  folderId: EARS.EntityId | null
-): Promise<void> {
-  const searchIndex = await findSearchIndex(indexId)
+/** Files every document in the index's scope, and removes the chunks of documents no longer in it */
+export function indexDocumentsInFolder(indexId: EARS.EntityId, folderId: EARS.EntityId | null): void {
+  const searchIndex = findSearchIndex(indexId)
   if (!searchIndex) throw new Error(`Search index ${indexId} not found`)
-  
-  // Get or create index
-  let index = indexCache.get(indexId)
-  if (!index) {
-    index = await searchService.loadIndex(getIndexFilePath(indexId), searchIndex)
-    indexCache.set(indexId, index)
-  }
-  
-  const mappings = searchService.loadMappings(indexId)
-  const documents = await getDocumentsToIndex(folderId, searchIndex)
-  
-  if (!documents.length) return
-  
-  // Process in batches
-  const BATCH_SIZE = 50
-  for (let i = 0; i < documents.length; i += BATCH_SIZE) {
-    await indexDocumentsBatch(
-      documents.slice(i, i + BATCH_SIZE),
-      indexId,
-      searchIndex,
-      index,
-      mappings,
-      mappings.size
-    )
-  }
-  
-  // Update and save
-  searchIndex.documentCount = mappings.size
-  write(indexId).set('documentCount', mappings.size)
-  
-  if (mappings.size > 0) {
-    await searchService.saveIndex(index, getIndexFilePath(indexId))
-  }
-  searchService.saveMappings(indexId, mappings)
-  searchService.saveMetadata(indexId, searchIndex)
+  const documents = getDocumentsToIndex(folderId, searchIndex)
+  const inScope = new Set(documents.map(({ id }) => id))
+  const filed = new Set(indexedDocs(indexId).pickAll().map((row) => (row as unknown as IndexedDocEntity).documentId))
+  for (const documentId of filed) if (!inScope.has(documentId)) removeDocumentChunks(documentId, indexId)
+  for (const document of documents) fileDocument(document, searchIndex)
+  countChunks(indexId)
 }
 
-export async function indexDocument(
-  documentId: EARS.EntityId,
-  indexId: EARS.EntityId
-): Promise<void> {
-  const searchIndex = await findSearchIndex(indexId)
+export function indexDocument(documentId: EARS.EntityId, indexId: EARS.EntityId): void {
+  const searchIndex = findSearchIndex(indexId)
   if (!searchIndex) throw new Error(`Search index ${indexId} not found`)
-
   const document = libraryQueries.findDocument(documentId)
   if (!document) throw new Error(`Document ${documentId} not found`)
-
   if (searchIndex.excludedDocumentIds.includes(documentId)) return
-
-  // Get or load index
-  let index = indexCache.get(indexId)
-  if (!index) {
-    index = await searchService.loadIndex(getIndexFilePath(indexId), searchIndex)
-    indexCache.set(indexId, index)
-  }
-
-  const mappings = searchService.loadMappings(indexId)
-
-  // Remove old chunks first
-  removeDocumentChunks(documentId, indexId, index, mappings)
-
-  // Calculate next vector ID - handle empty mappings case
-  const nextVectorId = mappings.size === 0 ? 0 : Math.max(...Array.from(mappings.values())) + 1
-
-  // Reindex with the new vector ID
-  await indexDocumentsBatch([document], indexId, searchIndex, index, mappings, nextVectorId, false)
-
-  // Update and save
-  searchIndex.documentCount = mappings.size
-  write(indexId).set('documentCount', mappings.size)
-
-  await searchService.saveIndex(index, getIndexFilePath(indexId))
-  searchService.saveMappings(indexId, mappings)
+  fileDocument(document, searchIndex)
+  countChunks(indexId)
 }
 
-export async function removeDocumentFromIndex(
-  documentId: EARS.EntityId,
-  indexId: EARS.EntityId
-): Promise<void> {
-  const searchIndex = await findSearchIndex(indexId)
-  if (!searchIndex) return
-  
-  let index = indexCache.get(indexId)
-  if (!index) {
-    index = await searchService.loadIndex(getIndexFilePath(indexId), searchIndex)
-    indexCache.set(indexId, index)
-  }
-  
-  const mappings = searchService.loadMappings(indexId)
-  
-  if (removeDocumentChunks(documentId, indexId, index, mappings)) {
-    await searchService.saveIndex(index, getIndexFilePath(indexId))
-    searchService.saveMappings(indexId, mappings)
-    
-    searchIndex.documentCount = mappings.size
-    write(indexId).set('documentCount', mappings.size)
-  }
+export function removeDocumentFromIndex(documentId: EARS.EntityId, indexId: EARS.EntityId): void {
+  if (!findSearchIndex(indexId)) return
+  removeDocumentChunks(documentId, indexId)
+  countChunks(indexId)
 }
 
-export async function searchInIndex(
-  indexId: EARS.EntityId,
-  query: string,
-  limit: number = 10
-): Promise<IndexSearchResult[]> {
-  const searchIndex = await findSearchIndex(indexId)
-  if (!searchIndex) throw new Error(`Search index ${indexId} not found`)
-  
-  // Get or load the index
-  let index = indexCache.get(indexId)
-  if (!index) {
-    index = await searchService.loadIndex(getIndexFilePath(indexId), searchIndex)
-    indexCache.set(indexId, index)
-  }
-
-  // Embed the query
-  let queryEmbedding
-  try {
-    queryEmbedding = await searchService.embedText(query, searchIndex.embeddingModel)
-  } catch (error) {
-    logger.error('Failed to generate embedding for search query', {
-      error: errorMessage(error),
-      modelId: searchIndex.embeddingModel,
-      query
+/**
+ * The index's chunks nearest `text`, most similar first. A chunk still pending (`embedIndexedDocs`) isn't among them
+ */
+export async function searchInIndex(indexId: EARS.EntityId, text: string, limit = 10): Promise<IndexSearchResult[]> {
+  if (!findSearchIndex(indexId)) throw new Error(`Search index ${indexId} not found`)
+  const vector = await embedSearchText(EARS.Entity.IndexedDoc, text)
+  return indexedDocs(indexId).near(vector, { k: limit }).hits({ fields: ['documentId', 'text', 'metadata', 'chunkInfo'] as never })
+    .map(({ score, row }) => {
+      const { documentId, text: chunkText, metadata, chunkInfo } = row as unknown as IndexedDocEntity
+      return { documentId, score, text: chunkText, metadata, ...(chunkInfo && { chunkInfo }) }
     })
-    throw new Error(`Failed to generate search query embedding: ${errorMessage(error)}`)
-  }
-
-  // Search
-  const results = index.search(queryEmbedding.embedding, limit)
-  
-  // Load mappings to get chunk keys
-  const mappings = searchService.loadMappings(indexId)
-  const reverseMappings = new Map(Array.from(mappings).map(([k, v]) => [v, k]))
-  
-  // Build search results
-  const searchResults: IndexSearchResult[] = []
-  
-  if (results.keys && results.distances) {
-    const keys = results.keys
-    const distances = results.distances
-    
-    for (let i = 0; i < keys.length; i++) {
-      const key = Number(keys[i])
-      const distance = distances[i]
-      
-      const chunkKey = reverseMappings.get(key)
-      if (!chunkKey) continue
-      
-      // Load indexed document metadata
-      const indexedDoc = findIndexedDoc(indexId, chunkKey) as unknown as IndexedDocument
-      
-      if (indexedDoc) {
-        searchResults.push({
-          documentId: indexedDoc.documentId,
-          score: distance,
-          text: indexedDoc.text,
-          metadata: indexedDoc.metadata,
-          chunkInfo: indexedDoc.chunkInfo,
-        })
-      }
-    }
-  }
-  
-  // Sort by score (lowest distance first - better matches)
-  searchResults.sort((a, b) => a.score - b.score)
-  
-  return searchResults
 }
 
-async function getDocumentsToIndex(
-  folderId: EARS.EntityId | null,
-  searchIndex: SearchIndex
-): Promise<DocumentDTO[]> {
-  let documents: DocumentDTO[] = []
-  
+function getDocumentsToIndex(folderId: EARS.EntityId | null, searchIndex: SearchIndex): DocumentDTO[] {
+  let documents: DocumentDTO[]
   if (folderId === null) {
     // Root folder - get all documents not in any collection
-    documents = libraryQueries.getDocuments()
-    documents = documents.filter(doc => !doc.collectionId)
+    documents = libraryQueries.getDocuments().filter(doc => !doc.collectionId)
   } else {
-    // Get documents in this folder
     documents = libraryQueries.getDocumentsInCollection(folderId)
-    
-    // If not excluding subfolders, also get documents from child collections
     if (!searchIndex.excludeAllSubfolders) {
-      const childCollections = await getChildCollectionsRecursive(folderId)
-      for (const childId of childCollections) {
+      for (const childId of getChildCollectionsRecursive(folderId)) {
         if (!searchIndex.excludedFolderIds.includes(childId)) {
-          const childDocs = libraryQueries.getDocumentsInCollection(childId)
-          documents = documents.concat(childDocs)
+          documents = documents.concat(libraryQueries.getDocumentsInCollection(childId))
         }
       }
     }
   }
-  
-  // Filter out excluded documents
-  documents = documents.filter(doc => 
-    !searchIndex.excludedDocumentIds.includes(doc.id as EARS.EntityId)
-  )
-  
-  return documents
+  return documents.filter(doc => !searchIndex.excludedDocumentIds.includes(doc.id as EARS.EntityId))
 }
 
-async function getChildCollectionsRecursive(
-  collectionId: EARS.EntityId
-): Promise<EARS.EntityId[]> {
-  const children = query.ids(collectionId)
-    .out(EARS.RelKind.PARENT_OF, 'Collection' as any)
-    .ids()
-  
-  const allChildren = [...children]
-  
-  for (const childId of children) {
-    const grandChildren = await getChildCollectionsRecursive(childId)
-    allChildren.push(...grandChildren)
-  }
-  
-  return allChildren
+function getChildCollectionsRecursive(collectionId: EARS.EntityId): EARS.EntityId[] {
+  return query.ids(collectionId).descendants(EARS.RelKind.PARENT_OF, EARS.Entity.Collection).ids()
 }
 
-async function reindexAllDocuments(indexId: EARS.EntityId): Promise<void> {
-  const searchIndex = await findSearchIndex(indexId)
-  if (!searchIndex) return
-  
-  // Clean up all old IndexedDoc entities before reindexing
-  deleteIndexedDocsForIndex(indexId)
-  
-  // Clear existing index
-  searchService.deleteIndexFiles(indexId)
-  indexCache.delete(indexId)
-  
-  // Create new index
-  const index = searchService.createIndex(searchIndex)
-  
-  // Save mappings
-  searchService.saveMappings(indexId, new Map())
-  
-  // Update cache
-  indexCache.set(indexId, index)
-  
-  // Re-index all documents using batch processing
-  await indexDocumentsInFolder(indexId, searchIndex.folderId)
+/** Whether a document is in the index's scope: its folder, or a subfolder the index doesn't exclude */
+function inScope(document: DocumentDTO, searchIndex: SearchIndex): boolean {
+  if (searchIndex.folderId === null) return !document.collectionId
+  if (document.collectionId === searchIndex.folderId) return true
+  if (searchIndex.excludeAllSubfolders || !document.collectionId) return false
+  const collectionId = document.collectionId as EARS.EntityId
+  return getChildCollectionsRecursive(searchIndex.folderId).includes(collectionId) && !searchIndex.excludedFolderIds.includes(collectionId)
 }
 
-// Auto-index new documents in folders with indices
-export async function autoIndexNewDocument(documentId: EARS.EntityId): Promise<void> {
+/** Files a document in every index whose scope holds it */
+export function autoIndexNewDocument(documentId: EARS.EntityId): void {
   const document = libraryQueries.findDocument(documentId)
   if (!document) return
-  
-  // Find all indices that should include this document
-  const allIndices = query(EARS.Entity.SearchIndex).pickAll()
-  
-  for (const indexData of allIndices) {
-    const searchIndex = indexData as unknown as SearchIndex
-    
-    // Check if document is in the index's folder scope
-    if (searchIndex.folderId === null) {
-      // Root index - only index if document is not in any collection
-      if (!document.collectionId) {
-        await indexDocument(documentId, searchIndex.id)
-      }
-    } else if (document.collectionId === searchIndex.folderId) {
-      // Document is directly in the index's folder
-      await indexDocument(documentId, searchIndex.id)
-    } else if (!searchIndex.excludeAllSubfolders) {
-      // Check if document is in a subfolder
-      const childCollections = await getChildCollectionsRecursive(searchIndex.folderId)
-      if (document.collectionId && childCollections.includes(document.collectionId as EARS.EntityId)) {
-        if (!searchIndex.excludedFolderIds.includes(document.collectionId as EARS.EntityId)) {
-          await indexDocument(documentId, searchIndex.id)
-        }
-      }
-    }
+  for (const searchIndex of query(EARS.Entity.SearchIndex).pickAll() as unknown as SearchIndex[]) {
+    if (inScope(document, searchIndex)) indexDocument(documentId, searchIndex.id)
   }
 }
 
-// Remove document from all indices when deleted
-export async function removeDocumentFromAllIndices(documentId: EARS.EntityId): Promise<void> {
-  const allIndices = query(EARS.Entity.SearchIndex).pickAll()
-  
-  for (const indexData of allIndices) {
-    const searchIndex = indexData as unknown as SearchIndex
-    await removeDocumentFromIndex(documentId, searchIndex.id)
-  }
+/** Removes a deleted document from every index */
+export function removeDocumentFromAllIndices(documentId: EARS.EntityId): void {
+  for (const id of query(EARS.Entity.SearchIndex).ids()) removeDocumentFromIndex(documentId, id)
 }
 
-// Delete all search indices for a folder when the folder is deleted
-export async function deleteSearchIndicesForFolder(folderId: EARS.EntityId): Promise<void> {
-  const indices = await getSearchIndicesForFolder(folderId)
-  
-  for (const index of indices) {
-    await deleteSearchIndex(index.id)
-  }
+/** Deletes every index of a folder that was deleted */
+export function deleteSearchIndicesForFolder(folderId: EARS.EntityId): void {
+  for (const index of getSearchIndicesForFolder(folderId)) deleteSearchIndex(index.id)
 }

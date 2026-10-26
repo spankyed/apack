@@ -2,7 +2,7 @@
 // in a note reaches the window with that note open and re-runs nothing else; every write is answered to the window
 // that made it, since the surface holds its views behind its own unanswered writes.
 import { describe, expect, it } from 'vitest'
-import { startApp } from '@apackdev/testing/harness'
+import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
 import { repository } from '#generated/repository.ts'
 import type { EARS } from '#generated/ears.ts'
 import type { NoteDTO, NoteSummary } from '#generated/types.ts'
@@ -91,5 +91,11 @@ describe('a write to a note', () => {
 
     await app.send('notes', { type: 'UPDATE_NOTE', id, title: 'Renamed by nobody' })
     expect(repository.noteQueries.byId(id)?.title).toBe('Renamed by nobody')
+    expect(takeSystemErrors(), 'the asked refusal is its window\'s to show').toEqual([])
+
+    // A refusal nobody asked for has no window to show it, so it is reported
+    await app.send('notes', { type: 'UPDATE_NOTE', id: 'Note-missing', title: 'Nothing' })
+    await app.settle()
+    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'notes', message: expect.stringContaining('Note-missing') })])
   })
 })

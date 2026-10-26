@@ -76,7 +76,7 @@ Moving the type off the id needs no conversion of the type itself.
 times: the root TNode is recreated on every boot because trace isn't hydrated
 (`brain/be/repository/index.ts:479-507`, where `findById` misses), and each boot's edge persists to a
 partition nothing reads back. That is not what `link`'s default decides, and it is
-[`ears-persistence-and-history.md`](../../plans/ears-persistence-and-history.md)'s subject, not this plan's.
+[`ears-persistence-and-history.md`](ears-persistence-and-history.md)'s subject, not this plan's.
 
 ## The changes
 
@@ -384,7 +384,7 @@ offset (`query.ts`), so a write between pages skips or repeats rows.
 - `page()` is deleted: its only caller is `apack-ears/tests/engine/queries.spec.ts:104-107`. A cursor that
   survives writes needs a stable order key, and nobody has asked for one.
 - The builder stays eager and synchronous. How filtering performs is
-  [`ears-attribute-filtering.md`](../../plans/ears-attribute-filtering.md)'s subject; its "no API change" premise holds
+  [`ears-attribute-filtering.md`](ears-attribute-filtering.md)'s subject; its "no API change" premise holds
   for its own work, which can land before or after this.
 
 ### 7. Everything that teaches the API moves with it
@@ -464,13 +464,13 @@ Every phase that moves a public export runs `npm run api:update` (ears and SDK) 
 
 ## What this is not
 
-- **Durable persistence.** [`ears-persistence-and-history.md`](../../plans/ears-persistence-and-history.md) owns flush
+- **Durable persistence.** [`ears-persistence-and-history.md`](ears-persistence-and-history.md) owns flush
   barriers, failed-save state and cross-environment behaviour, including what a unit spanning two
   environments promises when one fails, and the trace partition's per-boot root edge. `transact` gives it the
   logical unit it asks for; it doesn't make writes durable.
 - **The console's transactions.** [`goal-console-transactions.md`](../../goals/goal-console-transactions.md)
   becomes a caller: console code runs inside `transact`, and its Phase 1 is this plan's Phase 2.
-- **A disk-resident engine** ([`goal-lmdb-only.md`](../../goals/goal-lmdb-only.md)). Everything here is
+- **A disk-resident engine** ([`goal-lmdb-only.md`](../goals/goal-lmdb-only.md)). Everything here is
   storage-agnostic; doing this first gives that goal a smaller API to reimplement.
 - **Reactivity, a query language, or publishing EARS on its own.** A standalone package also needs a README
   that doesn't assume AgentBuddy and a name that isn't already a well-known requirements-syntax acronym.

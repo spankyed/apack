@@ -2,7 +2,7 @@
 // host-shared SDK proxies, pack Tailwind, prefixed bus IDs, and the test packs dir.
 // Run via `npm run test:external-pack` from the repo root.
 import { test, expect, waitForAppReady, type AppDriver } from '@apackdev/testing';
-import { acceptedRuntime, frontendAccepted } from './_support/pack-frontend.ts';
+import { acceptedRuntime, frontendAccepted, frontendUnloaded } from './_support/pack-frontend.ts';
 
 test('advanced settings JSON provides offline declared completion, descriptions and validated saves', async ({ appPage, app }) => {
   const externalRequests: string[] = [];
@@ -176,7 +176,8 @@ test("a re-enabled pack's surface gets its startup data again", async ({ appPage
   // Disabled while active: its surface actor must stop, or re-enabling can't spawn it again
   await app.navigate('memos');
   await toggle();
-  await expect.poll(surfaceIds, { timeout: 15_000 }).not.toContain('e2e-fixture/memos');
+  await frontendUnloaded(appPage, 'e2e-fixture');
+  expect(await surfaceIds()).not.toContain('e2e-fixture/memos');
   // Disabled declarations remain available; their executable forms are unloaded.
   await openMemoPreferences(appPage, app);
   await expect(appPage.getByText('e2e-fixture/memos', { exact: true })).toBeVisible();
@@ -267,6 +268,7 @@ test('same-named pack preferences stay independent through save, disable and res
     .send({ type: 'UI.TOGGLE_ENABLED', packId: 'e2e-fixture' }));
   const runtime = await acceptedRuntime(appPage, 'e2e-fixture');
   await toggle();
+  await frontendUnloaded(appPage, 'e2e-fixture');
   await expect(fixture).toHaveCount(0);
   await expect(appPage.getByRole('button', { name: 'Edit in JSON', exact: true })).toBeVisible();
   await expect(appPage.getByText('e2e-fixture/assistant', { exact: true })).toBeVisible();

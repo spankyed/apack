@@ -1,8 +1,8 @@
 import { dbBackupVerify, verifyBackup, VERIFY_USAGE } from './backup-verify';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { findRunningApp, holdDatabaseWriteLock, openRunHistoryStore } from '@apackdev/host/database';
-import { exportDatabase } from '@apackdev/host/backup';
+import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
+import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
@@ -39,16 +39,16 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));
       // A data dir the app never ran a flow in has no run history yet
-      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistoryStore(db.paths.runHistory, { readOnly: true }) : undefined;
+      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true }) : undefined;
       let backup: string;
       try {
-        backup = await exportDatabase({ lmdb: db.store, ...(runHistory && { runHistory }) }, stage, {
+        backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, stage, {
           name: 'backup', databases: runHistory ? ['lmdb', 'runHistory'] : ['lmdb'], mediaPath: db.paths.media,
           appVersion: readHostCompatibility(target.userDataDir).version,
           log: { info: message => io.err(message), warn: message => io.err(message) },
         });
       } finally {
-        runHistory?.close();
+        runHistory?.database.close();
       }
       verifyBackup(backup);
       fs.chmodSync(backup, 0o700);

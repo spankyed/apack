@@ -34,7 +34,7 @@ const field = z.union([
     z.object({ anyOf: z.array(titled).min(1).max(512) }).strict(),
   ]), default: z.array(z.string()).optional() }).strict(),
 ]);
-const schema = z.object({ type: z.literal('object'), properties: z.record(field), required: z.array(z.string()).optional(),
+const schema = z.object({ type: z.literal('object'), properties: z.record(z.string(), field), required: z.array(z.string()).optional(),
   title: z.string().optional(), description: z.string().optional(), $schema: z.string().optional(), additionalProperties: z.boolean().optional(),
 }).strict();
 

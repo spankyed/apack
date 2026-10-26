@@ -2,7 +2,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { _createPackServices } from '@apackdev/sdk/services';
 import { createSettingsStore, createSettingsService } from '../../src/features/settings/be/index.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _bindEars, boundEars } from '@apackdev/sdk/ears';
 import { repository } from '@apackdev/sdk/services';
 import { getSettingsCatalog, type PackFeatureSystem, type PackRegistration } from '@apackdev/sdk/framework';
@@ -393,7 +393,7 @@ describe('runtime settings admission', () => {
 
 describe('registered settings authority', () => {
   const previousEngine = boundEars();
-  beforeEach(() => { _bindEars(createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: name => name === 'Settings' })); });
+  beforeEach(() => { _bindEars(_createTestEngine({ entityTypes: ['Settings'] })); });
   afterEach(() => { _bindEars(previousEngine); });
 
   it('binds the accepted pack and revokes retained access when it unregisters', () => {

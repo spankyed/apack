@@ -4,7 +4,9 @@ import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createEarsEngine, type EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/ears';
+import { openDatabase } from '@apackdev/ears/lmdb';
+import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _bindEars, boundEars, untypedQuery } from '@apackdev/sdk/ears';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { openAppDatabase } from '../../src/database/open.ts';
@@ -122,21 +124,28 @@ describe('openAppDatabase', () => {
    */
   // A dir whose packs were removed still holds their rows — uninstalling deletes a directory, not rows — so
   // "no pack installed" is a schema that cannot be written against, however true it is about the directory
-  it('refuses a writable open on a data dir whose packs were removed, and allows a read', async () => {
+  it('writes a data dir whose packs were removed by the schema the app declared, which the report lacks', async () => {
     const dir = dataDirWithPacks();
     await writeData(dir, () => {});
     fs.rmSync(path.join(_appDirOf(dir), 'packs'), { recursive: true });
 
-    await expect(openAppDatabase({ env: 'test', userDataDir: dir, ...quiet }))
-      .rejects.toThrow(/has no packs installed .*an incomplete schema would write the wrong rows/s);
-
-    const db = await openAppDatabase({ env: 'test', userDataDir: dir, readOnly: true, ...quiet });
+    const db = await openAppDatabase({ env: 'test', userDataDir: dir, ...quiet });
     try {
       expect(db.schema.packs).toEqual([]);
       expect(db.schema.getRegisteredEntityTypes().has('Note')).toBe(false);
+      // The database still declares Note, as the app last did
+      expect(db.ears.create('Note').set('title', 'written').id().startsWith('Note-')).toBe(true);
     } finally {
       db.close();
     }
+  });
+
+  it('refuses a writable open of a database that holds no schema, and allows a read', async () => {
+    const dir = tempDir('host-database-');
+    openDatabase({ path: _appDataPaths(dir).lmdb }).close();
+    await expect(openAppDatabase({ env: 'test', userDataDir: dir, ...quiet })).rejects.toThrow(/holds no schema yet: start apack on it once/);
+    const db = await openAppDatabase({ env: 'test', userDataDir: dir, readOnly: true, ...quiet });
+    db.close();
   });
 
   // The escape hatch the refusal names, so the message is not a dead end
@@ -200,7 +209,7 @@ describe('openAppDatabase', () => {
     const dir = dataDirWithPacks();
     await writeData(dir, () => { untypedCreate('Note', { id: id('Note-1') }).set('title', 'kept'); });
     // A process that already has an engine: the app, or a test file that started a runtime
-    const outer = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => name === 'Note' });
+    const outer = _createTestEngine({ entityTypes: ['Note'] });
     _bindEars(outer);
     try {
       const db = await openAppDatabase({ env: 'test', userDataDir: dir, ...quiet });

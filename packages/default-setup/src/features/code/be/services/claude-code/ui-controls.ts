@@ -40,7 +40,7 @@ const nativeView = z.object({ session_id: z.string().min(1).max(256), revision: 
 const attach = z.object({ client_id: clientId, surface, viewport: viewport.optional(), native_view: nativeView.optional() }).strict().refine(value => !value.native_view || value.surface === 'desktop', 'native Agent UI requires desktop')
 const instanceRevision = z.number().int().positive().safe()
 const instanceRelease = z.object({ client_id: clientId, component: z.string().min(1).max(256), instance_id: z.string().min(1).max(256), instance_revision: instanceRevision }).strict()
-const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.unknown()), instance_revision: instanceRevision.optional(), viewport: viewport.optional() }).strict()
+const render = z.object({ client_id: clientId, surface, component: z.string(), instance_id: z.string(), props: z.record(z.string(), z.unknown()), instance_revision: instanceRevision.optional(), viewport: viewport.optional() }).strict()
 const press = z.object({ client_id: clientId, surface, plugin: z.string(), handle: z.number().int().safe(), key: z.string().optional(), href: z.string().max(2048).optional(), component: z.string().optional(), instance_id: z.string().max(256).optional(), instance_revision: instanceRevision.optional() }).strict()
 // Frozen 2.1.302 ui_input/ui_select schemas: whole-field text, keyed redraw identity.
 const field = z.object({
@@ -98,7 +98,7 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string(), z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>

@@ -54,6 +54,7 @@ jobs:
           compiler_node=$(command -v node)
           otool -L "$compiler_node"
           codesign --display --verbose=2 --entitlements - --xml "$compiler_node"
+      - uses: ./.github/actions/elmdb
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

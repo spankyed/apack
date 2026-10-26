@@ -1,5 +1,6 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { RowRules } from '@apackdev/ears';
+import type { EmbedDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbeddingModelId } from '../services/models.ts';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
 export interface PackEntityDeclaration {
@@ -9,13 +10,43 @@ export interface PackEntityDeclaration {
   readonly shortCode?: string;
   /** The fields a `where` on its rows reads an index for; any other field is found by filtering the type */
   readonly indexes?: readonly string[];
+  /** Its text index: the fields `search` matches, each at its weight, and the language it stems in */
+  readonly search?: PackSearchDeclaration;
+  /** Its vector index: the fields whose text is embedded, and the model `services.inference` embeds it with */
+  readonly embed?: PackEmbedDeclaration;
+}
+
+/** A vector index as a manifest declares it: the engine's `EmbedDeclaration`, its model one `services.inference` runs */
+export interface PackEmbedDeclaration extends EmbedDeclaration {
+  /** The model, as `provider:model`, that `embedPending` (`@apackdev/sdk/services`) embeds the chunks with */
+  readonly model: EmbeddingModelId;
+}
+
+/** A language a text index stems in (ISO 639-1): Snowball's, as elmdb names them */
+export type SearchStemLanguage = (typeof _SEARCH_STEM_LANGUAGES)[number];
+
+/** A text index as a manifest declares it: the engine's `SearchDeclaration`, its language one elmdb stems in */
+export interface PackSearchDeclaration extends SearchDeclaration {
+  /** The language whose stems match a word's other forms: with `en`, "running" matches "runs" */
+  readonly stem?: SearchStemLanguage;
+}
+
+/**
+ * One relation kind's declaration: what its edges are held to, each rule off unless declared. `{}` declares a kind
+ * with none
+ */
+export interface PackRelationDeclaration {
+  /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
+  readonly acyclic?: boolean;
+  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
+  readonly unique?: boolean;
 }
 
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
 export interface PackDataDeclarations {
   data?: {
     entities?: Readonly<Record<string, PackEntityDeclaration>>;
-    relations?: readonly string[];
+    relations?: Readonly<Record<string, PackRelationDeclaration>>;
     roles?: readonly string[];
   };
   features?: Readonly<Record<string, object>>;
@@ -30,6 +61,10 @@ export interface _PackEntityDeclaration {
   shortCode?: string;
   /** The fields it declares an index for, when its entry names any */
   indexes?: readonly string[];
+  /** Its text index, when its entry declares one */
+  search?: SearchDeclaration;
+  /** Its vector index, when its entry declares one */
+  embed?: EmbedDeclaration;
 }
 
 /**
@@ -53,14 +88,17 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes } = entry ?? {};
+      const { shape, shortCode, indexes, search, embed } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
         if (taken) throw new Error(`The short code prefix "${shortCode}" is declared for both "${taken}" and "${name}"`);
         prefixOwners.set(shortCode, name);
       }
-      result.set(name, { name, owner, shape: shape ?? null, ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }) });
+      result.set(name, {
+        name, owner, shape: shape ?? null,
+        ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }), ...(embed && { embed }),
+      });
     }
   }
   return [...result.values()];
@@ -94,6 +132,15 @@ export function _shortCodeTypes(rules: ReadonlyArray<readonly [string, Partial<R
   };
 }
 
+/** @internal The languages a text index stems in: Snowball's, as elmdb names them (ISO 639-1) */
+export const _SEARCH_STEM_LANGUAGES = ['ar', 'da', 'de', 'el', 'en', 'es', 'fi', 'fr', 'hu', 'it', 'nl', 'no', 'pt', 'ro', 'ru', 'sv', 'ta', 'tr'] as const;
+
+/** An entity type's name: PascalCase, as the database holds a type's */
+export const _ENTITY_NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
+
+/** A field the database is told of, one a shape requires or an entry indexes: lowerCamelCase, as it holds a field's */
+export const _FIELD_NAME_PATTERN = /^[a-z][A-Za-z0-9]*$/;
+
 /** A relation kind's or a role's stored name: snake_case, its generated EARS constant the same in uppercase */
 export const _WIRE_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
@@ -111,7 +158,16 @@ function wireConstants(wires: readonly string[], what: 'Relation' | 'Role', key:
 
 /** @internal The pack's relation kinds as EARS constants (`tagged_with` → `TAGGED_WITH`) */
 export function _packRelationTypes(declaration: PackDataDeclarations): Record<string, string> {
-  return wireConstants(declaration.data?.relations ?? [], 'Relation', 'relations');
+  return wireConstants(Object.keys(declaration.data?.relations ?? {}), 'Relation', 'relations');
+}
+
+/** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
+export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
+  const rules: Record<string, RelationRules> = {};
+  for (const [wire, { acyclic, unique }] of Object.entries(declaration.data?.relations ?? {})) {
+    if (acyclic || unique) rules[wire] = { ...(acyclic && { acyclic }), ...(unique && { unique }) };
+  }
+  return rules;
 }
 
 /** @internal The pack's roles as EARS constants (`entry_event` → `ENTRY_EVENT`) */

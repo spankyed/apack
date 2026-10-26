@@ -98,6 +98,23 @@ describe('compareFacadeReport', () => {
     expect(compareFacadeReport(dir, report('type T = { (value: unknown): string; (value: string): number };')).state).toBe('stale');
   });
 
+  it('compares optional literal unions consistently without hiding contract or comment changes', () => {
+    const header = '## Facade types report\n\n```ts\n';
+    const report = (body: string) => header + body + '\n```\n';
+    record(report('type T = { copyState?: "error" | "idle" | "pending" | "saved" | undefined; readonly id: string };'));
+    expect(compareFacadeReport(dir, report('type T = { readonly id: string; copyState?: "error" | "pending" | "idle" | "saved" | undefined };')).state).toBe('current');
+    for (const mutation of [
+      'copyState?: "error" | "idle" | "pending" | undefined; readonly id: string',
+      'copyState?: "error" | "idle" | "pending" | "saved" | "new" | undefined; readonly id: string',
+      'copyState: "error" | "idle" | "pending" | "saved" | undefined; readonly id: string',
+      'copyState?: "error" | "idle" | "pending" | "saved" | undefined; id: string',
+    ]) expect(compareFacadeReport(dir, report(`type T = { ${mutation} };`)).state).toBe('stale');
+    record(report('type T = "b" | /* explanation */ "a" | undefined;'));
+    expect(compareFacadeReport(dir, report('type T = "b" | /* changed */ "a" | undefined;')).state).toBe('stale');
+    record(report('type T = Foo | Bar | undefined;'));
+    expect(compareFacadeReport(dir, report('type T = Bar | Foo | undefined;')).state).toBe('stale');
+  });
+
   /** Missing and stale are different answers, and only one of them is a diff */
   it('reports a missing report as missing rather than as a difference', () => {
     const comparison = compareFacadeReport(dir, 'anything');

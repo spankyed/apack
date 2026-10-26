@@ -3,7 +3,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createEarsEngine, type EarsEngine } from '@apackdev/ears';
+import type { EarsEngine } from '@apackdev/ears';
+import { _createTestEngine } from '../../../src/testing/index.ts';
 import { compile } from '../../../src/build/compilers/flow-compiler.ts';
 import { exportFlowsToDSL } from '../../../src/build/compilers/flow-to-dsl.ts';
 import { EARS } from '../../../src/types/entities.ts';
@@ -20,7 +21,7 @@ export function createRoundTrip(rootFlowRole: string, steps?: StepDefinition[]) 
 
   return {
     beforeEach() {
-      engine = createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (value) => entityTypes.has(value) });
+      engine = _createTestEngine({ entityTypes: [...entityTypes] });
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsl-rt-'));
     },
     afterEach() {

@@ -94,8 +94,9 @@ The API's `transport/packs.ts` serves `packs.loaded` from `getLoadedPackEntries(
 
 ```
 0. initializeLogCapture()          — console calls become log events, each printed once
-   openAppStore()                  — (runtime/index.ts) createPackRegistry(), the app's registered packs; open the LMDB store
-                                     (@apackdev/ears/lmdb) and the run history's, createEarsEngine({ kv: store.kv }),
+   openAppStore()                  — (runtime/index.ts) createPackRegistry(), the app's registered packs; open the app's
+                                     elmdb database with the packs' schema and the run history's, each with its engine
+                                     (openDatabaseStore, openRunHistory: @apackdev/host/database),
                                      bindHost(createHostRuntime({ ..., packs })), which binds the engine
                                      and binds the registry for the SDK's lookups; every step below works on it
 1. registerPack(hostRegistration) — the app's own features as the pack `host`: the application and packs systems and surfaces

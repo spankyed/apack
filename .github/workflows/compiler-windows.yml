@@ -40,6 +40,7 @@ jobs:
           node -p "JSON.stringify({platform:process.platform,arch:process.arch,versions:process.versions})"
           node -e "const path=require('node:path'); const npm=path.join(path.dirname(process.execPath),'node_modules/npm/bin/npm-cli.js'); console.log(JSON.stringify({node:process.execPath,npm,exists:require('node:fs').existsSync(npm)}))"
           npm --version
+      - uses: ./.github/actions/elmdb
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}

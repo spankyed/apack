@@ -11,5 +11,5 @@ export async function list(
   if (opts.sessionCwd !== undefined) args.push('--cwd', opts.sessionCwd)
   if (opts.settingSources !== undefined) args.push('--setting-sources', opts.settingSources)
   // Populated fields remain opaque until verified against a real background session.
-  return z.array(z.record(z.unknown())).parse(await runJson<unknown>(args, opts))
+  return z.array(z.record(z.string(), z.unknown())).parse(await runJson<unknown>(args, opts))
 }

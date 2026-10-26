@@ -1,4 +1,5 @@
 import { test, expect } from '@apackdev/testing';
+import { frontendUnloaded } from './_support/pack-frontend.ts';
 
 test('installed pack help remains navigable without its runtime', async ({ app, appPage, electronApp }) => {
   await electronApp.evaluate(({ shell }) => {
@@ -19,7 +20,8 @@ test('installed pack help remains navigable without its runtime', async ({ app, 
     const surfaceIds = () => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.surfaces.map((surface: { id: string }) => surface.id) as string[]);
     await toggle();
     try {
-      await expect.poll(surfaceIds).not.toContain('e2e-fixture/memos');
+      await frontendUnloaded(appPage, 'e2e-fixture');
+      expect(await surfaceIds()).not.toContain('e2e-fixture/memos');
       await appPage.getByRole('link', { name: 'Next guide' }).click();
       await expect(appPage.getByTestId('help-article-title')).toHaveText('Next fixture guide');
       await expect.poll(surfaceIds).not.toContain('e2e-fixture/memos');

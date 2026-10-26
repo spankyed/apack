@@ -6,7 +6,7 @@
 import type { Simplify } from '@apackdev/sdk/helpers'
 import type { HotkeysMap, NavHistory, SurfaceInbox, ViewWrites } from '@apackdev/sdk/fe'
 import type {
-  ClaudePromptHostRequest, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptReply, ClaudePromptCompletionReply, AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, MessageEntity, Tab, ThreadCreateData,
+  ClaudePromptHostRequest, ClaudeUiFocusReply, ClaudeUiMountState, ClaudePromptReply, ClaudePromptCompletionReply, AgentMode as AgentModeConfig, AgentSettings, AgentThreadData, MessageEntity, MessageSearchResult, Tab, ThreadCreateData,
   ThreadEntity, ThreadExtended, ThreadTagOption, ThreadViewData, ThreadsSettings,
 } from '#generated/types.ts'
 import type { ThreadTabGroup } from './canvas/agent/tabs/types.ts'
@@ -69,6 +69,10 @@ export interface ThreadsContext {
   navHistory: NavHistory<string>;
   messagePagination: { hasMore: boolean; isLoading: boolean };
   sidebarArchivedThreads: ThreadListItem[];
+  /** The panel's message search: the query typed, and the results answering it once they arrive */
+  messageSearch: { query: string; results: MessageSearchResult[]; searching: boolean };
+  /** A message the chat brings into view once its thread has loaded it, older pages included */
+  focusMessage: { threadId: string; messageId: string } | null;
 
   // What the surface's views last gave it, from which the thread map and lists above are derived
   lists: { list: ThreadExtended[]; recent: Partial<ThreadEntity>[]; archived: Partial<ThreadEntity>[] };

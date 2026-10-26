@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { FeatureEntrySchema, ManifestSchema, type PackManifest } from '@apackdev/sdk/build';
 
-const shape = ManifestSchema.innerType().innerType().shape;
+const shape = ManifestSchema.shape;
 const rootFields = Object.keys(shape);
 const featureFields = Object.keys(FeatureEntrySchema.shape);
 const extensionFields = Object.keys(shape.extensions.unwrap().shape);

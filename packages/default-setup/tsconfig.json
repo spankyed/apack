@@ -28,12 +28,5 @@
   // checked here too; apack pack build bundles their declarations for the Monaco editors.
   "include": [
     "src/**/*.ts", "src/**/*.vue", "tests/**/*.ts"
-  ],
-  "exclude": [
-    // [SEARCH_INDEX_FF] The dormant library search index: these import fastembed and usearch, which
-    // no workspace installs. src/features/library/be/search-index/README.md says how to turn it on.
-    "src/features/library/be/search-index/repository.ts",
-    "src/features/library/be/search-index/service.ts",
-    "src/features/library/be/search-index/config/fastembed-mapping.ts"
   ]
 }

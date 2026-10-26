@@ -7,7 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  manifestPaths, missingPublishedPaths, packTree, publishedManifest, stagePublishTree, workspacePackList,
+  manifestPaths, missingPublishedPaths, packTree, publishedManifest, registryDependencies, stagePublishTree, workspacePackList,
 } from '../../src/build/published-manifest.ts';
 
 // What a published tarball may say, and what the build stages for npm to publish.
@@ -78,6 +78,40 @@ describe('publishedManifest', () => {
       peerDependenciesMeta: { lmdb: { optional: true } }, sideEffects: false,
     };
     expect(publishedManifest(manifest)).toEqual(manifest);
+  });
+
+  it('publishes a dependency on a linked directory as the version of the package there, and refuses one it cannot resolve', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'published-manifest-link-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'linked'));
+      fs.writeFileSync(path.join(dir, 'linked', 'package.json'), JSON.stringify({ name: 'linked', version: '2.3.4' }));
+      const manifest = { name: '@fake/pkg', dependencies: { linked: 'file:linked', msgpackr: '^1.11.9' } };
+      expect(publishedManifest(manifest, dir).dependencies).toEqual({ linked: '2.3.4', msgpackr: '^1.11.9' });
+      expect(() => publishedManifest(manifest)).toThrow('dependency linked is file:linked: publishing it needs the directory the path is relative to');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('registryDependencies', () => {
+  it('asks the registry for every dependency but one the same publish puts there, a linked one as its version', () => {
+    const linkedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'published-manifest-link-'));
+    try {
+      fs.mkdirSync(path.join(linkedDir, 'linked'));
+      fs.writeFileSync(path.join(linkedDir, 'linked', 'package.json'), JSON.stringify({ name: 'linked', version: '0.0.0', private: true }));
+      const engine = publishedManifest({ name: '@fake/engine', dependencies: { linked: 'file:linked', msgpackr: '^1' } }, linkedDir);
+      const sdk = { name: '@fake/sdk', dependencies: { '@fake/engine': '^1' }, peerDependencies: { vue: '^3' }, optionalDependencies: { fsevents: '^2' } };
+      const byName = (deps: Array<{ name: string }>) => [...deps].sort((a, b) => a.name.localeCompare(b.name));
+      expect(byName(registryDependencies([engine, sdk]))).toEqual([
+        { dependent: '@fake/sdk', name: 'fsevents', spec: '^2' },
+        { dependent: '@fake/engine', name: 'linked', spec: '0.0.0' },
+        { dependent: '@fake/engine', name: 'msgpackr', spec: '^1' },
+        { dependent: '@fake/sdk', name: 'vue', spec: '^3' },
+      ]);
+    } finally {
+      fs.rmSync(linkedDir, { recursive: true, force: true });
+    }
   });
 });
 

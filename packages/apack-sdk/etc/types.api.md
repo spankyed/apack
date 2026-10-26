@@ -6,6 +6,7 @@
 
 import type { BaseEntity } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
+import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { ShortCode } from '@apackdev/ears';
 
@@ -353,6 +354,9 @@ export const SDK_REL_KINDS: {
 };
 
 // @public
+export const SDK_RELATION_RULES: Readonly<Record<string, RelationRules>>;
+
+// @public
 export const SDK_ROLES: {
     readonly ROOT_FLOW: "root_flow";
     readonly ENTRY_EVENT: "entry_event";
@@ -381,6 +385,12 @@ export const SDK_ROW_RULES: {
         readonly required: readonly ["name", "content"];
         readonly shortCode: "DOC";
         readonly indexes: readonly ["name"];
+        readonly search: {
+            readonly fields: {
+                readonly name: 3;
+                readonly tags: 1;
+            };
+        };
     };
     readonly Collection: {
         readonly required: readonly ["name"];

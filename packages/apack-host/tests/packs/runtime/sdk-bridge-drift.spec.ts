@@ -24,7 +24,7 @@ const RUNTIME_ENTRY = path.join(REPO_ROOT, 'packages', 'default-setup', 'dist', 
 const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // Shared-instance exports the bridge leaves out (the Content DSL, test tooling), with their reasons
   ...Object.entries(APP_UNBRIDGED),
-  // Shared-instance exports only the app's composition root loads (the LMDB store)
+  // Shared-instance exports only the app's composition root loads (the elmdb databases)
   ...Object.entries(APP_ONLY_EXPORTS),
   // Redaction's host side: only the secrets store registers the values logs must mask, and a pack must not
   // The bound runtimes and unbinding: a pack could otherwise unbind the app or reach its raw services

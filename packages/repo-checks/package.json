@@ -15,9 +15,9 @@
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "app-builder-lib": "26.15.3",
-    "tsx": "^4.19.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
-    "vite": "^7.0.6",
-    "vitest": "^3.2.4"
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7"
   }
 }

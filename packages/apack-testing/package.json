@@ -38,7 +38,7 @@
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "ajv": "^8.20.0",
-    "tsx": "^4.19.4"
+    "tsx": "^4.23.15"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.40.0",
@@ -51,7 +51,7 @@
     "@trpc/server": "^11.1.2",
     "@vitejs/plugin-vue": "^6.0.1",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4",
+    "vitest": "^3.2.7",
     "ws": "^8.18.2"
   },
   "peerDependenciesMeta": {

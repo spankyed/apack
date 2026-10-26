@@ -305,6 +305,10 @@ const brainState = setup({
       flowHierarchy: [],
       selectedStepNode: undefined,
     }),
+    setBrainState: assign(({ event }) => {
+      const { rootFlowId, startError, paused, inspectEnabled } = typeOf('BRAIN_STATE', event);
+      return { brainIsDead: !rootFlowId, startError, runningRootFlowId: rootFlowId, brainIsPaused: paused, inspectEnabled };
+    }),
     setBrainStarted: assign({
       brainIsDead: false,
       startError: undefined,
@@ -398,6 +402,7 @@ const brainState = setup({
   on: {
     // Where the surface asks for what it starts from: the shell hands it this in a delivery naming the surface
     SURFACE_STARTED: { actions: 'requestSurfaceData' },
+    BRAIN_STATE: { actions: 'setBrainState' },
   },
   states: {
     loading: {
@@ -518,7 +523,7 @@ const brainState = setup({
         BRAIN_KILLED: {
           actions: 'setBrainKilled'
         },
-        // A new run: its tree is the root's, asked for again in this window
+        // News of a start: the new run's tree is the root's, asked for again in this window
         BRAIN_STARTED: {
           actions: ['setBrainStarted', 'requestRootData']
         },

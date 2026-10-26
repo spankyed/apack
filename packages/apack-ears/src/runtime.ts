@@ -8,7 +8,7 @@
  */
 import type { EARS, EntityNameArg, EntityShapes, ShapeOf } from './entities.ts';
 import type { RESERVED_ATTRIBUTES } from './errors.ts';
-import type { OrderedKV } from './kv.ts';
+import type { EarsDatabase } from './database.ts';
 
 /**
  * An id as `write` takes it: an entity's, plain or tagged with its type, and never a relation's (`EARS.RelationId`),
@@ -27,16 +27,17 @@ export interface RelationEdge<K extends string = string, Source extends string =
 
 /** What an engine is created with (`createEarsEngine`) */
 export interface EARSRuntimeDeps {
-  /** The store the engine reads and writes: a new one in memory by default (`createMemoryKV`) */
-  kv?: OrderedKV;
-  /** Whether a name is an entity type (`create('Note')` makes one) rather than an id */
-  isEntityType: (v: string) => boolean;
-  /** Whether a name is a relation kind: `link`, and every read or walk naming a kind, refuse one that isn't */
-  isRelationKind: (v: string) => boolean;
-  /** Whether a name is a role: `grant`, `revoke`, `grantExclusive` and `withRole` refuse one that isn't */
-  isRole: (v: string) => boolean;
-  /** What a created row of a type is held to; nothing by default — an engine given no shapes knows of no rule */
-  rowRules?: (type: string) => RowRules | undefined;
+  /**
+   * The elmdb database the engine reads and writes, opened by `@apackdev/ears/lmdb` (`openDatabase`). Its schema is
+   * the engine's entity types, relation kinds and roles, and the rules their rows and edges are held to; the engine's
+   * creator changes it with `admin.setSchema`
+   */
+  database: EarsDatabase;
+  /**
+   * Freezes every value a read gives back, as a test runtime does: code that changes one, expecting the database to
+   * change, throws there rather than silently not persisting in the app. Off by default
+   */
+  freeze?: boolean;
   /**
    * Told when a query does something its data will make slow — a `where` filtering thousands of a type's rows for
    * want of an index — once per call site. Nothing by default; the app passes one in development
@@ -62,6 +63,82 @@ export interface RowRules {
    * every type; a `where` on any other field filters the type's rows, finding the same matches
    */
   indexes?: readonly string[];
+  /** The fields its text index reads, each at its weight, and the language its words are stemmed in: what `search` matches */
+  search?: SearchDeclaration;
+  /** The fields its vector index embeds, and the model it embeds them with: what `near`, `like` and `hybrid` rank by */
+  embed?: EmbedDeclaration;
+}
+
+/** A type's text index, as its manifest entry declares it (`search`) */
+export interface SearchDeclaration {
+  /** Each field the index reads, with its weight: a field of weight 3 counts each of its words three times */
+  readonly fields: Readonly<Record<string, number>>;
+  /** The language whose stems a word is matched by (`en`, `de`, …), when the index stems */
+  readonly stem?: string;
+}
+
+/**
+ * A type's vector index, as its manifest entry declares it (`embed`). A write that changes one of its fields leaves the
+ * entity's chunks pending until an embedding of their text is stored (`embed`), which a later write's change refuses as
+ * stale. Embeddings are compared by cosine distance
+ */
+export interface EmbedDeclaration {
+  /** The fields whose text is embedded, in this order: strings, or lists of strings */
+  readonly from: readonly string[];
+  /** How the text is split, each part embedded on its own: whole (the default), at blank lines, or at Markdown headings */
+  readonly chunk?: 'whole' | 'paragraph' | 'heading';
+  /** The model the embeddings are made with: an embedding made with another is refused */
+  readonly model: string;
+  /** The numbers in each embedding, which the model decides */
+  readonly dims: number;
+}
+
+/** Chunks of a type's vector index waiting for embeddings, and what to make them with */
+export interface PendingEmbeddings {
+  model: string;
+  dims: number;
+  /** How many chunks wait in all, those beyond the limit included */
+  count: number;
+  /** Up to the limit of them: each one's entity, its number in the entity, its text's hash and the text to embed */
+  chunks: Array<{ id: EARS.EntityId; chunk: number; hash: string; text: string }>;
+}
+
+/** An embedding of one pending chunk, naming the chunk as `pendingEmbeddings` did */
+export interface Embedding {
+  id: EARS.EntityId;
+  chunk: number;
+  hash: string;
+  model: string;
+  vector: readonly number[];
+}
+
+/**
+ * How `search` matches and ranks. `fields` names the index's fields a match may be in, and `recency` a field holding a
+ * time, by which a score is halved for every `halfLife` milliseconds before `now` (the read's clock unless given)
+ */
+export interface SearchOptions<F extends string = string> {
+  /** The query's last word matches the words it starts, as a search box does while it is typed in */
+  prefix?: boolean;
+  /** A word of five letters or more also matches one an edit away, nine or more two; on unless false */
+  fuzzy?: boolean;
+  /** Any of the query's clauses matching is enough, rather than every one */
+  any?: boolean;
+  fields?: readonly F[];
+  recency?: { field: F; halfLife: number; now?: number };
+}
+
+/** Where a search's terms are in one field: each `[element, start, end]`, the element a list field's, in UTF-16 units */
+export type SearchHighlights = Record<string, ReadonlyArray<readonly [element: number, start: number, end: number]>>;
+
+/** What a search found in one entity */
+export interface SearchHit<E extends string = string> {
+  id: EARS.EntityId<E>;
+  /** Its relevance: BM25 over the index's fields at their weights, decayed by recency when asked */
+  score: number;
+  /** The index's words it matched: the query's, and those its prefixes and edits reached */
+  terms: string[];
+  /** With `highlights`, where the matched words are in each field */
+  highlights?: SearchHighlights;
 }
 
 /**
@@ -193,6 +270,35 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
   distinct(field?: keyof ShapeOf<D['shapes'], E> & string): QueryBuilder<E, D>;
   /** The ids reached, by their value of `field`, each group in query order; `query.ids(ids)` queries a group on */
   groupBy(field: keyof ShapeOf<D['shapes'], E> & string): Map<unknown, EARS.EntityId<E>[]>;
+  /**
+   * The entities the type's text index (its manifest entry's `search`) matches to `query`, most relevant first: words,
+   * every one of which matches; `"a phrase"`; `-word`, which no match holds; `field:word`; `a OR b`. After other
+   * steps it searches among the entities they reached
+   */
+  search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
+  /**
+   * The `k` entities (10 unless given) whose embeddings in the type's vector index (its manifest entry's `embed`) are
+   * nearest `vector`, nearest first, each scored `1 / (1 + distance)` by its nearest chunk; after other steps, among the
+   * entities they reached. An entity whose chunks are pending is not found until they are embedded
+   */
+  near(vector: readonly number[], options?: { k?: number }): QueryBuilder<E, D>;
+  /** `near` the embedding the entity with `id` holds, itself excepted: more like it */
+  like(id: EARS.EntityId, options?: { k?: number }): QueryBuilder<E, D>;
+  /**
+   * The text index's matches to `query` and the vector index's nearest to `vector`, merged by reciprocal rank fusion:
+   * an entity both find ranks above one either finds alone. The `k` best (10 unless given)
+   */
+  hybrid(query: string, vector: readonly number[], options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string> & { k?: number }): QueryBuilder<E, D>;
+  /** The entities after `id` in the order so far: the page after one that ended at `id` */
+  after(id: EARS.EntityId): QueryBuilder<E, D>;
+  /**
+   * What the query's `search` (or `near`, `like` or `hybrid`, whose hits hold no words) found in each entity it reaches: its score and matched words, with `highlights` where
+   * they are, and with `fields` its row's fields picked (`pick`'s)
+   */
+  hits<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(
+    options: { fields: A; highlights?: boolean },
+  ): Array<SearchHit<E> & { row: { id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]> }>;
+  hits(options?: { highlights?: boolean }): SearchHit<E>[];
   ids(): EARS.EntityId<E>[];
   count(): number;
   /** The first entity's id, or undefined when the query reaches none */
@@ -207,14 +313,13 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 
 // ─── WriteBuilder fluent interface ─────────────────────────────────────
 
-/** How `link` makes an edge */
-export interface LinkOptions<R extends string = string> {
+/**
+ * How `link` makes an edge. What a kind's edges are held to — no cycle through it, at most one edge between two
+ * entities — is the kind's declaration (`apack.json` `data.relations`), not a link's
+ */
+export interface LinkOptions {
   /** Stored on the edge, and part of what makes it the same edge as one already there */
   info?: unknown;
-  /** Removes this entity's edges of the kind to the target first, so the one linked is the only one */
-  replace?: boolean;
-  /** Refuses the edge when it would close a cycle through these kinds */
-  acyclicIn?: readonly R[];
 }
 
 /** What `create` is given besides the type */
@@ -332,9 +437,11 @@ export interface WriteBuilder<E extends string = string, D extends EarsSchema = 
   removeValue<K extends WritableField<D['shapes'], E>>(k: K, v: ListElement<FieldValue<D['shapes'], E, K>>): WriteBuilder<E, D>;
   /**
    * Links this entity to `target`. An edge of the kind to the target with the same `info` (or any, when
-   * none is given) is the same edge, and linking it again changes nothing.
+   * none is given) is the same edge, and linking it again changes nothing; of a kind declared `unique`, any edge to
+   * the target is, and linking it again with `info` replaces the edge's. A kind declared `acyclic` refuses an edge
+   * that would close a cycle through it (`CYCLE`).
    */
-  link(kind: D['relKinds'], target: EARS.EntityId, options?: LinkOptions<D['relKinds']>): WriteBuilder<E, D>;
+  link(kind: D['relKinds'], target: EARS.EntityId, options?: LinkOptions): WriteBuilder<E, D>;
   /** Removes this entity's edges of the kind, to `target` only when given */
   unlink(kind: D['relKinds'], target?: EARS.EntityId): WriteBuilder<E, D>;
   /** Removes every edge from this entity */

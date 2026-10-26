@@ -22,6 +22,8 @@ export const threadViews = defineViews({
     repository.chatQueries.chatPage(threadId as EARS.EntityId, limit),
   /** One message, whole; `null` once it is gone */
   message: ({ id }: { id: string }) => repository.chatQueries.messageById(id as EARS.EntityId),
+  /** The messages the panel's search box matches, most relevant first and newer before older, each with its thread */
+  messageSearch: ({ query }: { query: string }) => repository.chatQueries.searchMessages(query),
   /** An open tab's thread: its label, whether it is pinned, and its artifacts; `null` once it is gone */
   tab: ({ threadId }: { threadId: string }) => repository.chatQueries.tab(threadId as EARS.EntityId),
 });
