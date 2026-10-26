@@ -26,6 +26,7 @@ import type { Readable, Writable } from 'stream'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 
+import { createStderrTail } from './stderr-tail.ts'
 import { decodeNdjson, encodeNdjsonLine, type DecodedLine } from './ndjson.ts'
 import {
   ClaudeAbortError,
@@ -262,9 +263,9 @@ export async function spawnStream(
     throw wrapSpawnError(err, cliPath)
   }
 
-  // Collect stderr lazily for post-mortem on exit.
-  const stderrChunks: Buffer[] = []
-  child.stderr.on('data', c => stderrChunks.push(c))
+  // Drain throughout the process lifetime, retaining only bounded diagnostics.
+  const stderrTail = createStderrTail()
+  child.stderr.on('data', c => stderrTail.append(c))
 
   let exited = false
   let killTimer: ReturnType<typeof setTimeout> | undefined
@@ -314,7 +315,7 @@ export async function spawnStream(
         resolve({
           exitCode: code ?? -1,
           signal: sig,
-          stderr: Buffer.concat(stderrChunks).toString('utf8'),
+          stderr: stderrTail.text(),
         })
       })
     },

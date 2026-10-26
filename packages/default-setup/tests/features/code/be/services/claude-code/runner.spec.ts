@@ -112,3 +112,12 @@ describe('spawnStream input failure', () => {
     }
   }, 5000)
 })
+
+ it('retains bounded stderr including final writes before close', async () => {
+  const handle = await spawnStream(['-e', "process.stderr.write('x'.repeat(200000)); process.stderr.end('late diagnostic');"], {cliPath: process.execPath, cwd: tmpdir()})
+  const result = await handle.done()
+  expect(result.exitCode).toBe(0)
+  expect(result.stderr).toContain('[stderr truncated:')
+  expect(result.stderr.endsWith('late diagnostic')).toBe(true)
+  expect(Buffer.byteLength(result.stderr)).toBeLessThan(64 * 1024 + 100)
+ })
