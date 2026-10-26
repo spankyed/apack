@@ -24,7 +24,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createServer, type ViteDevServer } from 'vite';
+import { createServer, normalizePath, type ViteDevServer } from 'vite';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 /** One pack the app ships, and one that is not in `packages/` at all, reached the same way */
@@ -50,7 +50,10 @@ beforeAll(async () => {
   await server.listen();
 
   // Populate the graph the way a browser loading the page does: from the entry, following every import edge
-  // the transforms discover, the pack map's dynamic ones included
+  // the transforms discover, the pack map's dynamic ones included. Not the files a stylesheet watches:
+  // Tailwind records every source it scans (a pack's backend included) as a dependency of `style.css`, a
+  // node with no id that a browser never requests, and transforming one hands node-only packages to the
+  // browser's dependency optimizer
   const seen = new Set<string>();
   let queue = ['/src/main.ts'];
   for (let depth = 0; depth < 12 && queue.length > 0; depth++) {
@@ -61,7 +64,7 @@ beforeAll(async () => {
       try {
         await server.transformRequest(url);
         const mod = await server.moduleGraph.getModuleByUrl(url);
-        for (const imported of mod?.importedModules ?? []) if (imported.url) next.add(imported.url);
+        for (const imported of mod?.importedModules ?? []) if (imported.id) next.add(imported.url);
       } catch { /* a module the page would not have reached either */ }
     }));
     queue = [...next];
@@ -83,8 +86,9 @@ describe('a pack whose source this machine has', () => {
     const file = path.join(REPO_ROOT, component);
     expect(fs.existsSync(file), `${component} is gone — point this at a component that exists`).toBe(true);
 
-    const mods = server.moduleGraph.getModulesByFile(file);
-    const mod = mods && [...mods][0];
+    // The component's own module, whose id is the file: a file also has its SFC parts (`?vue&type=style…`)
+    // and a file-only node for what watches it (Tailwind's sources), neither of which is what an edit patches
+    const mod = [...server.moduleGraph.getModulesByFile(file) ?? []].find((m) => m.id === normalizePath(file));
     expect(mod, `${component} is not in the graph: its pack is fetched over pack://, so editing it reloads `
       + 'the window. APACK_DEV_PACK_DIRS or the workspace scan is what puts it here').toBeDefined();
     // Vite's condition for patching a module instead of reloading the page

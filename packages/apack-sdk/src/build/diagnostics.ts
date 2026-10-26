@@ -21,6 +21,11 @@ export interface PackValidation {
   skippedChecks: SkippedPackCheck[];
 }
 
+/** A validation issue's path as a diagnostic's: a JSON document has no symbol keys, so one would be named by its description */
+export function diagnosticPath(path: readonly PropertyKey[]): (string | number)[] {
+  return path.map(key => typeof key === 'symbol' ? String(key.description) : key);
+}
+
 /** An error takes precedence over incompleteness; warnings alone do not invalidate a pack. */
 export function packValidation(diagnostics: PackDiagnostic[] = [], skippedChecks: SkippedPackCheck[] = []): PackValidation {
   return {

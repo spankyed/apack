@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';
-import { ALLOWABLE_PACK_CHECKS, PackChecksSchema } from '@apackdev/sdk/build';
+import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@apackdev/sdk/build';
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses
@@ -484,7 +484,7 @@ export function packRuleProblems(packDir: string, dirs: readonly string[] = ['sr
   // Source-only callers need no manifest; owned packs use the same checks schema as full validation.
   const manifestFile = path.join(packDir, 'apack.json');
   const checks: unknown = fs.existsSync(manifestFile) ? (JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as { checks?: unknown }).checks : undefined;
-  const result = PackChecksSchema.safeParse(checks === undefined ? {} : checks);
+  const result = PackChecksSchema.safeParse(checks === undefined ? {} : checks, { error: _namingRefusedValue });
   if (!result.success) throw new Error(result.error.issues.map(issue =>
     `apack.json checks${issue.path.length ? '.' + issue.path.join('.') : ''}: ${issue.message}`).join('\n'));
   const allowed = new Set<PackRuleKey>(result.data.allow ?? []);

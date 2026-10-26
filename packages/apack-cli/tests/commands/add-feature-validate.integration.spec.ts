@@ -157,8 +157,8 @@ describe('apack pack validate', () => {
     const { exitCode, output } = await runValidate();
 
     expect(output).toContain('Warnings:');
-    expect(output).toContain('snapshot.json declarationRevision: Required');
-    expect(output).toContain('snapshot.json manifest.name: Required');
+    expect(output).toContain('snapshot.json declarationRevision: Invalid input: expected string, received undefined');
+    expect(output).toContain('snapshot.json manifest.name: Invalid input: expected string, received undefined');
     expect(exitCode).toBe(2);
     expect(output).toContain('Validation incomplete');
     expect(output).not.toContain('Pack is valid');

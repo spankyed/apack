@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { _namingRefusedValue } from '../framework/refused-value.ts';
 
 /** @internal Shared data validation for installed, source and native help declarations. */
 export const _HelpDocumentsSchema = z.array(z.object({
@@ -11,7 +12,7 @@ export const _HelpDocumentsSchema = z.array(z.object({
 
 /** @internal Metadata admission never needs executable modules. */
 export function _helpDataProblem(value: unknown, features: readonly string[]): string | undefined {
-  const result = _HelpDocumentsSchema.safeParse(value);
+  const result = _HelpDocumentsSchema.safeParse(value, { error: _namingRefusedValue });
   if (!result.success) return result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ');
   const ids = new Set<string>();
   for (const article of result.data) {

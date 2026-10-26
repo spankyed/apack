@@ -749,8 +749,8 @@ export function _stepBackendParts(entry: DeclarationData<Pick<StepEntry, 'build'
         callbacks: {
             compile: string;
             decompile: string;
-            validate?: string | undefined;
             validateTrack?: string | undefined;
+            validate?: string | undefined;
             register?: string | undefined;
         };
     } | undefined;

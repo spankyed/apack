@@ -146,7 +146,7 @@ export const ResultLineSchema = withUuid.extend({
   stop_reason: z.string().nullable().optional(),
   total_cost_usd: z.number().optional(),
   usage: z.object({}).passthrough().optional(),
-  modelUsage: z.record(z.any()).optional(),
+  modelUsage: z.record(z.string(), z.any()).optional(),
   permission_denials: z.array(z.object({}).passthrough()).optional(),
   structured_output: z.unknown().optional(),
   errors: z.array(z.string()).optional(),

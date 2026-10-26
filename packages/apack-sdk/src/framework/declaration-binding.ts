@@ -1,6 +1,7 @@
 import { _NativePackDeclarationSchema, _EventContractsSchema } from './declaration-schema.ts';
 import { _eventContractsProblem, type PackEventContracts } from './event-contracts.ts';
 import { _settingsJsonProblems } from './settings-validation.ts';
+import { _namingRefusedValue } from './refused-value.ts';
 
 /** @internal Read compiled authoring data with the same grammar and ownership checks as snapshots. */
 export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native = false): PackEventContracts {
@@ -14,7 +15,7 @@ export function _parseEventContracts(data: unknown, features: Parameters<typeof 
 export function _nativePackDeclarationProblem(declaration: unknown): string | undefined {
   const problems = _settingsJsonProblems(declaration);
   if (problems.length) return problems.map(problem => `${problem.path.join('.')}: declarations must contain finite, acyclic JSON data properties`).join('; ');
-  const result = _NativePackDeclarationSchema.safeParse(declaration);
+  const result = _NativePackDeclarationSchema.safeParse(declaration, { error: _namingRefusedValue });
   if (!result.success) return result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ');
 }
 

@@ -27,26 +27,28 @@ import type { StepFrontendDeclaration, StepLayoutDeclaration } from './step-fron
 export { FEATURE_ID_PATTERN };
 
 /** Rejects a pack's entries that use a name or value the SDK owns, naming each */
-const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx) => {
+const notSdkOwned = (owned: Record<string, string>) => (declared: Record<string, string>, ctx: z.RefinementCtx, path: PropertyKey[] = []) => {
   const taken = _reservedEntries(declared, owned);
   if (taken.length === 0) return;
   ctx.addIssue({
-    code: z.ZodIssueCode.custom,
+    code: 'custom',
+    path,
     message: `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} defined by the SDK and available to every pack: remove ${taken.length === 1 ? 'it' : 'them'}`,
   });
 };
 
-/** Check names before Zod decodes records: its object merge discards an own __proto__ key. */
-function checkDeclaredNames(raw: unknown, ctx: z.RefinementCtx): unknown {
-  if (!raw || typeof raw !== 'object') return raw;
-  const declaration = raw as Record<string, unknown>;
+/**
+ * Names no pack may declare. Every entity dictionary is a declarationRecord, so an own __proto__ name survives
+ * to be checked here. It runs whatever else the declaration got wrong (`ALONGSIDE_OTHER_ISSUES`), so an author
+ * sees a reserved name beside the rest rather than after fixing it.
+ */
+function checkDeclaredNames(parsed: unknown, ctx: z.RefinementCtx): void {
+  if (!parsed || typeof parsed !== 'object') return;
+  const declaration = parsed as Record<string, unknown>;
   try {
     for (const { name, owner } of _packEntities(declaration)) {
       const path = [...owner.split('.'), 'entities'];
-      notSdkOwned(SDK_ENTITIES)({ [name]: name }, {
-        path: [...ctx.path, ...path],
-        addIssue: issue => ctx.addIssue({ ...issue, path: [...path, ...(issue.path ?? [])] }),
-      });
+      notSdkOwned(SDK_ENTITIES)({ [name]: name }, ctx, path);
       if ((Object.values(RESERVED_ENTITY_TYPES) as string[]).includes(name)) {
         ctx.addIssue({
           code: 'custom',
@@ -70,8 +72,10 @@ function checkDeclaredNames(raw: unknown, ctx: z.RefinementCtx): unknown {
   } catch (error) {
     ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) });
   }
-  return raw;
 }
+
+/** A refinement's `when`: run even though the object has issues of its own, which a refinement otherwise skips */
+const ALONGSIDE_OTHER_ISSUES = { when: () => true };
 
 const PackRangeSchema = z.string().refine(_validPackRange, 'Must be a nonempty semver range');
 const PackDependencySchema = z.string().superRefine((value, ctx) => {
@@ -215,7 +219,7 @@ export const _EventContractsSchema = declarationRecord(z.string().regex(FEATURE_
   surface: z.object({ receives: EventNamesSchema }).strict().optional(),
 }).strict());
 
-export const _NativePackDeclarationSchema = z.preprocess(checkDeclaredNames, z.object({
+export const _NativePackDeclarationSchema = z.object({
   id: z.string().regex(PACK_ID_PATTERN),
   version: PackVersionSchema.optional(),
   migrations: z.lazy(() => MigrationsSchema).optional(),
@@ -255,7 +259,7 @@ export const _NativePackDeclarationSchema = z.preprocess(checkDeclaredNames, z.o
   checkDefaultSurfaceClaims(declaration.features, ctx);
   checkApiClaims(declaration.features, declaration.services, declaration.repositories, ctx);
   checkServiceProviders(declaration, ctx);
-}));
+}).superRefine(checkDeclaredNames, ALONGSIDE_OTHER_ISSUES);
 
 /** Validate provider membership before a build needs to resolve its declaration. */
 function checkServiceProviders(pack: { id: string; dependencies?: Readonly<Record<string, unknown>>; consumes?: { services: readonly string[] } }, ctx: z.RefinementCtx): void {
@@ -724,7 +728,7 @@ const ServicesSchema = declarationRecord(z.string().regex(_SERVICE_NAME_PATTERN,
  */
 const FEATURE_ID_SCHEMA = z.string()
   .regex(FEATURE_ID_PATTERN, 'Must start with a lowercase letter and contain only letters and digits (e.g. "notes", "calendarEvents")')
-  .refine((id) => !RESERVED_FEATURE_IDS.has(id), (id) => ({ message: `"${id}" is reserved in generated code: pick another feature id` }));
+  .refine((id) => !RESERVED_FEATURE_IDS.has(id), { error: (issue) => `"${String(issue.input)}" is reserved in generated code: pick another feature id` });
 
 export const FeatureEntrySchema = z.object({
   description: FeatureDescriptionSchema,
@@ -898,7 +902,7 @@ export type _MigrationLinesMatchRegistration = _Asserted<
     : ['the manifest declares a line the registration does not', Exclude<MigrationLine, keyof PackMigrations>]
 >;
 
-export const ManifestSchema = z.preprocess(checkDeclaredNames, z.object({
+export const ManifestSchema = z.object({
   $schema: z.string().describe('JSON Schema reference for editor validation.').optional(),
   id: z.string().regex(PACK_ID_PATTERN, 'Must be lowercase alphanumeric with hyphens')
     .refine((id) => id !== HOST_PACK_ID, { message: `"${HOST_PACK_ID}" is the app's own pack id: pick another` })
@@ -950,4 +954,4 @@ export const ManifestSchema = z.preprocess(checkDeclaredNames, z.object({
     }
   }
   checkContentWriterClaims(manifest, ctx);
-}));
+}).superRefine(checkDeclaredNames, ALONGSIDE_OTHER_ISSUES);

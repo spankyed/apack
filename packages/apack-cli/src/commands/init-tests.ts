@@ -6,7 +6,7 @@ import { cliVersion, findPackRoot } from '../utils';
 import { scaffoldUnitTestSetup } from './init';
 
 // The Playwright version @apackdev/testing is tested with
-const PLAYWRIGHT_RANGE = '^1.54.1';
+const PLAYWRIGHT_RANGE = '^1.55.1';
 
 
 /**

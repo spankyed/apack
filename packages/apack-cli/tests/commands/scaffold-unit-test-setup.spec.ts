@@ -51,7 +51,7 @@ describe('scaffoldUnitTestSetup', () => {
 
     expect(setup.addedDependencies).toEqual(['@apackdev/testing', 'vitest']);
     expect(setup.upgrades).toEqual([]);
-    expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^3.2.1' });
+    expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^3.2.7' });
   });
 
   it('names the upgrade for an installed @apackdev/testing without the harness and a vitest before 3, keeping them', () => {
@@ -65,7 +65,7 @@ describe('scaffoldUnitTestSetup', () => {
     expect(setup.addedDependencies).toEqual([]);
     expect(setup.upgrades).toEqual([
       { name: '@apackdev/testing', range: '^0.0.7', reason: 'the installed 0.0.7 has no @apackdev/testing/harness' },
-      { name: 'vitest', range: '^3.2.1', reason: '^2.1.0 is before 3.0.0' },
+      { name: 'vitest', range: '^3.2.7', reason: '^2.1.0 is before 3.0.0' },
     ]);
     expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^2.1.0' });
   });
@@ -86,7 +86,7 @@ describe('scaffoldUnitTestSetup', () => {
     });
 
     expect(scaffoldUnitTestSetup(root).upgrades).toEqual([
-      { name: 'vitest', range: '^3.2.1', reason: 'the installed 2.1.9 is before 3.0.0' },
+      { name: 'vitest', range: '^3.2.7', reason: 'the installed 2.1.9 is before 3.0.0' },
     ]);
   });
 });

@@ -194,14 +194,14 @@
     }
   },
   "peerDependencies": {
-    "@tiptap/pm": "^3.22.3",
-    "@tiptap/vue-3": "^3.22.2",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/vue-3": "^3.32.0",
     "ai": "^7.0.0",
     "esbuild": "^0.25.0",
     "typescript": ">=5.7",
     "vue": "^3.5.18",
     "xstate": "^5.19.2",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "peerDependenciesMeta": {
     "@tiptap/pm": {
@@ -223,10 +223,9 @@
     "ai": "^7.0.100",
     "esbuild": "^0.25.0",
     "typescript": "^5.8.3",
-    "vite": "^7.0.0",
-    "vitest": "^3.2.4",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7",
     "xstate": "^5.19.2",
-    "zod-to-json-schema": "^3.25.0",
     "jsdom": "^26.1.0",
     "@types/semver": "^7.8.0",
     "vscode-json-languageservice": "^5.7.2"

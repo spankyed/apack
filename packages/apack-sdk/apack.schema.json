@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
     "$schema": {
@@ -34,11 +35,12 @@
     },
     "dependencies": {
       "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
       "additionalProperties": {
         "type": "string"
-      },
-      "propertyNames": {
-        "pattern": "^[a-z][a-z0-9-]*$"
       },
       "description": "Other packs this pack depends on. Keys are pack IDs, values are nonempty semver ranges, file:<path> or github:<owner>/<repo> [range]."
     },
@@ -99,6 +101,20 @@
       "properties": {
         "entities": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$",
+            "not": {
+              "enum": [
+                "Flow",
+                "Node",
+                "Action",
+                "Prompt",
+                "Document",
+                "Collection"
+              ]
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -113,24 +129,25 @@
                 "description": "The prefix create numbers each row's short code with, <prefix>-<n>: three uppercase letters, unique across every pack. The shape declares no shortCode: #generated/ears types the field from this prefix (ShortCodeOf<E>). Leave it out for an entity that isn't numbered."
               },
               "indexes": {
+                "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed.",
                 "type": "array",
                 "items": {
                   "type": "string",
                   "pattern": "^[a-z][A-Za-z0-9]*$"
-                },
-                "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
+                }
               },
               "search": {
                 "type": "object",
                 "properties": {
                   "fields": {
                     "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][A-Za-z0-9]*$"
+                    },
                     "additionalProperties": {
                       "type": "number",
                       "exclusiveMinimum": 0
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z][A-Za-z0-9]*$"
                     },
                     "description": "Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times."
                   },
@@ -169,13 +186,13 @@
                 "type": "object",
                 "properties": {
                   "from": {
+                    "description": "The fields whose text is embedded, in this order.",
+                    "minItems": 1,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^[a-z][A-Za-z0-9]*$"
-                    },
-                    "minItems": 1,
-                    "description": "The fields whose text is embedded, in this order."
+                    }
                   },
                   "chunk": {
                     "type": "string",
@@ -210,23 +227,22 @@
             "additionalProperties": false,
             "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
           },
-          "propertyNames": {
-            "pattern": "^[A-Z][A-Za-z0-9]*$",
-            "not": {
-              "enum": [
-                "Flow",
-                "Node",
-                "Action",
-                "Prompt",
-                "Document",
-                "Collection"
-              ]
-            }
-          },
           "description": "Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity."
         },
         "relations": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+            "not": {
+              "enum": [
+                "contains",
+                "transitions_to",
+                "instance_of",
+                "parent_of"
+              ]
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -241,17 +257,6 @@
             },
             "additionalProperties": false,
             "description": "One relation kind: the rules its edges are held to, each off unless declared ({} for a kind with none)."
-          },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
-            "not": {
-              "enum": [
-                "contains",
-                "transitions_to",
-                "instance_of",
-                "parent_of"
-              ]
-            }
           },
           "description": "Pack-level relation wire names, each mapped to its declaration; generated EARS constants are their uppercase names. Do not redeclare SDK-owned wires."
         },
@@ -276,6 +281,10 @@
     },
     "features": {
       "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-zA-Z0-9]*$"
+      },
       "additionalProperties": {
         "type": "object",
         "properties": {
@@ -286,6 +295,20 @@
           },
           "entities": {
             "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Za-z0-9]*$",
+              "not": {
+                "enum": [
+                  "Flow",
+                  "Node",
+                  "Action",
+                  "Prompt",
+                  "Document",
+                  "Collection"
+                ]
+              }
+            },
             "additionalProperties": {
               "type": "object",
               "properties": {
@@ -300,24 +323,25 @@
                   "description": "The prefix create numbers each row's short code with, <prefix>-<n>: three uppercase letters, unique across every pack. The shape declares no shortCode: #generated/ears types the field from this prefix (ShortCodeOf<E>). Leave it out for an entity that isn't numbered."
                 },
                 "indexes": {
+                  "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed.",
                   "type": "array",
                   "items": {
                     "type": "string",
                     "pattern": "^[a-z][A-Za-z0-9]*$"
-                  },
-                  "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
+                  }
                 },
                 "search": {
                   "type": "object",
                   "properties": {
                     "fields": {
                       "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[a-z][A-Za-z0-9]*$"
+                      },
                       "additionalProperties": {
                         "type": "number",
                         "exclusiveMinimum": 0
-                      },
-                      "propertyNames": {
-                        "pattern": "^[a-z][A-Za-z0-9]*$"
                       },
                       "description": "Each field the text index reads, with its weight: a field of weight 3 counts each of its words three times."
                     },
@@ -356,13 +380,13 @@
                   "type": "object",
                   "properties": {
                     "from": {
+                      "description": "The fields whose text is embedded, in this order.",
+                      "minItems": 1,
                       "type": "array",
                       "items": {
                         "type": "string",
                         "pattern": "^[a-z][A-Za-z0-9]*$"
-                      },
-                      "minItems": 1,
-                      "description": "The fields whose text is embedded, in this order."
+                      }
                     },
                     "chunk": {
                       "type": "string",
@@ -397,19 +421,6 @@
               "additionalProperties": false,
               "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
             },
-            "propertyNames": {
-              "pattern": "^[A-Z][A-Za-z0-9]*$",
-              "not": {
-                "enum": [
-                  "Flow",
-                  "Node",
-                  "Action",
-                  "Prompt",
-                  "Document",
-                  "Collection"
-                ]
-              }
-            },
             "description": "Entity wire names owned by this feature, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity. Placement does not change wire names."
           },
           "designation": {
@@ -417,10 +428,14 @@
             "description": "Links the system to an EARS designation."
           },
           "settings": {
+            "description": "Declarative feature preferences: effective-value schema and explicit defaults.",
             "type": "object",
             "properties": {
               "schema": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
                 "additionalProperties": {},
                 "description": "JSON Schema draft-07 for the effective settings object; references stay within this schema.",
                 "$ref": "http://json-schema.org/draft-07/schema#"
@@ -457,8 +472,7 @@
               "schema",
               "defaults"
             ],
-            "additionalProperties": false,
-            "description": "Declarative feature preferences: effective-value schema and explicit defaults."
+            "additionalProperties": false
           },
           "types": {
             "type": "string",
@@ -575,6 +589,10 @@
                     "properties": {
                       "routes": {
                         "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "additionalProperties": {
                           "anyOf": [
                             {
@@ -766,23 +784,25 @@
           },
           "services": {
             "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[A-Za-z_$][\\w$]*$"
+            },
             "additionalProperties": {
               "type": "string",
               "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
-            },
-            "propertyNames": {
-              "pattern": "^[A-Za-z_$][\\w$]*$"
             },
             "description": "Services. Keys are service names on `services`, values are \"path#exportName\" of the service object (an object literal or a class instance, not a factory) in a source file."
           },
           "repositories": {
             "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[A-Za-z_$][\\w$]*$"
+            },
             "additionalProperties": {
               "type": "string",
               "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
-            },
-            "propertyNames": {
-              "pattern": "^[A-Za-z_$][\\w$]*$"
             },
             "description": "Repository objects. Keys are repository names on `repository` (from #generated/repository), values are \"path#exportName\" of the object in a source file."
           },
@@ -796,6 +816,10 @@
             "properties": {
               "types": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
@@ -838,9 +862,7 @@
                         "anyOf": [
                           {
                             "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "items": [
+                            "prefixItems": [
                               {
                                 "type": "string",
                                 "const": "path"
@@ -858,41 +880,52 @@
                                 ],
                                 "additionalProperties": false
                               }
-                            ]
+                            ],
+                            "items": false,
+                            "minItems": 2,
+                            "maxItems": 2
                           },
                           {
                             "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "items": [
+                            "prefixItems": [
                               {
                                 "type": "string",
                                 "const": "rect"
                               },
                               {
                                 "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
                                 "additionalProperties": {
                                   "type": "string"
                                 }
                               }
-                            ]
+                            ],
+                            "items": false,
+                            "minItems": 2,
+                            "maxItems": 2
                           },
                           {
                             "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "items": [
+                            "prefixItems": [
                               {
                                 "type": "string",
                                 "const": "circle"
                               },
                               {
                                 "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
                                 "additionalProperties": {
                                   "type": "string"
                                 }
                               }
-                            ]
+                            ],
+                            "items": false,
+                            "minItems": 2,
+                            "maxItems": 2
                           }
                         ]
                       },
@@ -906,13 +939,14 @@
                   ],
                   "additionalProperties": false
                 },
-                "propertyNames": {
-                  "pattern": "^[a-z][a-z0-9_-]*$"
-                },
                 "description": "Reference type IDs with static presentation and declared navigation bindings."
               },
               "categories": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$"
+                },
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
@@ -962,9 +996,6 @@
                   ],
                   "additionalProperties": false
                 },
-                "propertyNames": {
-                  "pattern": "^[a-z][a-z0-9_-]*$"
-                },
                 "description": "Reference picker category IDs and their declared item providers."
               }
             },
@@ -991,6 +1022,10 @@
           "properties": {
             "list": {
               "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
               "additionalProperties": {
                 "type": "object",
                 "properties": {
@@ -1004,9 +1039,6 @@
                   "placeholder"
                 ],
                 "additionalProperties": false
-              },
-              "propertyNames": {
-                "pattern": "^[a-z][a-z0-9-]*$"
               },
               "description": "The commands, keyed by the name typed after the \"/\"."
             },
@@ -1027,11 +1059,18 @@
         },
         "settings": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
               "schema": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
                 "additionalProperties": {},
                 "description": "JSON Schema draft-07 for the effective settings object; references stay within this schema.",
                 "$ref": "http://json-schema.org/draft-07/schema#"
@@ -1070,9 +1109,6 @@
             ],
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-zA-Z0-9]*$"
-          },
           "description": "Pack-owned preference groups keyed by local group ID; stored under this pack, independently of app and feature settings."
         },
         "help": {
@@ -1092,6 +1128,10 @@
         },
         "steps": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1240,6 +1280,7 @@
                 "description": "Trigger metadata, compiler callbacks and optional lazy registration."
               },
               "fe": {
+                "description": "Static editor presentation and explicit component/layout bindings.",
                 "type": "object",
                 "properties": {
                   "nodeConfig": {
@@ -1279,11 +1320,13 @@
                           "inputs": {
                             "type": "integer",
                             "minimum": -1,
+                            "maximum": 9007199254740991,
                             "description": "Maximum incoming connections; -1 means unlimited."
                           },
                           "outputs": {
                             "type": "integer",
                             "minimum": -1,
+                            "maximum": 9007199254740991,
                             "description": "Maximum outgoing connections; -1 means unlimited."
                           }
                         },
@@ -1424,8 +1467,7 @@
                 "required": [
                   "nodeConfig"
                 ],
-                "additionalProperties": false,
-                "description": "Static editor presentation and explicit component/layout bindings."
+                "additionalProperties": false
               },
               "types": {
                 "type": "string",
@@ -1469,12 +1511,13 @@
                 "properties": {
                   "references": {
                     "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_$][\\w$]*$"
+                    },
                     "additionalProperties": {
                       "type": "string",
                       "minLength": 1
-                    },
-                    "propertyNames": {
-                      "pattern": "^[A-Za-z_$][\\w$]*$"
                     },
                     "description": "DSL field to compiled content key, for static dependency and rename inspection. Computed targets are recorded as dynamic."
                   },
@@ -1502,13 +1545,14 @@
             ],
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9_-]*$"
-          },
           "description": "Flow step types this pack contributes. Inline node and editor data with explicit build, component, layout, type and runtime bindings. The type is the key, so a pack cannot declare one twice."
         },
         "artifacts": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1528,13 +1572,14 @@
             ],
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9_-]*$"
-          },
           "description": "Artifact types this pack contributes. Each names its icon and viewer. The type is the key, so a pack cannot declare one twice."
         },
         "blocks": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1559,24 +1604,25 @@
             },
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9_-]*$"
-          },
           "description": "Message blocks this pack contributes. Each names where its code lives. The type is the key, so a pack cannot declare one twice."
         },
         "services": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*$"
+          },
           "additionalProperties": {
             "type": "string",
             "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
-          },
-          "propertyNames": {
-            "pattern": "^[A-Za-z_$][\\w$]*$"
           },
           "description": "Pack-level services, belonging to no one feature. Keys are service names on `services`, values are \"path#exportName\" of the service object (an object literal or a class instance, not a factory) in a source file. A feature's own are its `services`."
         },
         "dsl": {
           "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1601,6 +1647,9 @@
               },
               "globals": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
                 "additionalProperties": {
                   "type": "string"
                 },
@@ -1624,28 +1673,34 @@
         },
         "textEditor": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
               "extensions": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_$][\\w$]*$"
+                },
                 "additionalProperties": {
                   "type": "string",
                   "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
-                },
-                "propertyNames": {
-                  "pattern": "^[A-Za-z_$][\\w$]*$"
                 },
                 "description": "Tiptap extension name to its exported extension object (\"path#exportName\"). Each key must match the exported object's Tiptap name."
               },
               "popups": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_$][\\w$]*$"
+                },
                 "additionalProperties": {
                   "type": "string",
                   "pattern": "^[^#]+$"
-                },
-                "propertyNames": {
-                  "pattern": "^[A-Za-z_$][\\w$]*$"
                 },
                 "description": "Popup IDs local to this group, mapped to pack-root-relative Vue component modules."
               },
@@ -1657,19 +1712,17 @@
             },
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[A-Za-z_$][\\w$]*$"
-          },
           "description": "Named rich-text editor contribution groups. Extensions, popup IDs and the optional suggestion predicate are declared without loading pack code."
         },
         "appExtensions": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*$"
+          },
           "additionalProperties": {
             "type": "string",
             "pattern": "^[^#]+$"
-          },
-          "propertyNames": {
-            "pattern": "^[A-Za-z_$][\\w$]*$"
           },
           "description": "Named app extensions. Keys are extension names (identifiers), values are paths to Vue components."
         }
@@ -1699,6 +1752,10 @@
       "properties": {
         "sources": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
           "additionalProperties": {
             "anyOf": [
               {
@@ -1734,13 +1791,14 @@
               }
             ]
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9-]*$"
-          },
           "description": "Content this pack writes into the database. Keys name the content; the specialty keys (actions, prompts, flows, documents, commands) take a path, other keys an entry object."
         },
         "datasets": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1769,13 +1827,14 @@
             },
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9-]*$"
-          },
           "description": "Compiled datasets the pack reads back itself, never written to the database. Each names a format declaring no entity."
         },
         "formats": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1798,21 +1857,21 @@
                     "type": "string"
                   },
                   {
+                    "minItems": 1,
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "minItems": 1
+                    }
                   }
                 ],
                 "description": "The entity types the format's items are written as. Omitted, sources using it are compiled and never written (content.datasets)."
               },
               "identity": {
+                "minItems": 1,
                 "type": "array",
                 "items": {
                   "type": "string"
                 },
-                "minItems": 1,
                 "description": "Fields matched to find an existing entity (\"parent\" = the tree parent). Ignored for entity types whose owning pack registers a content writer with \"find\"."
               },
               "tree": {
@@ -1836,6 +1895,9 @@
               },
               "fields": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
@@ -1868,13 +1930,13 @@
             },
             "additionalProperties": false
           },
-          "propertyNames": {
-            "pattern": "^[a-z][a-z0-9-]*$"
-          },
           "description": "Named formats that turn a source into items. A content source names one; a dependent pack names one of these as \"<this pack id>:<name>\"."
         },
         "writers": {
           "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string",
             "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
@@ -1890,6 +1952,10 @@
       "properties": {
         "app": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1909,14 +1975,15 @@
               "up"
             ],
             "additionalProperties": false
-          },
-          "propertyNames": {
-            "pattern": "^\\d+\\.\\d+\\.\\d+$"
           },
           "description": "Migrations on apack's version line, keyed by the release each targets. For data whose shape follows the app rather than this pack."
         },
         "pack": {
           "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -1936,9 +2003,6 @@
               "up"
             ],
             "additionalProperties": false
-          },
-          "propertyNames": {
-            "pattern": "^\\d+\\.\\d+\\.\\d+$"
           },
           "description": "Migrations on this pack's own version line, keyed by the version each targets, compared against `version` in this manifest."
         }
@@ -1992,7 +2056,6 @@
     "version"
   ],
   "additionalProperties": false,
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://apack.dev/schemas/apack.json",
   "$comment": "Auto-generated from framework/declaration-schema.ts — do not edit by hand. Run: npm run schema:update",
   "title": "apack Pack Manifest",

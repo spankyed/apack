@@ -106,7 +106,7 @@ const PACKAGE_JSON_TEMPLATE = (name: string) => JSON.stringify({
     // The generated facades import the EARS engine; it's released with the SDK at the same version
     '@apackdev/ears': SDK_RANGE(),
     '@apackdev/sdk': SDK_RANGE(),
-    zod: '^3.25.76',
+    zod: '^4.6.7',
   },
   devDependencies: {
     // Pinned per project: a global, Homebrew or app-bundled `apack` hands off to this one
@@ -144,7 +144,7 @@ const VITEST_FLOOR = '3.0.0';
  * What the unit test setup needs installed, for a pack on `sdkRange`. @apackdev/testing is released with @apackdev/sdk at
  * the same version and takes it as a peer dependency (^<version>, one minor before 1.0), so it gets the pack's SDK range.
  */
-const UNIT_TEST_DEV_DEPENDENCIES = (sdkRange: string) => ({ '@apackdev/testing': sdkRange, vitest: '^3.2.1' });
+const UNIT_TEST_DEV_DEPENDENCIES = (sdkRange: string) => ({ '@apackdev/testing': sdkRange, vitest: '^3.2.7' });
 
 /** The files vitest loads its config from, in the order it looks for them */
 export const VITEST_CONFIG_FILES = ['vitest.config', 'vite.config'].flatMap((name) => ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `${name}.${ext}`));

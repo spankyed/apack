@@ -90,5 +90,6 @@ export type { MigrationLine } from '../framework/declaration-schema.ts';
 export { _packEntities, _packEntityTypes, _packShortCodes, _shortCodeTypes, _SHORT_CODE_PATTERN, _packRelationTypes, _packRelationRules, _packRoles, type PackDataDeclarations, type PackEntityDeclaration, type PackRelationDeclaration, type _PackEntityDeclaration } from '../framework/data-declaration.ts';
 
 export { ALLOWABLE_PACK_CHECKS, PackChecksSchema } from '../framework/pack-checks.ts';
+export { _namingRefusedValue } from '../framework/refused-value.ts';
 
 export { parsePackDependency, type PackDependencySource } from '../framework/dependency-source.ts';

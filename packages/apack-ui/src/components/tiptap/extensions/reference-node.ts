@@ -2,7 +2,7 @@ import { openEntity } from '@apackdev/sdk/fe'
 import type { EARS } from '@apackdev/sdk'
 import { Node, mergeAttributes } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { MarkdownSerializerState } from '@tiptap/pm/markdown'
+import type { MarkdownSerializerState } from 'prosemirror-markdown'
 import { formatReferenceHref, parseReferenceHref, getReferenceTypeDeclaration, onReferenceDeclarationsChanged } from '@apackdev/sdk/fe/references'
 
 function createIconSvg(type: string): SVGSVGElement {

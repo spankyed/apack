@@ -6,9 +6,10 @@ import { z } from 'zod';
 import { ManifestSchema, _EventContractsSchema } from '../framework/declaration-schema.ts';
 import { _eventContractsProblem } from '../framework/event-contracts.ts';
 import { PACK_SNAPSHOT_FORMAT, PROVENANCE_KINDS, _snapshotFormatMismatch, type PackSnapshot, type PackDependencySnapshot, type ProvenanceKind } from './manifest.ts';
-import { packValidation, type PackValidation } from './diagnostics.ts';
+import { diagnosticPath, packValidation, type PackValidation } from './diagnostics.ts';
 import { _declarationRevision } from './declaration-revision.ts';
 import { _HelpDocumentsSchema, _helpDataProblem } from './help-data.ts';
+import { _namingRefusedValue } from '../framework/refused-value.ts';
 
 /** The complete compiled snapshot; executable pack modules are never needed to validate it. */
 const SnapshotShape = {
@@ -25,8 +26,8 @@ const SnapshotShape = {
   provenance: declarationRecord(z.enum(Object.keys(PROVENANCE_KINDS) as [ProvenanceKind, ...ProvenanceKind[]]), declarationRecord(z.string())).optional(),
   flowHelpers: z.object({ exports: z.array(z.string()), module: z.string(), types: z.string() }).strict().optional(),
 } satisfies Record<keyof PackSnapshot, z.ZodTypeAny>;
-const SnapshotSchema: z.ZodType<PackSnapshot, z.ZodTypeDef, unknown> = z.object(SnapshotShape).strict();
-const DependencySnapshotSchema: z.ZodType<PackDependencySnapshot, z.ZodTypeDef, unknown> = z.object({
+const SnapshotSchema: z.ZodType<PackSnapshot, unknown> = z.object(SnapshotShape).strict();
+const DependencySnapshotSchema: z.ZodType<PackDependencySnapshot, unknown> = z.object({
   ...SnapshotShape, format: SnapshotShape.format.optional(),
 }).strict();
 
@@ -57,10 +58,10 @@ export function parseDependencySnapshot(raw: unknown): PackDependencySnapshotVal
   }] } : result;
 }
 
-function parseSnapshotData<T extends PackDependencySnapshot>(raw: unknown, schema: z.ZodType<T, z.ZodTypeDef, unknown>): PackValidation & { snapshot?: T } {
-  const result = schema.safeParse(raw);
+function parseSnapshotData<T extends PackDependencySnapshot>(raw: unknown, schema: z.ZodType<T, unknown>): PackValidation & { snapshot?: T } {
+  const result = schema.safeParse(raw, { error: _namingRefusedValue });
   if (!result.success) return packValidation(result.error.issues.map(issue => ({
-    code: `snapshot.${issue.code}`, severity: 'error', path: issue.path, source: 'snapshot.json',
+    code: `snapshot.${issue.code}`, severity: 'error', path: diagnosticPath(issue.path), source: 'snapshot.json',
     message: `snapshot.json ${issue.path.join('.') || 'root'}: ${issue.message}`,
   })));
   const snapshot = result.data;
