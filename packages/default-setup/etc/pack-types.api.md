@@ -5282,7 +5282,10 @@ interface ThreadsContext {
         searching: boolean;
     };
     /** A message the chat brings into view once its thread has loaded it, older pages included */
-    focusMessageId: string | null;
+    focusMessage: {
+        threadId: string;
+        messageId: string;
+    } | null;
 }
 
 interface ThreadsContext$1 {

@@ -201,14 +201,19 @@ const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
-const focusMessageId = useSelector(actor, (state) => state.context.focusMessageId);
+// The message to bring into view, while the thread shown is its own
+const focusMessageId = useSelector(actor, ({ context }) =>
+  context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null);
 const style = useCssModule();
 
 // Scroll preservation for prepending older messages
 const savedScrollHeight = ref(0);
 const isPrependPending = ref(false);
 
+// Asks only when the machine takes the ask (`canLoadOlderMessages`): one it dropped would leave the page already loading,
+// a focused message's seek's, handled as this prepend
 function requestLoadMore() {
+  if (messagePagination.value.isLoading || !messagePagination.value.nextCursor) return;
   const el = messagesContainer.value;
   if (el) savedScrollHeight.value = el.scrollHeight;
   isPrependPending.value = true;

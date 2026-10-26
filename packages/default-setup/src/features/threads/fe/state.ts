@@ -1414,16 +1414,21 @@ const threadsState = setup({
     }),
     openMessage: enqueueActions(({ enqueue, event, self }) => {
       const { threadId, messageId } = typeOf('OPEN_MESSAGE', event);
-      enqueue.assign({ focusMessageId: messageId });
+      enqueue.assign({ focusMessage: { threadId, messageId } });
       enqueue(() => self.send({ type: 'OPEN_THREAD_CHAT', threadId }));
     }),
-    // A focused message not in the pages loaded is in an older one: ask for the next, until it is or none is left
+    // A focused message not in the pages loaded is in an older one: ask for the next, until it is or none is left.
+    // Another thread loaded in its place ends the seek, which pages only the focused message's own thread
     seekFocusedMessage: enqueueActions(({ context, enqueue, self }) => {
-      const wanted = context.focusMessageId;
+      const wanted = context.focusMessage;
       if (!wanted || !context.currentThread) return;
-      if ((context.currentThread.messages ?? []).some((m) => m.id === wanted)) return;
+      if (context.currentThread.id !== wanted.threadId) {
+        enqueue.assign({ focusMessage: null });
+        return;
+      }
+      if ((context.currentThread.messages ?? []).some((m) => m.id === wanted.messageId)) return;
       if (context.messagePagination.hasMore) enqueue(() => self.send({ type: 'LOAD_MORE_MESSAGES' }));
-      else enqueue.assign({ focusMessageId: null });
+      else enqueue.assign({ focusMessage: null });
     }),
     forkThread: ({ event }) => {
       const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
@@ -1508,7 +1513,7 @@ const threadsState = setup({
     messagePagination: { hasMore: false, nextCursor: null, isLoading: false },
     sidebarArchivedThreads: [],
     messageSearch: { query: '', results: [], searching: false },
-    focusMessageId: null,
+    focusMessage: null,
   }),
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation'] },
@@ -1772,7 +1777,7 @@ const threadsState = setup({
     SEARCH_MESSAGES: { actions: 'searchMessages' },
     MESSAGES_FOUND: { actions: 'setMessagesFound' },
     OPEN_MESSAGE: { actions: 'openMessage' },
-    FOCUSED_MESSAGE_SHOWN: { actions: assign({ focusMessageId: null }) },
+    FOCUSED_MESSAGE_SHOWN: { actions: assign({ focusMessage: null }) },
     SEND_MESSAGE: { actions: 'sendMessage' },
     SEND_COMMAND: { actions: 'sendCommand' },
     SET_CHAT_STATE: { actions: 'setChatState' },

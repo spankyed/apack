@@ -33,3 +33,15 @@ it('asks for nothing, and shows nothing loading, when the thread has no older pa
   expect(asked()).toEqual([])
   expect(actor.getSnapshot().context.messagePagination.isLoading).toBe(false)
 })
+
+it('seeks a message opened from search only in its own thread, and stops when another thread loads', () => {
+  const actor = openThread({ hasMore: true, nextCursor: 'm-1' })
+  actor.send({ type: 'OPEN_MESSAGE', threadId: 'Thread-t1', messageId: 'Message-old' })
+  actor.send({ type: 'LOAD_CHAT_THREAD', restore: true, data: { id: 'Thread-t1', messages: [], hasMore: true, nextCursor: 'm-1' } as never })
+  expect(asked()).toEqual([{ type: 'LOAD_MORE_MESSAGES', threadId: 'Thread-t1', cursor: 'm-1' }])
+
+  actor.send({ type: 'LOAD_CHAT_THREAD', restore: true, data: { id: 'Thread-t2', messages: [], hasMore: true, nextCursor: 'n-1' } as never })
+  actor.send({ type: 'OLDER_MESSAGES_LOADED', threadId: 'Thread-t1', messages: [], hasMore: true, nextCursor: 'm-2' })
+  expect(asked().map((event) => (event as { threadId?: string }).threadId)).toEqual(['Thread-t1'])
+  expect(actor.getSnapshot().context.focusMessage).toBeNull()
+})
