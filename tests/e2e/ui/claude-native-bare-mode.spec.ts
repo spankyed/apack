@@ -95,6 +95,7 @@ test('keeps bare-mode native startup and composer usable without private plugin 
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   await expect.poll(async()=>(await context()).claude.turns).toBeGreaterThan(1)
+  await expect.poll(async()=>(await context()).messages.some((message:any)=>message.sender==='assistant'&&message.text==='Bare session review complete.')).toBe(true)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click()
   await expect.poll(async()=>(await context()).native.state.status).toBe('exited')
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
