@@ -138,6 +138,7 @@ test('edits original Settings through desktop controls and retains composing', a
   const user = async () => JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
   const search = panel.getByRole('textbox',{name:'Search Claude Code settings',exact:true})
   const nativeWindow = await electronApp.browserWindow(appPage), captures:string[]=[]
+  if(externalConsentProfile)await electronApp.evaluate(({app,webContents})=>{(globalThis as any).consentSecurityNavigations=[];const observe=(contents:any)=>contents.on('did-start-navigation',(details:any)=>{if(details.url==='https://code.claude.com/docs/en/security'&&details.isMainFrame)(globalThis as any).consentSecurityNavigations.push({url:details.url,isMainFrame:details.isMainFrame,webContentsId:contents.id})});webContents.getAllWebContents().forEach(observe);app.on('web-contents-created',(_event,contents)=>observe(contents))})
   if(!externalConsentProfile){
   await panel.getByRole('checkbox',{name:'Show tips',exact:true}).click()
   await expect.poll(async()=>(await local()).spinnerTipsEnabled).toBe(false)
@@ -283,12 +284,13 @@ test('edits original Settings through desktop controls and retains composing', a
         const capture=testInfo.outputPath(`native-settings-external-consent-${width}-${index}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
         await writeFile(capture,Buffer.from(image,'base64'));readings.push({index,text,geometry,realWheel:true,capture})
         if(index===2){
-          const url='https://code.claude.com/docs/en/security',link=editor.getByRole('link',{name:url,exact:true});await expect(link).toHaveAttribute('href',url);await link.click()
-          await app.waitForSurface('default-setup/browser');await expect.poll(async()=>appPage.evaluate(url=>{const browser=(window as any).applicationState.system.get('default-setup/browser').getSnapshot().context;return browser.tabs.find((tab:any)=>tab.url===url)?.url},url)).toBe(url)
-          const address=appPage.getByPlaceholder('Enter URL or search...', {exact:true});await expect(address).toBeVisible();await expect(address).toHaveValue(url)
+          const url='https://code.claude.com/docs/en/security',link=editor.getByRole('link',{name:url,exact:true});await expect(link).toHaveAttribute('href',url)
+          const beforeNavigation=await electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.length);await link.click()
+          await app.waitForSurface('default-setup/browser');await expect.poll(async()=>electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.length)).toBeGreaterThan(beforeNavigation)
+          const navigation=await electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.at(-1));expect(navigation.url).toBe(url);await expect(appPage.getByText('BROWSER',{exact:true}).first()).toBeVisible()
           const browserCapture=testInfo.outputPath(`native-consent-security-browser-${width}.png`),browserImage=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(browserCapture,Buffer.from(browserImage,'base64'))
           await app.navigate('default-setup/threads');await expect(editor).toBeVisible();expect((await context()).native.state.nativePid).toBe(boundNativePid)
-          securityNavigation.push({width,height,url,addressVisible:true,capture:browserCapture,returnedToConsent:true,sameNativeOwner:true})
+          securityNavigation.push({width,height,url,nativeNavigationStarted:true,navigation,capture:browserCapture,returnedToConsent:true,sameNativeOwner:true})
         }
 
       }
