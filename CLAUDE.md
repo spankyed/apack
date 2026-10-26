@@ -97,7 +97,7 @@ Versioned migrations for future deliberate data changes are separate from suppor
 no upgrade step, and nothing for derived data, which `rebuild()` builds. Our own databases are reset, or converted once
 by hand on a copy. The tag of the first release that ships to people other than us locks format 1, and only from then
 does each layout change bump the format with its upgrade step. Why, and what it changed:
-[storage-format-one.md](docs/plans/storage-format-one.md).
+[storage-format-one.md](docs/archive/plans/storage-format-one.md).
 
 **Revisit this when a third-party pack can actually be installed from a registry.** That is the condition. Until it
 holds, "an installed pack might depend on this" has no subject, and a plan that treats it as a constraint should say

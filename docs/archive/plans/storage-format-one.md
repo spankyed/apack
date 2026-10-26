@@ -1,6 +1,7 @@
 # Storage format 1 until a release has users
 
-Status: steps 1–3 done, 2026-10-26 (elmdb `14bd362`; apack, the commit that pins it). Step 4 waits on its condition.
+Status: done, 2026-10-26. Steps 1–3: elmdb `14bd362` and the apack commit that pins it. Step 4: elmdb `c51e0f1` and the
+apack commit that pins it.
 
 The app's stored data has one format, 1, and it stays 1 until a release ships to people other than us. Until then, a
 change to how data is stored edits format 1 in place, and our own databases are reset or converted once, by hand, on
@@ -57,7 +58,8 @@ files a build can't read.
   from before the format was fixed and must be re-created.
 - `crates/elmdb/src/upgrade.rs`: delete `upgrade_format` and `unbuild_text_indexes`, the 1 → 2 step.
 - `crates/elmdb-cli/src/main.rs`: `elmdb upgrade <dir>` (one directory, the form that runs `upgrade_format`) goes.
-  `elmdb upgrade <dump> <dir>` reads an lmdb-js dump and stays until the move off lmdb-js is done (below).
+  `elmdb upgrade <dump> <dir>` reads an lmdb-js dump and stays until the move off lmdb-js is done (below), and then
+  goes too.
 - Specs:
   - delete `upgrade_steps_a_format_1_database_rebuilding_its_text_indexes_with_the_words_as_written`
     (`engine/tests/maintenance.rs`);
@@ -105,15 +107,24 @@ backup after a release, by hand on a copy. Temporary data dirs a running test or
 
 ## The move off lmdb-js
 
-The path from apack's lmdb-js storage (`tools/lmdb-js-export`, `elmdb upgrade <dump>`, `apack db import-runs`) is a
-one-time move of our own data, not a format upgrade. It stays until the last database we want off lmdb-js has moved,
-and goes in one change after that.
+The path from apack's lmdb-js storage (`tools/lmdb-js-export`, `elmdb upgrade <dump>`, `apack db import-runs`) was a
+one-time move of our own data, not a format upgrade, kept until the last lmdb-js data we want had moved.
 
-It has one more user: elmdb's production-shaped benchmark data (goal-elmdb-next G8) is made from the 2026-10-17 backup
-through it. Before deleting the path, make that copy once, keep the resulting elmdb database as the benchmark's
-source, and change G8's recipe to start from it.
+That data was the backup of 2026-10-17 (the two backups of that day are byte-identical). On 2026-10-26 a copy of it went
+through the path once: `scripts/ears-convert.ts` at `3e0b280ff` to format 4, `tools/lmdb-js-export`, then
+`elmdb upgrade` with no schema, which read 22,816 entities, 178,131 fields and 45,798 relations, the counts apack's own
+conversion reports. The result was written out by `elmdb dump`, which this step added to elmdb: a file of the schema and
+the primary data as loads, naming no stored layout, so it outlives any in-place change to format 1 (`format.md`, Dumps).
+A load of it, dumped again, is byte-identical. It is kept beside the backups, at
+`~/Develop/backups/abuddy-backups/elmdb-dumps/`, with a README of how it was made. It is the source of goal-elmdb-next's
+production-shaped data (G8) and of the conversion of the installed app's data after a release.
 
-That deletion is a separate step with its own condition. Steps 1–3 don't wait for it.
+It holds the backup's data in the backup's own contract: its `Note` type, its older short code prefixes and 17 duplicate
+short codes (`elmdb/docs/evidence/phase-7.md`). Converting that to apack's current contract is the by-hand conversion
+this plan leaves to the lead developer.
+
+Then the path was deleted in one change: `tools/lmdb-js-export` and `elmdb upgrade` (`upgrade.rs`) in elmdb `c51e0f1`,
+and `apack db import-runs` in apack. Neither backup holds a run history, so there was nothing for `import-runs` to move.
 
 ## Order
 
@@ -122,7 +133,7 @@ That deletion is a separate step with its own condition. Steps 1–3 don't wait 
 2. **apack: follow it.** `DATABASE_FORMAT`, the `CLAUDE.md` rule, the apack-ears guide, the refusal message check. Run
    the `--no-native` chain.
 3. **Our databases** (above): wiped, so the next open makes a format 1 database.
-4. **Later, on its own condition:** delete the lmdb-js move path once nothing needs it, with G8's data made first.
+4. **The lmdb-js move path:** the backup moved once and kept as an elmdb dump, then the path deleted (above).
 
 ## Done when
 
@@ -132,3 +143,4 @@ That deletion is a separate step with its own condition. Steps 1–3 don't wait 
 - The rule is written in apack's `CLAUDE.md` and elmdb's `format.md`, and goal-elmdb-next's G3 and Phase 8 follow it.
 - The development app opens on a new format 1 database.
 - An app started on a database in another format shows the refusal's own message.
+- The backup is kept as an elmdb dump, and no lmdb-js move path is left in either repository.

@@ -7,12 +7,12 @@ import { Readable } from 'node:stream';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type EARS } from '@apackdev/ears';
+import { createEarsEngine, type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
 import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
 import { runHistoryAt } from '../_support/run-history.ts';
 import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
-import { DATABASE_FORMAT } from '@apackdev/ears/lmdb';
+import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -439,47 +439,6 @@ describe('apack db runs', () => {
   });
 });
 
-describe('apack db import-runs', () => {
-  /** A dump as `tools/lmdb-js-export --records` writes one: its header, then each record as the store held it */
-  function dumpOf(header: Record<string, unknown>, records: Record<string, unknown>[]): string {
-    const file = path.join(tempDir('runs-dump-'), 'runs.jsonl');
-    fs.writeFileSync(file, [header, ...records].map((line) => JSON.stringify(line)).join('\n') + '\n');
-    return file;
-  }
-  const HEADER = { dump: 'apack-records', version: 1, format: 1 };
-  const RECORDS = [
-    { id: 'RunNode-00mg8xk2l0000', rootId: 'RunNode-00mg8xk2l0000', kind: 'flow', label: 'Dumped', status: 'completed', startedAt: Date.UTC(2026, 8, 1), flowId: 'Flow-root', input: { nested: [1, 'two'] } },
-    { id: 'RunNode-00mg8xk2l0001', rootId: 'RunNode-00mg8xk2l0000', parentId: 'RunNode-00mg8xk2l0000', kind: 'event', label: 'go', status: 'completed', startedAt: Date.UTC(2026, 8, 1, 0, 1) },
-  ];
-
-  it('lists the import without --force, then puts each node in an empty run history under its own id', async () => {
-    const dir = await appDataDir();
-    fs.rmSync(_appDataPaths(dir).runHistory, { recursive: true });
-    const dump = dumpOf(HEADER, RECORDS);
-
-    expect((await ok(['import-runs', dump, '--data-dir', dir])).out).toContain('Would import 2 run node(s)');
-    expect(fs.existsSync(_appDataPaths(dir).runHistory)).toBe(false);
-
-    expect((await ok(['import-runs', dump, '--force', '--data-dir', dir])).out).toBe(`Imported 2 run node(s) into ${_appDataPaths(dir).runHistory}`);
-    const tree = JSON.parse((await ok(['runs', '--run', 'RunNode-00mg8xk2l0000', '--data-dir', dir])).out);
-    expect(tree).toMatchObject({ label: 'Dumped', input: { nested: [1, 'two'] }, children: [{ id: 'RunNode-00mg8xk2l0001', label: 'go' }] });
-  });
-
-  it('refuses a run history that holds runs, a file that is not a records dump, and a record that is not a run node', async () => {
-    const dir = await appDataDir();
-    expect((await run(['import-runs', dumpOf(HEADER, RECORDS), '--force', '--data-dir', dir])).error?.message)
-      .toMatch(/already holds 2 run node\(s\): import into one that holds none/);
-    const history = runHistoryAt(_appDataPaths(dir).runHistory, { readOnly: true });
-    expect(history.get('RunNode-00mg8xk2l0000')).toBeUndefined();
-    history.close();
-
-    expect((await run(['import-runs', dumpOf({ dump: 'apack-records', version: 1, format: 2 }, RECORDS), '--data-dir', dir])).error?.message)
-      .toMatch(/isn't a run history dump/);
-    expect((await run(['import-runs', dumpOf(HEADER, [{ id: 'Note-a' }]), '--data-dir', dir])).error?.message)
-      .toMatch(/record 1: not a run node/);
-  });
-});
-
 describe('apack db exec', () => {
   it('writes with the transaction helpers', async () => {
     const dir = await appDataDir();
@@ -836,6 +795,20 @@ describe('apack db inspect', () => {
     // A type no installed pack declares is a typo, not an empty result, as in export
     expect((await run(['inspect', '--type', 'Nope', '--data-dir', dir])).error?.message).toBe('Not an entity type of the installed packs: Nope');
     expect((await run(['inspect', '--depth', '0', '--data-dir', dir])).error?.message).toMatch(/--depth/);
+  });
+
+  it('counts a database no app has opened, which holds no schema, as a load of a dump leaves one', async () => {
+    const dir = await appDataDir();
+    const paths = _appDataPaths(dir);
+    fs.rmSync(paths.lmdb, { recursive: true });
+    const database = openDatabase({ path: paths.lmdb });
+    const { admin } = createEarsEngine({ database });
+    admin.bulkLoadAttr(id('Note-a'), 'title', 'Alpha');
+    admin.bulkLoadAttr(id('Note-b'), 'title', 'Beta');
+    admin.addRelation(id('Note-a'), 'parent_of', id('Note-b'));
+    database.close();
+    const stats = await ok(['inspect', '--data-dir', dir]);
+    expect(stats.out.split('\n')).toContainEqual(expect.stringMatching(/^Note\s+2\s+1\s+0\.5$/));
   });
 });
 
