@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import type { Editor } from '@tiptap/vue-3'
 import { PluginKey } from '@tiptap/pm/state'
@@ -60,11 +60,14 @@ function onMouseDown() { rightClicked = false }
 
 onMounted(() => {
   ownerDocument.body.appendChild(menuHost)
-  // EditorContent attaches the editor DOM during mount; setup may still see a detached view.
-  const boundary = editorElement.closest('form')
-  if (boundary) props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, {
-    type: 'updateOptions', options: { options: { shift: { boundary, padding: 8 }, flip: { boundary, padding: 8 } } },
-  }))
+  // BubbleMenu registers its plugin on nextTick; EditorContent must also have attached its DOM.
+  void nextTick(() => {
+    const boundary = editorElement.closest('form')
+    if (!boundary || props.editor.isDestroyed || !menuHost.isConnected) return
+    props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, {
+      type: 'updateOptions', options: { options: { shift: { boundary, padding: 8 }, flip: { boundary, padding: 8 } } },
+    }))
+  })
 
   ownerDocument.addEventListener('scroll', onAncestorScroll, true)
   const el = editorElement
