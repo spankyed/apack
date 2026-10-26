@@ -2973,8 +2973,16 @@ checkout, and its cause is open. Attempts to reproduce it afterwards all passed:
 worktree one app at a time, 6 in the main checkout with the renderer's CPU throttled 6x, and 9 in a fresh worktree
 three apps at once with `console.info` in `@apackdev/ui`'s editor rebuild, reset, model watch and `onUpdate`. The one
 failure since the restart came minutes after boot, while `fseventsd` was catching up; before it, the failures came
-while the machine was degrading toward running out of memory. A run that reproduces it again with that
-instrumentation and a kept trace is the next step. **No same-files test of the indexing was made**: moving a built worktree between an
+while the machine was degrading toward running out of memory. **The mechanism is a reconnect, reproduced deterministically**: in the main checkout, a probe typed into the editor,
+confirmed the model held it, then terminated the API child by the pid in its own `api-port` file; Electron main
+restarted it, the window reconnected, and afterwards the editor and the model both read "Bundled editor" — the
+failure exactly. A reconnect sets `packFrontendsNeedRefresh` (`disconnectPackFrontends`,
+`@apackdev/host` `features/application/fe/machine.ts`), so the next load re-accepts every pack, unchanged ones
+included, and replaces their surface actors; `SurfaceScope` remounts on a new actor, and the fixture keeps its text
+in component-local state. Neither the client nor the `ws` server sets a keepalive, so a connection does not drop
+for load alone: what the failing runs had was most likely an API child that went away on a machine running out of
+memory. Their app logs went with the restart, so that trigger is unconfirmed; a second `CLIENT_CONNECTED` in a
+failing run's `app-<n>.log` would confirm it. **No same-files test of the indexing was made**: moving a built worktree between an
 indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
 startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
 
