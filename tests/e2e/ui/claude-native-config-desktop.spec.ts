@@ -287,7 +287,7 @@ test('edits original Settings through desktop controls and retains composing', a
           const url='https://code.claude.com/docs/en/security',link=editor.getByRole('link',{name:url,exact:true});await expect(link).toHaveAttribute('href',url)
           const beforeNavigation=await electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.length);await link.click()
           await app.waitForSurface('default-setup/browser');await expect.poll(async()=>electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.length)).toBeGreaterThan(beforeNavigation)
-          const navigation=await electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.at(-1));expect(navigation.url).toBe(url);await expect(appPage.getByText('BROWSER',{exact:true}).first()).toBeVisible()
+          const navigation=await electronApp.evaluate(()=>(globalThis as any).consentSecurityNavigations.at(-1));expect(navigation.url).toBe(url);await expect(appPage.getByText(/^browser$/i).first()).toBeVisible()
           const browserCapture=testInfo.outputPath(`native-consent-security-browser-${width}.png`),browserImage=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(browserCapture,Buffer.from(browserImage,'base64'))
           await app.navigate('default-setup/threads');await expect(editor).toBeVisible();expect((await context()).native.state.nativePid).toBe(boundNativePid)
           securityNavigation.push({width,height,url,nativeNavigationStarted:true,navigation,capture:browserCapture,returnedToConsent:true,sameNativeOwner:true})
