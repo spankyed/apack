@@ -43,7 +43,7 @@ describe('a streamed reply', () => {
     for (const view of Object.values(views)) await view.next()
 
     // The writer the Claude Code chat action streams with: each flush is one write of the message's text, at most one
-    // per its 80 ms interval, so the message view's rate is the flush rate (measured: docs/plans/live-queries.md, threads)
+    // per its 80 ms interval, so the message view's rate is the flush rate (measured: docs/archive/plans/live-queries.md, threads)
     const writer = createStreamWriter({ chat: chatService } as never, reply)
     const FLUSHES = 16
     for (let flush = 0; flush < FLUSHES; flush++) {

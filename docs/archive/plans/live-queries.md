@@ -16,7 +16,7 @@ reconnect remounted its surface (`c06a97a38`, with the E2E fixture naming an API
 `b43926dc0`).
 Step 1's readings and the decisions each step made are below.
 
-On elmdb, where this branch is merged with `session/ears-on-elmdb` (`session/live-queries-on-elmdb`): `engine.watch`
+Landed on master with the move to elmdb (#278, `0e6d0ffce`, merging `live-queries` onto `session/ears-on-elmdb`): `engine.watch`
 keeps this contract over elmdb's tracked reads, so the read recorder, the write log and the read-set index are gone, as
 The move to elmdb says; `watch.spec.ts` and the harness's watch property run there against elmdb. The threads panel's
 message search, which the elmdb branch added, is a view (`messageSearch`), and a message opened from it grows the chat
