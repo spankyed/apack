@@ -140,6 +140,7 @@ test('edits original Settings through desktop controls and retains composing', a
   const nativeWindow = await electronApp.browserWindow(appPage), captures:string[]=[]
   if(externalConsentProfile)await electronApp.evaluate(({app,webContents})=>{(globalThis as any).consentSecurityNavigations=[];const observe=(contents:any)=>contents.on('did-start-navigation',(details:any)=>{if(details.url==='https://code.claude.com/docs/en/security'&&details.isMainFrame)(globalThis as any).consentSecurityNavigations.push({url:details.url,isMainFrame:details.isMainFrame,webContentsId:contents.id})});webContents.getAllWebContents().forEach(observe);app.on('web-contents-created',(_event,contents)=>observe(contents))})
   if(!externalConsentProfile){
+  if(process.env.CLAUDE_RESEARCH_SETTINGS_FRESHNESS==='1'){await writeFile(join(workspace!,'native-settings-freshness-ready'),'ready');await expect.poll(async()=>{const observed=JSON.parse(await readFile(join(workspace!,'native-settings-freshness.json'),'utf8').catch(()=>'{}'));return observed.status==='observing'&&observed.samples.length>0}).toBe(true)}
   await panel.getByRole('checkbox',{name:'Show tips',exact:true}).click()
   await expect.poll(async()=>(await local()).spinnerTipsEnabled).toBe(false)
   await expect(panel.getByRole('checkbox',{name:'Show tips',exact:true})).not.toBeChecked()
