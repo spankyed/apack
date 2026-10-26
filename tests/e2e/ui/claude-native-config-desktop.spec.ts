@@ -221,12 +221,13 @@ test('edits original Settings through desktop controls and retains composing', a
       expect(text.replace(/\s+/g,' ')).toContain('encrypted at rest');expect(text.replace(/\s+/g,' ')).toContain('Yes and No are saved for this machine')
       await expect(editor.locator('[data-native-settings-option="not_now"]')).toHaveAttribute('aria-pressed','true');await expect(editor.locator('[data-native-settings-option="not_now"]')).toBeFocused()
       const lines=await description.evaluate(element=>{
-        const node=document.createTreeWalker(element,NodeFilter.SHOW_TEXT).nextNode()!,text=node.textContent!,lines:{start:number;end:number;top:number}[]=[]
+        const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node=walker.nextNode();while(node&&!node.textContent?.length)node=walker.nextNode();if(!node||node.textContent!==element.textContent)throw Error('Native disclosure text nodes changed');const text=node.textContent!,lines:{start:number;end:number;top:number}[]=[]
         for(const word of text.matchAll(/\S+/g)){const range=document.createRange();range.setStart(node,word.index!);range.setEnd(node,word.index!+word[0].length);const rect=range.getBoundingClientRect(),last=lines.at(-1);if(last&&Math.abs(last.top-rect.top)<1)last.end=word.index!+word[0].length;else lines.push({start:word.index!,end:word.index!+word[0].length,top:rect.top})}return lines.map(({start,end})=>({start,end}))
       })
+      expect(lines.length).toBeGreaterThan(0);expect(lines.length).toBeLessThan(128)
       const capture=async()=>{await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))));const path=testInfo.outputPath(`native-settings-cloud-${width}-${captures.length}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(path,Buffer.from(image,'base64'));captures.push(path)}
       for(const [index,line]of lines.entries()){
-        const bounds=()=>description.evaluate((element,line)=>{const range=document.createRange();const node=document.createTreeWalker(element,NodeFilter.SHOW_TEXT).nextNode()!;range.setStart(node,line.start);range.setEnd(node,line.end);const r=range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}},line)
+        const bounds=()=>description.evaluate((element,line)=>{const range=document.createRange();const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);let node=walker.nextNode();while(node&&!node.textContent?.length)node=walker.nextNode();if(!node||node.textContent!==element.textContent)throw Error('Native disclosure text nodes changed');range.setStart(node,line.start);range.setEnd(node,line.end);const r=range.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}},line)
         let wheels=0;await body.hover()
         for(let step=0;step<30;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,Math.sign(state.shift)*Math.max(Math.abs(state.shift),Math.min(80,(state.viewportBottom-state.viewportTop)/2)));wheels++;await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
         const geometry=await bounds();expect(geometry.visible).toBe(true);readings.push({index,text:text.slice(line.start,line.end),geometry,wheels});if(index===0||wheels)await capture()
@@ -245,7 +246,8 @@ test('edits original Settings through desktop controls and retains composing', a
     const outcome=(await global()).remoteHomeSettingsMode==='forward'?'enabled':'native-flag-refused'
     if(outcome==='native-flag-refused'){await expect(row).toContainText('Could not turn this on: forwarding settings to cloud sessions is not enabled for you right now');expect((await global()).remoteHomeSettingsMode).toBe('keep_local')}
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    remoteHomeEditor={samples,outcome,initiallyForwarding,notNowPreserved:true,cancelPreserved:true,keepLocalPersisted:true,noPhantomTurn:true,finalMode:(await global()).remoteHomeSettingsMode,nativeGatesUnchanged:true}
+    await expect(panel.getByText('Saved by Claude Code',{exact:true})).toHaveCount(0)
+    remoteHomeEditor={samples,outcome,initiallyForwarding,noFalseSaved:true,resultText:await row.innerText(),notNowPreserved:true,cancelPreserved:true,keepLocalPersisted:true,noPhantomTurn:true,finalMode:(await global()).remoteHomeSettingsMode,nativeGatesUnchanged:true}
     await appPage.setViewportSize({width:1100,height:900});await search.fill('')
   }
 
