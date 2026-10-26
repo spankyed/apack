@@ -15,7 +15,13 @@ function nativeSettingsPanel(request){
 async function readNativeSettings(n,entry,signal){
  await waitForNativeSettingsConfig(n,entry,signal);
  const api=await import('/$bunfs/root/chunk-1ghyy712.js');
- const context=entry.context,handles=api.configRowHandles(context);
+ const context=entry.context;let handles=api.configRowHandles(context);
+ if(await refreshNativeSettingsUpdateCallbacks(n,entry,handles,signal)){
+  handles=api.configRowHandles(context);
+  const expected=handles.find(handle=>handle.row.key==='autoUpdatesChannel')?.row;
+  const mounted=nativeSettingsMountedDescriptors(n,entry).find(row=>row.id==='autoUpdatesChannel');
+  if(!expected||!mounted||!Object.is(expected.value,mounted.value))throw Error('Native Settings changed during refresh; refresh before editing');
+ }
  if(!Array.isArray(handles)||handles.length>256)throw Error('Native Settings row limit exceeded');
  const rows=[];
  for(const handle of handles){
@@ -58,6 +64,7 @@ async function nativeSettings(n,request,abort){
    cancelledLease=lease;lease.controller.abort(Error('Native Settings editor cancelled'));
   }else if(request.operation!=='read')throw Error('A native Settings editor operation is pending');
  }
+ if(entry.settingsConfigRefresh)throw Error('Native Settings refresh is already pending');
  const read=await readNativeSettings(n,entry,abort.signal);nativeSettingsPanel(request);
  if(request.operation==='read')return {snapshot:read.snapshot,...read.problem?{problem:read.problem}:{},...read.savedKey?{savedKey:read.savedKey}:{}};
  if(entry.settingsCommit&&request.operation!=='editor')throw Error('A native setting change is pending');

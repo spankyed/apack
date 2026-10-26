@@ -7,11 +7,11 @@ function fixture(){
   const qh={Field:()=>{},Button:()=>{},Link:()=>{}},Config=()=>{},onClose=()=>{},open=vi.fn()
   const field={type:qh.Field,key:'model',props:{label:'Model',children:{type:qh.Button,props:{onPress:open}}}}
   const config:any={type:Config,memoizedProps:{onClose,setTabsHidden:()=>{},children:[field]}}
-  const owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
+  const selectTab=vi.fn(async(_n:unknown,_entry:unknown,tab:string,signal?:AbortSignal)=>{signal?.throwIfAborted();frame.panel.selectedTab=tab}),owner={child:config},frame={owner,panel:{selectedTab:'Config',hidden:false}},entry={originalProps:{onClose},closed:false,answered:false,current:vi.fn()}
   const functionHashes=new Map<string,string>(),formatText=vi.fn(async(_n:unknown,value:unknown)=>String(value)),palette=vi.fn(()=>({text:'#eeeeee',inverseText:'#111111'}))
   let hash='f9c1d43d75a5b3536ba40462166d47979c88ee4e471ccbe19e493a83984d0707'
-  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection').replaceAll("await import('/$bunfs/root/chunk-35cyt9ex.js')",'originalModal')+';({nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{originalSelection:{Fi:noCommitted,Xe},originalModal:{Se},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
-  return {Se,Xe,noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
+  const run=vm.runInNewContext(claudeTerminalSettingsEditorRuntime.replaceAll("await import('/$bunfs/root/chunk-07y7va8x.js')",'originalControls').replaceAll("await import('/$bunfs/root/chunk-0d2czwx3.js')",'originalSelection').replaceAll("await import('/$bunfs/root/chunk-35cyt9ex.js')",'originalModal')+';({refreshNativeSettingsUpdateCallbacks,nativeSettingsMountedConsentRows,nativeSettingsEditorOpeners,activateNativeSettingsEditor,readNativeSettingsEditor,actNativeSettingsEditor,saveNativeSettingsEditor,waitForNativeSettingsConfig})',{selectNativeSettingsTab:selectTab,originalSelection:{Fi:noCommitted,Xe},originalModal:{Se},originalControls:{qh},nativeSettingsFrame:()=>frame,awaitNativeSettingsReading:async(value:unknown)=>value,nativeGenericPermissionText:formatText,nativeThemePalette:palette,nativeGenericPermissionDetail:async()=>({value:'Original code preview',ansi:'\u001b[32mOriginal code preview\u001b[0m'}),setTimeout,createHash:()=>({update:(value:string)=>({digest:()=>functionHashes.get(value)??(value.startsWith('{')?createHash('sha256').update(value).digest('hex'):hash)})})})
+  return {selectTab,refresh:(value:string,signal?:AbortSignal)=>run.refreshNativeSettingsUpdateCallbacks({},entry,[{row:{key:'autoUpdatesChannel',value}}],signal),Se,Xe,noCommitted,mountedConsentRows:()=>run.nativeSettingsMountedConsentRows({},entry),palette,wait:(signal?:AbortSignal)=>run.waitForNativeSettingsConfig({},entry,signal),formatText,setFunctionHash:(fn:Function,value:string)=>functionHashes.set(fn.toString(),value),editor:()=>run.readNativeSettingsEditor({},entry),act:(request:unknown)=>run.actNativeSettingsEditor({},entry,request),save:(revision:string,values:Record<string,string>)=>run.saveNativeSettingsEditor({},entry,revision,values),qh,config,field,frame,entry,open,setHash:(value:string)=>{hash=value},read:()=>run.nativeSettingsEditorOpeners({},entry),activate:(keys=new Set(['model']),signal?:AbortSignal)=>run.activateNativeSettingsEditor({},entry,'model',keys,signal)}
 }
 it('finds original editor callbacks in owned element props before the field mounts',async()=>{
   const f=fixture(),result=await f.read()
@@ -285,4 +285,32 @@ it('keeps typed Escape refusal and source callback retirement authoritative',asy
 it('uses the mounted choice when a retired typed renderer remains in the native memo cache',async()=>{
  const f=consentFixture(),Typed=function RetiredTypedConsent(){};f.setFunctionHash(Typed,'1ab09c3b658193cdd1ed26d457a97d40a7d6480fef6f296b4c813036ef70bc9a');f.pc[7]={type:Typed,props:{}}
  expect((await f.editor()).snapshot.kind).toBe('choice');expect(f.write).not.toHaveBeenCalled()
+})
+
+
+it('rebinds stale update callbacks through original tabs without invoking a setting writer',async()=>{
+ const f=fixture(),onChange=vi.fn(),row={id:'autoUpdatesChannel',label:'Auto-update channel',type:'managedEnum',value:'stable',onChange}
+ f.config.memoizedState={memoizedState:[[row],[]]}
+ expect(await f.refresh('stable')).toBe(false);expect(f.selectTab).not.toHaveBeenCalled()
+ f.selectTab.mockImplementation(async(_n,_entry,tab,signal)=>{signal?.throwIfAborted();f.frame.panel.selectedTab=tab;if(tab==='Config')row.value='disabled'})
+ expect(await f.refresh('disabled')).toBe(true)
+ expect(f.selectTab.mock.calls.map(call=>call[2])).toEqual(['Status','Config']);expect(row.value).toBe('disabled')
+ expect(onChange).not.toHaveBeenCalled();expect(f.open).not.toHaveBeenCalled();expect((f.entry as any).settingsConfigRefresh).toBeUndefined()
+ expect(await f.refresh('disabled')).toBe(false);expect(f.selectTab).toHaveBeenCalledTimes(2)
+})
+it('keeps active editors and pending writes intact during external update changes',async()=>{
+ for(const held of [{settingsEditorLease:{}},{settingsCommit:{}},{settingsBusy:true}]){
+  const f=fixture();Object.assign(f.entry,held)
+  expect(await f.refresh('disabled')).toBe(false);expect(f.selectTab).not.toHaveBeenCalled()
+ }
+ const f=fixture();f.frame.panel.hidden=true;expect(await f.refresh('disabled')).toBe(false)
+ f.frame.panel.hidden=false;f.frame.panel.selectedTab='Stats';expect(await f.refresh('disabled')).toBe(false);expect(f.selectTab).not.toHaveBeenCalled()
+})
+it('bounds callback refresh and cleans its lease after cancellation or native failure',async()=>{
+ const f=fixture(),row={id:'autoUpdatesChannel',label:'Auto-update channel',type:'managedEnum',value:'stable',onChange:vi.fn()}
+ f.config.memoizedState={memoizedState:[[row],[]]};const aborted=new AbortController();aborted.abort()
+ await expect(f.refresh('disabled',aborted.signal)).rejects.toThrow();expect((f.entry as any).settingsConfigRefresh).toBeUndefined();expect(row.onChange).not.toHaveBeenCalled()
+ f.selectTab.mockRejectedValueOnce(Error('Native panel replaced'))
+ await expect(f.refresh('disabled')).rejects.toThrow('replaced');expect((f.entry as any).settingsConfigRefresh).toBeUndefined()
+ ;(f.entry as any).settingsConfigRefresh=true;await expect(f.refresh('disabled')).rejects.toThrow('already pending')
 })

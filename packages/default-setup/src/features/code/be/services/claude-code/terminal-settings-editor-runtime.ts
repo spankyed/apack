@@ -28,20 +28,42 @@ function nativeSettingsConfig(n,entry){
  if(owners.length!==1)throw Error('Native Config is not uniquely mounted');
  return {frame,owner:owners[0]};
 }
-function nativeSettingsMountedConsentRows(n,entry){
+function nativeSettingsMountedDescriptors(n,entry){
  const {owner}=nativeSettingsConfig(n,entry),seen=new Set(),matches=[];let hook=owner.memoizedState;
  while(hook){
   if(seen.has(hook)||seen.size>=512)throw Error('Native Config descriptors exceeded bound');seen.add(hook);
   const state=hook.memoizedState,rows=Array.isArray(state)?state[0]:undefined;
-  if(Array.isArray(rows)&&rows.length<=256&&rows.some(row=>row?.id==='showExternalIncludesDialog')&&rows.every(row=>row&&typeof row.id==='string'&&typeof row.label==='string'&&['boolean','enum','managedEnum'].includes(row.type)&&typeof row.onChange==='function'))matches.push(rows);
+  if(Array.isArray(rows)&&rows.length<=256&&rows.some(row=>row?.id==='showExternalIncludesDialog'||row?.id==='autoUpdatesChannel')&&rows.every(row=>row&&typeof row.id==='string'&&typeof row.label==='string'&&['boolean','enum','managedEnum'].includes(row.type)&&typeof row.onChange==='function'))matches.push(rows);
   hook=hook.next;
  }
  if(matches.length===0)return [];
- if(matches.length!==1)throw Error('Native Config consent descriptor is ambiguous');
- const source=matches[0].filter(row=>row.id==='showExternalIncludesDialog');
+ if(matches.length!==1)throw Error('Native Config descriptor is ambiguous');
+ return matches[0];
+}
+function nativeSettingsMountedConsentRows(n,entry){
+ const source=nativeSettingsMountedDescriptors(n,entry).filter(row=>row.id==='showExternalIncludesDialog');
+ if(source.length===0)return [];
  if(source.length!==1)throw Error('Native Config consent descriptor is ambiguous');const row=source[0];
  if(row.type!=='managedEnum'||!['true','false'].includes(row.value)||row.label.length>16384||row.lock!==undefined&&(typeof row.lock!=='object'||typeof row.lock.reason!=='string'||row.lock.reason.length>16384))throw Error('Native Config consent descriptor changed');
  return [{key:row.id,label:row.label,kind:'text',value:row.value,isLocked:row.lock!==undefined,...row.lock?{lockReason:row.lock.reason}:{}}];
+}
+async function refreshNativeSettingsUpdateCallbacks(n,entry,handles,signal){
+ const expected=handles.find(handle=>handle.row.key==='autoUpdatesChannel')?.row;
+ if(!expected)return false;
+ const frame=nativeSettingsFrame(n,entry);
+ if(frame.panel.selectedTab!=='Config'||frame.panel.hidden||entry.settingsEditorLease||entry.settingsCommit||entry.settingsBusy)return false;
+ const mounted=nativeSettingsMountedDescriptors(n,entry).filter(row=>row.id===expected.key);
+ if(mounted.length!==1)throw Error('Native Config update descriptor is unavailable');
+ if(Object.is(mounted[0].value,expected.value))return false;
+ if(entry.settingsConfigRefresh)throw Error('Native Settings refresh is already pending');
+ entry.settingsConfigRefresh=true;
+ try{
+  // Original tabs unmount Config. Re-entering binds its readers and callbacks together, without a writer.
+  await selectNativeSettingsTab(n,entry,'Status',signal);
+  await selectNativeSettingsTab(n,entry,'Config',signal);
+  await waitForNativeSettingsConfig(n,entry,signal);
+  return true;
+ }finally{delete entry.settingsConfigRefresh;}
 }
 function sameNativeSettingsFiber(a,b){
  return a===b||!!(a&&b&&a.type===b.type&&a.key===b.key&&a.alternate===b&&b.alternate===a);
