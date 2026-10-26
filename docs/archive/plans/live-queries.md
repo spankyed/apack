@@ -622,6 +622,9 @@ and `threads`' streaming tokens are notifications.
   re-runs one view about 13 times a second (Step 4, threads) — well under 1% of a core. The writer's throttle is the
   bound; a view host interval would only delay what the window shows. What would reopen it is a view
   whose re-run is measured taking longer than its writer's interval.
+  *Superseded, 2026-10-26:* the stream writer is one writer, and nothing holds the others to its interval, so the
+  bound moved into the watch scheduler, for any writer (elmdb's `docs/goals/goal-elmdb-next.md`, G14 and Phase 3).
+  The 0.5 ms above is a reading of the lmdb-js engine; the same readings' indexed `where` with a `limit` took 32 ms.
 - **A view that reads too much** (a whole table to show a count) re-runs on every write to that table. That's correct
   but expensive. The cure is a narrower read, which the engine already offers (`count`, `pick`, the indexes).
 - **Two channels.** A reply and a view result can arrive in either order. The sequence makes that explicit instead of
