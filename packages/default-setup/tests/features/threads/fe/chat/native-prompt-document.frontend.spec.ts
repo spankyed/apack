@@ -1,6 +1,6 @@
 import { claudePromptThemeStyle, claudeUiColor } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { Editor, Node } from '@tiptap/core'
-import { drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
+import { createClaudePromptDecorations, drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
 import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-editor.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -637,4 +637,77 @@ it('retains rich formatting when native decoration font properties are absent', 
   expect(attrs.style).not.toMatch(/font-weight|font-style|opacity/)
   expect(serialize(editor.state.doc)).toBe(text)
   expect(editor.state.doc.firstChild?.firstChild?.marks.map(mark=>mark.type.name)).toEqual(expect.arrayContaining(['bold','italic']))
+})
+
+it('resets native lines inside a rich strike mark without losing adjacent strike or draft data', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc)
+  const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn()),before=send.mock.calls.length
+  const cursor=captureClaudePromptDocument(doc,selection.head,serialize)!.cursor
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:2,end:14,underline:false,strikethrough:false}]}})
+  const paint=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')
+  expect(paint?.textContent).toBe('Review notes')
+  expect(paint?.style.textDecorationLine).toBe('none')
+  const inherited=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-line-inherit')
+  expect(inherited?.textContent).toBe(' and rollout')
+  expect(inherited?.style.textDecorationLine).toBe('line-through')
+  expect(editor.state.doc.eq(doc)).toBe(true);expect(editor.state.selection.eq(selection)).toBe(true)
+  expect(editor.view.dom.querySelector('s')?.textContent).toBe('Review notes and rollout')
+  expect(send).toHaveBeenCalledTimes(before)
+  bridge.dispose()
+})
+
+it.each([
+  [true,false,'underline'],[false,true,'line-through'],[true,true,'underline line-through'],[false,false,'none'],
+] as const)('keeps native underline %s and strike %s independent over rich strike', (underline,strikethrough,line) => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const drawn=drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,underline,strikethrough}],serialize)
+  const native=drawn.find().find(item=>(item as any).type.attrs.class.includes('claude-prompt-decoration'))!
+  const inherited=drawn.find().find(item=>(item as any).type.attrs.class.includes('claude-prompt-line-inherit'))!
+  expect((native as any).type.attrs.style).toContain('text-decoration-line:'+line)
+  expect((inherited as any).type.attrs.style).toBe('text-decoration-line:line-through')
+})
+
+it('recomputes inherited line paint when native schema maintenance changes marks', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const {key,plugin}=createClaudePromptDecorations();editor.registerPlugin(plugin)
+  const original=editor.state.tr.setMeta(key,drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,strikethrough:false}],serialize))
+  editor.view.dispatch(original)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-inherit')?.textContent).toBe(' and rollout')
+  const normalization=editor.state.tr.removeMark(1,editor.state.doc.content.size-1,editor.schema.marks.strike).setMeta('appendedTransaction',original)
+  editor.view.dispatch(normalization)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-inherit')).toBeNull()
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.textDecorationLine).toBe('none')
+  expect(editor.view.dom.textContent).toBe('Review notes and rollout')
+  editor.unregisterPlugin(key)
+})
+
+it('retires temporary line spans on a person edit while keeping the rich mark', () => {
+  editor.commands.setContent('~~Review notes and rollout~~')
+  const {key,plugin}=createClaudePromptDecorations();editor.registerPlugin(plugin)
+  editor.view.dispatch(editor.state.tr.setMeta(key,drawClaudePromptDecorations(editor.state.doc,[{start:2,end:14,strikethrough:false}],serialize)))
+  expect(editor.view.dom.querySelector('.claude-prompt-line-paint')).not.toBeNull()
+  editor.commands.setTextSelection(3)
+  expect(editor.view.dom.querySelector('.claude-prompt-line-paint')).toBeNull()
+  expect(editor.view.dom.querySelector('s')?.textContent).toBe('Review notes and rollout')
+  expect(serialize(editor.state.doc)).toBe('~~Review notes and rollout~~')
+  editor.unregisterPlugin(key)
+})
+
+it('resets native lines over the chat-admitted underline mark with HTML input disabled', () => {
+  editor.destroy()
+  editor=new Editor({extensions:[StarterKit.configure({strike:false}),Markdown.configure({html:false})]})
+  const underline=editor.schema.marks.underline
+  expect(underline).toBeDefined()
+  editor.commands.setContent({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Review notes and rollout',marks:[{type:'underline'}]}]}]})
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc),start=text.indexOf('Review notes')
+  const bridge=bindClaudePromptEditor(editor,vi.fn(),vi.fn())
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor:captureClaudePromptDocument(doc,selection.head,serialize)!.cursor,decorations:[{start,end:start+12,underline:false,strikethrough:false}]}})
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')?.style.textDecorationLine).toBe('none')
+  expect(editor.view.dom.querySelector<HTMLElement>('.claude-prompt-line-inherit')?.style.textDecorationLine).toBe('underline')
+  expect(editor.view.dom.querySelector('u')?.textContent).toBe('Review notes and rollout')
+  expect(editor.state.doc.eq(doc)).toBe(true);expect(editor.state.selection.eq(selection)).toBe(true)
+  bridge.dispose()
 })

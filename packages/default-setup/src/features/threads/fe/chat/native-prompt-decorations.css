@@ -1,0 +1,4 @@
+/* Rich marks retain their semantics; inline leaves own the temporary native line paint. */
+.ProseMirror[contenteditable="true"] :is(s, del, u):has(.claude-prompt-line-paint) {
+  text-decoration-line: none;
+}
