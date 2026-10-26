@@ -98,15 +98,26 @@ test('retires a focused held Client press across native policy restriction and r
   await client.focus();await client.press('r');await expect.poll(async()=>(await readClient())?.key).toBe('r')
   await writeFile(join(workspace!,'native-policy-held-arm.txt'),'')
   await writeFile(join(workspace!,'native-policy-held-release.txt'),nonce)
-  await expect.poll(async()=>(await receipt('native-policy-held-settled.json'))?.nonce,{timeout:10000,message:'Original held middleware finishes after restoration; native cancellation/HTTP timeout must not be relabeled as successful stale acknowledgement'}).toBe(nonce)
-  const heldSettled=await receipt('native-policy-held-settled.json'),afterHeld=await readClient()
-  expect(heldSettled.result.element).toBe('held-policy-action');expect(afterHeld.pressed).toBe(0)
+  let heldSettled=null,heldRetired=null
+  if(borrowedPolicyClient){
+    // Native terminal sandboxes release their original press handle on policy retirement.
+    await expect.poll(async()=>(await receipt('native-policy-held-error.json'))?.nonce,{timeout:10000}).toBe(nonce)
+    heldRetired=await receipt('native-policy-held-error.json')
+    expect(heldRetired.error).toMatch(/^HooksError: ui\.press\/ui\.input\/ui\.select: no handler is held under handle -?\d+$/)
+    expect(await receipt('native-policy-held-settled.json')).toBeNull()
+    expect((await receipt('native-policy-held-released.json'))?.nonce).toBe(nonce)
+  }else{
+    await expect.poll(async()=>(await receipt('native-policy-held-settled.json'))?.nonce,{timeout:10000,message:'Original held middleware finishes after restoration; native cancellation/HTTP timeout must not be relabeled as successful stale acknowledgement'}).toBe(nonce)
+    heldSettled=await receipt('native-policy-held-settled.json')
+    expect(heldSettled.result.element).toBe('held-policy-action')
+  }
+  const afterHeld=await readClient();expect(afterHeld.pressed).toBe(0)
   await client.getByRole('button',{name:'Apply policy action',exact:true}).click()
   await expect.poll(async()=>(await readClient())?.pressed).toBe(1)
   const freshDraft=await receipt('native-policy-fresh-draft.json');expect(freshDraft).toEqual(parent)
   const afterFresh=await readClient(),after=await context()
   expect(after.turns).toBe(before.turns);expect(after.messages.map((m:any)=>m.id)).toEqual(before.messages.map((m:any)=>m.id));expect(after.native.state.nativePid).toBe(boundNativePid)
-  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,afterHeld,afterFresh,freshDraft,borrowedPolicyClient:!!borrowedPolicyClient,noPhantomTurn:true}))
+  await writeFile(join(workspace!,'native-policy-held-proof.json'),JSON.stringify({sessionId,boundNativePid,parent,oldToken,freshToken,heldStarted,heldSettled,heldRetired,afterHeld,afterFresh,freshDraft,borrowedPolicyClient:!!borrowedPolicyClient,noPhantomTurn:true}))
   await composer.focus()
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
