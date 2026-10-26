@@ -1281,6 +1281,40 @@ describe('the claim on a pack', () => {
     } finally { system.stop(); }
   });
 
+  it("turns a pack back on when the toggle comes while the pack's disable is still tearing it down", async () => {
+    await installPackFromLocal(packSource('1.0.0', withSystem));
+    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    const system = runPacksSystem({ deferStops: true });
+    try {
+      system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
+      await vi.waitFor(() => expect(system.stops).toHaveLength(1));
+      system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(emitted(system.sent).filter(e => e.type === 'PACK_ENABLED_CHANGED').map(e => e.enabled)).toEqual([false]);
+
+      system.stops.splice(0).forEach(finish => finish());
+      await vi.waitFor(() => expect(emitted(system.sent).filter(e => e.type === 'PACK_ENABLED_CHANGED').map(e => e.enabled))
+        .toEqual([false, true]));
+      expect(readInstalledPacks().find(record => record.id === PACK_ID)?.enabled).toBe(true);
+      expect(registry.getPackRegistration(PACK_ID)).not.toBeNull();
+    } finally { system.stop(); }
+  });
+
+  it('refused for another operation is reported, and the state that holds broadcast', async () => {
+    await installPackFromLocal(packSource('1.0.0'));
+    const system = runPacksSystem();
+    takeSystemErrors();
+    expect(registry.claimPackOperation(PACK_ID)).toBe(true);
+    try {
+      system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
+      expect(takeSystemErrors().map(e => e.message).join('\n')).toContain('in progress');
+      expect(emitted(system.sent).filter(e => e.type === 'PACK_ENABLED_CHANGED')).toEqual([
+        { type: 'PACK_ENABLED_CHANGED', packId: PACK_ID, enabled: true },
+      ]);
+      expect(readInstalledPacks().find(record => record.id === PACK_ID)?.enabled ?? true).toBe(true);
+    } finally { registry.releasePackOperation(PACK_ID); system.stop(); }
+  });
+
   it.each(['uninstall', 'update'] as const)('refused for %s is reported to the Packs view', async operation => {
     await installPackFromLocal(packSource('1.0.0'));
     // An update needs a source to update from before it asks for the claim
