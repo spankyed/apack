@@ -19,6 +19,15 @@ scope covers withdrawal, complete disclosure/choices, Not now/header cancellatio
 native eligibility refusal and recovery. Successful forwarding and actual cloud sending remain
 unverified. These milestones use local Linux execution; no CI is dispatched.
 
+The runner also includes the scoped rich parent/Agent round-trip verifier. Its private app profile
+uses `CLAUDE_RESEARCH_PROMPT_THEME=rich-selection`, `CLAUDE_RESEARCH_AGENT_REFERENCE=1` and
+`CLAUDE_RESEARCH_AGENT_ROUNDTRIP=1`; it requires the same offline receipt/read-only executable
+boundary and refuses the startup-only profile. Acceptance compares exact drafts and owner reads,
+source-normalized parent Send, original parent/worker journals and model requests, parent-only PNG
+bytes, ten normal/compact captures and same-session recovery. It does not add Agent binary-media
+support or establish full parity. The accepted visual refinement covers full image previews,
+form-bounded formatting menus and real-wheel reading of the complete marked/reference message.
+
 The exporter uses committed Git blobs, normalized archive metadata and per-file SHA-256 hashes.
 The replay launcher verifies the archive and every file, downloads the explicitly pinned official
 native package and checks both package and binary hashes before execution. Local native execution
