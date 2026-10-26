@@ -112,6 +112,12 @@ test('retires a focused held Client press across native policy restriction and r
     expect(heldSettled.result.element).toBe('held-policy-action')
   }
   const afterHeld=await readClient();expect(afterHeld.pressed).toBe(0)
+  if(borrowedPolicyClient){
+    const button=client.getByRole('button',{name:'Apply policy action',exact:true})
+    const state=await appPage.evaluate(()=>{const context=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(context.nativeUiViews).map((view:any)=>({attachmentId:view.attachmentId,state:view.state}))})
+    await writeFile(join(workspace!,'native-policy-fresh-button-before-click.json'),JSON.stringify({html:await button.evaluate(element=>element.outerHTML),disabled:await button.isDisabled(),bounds:await button.boundingBox(),state}))
+    await expect(button).toBeEnabled()
+  }
   await client.getByRole('button',{name:'Apply policy action',exact:true}).click()
   await expect.poll(async()=>(await readClient())?.pressed).toBe(1)
   const freshDraft=await receipt('native-policy-fresh-draft.json');expect(freshDraft).toEqual(parent)
