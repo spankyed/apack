@@ -122,7 +122,11 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
     await observeFormatting(editor,'before bold')
     await editor.press('Control+b');await observeFormatting(editor,'after bold')
     await editor.press('Control+i');await observeFormatting(editor,'after italic')
-    try{await expect(editor.locator('strong em, em strong').filter({hasText:'Re'})).toHaveCount(1);await expect.poll(selected).toBe('Re')}
+    try{
+      await expect(editor.locator('strong em, em strong').filter({hasText:'Re'})).toHaveCount(1);await expect.poll(selected).toBe('Re')
+      const menu=appPage.locator('.bubble-menu:visible');await expect(menu).toHaveCount(1)
+      await expect.poll(async()=>{const m=await menu.boundingBox(),f=await editor.evaluate(element=>{const r=element.closest('form')!.getBoundingClientRect();return {left:r.left,right:r.right}});return !!m&&m.x>=f.left&&m.x+m.width<=f.right}).toBe(true)
+    }
     finally{await observeFormatting(editor,'after formatting assertion')}
   }
   const parentFill=await fill(card,composer,'Parent')
@@ -147,7 +151,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   await agentComposer.evaluate(el=>el.setAttribute('data-rich-original','true'))
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click()
   await expect(composer.locator('h1')).toHaveText('Parent review');await expect(composer.locator('pre')).toContainText('const ready = true');await expect(composer).toBeFocused();await expect.poll(selected).toBe('Re')
-  if(roundTripJourney){expect(await snapshot(composer)).toEqual(parentState);await expect(card.locator('img[src^="data:image/"]')).toHaveAttribute('src',parentImage!)}
+  if(roundTripJourney){expect(await snapshot(composer)).toEqual(parentState);await expect(card.locator('img[src^="data:image/"]')).toHaveAttribute('src',parentImage!);await expect(card.locator('img[src^="data:image/"]')).toHaveCSS('object-fit','contain')}
   await row.getByRole('button',{name:'Open Agent',exact:true}).click();await expect(focused).toBeVisible()
   expect(await agentComposer.getAttribute('data-rich-original')).toBeNull()
   if(referenceJourney)await expect(agentComposer.locator('.reference-pill')).toHaveAttribute('data-ref-type','thread')
@@ -209,7 +213,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   }
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer.locator('h1')).toHaveText('Parent review');await expect.poll(selected).toBe('Re')
   if(roundTripJourney){
-    expect(await snapshot(composer)).toEqual(parentState);await expect(card.locator('img[src^="data:image/"]')).toHaveAttribute('src',parentImage!)
+    expect(await snapshot(composer)).toEqual(parentState);await expect(card.locator('img[src^="data:image/"]')).toHaveAttribute('src',parentImage!);await expect(card.locator('img[src^="data:image/"]')).toHaveCSS('object-fit','contain')
     await expect.poll(async()=>(await context()).native.state.view?.kind).toBe('main')
     const restored=await nativeRead(card,composer);expect(restored.text).toBe(parentFill.after.text)
     for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(card.locator('img[src^="data:image/"]')).toBeInViewport();await expect(composer.locator('p').filter({hasText:'Review changes.'})).toBeInViewport();const file=`native-rich-parent-roundtrip-${width}.png`;await capture(file);roundtripCaptures.push({owner:'parent',width,height,file})}
