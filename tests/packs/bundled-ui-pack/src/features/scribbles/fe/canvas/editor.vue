@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { useSurfaceDraft } from '@apackdev/sdk/fe';
 // Bundled into this pack (apack.json fe.bundleUi); ProseMirror and tiptap's core still come from the host
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
 // A component whose classes name the host theme (primary-*): without @apackdev/ui's Tailwind preset
 // its accent silently gets no CSS, which fe-bundler-ui-theme.spec.ts checks for
 import Button from '@apackdev/ui/design/button';
 
-const text = ref('Bundled editor');
+// What the user typed, kept across the remount a reconnect causes rather than in a component `ref`, which goes with it
+const text = useSurfaceDraft('text', 'Bundled editor');
 </script>
 
 <template>

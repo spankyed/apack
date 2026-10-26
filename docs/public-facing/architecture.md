@@ -95,6 +95,12 @@ Every pack's frontend is loaded at runtime, the ones the app ships included. A d
 
 A connection's own `CLIENT_CONNECTED` skips the systems of external packs with frontend code (the bus asks `getPacksWithClientLoadedFrontends()`). When the renderer's bus subscription (re)connects, `BUS_SUBSCRIBED` calls `packClientReady` again for every pack whose frontend it loaded. Systems of packs without frontend code are told and asked directly.
 
+A reconnect re-accepts every pack frontend and replaces each surface's actor, so the surface remounts: what the old
+connection left unanswered goes with the old actor, and the surface asks again on its new one's `SURFACE_STARTED`.
+State a component holds in a `ref` goes too. Hold what the user has typed and not saved in `useSurfaceDraft(name,
+initial)` (`@apackdev/sdk/fe`) instead: it is kept by the surface's ref, so the remounted component is handed the same
+value. It lasts as long as the window; what must outlive an app restart is saved.
+
 ### Activation, teardown and reload
 
 The `packs` system handles install, uninstall, enable/disable and update from the Packs view:
