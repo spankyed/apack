@@ -115,15 +115,20 @@ test('keeps native review fields usable after obsolete edits fail', async ({ app
   await writeFile(join(workspace!,'native-field-lifetime-cases.json'),JSON.stringify({sessionId,boundNativePid,cases}))
   for(const width of [1100,680]){
     await appPage.setViewportSize({width,height:width===680?600:900})
-    await note.scrollIntoViewIfNeeded()
-    const bounds=await note.evaluate(element=>{const result=[];let current:Element|null=element;while(current){const r=current.getBoundingClientRect(),s=getComputedStyle(current);result.push({tag:current.tagName,classes:current.className,x:r.x,y:r.y,width:r.width,height:r.height,overflowX:s.overflowX,overflowY:s.overflowY,scrollWidth:current.scrollWidth,clientWidth:current.clientWidth});current=current.parentElement;}return result})
-    await writeFile(join(workspace!,'native-field-bounds-'+width+'.json'),JSON.stringify(bounds))
-    await expect(composer).toHaveText(draft)
-    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
-    const file='native-field-lifetime-'+width+'.png'
-    const png=await nativeWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
-    await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({width,file,note:await note.inputValue(),scope:await scope.textContent()})
-    await expect(note).toBeInViewport({ratio:1});await expect(scope).toBeInViewport({ratio:1});await expect(reset).toBeInViewport({ratio:1})
+    // A transcript taller than the compact viewport is ordinary scrollable content.
+    // Reveal each control fully; do not require the entire message to fit at once.
+    for(const part of ['fields','reset']){
+      const target=part==='fields'?note:reset
+      await target.evaluate(element=>element.scrollIntoView({block:'center',inline:'nearest'}))
+      await expect(target).toBeInViewport({ratio:1})
+      if(part==='fields')await expect(scope).toBeInViewport({ratio:1})
+      await expect(composer).toHaveText(draft)
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+      await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+      const file='native-field-lifetime-'+width+'-'+part+'.png'
+      const png=await nativeWindow.evaluate(async window=>(await window.capturePage()).toPNG().toString('base64'))
+      await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({width,part,file,note:await note.inputValue(),scope:await scope.textContent()})
+    }
   }
   const after=await context()
   const oldIds=new Set(before.messages.map((message:any)=>message.id))
