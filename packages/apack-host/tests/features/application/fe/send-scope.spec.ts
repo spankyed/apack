@@ -116,6 +116,30 @@ describe('a surface handling what the shell gave it', () => {
       w.app.stop();
     }
   });
+
+  /**
+   * And for a surface spawned while the shell is running, which is every pack's: its frontend loads after the
+   * window connects. The shell then runs its actions at once, before the child it spawned has started.
+   */
+  it('names it for the start of a surface a pack frontend brings later', async () => {
+    const w = watching();
+    try {
+      await settle();
+      const seen: Array<{ type: string; receiver: string | undefined }> = [];
+      const state = setup({}).createMachine({
+        on: { '*': { actions: ({ event }) => { seen.push({ type: event.type, receiver: _currentDelivery()?.receiver }); } } },
+      });
+      const later = { id: 'ext/own', label: 'own', icon: 'Zap', state, canvas: {} } as unknown as Surface;
+      w.shell.acceptSurface(later);
+      w.app.send({ type: 'PACK_FRONTEND_LOADED', registrationId: 'runtime', packId: 'ext', surfaces: [later] });
+      await settle();
+
+      expect(receiverFor(seen, 'SURFACE_STARTED')).toBe('ext/own');
+      expect(seen.filter((entry) => entry.type === 'SURFACE_STARTED'), 'once').toHaveLength(1);
+    } finally {
+      w.app.stop();
+    }
+  });
 });
 
 describe('how far each send reaches', () => {

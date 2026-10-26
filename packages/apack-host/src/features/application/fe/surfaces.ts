@@ -19,6 +19,12 @@ export function withHostLast(surfaces: Surface[]): Surface[] {
  *
  * XState types `id` from the declared children, and surfaces are registered at runtime (built-in and from
  * packs), so the id goes through this one cast rather than at each call site.
+ *
+ * **The actor is started before it is handed the event.** XState defers a spawned child's start until the
+ * spawning transition's actions have run, while a running shell runs this action at once, so the child is not
+ * started yet: its mailbox would hold the event and handle it at the deferred start, after the delivery has
+ * returned, and the surface's startup asks would go out with no sender for the system to answer. `start()` on a
+ * running actor returns at once, so the deferred start finds it running and does nothing.
  */
 export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
   const spawner = enqueue as {
@@ -28,7 +34,9 @@ export function spawnSurfaceActor(enqueue: unknown, surface: Surface): void {
   spawner.spawnChild(surface.state, { id: surface.id, systemId: surface.id });
   spawner(({ system }) => {
     const actor = system.get(surface.id);
-    if (actor) notifySurfaceActor(actor, surface.id, { type: 'SURFACE_STARTED' });
+    if (!actor) return;
+    actor.start();
+    notifySurfaceActor(actor, surface.id, { type: 'SURFACE_STARTED' });
   });
 }
 
