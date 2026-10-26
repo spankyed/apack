@@ -346,3 +346,30 @@ it('does not publish a managed policy diagnostic reply after its view is dispose
   f.host.dispose();finish([{file:'managed settings',path:'',message:'Old warning',severity:'warning'}]);await vi.advanceTimersByTimeAsync(50)
   expect(f.host.managedSettingsDiagnostics).toEqual([])
 })
+
+it('does not replace a fresh drawing when a retired press rejects', async () => {
+  const f = fixture(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  const first = f.nodes()[0]; if (first.kind !== 'button') throw Error('button')
+  let reject!: (error: Error) => void
+  f.ui.press.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+  const pending = f.host.press(first.actionId!)
+  f.host.receive({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
+  await vi.advanceTimersByTimeAsync(50)
+  reject(new Error('Original terminal press handle retired'))
+  await expect(pending).resolves.toEqual({ handled: false })
+  await vi.advanceTimersByTimeAsync(50)
+  const fresh = f.nodes()[0]; if (fresh.kind !== 'button') throw Error('button')
+  expect(fresh.actionId).toBeTruthy()
+  await expect(f.host.press(first.actionId!)).resolves.toEqual({ handled: false })
+  await expect(f.host.press(fresh.actionId!)).resolves.toEqual({ handled: true })
+  await f.host.dispose()
+})
+
+it('keeps the error presentation when the current press fails without a replacement drawing', async () => {
+  const f = fixture(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  const button = f.nodes()[0]; if (button.kind !== 'button') throw Error('button')
+  f.ui.press.mockRejectedValueOnce(new Error('Current callback failed'))
+  await expect(f.host.press(button.actionId!)).resolves.toEqual({ handled: false })
+  expect(f.host.state[0].body.status).toBe('error')
+  await f.host.dispose()
+})

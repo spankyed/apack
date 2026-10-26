@@ -244,11 +244,17 @@ export function createClaudeTranscriptMessageHost(options: {
         try { if (!['https:', 'http:', 'file:'].includes(new URL(href).protocol)) return { handled: false } } catch { return { handled: false } }
       } else if (href !== undefined) return { handled: false }
       let failed = false
-      entry.pressing = true; retire(entry); publish()
+      entry.pressing = true; retire(entry)
+      const epoch = entry.epoch
+      publish()
       try {
         const result = await options.ui.press({ ...options.client, ...action, component: entry.row.component, instance_id: entry.row.uuid, instance_revision: entry.instanceRevision, ...(link ? { href } : {}) })
         return { handled: valid(entry) && result.handled }
-      } catch { failed = true; fail(entry); return { handled: false } }
+      } catch {
+        // A retired callback cannot replace a newer policy/Client drawing with its failure.
+        if (entry.epoch === epoch && !entry.drawing) { failed = true; fail(entry) }
+        return { handled: false }
+      }
       finally { entry.pressing = false; if (!failed && present(entry)) invalidate(entry) }
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
