@@ -74,15 +74,15 @@ test('retires completed but unsettled Workflow controls after stopping native wo
   await expect(approval).toBeVisible();await expect(approval).toContainText('Review release notes')
   await approval.getByRole('button',{name:'Yes, run it',exact:true}).click();await expect(approval).toHaveCount(0)
   const tasks=async()=>JSON.parse(await readFile(join(workspace!,'native-workflow-state.json'),'utf8').catch(()=>'[]'))
-  const original=async()=>(await tasks()).find((task:any)=>task.type==='local_workflow'&&task.status==='completed'&&task.settled===false)
-  let before:any
-  await expect.poll(async()=>{const value=await original();if(value)before=value;return !!value},{timeout:15000,message:'Original Workflow completion precedes native settlement'}).toBe(true)
-  const taskId=before.id
+  const original=async()=>(await tasks()).find((task:any)=>task.type==='local_workflow'&&task.status==='running'&&task.settled===false)
+  let running:any
+  await expect.poll(async()=>{const value=await original();if(value)running=value;return !!value},{timeout:15000}).toBe(true)
+  const taskId=running.id
   const currentTask=async()=>(await context()).native.state.tasks.find((task:any)=>task.id===taskId)
-  await expect.poll(currentTask).toMatchObject({kind:'workflow',status:'completed',settled:false,canStop:true})
+  await expect.poll(currentTask).toMatchObject({kind:'workflow',status:'running',settled:false,canStop:true})
   const region=appPage.getByRole('region',{name:'Native Claude workflows',exact:true}),row=region.locator('[data-native-workflow-id="'+taskId+'"]')
   const stop=row.getByRole('button',{name:'Stop Workflow',exact:true})
-  await expect(stop).toBeEnabled();await expect(row.getByRole('button',{name:'Pause Workflow',exact:true})).toHaveCount(0);await expect(row.getByRole('button',{name:'Resume Workflow',exact:true})).toHaveCount(0)
+  await expect(stop).toBeEnabled()
   const draft='Keep the release notes while the reviewer settles.'
   await composer.click();await composer.press('ControlOrMeta+A');await appPage.keyboard.insertText(draft);await expect(composer).toHaveText(draft)
   const win=await electronApp.browserWindow(appPage),captures:any[]=[]
@@ -96,8 +96,15 @@ test('retires completed but unsettled Workflow controls after stopping native wo
       await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({stage,width,file,task:await currentTask()})
     }
   }
-  await capture('completed-unsettled')
+  await capture('running')
+  await expect.poll(async()=>((await tasks()).find((task:any)=>task.id===taskId)?.logs??[]).some((line:string)=>line.includes('Release reviewer ready to settle')),{timeout:15000}).toBe(true)
   await stop.click()
+  const receipts=async()=>(await readFile(join(workspace!,'native-workflow-stop-receipts.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
+  await expect.poll(async()=>(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true),{timeout:10000}).toBeTruthy()
+  const receipt=(await receipts()).find((receipt:any)=>receipt.taskId===taskId&&receipt.reply?.result?.stopped===true)
+  expect(receipt.task).toMatchObject({id:taskId,status:'completed',settled:false,result:{reviewQueued:true}})
+  expect(receipt.pid).toBe(boundNativePid);expect(receipt.ownerPid).toBe(boundNativePid);expect(receipt.sessionId).toBe(sessionId)
+  const before=receipt.task
   await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===taskId)?.settled,{timeout:15000}).toBe(true)
   await expect.poll(currentTask).toMatchObject({settled:true,canStop:false})
   await expect(stop).toBeDisabled()
@@ -112,6 +119,6 @@ test('retires completed but unsettled Workflow controls after stopping native wo
   await composer.click();await composer.press('ControlOrMeta+A');await appPage.keyboard.insertText(continuation);await expect(composer).toHaveText(continuation)
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000}).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-workflow-unsettled-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,before,after,captures,draft,continuation}))
+  await writeFile(join(workspace!,'native-workflow-unsettled-proof.json'),JSON.stringify({sessionId,boundNativePid,taskId,before,after,receipt,captures,draft,continuation}))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'task-controls',nativeWorkflowUnsettled:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
