@@ -137,6 +137,8 @@ function operationInProgress(key: string): string {
 export function createPacksSystem(registry: PackRegistry) {
   const isInstalled = (id: string) => PACK_ID_PATTERN.test(id)
     && discoverPackDirectories(resolveAppEnvironment().packsDir).some(dir => path.basename(dir) === id);
+  /** Each disable whose teardown is still running, settled once the pack's operation is released */
+  const teardowns = new Map<string, Promise<void>>();
   return setup({
     types: packsSpec.types,
     actions: packsSpec.actions({
@@ -578,21 +580,31 @@ export function createPacksSystem(registry: PackRegistry) {
         });
       },
 
-      togglePackEnabled: ({ system, event }) => {
+      togglePackEnabled: ({ system, event, self }) => {
         const ev = packsSpec.typeOf('TOGGLE_PACK_ENABLED', event);
         const packId = ev.packId;
 
         if (packId === HOST_PACK_ID) return;
         // Claimed like any other operation on the pack, so a development install cannot land mid-toggle
         if (!registry.claimPackOperation(packId)) {
-          console.warn(`[packs] ${operationInProgress(packId)}; the toggle was skipped`);
+          // The pack's own disable is still tearing down: turning it back on is what was asked, once that ends
+          const teardown = teardowns.get(packId);
+          if (teardown) {
+            void teardown.then(() => self.send(event));
+            return;
+          }
+          // Refused as every operation on a busy pack is, and said so: each window shows the state that holds
+          reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(operationInProgress(packId)) });
+          if (isInstalled(packId)) {
+            broadcastToSurface('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: packRecord(packId).enabled });
+          }
           return;
         }
         // Held until a disable's teardown finishes, since the pack is registered until then
         let tearingDown: Promise<void> | undefined;
         try {
           if (!isInstalled(packId)) {
-            console.warn(`[packs] Pack not found: ${packId}`);
+            reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(`${packId} is not an installed pack`) });
             return;
           }
           const entry = packRecord(packId);
@@ -634,8 +646,16 @@ export function createPacksSystem(registry: PackRegistry) {
           });
           emitPacksList(registry);
         } finally {
-          if (tearingDown) void tearingDown.finally(() => registry.releasePackOperation(packId));
-          else registry.releasePackOperation(packId);
+          if (tearingDown) {
+            const settled = tearingDown.finally(() => {
+              registry.releasePackOperation(packId);
+              teardowns.delete(packId);
+            });
+            teardowns.set(packId, settled);
+            void settled;
+          } else {
+            registry.releasePackOperation(packId);
+          }
         }
       },
     }),
