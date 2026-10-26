@@ -1,4 +1,4 @@
-import { readFile, readdir as _readdir, writeFile, utimes } from 'node:fs/promises'
+import { readFile, readdir as _readdir, writeFile, utimes, rename } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { stripVTControlCharacters } from 'node:util'
@@ -206,13 +206,34 @@ test('edits original Settings through desktop controls and retains composing', a
     const originalTurns=(await context()).turns
     await search.fill('')
     const openUpdate=async(title:string)=>{await expect(row.getByRole('button',{name:'Change…',exact:true})).toBeEnabled();await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor.getByRole('heading',{name:title,exact:true})).toBeVisible()}
-    const capture=async(kind:string,width:number,height:number)=>{await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport();for(const option of await editor.locator('[data-native-settings-option]').all())await expect(option).toBeInViewport();await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))));const path=testInfo.outputPath(`native-settings-updates-${kind}-${width}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(path,Buffer.from(image,'base64'));samples.push({kind,width,height,text:await editor.innerText(),capture:path})}
+    const capture=async(kind:string,width:number,height:number)=>{
+      const body=editor.locator('[data-native-settings-editor-body]'),readings:any[]=[]
+      for(const [index,target]of (await editor.locator('[data-native-settings-option]').all()).entries()){
+        const bounds=()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),b=element.closest('[data-native-settings-editor-body]')!.getBoundingClientRect();return {visible:r.top>=b.top-1&&r.bottom<=b.bottom+1,top:r.top,bottom:r.bottom,viewportTop:b.top,viewportBottom:b.bottom,shift:r.top<b.top?r.top-b.top:r.bottom-b.bottom}})
+        await body.hover();let wheels=0
+        for(let step=0;step<20;step++){const state=await bounds();if(state.visible)break;await appPage.mouse.wheel(0,Math.sign(state.shift)*Math.min(64,Math.max(2,Math.abs(state.shift))));wheels++;await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())))}
+        const geometry=await bounds();expect(geometry.visible).toBe(true);await expect(editor.getByRole('button',{name:'Cancel',exact:true})).toBeInViewport()
+        await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()))))
+        const path=testInfo.outputPath(`native-settings-updates-${kind}-${width}-${index}.png`),image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height})
+        await writeFile(path,Buffer.from(image,'base64'));readings.push({index,option:await target.innerText(),geometry,wheels,capture:path})
+      }
+      samples.push({kind,width,height,text:await editor.innerText(),readings})
+    }
     for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await openUpdate('Switch to Stable Channel');await expect(editor).toContainText('2.1.302');await expect(editor.locator('[data-native-settings-option="stay"]')).toContainText('Stay on current version (2.1.302) until stable catches up');await capture('downgrade',width,height);const before=await user();await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect(await user()).toEqual(before)}
     await openUpdate('Switch to Stable Channel');await editor.locator('[data-native-settings-option="stay"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('stable');await expect.poll(async()=>(await user()).minimumVersion).toBe('2.1.302');await expect(row).toContainText('stable')
     await row.getByRole('button',{name:'Change…',exact:true}).click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBeUndefined();await expect.poll(async()=>(await user()).minimumVersion).toBeUndefined();await expect(row).toContainText('latest')
     await openUpdate('Switch to Stable Channel');await editor.locator('[data-native-settings-option="downgrade"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('stable');expect((await user()).minimumVersion).toBeUndefined();await expect(row).toContainText('stable')
+    const globalPath=join(workspace!,'.claude/.claude.json'),global=async()=>JSON.parse(await readFile(globalPath,'utf8'))
+    const disableByLiveConfig=async()=>{
+      const before=await global();await writeFile(globalPath+'.research-temp',JSON.stringify({...before,autoUpdates:false}));await rename(globalPath+'.research-temp',globalPath)
+      await expect.poll(async()=>{await panel.getByRole('button',{name:'Refresh',exact:true}).click();return row.innerText()},{timeout:15000}).toMatch(/disabled/i)
+    }
+    await disableByLiveConfig();const beforeEnable=await user()
+    for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await openUpdate('Enable Auto-Updates');await expect(editor.locator('[data-native-settings-option="latest"]')).toHaveText('Enable with latest channel');await expect(editor.locator('[data-native-settings-option="stable"]')).toHaveText('Enable with stable channel');await capture('enable',width,height);await editor.getByRole('button',{name:'Cancel',exact:true}).click();await expect(editor).toHaveCount(0);expect((await global()).autoUpdates).toBe(false);expect(await user()).toEqual(beforeEnable)}
+    await openUpdate('Enable Auto-Updates');await editor.locator('[data-native-settings-option="stable"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await global()).autoUpdates).toBe(true);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('stable');expect((await user()).minimumVersion).toBeUndefined()
+    await disableByLiveConfig();await openUpdate('Enable Auto-Updates');await editor.locator('[data-native-settings-option="latest"]').click();await expect(editor).toHaveCount(0);await expect.poll(async()=>(await global()).autoUpdates).toBe(true);await expect.poll(async()=>(await user()).autoUpdatesChannel).toBe('latest');expect((await user()).minimumVersion).toBeUndefined()
     expect((await context()).turns).toBe(originalTurns);expect((await context()).native.state.nativePid).toBe(boundNativePid)
-    updateDecisions={samples,downgradeCancelPreserved:true,stayPinsCurrentVersion:true,switchLatestClearsPin:true,downgradeAllowsOlder:true,noPhantomTurn:true,finalUser:await user()}
+    updateDecisions={samples,visualAcceptanceVersion:2,liveConfigWatcherAdmission:true,enableCancelPreserved:true,enabledStable:true,enabledLatest:true,downgradeCancelPreserved:true,stayPinsCurrentVersion:true,switchLatestClearsPin:true,downgradeAllowsOlder:true,noPhantomTurn:true,finalUser:await user()}
     await appPage.setViewportSize({width:1100,height:900});await search.fill('')
   }
   if(process.env.CLAUDE_RESEARCH_SETTINGS_UPDATES==='1'){
