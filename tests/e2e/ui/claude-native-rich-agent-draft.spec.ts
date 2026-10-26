@@ -107,7 +107,18 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
     roundtripReads.push({agentId,value});await writeFile(join(workspace!,'native-agent-roundtrip-reads.json'),JSON.stringify(roundtripReads))
     await tools.click();await editor.focus();await expect.poll(selected).toBe('Re');return value
   }
-  async function markSelected(editor:typeof composer){await editor.press('Control+b');await editor.press('Control+i');await expect(editor.locator('strong em, em strong').filter({hasText:'Re'})).toHaveCount(1);await expect.poll(selected).toBe('Re')}
+  const formattingObservations:any[]=[]
+  async function observeFormatting(editor:typeof composer,phase:string){
+    formattingObservations.push({phase,...await snapshot(editor),...await editor.evaluate(element=>({html:element.innerHTML,selected:window.getSelection()?.toString()??'',focused:element===document.activeElement}))})
+    await writeFile(join(workspace!,'native-rich-roundtrip-formatting.json'),JSON.stringify(formattingObservations,null,2))
+  }
+  async function markSelected(editor:typeof composer){
+    await observeFormatting(editor,'before bold')
+    await editor.press('Control+b');await observeFormatting(editor,'after bold')
+    await editor.press('Control+i');await observeFormatting(editor,'after italic')
+    try{await expect(editor.locator('strong em, em strong').filter({hasText:'Re'})).toHaveCount(1);await expect.poll(selected).toBe('Re')}
+    finally{await observeFormatting(editor,'after formatting assertion')}
+  }
   const parentFill=await fill(card,composer,'Parent')
   if(roundTripJourney){
     expect(process.platform).toBe('linux')
