@@ -14,6 +14,10 @@ test('completes an everyday native review across Agent, approval, question and i
   expect(process.env.HOME).toBe(workspace)
   const combinedAcceptance=process.env.CLAUDE_RESEARCH_COMBINED_ACCEPTANCE==='1'
   const restriction = false
+  async function replaceDraft(editor:import('@playwright/test').Locator,text:string){
+    if(combinedAcceptance){await editor.click();await editor.press('ControlOrMeta+A');await appPage.keyboard.insertText(text);await expect(editor).toHaveText(text)}
+    else await editor.fill(text)
+  }
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -25,7 +29,7 @@ test('completes an everyday native review across Agent, approval, question and i
   await app.navigate('default-setup/threads')
   await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
-  await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
+  await replaceDraft(card.locator('[contenteditable="true"]'),'Help me review the release notes and checklist.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns,{timeout:20000}).toBe(1)
@@ -35,7 +39,7 @@ test('completes an everyday native review across Agent, approval, question and i
   const selectedChannels=()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode?.channelSelection)
   const captureChannels=async(label:string,width:number,height:number)=>{await appPage.setViewportSize({width,height});for(const control of [channelDialog.getByRole('textbox'),channelDialog.getByRole('button',{name:'Cancel',exact:true}),channelDialog.getByRole('button',{name:'Save channels',exact:true})])await expect(control).toBeInViewport({ratio:1});const png=await channelWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-channels-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));channelCaptures.push(name)}
   if(!combinedAcceptance){
-  await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
+  await replaceDraft(card.locator('[contenteditable="true"]'),'Help me review the release notes and checklist.')
   await openChannels();await channelDialog.getByRole('textbox').fill('server:');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click()
   await expect(channelDialog.getByRole('alert')).toContainText('server:<name>');await expect(channelDialog.getByRole('textbox')).toHaveValue('server:')
   for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(channelDialog.getByRole('alert')).toBeInViewport({ratio:1});await expect(channelDialog.locator('#claude-channel-help')).toBeInViewport({ratio:1});await captureChannels('invalid',width,height)}
@@ -134,7 +138,7 @@ test('completes an everyday native review across Agent, approval, question and i
   const beforeCommands = await context()
   for (const [width, height] of [[1100, 900], [680, 600]] as const) {
     await appPage.setViewportSize({ width, height })
-    await composer.fill(''); await composer.fill('/cc-')
+    await replaceDraft(composer,''); await replaceDraft(composer,'/cc-')
     const popup = appPage.locator('.command-suggestion-popup')
     await expect(popup).toBeVisible()
     for (const name of ['cc-plan', 'cc-models', 'cc-reset']) await expect(popup.getByText('/' + name, { exact: true })).toHaveCount(1)
@@ -156,14 +160,14 @@ test('completes an everyday native review across Agent, approval, question and i
   await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, boundNativePid }))
   await appPage.setViewportSize({ width: 1100, height: 900 })
   }
-  await composer.fill('Review the release notes with a worker.')
+  await replaceDraft(composer,'Review the release notes with a worker.')
   await send.click()
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'running'), { timeout: 15000 }).toBe(true)
   await appPage.getByRole('button', { name: /^Native tools/ }).first().click()
   const row = appPage.locator('[data-native-agent-id]').first()
   await expect(row.getByTestId('native-agent-status-text')).toContainText('Reviewing release notes')
   const taskId = await row.getAttribute('data-native-agent-id'); expect(taskId).toBeTruthy()
-  await composer.fill(mainDraft)
+  await replaceDraft(composer,mainDraft)
   await row.getByRole('button', { name: 'Open Agent', exact: true }).click()
   const focused = appPage.getByRole('region', { name: 'Focused Agent conversation', exact: true })
   const agentForm = focused.getByRole('form', { name: 'Agent message', exact: true })
@@ -172,7 +176,7 @@ test('completes an everyday native review across Agent, approval, question and i
   if(!combinedAcceptance){
   for (const [width, height] of [[1100, 900], [680, 600]] as const) {
     await appPage.setViewportSize({ width, height })
-    await agentEditor.fill('/cc-model haiku')
+    await replaceDraft(agentEditor,'/cc-model haiku')
     await expect(agentEditor).toHaveText('/cc-model haiku')
     await expect(appPage.locator('.command-suggestion-popup:visible')).toHaveCount(0)
     await expect(agentEditor.locator('.command-segment')).toHaveCount(0)
@@ -190,7 +194,7 @@ test('completes an everyday native review across Agent, approval, question and i
   }
   await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, agentAppCommandsHeld: true, boundNativePid }))
   }
-  await agentEditor.fill(agentDraft)
+  await replaceDraft(agentEditor,agentDraft)
   await capture('agent', agentEditor, [agentForm.getByRole('button', { name: 'Send to Agent', exact: true }), focused.getByRole('button', { name: 'Back to conversation', exact: true })], focused.getByRole('region', { name: 'Agent transcript', exact: true }))
   await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(composer).toHaveText(mainDraft)
@@ -207,10 +211,10 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('The release review is ready.'))).toBe(true)
   await capture('composer', composer, [send], appPage.getByTestId('chat-transcript'))
   const reference = JSON.parse(await readFile(join(workspace!, 'reference-fixture.json'), 'utf8'))
-  await composer.fill('Read the release checklist before proposing changes.')
+  await replaceDraft(composer,'Read the release checklist before proposing changes.')
   await send.click()
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'everyday-read-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
-  await composer.fill('Keep my review draft while I approve this read.')
+  await replaceDraft(composer,'Keep my review draft while I approve this read.')
   await writeFile(join(workspace!, 'everyday-read-release'), 'release')
   const approval = appPage.getByTestId('native-read-approval')
   await expect(approval).toBeVisible(); await expect(approval.getByTestId('native-read-path')).toHaveText(reference.file)
@@ -220,10 +224,10 @@ test('completes an everyday native review across Agent, approval, question and i
   await expect(approval).toBeHidden()
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('The release checklist is available.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Keep my review draft while I approve this read.')
-  await composer.fill('Ask me which release audience to target.')
+  await replaceDraft(composer,'Ask me which release audience to target.')
   await send.click()
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'everyday-question-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
-  await composer.fill('Use a direct, concise tone in the summary.')
+  await replaceDraft(composer,'Use a direct, concise tone in the summary.')
   await writeFile(join(workspace!, 'everyday-question-release'), 'release')
   const question = appPage.getByTestId('native-question-panel')
   await expect(question).toBeVisible(); await expect(question).toContainText('Who should the release summary address?')
@@ -289,7 +293,7 @@ test('completes an everyday native review across Agent, approval, question and i
   if(toolNotice){await expect(appPage.getByText(questionNoticeReceipt.text,{exact:false})).toHaveCount(0);await writeFile(join(workspace!,'native-question-tool-notice-app.json'),JSON.stringify({receipt:questionNoticeReceipt,missingCallRefusal,liveUpdates:questionNoticeLiveUpdates,nativeScreenIncludesNotice:true,appVisible:true,retired:true}))}
   await expect.poll(async () => (await context()).messages.some((message: any) => message.sender === 'assistant' && message.text.includes('for developers.')), { timeout: 15000 }).toBe(true)
   await expect(composer).toHaveText('Use a direct, concise tone in the summary.')
-  await composer.fill('Draft the release summary while I review the checklist.')
+  await replaceDraft(composer,'Draft the release summary while I review the checklist.')
   await send.click()
   await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-pause-ready.json'), 'utf8').catch(() => '{}')).ready).toBe(true)
   if(toolNotice){
@@ -300,7 +304,7 @@ test('completes an everyday native review across Agent, approval, question and i
     const path=join(workspace!,'native-question-tool-notice-app.json'),proof=JSON.parse(await readFile(path,'utf8'))
     await writeFile(path,JSON.stringify({...proof,closedRefusal}))
   }
-  await composer.fill('Keep this note after interruption.')
+  await replaceDraft(composer,'Keep this note after interruption.')
   await card.getByTitle('Pause agent work', { exact: true }).click()
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   expect((await context()).native.state.status).toBe('live')
@@ -340,7 +344,7 @@ test('completes an everyday native review across Agent, approval, question and i
     return (await context()).claude.totalCostUsd === resumedCost
   }).toBe(true)
   for (const original of acceptedUsers) await expect.poll(async () => (await context()).messages.filter((message: any) => message.context?.cliUuid === original.uuid).length).toBe(1)
-  await composer.fill('Ready for the next release-review step.')
+  await replaceDraft(composer,'Ready for the next release-review step.')
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots, combinedAcceptance, retainedParentDraft:mainDraft,retainedAgentDraft:agentDraft }))
