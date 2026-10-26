@@ -36,7 +36,9 @@ export function linkElmdb(root, checkout = elmdbCheckout()) {
   const held = fs.lstatSync(link, { throwIfNoEntry: false });
   if (held?.isSymbolicLink()) fs.unlinkSync(link);
   else if (held) throw new Error(`${link} is a ${held.isDirectory() ? 'directory' : 'file'}, not the link to an elmdb checkout: move it away first`);
-  fs.symlinkSync(checkout, link, 'dir');
+  // A junction on Windows, which needs neither elevation nor Developer Mode as a directory symlink does; Node reads
+  // either as a symbolic link, so the replacement above holds for both
+  fs.symlinkSync(checkout, link, process.platform === 'win32' ? 'junction' : 'dir');
   return { link, checkout, rev };
 }
 
