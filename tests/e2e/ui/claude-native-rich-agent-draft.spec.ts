@@ -90,7 +90,7 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
     await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-rich-draft-fill.json'),'utf8').catch(()=>'{}'))).toMatchObject({result:{isFilled:true},after:{text:expect.stringContaining('# '+owner+' review')}})
     await expect(editor.locator('h1')).toHaveText(owner+' review');await expect(editor.locator('pre')).toContainText('const ready = true')
     await tools.click()
-    await editor.locator('p').filter({hasText:'Review changes.'}).click();await editor.press('Control+a');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight')
+    await editor.locator('p').filter({hasText:'Review changes.'}).click();await editor.press(process.platform==='darwin'?'Control+a':'Home');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight')
     await expect.poll(selected).toBe('Re')
     return JSON.parse(await readFile(join(workspace!,'native-rich-draft-fill.json'),'utf8'))
   }
