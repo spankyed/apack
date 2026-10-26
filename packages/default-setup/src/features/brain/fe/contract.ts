@@ -24,6 +24,8 @@ export interface BrainContext {
   startError?: string;
   /** The root flow the running brain started with; the flows surface's root flow differing from it takes a restart */
   runningRootFlowId?: string;
+  /** The run of it this window shows: the brain's state names the same run again, and a new start another */
+  runningRootRunId?: string;
   brainIsPaused: boolean;
   latestRuntimeError?: StepRuntimeError;
   runtimeErrors: StepRuntimeError[];

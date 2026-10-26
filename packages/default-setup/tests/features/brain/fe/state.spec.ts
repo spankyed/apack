@@ -27,7 +27,28 @@ it('asks for the flow it shows on a pulse, and for the root when a run starts ag
   actor.send({ type: 'EVENT_PULSE', eventType: 'user.message' });
   expect(asks().at(-1), 'at once, in the pulse').toEqual({ type: 'REQUEST_SURFACE_DATA', flowRunNodeId: 'Run-sub' });
 
-  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never });
+  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: 'RunNode-first' as never });
   expect(asks().at(-1), 'a new run is the root').toEqual({ type: 'REQUEST_SURFACE_DATA' });
+  actor.stop();
+});
+
+it("answers the brain's state naming the run it shows with no ask, and asks again for another run", () => {
+  const actor = createActor(brainState).start();
+  actor.send({ type: 'SURFACE_STARTED' });
+  // The answer to an ask: the tree, then the brain's state, which names the run it is on
+  const answer = (rootRunId: string) => {
+    actor.send(tree('RunNode-root'));
+    actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: rootRunId as never });
+  };
+  answer('RunNode-first');
+  const afterFirst = asks().length;
+  answer('RunNode-first');
+  answer('RunNode-first');
+  expect(asks().length, 'the same run named again asks for nothing').toBe(afterFirst);
+
+  // A restart of the same root flow is another run, so every window asks for its tree
+  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: 'RunNode-second' as never });
+  expect(asks().length).toBe(afterFirst + 1);
+  expect(asks().at(-1)).toEqual({ type: 'REQUEST_SURFACE_DATA' });
   actor.stop();
 });

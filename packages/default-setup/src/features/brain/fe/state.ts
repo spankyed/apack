@@ -300,6 +300,7 @@ const brainState = setup({
       brainIsDead: true,
       startError: ({ event }) => typeOf('BRAIN_KILLED', event).startError,
       runningRootFlowId: undefined,
+      runningRootRunId: undefined,
       brainIsPaused: false,
       possibleEvents: [],
       flowHierarchy: [],
@@ -309,6 +310,7 @@ const brainState = setup({
       brainIsDead: false,
       startError: undefined,
       runningRootFlowId: ({ event }) => typeOf('BRAIN_STARTED', event).rootFlowId,
+      runningRootRunId: ({ event }) => typeOf('BRAIN_STARTED', event).rootRunId,
       brainIsPaused: false,
     }),
     setBrainPaused: assign({
@@ -361,6 +363,7 @@ const brainState = setup({
     },
   },
   guards: {
+    startsAnotherRun: ({ context, event }) => typeOf('BRAIN_STARTED', event).rootRunId !== context.runningRootRunId,
     canGoBack: () => {
       return true;
     },
@@ -518,10 +521,12 @@ const brainState = setup({
         BRAIN_KILLED: {
           actions: 'setBrainKilled'
         },
-        // A new run: its tree is the root's, asked for again in this window
-        BRAIN_STARTED: {
-          actions: ['setBrainStarted', 'requestRootData']
-        },
+        // A run this window hasn't shown: its tree is the root's, asked for again. The brain's state names the run it
+        // is on in every answer to that ask, so asking again for the same run would ask for ever
+        BRAIN_STARTED: [
+          { guard: 'startsAnotherRun', actions: ['setBrainStarted', 'requestRootData'] },
+          { actions: 'setBrainStarted' },
+        ],
         PAUSE_BRAIN: {
           actions: 'pauseBrain'
         },

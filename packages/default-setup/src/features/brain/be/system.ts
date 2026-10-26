@@ -59,13 +59,13 @@ type BrainStateNews = Extract<OutgoingBrainEvents, { type: BrainStateNewsType }>
  * The brain's state as a window shows it: running or stopped (and why), paused, and whether its steps are inspected.
  * Inspection is restored from the settings, on by default in development so steps are visible out of the box.
  */
-function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; startError?: Error }, paused: boolean): BrainStateNews[] {
+function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; rootRunId?: RunNodeId; startError?: Error }, paused: boolean): BrainStateNews[] {
   const brainSettings = featureSettings.forFeature('brain').get();
   const inspectEnabled = brainSettings?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
   setDebugEnabled('brain', inspectEnabled);
   return [
-    context.brainActor && context.runningRootFlowId
-      ? { type: 'BRAIN_STARTED', rootFlowId: context.runningRootFlowId }
+    context.brainActor && context.runningRootFlowId && context.rootRunId
+      ? { type: 'BRAIN_STARTED', rootFlowId: context.runningRootFlowId, rootRunId: context.rootRunId }
       : { type: 'BRAIN_KILLED', startError: context.startError?.message },
     ...(paused ? [{ type: 'BRAIN_PAUSED' } as const] : []),
     { type: 'INSPECT_TOGGLED', enabled: inspectEnabled },
@@ -119,10 +119,11 @@ export const brainSystem = setup({
 
       // News for every window, each of which asks for the new run's tree
       enqueue(({ context }) => {
-        if (context.brainActor && context.runningRootFlowId) {
+        if (context.brainActor && context.runningRootFlowId && context.rootRunId) {
           broadcastToSurface('brain', {
             type: 'BRAIN_STARTED',
             rootFlowId: context.runningRootFlowId,
+            rootRunId: context.rootRunId,
           });
         }
       });
@@ -228,6 +229,7 @@ export const brainSystem = setup({
         broadcastToSurface('brain', {
           type: 'BRAIN_STARTED',
           rootFlowId: currentRootFlowId,
+          rootRunId: runNodeId,
         });
 
         logger.info('Restarted brain with root flow', { flowId: currentRootFlowId });
