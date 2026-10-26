@@ -2962,8 +2962,11 @@ neither hung.
 The comparison, run as four pairs of fresh worktrees set up identically (`npm ci`, `build:default-setup`,
 `build:runtime`, `test:external-pack:contract`, then three apps at once with `--trace retain-on-failure`), alternating
 which went first: every worktree Spotlight indexed took 23–65s and two of the four hung; every one in a `.noindex`
-directory took 8.6–9.0s and none hung. So Spotlight indexing a fresh `node_modules` is what slowed the writes
-Chromium blocks exit on. `session:new` and `session:check` create worktrees under `<repository>-worktrees.noindex`
+directory took 8.6–9.0s and none hung. So Spotlight indexing a fresh `node_modules` makes the slow writes
+Chromium blocks exit on far more likely. It is not the whole cause: on 2026-10-26 a freshly installed `.noindex`
+worktree, gating `da805a5d1` through the whole chain, hit the same teardown timeout on three apps, beside two other
+E2E waits timing out (`step-palette`, `settings-ownership`) — so a fresh install under the chain's full load can
+still stall it. The `.noindex` location stays, since it removes the largest measured contributor. `session:new` and `session:check` create worktrees under `<repository>-worktrees.noindex`
 (`worktreesRoot`, `scripts/session.mjs`). No timeout or assertion was changed.
 
 Two things this does not establish. **The lost input is not explained by it**: on 2026-10-25, after a restart, one
