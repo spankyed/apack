@@ -28,6 +28,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  // A spy outlives its case otherwise: spying on AbortSignal.timeout again returns it, earlier calls and all
+  vi.restoreAllMocks();
   for (const [key, value] of Object.entries(ORIGINAL)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
