@@ -2982,7 +2982,8 @@ included, and replaces their surface actors; `SurfaceScope` remounts on a new ac
 in component-local state. Neither the client nor the `ws` server sets a keepalive, so a connection does not drop
 for load alone: what the failing runs had was most likely an API child that went away on a machine running out of
 memory. Their app logs went with the restart, so that trigger is unconfirmed; a second `CLIENT_CONNECTED` in a
-failing run's `app-<n>.log` would confirm it. **No same-files test of the indexing was made**: moving a built worktree between an
+failing run's `app-<n>.log` would confirm it. The E2E fixture now names an API restart under a failing test
+(`api-restarted`), and the fix is planned: [reconnect without remount](../../plans/reconnect-without-remount.md). **No same-files test of the indexing was made**: moving a built worktree between an
 indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
 startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
 
