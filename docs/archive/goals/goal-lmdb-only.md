@@ -1,6 +1,6 @@
 # Goal: EARS reads from disk — the engine's data only in LMDB
 
-Status: started, 2026-10-23 — the cut-over in [ears-storage-layout.md](../plans/ears-storage-layout.md), which has the
+Status: done, 2026-10-24 — the cut-over in [ears-storage-layout.md](../plans/ears-storage-layout.md), which has the
 decision and the readings behind it. The spike (PR #261, closed unmerged) is recorded below; its code is not reused.
 
 ## Where it starts

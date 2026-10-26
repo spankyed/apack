@@ -12,7 +12,7 @@ sink would not accelerate them. Moving those queries into SQL would require chan
 including its equality, ordering, relation traversal and synchronous mutation semantics.
 
 Run history is outside this plan: it left the engine for a record store of its own, indexed by the fields
-it is looked up by and paged ([run-history-store.md](../../plans/run-history-store.md)). No new indexes are proposed for
+it is looked up by and paged ([run-history-store.md](run-history-store.md)). No new indexes are proposed for
 the database either: normal queries already use in-memory entity-type and relation indexes.
 
 This decision follows source inspection, not a measured LMDB-versus-SQLite benchmark. Revisit SQLite

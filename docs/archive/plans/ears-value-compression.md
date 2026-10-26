@@ -14,7 +14,7 @@ On the converted production copy (the backup of 2026-10-17, 22,816 entities):
 
 - 10,063 values over 512 bytes, mostly message text, hold 150.4 MB. The other 396,906 values hold 15.5 MB, and keys
   18 MB.
-- Compacted, the file is 271 MB (`docs/plans/ears-storage-layout.md`, Step 5). The large values are most of it.
+- Compacted, the file is 271 MB (`docs/archive/plans/ears-storage-layout.md`, Step 5). The large values are most of it.
 
 Compression shrinks the data itself, where compaction (`COMPACT_COPIES`) only removes the space deletes freed. The two
 are independent and add up.

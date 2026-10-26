@@ -454,7 +454,7 @@ run; the bench's graph (50k entities, 200k attributes, 100k relations) on an LMD
   since LMDB keeps the pages the old tables freed. With `COMPACT_COPIES` on, the script compacts the converted file
   (`compactEnvironment`), which takes it to 271 MB; the flag is off, because a compacted copy of this data aborts the
   process when a reset empties it, an lmdb-js bug fixed by kriszyp/lmdb-js#381
-  ([the evidence and repro](../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
+  ([the evidence and repro](../../references/evidence/lmdb-compacted-copy-crash.md)). Read with the store open
   read-only, two runs each, both warm:
 
   | Reading | Production copy |
@@ -633,7 +633,7 @@ per terminal. 1,000 `query(type).first()` over 40k 3,815 → 0.25 ms, 100 `linke
 ### Writes committed when they return (review item 9) — dropped
 With one copy of the data there is nothing to roll back, so the journal, the adapter, the sink and hydration go in
 the cut-over instead of being reworked. Its design is kept, with moving thread messages out of the engine, in
-[deferred/ears-in-memory-path.md](deferred/ears-in-memory-path.md), the path not taken.
+[deferred/ears-in-memory-path.md](../../plans/deferred/ears-in-memory-path.md), the path not taken.
 
 ### Relations are not entities
 Done, 2026-10-24, with two of its follow-ups:
@@ -645,7 +645,7 @@ Done, 2026-10-24, with two of its follow-ups:
 - **Relations have their own operations:** `getRelation`, `findRelations`, `updateRelation` and `removeRelation`, the last
   two refusing an id no relation has (`NO_SUCH_RELATION`). A relation's id is an `EARS.RelationId`, which `write`
   refuses at compile time (`WriteTarget`). Relations through `write`, the alternative, is deferred in
-  [deferred/relation-write-builder.md](deferred/relation-write-builder.md).
+  [deferred/relation-write-builder.md](../../plans/deferred/relation-write-builder.md).
 - The third follow-up, numbering rows out of the entity index, is Step 3's `['s', key]`.
 
 ## Out of scope

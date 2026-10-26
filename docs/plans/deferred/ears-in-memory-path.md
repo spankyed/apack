@@ -1,7 +1,7 @@
 # The in-memory path: writes committed when they return, and thread messages in a record store
 
 Status: deferred by decision, 2026-10-23. This is the road not taken by
-[ears-storage-layout.md](../ears-storage-layout.md): the engine moves to disk (its cut-over, Steps 1–6) instead of staying in
+[ears-storage-layout.md](../../archive/plans/ears-storage-layout.md): the engine moves to disk (its cut-over, Steps 1–6) instead of staying in
 memory with these two fixes. Resume only if the cut-over is abandoned, or stalls long enough that the silent write loss
 (Part A) has to be fixed first. If the cut-over lands, close this: it deletes Part A's subject, and with one copy of the
 data no field is too large for the engine, which is Part B's.
@@ -82,7 +82,7 @@ records the implicit unit's cost.
 
 **Why.** A transcript is a log: appended, read one thread at a time, never queried across threads, and growing
 without bound — the same diagnosis that moved run history out of the engine
-([run-history-store.md](../run-history-store.md)). It is 88% of the production data's values.
+([run-history-store.md](../../archive/plans/run-history-store.md)). It is 88% of the production data's values.
 
 **Today.** A thread `contains` its messages and `has` its artifacts
 (`default-setup/src/features/threads/be/repository/index.ts`): messages are read per thread in order

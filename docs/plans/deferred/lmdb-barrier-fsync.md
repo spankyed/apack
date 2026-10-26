@@ -1,13 +1,13 @@
 # An ordering-only sync for LMDB commits on macOS
 
-Status: deferred, 2026-10-24. An option for the cut-over's durability ([ears-storage-layout.md](../ears-storage-layout.md));
+Status: deferred, 2026-10-24. An option for the cut-over's durability ([ears-storage-layout.md](../../archive/plans/ears-storage-layout.md));
 nothing measured or built yet.
 
 ## The cost it targets
 
 On disk, a write commits before it returns. What a commit costs is decided by how hard it asks the hardware to
 guarantee durability, not by LMDB or its binding. Measured on lmdb-js 3.5.3, macOS, Node 23.11
-([goal-lmdb-only.md](../../goals/goal-lmdb-only.md), "Write path"):
+([goal-lmdb-only.md](../../archive/goals/goal-lmdb-only.md), "Write path"):
 
 | How a commit syncs | Per commit |
 |---|---|

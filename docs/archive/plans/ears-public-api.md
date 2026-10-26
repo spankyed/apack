@@ -468,7 +468,7 @@ Every phase that moves a public export runs `npm run api:update` (ears and SDK) 
   logical unit it asks for; it doesn't make writes durable.
 - **The console's transactions.** [`goal-console-transactions.md`](../../goals/goal-console-transactions.md)
   becomes a caller: console code runs inside `transact`, and its Phase 1 is this plan's Phase 2.
-- **A disk-resident engine** ([`goal-lmdb-only.md`](../../goals/goal-lmdb-only.md)). Everything here is
+- **A disk-resident engine** ([`goal-lmdb-only.md`](../goals/goal-lmdb-only.md)). Everything here is
   storage-agnostic; doing this first gives that goal a smaller API to reimplement.
 - **Reactivity, a query language, or publishing EARS on its own.** A standalone package also needs a README
   that doesn't assume AgentBuddy and a name that isn't already a well-known requirements-syntax acronym.

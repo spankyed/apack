@@ -109,7 +109,7 @@ this ledger is not permission to downgrade an outcome to a survey.
   needed by discovery belongs in discovery's checkpoints, not in an unrelated package watcher redesign.
 - [Pack security isolation](../../goals/goal-pack-security-isolation.md) remains a separate design-first goal.
   Reconcile its frontend isolation input there; security confinement is not required to discover data.
-- [LMDB-only](../../goals/goal-lmdb-only.md), console transactions and advisory locks remain a separate storage
+- [LMDB-only](../goals/goal-lmdb-only.md), console transactions and advisory locks remain a separate storage
   track. Settle their overlapping transaction/lock decisions together before changing persistence.
 - Surfaces-to-surfaces, logs extraction and distribution remain deferred. Re-audit their APIs after the
   earlier contract changes; none is a prerequisite here. [Stretch-projection removal](drop-the-stretch-projection.md)
