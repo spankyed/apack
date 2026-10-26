@@ -1,12 +1,13 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
+const brokerFailure=process.env.CLAUDE_RESEARCH_PROMPT_BROKER_FAILURE==='1'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async({appPage},testInfo)=>{if(testInfo.status!==testInfo.expectedStatus)await appPage.screenshot({path:testInfo.outputPath('native-prompt-timeout-failure.png')}).catch(()=>{})})
-test('retires an expired reverse read without letting its late reply satisfy a fresh read', async ({ app, appPage }, testInfo) => {
-  test.setTimeout(90000)
+test('retires an expired reverse read without letting its late reply satisfy a fresh read', async ({ app, appPage, electronApp }, testInfo) => {
+  test.setTimeout(brokerFailure?150000:90000)
   expect(process.env.HOME).toBe(workspace)
   const { restriction, transition } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   expect(transition).toBe(true)
@@ -72,6 +73,38 @@ test('retires an expired reverse read without letting its late reply satisfy a f
     await draft(old);await hold.arm();await read.click()
     await expect.poll(async()=>(await hold.receipts()).length).toBe(1)
     expect((await hold.receipts())[0].box).toEqual(old)
+    if(brokerFailure){
+      const live=(await context()).native.state,history=before.messages.map((message:any)=>({id:message.id,uuid:message.context?.cliUuid,text:message.text}))
+      const failure={kind:'broker',brokerPid:live.pid,nativePid:live.nativePid,at:Date.now(),retiredAt:0}
+      expect(failure.nativePid).toBe(boundNativePid);expect(failure.brokerPid).toBeGreaterThan(1);expect(failure.brokerPid).not.toBe(process.pid)
+      process.kill(failure.brokerPid,'SIGKILL')
+      await expect.poll(async()=>(await context()).native.state.status).toBe('error')
+      await expect.poll(()=>{try{process.kill(boundNativePid,0);return false}catch(error:any){if(error.code!=='ESRCH')throw error;return true}}).toBe(true)
+      failure.retiredAt=Date.now();await expect(composer).toHaveText(old.text)
+      await expect(section.getByRole('status')).toContainText('disconnected unexpectedly')
+      const capture=async(file:string)=>{const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!;const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size);await writeFile(testInfo.outputPath(file),Buffer.from(image,'base64'))}
+      for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(composer).toHaveText(old.text);await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeInViewport();await capture('native-prompt-broker-disconnected-'+width+'.png')}
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+      await expect.poll(async()=>(await context()).native.state.status,{timeout:20000}).toBe('live')
+      const freshPid=(await context()).native.state.nativePid;expect(freshPid).not.toBe(boundNativePid)
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(old.text)
+      await unlink(join(workspace!,'native-timeout-read-1.json')).catch(error=>{if(error.code!=='ENOENT')throw error})
+      await draft(current);await hold.arm();if(await tools.getAttribute('aria-expanded')!=='true')await tools.click();await read.click()
+      await expect.poll(async()=>(await hold.receipts()).length).toBe(2)
+      const pending=await hold.receipts();expect(pending[1].requestId).not.toBe(pending[0].requestId);expect(pending[1].mountId).not.toBe(pending[0].mountId);expect(pending[1].box).toEqual(current)
+      await hold.release(0);await appPage.waitForTimeout(250);expect(await receipt(1)).toBeNull();await expect(composer).toHaveText(current.text)
+      await hold.release(1);await expect.poll(async()=>await receipt(1)).toMatchObject({result:current})
+      const fresh=await receipt(1),after=await context();expect(after.turns).toBe(before.turns);expect(after.messages.map((message:any)=>({id:message.id,uuid:message.context?.cliUuid,text:message.text}))).toEqual(history)
+      for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(composer).toHaveText(current.text);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(read).toBeInViewport();await capture('native-prompt-broker-recovered-'+width+'.png')}
+      await writeFile(join(workspace!,'native-prompt-broker-failure-proof.json'),JSON.stringify({sessionId,boundNativePid,freshPid,failure,old,current,fresh,replies:await hold.receipts(),history,oldDidNotSettleFresh:true,noPhantomTurn:true}))
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
+      const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+      await expect(composer).toHaveText(current.text);await composer.fill('Continue after recovering the interrupted native draft read.');await card.getByRole('button',{name:'Send',exact:true}).click()
+      await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000}).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);expect(resizeErrors).toEqual([])
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePromptBrokerFailure:true,reopenedNativePid:freshPid,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors,resizeErrors}))
+      return
+    }
+
     await expect.poll(async()=>await receipt(1),{timeout:6500,message:'Original per-request deadline retires the addressed read'}).toMatchObject({result:{text:'',cursor:0}})
     const expired=await receipt(1);expect(expired.finished-expired.started).toBeGreaterThanOrEqual(3500)
     await expect(composer).toHaveText(old.text)
