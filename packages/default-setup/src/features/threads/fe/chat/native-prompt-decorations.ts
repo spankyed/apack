@@ -60,9 +60,10 @@ export function drawClaudePromptDecorations(doc: ProseMirrorNode, runs: NonNulla
     const from = position(run.start, 1), to = position(run.end, -1)
     if (from === undefined || to === undefined || to <= from) continue
     const styles: string[] = []
-    if (run.bold) styles.push('font-weight:600')
-    if (run.italic) styles.push('font-style:italic')
-    if (run.dimColor) styles.push('opacity:0.6')
+    // False is an explicit native override; absence retains the person's rich formatting.
+    if (run.bold !== undefined) styles.push(run.bold ? 'font-weight:600' : 'font-weight:normal')
+    if (run.italic !== undefined) styles.push(run.italic ? 'font-style:italic' : 'font-style:normal')
+    if (run.dimColor !== undefined) styles.push(run.dimColor ? 'opacity:0.6' : 'opacity:1')
     const lines = [run.underline && 'underline', run.strikethrough && 'line-through'].filter(Boolean)
     if (lines.length) styles.push(`text-decoration-line:${lines.join(' ')}`)
     const foreground = claudeUiColor(run.color), background = claudeUiColor(run.backgroundColor)

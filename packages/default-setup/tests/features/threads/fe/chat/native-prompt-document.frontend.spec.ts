@@ -610,3 +610,31 @@ it.each(['b', 'i'])('formats the visible browser selection before deferred selec
     expect(editor.state.selection.to).toBe(3)
   } finally { bridge.dispose() }
 })
+
+it('applies explicit native font resets over rich formatting without altering the draft or selection', () => {
+  editor.commands.setContent('***Review notes***')
+  editor.commands.setTextSelection(3)
+  const doc=editor.state.doc,selection=editor.state.selection,text=serialize(doc)
+  const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,vi.fn()),before=send.mock.calls.length
+  const cursor=captureClaudePromptDocument(doc,selection.head,serialize)!.cursor
+  bridge.receive({revision:bridge.revision,status:'applied',frame:{text,cursor,decorations:[{start:3,end:15,bold:false,italic:false,dimColor:false}]}})
+  const paint=editor.view.dom.querySelector<HTMLElement>('.claude-prompt-decoration')
+  expect(paint?.textContent).toBe('Review notes')
+  expect(paint?.style.fontWeight).toBe('normal')
+  expect(paint?.style.fontStyle).toBe('normal')
+  expect(paint?.style.opacity).toBe('1')
+  expect(editor.state.doc.eq(doc)).toBe(true)
+  expect(editor.state.selection.eq(selection)).toBe(true)
+  expect(editor.state.doc.firstChild?.firstChild?.marks.map(mark=>mark.type.name)).toEqual(expect.arrayContaining(['bold','italic']))
+  expect(send).toHaveBeenCalledTimes(before)
+  bridge.dispose()
+})
+
+it('retains rich formatting when native decoration font properties are absent', () => {
+  editor.commands.setContent('***Review notes***')
+  const text=serialize(editor.state.doc),drawn=drawClaudePromptDecorations(editor.state.doc,[{start:3,end:15,color:'red'}],serialize)
+  const attrs=(drawn.find()[0] as any).type.attrs
+  expect(attrs.style).not.toMatch(/font-weight|font-style|opacity/)
+  expect(serialize(editor.state.doc)).toBe(text)
+  expect(editor.state.doc.firstChild?.firstChild?.marks.map(mark=>mark.type.name)).toEqual(expect.arrayContaining(['bold','italic']))
+})
