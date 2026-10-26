@@ -38,7 +38,7 @@
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "ajv": "^8.20.0",
-    "tsx": "^4.19.4"
+    "tsx": "^4.23.15"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.40.0",

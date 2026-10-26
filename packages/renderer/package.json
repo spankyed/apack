@@ -21,7 +21,7 @@
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",
     "@guolao/vue-monaco-editor": "^1.5.5",
-    "@statelyai/inspect": "^0.4.0",
+    "@statelyai/inspect": "^0.7.2",
     "@tiptap/extension-code-block-lowlight": "^3.32.0",
     "@tiptap/extension-color": "^3.32.0",
     "@tiptap/extension-details": "^3.32.0",
