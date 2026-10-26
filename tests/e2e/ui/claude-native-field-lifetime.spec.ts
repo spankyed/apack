@@ -75,6 +75,7 @@ test('keeps native review fields usable after obsolete edits fail', async ({ app
   const draft='Keep my pending review while updating these preferences.'
   await composer.fill(draft)
   const before=await context(),cases:any[]=[],captures:any[]=[]
+  const fieldEvents=async()=>[...(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8')).matchAll(/Incoming: "CLAUDE_UI_FIELD" \{[\s\S]*?\n\}/g)].map(match=>match[0])
   const receipt=async(name:string)=>JSON.parse(await readFile(join(workspace!,name),'utf8').catch(()=>'null'))
   const choose=async(value:string)=>{await scope.click();await appPage.getByRole('option',{name:value==='files'?'Changed files':'Whole project',exact:true}).click()}
   const nativeWindow=await electronApp.browserWindow(appPage)
@@ -88,11 +89,16 @@ test('keeps native review fields usable after obsolete edits fail', async ({ app
     if(replacement==='reset'){
       await reset.click();await expect.poll(()=>receipt('native-form-reset.json')).toMatchObject({input:'',select:'summary'})
     }else{
+      const count=(await fieldEvents()).length
       if(kind==='input')await note.fill('Current review');else await choose('project')
-      await expect.poll(()=>receipt('native-form-'+kind+'-value.json')).toMatchObject({kind,value:kind==='input'?'Current review':'project'})
+      // Original Claude serializes Input callbacks per plugin, and Select callbacks separately.
+      // Prove the later app event arrived before releasing the earlier native callback.
+      await expect.poll(async()=>(await fieldEvents()).length).toBeGreaterThan(count)
+      expect((await fieldEvents()).at(-1)).toContain(kind==='input'?"value: 'Current review'":"value: 'project'")
     }
     await writeFile(join(workspace!,'native-form-'+nonce+'-release.txt'),nonce)
     await expect.poll(()=>receipt('native-form-'+nonce+'-rejected.json')).toMatchObject({nonce,kind})
+    if(replacement==='edit')await expect.poll(()=>receipt('native-form-'+kind+'-value.json')).toMatchObject({kind,value:kind==='input'?'Current review':'project'})
     // The owner must process the error and still accept a later real interaction.
     // Waiting for this fresh callback is stronger than a screenshot taken before the error arrives.
     await note.fill('Confirmed '+nonce)
