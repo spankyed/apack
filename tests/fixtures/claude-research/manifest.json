@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "f22e8c5a8609252d13d435412231e7e4238a0e05",
+  "researchCommit": "68e9cdfce37ca01b7f43dd7482a326af06333cbd",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -251,7 +251,7 @@
     "src/protocol/native-ui-error-fixture.mjs": "2c2f79f1c6e080ba1673ada4f4ff1da15f81f7f26bc89cb87afa6a7be4450c89",
     "src/protocol/native-usage.mjs": "7ceedde44fac6fccf66263bc53d329a6b4103c80aedf539fc90acc0e9abcb2e5",
     "src/protocol/native-workflow-editor-fixture.mjs": "5b62840e05c05c6417ef7fb55a65cbbcc646656f43ce53b260b27899cef0b3a5",
-    "src/protocol/native-workflow-unsettled.mjs": "3e1f366e33b85fdccb0c62bb43c7d87f0cdf22e6a8d04e89fcdc00c6dd7ce3cb",
+    "src/protocol/native-workflow-unsettled.mjs": "47b1489122a05992e9dcff36e55cff5f2bf948ad84b9d569f8ef06e3a4b8f6ac",
     "src/protocol/native-workflow-worker-fixture.mjs": "d3106f741379f61bbcceee2d6aa6aedf28bc3fc2f8dc09c7f7b5537340c82d0a",
     "src/protocol/owned-client-load-delay.mjs": "f0844c9681b772a9c38dfdb7416f1c765888a9d7b791880976b9a02404f9abcd",
     "src/protocol/owned-image-read-hold.mjs": "2d1c146479b5db6ef31755b4d363f243f9c6649319b78719887318023c06c704",
@@ -317,5 +317,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "0ddc323ef04ed9fc9f6756dfca3db995f74c50f91ac31b5ee77cd9d077d26b92"
+  "archiveSha256": "4772b1cb6ad0570cb86c4afe46eedd97c3437e21a7128c12a21988d5a2e9ac65"
 }
