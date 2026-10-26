@@ -1,6 +1,6 @@
 # The database's catalog, kept as it writes
 
-Status: planned, 2026-10-26. Nothing built. Follows live queries
+Status: planned, 2026-10-26, in Claude Code session `0e968e2f-d9bd-417a-8247-c87cc9d75fdd`. Nothing built. Follows live queries
 ([archive/plans/live-queries.md](../archive/plans/live-queries.md), Open: "Schema counts the engine keeps").
 
 ## Where it stands
