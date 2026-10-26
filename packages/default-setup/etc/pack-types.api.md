@@ -310,8 +310,6 @@ interface BrainContext {
     startError?: string;
     /** The root flow the running brain started with; the flows surface's root flow differing from it takes a restart */
     runningRootFlowId?: string;
-    /** The run of it this window shows: the brain's state names the same run again, and a new start another */
-    runningRootRunId?: string;
     brainIsPaused: boolean;
     latestRuntimeError?: StepRuntimeError;
     runtimeErrors: StepRuntimeError[];
@@ -2938,14 +2936,22 @@ type OutgoingBrainEvents = {
     type: 'BRAIN_KILLED';
     startError?: string;
 }
-/**
- * The brain is running `rootFlowId`, the root flow it started with (a root flow changed since takes a restart), as
- * the run `rootRunId`: each start is a run of its own, a restart of the same root flow included
- */
+/** News of a start: the brain began a run of `rootFlowId`, so a window asks for the new run's tree */
  | {
     type: 'BRAIN_STARTED';
     rootFlowId: EARS.EntityId;
-    rootRunId: RunNodeId;
+}
+/**
+ * What the brain holds, as a window shows it: the root flow it runs (none while stopped, with why when a start
+ * failed), whether it is paused and whether its steps are inspected. The answer to a window's ask and what the brain
+ * publishes; the other events here are news of a change
+ */
+ | {
+    type: 'BRAIN_STATE';
+    rootFlowId?: EARS.EntityId;
+    startError?: string;
+    paused: boolean;
+    inspectEnabled: boolean;
 } | {
     type: 'BRAIN_PAUSED';
 } | {

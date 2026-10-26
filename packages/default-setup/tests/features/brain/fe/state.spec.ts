@@ -27,28 +27,21 @@ it('asks for the flow it shows on a pulse, and for the root when a run starts ag
   actor.send({ type: 'EVENT_PULSE', eventType: 'user.message' });
   expect(asks().at(-1), 'at once, in the pulse').toEqual({ type: 'REQUEST_SURFACE_DATA', flowRunNodeId: 'Run-sub' });
 
-  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: 'RunNode-first' as never });
+  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never });
   expect(asks().at(-1), 'a new run is the root').toEqual({ type: 'REQUEST_SURFACE_DATA' });
   actor.stop();
 });
 
-it("answers the brain's state naming the run it shows with no ask, and asks again for another run", () => {
+it("takes the brain's state from an answer without asking again", () => {
   const actor = createActor(brainState).start();
   actor.send({ type: 'SURFACE_STARTED' });
-  // The answer to an ask: the tree, then the brain's state, which names the run it is on
-  const answer = (rootRunId: string) => {
-    actor.send(tree('RunNode-root'));
-    actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: rootRunId as never });
-  };
-  answer('RunNode-first');
-  const afterFirst = asks().length;
-  answer('RunNode-first');
-  answer('RunNode-first');
-  expect(asks().length, 'the same run named again asks for nothing').toBe(afterFirst);
+  actor.send(tree('RunNode-root'));
+  actor.send({ type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true });
+  expect(asks(), 'the one ask, answered').toHaveLength(1);
+  expect(actor.getSnapshot().context).toMatchObject({ brainIsDead: false, runningRootFlowId: 'Flow-root', brainIsPaused: true, inspectEnabled: true });
 
-  // A restart of the same root flow is another run, so every window asks for its tree
-  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never, rootRunId: 'RunNode-second' as never });
-  expect(asks().length).toBe(afterFirst + 1);
-  expect(asks().at(-1)).toEqual({ type: 'REQUEST_SURFACE_DATA' });
+  actor.send({ type: 'BRAIN_STATE', startError: 'No root flow', paused: false, inspectEnabled: false });
+  expect(actor.getSnapshot().context).toMatchObject({ brainIsDead: true, startError: 'No root flow', runningRootFlowId: undefined });
+  expect(asks()).toHaveLength(1);
   actor.stop();
 });

@@ -51,25 +51,18 @@ function stopWithoutRootFlow({ clientConnected }: BrainContext): Partial<BrainCo
   return { brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, startError, startErrorReported: clientConnected };
 }
 
-/** The brain's state, which every window may hear: what it is doing, never a run's data */
-type BrainStateNewsType = 'BRAIN_STARTED' | 'BRAIN_KILLED' | 'BRAIN_PAUSED' | 'INSPECT_TOGGLED'
-type BrainStateNews = Extract<OutgoingBrainEvents, { type: BrainStateNewsType }>
-
-/**
- * The brain's state as a window shows it: running or stopped (and why), paused, and whether its steps are inspected.
- * Inspection is restored from the settings, on by default in development so steps are visible out of the box.
- */
-function brainState(context: { brainActor?: unknown; runningRootFlowId?: EARS.EntityId; rootRunId?: RunNodeId; startError?: Error }, paused: boolean): BrainStateNews[] {
-  const brainSettings = featureSettings.forFeature('brain').get();
-  const inspectEnabled = brainSettings?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
+/** The brain's state (`BRAIN_STATE`). Inspection is restored from the settings, on by default in development */
+function brainState(context: BrainContext, paused: boolean): Extract<OutgoingBrainEvents, { type: 'BRAIN_STATE' }> {
+  const inspectEnabled = featureSettings.forFeature('brain').get()?.inspectEnabled ?? (process.env.NODE_ENV !== 'production');
   setDebugEnabled('brain', inspectEnabled);
-  return [
-    context.brainActor && context.runningRootFlowId && context.rootRunId
-      ? { type: 'BRAIN_STARTED', rootFlowId: context.runningRootFlowId, rootRunId: context.rootRunId }
-      : { type: 'BRAIN_KILLED', startError: context.startError?.message },
-    ...(paused ? [{ type: 'BRAIN_PAUSED' } as const] : []),
-    { type: 'INSPECT_TOGGLED', enabled: inspectEnabled },
-  ];
+  return {
+    type: 'BRAIN_STATE',
+    ...(context.brainActor && context.runningRootFlowId
+      ? { rootFlowId: context.runningRootFlowId }
+      : { startError: context.startError?.message }),
+    paused,
+    inspectEnabled,
+  };
 }
 
 export const brainSystem = setup({
@@ -119,11 +112,10 @@ export const brainSystem = setup({
 
       // News for every window, each of which asks for the new run's tree
       enqueue(({ context }) => {
-        if (context.brainActor && context.runningRootFlowId && context.rootRunId) {
+        if (context.brainActor && context.runningRootFlowId) {
           broadcastToSurface('brain', {
             type: 'BRAIN_STARTED',
             rootFlowId: context.runningRootFlowId,
-            rootRunId: context.rootRunId,
           });
         }
       });
@@ -229,7 +221,6 @@ export const brainSystem = setup({
         broadcastToSurface('brain', {
           type: 'BRAIN_STARTED',
           rootFlowId: currentRootFlowId,
-          rootRunId: runNodeId,
         });
 
         logger.info('Restarted brain with root flow', { flowId: currentRootFlowId });
@@ -265,11 +256,11 @@ export const brainSystem = setup({
       }
 
       reply({ type: 'RECEIVE_SURFACE_DATA', data });
-      for (const state of brainState(context, self.getSnapshot().matches({ running: 'paused' }))) reply(state);
+      reply(brainState(context, self.getSnapshot().matches({ running: 'paused' })));
     },
-    /** The brain's state, news for every window whenever it is asked to publish: none of it is a row */
+    /** The brain's state, for every window whenever it is asked to publish: none of it is a row */
     publishBrainState: ({ context, self }) => {
-      for (const state of brainState(context, self.getSnapshot().matches({ running: 'paused' }))) broadcastToSurface('brain', state);
+      broadcastToSurface('brain', brainState(context, self.getSnapshot().matches({ running: 'paused' })));
     },
     openRunNode: ({ event, reply }) => {
       const ev = brainSpec.typeOf('OPEN_RUN_NODE', event);

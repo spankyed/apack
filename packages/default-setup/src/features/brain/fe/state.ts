@@ -300,17 +300,19 @@ const brainState = setup({
       brainIsDead: true,
       startError: ({ event }) => typeOf('BRAIN_KILLED', event).startError,
       runningRootFlowId: undefined,
-      runningRootRunId: undefined,
       brainIsPaused: false,
       possibleEvents: [],
       flowHierarchy: [],
       selectedStepNode: undefined,
     }),
+    setBrainState: assign(({ event }) => {
+      const { rootFlowId, startError, paused, inspectEnabled } = typeOf('BRAIN_STATE', event);
+      return { brainIsDead: !rootFlowId, startError, runningRootFlowId: rootFlowId, brainIsPaused: paused, inspectEnabled };
+    }),
     setBrainStarted: assign({
       brainIsDead: false,
       startError: undefined,
       runningRootFlowId: ({ event }) => typeOf('BRAIN_STARTED', event).rootFlowId,
-      runningRootRunId: ({ event }) => typeOf('BRAIN_STARTED', event).rootRunId,
       brainIsPaused: false,
     }),
     setBrainPaused: assign({
@@ -363,7 +365,6 @@ const brainState = setup({
     },
   },
   guards: {
-    startsAnotherRun: ({ context, event }) => typeOf('BRAIN_STARTED', event).rootRunId !== context.runningRootRunId,
     canGoBack: () => {
       return true;
     },
@@ -401,6 +402,7 @@ const brainState = setup({
   on: {
     // Where the surface asks for what it starts from: the shell hands it this in a delivery naming the surface
     SURFACE_STARTED: { actions: 'requestSurfaceData' },
+    BRAIN_STATE: { actions: 'setBrainState' },
   },
   states: {
     loading: {
@@ -521,12 +523,10 @@ const brainState = setup({
         BRAIN_KILLED: {
           actions: 'setBrainKilled'
         },
-        // A run this window hasn't shown: its tree is the root's, asked for again. The brain's state names the run it
-        // is on in every answer to that ask, so asking again for the same run would ask for ever
-        BRAIN_STARTED: [
-          { guard: 'startsAnotherRun', actions: ['setBrainStarted', 'requestRootData'] },
-          { actions: 'setBrainStarted' },
-        ],
+        // News of a start: the new run's tree is the root's, asked for again in this window
+        BRAIN_STARTED: {
+          actions: ['setBrainStarted', 'requestRootData']
+        },
         PAUSE_BRAIN: {
           actions: 'pauseBrain'
         },

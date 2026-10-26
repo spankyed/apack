@@ -153,7 +153,7 @@ describe('brain start', () => {
     const app = await startBrain()
     expect(brainState(app)).toEqual({ running: false, hasActor: false })
     await app.connect()
-    expect(app.emitted('brain').map((e) => e.type)).toContain('BRAIN_KILLED')
+    expect(app.emitted('brain').filter((e) => e.type === 'BRAIN_STATE').at(-1), 'a stopped brain names no root flow').not.toHaveProperty('rootFlowId')
 
     importFlows({ 'Root Flow': { root: true, tracks: staysRunning } })
     await app.send('brain', { type: 'START_BRAIN' })
@@ -176,7 +176,7 @@ describe('brain start', () => {
 
   it("reports why it could not start once, and sends it in each client's startup data while it stays stopped, until a root flow exists", async () => {
     const couldNotStart = [expect.objectContaining({ source: 'brain', title: 'Could not start the brain', message: expect.stringContaining('No flow has the root role') })]
-    const startErrors = () => app.emitted('brain').flatMap((e) => (e.type === 'BRAIN_KILLED' ? [e.startError] : []))
+    const startErrors = () => app.emitted('brain').flatMap((e) => (e.type === 'BRAIN_STATE' ? [e.startError] : []))
     importFlows({ 'Root Flow': { tracks: staysRunning } })
     const app = await startBrain()
 
@@ -208,7 +208,7 @@ describe('brain start', () => {
 
     await app.connect()
     // The surface learns which root flow the brain runs from the brain, not from the settings
-    expect(await app.nextEmit('brain', 'BRAIN_STARTED')).toMatchObject({ rootFlowId })
+    expect(await app.nextEmit('brain', 'BRAIN_STATE')).toMatchObject({ rootFlowId })
     expect(featureSettings.forFeature('brain').get()).not.toHaveProperty('runningRootFlowId')
     repository.flowsCommands.revokeRootFlowRole(rootFlowId)
     await app.send('brain', { type: 'RESTART_BRAIN' })
