@@ -194,7 +194,8 @@
                   "dims": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "description": "The numbers in each of the model's embeddings."
+                    "maximum": 4096,
+                    "description": "The numbers in each of the model's embeddings, at most 4096."
                   }
                 },
                 "required": [
@@ -380,7 +381,8 @@
                     "dims": {
                       "type": "integer",
                       "exclusiveMinimum": 0,
-                      "description": "The numbers in each of the model's embeddings."
+                      "maximum": 4096,
+                      "description": "The numbers in each of the model's embeddings, at most 4096."
                     }
                   },
                   "required": [

@@ -150,6 +150,19 @@ describe('parseManifest', () => {
     expect(refused({ entities: { Memo: { shortCode: 'DOC' } } })).toContain("the SDK's Document prefix");
   });
 
+  it("refuses a text or vector index over the engine's fields, a model's size past elmdb's, and a field index named as one of them", () => {
+    const pack = { id: 'test-pack', name: 'Test', version: '0.1.0' };
+    const refused = (memo: object) => messagesOf(parseManifest({ ...pack, data: { entities: { Memo: memo } } })).join('\n');
+    const embed = { from: ['body'], model: 'openai:text-embedding-3-small', dims: 1536 };
+    expect(refused({ indexes: ['search', 'embedding'], search: { fields: { body: 1 } } })).toContain('"search" names this entity\'s text index');
+    expect(refused({ indexes: ['embedding'], embed })).toContain('"embedding" names this entity\'s vector index');
+    expect(refused({ indexes: ['search', 'embedding'] }), 'a field may be called either where no index takes the name').toBe('');
+    expect(refused({ search: { fields: { body: 1, createdAt: 1 } } })).toContain('"createdAt" is written by the engine');
+    expect(refused({ embed: { ...embed, from: ['body', 'id'] } })).toContain('"id" is written by the engine');
+    expect(refused({ embed: { ...embed, dims: 4097 } })).not.toBe('');
+    expect(refused({ embed: { ...embed, dims: 4096 } })).toBe('');
+  });
+
   it.each(['memo', 'memo_entry', 'Memo-entry', '_Memo', '__proto__', ''])
   ('refuses an entity name the database does not hold, which is PascalCase: %j', (name) => {
     const result = parseManifest({ id: 'test-pack', name: 'Test', version: '0.1.0', data: { entities: Object.fromEntries([[name, {}]]) } });

@@ -38,6 +38,8 @@ jobs:
           node-version: 23
           cache: npm
 
+      - uses: ./.github/actions/elmdb
+
       - name: Detect channel
         id: channel
         run: |

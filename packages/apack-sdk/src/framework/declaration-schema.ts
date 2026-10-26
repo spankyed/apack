@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { _PACK_VERSION_PATTERN, _validPackVersion, _validPackRange, parsePackDependency } from './dependency-source.ts';
 import { PackChecksSchema } from './pack-checks.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROLES, SDK_SHORT_CODES } from '../types/sdk-entities.ts';
-import { RESERVED_ENTITY_TYPES } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES, RESERVED_ENTITY_TYPES } from '@apackdev/ears';
 import { _reservedEntries } from '../types/reserved-names.ts';
 import { HOST_PACK_ID } from '../ids/refs.ts';
 import { FEATURE_ID_PATTERN, PACK_ID_PATTERN } from '../ids/refs.ts';
@@ -111,10 +111,25 @@ const EntityDeclarationSchema = z.object({
     model: z.string().regex(_EMBEDDING_MODEL_PATTERN, 'Must be provider:model, from a provider that embeds')
       .refine((model): model is EmbeddingModelId => _EMBEDDING_MODEL_PATTERN.test(model))
       .describe('The embedding model, as provider:model: services.inference runs it with the user\'s key for its provider.'),
-    dims: z.number().int().positive().describe('The numbers in each of the model\'s embeddings.'),
+    // elmdb's `MAX_DIMS`
+    dims: z.number().int().positive().max(4096).describe('The numbers in each of the model\'s embeddings, at most 4096.'),
   }).strict()
     .describe('A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity\'s chunks pending until embedPending embeds them. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
-}).strict().describe('One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity).');
+}).strict().superRefine((entity, ctx) => {
+  // Text is read from a row's own fields, never the engine's
+  const reserved: readonly string[] = RESERVED_ATTRIBUTES;
+  for (const field of Object.keys(entity.search?.fields ?? {})) {
+    if (reserved.includes(field)) ctx.addIssue({ code: 'custom', path: ['search', 'fields', field], message: `"${field}" is written by the engine and holds no text to search` });
+  }
+  for (const [at, field] of (entity.embed?.from ?? []).entries()) {
+    if (reserved.includes(field)) ctx.addIssue({ code: 'custom', path: ['embed', 'from', at], message: `"${field}" is written by the engine and holds no text to embed` });
+  }
+  // The text and vector indexes are named `search` and `embedding`, beside the value indexes named after their fields
+  for (const [name, declared] of [['search', entity.search], ['embedding', entity.embed]] as const) {
+    const at = entity.indexes?.indexOf(name) ?? -1;
+    if (declared && at >= 0) ctx.addIssue({ code: 'custom', path: ['indexes', at], message: `"${name}" names this entity's ${name === 'search' ? 'text' : 'vector'} index: a field indexed for where() can't have that name too` });
+  }
+}).describe('One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity).');
 const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 'Must be a PascalCase entity wire name'), EntityDeclarationSchema)
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({

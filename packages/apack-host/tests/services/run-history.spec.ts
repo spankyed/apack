@@ -184,4 +184,16 @@ describe('the app\'s run history', () => {
     expect(aside).toHaveLength(1);
     expect(fs.existsSync(path.join(path.dirname(dir), aside[0], 'data.mdb'))).toBe(true);
   });
+
+  it('throws for a failure that says nothing about the files, and leaves the history where it is', () => {
+    const dir = path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
+    const held = openRunHistory(dir);
+    try {
+      // The process has it open already: a refusal of this open, not of what the files hold
+      expect(() => openRunHistory(dir)).toThrow(expect.objectContaining({ code: 'ALREADY_OPEN' }));
+      expect(fs.readdirSync(path.dirname(dir))).toEqual(['run-history']);
+    } finally {
+      held.database.close();
+    }
+  });
 });

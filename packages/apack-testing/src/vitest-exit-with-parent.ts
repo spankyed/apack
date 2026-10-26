@@ -31,6 +31,15 @@ if (process.send !== undefined && state[INSTALLED] === undefined) {
   // A `disconnect` that came before this listener is not heard again
   if (process.connected) process.once('disconnect', exit);
   else exit();
-  // Between files, where vitest has put back the `process.exit` it replaces while a test runs
-  process.once('SIGTERM', () => process.exit(143));
+  process.once('SIGTERM', () => {
+    try {
+      process.exit(143);
+    } catch {
+      // During a test, where `process.exit` is vitest's and throws: the exit handlers run here instead, then the
+      // signal ends the worker
+      process.exitCode = 143;
+      process.emit('exit', 143);
+      exit();
+    }
+  });
 }
