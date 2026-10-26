@@ -100,7 +100,7 @@ jobs:
           # watchers run one at a time, as the strict gate's native job runs them: two at once on this runner
           # starve each other's rebuild deadlines
           run() {
-            node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --config "vitest.$1.config.ts" "${@:3}" --poolOptions.threads.maxThreads=$2 --poolOptions.threads.minThreads=1 --poolOptions.forks.maxForks=$2 --poolOptions.forks.minForks=1 --bail=1 --reporter=default --reporter=json --outputFile=".apack/tests/results/$1.json"
+            node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --config "vitest.$1.config.ts" "${@:3}" --maxWorkers=$2 --bail=1 --reporter=default --reporter=json --outputFile=".apack/tests/results/$1.json"
           }
           if (( ${#integration[@]} )); then run integration 2 "${integration[@]}"; fi
           if (( ${#native[@]} )); then run native 1 "${native[@]}"; fi

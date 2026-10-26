@@ -21,7 +21,7 @@ export default defineConfig({
      * longest-first list across package boundaries.
      *
      * Each project loads its own config, which is where its `testTimeout` lives — per-project *test* config
-     * is honoured, unlike `poolOptions` below.
+     * is honoured, unlike `maxWorkers` below, which is the run's.
      *
      * Written out rather than derived from `INTEGRATION_SUITES`, for the reason `vitest.config.ts` gives:
      * `check:specifiers` reads this file as text and cannot read a computed list. `chain-inputs.spec.ts`
@@ -37,7 +37,7 @@ export default defineConfig({
      *
      * Measured 2026-09-29 on an idle 10-core machine, this pool, five and nine runs:
      *
-     *     maxThreads 50%   44.97 48.05 48.22 48.62 49.29   median 48.2s, 5 clean
+     *     half the cores   44.97 48.05 48.22 48.62 49.29   median 48.2s, 5 clean
      *     no cap           50.80 51.72 51.81 52.30 52.63 52.77 53.43 54.17   median 52.4s, 9 clean
      *
      * Nine workers each running `ts.createProgram` and `apack pack build` put the box at a load of 25-32, and
@@ -60,10 +60,10 @@ export default defineConfig({
      * `npm run measure --trials` goes from 2 of 2 failing to 0 of 3. The cap earns its place by being
      * faster; that it also shortens those blocks is a second reason, not the first.
      *
-     * A percentage, because vitest reads this as `poolOptions.maxThreads ?? maxWorkers ?? (cpus - 1)`: it
-     * replaces the default rather than capping it, so a fixed number raises the worker count on any machine
-     * smaller than that number. `50%` is at most `cpus - 1` for cpus >= 2, so it can only lower.
+     * A percentage, because `maxWorkers` replaces vitest's default of `cpus - 1` rather than capping it, so a
+     * fixed number raises the worker count on any machine smaller than that number. `50%` is at most
+     * `cpus - 1` for cpus >= 2, so it can only lower.
      */
-    poolOptions: { threads: { maxThreads: '50%' }, forks: { maxForks: '50%' } },
+    maxWorkers: '50%',
   },
 });

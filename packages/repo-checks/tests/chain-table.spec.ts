@@ -35,7 +35,6 @@ import { population } from '@apackdev/sdk/testing';
 const resolvedConfig = async (rel: string): Promise<{ test?: {
   projects?: string[];
   maxWorkers?: unknown;
-  poolOptions?: { threads?: { maxThreads?: unknown }; forks?: { maxForks?: unknown } };
 } }> => (await import(path.join(REPO_ROOT, rel))).default;
 
 const projectsOf = async (rel: string): Promise<string[]> => {
@@ -246,7 +245,7 @@ describe('the root pool lists exactly the host suites', () => {
 /**
  * Each pool's width, in the config that sets it and in the table the chain's scheduler admits on.
  *
- * `poolOptions` is process-wide, so it belongs to the root config and a per-project copy is read by nobody
+ * `maxWorkers` is process-wide, so it belongs to the root config and a per-project copy is read by nobody
  * — `unit-suites.ts` records the same thing measured for `poolOptions.execArgv` one pool along. Both halves
  * matter here: without the root value the pool silently runs at full width, which is 52.4s against 48.2s
  * measured, and a per-package copy would look like the cap while doing nothing.
@@ -290,9 +289,7 @@ describe('every pool runs at the width core-budget.ts says it does', () => {
   it('caps the workers in the config that is read for it', async () => {
     const share = shareOf(STEP_OF.integration);
     expect(share, 'the integration pool is declared as a share, which is what a config can set').toBeDefined();
-    const pool = (await resolvedConfig(configOf('integration'))).test?.poolOptions;
-    expect(pool?.threads?.maxThreads, 'threads').toBe(asPercent(share!));
-    expect(pool?.forks?.maxForks, 'forks').toBe(asPercent(share!));
+    expect((await resolvedConfig(configOf('integration'))).test?.maxWorkers).toBe(asPercent(share!));
   });
 
   it('leaves the pools it calls UNCAPPED with no cap in their configs', async () => {
@@ -302,14 +299,13 @@ describe('every pool runs at the width core-budget.ts says it does', () => {
       const where = configOf(pool);
       const test = (await resolvedConfig(where)).test;
       const why = `${where} caps its workers, so UNCAPPED in POOL_WIDTH is wrong about what ${pool} takes`;
-      expect(test?.poolOptions, why).toBeUndefined();
       expect(test?.maxWorkers, why).toBeUndefined();
     }
   });
 
   it('carries no per-project copy, which would be read by nobody', async () => {
     for (const project of await projectsOf('vitest.integration.config.ts')) {
-      expect((await resolvedConfig(project)).test?.poolOptions, `${project} declares poolOptions, which is `
+      expect((await resolvedConfig(project)).test?.maxWorkers, `${project} declares maxWorkers, which is `
         + 'process-wide and set at the root: this one is inert and reads as protection').toBeUndefined();
     }
   });

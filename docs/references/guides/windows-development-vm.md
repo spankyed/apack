@@ -344,7 +344,7 @@ $report = Join-Path $runRoot 'native-result.json'
 node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts `
   --project @apackdev/cli packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts `
   --testNamePattern "$case" --bail=1 `
-  --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism `
+  --maxWorkers=1 --no-file-parallelism `
   --reporter=default --reporter=json --outputFile="$report"
 if ($LASTEXITCODE -ne 0) { throw 'Focused native case failed' }
 ```

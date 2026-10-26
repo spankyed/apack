@@ -68,7 +68,7 @@ jobs:
           packages/apack-host/tests/build/compiler-paths.windows.spec.ts
           --testNamePattern "$env:APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/apack-compiler-input-tests.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       - name: Prepare matching Node native SDK and MSVC
         timeout-minutes: 3
         run: ./.github/scripts/setup-node-native-sdk.ps1
@@ -80,7 +80,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts
           --testNamePattern "$env:APACK_TEST_NAME"
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/apack-compiler-native-tests.json"
-          --bail=1 --poolOptions.threads.maxThreads=1 --poolOptions.threads.minThreads=1 --no-file-parallelism
+          --bail=1 --maxWorkers=1 --no-file-parallelism
       # A side-by-side activation failure names its cause only in the Application event log
       - name: Side-by-side activation events
         if: ${{ failure() }}
@@ -123,7 +123,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-installation.spec.ts
           packages/apack-cli/tests/build/compiler-runtime.spec.ts
           packages/apack-cli/tests/build/compiler-native-libraries.spec.ts
-          --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1
+          --maxWorkers=2
       - name: Compiler publication waits for descendants
         if: ${{ !inputs.test_name }}
         env:
@@ -133,7 +133,7 @@ jobs:
           packages/apack-cli/tests/build/pack-builder.spec.ts
           --testNamePattern='stops remaining compiler descendants|cancels a frontend input check'
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/compiler-publication-descendants.json"
-          --bail=1 --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1
+          --bail=1 --maxWorkers=2
       - name: Retained Vite process ownership
         if: ${{ !inputs.test_name }}
         run: >-
@@ -141,7 +141,7 @@ jobs:
           packages/apack-cli/tests/build/compiler-native-vite.native.spec.ts
           --testNamePattern='retains independent captured Vite owners'
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/compiler-vite-ownership.json"
-          --bail=1 --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1
+          --bail=1 --maxWorkers=2
       # These establish process ownership and baseline identity; native input admission remains separate.
       - name: Build worker platform baseline
         if: ${{ !inputs.test_name }}
@@ -150,7 +150,7 @@ jobs:
           packages/apack-cli/tests/build/build-worker.native.spec.ts
           --testNamePattern='captures native launch identity|uses the captured compiler'
           --reporter=default --reporter=json --outputFile="$env:RUNNER_TEMP/compiler-worker-baseline.json"
-          --bail=1 --poolOptions.threads.maxThreads=2 --poolOptions.threads.minThreads=1
+          --bail=1 --maxWorkers=2
       - name: Verify selected compiler cases executed
         run: >-
           node .github/scripts/verify-filtered-tests.cjs

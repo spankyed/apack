@@ -76,7 +76,7 @@ export const SAMPLE_MS = 250;
  * **It exists so that an A/B's arms can be shown to differ in something other than wall time.** A null
  * result is ambiguous between "the change did nothing" and "the change never reached what you changed", and
  * wall time alone cannot separate them: measured 2026-10-04, `--maxWorkers 2` moved `test:integration` by
- * -1% because `poolOptions.maxThreads` takes precedence over it, and the arm that looked like a flat pool
+ * -1% because the config's own per-pool cap took precedence over it, and the arm that looked like a flat pool
  * was a pool still running at 6.6 cores. Capping the pool for real took 42.5s to 82.5s at a third of that.
  *
  * **Reported on `--against` and nowhere else.** On a lone measurement it sizes no choice, which is the bar a
