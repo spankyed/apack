@@ -1,6 +1,6 @@
 # Storage format 1 until a release has users
 
-Status: planned, 2026-10-26. Not started.
+Status: steps 1–3 done, 2026-10-26 (elmdb `14bd362`; apack, the commit that pins it). Step 4 waits on its condition.
 
 The app's stored data has one format, 1, and it stays 1 until a release ships to people other than us. Until then, a
 change to how data is stored edits format 1 in place, and our own databases are reset or converted once, by hand, on
@@ -98,11 +98,10 @@ files a build can't read.
 
 ## Our databases
 
-The databases on our machines are stamped format 2. Once the number is 1, they read as "newer than this build" and
-are refused. Their layout is format 1's, since the collapse renames the format and moves nothing. So each one is
-re-stamped once, on a copy, by a one-off that writes `m/format = 1`, and the copy then replaces the original. That
-covers the development app's database and its run history, and any profile we want to keep. The one-off is run and
-discarded, not committed.
+Wiped rather than re-stamped (2026-10-26): every elmdb or lmdb-js database on the development machine except the
+installed app's own — the development profile's (`apack-dev`, its app database, run history and a format-3 backup) and
+each `apack-cli` profile's — so each opens a new format 1 database. The installed app's data is converted from its
+backup after a release, by hand on a copy. Temporary data dirs a running test or agent holds were left alone.
 
 ## The move off lmdb-js
 
@@ -122,7 +121,7 @@ That deletion is a separate step with its own condition. Steps 1–3 don't wait 
    spec, and update the docs. One commit. Run elmdb's own checks and its model harness.
 2. **apack: follow it.** `DATABASE_FORMAT`, the `CLAUDE.md` rule, the apack-ears guide, the refusal message check. Run
    the `--no-native` chain.
-3. **Re-stamp our databases** (above), on copies, then open the app on them.
+3. **Our databases** (above): wiped, so the next open makes a format 1 database.
 4. **Later, on its own condition:** delete the lmdb-js move path once nothing needs it, with G8's data made first.
 
 ## Done when
@@ -131,5 +130,5 @@ That deletion is a separate step with its own condition. Steps 1–3 don't wait 
   message naming both formats.
 - apack's `DATABASE_FORMAT` is `elmdb/1`, and the chain passes.
 - The rule is written in apack's `CLAUDE.md` and elmdb's `format.md`, and goal-elmdb-next's G3 and Phase 8 follow it.
-- The development app opens on its re-stamped database with its data intact.
+- The development app opens on a new format 1 database.
 - An app started on a database in another format shows the refusal's own message.

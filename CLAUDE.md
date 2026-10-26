@@ -93,6 +93,12 @@ if conversion is necessary, perform it explicitly on a copy, outside normal runt
 current-format overrides when a pack is disabled or uninstalled; that is supported lifecycle behavior.
 Versioned migrations for future deliberate data changes are separate from supporting obsolete formats.
 
+**Storage formats are 1 until a release has users.** A change to how data is stored edits format 1 in place: no bump,
+no upgrade step, and nothing for derived data, which `rebuild()` builds. Our own databases are reset, or converted once
+by hand on a copy. The tag of the first release that ships to people other than us locks format 1, and only from then
+does each layout change bump the format with its upgrade step. Why, and what it changed:
+[storage-format-one.md](docs/plans/storage-format-one.md).
+
 **Revisit this when a third-party pack can actually be installed from a registry.** That is the condition. Until it
 holds, "an installed pack might depend on this" has no subject, and a plan that treats it as a constraint should say
 so out loud so the claim can be checked.

@@ -49,7 +49,7 @@ describe('services.appData', () => {
         timestamp: expect.any(Number), databases: ['lmdb'], size: expect.any(Number), hasMedia: false, appVersion: '0.4.1',
       });
       const metadata = JSON.parse(fs.readFileSync(path.join(backup, 'metadata.json'), 'utf-8'));
-      expect(metadata).toMatchObject({ appVersion: '0.4.1', storageFormats: { lmdb: 'elmdb/2' } });
+      expect(metadata).toMatchObject({ appVersion: '0.4.1', storageFormats: { lmdb: 'elmdb/1' } });
     } finally {
       version.current = undefined;
     }
