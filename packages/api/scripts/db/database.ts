@@ -1,5 +1,5 @@
 // Opens this data dir's database for a one-off script, the way the API boots it: built-in packs
-// registered (from their dev entries: the script runs unbundled) and LMDB hydrated, so it can run
+// registered (from their dev entries: the script runs unbundled) over the LMDB store, so it can run
 // their content code. Needs APACK_ENV and APACK_USER_DATA_DIR, like any process that touches app data.
 // Database work that runs no pack code goes through `apack db` instead.
 import * as path from 'node:path';
@@ -13,28 +13,14 @@ export const packagesDir = path.resolve(path.dirname(fileURLToPath(import.meta.u
 export const { store, engine, packs } = openAppStore();
 
 /**
- * Registers the installed packs and hydrates the store, as the app's boot does. It does not *install* the
- * packs the app ships: a tool reads a data dir as it found it, and writing packs into one is the app's job.
+ * Registers the installed packs, as the app's boot does. It does not *install* the packs the app ships: a tool reads
+ * a data dir as it found it, and writing packs into one is the app's job.
  */
-export async function openDatabase(): Promise<void> {
+export function openDatabase(): void {
   loadAppPacks(packs);
-  await store.hydrate();
 }
 
-/** How many LMDB writes have failed in this process so far (the adapter logs a failed flush and carries on) */
-export function persistenceErrorCount(): number {
-  return store.sink.getErrorStats?.().errorCount ?? 0;
-}
-
-/**
- * Waits for the writes buffered so far to be flushed to LMDB (the adapter flushes in a microtask) and
- * returns the failed-write count after it, so a script can check it before closeDatabase.
- */
-export async function flushDatabase(): Promise<number> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  return persistenceErrorCount();
-}
-
+/** Syncs and closes the store: every write the script committed is on disk when it returns */
 export function closeDatabase(): void {
   store.close();
 }

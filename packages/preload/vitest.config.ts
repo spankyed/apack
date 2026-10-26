@@ -15,6 +15,8 @@ export default defineConfig({
   },
   ssr: { resolve: { conditions } },
   test: {
+    // A worker exits when its vitest does, rather than running on orphaned
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts'],
     // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts). Declared rather than left to vitest's 5s default,
     // which is *tighter* than the size allows and reports a hang where the size has headroom
     testTimeout: 30_000,

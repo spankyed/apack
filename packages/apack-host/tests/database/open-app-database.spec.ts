@@ -196,16 +196,6 @@ describe('openAppDatabase', () => {
     again.close();
   });
 
-  it('throws from close when a write failed to reach the files', async () => {
-    const dir = dataDirWithPacks();
-    await writeData(dir, () => { untypedCreate('Note', { id: id('Note-1') }).set('title', 'kept'); });
-    const db = await openAppDatabase({ env: 'test', userDataDir: dir, ...quiet });
-    // JSON can't encode a BigInt
-    db.ears.write(id('Note-1')).set('count', 1n);
-    expect(() => db.close()).toThrow(/1 write\(s\) didn't reach the database in .*BigInt/);
-    expect(() => boundEars()).toThrow();
-  });
-
   it('puts back the engine that was installed before, however it ends', async () => {
     const dir = dataDirWithPacks();
     await writeData(dir, () => { untypedCreate('Note', { id: id('Note-1') }).set('title', 'kept'); });

@@ -41,7 +41,7 @@ describe('creating a terminal', () => {
     await app.settle()
 
     const types = sentToCode(app)
-    expect(types, "the news, which grows every window's list").toContain('terminal.CREATED')
+    expect(types, "the news, on which every window asks for its list again").toContain('terminal.CREATED')
     expect(types, 'and the answer, which opens it for the asker alone').toContain('terminal.OPENED')
   })
 

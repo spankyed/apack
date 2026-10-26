@@ -24,7 +24,7 @@ it('remounts cached content for a replaced actor and leaves unchanged scopes mou
       const subscription = parent.subscribe(listener);
       return { unsubscribe() { unsubscribe(); subscription.unsubscribe(); } };
     },
-  } as never, secrets: {} as never, settings: {} as never, client: { send() {} }, packs: {} as never });
+  } as never, secrets: {} as never, settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never });
   const Content = defineComponent({ setup() {
     mounted();
     const captured = useSurface<AnyActorRef>();

@@ -19,9 +19,10 @@ export interface ModuleExports {
   /**
    * What an entity shape (the type `name` that `file` declares) holds a created row to: the fields it requires — its
    * non-optional properties but the engine's own — which the engine refuses a created row without, as `create`'s
-   * type does; and whether it declares `shortCode`, which is the engine's to write and `#generated/ears` to type
+   * type does; whether it declares `shortCode`, which is the engine's to write and `#generated/ears` to type; and
+   * every field it declares, which an index may name
    */
-  rowRulesOf(file: string, name: string): { required: string[]; declaresShortCode: boolean };
+  rowRulesOf(file: string, name: string): { required: string[]; declaresShortCode: boolean; fields: string[] };
   /** The export `name` of `file` (an absolute path the reader was created with); undefined when it has none */
   exportOf(file: string, name: string): ModuleExport | undefined;
   /**
@@ -230,11 +231,12 @@ export function createModuleExports(packRoot: string, files: string[], sources: 
     rowRulesOf(file, name) {
       const shape = declaredTypeOf(file, name);
       if (!shape) throw new Error(`${path.basename(file)} declares no type "${name}"`);
-      const required = checker.getPropertiesOfType(shape)
+      const properties = checker.getPropertiesOfType(shape);
+      const required = properties
         .filter((property) => !(property.flags & ts.SymbolFlags.Optional) && !(RESERVED_ATTRIBUTES as readonly string[]).includes(property.name))
         .map((property) => property.name)
         .sort();
-      return { required, declaresShortCode: shape.getProperty('shortCode') !== undefined };
+      return { required, declaresShortCode: shape.getProperty('shortCode') !== undefined, fields: properties.map((property) => property.name) };
     },
     exportOf(file, name) {
       const exported = exportedSymbol(file, name);

@@ -13,7 +13,7 @@ export default defineConfig({
     // it across the TypeScript matrix, which is tens of seconds of work in a handful of tests.
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    setupFiles: ['./tests/_support/turn-event-loop.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts'],
     include: ['tests/**/*.integration.spec.ts'],
     exclude: ['**/node_modules/**'],
   },

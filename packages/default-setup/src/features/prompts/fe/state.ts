@@ -1,6 +1,6 @@
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
+import { and, assign, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -8,15 +8,13 @@ import {
   TRAIL_CLICK,
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
-import type { PromptsSettings } from '#generated/types.ts'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
 import type { OutgoingPromptEvents } from '#features/prompts/be/types.ts'
-import type { TemplateInput } from '@apackdev/sdk'
+import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
+import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
-import { answersCall, newCall } from '@apackdev/sdk/events'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
-import type { PromptEntity } from '@apackdev/sdk'
 
 /* ─────────────────────────────────────────────────────────── */
 /* Machine Types                                               */
@@ -24,19 +22,19 @@ import type { PromptEntity } from '@apackdev/sdk'
 export const id = 'prompts' as const;
 export type PromptsState = ActorRefFrom<typeof promptsState>
 
-
-type SystemEvent = OutgoingPromptEvents
-  | { type: 'PROMPTS_PAGE_LOADED'; data: { prompts: PromptEntity[]; page: number; totalPages: number } }
-  | { type: 'PROMPTS_ALL_LOADED'; data: { prompts: PromptEntity[] } }
-  | { type: 'PROMPTS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'PROMPTS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'PROMPTS_EXPORTED'; filePath: string; promptCount: number }
-  | { type: 'PROMPTS_EXPORT_FAILED'; errors: string[] }
+/** How many more prompts the list shows each time the user reaches its end */
+export const PROMPTS_PAGE_SIZE = 20
 
 type UIEvent =
   | PromptsInboxEvent
   | { type: 'PROMPT.CREATE' }
   | { type: 'PROMPT.SAVE' }
+  /**
+   * What the open prompt's view read, which the canvas hands on: the prompt, or `null` once it's gone (deleted here
+   * or in another window). About the UI, not the data — it fills the form once and keeps the breadcrumb's label.
+   */
+  | { type: 'PROMPT.LOADED'; promptId: EARS.EntityId; prompt: PromptEntity | null }
+  | { type: 'PROMPTS.LOAD_MORE' }
   | { type: 'FORM.UPDATE_CATEGORY'; category: string }
   | { type: 'FORM.UPDATE_LABEL'; label: string }
   | { type: 'FORM.UPDATE_DESCRIPTION'; description: string }
@@ -44,11 +42,9 @@ type UIEvent =
   | { type: 'FORM.UPDATE_TEMPLATE'; templateFn: string }
   | { type: 'FORM.UPDATE_OUTPUT_SCHEMA'; outputSchema: any }
   | { type: 'VIEW_LIST' }
-  | { type: 'SURFACE_DEACTIVATED' }
   | { type: 'TOGGLE_INPUTS_SECTION'; show: boolean }
   | { type: 'TOGGLE_OUTPUT_SECTION'; show: boolean }
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
-  | { type: 'FEATURE_SETTINGS_UPDATED'; settings: PromptsSettings }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
   // Import/Export events
@@ -57,7 +53,7 @@ type UIEvent =
   | { type: 'PROMPTS.EXPORT'; directory: string }
   | { type: 'PROMPTS.RESET_EXPORT_STATUS' }
 
-export type PromptsEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent
+export type PromptsEvents = OpenEntity | UIEvent | OutgoingPromptEvents | TrailClickEvent
 const typeOf = safeEvents<PromptsEvents>()
 
 const promptsState = setup({
@@ -66,52 +62,32 @@ const promptsState = setup({
     events: {} as PromptsEvents,
   },
   actions: {
-    /* ── bootstrap ─────────────────────────────────────── */
-    setSurfaceData: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_CONNECTED', event);
-      return {
-        prompts: ev.data.prompts,
-        totalCount: ev.data.totalCount,
-        page: ev.data.page,
-        totalPages: ev.data.totalPages,
-        categories: ev.data.categories || [],
-      }
-    }),
-
-    cancelSelection: assign({ pendingPromptCall: null }),
-    // The list shows no prompt, so reopening one asks for it again rather than showing a form that may be stale
-    clearSelectedPrompt: assign({ selectedPromptId: undefined, selectedPrompt: undefined }),
+    // The list shows no prompt, so reopening one fills its form afresh from what its view reads then
+    clearSelectedPrompt: assign({ selectedPromptId: undefined, selectedLabel: undefined, formFor: undefined }),
 
     /* ── prompt interactions ────────────────────────────── */
-    /**
-     * **`enqueueActions`, so the call is stored before the ask is sent.** A send made from inside an
-     * `assign` producer runs before the assign is applied, so an answer that arrives synchronously is
-     * matched against a slot the ask has not written yet. Against a backend in another process the race
-     * never shows; against one that answers in the same turn it always does.
-     */
-    selectPrompt: enqueueActions(({ event, context, enqueue }) => {
-      const promptId = event.type === 'OPEN_ENTITY' ? event.id : typeOf('PROMPT.SELECT', event).promptId;
-      if (context.selectedPromptId === promptId) return;
-      const call = newCall();
-      // Recorded before the ask, so the answer can be told from one for a selection since replaced
-      enqueue.assign({ pendingPromptCall: call });
-      enqueue(() => sendToSystem(id, { type: 'PROMPT_SELECT', promptId }, { call }));
+    selectPrompt: assign(({ event, context }) => {
+      const promptId = event.type === 'OPEN_ENTITY' ? event.id as EARS.EntityId : typeOf('PROMPT.SELECT', event).promptId;
+      if (context.selectedPromptId === promptId) return {};
+      return { selectedPromptId: promptId, selectedLabel: undefined, formFor: undefined };
     }),
 
-    loadPromptData: assign(({ event }) => {
-      const ev = typeOf('PROMPT_SELECTED', event);
+    showLoadedPrompt: assign(({ event, context }) => {
+      const { promptId, prompt } = typeOf('PROMPT.LOADED', event);
+      if (!prompt) return {};
+      // The form is filled once per opening: a change the view brings later (another window's edit) leaves what the
+      // user is typing alone, and saving writes the form as it stands
+      if (context.formFor === promptId) return { selectedLabel: prompt.label };
       return {
-        // Settled: nothing is outstanding, so a later answer for an abandoned ask has no call to match
-        pendingPromptCall: null,
-        selectedPromptId: ev.promptId,
-        selectedPrompt: ev.data,
+        selectedLabel: prompt.label,
+        formFor: promptId,
         formData: {
-          label: ev.data.label,
-          description: ev.data.description,
-          category: ev.data.category,
-          inputs: ev.data.inputs,
-          templateFn: ev.data.templateFn,
-          outputSchema: ev.data.outputSchema,
+          label: prompt.label,
+          description: prompt.description,
+          category: prompt.category,
+          inputs: prompt.inputs,
+          templateFn: prompt.templateFn,
+          outputSchema: prompt.outputSchema,
         },
       };
     }),
@@ -126,13 +102,14 @@ const promptsState = setup({
         outputSchema: undefined,
       },
       selectedPromptId: undefined,
-      selectedPrompt: undefined,
+      selectedLabel: undefined,
+      formFor: undefined,
     }),
 
     sendSavePrompt: ({ context }) => {
       // Determine if creating or updating based on selectedPromptId
       const isCreating = !context.selectedPromptId;
-      
+
       if (isCreating) {
         // Create new prompt
         sendToSystem(id, {
@@ -184,28 +161,6 @@ const promptsState = setup({
         label: ev.label,
       });
     },
-
-    // News every window hears, whoever created it: it adds the prompt and selects nothing, so opening it fetches it
-    addCreatedPrompt: assign(({ context, event }) => ({ prompts: [...context.prompts, typeOf('PROMPT_CREATED', event).prompt] })),
-
-    updatePromptInList: assign(({ context, event }) => {
-      const ev = typeOf('PROMPT_UPDATED', event);
-      return {
-        prompts: context.prompts.map(p => 
-          p.id === ev.promptId ? ev.prompt : p
-        ),
-        selectedPrompt: ev.prompt,
-      };
-    }),
-
-    removeDeletedPrompt: assign(({ context, event }) => {
-      const ev = typeOf('PROMPT_DELETED', event);
-      return {
-        prompts: context.prompts.filter(p => p.id !== ev.promptId),
-        selectedPromptId: undefined,
-        selectedPrompt: undefined,
-      };
-    }),
 
     /* ── form updates ────────────────────────────────────── */
     updateFormLabel: assign(({ event, context }) => {
@@ -265,13 +220,6 @@ const promptsState = setup({
           ...context.formData,
           category: ev.category,
         },
-      };
-    }),
-    
-    handleSettingsUpdate: assign(({ event }) => {
-      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event);
-      return {
-        categories: ev.settings?.categories || [],
       };
     }),
 
@@ -391,41 +339,8 @@ const promptsState = setup({
       promptsExport: { status: 'idle' as const, errors: [], filePath: '', promptCount: 0 },
     }),
 
-    /* ── pagination ────────────────────────────────────────── */
-    requestNextPage: assign(({ context }) => {
-      sendToSystem(id, {
-        type: 'FETCH_PROMPTS_PAGE',
-        page: context.page + 1,
-      });
-      return { loadingMore: true };
-    }),
-
-    appendPageData: assign(({ context, event }) => {
-      const ev = typeOf('PROMPTS_PAGE_LOADED', event);
-      return {
-        prompts: [...context.prompts, ...ev.data.prompts],
-        page: ev.data.page,
-        totalPages: ev.data.totalPages,
-        loadingMore: false,
-      };
-    }),
-
-    requestAllItems: assign(() => {
-      sendToSystem(id, {
-        type: 'FETCH_ALL_PROMPTS',
-      });
-      return { loadingMore: true };
-    }),
-
-    setAllItems: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_ALL_LOADED', event);
-      return {
-        prompts: ev.data.prompts,
-        page: 1,
-        totalPages: 1,
-        loadingMore: false,
-      };
-    }),
+    /* ── the list ─────────────────────────────────────────── */
+    showMore: assign(({ context }) => ({ listLimit: context.listLimit + PROMPTS_PAGE_SIZE })),
 
     /* ── filter actions ──────────────────────────────────── */
     toggleCategoryFilter: assign(({ event, context }) => {
@@ -446,25 +361,19 @@ const promptsState = setup({
   },
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
-    /** Whether this answer is the one the outstanding ask is waiting for, and false when none is */
-    answersPendingPrompt: ({ context, event }) => answersCall(event, context.pendingPromptCall),
-    /** Whether this page is the one just asked for — two clicks ask for the same one */
-    isNextPage: ({ context, event }) =>
-      (event as { data?: { page?: number } }).data?.page === context.page + 1,
+    /** Whether what was loaded is the prompt open now, rather than one the user has since moved on from */
+    loadsSelected: ({ context, event }) => (event as { promptId?: string }).promptId === context.selectedPromptId,
+    /** Whether the open prompt is gone */
+    loadsNothing: ({ event }) => (event as { prompt?: unknown }).prompt === null,
   },
 }).createMachine({
   id,
   initial: 'list',
   context: {
     selectedPromptId: undefined,
-    pendingPromptCall: null,
-    prompts: [],
-    selectedPrompt: undefined,
-    totalCount: 0,
-    page: 1,
-    totalPages: 1,
-    loadingMore: false,
-    categories: [], // Will be populated from settings
+    selectedLabel: undefined,
+    formFor: undefined,
+    listLimit: PROMPTS_PAGE_SIZE,
     selectedCategories: [], // Filter state
     promptsImport: {
       status: 'idle',
@@ -487,32 +396,15 @@ const promptsState = setup({
     },
   },
   on: {
-    SURFACE_DEACTIVATED: { actions: 'cancelSelection' },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },
     'VIEW_LIST': {
       target: '.list',
     },
-    PROMPTS_CONNECTED: { actions: 'setSurfaceData' },
-    PROMPT_SELECTED: { guard: 'answersPendingPrompt', actions: 'loadPromptData' },
-    FEATURE_SETTINGS_UPDATED: { actions: 'handleSettingsUpdate' },
-    PROMPT_CREATED: {
-      actions: 'addCreatedPrompt'
-    },
-    PROMPT_UPDATED: {
-      actions: 'updatePromptInList'
-    },
-    PROMPT_DELETED: {
-      actions: 'removeDeletedPrompt',
-      target: '.list'
-    },
     TOGGLE_INPUTS_SECTION: { actions: 'toggleInputsSection' },
     TOGGLE_OUTPUT_SECTION: { actions: 'toggleOutputSection' },
     TOGGLE_METADATA_SECTION: { actions: 'toggleMetadataSection' },
-    'PROMPTS.LOAD_MORE': { actions: 'requestNextPage' },
-    'PROMPTS.LOAD_ALL': { actions: 'requestAllItems' },
-    PROMPTS_PAGE_LOADED: { guard: 'isNextPage', actions: 'appendPageData' },
-    PROMPTS_ALL_LOADED: { actions: 'setAllItems' },
+    'PROMPTS.LOAD_MORE': { actions: 'showMore' },
     'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
     'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
     // Import events
@@ -582,20 +474,24 @@ const promptsState = setup({
       },
     },
     detail: {
-      exit: 'cancelSelection',
       tags: ['detail-prompt'],
       meta: {
         ...breadcrumbWithParams<PromptsContext>({
           target: 'detail',
           getLabel: (ctx) => {
-            return ctx.selectedPrompt?.label || ctx.selectedPromptId || '';
+            return ctx.selectedLabel || ctx.selectedPromptId || '';
           }
         }),
         ...contextMenuFn<PromptsContext>((ctx) => [
-          { label: 'Delete Prompt', icon: Trash2, event: { type: 'PROMPT.DELETE' as const, promptId: ctx.selectedPromptId! }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.selectedPrompt?.label || 'this prompt'}"?` },
+          { label: 'Delete Prompt', icon: Trash2, event: { type: 'PROMPT.DELETE' as const, promptId: ctx.selectedPromptId! }, iconColor: 'text-red-400', confirm: `Are you sure you want to delete "${ctx.selectedLabel || 'this prompt'}"?` },
         ]),
       },
       on: {
+        // The open prompt deleted, here or in another window: there is nothing left to show
+        'PROMPT.LOADED': [
+          { guard: and(['loadsSelected', 'loadsNothing']), target: 'list' },
+          { guard: 'loadsSelected', actions: 'showLoadedPrompt' },
+        ],
         'FORM.UPDATE_LABEL': { actions: 'updateFormLabel' },
         'FORM.UPDATE_DESCRIPTION': { actions: 'updateFormDescription' },
         'FORM.UPDATE_INPUTS': { actions: 'updateFormInputs' },
@@ -614,4 +510,4 @@ const promptsState = setup({
   },
 })
 
-export default promptsState 
+export default promptsState

@@ -103,6 +103,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
   | { type: 'commit.GENERATING_MESSAGE' }
   | { type: 'commit.MESSAGE_GENERATED'; data: { message: string } }
+  /** The repository changed, on disk or by a write from any window: news for every window, each of which asks again for what it shows of it */
+  | { type: 'commit.REPOSITORY_CHANGED' }
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
@@ -192,10 +194,11 @@ export type IncomingTerminalEvents =
 
 export type OutgoingTerminalEvents =
   /**
-   * A terminal exists — news for every window, so every list grows. It carries no instruction: a window that
-   * did not ask for it must not open it, which is what `terminal.OPENED` is for.
+   * A terminal exists — news for every window, each of which asks for the list again (\`terminal.REFRESH_LIST\`, answered
+   * with \`terminal.TERMINALS_LISTED\`). It names the terminal and carries no instruction: a window that did not ask for
+   * it must not open it, which is what \`terminal.OPENED\` is for.
    */
-  | { type: 'terminal.CREATED'; data: TerminalInfo }
+  | { type: 'terminal.CREATED'; data: { terminalId: string } }
   /**
    * The terminal *you* asked for, answered to the window that asked.
    *
@@ -246,6 +249,11 @@ export type IncomingCodeEvents =
   | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
+  /**
+   * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
+   * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
+   */
+  | { type: 'GET_CODE_START' }
 export type OutgoingCodeEvents =
   | OutgoingExplorerEvents
   | OutgoingSearchEvents
@@ -255,7 +263,12 @@ export type OutgoingCodeEvents =
   | OutgoingActionsEvents
   | OutgoingPromptsEvents
   // Broadcast events (sent to all child systems)
-  | { type: 'CODE_CONNECTED'; data: CodeConnectedData }
+  | { type: 'CODE_STARTED'; data: CodeConnectedData }
+  /**
+   * The code surface's directory moved, for every window, which all show the one directory: each asks again for what
+   * it starts from and for what its panels show. News, with no listing on it.
+   */
+  | { type: 'BASE_DIRECTORY_CHANGED'; baseDirectory: string }
   /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
   | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string }
 

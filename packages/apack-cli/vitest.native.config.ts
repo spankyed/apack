@@ -17,7 +17,7 @@ export default defineConfig({
     // that needs longer still declares a reviewed per-test budget.
     testTimeout: 600_000,
     hookTimeout: 600_000,
-    setupFiles: ['./tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
     globalSetup: ['./tests/_support/compiler-store-run.ts'],
     include: ['tests/**/*.native.spec.ts'],
     exclude: ['**/node_modules/**'],

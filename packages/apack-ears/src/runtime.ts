@@ -1,5 +1,5 @@
 /**
- * EARS runtime types: the persistence port, what an engine is created with, and the query and
+ * EARS runtime types: what an engine is created with, and the query and
  * transaction builders.
  *
  * CHANGE CONTROL: these types are a specified contract, and editor completions and error messages
@@ -8,6 +8,7 @@
  */
 import type { EARS, EntityNameArg, EntityShapes, ShapeOf } from './entities.ts';
 import type { RESERVED_ATTRIBUTES } from './errors.ts';
+import type { OrderedKV } from './kv.ts';
 
 /**
  * An id as `write` takes it: an entity's, plain or tagged with its type, and never a relation's (`EARS.RelationId`),
@@ -24,53 +25,10 @@ export interface RelationEdge<K extends string = string, Source extends string =
   info?: EARS.AttributeValue;
 }
 
-// ─── PersistenceSink interface ─────────────────────────────────────────
-
-export interface PersistenceSink {
-  /** An entity was created, as `entityType`: the one call that gives it a row */
-  onCreateEntity(entityId: string, entityType: string): void;
-  onDestroyEntity(entityId: string): void;
-  /** An attribute was removed */
-  onDropAttr(kind: string, entityId: string): void;
-  /** An attribute's value after a write, whole (a list is one array value): the sink stores it in place of what it had */
-  onPutAttr(kind: string, entityId: string, value: unknown): void;
-  onAddRelation(relId: string, kind: string, source: string, target: string, info: unknown): void;
-  onUpdateRelation(relId: string, patch: { source?: string; target?: string; info?: unknown }): void;
-  /** A relation (a link between two entities) was removed: unlinked, destroyed, or with one of its entities */
-  onRemoveRelation(relId: string): void;
-  /**
-   * A committed unit (`transact`) begins: the calls up to `onUnitEnd` are its writes, and the sink stores them
-   * together or not at all. Calls outside a unit are each their own.
-   */
-  onUnitStart(): void;
-  onUnitEnd(): void;
-  close?(): void;
-  getErrorStats?(): PersistenceErrorStats;
-}
-
-/** The writes a sink failed to store so far, and the last failure */
-export interface PersistenceErrorStats {
-  errorCount: number;
-  lastError: unknown;
-}
-
-/** A sink that drops every write: an engine's persistence unless it's given one */
-export const noopSink: PersistenceSink = {
-  onCreateEntity() {},
-  onDestroyEntity() {},
-  onDropAttr() {},
-  onPutAttr() {},
-  onAddRelation() {},
-  onUpdateRelation() {},
-  onRemoveRelation() {},
-  onUnitStart() {},
-  onUnitEnd() {},
-};
-
 /** What an engine is created with (`createEarsEngine`) */
 export interface EARSRuntimeDeps {
-  /** Receives every write; nothing by default */
-  persistence?: PersistenceSink;
+  /** The store the engine reads and writes: a new one in memory by default (`createMemoryKV`) */
+  kv?: OrderedKV;
   /** Whether a name is an entity type (`create('Note')` makes one) rather than an id */
   isEntityType: (v: string) => boolean;
   /** Whether a name is a relation kind: `link`, and every read or walk naming a kind, refuse one that isn't */
@@ -79,6 +37,11 @@ export interface EARSRuntimeDeps {
   isRole: (v: string) => boolean;
   /** What a created row of a type is held to; nothing by default — an engine given no shapes knows of no rule */
   rowRules?: (type: string) => RowRules | undefined;
+  /**
+   * Told when a query does something its data will make slow — a `where` filtering thousands of a type's rows for
+   * want of an index — once per call site. Nothing by default; the app passes one in development
+   */
+  warn?: (message: string) => void;
 }
 
 /**
@@ -94,6 +57,11 @@ export interface RowRules {
    * for a type and prefix, and a type with none holds no short code
    */
   shortCode?: string;
+  /**
+   * The fields a `where(field, value)` on the type reads an index for. The engine indexes `role` and `shortCode` on
+   * every type; a `where` on any other field filters the type's rows, finding the same matches
+   */
+  indexes?: readonly string[];
 }
 
 /**

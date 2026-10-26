@@ -57,7 +57,7 @@ describe('CC: Approve Tool', () => {
     mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => undefined) } as never });
     mockService<Services, 'chat'>('chat', { updateMessageState: vi.fn(), sendBlockMessage: vi.fn() });
     mockService<Services, 'action'>('action', { executeIfFound: execute });
-    mockService<Services, 'artifact'>('artifact', { updateAndNotify: vi.fn((artifact, options) => {
+    mockService<Services, 'artifact'>('artifact', { update: vi.fn((artifact, options) => {
       repository.chatCommands.updateArtifact(artifact, { content: options.content });
     }) });
     await expect(action({ threadId: id, requestId: 'current', toolName: 'ExitPlanMode' }, services)).resolves.toMatchObject({ success: false });

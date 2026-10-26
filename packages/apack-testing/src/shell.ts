@@ -9,6 +9,7 @@ import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import type { HostShell, SurfaceDefinition, PackFERegistration } from '@apackdev/sdk/fe';
 import { nativeFrontendDeclarationFixture, startFeTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import { _isFeHostBound, type FePackRegistryView, type PackExtensionsView } from '@apackdev/sdk/runtime';
+import { testViews } from './app.ts';
 
 /** One of the pack's surfaces, as a test registers it: its state machine, and whatever else of its definition it needs */
 export type TestSurface = { state: AnyStateMachine } & Partial<Omit<SurfaceDefinition, 'state'>>;
@@ -146,6 +147,8 @@ export async function startShell(packId: string, options: StartShellOptions, bac
     // The test's surfaces are registered up front, as a built-in pack's are: no external pack frontends to load
     loadedPacks: async () => [],
     entityExists: async (id, signal) => { signal.throwIfAborted(); return boundEars().query.ids(id).exists(); },
+    // The test file's views, which a test app's watchView shares: a component's useView is one more subscriber
+    watchView: (request, observer) => testViews().watch(request, observer),
     describeConnection: async () => 'A unit test\'s shell: its client is the harness\'s in-memory bus',
   };
 

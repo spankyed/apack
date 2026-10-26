@@ -26,7 +26,7 @@ beforeEach(() => {
     system: { get: () => undefined },
   }
   bindFeHost({ catalog: {} as never, application, secrets: {} as never,
-    settings: {} as never, client: { send() {} }, packs: {} as never })
+    settings: {} as never, client: { send() {}, watchView: () => () => {} }, packs: {} as never })
 })
 
 afterEach(() => unbindFeHost())

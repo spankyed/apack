@@ -49,7 +49,6 @@ beforeAll(async () => {
   // The app installs the packs it ships, then loads every installed pack
   await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
   loadAppPacks(packs);
-  await store.hydrate();
   startPacks(packs);
   fresh = { settings: storedSettings(), flows: flows() };
 });
@@ -102,7 +101,7 @@ it('restores unfinished onboarding and resumes it only after an explicit restart
   const { rootEvents } = await import('../../src/transport/emitter.ts');
   const opened: unknown[] = [];
   const unsubscribe = rootEvents.onOutgoing(({ to, event }) => {
-    if (to === 'default-setup/threads' && event.type === 'LOAD_CHAT_THREAD') opened.push(event);
+    if (to === 'default-setup/threads' && event.type === 'SHOW_THREAD') opened.push(event);
   });
   const bus = createActor(createAppBus(packs), { systemId: HOST.bus }).start();
   const threadId = () => untypedQuery.all().withRole('assistant_birth').ids()[0];

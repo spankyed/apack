@@ -8,7 +8,9 @@ npm run session:new -- settings-help
 ```
 
 The command creates `session/settings-help` at the current HEAD in a sibling
-`<repository>-worktrees/settings-help` directory, runs `npm ci` and builds the pack and app there. An optional second argument
+`<repository>-worktrees.noindex/settings-help` directory, runs `npm ci` and builds the pack and app there. The `.noindex`
+suffix keeps Spotlight from indexing each fresh `node_modules`, which on macOS slowed a new worktree's runs severalfold
+and held Electron's shutdown past Playwright's teardown deadline. An optional second argument
 selects another base ref. Continue the agent or terminal session **in the printed directory**.
 The command does not transfer uncommitted changes from the original checkout.
 If setup fails, the new checkout is retained. Retry the failed command there.

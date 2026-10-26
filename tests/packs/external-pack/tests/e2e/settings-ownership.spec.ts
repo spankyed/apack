@@ -223,9 +223,21 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
   } });
   const client = createTRPCUntypedClient({ links: [wsLink({ client: ws })] });
   let subscription: { unsubscribe(): void } | undefined;
+  // The packs system broadcasts how an install or a toggle ended, failed ones included; the case waits for that
+  // event, however long the operation takes on this machine, rather than for a clock
+  const waiters: { match: (event: Record<string, unknown>) => boolean; resolve: (event: Record<string, unknown>) => void }[] = [];
+  const nextEvent = (match: (event: Record<string, unknown>) => boolean) =>
+    new Promise<Record<string, unknown>>(resolve => waiters.push({ match, resolve }));
   const ready = new Promise<void>((resolve, reject) => {
     subscription = client.subscription('bus.sub', undefined, { onStarted: () => resolve(), onError: reject,
-      onData: message => messages.push(message as (typeof messages)[number]) });
+      onData: data => {
+        const message = data as (typeof messages)[number];
+        messages.push(message);
+        for (const waiter of waiters.filter(w => w.match(message.event))) {
+          waiters.splice(waiters.indexOf(waiter), 1);
+          waiter.resolve(message.event);
+        }
+      } });
   });
   const loaded = async () => await client.query('packs.loaded') as { id: string; registrationId: string; declarationRevision: string; buildRevision: string }[];
   const credential = async (packId: string) => {
@@ -277,10 +289,13 @@ shared.set({ path: ['name'], value: 2 });
     execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', dependent], {
       cwd: dependent, stdio: 'pipe', timeout: 20_000,
     });
+    const outcome = nextEvent(event => (event.type === 'PACK_INSTALL_COMPLETE' || event.type === 'PACK_INSTALL_FAILED')
+      && event.packSlug === dependent);
     await appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
       type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
     }), dependent);
-    await expect.poll(async () => (await loaded()).map(pack => pack.id)).toContain(id);
+    expect(await outcome).toMatchObject({ type: 'PACK_INSTALL_COMPLETE', packId: id });
+    expect((await loaded()).map(pack => pack.id)).toContain(id);
     installed = true;
     const owner = await credential('bundled-ui-fixture');
     const access = await credential(id);
@@ -323,11 +338,18 @@ shared.set({ path: ['name'], value: 2 });
     expect(await ask(access, { type: 'RESET_SETTINGS', target: target('assistant') })).toMatchObject({ type: 'SETTINGS_SAVED' });
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Scribbles helper');
     const previousRuntime = (await loaded()).find(pack => pack.id === id)!;
+    const toggled = () => nextEvent(event => event.type === 'PACK_ENABLED_CHANGED' && event.packId === id);
+    const disabled = toggled();
     await toggle();
+    expect(await disabled).toMatchObject({ enabled: false });
+    // Disabled as the toggle answers; registered until its teardown, which runs in the API, ends
     await expect.poll(async () => (await loaded()).map(pack => pack.id)).not.toContain(id);
     await expect(ask(access, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Stale' })).rejects.toThrow('Settings access is unavailable');
+    const enabled = toggled();
     await toggle();
-    await expect.poll(async () => (await loaded()).map(pack => pack.id)).toContain(id);
+    // The toggle answers once its activation, which runs within it, has registered the pack, or failed to
+    expect(await enabled).toMatchObject({ enabled: true });
+    expect((await loaded()).map(pack => pack.id)).toContain(id);
     const replacementRuntime = (await loaded()).find(pack => pack.id === id)!;
     expect(replacementRuntime.buildRevision).toBe(previousRuntime.buildRevision);
     expect(replacementRuntime.registrationId).not.toBe(previousRuntime.registrationId);

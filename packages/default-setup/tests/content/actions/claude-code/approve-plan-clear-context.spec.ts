@@ -11,7 +11,7 @@ function setup(requestId?: string, toolName = 'ExitPlanMode') {
   } } });
   const kill = vi.fn(), clearHandle = vi.fn(), create = vi.fn();
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => ({ kill })), clearHandle } as never });
-  mockService<Services, 'chat'>('chat', { createThreadAndNotify: create });
+  mockService<Services, 'chat'>('chat', { createThread: create });
   return { id, kill, clearHandle, create };
 }
 
@@ -43,13 +43,13 @@ describe('CC: Approve Plan Clear Context', () => {
       title: 'Fixture implementation', content: { status: 'draft', notes: plan, steps: [] } });
     create.mockImplementation((options: { topic: string; instructions: string }) => repository.threadCommands.create(options));
     const open = vi.fn(), execute = vi.fn(async () => undefined);
-    mockService<Services, 'chat'>('chat', { createThreadAndNotify: create, openThreadChatAndRefreshRecent: open });
+    mockService<Services, 'chat'>('chat', { createThread: create, showThread: open });
     mockService<Services, 'action'>('action', { executeIfFound: execute });
     mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'emitter'>('emitter', { broadcastToSurface: vi.fn() });
     mockService<Services, 'artifact'>('artifact', {
-      updateAndNotify: vi.fn((artifact: EntityId, options: { content?: unknown }) => {
+      update: vi.fn((artifact: EntityId, options: { content?: unknown }) => {
         repository.chatCommands.updateArtifact(artifact, { content: options.content });
       }),
       findOrCreateByType: vi.fn((threadId: EntityId) => ({ ...repository.chatCommands.createArtifact({

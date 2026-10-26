@@ -1,12 +1,10 @@
-import { broadcastToSurface } from '#generated/events.ts';
+import { answer } from '../answer.ts'
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup } from 'xstate'
 
 import { repository } from '#generated/repository.ts';
 import { EARS } from '#generated/ears.ts'
 import type { ActionEntity } from '@apackdev/sdk'
-
-const surfaceId = 'code' as const
 
 // Incoming events from frontend
 
@@ -29,7 +27,7 @@ export const actionsSystem = setup({
     events: {} as Event,
   },
   actions: handlers.actions({
-    openAction: ({ event }) => {
+    openAction: ({ event, reply }) => {
       const ev = event as { type: 'codeActions.OPEN_ACTION'; actionId: string }
       const action = repository.actionQueries.byId(ev.actionId as EARS.EntityId)
 
@@ -40,13 +38,13 @@ export const actionsSystem = setup({
           actionFnContent: action.actionFn
         }
 
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codeActions.ACTION_SELECTED',
           actionId: ev.actionId as EARS.EntityId,
           data: actionWithContent
         })
       } else {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codeActions.CODE_ERROR',
           data: {
             message: `Action ${ev.actionId} not found`
@@ -55,7 +53,7 @@ export const actionsSystem = setup({
       }
     },
 
-    saveAction: ({ event }) => {
+    saveAction: ({ event, reply }) => {
       const ev = event as { type: 'codeActions.SAVE_ACTION'; actionId: string; actionFn: string }
 
       // Update the action with new actionFn
@@ -65,7 +63,7 @@ export const actionsSystem = setup({
 
       const updatedAction = repository.actionQueries.byId(ev.actionId as EARS.EntityId)
       if (updatedAction) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'codeActions.ACTION_UPDATED',
           action: updatedAction,
           actionId: updatedAction.id

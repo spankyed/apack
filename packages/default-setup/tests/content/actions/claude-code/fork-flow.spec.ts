@@ -10,7 +10,7 @@ it('compiled cc-fork reports native rejection before creating a thread', async (
   const validate=vi.fn(async()=>{throw Error('No message found with message.uuid');});
   const create=vi.fn(), notify=vi.fn();
   mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn()} as never});
-  mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify});
+  mockService<Services,'chat'>('chat',{createThread:create,sendBlockMessage:notify});
   const app=await startApp({systems:['brain']});
   await app.runFlow('Claude Code');
   const {id}=repository.threadCommands.create({topic:'Compiled fork',instructions:''});

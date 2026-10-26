@@ -19,8 +19,9 @@ import { _callOn, _runDelivery, type _Asker, type Message } from '@apackdev/sdk/
  * The common case, and so the short one — twelve call sites against the two that carry an address.
  */
 export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, call?: Pick<Message, 'call' | 'answering'>): void {
-  _runDelivery({ receiver: ref, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    actor.send(call === undefined ? event : { ...event, ..._callOn(call) }));
+  const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
+  _runDelivery({ receiver: ref, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
+    actor.send(delivered));
 }
 
 /**
@@ -48,6 +49,7 @@ export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEv
  * `?.` here would have levelled those two to the quieter one, which it briefly did.
  */
 export function sendToSurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, asker: _Asker, call?: Pick<Message, 'call' | 'answering'>): void {
-  _runDelivery({ receiver: ref, asker, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    actor.send(call === undefined ? event : { ...event, ..._callOn(call) }));
+  const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
+  _runDelivery({ receiver: ref, asker, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
+    actor.send(delivered));
 }

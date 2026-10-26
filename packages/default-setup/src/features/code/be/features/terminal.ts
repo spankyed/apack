@@ -1,3 +1,4 @@
+import { answer } from '../answer.ts'
 import { featureSettings } from '#generated/settings.ts';
 import type { OutgoingTerminalEvents } from '../contract.ts'
 
@@ -37,10 +38,14 @@ export type Event =
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
-  | { type: 'CODE_CONNECTED' };
+  | { type: 'GET_CODE_START' };
 
-/** Emit an event to the frontend code surface */
-const emitToFrontend = (event: OutgoingTerminalEvents) => {
+/** A terminal's news, for every window showing the code surface: what its process did, never a listing */
+type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.OUTPUT' | 'terminal.CLOSED' | 'terminal.CREATED' | 'terminal.ERROR'
+type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
+
+/** Tell every window showing the code surface what a terminal did */
+const emitToFrontend = (event: TerminalNews) => {
   broadcastToSurface(surfaceId, event)
 }
 
@@ -110,13 +115,14 @@ export const terminalSystem = setup({
     })
   },
   actions: handlers.actions({
-    sendConnectedData: () => {
-      emitToFrontend({ type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
+    /** The running terminals, answered to the window that asked as it starts */
+    sendConnectedData: ({ reply }) => {
+      answer(reply, { type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
     },
 
     createTerminal: ({ event, context, reply }) => {
-      const ev = event as { 
-        type: 'terminal.CREATE_TERMINAL'; 
+      const ev = event as {
+        type: 'terminal.CREATE_TERMINAL';
         title?: string;
         cwd?: string;
         shell?: string;
@@ -137,7 +143,7 @@ export const terminalSystem = setup({
 
         // The two halves of what used to be one event: every window's list grows, and only the window that
         // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
-        emitToFrontend({ type: 'terminal.CREATED', data: terminalInfo })
+        emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
         reply?.({ type: 'terminal.OPENED', data: terminalInfo })
       } catch (error: any) {
         // A failure to create is the asker's to see; with nobody to answer it is still worth reporting
@@ -146,74 +152,74 @@ export const terminalSystem = setup({
       }
     },
 
-    closeTerminal: ({ event }) => {
+    closeTerminal: ({ event, reply }) => {
       const ev = event as { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.kill(ev.terminalId)
         if (!success) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.ERROR',
             data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
           })
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message, terminalId: ev.terminalId }
         })
       }
     },
 
-    sendTerminalInput: ({ event }) => {
+    sendTerminalInput: ({ event, reply }) => {
       const ev = event as { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.write(ev.terminalId, ev.data)
         if (!success) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.ERROR',
             data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
           })
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message, terminalId: ev.terminalId }
         })
       }
     },
 
-    resizeTerminal: ({ event }) => {
+    resizeTerminal: ({ event, reply }) => {
       const ev = event as { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number }
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.resize(ev.terminalId, ev.cols, ev.rows)
         if (!success) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.ERROR',
             data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
           })
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message, terminalId: ev.terminalId }
         })
       }
     },
 
-    renameTerminal: ({ event }) => {
+    renameTerminal: ({ event, reply }) => {
       const ev = event as { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
       try {
         const terminal = terminalService.get(ev.terminalId)
         const terminalName = terminal ? terminal.info.title : 'Terminal'
         const success = terminalService.rename(ev.terminalId, ev.customTitle)
         if (!success) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.ERROR',
             data: { message: `${terminalName} not found`, terminalId: ev.terminalId }
           })
@@ -225,50 +231,50 @@ export const terminalSystem = setup({
           })
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message, terminalId: ev.terminalId }
         })
       }
     },
 
-    listTerminals: () => {
+    listTerminals: ({ reply }) => {
       try {
         const terminals = terminalService.list()
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.TERMINALS_LISTED',
           data: terminals
         })
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message }
         })
       }
     },
 
-    openTerminalTab: ({ event }) => {
+    openTerminalTab: ({ event, reply }) => {
       const ev = event as { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
       try {
         const terminals = terminalService.list()
         const terminal = terminals.find(t => t.id === ev.terminalId)
-        
+
         if (terminal) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.TERMINAL_TAB_OPENED',
             data: terminal
           })
         } else {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'terminal.ERROR',
-            data: { 
-              message: `Terminal not found`, 
-              terminalId: ev.terminalId 
+            data: {
+              message: `Terminal not found`,
+              terminalId: ev.terminalId
             }
           })
         }
       } catch (error: any) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'terminal.ERROR',
           data: { message: error.message, terminalId: ev.terminalId }
         })
@@ -320,7 +326,7 @@ export const terminalSystem = setup({
     },
     idle: {
       on: {
-        'CODE_CONNECTED': {
+        'GET_CODE_START': {
           actions: 'sendConnectedData'
         },
         'terminal.CREATE_TERMINAL': {

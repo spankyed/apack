@@ -43,8 +43,8 @@ describe('broadcastToSurface', () => {
   // Wrapped in functions that never run: only their types are checked
   it('accepts an event the surface receives', () => {
     expectTypeOf(() => {
-      broadcastToSurface('threads', { type: 'THREAD_CREATED', id: 't1' as EARS.EntityId, shortCode: 'T1', entityType: 'Thread' as EARS.Entity, timestamp: 0 });
-      broadcastToSurface('flows', { type: 'ACTION_DELETED', actionId: 'Action-1' as EARS.EntityId });
+      broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: 't1' as EARS.EntityId });
+      broadcastToSurface('flows', { type: 'FLOW.SELECT', flowId: 'Flow-1' as EARS.EntityId });
       broadcastToSurface('host/application', { type: 'APPLICATION_HOTKEYS', hotkeys });
       broadcastToSurface('host/application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'default-setup/notes': false } });
     }).toBeFunction();
@@ -69,7 +69,7 @@ describe('sendToSystem', () => {
       sendToSystem('notes', { type: 'DELETE_NOTE', id: 'Note-1' });
       // System to system, as a backend system sends another: the same typed send
       sendToSystem('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
-      sendToSystem('threads', { type: 'REFRESH_THREADS' });
+      sendToSystem('threads', { type: 'GET_CHAT_START' });
       // A role reaches whichever system plays it
       sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
       // The host's systems, by ref
@@ -84,7 +84,7 @@ describe('sendToSystem', () => {
       // @ts-expect-error the settings system doesn't receive this event
       sendToSystem('settings', { type: 'DELETE_NOTE', id: 'Note-1' });
       // @ts-expect-error the brain doesn't receive what threads does, so a system can't send it one
-      sendToSystem('brain', { type: 'REFRESH_THREADS' });
+      sendToSystem('brain', { type: 'GET_CHAT_START' });
       // @ts-expect-error DELETE_NOTE needs an id
       sendToSystem('notes', { type: 'DELETE_NOTE' });
       // @ts-expect-error one system per send

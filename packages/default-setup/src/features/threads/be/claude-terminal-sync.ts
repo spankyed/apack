@@ -77,8 +77,6 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       // addMessage trims the human entry path; a native row's exact text is already accepted.
       if (result.text !== row.text) repository.chatCommands.updateMessageState({ messageId: result.id, updates: { text: row.text } })
       nativeMessages.set(key, { id: result.id, terminal: true, order, timestamp })
-      const message = repository.chatQueries.messageById(result.id)
-      if (message) broadcastToSurface('threads', { type: 'MESSAGE_ADDED', threadId, message })
     }
   }
   async function flush() {
@@ -155,7 +153,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
                 title: generic.presentation.title, question, reason: generic.reason, genericTool: generic.presentation } }
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
           }
         } else {
           const sameDialog = nativeControl && dialog && nativeControl.ownerId === owner.state.ownerId && nativeControl.sessionId === dialog.sessionId && nativeControl.dialogId === dialog.id && nativeControl.revision === dialog.revision
@@ -187,30 +185,30 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
             if (pendingControlRequest !== priorControl) {
               const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest } }
               repository.threadCommands.update(threadId, { context })
-              broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
             }
           }
           if (sameDialog && dialog?.toolName === 'Bash' && nativeControl && priorControl && object(nativeControl.bash)?.token !== dialog.choiceToken) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
               pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, bash: dialog.choices && dialog.choiceToken ? { choices: dialog.choices, token: dialog.choiceToken } : undefined } } } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
           }
           if (sameDialog && dialog && ['Read', 'Write', 'Edit', 'NotebookEdit'].includes(dialog.toolName) && nativeControl && priorControl && 'approval' in dialog && object(nativeControl.file)?.token !== dialog.approval?.token) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode,
               pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, file: dialog.approval } } } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
           }
           if (sameDialog && dialog && (dialog.toolName === 'WebFetch' || dialog.toolName === 'Skill') && nativeControl && priorControl && object(nativeControl.tool)?.token !== dialog.presentation.token) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, title: dialog.presentation.title, tool: dialog.presentation } } } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
           }
           if (sameDialog && dialog?.toolName === 'Workflow' && nativeControl && priorControl && object(nativeControl.workflow)?.token !== dialog.presentation.token) {
             const context = { ...dialogThread.context, claudeCode: { ...dialogThread.context?.claudeCode, pendingControlRequest: { ...priorControl, nativeTerminal: { ...nativeControl, workflow: dialog.presentation } } } }
             repository.threadCommands.update(threadId, { context })
-            broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
           }
         }
         const state = owner.state, metadata = state.session
@@ -231,7 +229,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode, prePlanMode: metadata.prePlanMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }
         repository.threadCommands.update(threadId, { context })
-        broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } })
+
         if (state.status === 'live' && metadata?.permissionMode && metadata.permissionMode !== prior.permissionMode
           && (metadata.permissionMode === 'plan' || prior.permissionMode === 'plan')) {
           broadcastToSurface('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
@@ -243,7 +241,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const thread = current() ? repository.threadQueries.byId(threadId) : undefined
         if (thread && thread.context?.claudeCode?.sessionError !== problem) {
           const context = { ...thread.context, claudeCode: { ...thread.context?.claudeCode, sessionError: problem, chatState: 'error' } }
-          repository.threadCommands.update(threadId, { context }); broadcastToSurface('threads', { type: 'THREAD_UPDATED', threadId, updates: { context } }); updateChatState(threadId, 'error')
+          repository.threadCommands.update(threadId, { context }); updateChatState(threadId, 'error')
         }
       }
     })().finally(() => { inFlight = undefined })

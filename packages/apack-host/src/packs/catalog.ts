@@ -108,7 +108,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
   let help: CatalogData<HelpCatalog> = immutable({ articles: [], problems: [] });
 
   function publish(changes: Partial<Omit<PackCatalogSnapshot, 'revision' | 'appSettings'>>,
-    refused = refusedDestinations): void {
+    refused = refusedDestinations, { admitSettings = true }: { admitSettings?: boolean } = {}): void {
     const { packs, native, sourcePacks, problems: catalogProblems, appPackSources, appPackSourceProblems } = { ...current, ...changes };
     const declarationsChanged = !isDeepStrictEqual(current.packs, packs)
       || !isDeepStrictEqual(current.native, native) || !isDeepStrictEqual(current.sourcePacks, sourcePacks);
@@ -125,7 +125,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
     assertCatalogClaims(next);
     // Diagnostics and source offers leave accepted settings definitions and their identity intact.
     const projection = declarationsChanged ? immutable(settingsForDeclarations(app, definitions, next.revision)) : settings;
-    if (declarationsChanged) checkSettings?.(projection);
+    if (declarationsChanged && admitSettings) checkSettings?.(projection);
     const helpOwners = [
       ...packs.map(({ snapshot }) => ({ manifest: snapshot.manifest, help: snapshot.help })),
       ...sourcePacks.map(source => ({ manifest: source.manifest, help: source.help })),
@@ -232,9 +232,13 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
         pack.snapshot.manifest.id === packId ? { ...pack, enabled } : pack) });
     },
 
-    /** Explicit admission is atomic; discovery may instead report and withhold all conflicting owners. */
+    /**
+     * Explicit admission is atomic; discovery may instead report and withhold all conflicting owners. `admitSettings`
+     * false accepts declarations whatever they make of the stored settings: what boot's first discovery finds is
+     * what is installed, and a stored value it makes invalid is recovery's to settle, not a reason to refuse the pack
+     */
     replace(sources: readonly PackCatalogSource[], problems: readonly PackCatalogProblem[] = [],
-      { reportConflicts = false }: { reportConflicts?: boolean } = {}): void {
+      { reportConflicts = false, admitSettings = true }: { reportConflicts?: boolean; admitSettings?: boolean } = {}): void {
       const next = new Map<string, PackCatalogEntry>();
       for (const source of sources) {
         const candidate = immutable(source);
@@ -260,7 +264,7 @@ export function createContributionCatalog(appSettings: SettingsDefinition) {
         refused = packs.filter(pack => conflicts.has(pack.snapshot.manifest.id));
         packs = packs.filter(pack => !conflicts.has(pack.snapshot.manifest.id));
       }
-      publish({ packs, problems }, refused);
+      publish({ packs, problems }, refused, { admitSettings });
     },
 
     onChanged(listener: () => void): () => void {

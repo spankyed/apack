@@ -159,7 +159,7 @@ export type Event =
   | { type: 'pr.OPEN_FILE'; file: GitStatusFile }
   | { type: 'pr.STATUS_CHANGED'; data: { timestamp: Date } }
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
-  | { type: 'CODE_STARTUP' }
+  | { type: 'CODE_STARTED' }
   // GitHub PR events from backend
   | { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
   | { type: 'pr.NAVIGATE_TO_HELP' }
@@ -945,7 +945,7 @@ export const pullRequestState = setup({
         'pr.STATUS_CHANGED': { actions: [assign({ diffStale: true, isManualPRSelection: false, pendingManualPRNumber: null, prCheckCompleted: false, isGhChecking: true, viewMode: 'files' as const, prError: null }), 'refreshPrStatus'] },
         // Lightweight refresh for git changes — re-checks PR status without resetting viewMode or manual selection
         'pr.GIT_STATUS_REFRESHED': { actions: [assign({ diffStale: true, prCheckCompleted: false, isGhChecking: true, prError: null }), 'refreshPrStatus'] },
-        'CODE_STARTUP': {
+        'CODE_STARTED': {
           actions: [
             assign({
               prCheckCompleted: false,

@@ -81,6 +81,7 @@ export function defineEvents<P extends SurfaceEvents, S extends SystemEventMap>(
 export interface _Delivery {
     asker?: _Asker;
     call?: string;
+    event?: object;
     receiver: string;
 }
 

@@ -8,7 +8,6 @@
 import { importedSessionMetadata } from './_helpers/session-import.ts';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z } from '#generated/services.ts';
-import type { ThreadsSettings } from '#generated/types.ts';
 import { getClaudeState, persistClaudeState, ensureSessionMarker, updateChatState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -134,7 +133,7 @@ async function handleResume(
   if (existing) {
     const text = 'Continuing the existing app conversation for this Claude Code session.';
     services.chat.sendBlockMessage({ threadId: existing.id, text, blocks: [] });
-    services.chat.openThreadChatAndRefreshRecent(existing.id);
+    services.chat.showThread(existing.id);
     return { text, skipMessage: true };
   }
 
@@ -150,7 +149,7 @@ async function handleResume(
 
   if (requiresNewThread) {
     const title = (session as any).title || 'Resumed session';
-    const { id: newThreadId } = services.chat.createThreadAndNotify({
+    const { id: newThreadId } = services.chat.createThread({
       topic: title,
       instructions: '',
     });
@@ -186,14 +185,11 @@ async function handleResume(
       text: confirmText,
       blocks: [],
     });
-    services.chat.openThreadChatAndRefreshRecent(targetThreadId as any);
+    services.chat.showThread(targetThreadId as any);
     return { text: confirmText, skipMessage: true };
   }
 
-  // Same thread: reload thread data to show imported messages
-  const threadData = services.repository.chatQueries.threadData(targetThreadId as any);
-  if (threadData) services.emitter.broadcastToSurface('default-setup/threads', { type: 'LOAD_CHAT_THREAD', data: threadData });
-
+  // Same thread: the chat showing it lists the imported messages through its view
   return { text: confirmText };
 }
 
@@ -273,9 +269,7 @@ async function handleImport(
       // Import messages
       services.chat.importClaudeSessionMessages({threadId: newThreadId, transcript, sessionId: session.id});
 
-      // Write session state directly — no frontend events during bulk import.
-      // Using persistClaudeState + ensureSessionMarker would emit THREAD_UPDATED
-      // + ARTIFACT_ADDED per thread, causing an event storm that crashes the frontend.
+      // The session state with an import's defaults, written in one update
       const thread = services.repository.threadQueries.byId(newThreadId) as any;
       const ccState = {
         sessionId: session.id, sessionWorktree: false, cwd: (session as any).cwd || undefined,
@@ -309,15 +303,6 @@ async function handleImport(
   const summary = parts.join(' ');
 
   services.chat.updateMessageState(progressMsgId as any, { text: summary });
-
-  // Full refresh: update the entire thread list, tags, and chat states.
-  // sendRecentThreadsRefresh() only updates the sidebar (recent 7 threads).
-  const connectedData = services.repository.threadQueries.connectedData();
-  const threadsSettings = services.settings.get<ThreadsSettings>({ kind: 'feature', featureRef: 'default-setup/threads' });
-  services.emitter.broadcastToSurface('default-setup/threads', {
-    type: 'THREAD_CONNECTED',
-    data: { ...connectedData, settings: threadsSettings || null },
-  });
 
   return { text: summary, skipMessage: true };
 }

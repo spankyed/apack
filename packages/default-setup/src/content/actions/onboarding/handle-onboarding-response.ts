@@ -31,7 +31,7 @@ export async function action(
 
   if (state.step === 'complete') {
     if (response && typeof response === 'string') {
-      services.chat.openThreadChatAndRefreshRecent(response as EntityId);
+      services.chat.showThread(response as EntityId);
     }
     return { success: true, step: 'complete', threadId, response };
   }

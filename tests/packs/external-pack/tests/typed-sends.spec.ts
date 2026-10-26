@@ -10,12 +10,13 @@ describe('typed sends to systems', () => {
   it("reaches default-setup's library system", async () => {
     const app = await startApp({ systems: ['default-setup/library'] });
     await app.connect();
-    await app.nextEmit('default-setup/library', 'LIBRARY_CONNECTED');
+    const root = app.watchView<{ onDisk: false; contents: { items: Array<{ name: string }> } }>('default-setup/library', 'folder', { folderId: null });
+    await root.next();
 
-    sendToSystem('default-setup/library', { type: 'GET_LIBRARY_INDEX' });
+    sendToSystem('default-setup/library', { type: 'CREATE_COLLECTION', name: 'Typed' });
 
-    expect(await app.nextEmit('default-setup/library', 'LIBRARY_INDEX_LOADED'))
-      .toMatchObject({ type: 'LIBRARY_INDEX_LOADED' });
+    const update = await root.next();
+    expect(update.ok && update.value.contents.items.map((item) => item.name)).toContain('Typed');
   });
 
   // A dependency's *internal* events are not ours to send: they are what that system's own children send it
@@ -73,7 +74,7 @@ describe('typed sends to systems', () => {
       // @ts-expect-error the library system doesn't receive memo events
       sendToSystem('default-setup/library', { type: 'ADD_MEMO', text: 'x' });
       // @ts-expect-error a dependency's system is named <dependency>/<feature>
-      sendToSystem('library', { type: 'GET_LIBRARY_INDEX' });
+      sendToSystem('library', { type: 'CREATE_COLLECTION', name: 'x' });
       // @ts-expect-error ADD_MEMO needs its text
       sendToSystem('memos', { type: 'ADD_MEMO' });
       // @ts-expect-error pack code names its own features by feature id; `<pack>/<feature>` is for another pack

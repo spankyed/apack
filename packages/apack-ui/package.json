@@ -17,7 +17,7 @@
     "exports:update": "tsx scripts/exports.ts",
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit",
-    "api:build": "node -e \"require('fs').rmSync('.temp', { recursive: true, force: true })\" && vue-tsc -p tsconfig.package.json --outDir .temp/api-types",
+    "api:build": "node -e \"require('fs').rmSync('.temp/api-types', { recursive: true, force: true })\" && vue-tsc -p tsconfig.package.json --outDir .temp/api-types",
     "api:check": "npm run api:build && tsx ../../scripts/api-reports.ts .",
     "api:update": "npm run api:build && tsx ../../scripts/api-reports.ts . --local",
     "exports:check": "tsx scripts/exports.ts --check"

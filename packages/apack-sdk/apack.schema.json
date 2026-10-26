@@ -111,10 +111,18 @@
                 "type": "string",
                 "pattern": "^[A-Z]{3}$",
                 "description": "The prefix create numbers each row's short code with, <prefix>-<n>: three uppercase letters, unique across every pack. The shape declares no shortCode: #generated/ears types the field from this prefix (ShortCodeOf<E>). Leave it out for an entity that isn't numbered."
+              },
+              "indexes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
               }
             },
             "additionalProperties": false,
-            "description": "One entity type: its shape and its short code prefix, each optional ({} for an untyped, unnumbered entity)."
+            "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
           },
           "propertyNames": {
             "minLength": 1,
@@ -191,10 +199,18 @@
                   "type": "string",
                   "pattern": "^[A-Z]{3}$",
                   "description": "The prefix create numbers each row's short code with, <prefix>-<n>: three uppercase letters, unique across every pack. The shape declares no shortCode: #generated/ears types the field from this prefix (ShortCodeOf<E>). Leave it out for an entity that isn't numbered."
+                },
+                "indexes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "The fields a where(field, value) on this entity reads an index for: strings up to 256 characters, finite numbers and booleans, and each element of a list. A where on any other field filters the type's rows. A shaped entity's indexes must be fields its shape declares; role, shortCode and contentKey are always indexed."
                 }
               },
               "additionalProperties": false,
-              "description": "One entity type: its shape and its short code prefix, each optional ({} for an untyped, unnumbered entity)."
+              "description": "One entity type: its shape, its short code prefix and its indexes, each optional ({} for an untyped, unnumbered entity)."
             },
             "propertyNames": {
               "minLength": 1,
@@ -584,6 +600,11 @@
               "pattern": "^[A-Za-z_$][\\w$]*$"
             },
             "description": "Repository objects. Keys are repository names on `repository` (from #generated/repository), values are \"path#exportName\" of the object in a source file."
+          },
+          "views": {
+            "type": "string",
+            "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$",
+            "description": "The feature's views: \"path#exportName\" of the object `defineViews` returns, from @apackdev/sdk/framework. A window subscribes to one with `useView` from #generated/fe; each is a pure read of the engine, run again after every commit that could change its result."
           },
           "references": {
             "type": "object",

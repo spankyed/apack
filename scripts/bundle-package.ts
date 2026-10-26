@@ -44,8 +44,8 @@ const CONFIGS: Record<string, BundleConfig> = {
     manifest: { bin: { apack: 'bin/apack.mjs' } },
   },
   '@apackdev/testing': {
-    // vitest-worker and vitest-teardown are loaded by path from dist/vitest.js's isolatedDataDir()
-    entries: { index: 'src/index.ts', playwright: 'src/playwright.ts', vitest: 'src/vitest.ts', 'vitest-worker': 'src/vitest-worker.ts', 'vitest-teardown': 'src/vitest-teardown.ts' },
+    // vitest-exit-with-parent, vitest-worker and vitest-teardown are loaded by path from dist/vitest.js's isolatedDataDir()
+    entries: { index: 'src/index.ts', playwright: 'src/playwright.ts', vitest: 'src/vitest.ts', 'vitest-worker': 'src/vitest-worker.ts', 'vitest-exit-with-parent': 'src/vitest-exit-with-parent.ts', 'vitest-teardown': 'src/vitest-teardown.ts' },
     sharedExternalEntries: { harness: 'src/harness.ts' },
     declarations: true,
     manifest: { exports: {

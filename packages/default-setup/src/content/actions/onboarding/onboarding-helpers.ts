@@ -1,5 +1,4 @@
 import type { EntityId, Services } from '#generated/services.ts';
-import type { ThreadsSettings } from '#generated/types.ts';
 
 export interface OnboardingState {
   step: 'welcome' | 'projects' | 'import-threads' | 'pick-thread' | 'choose-mode' | 'complete';
@@ -10,7 +9,9 @@ export interface OnboardingState {
 
 export function getOnboardingState(services: Services, threadId: EntityId): OnboardingState | null {
   const thread = services.repository.threadQueries.byId(threadId) as any;
-  return thread?.context?.onboarding ?? null;
+  const state = thread?.context?.onboarding;
+  // Steps edit a working copy; persistOnboardingState owns the database write.
+  return state ? { ...state, data: { ...state.data } } : null;
 }
 
 export function persistOnboardingState(services: Services, threadId: EntityId, state: OnboardingState) {
@@ -115,25 +116,16 @@ export function finishOnboarding(
   }
 
   if (!options?.skipCompletionMessage) {
-    services.chat.openThreadChatAndRefreshRecent(threadId);
+    services.chat.showThread(threadId);
   }
 
   flashState(services, threadId, 'success', 'idle');
 
-  services.emitter.sendToSystem('default-setup/threads', { type: 'REFRESH_THREADS' });
-
   // Use the mode the user chose, or auto-detect from available CLIs
   const defaultMode = state.data.chosenMode
     || ((!state.data.cliFound && state.data.codexFound) ? 'Codex' : 'Claude Code');
+  // The chat's settings reach every window with the change; the mode is what the chat's input offers now
   services.settings.set({ kind: 'feature', featureRef: 'default-setup/threads' }, ['chat', 'defaultMode'], defaultMode);
-  // Push the updated chat settings to the frontend so resolveDefaultModePhase picks up the new default
-  const chatSettings = services.settings.get<ThreadsSettings>({ kind: 'feature', featureRef: 'default-setup/threads' })?.chat;
-  if (chatSettings) {
-    services.emitter.broadcastToSurface('default-setup/threads', {
-      type: 'AGENT_SETTINGS_UPDATED',
-      settings: chatSettings,
-    });
-  }
   services.emitter.broadcastToSurface('default-setup/threads', {
     type: 'SET_MODE',
     mode: defaultMode,

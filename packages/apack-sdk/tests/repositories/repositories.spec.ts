@@ -3,7 +3,7 @@ import { nativePackDeclarationFixture } from '../../src/testing/index.ts';
 // nodes and edges, step results on RunNodes, and actions and prompts
 import * as os from 'node:os';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createEarsEngine, type PersistenceSink } from '@apackdev/ears';
+import { createEarsEngine } from '@apackdev/ears';
 import { findRelations, _bindEars, boundEars, untypedCreate, untypedQuery } from '@apackdev/sdk/ears';
 import { actionRepository, flowRepository, promptRepository } from '../../src/repositories/index.ts';
 import { compile as compileFlowDSL } from '../../src/build/compilers/flow-compiler.ts';
@@ -135,17 +135,10 @@ describe('flowRepository', () => {
     expect(edges()).toEqual(before);
   });
 
-  // Two edges between the same pair of nodes, one per handle, are two edges: listed apart and removed together.
-  // Removed as links, not left to the node's destroy: a partition keeping history keeps what a destroy took
+  // Two edges between the same pair of nodes, one per handle, are two edges: listed apart and removed together
   it('lists two edges between the same two nodes on different handles, and deletes both with the node', () => {
-    const removed: string[] = [];
-    const sink: PersistenceSink = {
-      onCreateEntity() {}, onDestroyEntity() {}, onDropAttr() {}, onPutAttr() {}, onAddRelation() {},
-      onUpdateRelation() {}, onUnitStart() {}, onUnitEnd() {},
-      onRemoveRelation(relId) { removed.push(relId); },
-    };
     const sdkTypes = new Set<string>(Object.values(EARS.Entity));
-    _bindEars(createEarsEngine({ isRelationKind: () => true, isRole: () => true, persistence: sink, isEntityType: (name) => sdkTypes.has(name) }));
+    _bindEars(createEarsEngine({ isRelationKind: () => true, isRole: () => true, isEntityType: (name) => sdkTypes.has(name) }));
     const flow = flowRepository.createFlow();
     const a = flowRepository.createNode(flow.id, { nodeType: 'action' });
     const b = flowRepository.createNode(flow.id, { nodeType: 'action' });
@@ -159,10 +152,9 @@ describe('flowRepository', () => {
       ]);
 
     const handleEdges = findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO }).map((rel) => rel.id);
+    expect(handleEdges).toHaveLength(2);
     flowRepository.deleteNode(b.id);
     expect(findRelations({ source: a.id, kind: EARS.RelKind.TRANSITIONS_TO })).toEqual([]);
-    // Both reach persistence: an edge is stored in its nodes' partition, which a node's deletion empties of its links
-    expect(removed).toEqual(expect.arrayContaining(handleEdges));
     expect(flowRepository.flowEdges(flow.id)).toEqual([]);
   });
 

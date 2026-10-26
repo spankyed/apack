@@ -1,11 +1,10 @@
 /**
  * Artifact Service
  *
- * Provides primitives for creating and managing artifacts across the application.
- * Follows a pure vs side-effect pattern similar to chat service.
+ * Creates and updates the artifacts a thread holds. A window sees them through the thread's `tab` view, which runs
+ * again after each of these writes, so nothing here tells a window anything.
  */
 
-import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 
 import { repository } from '#generated/repository.ts';
@@ -22,85 +21,23 @@ export interface CreateArtifactOptions {
 export interface UpdateArtifactOptions {
   title?: string;
   content?: unknown;
-  /** Thread to emit the ARTIFACT_UPDATED event for. If omitted, no event is sent. */
-  threadId?: EARS.EntityId;
 }
 
 /**
- * Create a new artifact and notify the frontend (with side effects)
- *
- * This function creates an artifact and automatically sends ARTIFACT_ADDED event
- * to the frontend when a threadId is provided. Use this in flow actions where
- * you want immediate UI updates.
- *
- * @param options - Options for creating the artifact
- * @returns Object containing the created artifact ID
- *
+ * Create an artifact, linked to `threadId` when it names one
  * @example
- * // Create artifact with automatic FE notification
- * const { artifactId } = createAndNotify({
- *   artifactType: 'todo',
- *   title: 'Tasks',
- *   content: { tasks: [...] },
- *   threadId: 'thread-123'
- * });
- * // Frontend automatically receives ARTIFACT_ADDED event
+ * const { artifactId } = create({ artifactType: 'todo', title: 'Tasks', content: { tasks: [...] }, threadId });
  */
-export function createAndNotify(options: CreateArtifactOptions): { artifactId: EARS.EntityId } {
-  const result = repository.chatCommands.createArtifact(options);
-
-  // Send FE notification if linked to thread
-  if (options.threadId) {
-    broadcastToSurface('threads', {
-      type: 'ARTIFACT_ADDED',
-      tabId: options.threadId,
-      artifact: {
-        id: result.artifactId,
-        type: options.artifactType,
-        title: options.title,
-        content: options.content,
-        ...(options.color ? { color: options.color } : {}),
-        metadata: {
-          createdAt: Date.now()
-        }
-      }
-    });
-  }
-
-  return result;
+export function create(options: CreateArtifactOptions): { artifactId: EARS.EntityId } {
+  return repository.chatCommands.createArtifact(options);
 }
 
 /**
- * Patch an existing artifact's title and/or content in place, and notify
- * the frontend so the panel re-renders with the new data.
- *
- * Used for artifacts that mutate across turns (e.g. the Claude Code session
- * card, which tracks live status/cost/turn count). The `ARTIFACT_UPDATED`
- * event mirrors `ARTIFACT_ADDED` but carries only the fields that changed.
+ * Patch an artifact's title and/or content in place: for artifacts that change across turns (the Claude Code session
+ * card, which tracks live status, cost and turn count)
  */
-export function updateAndNotify(
-  artifactId: EARS.EntityId,
-  options: UpdateArtifactOptions,
-): void {
-  repository.chatCommands.updateArtifact(artifactId, {
-    title: options.title,
-    content: options.content,
-  });
-
-  if (options.threadId) {
-    broadcastToSurface('threads', {
-      type: 'ARTIFACT_UPDATED',
-      tabId: options.threadId,
-      artifact: {
-        id: artifactId,
-        title: options.title,
-        content: options.content,
-        metadata: {
-          updatedAt: Date.now()
-        }
-      }
-    });
-  }
+export function update(artifactId: EARS.EntityId, options: UpdateArtifactOptions): void {
+  repository.chatCommands.updateArtifact(artifactId, { title: options.title, content: options.content });
 }
 
 /**
@@ -117,7 +54,7 @@ export function findOrCreateByType(
   if (existing?.id) {
     return { artifactId: existing.id, created: false };
   }
-  const { artifactId } = createAndNotify({
+  const { artifactId } = create({
     artifactType,
     title: initial.title,
     content: initial.content,
@@ -127,9 +64,9 @@ export function findOrCreateByType(
   return { artifactId, created: true };
 }
 
-/** `services.artifact`: artifact writes with frontend notification */
+/** `services.artifact`: a thread's artifact writes */
 export const artifactService = {
-  createAndNotify,
-  updateAndNotify,
+  create,
+  update,
   findOrCreateByType,
 };

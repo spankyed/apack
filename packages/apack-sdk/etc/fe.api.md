@@ -6,8 +6,10 @@
 
 import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
+import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
+import { CallbackActorLogic } from 'xstate';
 import type { Component } from 'vue';
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
@@ -17,11 +19,12 @@ import { EARS as EARS_2 } from '@apackdev/ears';
 import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
 import { entityTypeOf } from '@apackdev/ears';
-import type { EventObject } from 'xstate';
+import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
+import { MaybeRefOrGetter } from 'vue';
 import type { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
@@ -881,6 +884,15 @@ export interface SurfaceInboxAudiences {
 export function surfaceIsRunning(ref: string): boolean;
 
 // @public
+export type SurfaceLifecycleEvent = {
+    type: 'SURFACE_STARTED';
+} | {
+    type: 'SURFACE_ACTIVATED';
+} | {
+    type: 'SURFACE_DEACTIVATED';
+};
+
+// @public
 export const SurfaceScope: DefineComponent<ExtractPropTypes<    {
 surface: {
 type: StringConstructor;
@@ -992,7 +1004,13 @@ export type TrailClickEvent<TInfo = unknown> = {
 };
 
 // @public
+export function untypedFromView<Result, Args, TEvent extends EventObject>(ref: string, view: string, read: (update: ViewUpdate<Result>, args: Args) => TEvent): CallbackActorLogic<AnyEventObject, Args>;
+
+// @public
 export function untypedOpenSurface(ref: string, event?: SurfaceEvent | SurfaceEvent[]): void;
+
+// @public
+export function untypedUseView<Result = unknown>(ref: string, view: string, ...args: [] | [args: MaybeRefOrGetter<unknown>, options?: UseViewOptions]): ViewState<Result>;
 
 // @public
 export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
@@ -1035,6 +1053,9 @@ export function useStepDeclarations(): ComputedRef<readonly StepCatalogEntry[]>;
 export function useSurface<T>(): T;
 
 // @public
+export function useSurfaceDraft<T>(name: string, initial: T): Ref<T>;
+
+// @public
 export function useSurfaceStorage(): SurfaceStorage;
 
 // @public (undocumented)
@@ -1042,6 +1063,65 @@ export function useTrackedMenuOpen(menuOpen: Ref<boolean>): void;
 
 // @public
 export function useUntypedSurfaceState<TSnapshot, TSelected>(ref: string, selector: (snapshot: TSnapshot) => TSelected): Readonly<Ref<TSelected | undefined>>;
+
+// @public
+export interface UseViewOptions {
+    keepPrevious?: boolean;
+}
+
+// @public
+export function viewRead(writes: ViewWrites): {
+    writes: ViewWrites;
+    apply: boolean;
+};
+
+// @public
+export interface ViewRequest {
+    args?: unknown;
+    ref: string;
+    view: string;
+}
+
+// @public
+export interface ViewState<Result> {
+    readonly commit: number;
+    readonly data: Result | undefined;
+    readonly error: string | undefined;
+    refresh(): void;
+    readonly status: 'idle' | 'loading' | 'ready' | 'error';
+}
+
+// @public
+export type ViewUpdate<Result = unknown> = {
+    ok: true;
+    value: Result;
+    commit: number;
+} | {
+    ok: false;
+    error: string;
+    commit: number;
+};
+
+// @public
+export interface ViewWrites {
+    readonly pending: Readonly<Record<string, true>>;
+    readonly refreshes: number;
+    readonly stale: boolean;
+}
+
+// @public
+export const viewWrites: () => ViewWrites;
+
+// @public
+export function writeAnswered(writes: ViewWrites, answer: {
+    [key: string]: unknown;
+}, refused?: boolean): ViewWrites;
+
+// @public
+export const writeSent: (writes: ViewWrites, call: string) => ViewWrites;
+
+// @public
+export const writing: (writes: ViewWrites) => boolean;
 
 // (No @packageDocumentation comment for this package)
 

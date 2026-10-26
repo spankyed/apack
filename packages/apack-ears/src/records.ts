@@ -47,8 +47,10 @@ export interface RecordStore<R extends { id: string } = StoredRecord> {
   reopen(): void;
   /** Removes every record */
   reset(): Promise<void>;
-  /** A consistent copy of the store into `targetDir`, which a store on disk opens again */
+  /** A consistent copy of the store into `targetDir`, which a store on disk opens again; on disk, a compacted one */
   copyTo(targetDir: string): Promise<void>;
+  /** Replaces every record with those of the store at `dir`, in one unit, filing them in this store's indexes */
+  replaceWith(dir: string): void;
 }
 
 const isIndexValue = (value: unknown): value is IndexValue =>
@@ -108,5 +110,6 @@ export function createMemoryRecordStore<R extends { id: string } = StoredRecord>
     reopen() {},
     async reset() { records.clear(); },
     async copyTo() { throw new Error('A record store in memory has no files to copy'); },
+    replaceWith() { throw new Error('A record store in memory has no files to replace its records with'); },
   };
 }

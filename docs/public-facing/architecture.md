@@ -75,7 +75,7 @@ The source directory must be built first: installing a directory with neither a 
 4. Installs the packs the app ships into `packs/<id>`, each being a directory under `SHIPPED_PACKS_DIR` that holds an `apack.json`. Missing defaults are installed unless deliberately suppressed. Existing user-managed replacements are preserved; explicitly app-managed copies refresh when the shipped source revision changes. This is before loading, not beside it: a pack is loaded from `packs/`, so it has to be there to be found.
 5. Loads packs — one path for all of them, the ones the app ships included. Discovered in `packs/` and reconciled with `installed-packs.json` (new packs added enabled, missing ones removed), the shipped ones ordered first so a pack depending on one finds it registered. For each enabled pack: `hostVersion` check, pack layout format check, a warning on an SDK major version mismatch, and `runtime/index.cjs` loaded from its own installed directory through the module bridge. A pack with no built runtime, or one whose load throws, has a load problem recorded and the rest load. Each pack's systems register as `<packId>/<featureId>`, and the registry's `registerPack()` stores each registration (see [Collision detection](#collision-detection)). A pack contributes only through its registration: nothing registers when its modules are imported.
 7. Wires each pack's `onShutdown` hook, keyed by pack id.
-8. Hydrates the app's engine from LMDB. Every pack's entity types are registered by now, so the engine knows them all.
+8. Logs the database's size on disk and the heap. There is no load step: the engine has read the database from the moment it opened, and an entity type is checked when a write or query names it, after every pack has registered.
 9. Runs every pack's `onInit`.
 10. Runs app migrations (`runAppMigrations`: the host's own, then the built-in packs', against the app version), then external pack migrations (`runPackMigrations`, each against its own pack version).
 11. Content: each built-in pack's declarative `content.sources`, then external packs' compiled content, skipped when a pack's content revision hasn't changed.
@@ -94,6 +94,12 @@ Every pack's frontend is loaded at runtime, the ones the app ships included. A d
 4. `packClientReady` sends the pack's systems `CLIENT_CONNECTED` and asks them to publish, so they send their startup data once the surface actors exist.
 
 A connection's own `CLIENT_CONNECTED` skips the systems of external packs with frontend code (the bus asks `getPacksWithClientLoadedFrontends()`). When the renderer's bus subscription (re)connects, `BUS_SUBSCRIBED` calls `packClientReady` again for every pack whose frontend it loaded. Systems of packs without frontend code are told and asked directly.
+
+A reconnect re-accepts every pack frontend and replaces each surface's actor, so the surface remounts: what the old
+connection left unanswered goes with the old actor, and the surface asks again on its new one's `SURFACE_STARTED`.
+State a component holds in a `ref` goes too. Hold what the user has typed and not saved in `useSurfaceDraft(name,
+initial)` (`@apackdev/sdk/fe`) instead: it is kept by the surface's ref, so the remounted component is handed the same
+value. It lasts as long as the window; what must outlive an app restart is saved.
 
 ### Activation, teardown and reload
 
@@ -314,7 +320,7 @@ The app keeps two LMDB stores, both opened from `@apackdev/ears/lmdb`; `lmdb` is
 
 | Store | Directory | Holds | In memory |
 |---|---|---|---|
-| The database (`openLmdbStore({ path, engine })`) | `ears-db/` | Every entity and relation | Yes: hydrated into the engine at boot, and the store's sink is the engine's persistence |
+| The database (`openLmdbStore({ path })`) | `ears-db/` | Every entity and relation | Yes: the engine reads and writes it directly (`kv: store.kv`), keeping no copy in memory |
 | The run history (`openRecordStore`) | `run-history/` | Every flow run's record: each node a run made, with what it was given and returned | No: `services.runHistory` reads and writes it directly |
 
 A flow run is not an entity: the engine never holds one, so a run's record is never undone by a unit (`transact`) that throws and never waits on one. As the run history opens it marks what the last session left running as `stopped`, and removes every session that ended more than 30 days ago, with everything it ran.

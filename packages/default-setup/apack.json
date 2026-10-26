@@ -35,7 +35,7 @@
     "threads": {
       "description": "Converse with assistants and manage threads, messages and artifacts.",
       "entities": {
-        "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR" },
+        "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR", "indexes": ["pinned"] },
         "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity" },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
@@ -526,6 +526,7 @@
         "chatQueries": "src/features/threads/be/repository/index.ts#chatQueries",
         "chatCommands": "src/features/threads/be/repository/index.ts#chatCommands"
       },
+      "views": "src/features/threads/be/views.ts#threadViews",
       "references": {
         "types": {
           "thread": {
@@ -851,7 +852,7 @@
     "notes": {
       "description": "Write, organize and export notes.",
       "entities": {
-        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity" }
+        "Note": { "shape": "src/features/notes/be/types.ts#NoteEntity", "indexes": ["title", "linkTargets"] }
       },
       "settings": {
         "schema": {
@@ -901,6 +902,7 @@
         "noteQueries": "src/features/notes/be/repository/index.ts#noteQueries",
         "noteCommands": "src/features/notes/be/repository/index.ts#noteCommands"
       },
+      "views": "src/features/notes/be/views.ts#noteViews",
       "references": {
         "types": {
           "note": {
@@ -1081,8 +1083,8 @@
     "library": {
       "description": "Organize documents, collections and indexed content.",
       "entities": {
-        "SearchIndex": {},
-        "IndexedDoc": {}
+        "SearchIndex": { "indexes": ["folderId"] },
+        "IndexedDoc": { "indexes": ["indexId", "chunkKey"] }
       },
       "settings": {
         "schema": {
@@ -1166,6 +1168,7 @@
         "libraryQueries": "src/features/library/be/repository/index.ts#libraryQueries",
         "libraryCommands": "src/features/library/be/repository/index.ts#libraryCommands"
       },
+      "views": "src/features/library/be/views.ts#libraryViews",
       "references": {
         "types": {
           "document": {
@@ -1264,7 +1267,8 @@
       "repositories": {
         "flowsQueries": "src/features/flows/be/repository/index.ts#flowsQueries",
         "flowsCommands": "src/features/flows/be/repository/index.ts#flowsCommands"
-      }
+      },
+      "views": "src/features/flows/be/views.ts#flowViews"
     },
     "actions": {
       "description": "Manage reusable executable actions.",
@@ -1346,7 +1350,8 @@
       "repositories": {
         "actionQueries": "src/features/actions/be/repository/index.ts#actionQueries",
         "actionCommands": "src/features/actions/be/repository/index.ts#actionCommands"
-      }
+      },
+      "views": "src/features/actions/be/views.ts#actionViews"
     },
     "prompts": {
       "description": "Manage reusable prompt templates.",
@@ -1428,7 +1433,8 @@
       "repositories": {
         "promptQueries": "src/features/prompts/be/repository/index.ts#promptQueries",
         "promptCommands": "src/features/prompts/be/repository/index.ts#promptCommands"
-      }
+      },
+      "views": "src/features/prompts/be/views.ts#promptViews"
     },
     "brain": {
       "description": "Execute flows and coordinate their running steps.",

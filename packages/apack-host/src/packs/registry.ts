@@ -213,6 +213,11 @@ export interface PackRegistry extends PackRegistryView {
   registerContentRuntime(runtime: ContentRuntime, origin: PackOrigin, appliers?: ContentApplier[]): void;
   unregisterPack(packId: string): void;
   /**
+   * Hears a pack registering, being replaced or unregistering, once the change has committed: what its code is now
+   * is what `getPackRegistration` answers by then. Returns the unsubscribe.
+   */
+  onRegistrationChanged(listener: (packId: string) => void): () => void;
+  /**
    * Notes why an installed pack isn't running: the loader skipped it, or its registration was refused. The Packs
    * view shows it in place of the pack's enabled state. Cleared when the pack registers or is torn down.
    */
@@ -398,6 +403,19 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     try { return operation(); }
     finally { changing = false; }
   }
+  const registrationListeners = new Set<(packId: string) => void>();
+  /**
+   * `operation`, then every listener told `packId` once the registry takes changes again — when it committed, which
+   * `changed()` marks, so a refused registration tells nobody and an unregistration whose cleanup then failed does
+   */
+  function mutateAndTell<T>(packId: string, operation: () => T): T {
+    const before = revision;
+    try {
+      return mutate(operation);
+    } finally {
+      if (revision !== before) for (const listener of registrationListeners) listener(packId);
+    }
+  }
   const shutdownHooks = createShutdownHooks();
 
   let catalogDir: string | undefined;
@@ -422,7 +440,8 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
         if (previous) sources.push({ snapshot: previous.snapshot, integrity: previous.integrity, dir, enabled: !disabled.has(id) });
       }
     }
-    catalog.replace(sources, problems, { reportConflicts: true });
+    // The first discovery is boot's, which takes what is installed (`admitSettings`)
+    catalog.replace(sources, problems, { reportConflicts: true, admitSettings: catalogDir !== undefined });
     catalogDir = packsDir;
   }
 
@@ -507,7 +526,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   }
 
   function registerPack(registration: PackRegistration, origin?: PackOrigin): void {
-    mutate(() => registerContributions(registration, origin, backendBindingProblem));
+    mutateAndTell(registration.id, () => registerContributions(registration, origin, backendBindingProblem));
   }
 
   /** Register the content facet without claiming backend actors, roles or services. */
@@ -516,7 +535,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     if (!manifest) throw new Error(`Pack "${origin.id}" content runtime needs accepted manifest declarations`);
     const problem = _packDeclarationProblem(origin, runtime);
     if (problem) throw new Error(problem);
-    mutate(() => registerContributions({
+    mutateAndTell(runtime.id, () => registerContributions({
       id: runtime.id, declarationRevision: runtime.declarationRevision,
       settings: manifest.extensions?.settings,
       features: Object.fromEntries(Object.entries(manifest.features ?? {})
@@ -699,7 +718,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
   }
 
   function unregisterPack(packId: string): void {
-    mutate(() => {
+    mutateAndTell(packId, () => {
       if (!registrations.has(packId)) throw new Error(`Pack "${packId}" is not registered`);
       const candidate = new Map(admitted);
       candidate.delete(packId);
@@ -780,12 +799,16 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     catalog,
     refreshCatalog,
     registerPack,
-    replacePack: (registration, origin, options) => mutate(() => {
+    replacePack: (registration, origin, options) => mutateAndTell(registration.id, () => {
       if (!registrations.has(registration.id)) throw new Error(`Pack "${registration.id}" is not registered`);
       return registerContributions(registration, origin, backendBindingProblem, true, options);
     }),
     registerContentRuntime,
     unregisterPack,
+    onRegistrationChanged(listener) {
+      registrationListeners.add(listener);
+      return () => { registrationListeners.delete(listener); };
+    },
 
     recordLoadProblem(packId, problem) {
       loadProblems.set(packId, problem);

@@ -15,6 +15,8 @@ export default defineConfig({
 
   /* Vitest‑specific options -------------------------------------------- */
   test: {
+    // A worker exits when its vitest does, rather than running on orphaned
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts'],
     globals: true,                   // use `describe/it/expect` without imports
     environment: 'node',             // happy in pure Node (no jsdom needed here)
     // Specs live where the source they cover does (`CLAUDE.md`, Tests), so one pattern covers every one of

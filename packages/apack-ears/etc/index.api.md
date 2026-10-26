@@ -24,6 +24,27 @@ export interface BaseEntity {
 }
 
 // @public
+export interface ByteReader {
+    get(key: Uint8Array): Uint8Array | undefined;
+    scan(low: Uint8Array, high: Uint8Array | undefined, reverse: boolean, values: boolean, visit: (key: Uint8Array, value: Uint8Array | undefined) => boolean): void;
+}
+
+// @public
+export interface ByteWriter extends ByteReader {
+    clear(): void;
+    // (undocumented)
+    del(key: Uint8Array): void;
+    // (undocumented)
+    put(key: Uint8Array, value: Uint8Array): void;
+}
+
+// @public
+export interface Commit {
+    readonly keys: ReadonlySet<string> | 'all';
+    readonly number: number;
+}
+
+// @public
 export interface Create {
     // (undocumented)
     <E extends string>(type: TypeName<E>, row?: Record<string, unknown> & RowIdentity): WriteBuilder<E>;
@@ -42,11 +63,20 @@ E
 } : Record<string, unknown>;
 
 // @public
+export function createMemoryKV(options?: OrderedKVOptions): OrderedKV;
+
+// @public
+export function createMemoryKVBackend(): KvBackend;
+
+// @public
 export function createMemoryRecordStore<R extends {
     id: string;
 } = StoredRecord>(input: {
     indexes: RecordIndexes<R>;
 }): RecordStore<R>;
+
+// @public
+export function createOrderedKV(backend: KvBackend, input?: OrderedKVOptions): OrderedKV;
 
 // @public
 export function defineEars<D extends EarsSchema>(engine: () => Ears): TypedEars<D>;
@@ -114,16 +144,18 @@ export interface Ears {
     isEntityType(name: string): boolean;
     isRelationKind(name: string): boolean;
     isRole(name: string): boolean;
+    lastCommit(): number;
     nextLabel(type: EARS.Entity, base: string): string;
     query: Query;
     removeRelation(relId: EARS.RelationId): void;
-    transact<T>(fn: () => T): T;
+    transact<T>(fn: () => T, options?: UnitOptions): T;
     updateRelation(relId: EARS.RelationId, patch: {
         source?: EARS.EntityId;
         target?: EARS.EntityId;
         info?: unknown;
     }): void;
     upsert: Upsert;
+    watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void)): Watching;
     wouldCreateCycle(source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]): boolean;
     write: Write;
 }
@@ -131,9 +163,11 @@ export interface Ears {
 // @public
 export interface EarsAdmin {
     addRelation(source: EARS.EntityId, kind: string, target: EARS.EntityId, info?: unknown): EARS.RelationId;
+    bulkLoad<T>(fn: () => T): T;
     bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
     bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown): void;
     clear(): void;
+    countEntities(): Record<string, number>;
     deleteAttr(id: EARS.EntityId, kind: EARS.AttrKind): void;
     getAllEntities(): EARS.EntityId[];
     getEntitiesOfType(type: EARS.Entity): EARS.EntityId[];
@@ -143,6 +177,12 @@ export interface EarsAdmin {
         target?: EARS.EntityId;
         info?: unknown;
     }): void;
+    watchesSettled(): Promise<void>;
+    watchStats(): {
+        watches: number;
+        keys: number;
+        ranges: number;
+    };
 }
 
 // @public
@@ -197,8 +237,9 @@ export interface EARSRuntimeDeps {
     isEntityType: (v: string) => boolean;
     isRelationKind: (v: string) => boolean;
     isRole: (v: string) => boolean;
-    persistence?: PersistenceSink;
+    kv?: OrderedKV;
     rowRules?: (type: string) => RowRules | undefined;
+    warn?: (message: string) => void;
 }
 
 // @public
@@ -261,6 +302,35 @@ export function _indexEntries<R extends {
 export type IndexValue = string | number | boolean;
 
 // @public
+export type Key = readonly KeyPart[];
+
+// @public
+export type KeyPart = string | number | boolean | null;
+
+// @public
+export interface KvBackend {
+    durable(): Promise<void>;
+    // (undocumented)
+    read<T>(fn: (reader: ByteReader) => T): T;
+    // (undocumented)
+    write<T>(fn: (writer: ByteWriter) => T, options?: UnitOptions): T;
+}
+
+// @public
+export interface KvReader {
+    get(key: Key): unknown;
+    range(options: RangeOptions, visit: Visit): void;
+}
+
+// @public
+export interface KvWriter extends KvReader {
+    clear(): void;
+    del(key: Key): void;
+    // (undocumented)
+    put(key: Key, value: unknown): void;
+}
+
+// @public
 export interface LinkOptions<R extends string = string> {
     acyclicIn?: readonly R[];
     info?: unknown;
@@ -271,9 +341,6 @@ export interface LinkOptions<R extends string = string> {
 export type ListElement<T> = [T] extends [readonly (infer U)[]] ? U : unknown;
 
 // @public
-export const noopSink: PersistenceSink;
-
-// @public
 export type OptionalField<S extends EntityShapes, E extends string> = [
 E
 ] extends [keyof S] ? Extract<{
@@ -281,36 +348,23 @@ E
 }[keyof ShapeOf<S, E>], WritableField<S, E>> : string;
 
 // @public
-export interface PersistenceErrorStats {
-    // (undocumented)
-    errorCount: number;
-    // (undocumented)
-    lastError: unknown;
+export interface OrderedKV {
+    durable(): Promise<void>;
+    readonly lastCommit: number;
+    onCommit(listener: (commit: Commit) => void): () => void;
+    read<T>(fn: (reader: KvReader) => T): T;
+    replaceAll(entries: Iterable<{
+        key: Uint8Array;
+        value: Uint8Array;
+    }, unknown, undefined>, options?: UnitOptions): void;
+    track<T>(fn: () => T): Tracked<T>;
+    write<T>(fn: (writer: KvWriter) => T, options?: UnitOptions): T;
+    readonly writing: boolean;
 }
 
-// @public (undocumented)
-export interface PersistenceSink {
-    // (undocumented)
-    close?(): void;
-    // (undocumented)
-    getErrorStats?(): PersistenceErrorStats;
-    // (undocumented)
-    onAddRelation(relId: string, kind: string, source: string, target: string, info: unknown): void;
-    onCreateEntity(entityId: string, entityType: string): void;
-    // (undocumented)
-    onDestroyEntity(entityId: string): void;
-    onDropAttr(kind: string, entityId: string): void;
-    onPutAttr(kind: string, entityId: string, value: unknown): void;
-    onRemoveRelation(relId: string): void;
-    // (undocumented)
-    onUnitEnd(): void;
-    onUnitStart(): void;
-    // (undocumented)
-    onUpdateRelation(relId: string, patch: {
-        source?: string;
-        target?: string;
-        info?: unknown;
-    }): void;
+// @public
+export interface OrderedKVOptions {
+    freeze?: boolean;
 }
 
 // @public
@@ -386,6 +440,22 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 }
 
 // @public
+export interface RangeOptions {
+    end?: Key;
+    limit?: number;
+    prefix?: Key;
+    reverse?: boolean;
+    start?: Key;
+    values?: boolean;
+}
+
+// @public
+export interface ReadSet {
+    readonly keys: ReadonlySet<string>;
+    readonly ranges: ReadonlyArray<readonly [low: string, high: string | undefined]>;
+}
+
+// @public
 export type RecordIndexes<R extends {
     id: string;
 } = StoredRecord> = Readonly<Record<string, (record: R) => unknown>>;
@@ -406,6 +476,7 @@ export interface RecordStore<R extends {
     readonly readOnly: boolean;
     // (undocumented)
     reopen(): void;
+    replaceWith(dir: string): void;
     reset(): Promise<void>;
 }
 
@@ -454,7 +525,6 @@ export const RESERVED_ATTRIBUTES: readonly ["id", "entityType", "shortCode", "cr
 // @public
 export const RESERVED_ENTITY_TYPES: {
     readonly relation: "Relation";
-    readonly sequence: "Sequence";
 };
 
 // @public
@@ -466,6 +536,7 @@ export interface RowIdentity {
 
 // @public
 export interface RowRules {
+    indexes?: readonly string[];
     required: readonly string[];
     shortCode?: string;
 }
@@ -506,6 +577,17 @@ E
 export type StoredRecord = {
     id: string;
 } & Record<string, unknown>;
+
+// @public
+export type Tracked<T> = {
+    reads: ReadSet;
+} & ({
+    ok: true;
+    value: T;
+} | {
+    ok: false;
+    error: unknown;
+});
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {
@@ -568,6 +650,11 @@ export interface TypedWrite<D extends EarsSchema> {
 export type TypeName<T extends string> = T extends `${string}-${string}` ? never : T;
 
 // @public
+export interface UnitOptions {
+    durable?: boolean;
+}
+
+// @public
 export interface UntypedSchema extends EarsSchema {
     // (undocumented)
     names: string;
@@ -585,6 +672,20 @@ export interface Upsert {
     <E extends string>(type: TypeName<E>, row: Record<string, unknown> & RowIdentity & {
         id: EARS.EntityId;
     }): WriteBuilder<E>;
+}
+
+// @public
+export type Visit = (key: Key, value: unknown) => boolean | void;
+
+// @public
+export interface Watching {
+    stop(): void;
+}
+
+// @public
+export interface WatchObserver<T> {
+    error?(error: unknown, commit: number): void;
+    next(value: T, commit: number): void;
 }
 
 // @public

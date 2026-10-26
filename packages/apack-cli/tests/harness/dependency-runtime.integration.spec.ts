@@ -116,8 +116,8 @@ import { startApp } from '@apackdev/testing/harness';
 it("connects to default-setup's notes and the app's settings", async () => {
   const app = await startApp({ systems: ['default-setup/notes', 'host/settings'] });
   await app.connect();
-  const connected = await app.nextEmit('default-setup/notes', 'NOTES_CONNECTED');
-  expect(connected.data).toBeDefined();
+  // A dependency's view, run by the test file's views over its registered runtime
+  expect(await app.watchView('default-setup/notes', 'tree').next()).toMatchObject({ ok: true, value: [] });
   const loaded = await app.nextEmit('host/settings', 'SETTINGS_LOADED');
   expect(loaded.snapshot).toMatchObject({ values: { app: expect.any(Object), features: expect.any(Object) } });
   expect(app.emitted('host/application').map((e) => e.type)).toContain('APPLICATION_HOTKEYS');

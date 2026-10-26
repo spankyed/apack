@@ -63,8 +63,8 @@ const props = defineProps<{
 }>()
 
 // Status comes straight from the artifact content, with no local mirror: approval
-// round-trips through the chat approval block, and the backend pushes the new status
-// with services.artifact.updateAndNotify, which hydrates this prop.
+// round-trips through the chat approval block, the backend writes the new status with
+// services.artifact.update, and the thread's tab view hydrates this prop.
 const status = computed<PlanStatus>(() => props.artifact.content?.status ?? 'draft')
 
 const notes = computed(() => props.artifact.content?.notes ?? '')

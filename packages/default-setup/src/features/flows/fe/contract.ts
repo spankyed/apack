@@ -1,24 +1,15 @@
 // The flows surface's contract: the state it publishes and what other surfaces may send it.
 //
-// A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears`. Its inbox used to
-// be `OutgoingActionEvents` — eleven events from the actions feature's `be/system`, where this surface handles
-// three. Spelling those three out is what lets the contract live in a leaf at all: a leaf may not import another
-// feature. `apack.json` names it at `features[].surface.contract`.
-import type { NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
-import type { ActionEntity, FlowEntity, PromptEntity } from '@apackdev/sdk'
+// A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears`. `apack.json` names
+// it at `features[].surface.contract`.
+import type { NavHistory, SurfaceInbox, ViewWrites } from '@apackdev/sdk/fe'
 import type { ModelCatalogEntry } from '@apackdev/sdk/models'
 import type { EARS } from '#generated/ears.ts'
 import type { EdgeEntity, NodeEntity } from '#generated/types.ts'
 
 export interface FlowsContext {
-  /** A flow the user asked to open; what the user does next (open another, edit a node, leave) cancels it */
-  pendingFlow?: { call: string; flowId: EARS.EntityId; nodeId?: string; recordHistory: boolean };
-  /**
-   * The shown flow asked for again because the backend published (a reconnect, a pack change, data replaced).
-   * Its own slot, so nothing that cancels a user's selection drops it; its answer keeps the node selection, the
-   * editor and any node still being added.
-   */
-  pendingRefresh?: { call: string; flowId: EARS.EntityId };
+  /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
+  pendingFlow?: { flowId: EARS.EntityId; nodeId?: string; recordHistory: boolean };
 
   selectedNodeId?: EARS.EntityId;
   editingNodeId?: EARS.EntityId; // Node currently being edited
@@ -28,23 +19,28 @@ export interface FlowsContext {
     nodeId: string;
     handleId?: string;
   };
+  /**
+   * The open flow as the editor shows it: its graph view's last result, with the user's edits applied at once on top
+   * of it. Positions are the editor's own layout, never stored.
+   */
   graph: {
     nodes: NodeEntity[];
     edges: EdgeEntity[];
-    // Store positions separately from node data
     positions: Record<string, { x: number; y: number }>;
   };
-  flows: FlowEntity[];
-  // Resources available for node configuration
-  prompts: PromptEntity[];
+  /**
+   * The editor's graph writes, and the graph view's results held behind those still unanswered (`ViewWrites`,
+   * `@apackdev/sdk/fe`): a result that may predate a write would undo an edit on screen. The canvas reads the view
+   * again on each of its `refreshes`.
+   */
+  writes: ViewWrites;
+  /** The models a node may name, which the flows system sends when it publishes */
   models: ModelCatalogEntry[];
-  actions: ActionEntity[];
   // Track temporary IDs during async creation
   tempIdMap: Record<string, string>; // tempId -> permanentId
-  /** The root flow the brain runs (the flow with the root role), as the flows system last sent it */
-  rootFlowId?: string;
-  // Settings
-  settings?: any; // FlowsSettings
+  /** The root flow the brain runs and each flow's label, from the list view: what the breadcrumb and history read */
+  rootFlowId?: EARS.EntityId;
+  flowLabels: Record<string, string>;
   // Dialog bridge flags (set by context menu, consumed by watchers in flow-canvas.vue)
   showEditLabelDialog?: boolean;
   showDeleteFlowDialog?: boolean;
@@ -67,11 +63,8 @@ export interface FlowsContext {
   navHistory: NavHistory<string | null>;
 }
 
-/** The actions system keeps the flows editor's action list current, and the brain opens a flow or a node in it */
+/** What the brain asks of the flows editor: to open a flow, or a node in it */
 export type FlowsInboxEvent =
-  | { type: 'ACTION_CREATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_UPDATED'; action: ActionEntity; actionId: EARS.EntityId }
-  | { type: 'ACTION_DELETED'; actionId: EARS.EntityId }
   | { type: 'FLOW.SELECT'; flowId: EARS.EntityId }
   | { type: 'NODE.DOUBLE_CLICK'; nodeId: string }
   | { type: 'NODE.REVEAL'; flowId: EARS.EntityId; nodeId: string }

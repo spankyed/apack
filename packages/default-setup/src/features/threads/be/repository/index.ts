@@ -6,16 +6,15 @@ import { EARS } from '#generated/ears.ts';
 import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
 import { wouldCreateCycle } from '@apackdev/sdk/ears';
 import { createLogger } from '@apackdev/sdk/logger';
-import { b64Encode, b64Decode } from '@apackdev/ears';
 import type {
   ThreadEntity, MessageEntity, ArtifactEntity, BlockConfig, MessageReferences,
   ThreadCreateData,
   ThreadExtendedData,
-  ThreadConnectedData,
-  AgentThreadData, RecentThreadRefreshData, AgentConnectedData, Tab, ArtifactType, ThreadLinkRelation,
+  ThreadExtended,
+  AgentThreadData, ArtifactType, ThreadLinkRelation,
+  ChatPage, ChatStart, ThreadDetailView, ThreadTabView,
 } from '../types.ts';
 import { ThreadRelations } from '../types.ts';
-import type { ThreadTagOption } from '#generated/types.ts';
 import type { ArtifactItem } from '@apackdev/sdk/artifacts';
 
 /**
@@ -89,48 +88,26 @@ export const threadQueries = {
     };
   },
 
-  archivedThreads: (): Partial<ThreadEntity>[] => {
-    return getArchivedThreads();
+  /** The archived threads, in the order the chat's settings sort recent threads */
+  archivedThreads: (sortOrder: RecentThreadsSortOrder): Partial<ThreadEntity>[] => getArchivedThreads(sortOrder),
+
+  /** The threads the list and the board show: every one not archived, newest first, each with its parent's id */
+  listed: (): ThreadExtended[] => {
+    const threads = query(EARS.Entity.Thread).pickAll().filter(t => !t.archived);
+    return threads
+      .map(thread => {
+        // A thread's parent is the one linking to it with 'parent_of'
+        const parentIds = query.ids(thread.id).in(EARS.RelKind.PARENT_OF, EARS.Entity.Thread).ids();
+        return { ...thread, ...(parentIds.length > 0 ? { parentId: parentIds[0] as string } : {}) } as ThreadExtended;
+      })
+      .sort((a, b) => ((b.timestamp as number) || 0) - ((a.timestamp as number) || 0));
   },
 
-  // Get connected data — sends only thread metadata (no messages/linkedThreads).
-  // Messages are fetched on demand via VIEW_THREAD / OPEN_THREAD_CHAT.
-  connectedData: (): ThreadConnectedData => {
-    const threads = query(EARS.Entity.Thread).pickAll().filter(t => !t.archived);
-    const extendedThreads = threads.map(thread => {
-      // Compute parentId by finding threads that link to this one via 'parent_of' (reverse direction)
-      const parentIds = query.ids(thread.id).in(EARS.RelKind.PARENT_OF, EARS.Entity.Thread).ids();
-      return {
-        ...thread,
-        ...(parentIds.length > 0 ? { parentId: parentIds[0] as string } : {}),
-      };
-    });
-
-    // Sort by creation time (newest first)
-    extendedThreads.sort((a, b) => {
-      const aTime = (a.timestamp as number) || 0;
-      const bTime = (b.timestamp as number) || 0;
-      return bTime - aTime;
-    });
-
-    // Get tags from settings
-    const threadsSettings = featureSettings.forFeature('threads').get();
-    const availableTags: ThreadTagOption[] = threadsSettings?.tags || [];
-
-    // Build chat states map from thread entities directly
-    const chatStates: Record<string, string> = {};
-    for (const thread of extendedThreads) {
-      const chatState = thread.chatState;
-      if (typeof chatState === 'string') {
-        chatStates[thread.id as string] = chatState;
-      }
-    }
-
-    return {
-      threads: extendedThreads,
-      availableTags,
-      chatStates,
-    };
+  /** A thread as its detail page shows it, or `null` once it is gone */
+  detail: (threadId: EARS.EntityId): ThreadDetailView | null => {
+    if (!threadQueries.byId(threadId)) return null;
+    const { messages: _messages, ...fields } = threadQueries.extendedData(threadId, 'linkedThreads');
+    return { ...fields, id: threadId as ThreadEntity['id'], messageIds: displayOrder(threadId).map(m => m.id) };
   },
 
   /**
@@ -328,19 +305,21 @@ export const threadCommands = {
 const THREAD_TOPIC_MAX_LENGTH = 40;
 const RECENT_THREADS_FALLBACK_LIMIT = 7;
 
-function getConfiguredRecentThreadsLimit(): number {
-  const configured = featureSettings.forFeature('threads').get()?.recentThreadsLimit;
-  return typeof configured === 'number' && configured > 0
-    ? configured
-    : RECENT_THREADS_FALLBACK_LIMIT;
+/** How the chat's settings order recent and archived threads */
+export type RecentThreadsSortOrder = 'created' | 'visited' | 'message';
+
+/** The recent-thread limit and order the threads settings hold, read where no view is asking */
+function configuredRecentThreads(): { limit: number; sortOrder: RecentThreadsSortOrder } {
+  const settings = featureSettings.forFeature('threads').get();
+  const limit = settings?.recentThreadsLimit;
+  const sortOrder = settings?.recentThreadsSortOrder;
+  return {
+    limit: typeof limit === 'number' && limit > 0 ? limit : RECENT_THREADS_FALLBACK_LIMIT,
+    sortOrder: sortOrder === 'visited' || sortOrder === 'message' ? sortOrder : 'created',
+  };
 }
 
-function getConfiguredSortOrder(): 'created' | 'visited' | 'message' {
-  const configured = featureSettings.forFeature('threads').get()?.recentThreadsSortOrder;
-  return configured === 'visited' || configured === 'message' ? configured : 'created';
-}
-
-function getSortTimestamp(thread: Partial<ThreadEntity>, sortOrder: 'created' | 'visited' | 'message'): number {
+function getSortTimestamp(thread: Partial<ThreadEntity>, sortOrder: RecentThreadsSortOrder): number {
   switch (sortOrder) {
     case 'visited': return thread.lastVisitedTimestamp || thread.timestamp || 0;
     case 'message': return thread.lastMessageTimestamp || thread.timestamp || 0;
@@ -349,7 +328,7 @@ function getSortTimestamp(thread: Partial<ThreadEntity>, sortOrder: 'created' | 
   }
 }
 
-function getRecentThreads(limit: number = getConfiguredRecentThreadsLimit()): Partial<ThreadEntity>[] {
+function getRecentThreads(limit: number, sortOrder: RecentThreadsSortOrder): Partial<ThreadEntity>[] {
   const threadFields = [
     "shortCode", "topic", "instructions", "status", "timestamp",
     "lastMessageTimestamp", "lastVisitedTimestamp", "forcedMode", "pinned", "archived", "chatState", "context",
@@ -358,14 +337,12 @@ function getRecentThreads(limit: number = getConfiguredRecentThreadsLimit()): Pa
   const allThreads = query(EARS.Entity.Thread).pick(threadFields)
     .filter(t => !t.archived);
 
-  const sortOrder = getConfiguredSortOrder();
-
   return allThreads
     .sort((a, b) => getSortTimestamp(b, sortOrder) - getSortTimestamp(a, sortOrder))
     .slice(0, limit);
 }
 
-function getArchivedThreads(): Partial<ThreadEntity>[] {
+function getArchivedThreads(sortOrder: RecentThreadsSortOrder): Partial<ThreadEntity>[] {
   const threadFields = [
     "shortCode", "topic", "instructions", "status", "timestamp",
     "lastMessageTimestamp", "lastVisitedTimestamp", "forcedMode", "pinned", "archived", "chatState", "context",
@@ -373,39 +350,7 @@ function getArchivedThreads(): Partial<ThreadEntity>[] {
 
   return query(EARS.Entity.Thread).pick(threadFields)
     .filter(t => t.archived)
-    .sort((a, b) => getSortTimestamp(b, getConfiguredSortOrder()) - getSortTimestamp(a, getConfiguredSortOrder()));
-}
-
-function getThreadsWithCurrent(limit: number = getConfiguredRecentThreadsLimit()): {
-  threads: Partial<ThreadEntity>[];
-  currentThread: AgentThreadData | null;
-} {
-  const threads = getRecentThreads(limit);
-
-  if (threads.length === 0) {
-    return { threads, currentThread: null };
-  }
-
-  const mostRecentThread = threads[0];
-
-  // Send only thread metadata — messages are loaded on demand via OPEN_THREAD_CHAT
-  const currentThread: AgentThreadData = {
-    id: mostRecentThread.id,
-    shortCode: mostRecentThread.shortCode,
-    topic: mostRecentThread.topic || '',
-    instructions: mostRecentThread.instructions || '',
-    status: mostRecentThread.status || 'backlog',
-    timestamp: mostRecentThread.timestamp || Date.now(),
-    forcedMode: mostRecentThread.forcedMode,
-    chatState: mostRecentThread.chatState,
-    context: mostRecentThread.context,
-    messages: [],
-    artifacts: mostRecentThread.id
-      ? getThreadArtifacts(mostRecentThread.id) as any as ArtifactEntity[]
-      : [],
-  };
-
-  return { threads, currentThread };
+    .sort((a, b) => getSortTimestamp(b, sortOrder) - getSortTimestamp(a, sortOrder));
 }
 
 function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
@@ -425,8 +370,6 @@ function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
     }))
     .sort((a, b) => b.metadata.createdAt - a.metadata.createdAt);
 }
-
-const MESSAGE_PAGE_SIZE = 50;
 
 const messagePickFields = ["id", "text", "sender", "timestamp", "blocks", "blockResponse", "responseTimestamp", "forkable", "references", "isCommand", "command", "context", "autoHide", "asUser", "asideText", "asideContext", "status", "compacted"] as const;
 
@@ -461,34 +404,14 @@ function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[]
     }) as Partial<MessageEntity>[];
 }
 
-function paginatedMessages(threadId: EARS.EntityId, cursor?: string | null): {
-  messages: Partial<MessageEntity>[];
-  hasMore: boolean;
-  nextCursor: string | null;
-} {
-  const allMessages = (query.ids(threadId)
-    .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []);
-
-  const queued = allMessages.filter(m => m.status === 'queued');
-  const regular = orderClaudeSessionMessages(threadId, allMessages.filter(m => m.status !== 'queued'));
-
-  // Reverse to get newest-first for paging, then slice
-  const reversed = [...regular].reverse();
-  const offset = cursor ? b64Decode(cursor) : 0;
-  const end = offset + MESSAGE_PAGE_SIZE;
-  const page = reversed.slice(offset, end);
-  const hasMore = end < reversed.length;
-  const nextCursor = hasMore ? b64Encode(end) : null;
-
-  // Reverse page back to chronological order for display
-  const chronoPage = [...page].reverse();
-
-  // Only include queued messages on the first page (offset 0)
-  const messages = offset === 0
-    ? [...chronoPage, ...queued] as Partial<MessageEntity>[]
-    : chronoPage as Partial<MessageEntity>[];
-
-  return { messages, hasMore, nextCursor };
+/**
+ * A thread's messages in the order the chat shows them, with the stable status/chronology fields Claude restoration needs, the queued ones
+ * last. It reads no message's text or blocks, which is what keeps a view over it still while a message streams.
+ */
+function displayOrder(threadId: EARS.EntityId): Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }> {
+  const all = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['status', 'timestamp', 'context'] as const) ?? [];
+  const queued = all.filter(m => m.status === 'queued');
+  return [...orderClaudeSessionMessages(threadId, all.filter(m => m.status !== 'queued')), ...queued] as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
 }
 
 export const chatQueries = {
@@ -507,68 +430,55 @@ export const chatQueries = {
     };
   },
 
-  threadDataPaginated: (threadId: EARS.EntityId, cursor?: string | null): AgentThreadData | null => {
+  /**
+   * A thread as the chat shows it, or `null` once it is gone: its fields and the ids of its last \`limit\` messages
+   * and its queued ones, in display order
+   */
+  chatPage: (threadId: EARS.EntityId, limit: number): ChatPage | null => {
     const thread = getThreadFields(threadId);
     if (!thread) return null;
-
-    const { messages, hasMore, nextCursor } = paginatedMessages(threadId, cursor);
+    const ordered = displayOrder(threadId);
+    const regular = ordered.filter(m => m.status !== 'queued');
+    const page = regular.slice(Math.max(0, regular.length - limit));
     return {
       ...thread,
-      messages,
-      hasMore,
-      nextCursor,
-      artifacts: getThreadArtifacts(threadId) as any as ArtifactEntity[],
+      id: threadId as ThreadEntity['id'],
+      messageIds: [...page, ...ordered.filter(m => m.status === 'queued')].map(m => m.id),
+      hasMore: regular.length > page.length,
     };
   },
 
-  paginatedMessages,
-
-  refreshThreadsData: (): RecentThreadRefreshData => {
-    return { recentThreads: getRecentThreads() };
+  /** An open tab's thread, or `null` once it is gone */
+  tab: (threadId: EARS.EntityId): ThreadTabView | null => {
+    const thread = query.ids(threadId).ofType(EARS.Entity.Thread).pickOne(['topic', 'pinned'] as const);
+    if (!thread) return null;
+    return { topic: thread.topic || '', ...(thread.pinned && { pinned: true }), artifacts: getThreadArtifacts(threadId) };
   },
 
-  connectedData: (): AgentConnectedData => {
-    const { threads, currentThread } = getThreadsWithCurrent();
-    const tabs: Tab[] = [];
+  /** The recent threads, at most \`limit\`, in \`sortOrder\` */
+  recentThreads: (limit: number, sortOrder: RecentThreadsSortOrder): Partial<ThreadEntity>[] => getRecentThreads(limit, sortOrder),
 
-    const pinnedThreads = (query(EARS.Entity.Thread)
-      .where('pinned', true)
-      .pick(["id", "shortCode", "topic", "archived"] as const))
+  /** The recent-thread limit and order the settings hold now */
+  configuredRecentThreads,
+
+  /**
+   * What a window's chat starts from: the most recent thread, opened; the tabs every window opens — that thread's
+   * and each pinned one's; and the threads settings
+   */
+  chatStart: (): ChatStart => {
+    const { limit, sortOrder } = configuredRecentThreads();
+    const current = getRecentThreads(limit, sortOrder)[0];
+    const pinned = query(EARS.Entity.Thread).where('pinned', true)
+      .pick(['topic', 'archived'] as const)
       .filter(t => !t.archived);
-    const pinnedIds = new Set(pinnedThreads.map(t => t.id));
-
-    if (currentThread?.id) {
-      const artifacts = getThreadArtifacts(currentThread.id);
-      const threadTab: Tab = {
-        id: currentThread.id,
-        label: currentThread.topic || `Thread ${currentThread.shortCode || ''}`,
-        artifacts,
-        selectedArtifactId: artifacts[0]?.id,
-        ...(pinnedIds.has(currentThread.id) && { pinned: true }),
-      };
-      tabs.push(threadTab);
+    const tabs: ChatStart['tabs'] = pinned.map(t => ({ id: t.id as ThreadEntity['id'], label: t.topic || 'No topic', pinned: true }));
+    if (current?.id && !tabs.some(t => t.id === current.id)) {
+      tabs.push({ id: current.id as ThreadEntity['id'], label: current.topic || `Thread ${current.shortCode || ''}` });
     }
-
-    for (const pt of pinnedThreads) {
-      if (!pt.id || pt.id === currentThread?.id) continue;
-      const ptArtifacts = getThreadArtifacts(pt.id);
-      tabs.unshift({
-        id: pt.id,
-        label: pt.topic || 'No topic',
-        artifacts: ptArtifacts,
-        selectedArtifactId: ptArtifacts[0]?.id,
-        pinned: true,
-      });
-    }
-
-    const chatSettings = featureSettings.forFeature('threads').get().chat;
-
     return {
-      currentThread,
-      threads,
-      recentThreads: getRecentThreads(),
+      currentThreadId: (current?.id as ThreadEntity['id'] | undefined) ?? null,
       tabs,
-      settings: chatSettings,
+      settings: featureSettings.forFeature('threads').get(),
     };
   },
 

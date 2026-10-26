@@ -93,7 +93,7 @@ describe('isolated editing sessions', () => {
     await git(repo, 'config', 'core.worktree', repo);
     expect(checkoutProfile(repo)).toBe('development');
     const session = createSession(repo, 'separate');
-    expect(session).toBe(fs.realpathSync(path.join(dir, 'repo-worktrees', 'separate')));
+    expect(session).toBe(fs.realpathSync(path.join(dir, 'repo-worktrees.noindex', 'separate')));
     expect(checkoutProfile(session)).toMatch(/^worktree-/);
     expect(createSession(session, 'from-linked')).toBe(path.join(path.dirname(session), 'from-linked'));
   });
@@ -136,7 +136,7 @@ describe('isolated editing sessions', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Checkout retained');
     expect(result.stdout).not.toContain('Ready.');
-    const session = path.join(dir, 'repo-worktrees', 'review');
+    const session = path.join(dir, 'repo-worktrees.noindex', 'review');
     expect(await git(session, 'branch', '--show-current')).toBe('session/review');
     expect(await git(repo, 'status', '--porcelain')).toBe('');
   });

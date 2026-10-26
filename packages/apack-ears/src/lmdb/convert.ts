@@ -6,8 +6,21 @@ import * as path from 'node:path';
 import { open, type Database, type RootDatabase } from 'lmdb';
 import { entityTypeOf } from '../attribute-storage.ts';
 import type { EARS } from '../entities.ts';
-import { LMDB_FORMAT_VERSION } from './envs.ts';
-import { decodeAttr, type AttrRecord } from './reader.ts';
+import { createEarsEngine } from '../engine.ts';
+import { createOrderedKV } from '../kv.ts';
+import { createLmdbKVBackend } from './kv-backend.ts';
+import { COMPACT_COPIES, LMDB_FORMAT_VERSION } from './store.ts';
+
+/** An attribute row of formats 1 to 3: its value, with a top-level Date as an ISO string */
+type AttrRecord = { t: 'null' | 'string' | 'number' | 'boolean' | 'object' | 'array' | 'date' | 'blob'; v: unknown };
+/** A relation row of formats 1 to 3 */
+type RelationRecord = { kind: string; src: string; tgt: string; info?: unknown; createdAt?: number };
+
+/** An attribute row's value */
+function decodeAttr(rec?: AttrRecord | null): unknown {
+  if (!rec) return null;
+  return rec.t === 'date' && typeof rec.v === 'string' ? new Date(rec.v) : rec.v;
+}
 
 const SEP = '\x1F';
 
@@ -126,8 +139,99 @@ export function convertToFormat3(basePath: string): Format3Conversion {
   });
 }
 
+/** What the conversion to format 4 loaded, and what it left behind */
+/** Format 3 kept each numbering sequence as an entity of its own, `Sequence-<key>` */
+const SEQUENCE_PREFIX = 'Sequence-';
+
+export interface Format4Conversion {
+  entities: number;
+  attributes: number;
+  relations: number;
+  /** Attribute rows of an entity with no entity row, which format 3's hydration skipped too */
+  orphanedAttributes: number;
+  /** Relation rows naming no end or no kind, which format 3's hydration skipped too */
+  invalidRelations: number;
+  /** Numbering rows (`Sequence-<key>`), which format 4 keeps as sequences rather than entities */
+  sequences: number;
+  /** Attribute rows holding no value (`{ t: 'undefined' }`), which format 3's hydration read as absent and format 4 doesn't keep */
+  emptyAttributes: number;
+}
+
+/**
+ * Converts the format 3 environment at `basePath` to format 4, in place: its three tables are read as format 3's
+ * hydration read them and loaded through an engine into the one database format 4 keeps (`kv`) — entities in the order
+ * they were created, each relation under its id, and each numbering row (`Sequence-<key>`, holding the next number)
+ * as the sequence it was — in one unit; the old tables are then emptied and format 4 recorded.
+ */
+export function convertToFormat4(basePath: string): Format4Conversion {
+  return withEnv(basePath, 3, ({ root, meta }) => {
+    const entityRows = root.openDB({ name: 'entities', encoding: 'json' }) as Database<{ type?: string }>;
+    const attrRows = root.openDB({ name: 'attrs', encoding: 'json' }) as Database<AttrRecord>;
+    const relationRows = root.openDB({ name: 'relations', encoding: 'json' }) as Database<RelationRecord>;
+    const result: Format4Conversion = { entities: 0, attributes: 0, relations: 0, orphanedAttributes: 0, invalidRelations: 0, sequences: 0, emptyAttributes: 0 };
+
+    const fields = new Map<string, Array<[string, unknown]>>();
+    for (const key of entityRows.getKeys()) fields.set(String(key), []);
+    for (const { key, value } of attrRows.getRange() as Iterable<{ key: string; value: AttrRecord }>) {
+      const sep = key.indexOf(SEP);
+      const row = fields.get(key.slice(sep + 1));
+      if (!row) { result.orphanedAttributes++; continue; }
+      const decoded = decodeAttr(value);
+      if (decoded === undefined) { result.emptyAttributes++; continue; }
+      row.push([key.slice(0, sep), decoded]);
+    }
+    const createdAt = (row: Array<[string, unknown]>) => {
+      const at = row.find(([kind]) => kind === 'createdAt')?.[1];
+      return typeof at === 'number' ? at : Infinity;
+    };
+    const sequences = new Map<string, unknown>();
+    for (const [id, row] of fields) {
+      if (!id.startsWith(SEQUENCE_PREFIX)) continue;
+      sequences.set(id.slice(SEQUENCE_PREFIX.length), row.find(([kind]) => kind === 'next')?.[1]);
+      fields.delete(id);
+    }
+    const entities = [...fields].filter(([, row]) => row.length > 0)
+      .sort(([a, rowA], [b, rowB]) => createdAt(rowA) - createdAt(rowB) || (a < b ? -1 : 1));
+    const relations: Array<[string, RelationRecord]> = [];
+    for (const { key, value } of relationRows.getRange() as Iterable<{ key: string; value: RelationRecord }>) {
+      if (!value?.src || !value.tgt || typeof value.kind !== 'string') { result.invalidRelations++; continue; }
+      relations.push([String(key), value]);
+    }
+    relations.sort(([a, relA], [b, relB]) => (relA.createdAt ?? 0) - (relB.createdAt ?? 0) || (a < b ? -1 : 1));
+
+    const db = root.openDB({ name: 'kv', keyEncoding: 'binary', encoding: 'binary', compression: false }) as Database<Uint8Array, Uint8Array>;
+    const kv = createOrderedKV(createLmdbKVBackend(root, db, { committed() {}, synced() {}, durable: () => Promise.resolve() }));
+    const { admin } = createEarsEngine({ kv, isEntityType: () => true, isRelationKind: () => true, isRole: () => true });
+    admin.bulkLoad(() => {
+      for (const [id, row] of entities) {
+        for (const [kind, value] of row) admin.bulkLoadAttr(id as EARS.EntityId, kind as EARS.AttrKind, value);
+        result.entities++;
+        result.attributes += row.length;
+      }
+      for (const [relId, { kind, src, tgt, info }] of relations) {
+        admin.bulkLoadRelation(relId as EARS.RelationId, kind, src as EARS.EntityId, tgt as EARS.EntityId, info ?? undefined);
+        result.relations++;
+      }
+      // Where `numbering.ts` keeps a sequence
+      kv.write((w) => {
+        for (const [key, next] of sequences) if (typeof next === 'number') { w.put(['s', key], next); result.sequences++; }
+      });
+    });
+    root.transactionSync(() => {
+      // Collected first, since the body removes the keys a live cursor would walk
+      for (const table of [entityRows, attrRows, relationRows]) for (const key of Array.from(table.getKeys())) table.remove(key);
+      meta.put('format', 4);
+    });
+    return result;
+  });
+}
+
 /** Each step a conversion took, from the format the environment recorded to the current one */
-export type FormatSteps = Array<{ to: 2; result: FormatConversion } | { to: 3; result: Format3Conversion }>;
+export type FormatSteps = Array<
+  | { to: 2; result: FormatConversion }
+  | { to: 3; result: Format3Conversion }
+  | { to: 4; result: Format4Conversion }
+>;
 
 /** Converts the environment at `basePath` from the format it records to `LMDB_FORMAT_VERSION`, a step per format */
 export function convertToCurrentFormat(basePath: string): FormatSteps {
@@ -136,8 +240,69 @@ export function convertToCurrentFormat(basePath: string): FormatSteps {
   if (format === LMDB_FORMAT_VERSION) return steps;
   if (format === 1) { steps.push({ to: 2, result: convertToFormat2(basePath) }); format = 2; }
   if (format === 2) { steps.push({ to: 3, result: convertToFormat3(basePath) }); format = 3; }
+  if (format === 3) { steps.push({ to: 4, result: convertToFormat4(basePath) }); format = 4; }
   if (format !== LMDB_FORMAT_VERSION) throw new Error(`The database at ${basePath} records storage format ${JSON.stringify(format)}, which doesn't convert to ${LMDB_FORMAT_VERSION}`);
   return steps;
+}
+
+/** What compacting an environment did */
+export interface Compaction {
+  /** The size of its `data.mdb` before, in bytes */
+  before: number;
+  /** The size of its `data.mdb` after, in bytes: the pages in use, and none its deletes freed */
+  after: number;
+}
+
+/** Makes a file's contents, or a directory's entries, durable; Windows can't open a directory to sync it */
+function syncPath(target: string, directory: boolean): void {
+  if (directory && process.platform === 'win32') return;
+  const fd = fs.openSync(target, 'r');
+  try {
+    fs.fsyncSync(fd);
+  } catch (error) {
+    // File systems that can't sync a directory
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!directory || (code !== 'EINVAL' && code !== 'ENOTSUP')) throw error;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Rewrites the environment at `basePath` without the pages its deletes freed, in place: LMDB never shrinks a file,
+ * and a conversion writes the new format beside the old tables before it empties them, so a converted file holds
+ * both. A compacting copy is written beside it, synced, and its `data.mdb` renamed over the original's, so the file
+ * is the old one or the new one whatever happens part way, a power cut included.
+ *
+ * Refuses an environment anything has open, this process included: a process holding it would go on writing the
+ * file the rename replaced, and lose those writes. What holds it is read off LMDB's reader table, where every
+ * process that has read the environment keeps a slot until it closes it, after clearing the slots of processes
+ * that have exited.
+ */
+export async function compactEnvironment(basePath: string): Promise<Compaction> {
+  // A compacted file this lmdb can't safely empty would become a live database: refused until it can (`COMPACT_COPIES`)
+  if (!COMPACT_COPIES) throw new Error(`Compaction is off (COMPACT_COPIES): this lmdb aborts emptying a compacted copy, kriszyp/lmdb-js#381`);
+  const file = path.join(basePath, 'data.mdb');
+  if (!fs.existsSync(file)) throw new Error(`No LMDB database at ${basePath}`);
+  const before = fs.statSync(file).size;
+  const root = open({ path: basePath, maxDbs: 8, readOnly: true });
+  const beside = fs.mkdtempSync(`${basePath}.compacting-`);
+  try {
+    root.readerCheck();
+    // The table's header line, and a line per slot; none is this handle's, which has read nothing yet
+    const holders = root.readerList().split('\n').slice(1).filter((line) => line.trim() !== '');
+    if (holders.length > 0) {
+      throw new Error(`The LMDB database at ${basePath} is open (reader pids: ${holders.map((line) => line.trim().split(/\s+/)[0]).join(', ')}); close it before compacting`);
+    }
+    await root.backup(beside, true);
+    syncPath(path.join(beside, 'data.mdb'), false);
+    fs.renameSync(path.join(beside, 'data.mdb'), file);
+    syncPath(basePath, true);
+  } finally {
+    root.close();
+    fs.rmSync(beside, { recursive: true, force: true });
+  }
+  return { before, after: fs.statSync(file).size };
 }
 
 /** The format an environment records, 1 when it records none */
@@ -167,56 +332,7 @@ function withEnv<T>(basePath: string, from: number | undefined, fn: (env: { root
   }
 }
 
-/** What `rewriteAttributes` changed */
-export interface AttributeRewrite {
-  /** Attribute rows given a new value */
-  rewritten: number;
-  /** Attribute rows removed: with their entity, or by the rewrite answering `REMOVE_ATTRIBUTE` */
-  removed: number;
-  /** Entity rows removed (`removeEntities`) */
-  removedEntities: number;
-}
-
-/** What a `rewriteAttributes` rewrite answers to remove the attribute row it was given */
-export const REMOVE_ATTRIBUTE: unique symbol = Symbol('REMOVE_ATTRIBUTE');
-
-/**
- * Rewrites the attribute rows of a copy of a database in this version's format, in place and in one transaction: a
- * data change made explicitly, on a copy, as a format conversion is — never at boot. `rewrite` is given each
- * attribute's kind, entity id and value, as a read gives it back, and answers its new value, undefined to leave
- * it, or `REMOVE_ATTRIBUTE` to remove it; `removeEntities` names entities to remove, their rows and every attribute of theirs.
- * Refuses a database in another format.
- */
-export function rewriteAttributes(
-  basePath: string,
-  rewrite: (kind: string, id: string, value: unknown) => unknown,
-  { removeEntities = [] }: { removeEntities?: readonly string[] } = {},
-): AttributeRewrite {
-  return withEnv(basePath, LMDB_FORMAT_VERSION, ({ root }) => {
-    const entities = root.openDB({ name: 'entities', encoding: 'json' }) as Database<unknown>;
-    const attrs = root.openDB({ name: 'attrs', encoding: 'json' }) as Database<AttrRecord>;
-    const removing = new Set(removeEntities);
-    const result: AttributeRewrite = { rewritten: 0, removed: 0, removedEntities: 0 };
-    root.transactionSync(() => {
-      // Materialised, since the body writes and removes keys of the range it walks
-      for (const { key, value } of [...attrs.getRange()] as Array<{ key: string; value: AttrRecord }>) {
-        const sep = key.indexOf(SEP);
-        const kind = key.slice(0, sep);
-        const id = key.slice(sep + 1);
-        if (removing.has(id)) { attrs.remove(key); result.removed++; continue; }
-        const next = rewrite(kind, id, decodeAttr(value));
-        if (next === undefined) continue;
-        if (next === REMOVE_ATTRIBUTE) { attrs.remove(key); result.removed++; continue; }
-        attrs.put(key, encode(next));
-        result.rewritten++;
-      }
-      for (const id of removing) if (entities.get(id) !== undefined) { entities.remove(id); result.removedEntities++; }
-    });
-    return result;
-  });
-}
-
-/** An attribute record, as the adapter writes one */
+/** An attribute record of formats 1 to 3 */
 function encode(value: unknown): AttrRecord {
   if (value instanceof Date) return { t: 'date', v: value.toISOString() };
   const t = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : typeof value;

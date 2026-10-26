@@ -10,8 +10,8 @@ import type { ClaudeMcpForm } from '#features/code/common/mcp-elicitation-form.t
  *
  * The `claude-session` artifact is a **type marker only** — it exists so the
  * artifact list shows a session card, but its content is empty. All session
- * data lives here on thread context; the frontend reads it via
- * `THREAD_UPDATED` events.
+ * data lives here on thread context; the frontend reads it through the
+ * threads views.
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
@@ -231,29 +231,17 @@ export function persistClaudeState(
     ? existingTags
     : [...existingTags, CLAUDE_CODE_TAG];
 
-  const tagAdded = !existingTags.includes(CLAUDE_CODE_TAG);
-
   services.repository.threadCommands.update(threadId as any, {
     context: nextContext,
     tags: nextTags,
-  });
-
-  // Notify frontend so thread context is always in sync.
-  services.emitter.broadcastToSurface('default-setup/threads', {
-    type: 'THREAD_UPDATED',
-    threadId,
-    updates: {
-      ...(tagAdded ? { tags: nextTags } : {}),
-      context: nextContext,
-    },
   });
 }
 
 // ─── Writers ─────────────────────────────────────────────────────────────────
 
 /**
- * Merge a patch into the thread's Claude Code state. The frontend receives
- * the update via `THREAD_UPDATED` (emitted by `persistClaudeState`).
+ * Merge a patch into the thread's Claude Code state, which the frontend
+ * reads through the threads views.
  *
  * The patch can be a plain object or a function that receives the current
  * state and returns the delta (useful for counters that need read-modify-write).
@@ -508,9 +496,5 @@ export function clearClaudeState(services: Services, threadId: string): void {
   services.repository.threadCommands.update(threadId as any, {
     context: nextContext,
     tags: nextTags,
-  });
-
-  services.emitter.broadcastToSurface('default-setup/threads', {
-    type: 'THREAD_UPDATED', threadId, updates: { context: nextContext, tags: nextTags },
   });
 }

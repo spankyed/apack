@@ -77,4 +77,17 @@ await boundedSpawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], 30000
     await running;
     await expectGone(grandchild);
   });
+
+  it('kills what the child left in its group when it exits, a pass included', async () => {
+    const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-spawn-')), 'grandchild.pid');
+    // The shell exits 0 at once, leaving the grandchild running: a vitest that died with its workers alive
+    const result = await boundedSpawn('sh',
+      ['-c', `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{},1000)' >/dev/null 2>&1 &
+while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
+      30_000);
+    const grandchild = Number(fs.readFileSync(pidFile, 'utf-8'));
+    expect(grandchild, 'nothing is proven if the grandchild never started').toBeGreaterThan(0);
+    expect(result.code).toBe(0);
+    await expectGone(grandchild);
+  });
 });

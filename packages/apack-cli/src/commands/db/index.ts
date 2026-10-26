@@ -28,7 +28,7 @@ export const DB_USAGE = `
 Usage: apack db <command> [options]
 
 The app's database, read and changed while apack is closed. Commands that change it refuse while apack runs
-on the data dir; reads warn that they may miss what it hasn't written yet.
+on the data dir; reads warn that it is running, and read what it has committed.
 
 Commands:
   query <code>          Run read-only query code (the Database console's)

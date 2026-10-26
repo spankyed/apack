@@ -1,244 +1,112 @@
-// Two answers and what happens when a second ask is in flight.
-//
-// `ACTIONS_PAGE_LOADED` carries the page it holds and `ACTION_SELECTED` the action it describes, so
-// neither needs a new field to be identifiable — only a reader that looks. Without one, a double-click
-// on "load more" appends the same page twice, and two quick selections are decided by arrival order.
+// The actions surface holds what the user is doing — which action is open, how far down the list they've read, the
+// form — and the rows are its views' (`views.spec.ts`). What it hears of a view is `ACTION.LOADED`, which the canvas
+// sends when the open action's view reads something: it fills the form once per opening, keeps the breadcrumb's
+// label, and leaves the detail view when the action is gone. Nothing it does asks the backend for a row.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../_support/calls.ts';
 import type { ActionEntity } from '@apackdev/sdk';
+import type { EARS } from '#generated/ears.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
 
-const { default: actionsState } = await import('#features/actions/fe/state.ts');
+const { default: actionsState, ACTIONS_PAGE_SIZE } = await import('#features/actions/fe/state.ts');
 
-/** An action as the view reads it; only the fields these assertions touch are real */
-const anAction = (id: string) => ({
-  id, label: id, description: '', category: '', input: {}, actionFn: '', output: {},
-}) as unknown as ActionEntity;
+const id = (name: string) => name as EARS.EntityId;
+/** A action as its view reads it; only the fields these assertions touch are real */
+const aAction = (name: string, label = name) => ({ id: id(name), label, description: '', category: '', input: {}, actionFn: `return "${label}"` }) as unknown as ActionEntity;
+const loaded = (name: string, action: ActionEntity | null) => ({ type: 'ACTION.LOADED' as const, actionId: id(name), action });
 
-/** A started surface showing page 1, which is the state a double-click starts from */
-function listed() {
-  const actor = createActor(actionsState).start();
-  actor.send({
-    type: 'ACTIONS_LISTED',
-    data: { actions: [anAction('Action-a1')], totalCount: 3, page: 1, totalPages: 3, categories: [] },
-  });
-  return actor;
-}
-
-const sentTypes = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: string }).type);
-
-/** The call the nth `ACTION_SELECT` was asked under, which the machine minted and the send carries */
-const selectCall = (nth: number) => sentCall(sendToSystem, 'ACTION_SELECT', nth);
+const start = () => createActor(actionsState).start();
 
 beforeEach(() => {
   sendToSystem.mockReset();
 });
 
-/**
- * The double-click, which is how this shows up for a person.
- *
- * `requestNextPage` sends `context.page + 1`, and `page` only moves when a reply lands — so two clicks
- * both ask for page 2, and a handler that appends whatever arrives appends page 2 twice.
- */
-it('appends a page once, however many times it was asked for', () => {
-  const actor = listed();
+it('opens a action without asking the backend for it, and fills the form from its view once', () => {
+  const actor = start();
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  expect(actor.getSnapshot().matches('detail')).toBe(true);
+  expect(sendToSystem, 'the view reads the action; nothing is asked for').not.toHaveBeenCalled();
 
+  actor.send(loaded('Action-p1', aAction('Action-p1', 'first')));
+  actor.send({ type: 'FORM.UPDATE_LABEL', label: 'typed' });
+  // Another window renames it: the breadcrumb follows, the form the user is typing in doesn't
+  actor.send(loaded('Action-p1', aAction('Action-p1', 'renamed elsewhere')));
+
+  const { context } = actor.getSnapshot();
+  expect(context.selectedLabel).toBe('renamed elsewhere');
+  expect(context.formData.label).toBe('typed');
+  expect(context.formData.actionFn).toBe('return "first"');
+});
+
+it('ignores what a view read for a action the user has moved on from', () => {
+  const actor = start();
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p2') });
+
+  actor.send(loaded('Action-p1', aAction('Action-p1')));
+  actor.send(loaded('Action-p1', null));
+
+  expect(actor.getSnapshot().matches('detail')).toBe(true);
+  expect(actor.getSnapshot().context).toMatchObject({ selectedActionId: 'Action-p2', selectedLabel: undefined, formFor: undefined });
+});
+
+it('returns to the list when the open action is gone, deleted here or in another window', () => {
+  const actor = start();
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  actor.send(loaded('Action-p1', aAction('Action-p1')));
+  actor.send({ type: 'ACTION.DELETE', actionId: id('Action-p1') });
+  expect(sendToSystem).toHaveBeenCalledWith('actions', { type: 'DELETE_ACTION', actionId: 'Action-p1' });
+  expect(actor.getSnapshot().matches('detail'), 'still open until its view says it is gone').toBe(true);
+
+  actor.send(loaded('Action-p1', null));
+  expect(actor.getSnapshot().matches('list')).toBe(true);
+  expect(actor.getSnapshot().context.selectedActionId).toBeUndefined();
+});
+
+it('fills the form afresh when a action is reopened from the list', () => {
+  const actor = start();
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  actor.send(loaded('Action-p1', aAction('Action-p1', 'first')));
+  actor.send({ type: 'FORM.UPDATE_LABEL', label: 'abandoned' });
+  actor.send({ type: 'VIEW_LIST' });
+
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  actor.send(loaded('Action-p1', aAction('Action-p1', 'as stored')));
+  expect(actor.getSnapshot().context.formData.label).toBe('as stored');
+});
+
+it('shows a page more each time the list is read to its end', () => {
+  const actor = start();
+  expect(actor.getSnapshot().context.listLimit).toBe(ACTIONS_PAGE_SIZE);
   actor.send({ type: 'ACTIONS.LOAD_MORE' });
   actor.send({ type: 'ACTIONS.LOAD_MORE' });
-  expect(sentTypes().filter((type) => type === 'FETCH_ACTIONS_PAGE'), 'both clicks asked').toHaveLength(2);
-
-  const page2 = { actions: [anAction('Action-a2')], page: 2, totalPages: 3 };
-  actor.send({ type: 'ACTIONS_PAGE_LOADED', data: page2 });
-  actor.send({ type: 'ACTIONS_PAGE_LOADED', data: page2 });
-
-  const { actions, page } = actor.getSnapshot().context;
-  expect(actions.map((action) => action.id)).toEqual(['Action-a1', 'Action-a2']);
-  expect(page).toBe(2);
+  expect(actor.getSnapshot().context.listLimit).toBe(3 * ACTIONS_PAGE_SIZE);
+  expect(sendToSystem).not.toHaveBeenCalled();
 });
 
-it('takes the page it is waiting for', () => {
-  const actor = listed();
-  actor.send({ type: 'ACTIONS.LOAD_MORE' });
+it('saves the form it holds, as an update of the open action or a new one', () => {
+  const actor = start();
+  actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
+  actor.send(loaded('Action-p1', aAction('Action-p1', 'first')));
+  actor.send({ type: 'FORM.UPDATE_LABEL', label: 'edited' });
+  actor.send({ type: 'ACTION.SAVE' });
+  expect(sendToSystem).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'UPDATE_ACTION', actionId: 'Action-p1', label: 'edited' }));
+  expect(actor.getSnapshot().matches('list')).toBe(true);
 
-  // A reply for a page nobody asked for — a leftover from before a filter reset, say
-  actor.send({
-    type: 'ACTIONS_PAGE_LOADED',
-    data: { actions: [anAction('Action-stale')], page: 3, totalPages: 3 },
-  });
-  expect(actor.getSnapshot().context.actions.map((a) => a.id), 'not appended').toEqual(['Action-a1']);
-
-  actor.send({
-    type: 'ACTIONS_PAGE_LOADED',
-    data: { actions: [anAction('Action-a2')], page: 2, totalPages: 3 },
-  });
-  expect(actor.getSnapshot().context.actions.map((a) => a.id)).toEqual(['Action-a1', 'Action-a2']);
-});
-
-/**
- * Two selections in flight, the older answer arriving second.
- *
- * **It correlates on the call, not on the action id** — though this case alone would not force that, since
- * comparing `actionId` against what the ask recorded passes it too. What the id cannot reach are the two
- * cases below it: it does not distinguish windows, and a slot holding one is never emptied. `answerTo`
- * builds the answer as a delivery door would.
- */
-it('shows the action last asked for, not the answer that arrived last', () => {
-  const actor = listed();
-
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a2' });
-  expect(sentTypes().filter((type) => type === 'ACTION_SELECT')).toHaveLength(2);
-
-  // a2 answers first, then a1's older answer turns up
-  actor.send(answerTo(selectCall(1), { type: 'ACTION_SELECTED', actionId: 'Action-a2', data: anAction('Action-a2') }));
-  actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-
-  expect(actor.getSnapshot().context.selectedActionId).toBe('Action-a2');
-});
-
-/**
- * The answer another window got, which the action id could not tell from this window's.
- *
- * A broadcast `ACTION_SELECTED` reaches every window showing the actions surface, and a guard on the action id
- * alone admits it in all of them — two people looking at the same action take each other's answers. Replying
- * narrows it to the asker, and the call narrows it to the ask: one from elsewhere matches nothing here.
- */
-it('ignores an answer for an ask it did not make', () => {
-  const actor = listed();
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-
-  actor.send(answerTo('c-another-window', { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-
-  expect(actor.getSnapshot().context.selectedActionId, 'still nothing selected').toBeUndefined();
-});
-
-/**
- * Settled, so the answer just taken cannot be taken again.
- *
- * A slot that is only ever set names the last ask for the life of the surface. Cleared on the answer, the
- * same answer arriving twice — a reconnect replaying it, a double delivery — matches nothing the second
- * time, and an ask made since is still outstanding.
- */
-it('clears what it is waiting for once the answer lands', () => {
-  const actor = listed();
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-  const first = selectCall(0);
-
-  actor.send(answerTo(first, { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-  expect(actor.getSnapshot().context.pendingActionCall, 'nothing outstanding').toBeNull();
-
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a2' });
-  // The first answer again, which a cleared slot has nothing to match
-  actor.send(answerTo(first, { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-
-  expect(actor.getSnapshot().context.selectedActionId, 'the older answer did not win').toBe('Action-a1');
-  expect(actor.getSnapshot().context.pendingActionCall, "the second ask is still outstanding").toBe(selectCall(1));
-});
-
-/**
- * An answer carrying no call at all, with nothing outstanding — refused.
- *
- * **The case a hand-written comparison gets wrong**: `_callOf(event) === context.pendingActionCall` reads
- * `undefined === undefined` for an empty slot, which is the resting state — so it admits an answer nobody
- * asked for, on the common path rather than an edge.
- *
- * Held by two things independently — `answersCall` refuses an empty slot, and the slot is `null` — so this
- * fires only on losing both. `apack-sdk/tests/events/calls.spec.ts` holds the check itself.
- */
-it('refuses an answer carrying no call when nothing is outstanding', () => {
-  const actor = listed();
-
-  actor.send({ type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') });
-
-  expect(actor.getSnapshot().context.selectedActionId, 'nobody asked, so nothing is selected').toBeUndefined();
-});
-
-/** And after an ask has settled, which leaves the slot empty again */
-it('refuses an uncorrelated answer once an ask has settled', () => {
-  const actor = listed();
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-  actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-
-  actor.send({ type: 'ACTION_SELECTED', actionId: 'Action-stray', data: anAction('Action-stray') });
-
-  expect(actor.getSnapshot().context.selectedActionId, 'the settled answer still stands').toBe('Action-a1');
-});
-
-
-it('opening the cached action abandons a newer outstanding selection', () => {
-  const actor = listed();
-  try {
-    actor.send({ type: 'OPEN_ENTITY', id: 'Action-a1' });
-    actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-    actor.send({ type: 'OPEN_ENTITY', id: 'Action-a2' });
-    const abandoned = selectCall(1);
-    actor.send({ type: 'OPEN_ENTITY', id: 'Action-a1' });
-    actor.send(answerTo(abandoned, { type: 'ACTION_SELECTED', actionId: 'Action-a2', data: anAction('Action-a2') }));
-    expect(actor.getSnapshot().context.selectedActionId).toBe('Action-a1');
-    expect(actor.getSnapshot().context.pendingActionCall).toBeNull();
-  } finally { actor.stop(); }
-});
-
-it.each(['list', 'create', 'deactivate'] as const)('retires an entity selection on %s', destination => {
-  const actor = listed();
-  try {
-    actor.send({ type: 'OPEN_ENTITY', id: 'Action-a1' });
-    const abandoned = selectCall(0);
-    if (destination === 'deactivate') actor.send({ type: 'SURFACE_DEACTIVATED' });
-    else actor.send({ type: 'TRAIL_CLICK', target: destination });
-    actor.send(answerTo(abandoned, { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-    expect(actor.getSnapshot().context.selectedActionId).toBeUndefined();
-    expect(actor.getSnapshot().context.pendingActionCall).toBeNull();
-  } finally { actor.stop(); }
+  actor.send({ type: 'ACTION.CREATE' });
+  actor.send({ type: 'FORM.UPDATE_LABEL', label: 'new' });
+  actor.send({ type: 'ACTION.SAVE' });
+  expect(sendToSystem).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'CREATE_ACTION', label: 'new' }));
 });
 
 it('opens its entity from the create view and refuses unrelated entity types', () => {
-  const actor = listed();
-  try {
-    actor.send({ type: 'ACTION.CREATE' });
-    actor.send({ type: 'OPEN_ENTITY', id: 'Note-unrelated' });
-    expect(actor.getSnapshot().matches('create')).toBe(true);
-    expect(sentTypes()).not.toContain('ACTION_SELECT');
-    actor.send({ type: 'OPEN_ENTITY', id: 'Action-a1' });
-    actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-    expect(actor.getSnapshot().matches('detail')).toBe(true);
-    expect(actor.getSnapshot().context.selectedActionId).toBe('Action-a1');
-  } finally { actor.stop(); }
-});
-
-it('asks for an action again when it is reopened from the list, so a changed action is not shown stale', () => {
-  const actor = listed();
-  try {
-    actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-    actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-    actor.send({ type: 'VIEW_LIST' });
-    expect(actor.getSnapshot().context.selectedActionId).toBeUndefined();
-    actor.send({ type: 'ACTION_UPDATED', actionId: 'Action-a1', action: anAction('Action-a1') as never });
-    actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-    expect(sentTypes().filter(type => type === 'ACTION_SELECT')).toHaveLength(2);
-  } finally { actor.stop(); }
-});
-
-/**
- * `ACTION_CREATED` is news every window hears, whoever created it. It adds the action to the list and selects
- * nothing: selecting it here would skip the fetch when the user then opens it, and the form would keep the
- * previous action's fields under the new one's name.
- */
-it('fetches an action created elsewhere when it is opened', () => {
-  const actor = listed();
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-a1' });
-  actor.send(answerTo(selectCall(0), { type: 'ACTION_SELECTED', actionId: 'Action-a1', data: anAction('Action-a1') }));
-  actor.send({ type: 'VIEW_LIST' });
-
-  actor.send({ type: 'ACTION_CREATED', actionId: 'Action-x', action: anAction('Action-x') });
-  expect(actor.getSnapshot().context.actions.map((a) => a.id)).toContain('Action-x');
-  actor.send({ type: 'ACTION.SELECT', actionId: 'Action-x' });
-
-  expect(sentTypes().filter((type) => type === 'ACTION_SELECT')).toHaveLength(2);
-  actor.send(answerTo(selectCall(1), { type: 'ACTION_SELECTED', actionId: 'Action-x', data: anAction('Action-x') }));
-  expect(actor.getSnapshot().context.selectedAction?.id).toBe('Action-x');
+  const actor = start();
+  actor.send({ type: 'ACTION.CREATE' });
+  actor.send({ type: 'OPEN_ENTITY', id: 'Note-unrelated' });
+  expect(actor.getSnapshot().matches('create')).toBe(true);
+  actor.send({ type: 'OPEN_ENTITY', id: 'Action-p1' });
+  expect(actor.getSnapshot().matches('detail')).toBe(true);
+  expect(actor.getSnapshot().context.selectedActionId).toBe('Action-p1');
 });

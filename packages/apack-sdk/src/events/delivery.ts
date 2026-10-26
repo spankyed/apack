@@ -134,6 +134,13 @@ export interface _Delivery {
    * and `answering ?? call` is what a door injects into the delivered event for the receiver's guards.
    */
   call?: string;
+  /**
+   * The event the receiver is handed — the very object, as the door passed it to the actor. A handler answers this
+   * message and only this one: the same object forwarded on (a system routing it to a child) is still the message,
+   * while an event a handler makes while handling it (a system telling its children something of its own) is not,
+   * and its handler is handed no \`reply\` — or it would answer the first message's asker about something it never asked.
+   */
+  event?: object;
 }
 
 /** The holder, and the whole mechanism — in a window and on the backend alike */

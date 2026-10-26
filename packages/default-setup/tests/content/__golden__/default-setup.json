@@ -118,6 +118,10 @@
         "description": "Generate a git commit message from a diff using Claude CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "diff": {
             "type": "string",
             "description": "Git diff to generate a commit message from",
@@ -192,6 +196,10 @@
         "description": "Generate a read-only EARS database query using Claude CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "prompt": {
             "type": "string",
             "description": "Natural language query request from the user",
@@ -206,6 +214,10 @@
         "description": "Generate an EARS database transaction using Claude CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "prompt": {
             "type": "string",
             "description": "Natural language transaction request from the user",
@@ -768,6 +780,10 @@
         "description": "Generate a git commit message from a diff using Codex CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "diff": {
             "type": "string",
             "description": "Git diff to generate a commit message from",
@@ -817,6 +833,10 @@
         "description": "Generate a read-only EARS database query using Codex CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "prompt": {
             "type": "string",
             "description": "Natural language query request from the user",
@@ -831,6 +851,10 @@
         "description": "Generate an EARS database transaction using Codex CLI",
         "entityType": "Action",
         "input": {
+          "client": {
+            "type": "string",
+            "description": "The connection of the window that asked, which the result answers alone"
+          },
           "prompt": {
             "type": "string",
             "description": "Natural language transaction request from the user",

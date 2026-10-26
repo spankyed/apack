@@ -1,13 +1,19 @@
-// The engine's benchmark: hydrating an app-sized graph, then queries, relation walks and write batches on it.
+// The engine's benchmark: loading an app-sized graph, then queries, relation walks and write batches on it.
 // Run with `npm run bench -w @apackdev/ears`, which builds the package first: it times the engine in `dist`, the build
-// that ships, since a dev loader compiles with its own options. The baseline is in docs/plans/ears-storage-layout.md
-// (Step 4); the tolerance is +10% median per case.
-import { bench, describe } from 'vitest';
-import type { EARS as EarsTypes, PersistenceSink } from '../src/index.ts';
+// that ships, since a dev loader compiles with its own options. It runs on an LMDB store in a temp directory, the app's
+// backend; `EARS_BENCH_KV=memory` runs it on `createMemoryKV` instead. The readings are in
+// docs/plans/ears-storage-layout.md; the tolerance is +10% median per case.
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterAll, bench, describe } from 'vitest';
+import type { EARS as EarsTypes } from '../src/index.ts';
 
-// A specifier held in a variable, so the typecheck (which runs before any build) reads the types from source
+// Specifiers held in variables, so the typecheck (which runs before any build) reads the types from source
 const DIST = '../dist/index.js';
-const { createEarsEngine, EARS } = await import(/* @vite-ignore */ DIST) as typeof import('../src/index.ts');
+const DIST_LMDB = '../dist/lmdb/index.js';
+const { createEarsEngine, createMemoryKV, EARS } = await import(/* @vite-ignore */ DIST) as typeof import('../src/index.ts');
+const { openLmdbStore } = await import(/* @vite-ignore */ DIST_LMDB) as typeof import('../src/lmdb/index.ts');
 
 const TASKS = 40_000;
 const PROJECTS = 5_000;
@@ -16,13 +22,16 @@ const BLOCKS = 15_000;
 
 type Id = EarsTypes.EntityId;
 const types = new Set(['Task', 'Project', 'Person', 'Note']);
-// A sink that does nothing, as the LMDB store's does between flushes
-const sink: PersistenceSink = {
-  onCreateEntity() {}, onDestroyEntity() {}, onDropAttr() {}, onPutAttr() {},
-  onAddRelation() {}, onUpdateRelation() {}, onRemoveRelation() {}, onUnitStart() {}, onUnitEnd() {},
-};
-// Task rows are numbered T-<n>, as an app's shapes number theirs
-const engine = createEarsEngine({ isEntityType: (name) => types.has(name), isRelationKind: () => true, isRole: () => true, persistence: sink, rowRules: (type) => (type === 'Task' ? { required: [], shortCode: 'T' } : undefined) });
+const onMemory = process.env.EARS_BENCH_KV === 'memory';
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ears-bench-'));
+const store = onMemory ? undefined : openLmdbStore({ path: path.join(dir, 'ears-db') });
+afterAll(() => {
+  store?.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+// Task rows are numbered T-<n>, as an app's shapes number theirs, and declare the indexes an app's would
+const kv = store ? store.kv : createMemoryKV();
+const engine = createEarsEngine({ kv, isEntityType: (name) => types.has(name), isRelationKind: () => true, isRole: () => true, rowRules: (type) => (type === 'Task' ? { required: [], shortCode: 'T', indexes: ['status', 'title'] } : undefined) });
 const { admin } = engine;
 
 const task = (i: number) => `Task-${i}` as Id;
@@ -30,9 +39,13 @@ const project = (i: number) => `Project-${i}` as Id;
 const person = (i: number) => `Person-${i}` as Id;
 const STATUSES = ['open', 'done', 'blocked'];
 
-/** 50k entities with 4 attributes each (200k), and 100k relations */
+/** 50k entities with 4 attributes each (200k), and 100k relations, loaded as hydration loads them: one unit */
 function hydrate(): void {
   admin.clear();
+  admin.bulkLoad(load);
+}
+
+function load(): void {
   const entities: Id[] = [];
   for (let i = 0; i < TASKS; i++) entities.push(task(i));
   for (let i = 0; i < PROJECTS; i++) entities.push(project(i));
@@ -71,6 +84,11 @@ describe('queries', () => {
   // A lookup by a value one entity holds, as a note's links and a document's short code are resolved
   bench('1,000 where lookups by a unique value', () => {
     for (let i = 0; i < 1000; i++) engine.query('Task').where('title', `Row ${i * 37}`).first();
+  }, { iterations: 10, time: 0 });
+
+  // A lookup on a field the type declares no index for, matching nothing: a filtered walk of the whole type
+  bench('10 where lookups on an unindexed field', () => {
+    for (let i = 0; i < 10; i++) engine.query('Task').where('rank', -1).first();
   }, { iterations: 10, time: 0 });
 
   bench('100 withRole lookups', () => {
@@ -132,4 +150,41 @@ describe('writes', () => {
       for (let i = 0; i < 1000; i++) engine.create('Note').set('title', `Note ${i}`).set('status', 'open');
     });
   }, { iterations: 50, time: 0 });
+});
+
+// What a watch costs a write: each commit's keys looked up in the read sets of the watches open, which read other rows
+// here, so the cost is the lookup's and no read runs again. It should stay flat as the watches grow, which is what the
+// read-set index is for. Then the same creates with watches on a page of the type written, which each run again
+// (once for the burst), and a page read tracked, as a watch runs it, against the read alone
+describe('watches', () => {
+  let open: Array<{ stop(): void }> = [];
+  const watching = (count: number, read: (i: number) => () => unknown) => ({
+    async setup() {
+      for (let i = 0; i < count; i++) open.push(engine.watch(read(i), () => {}));
+      await admin.watchesSettled();
+    },
+    teardown() {
+      for (const w of open) w.stop();
+      open = [];
+    },
+  });
+  const creates = () => {
+    for (let i = 0; i < 1000; i++) engine.create('Note').set('title', `Note ${i}`).set('status', 'open');
+  };
+  for (const count of [0, 10, 100, 1000]) {
+    bench(`1,000 creates, ${count.toLocaleString('en')} watches open on other rows`, creates, {
+      iterations: 20, time: 0, ...watching(count, (i) => () => engine.getRow(project(i))),
+    });
+  }
+  bench('1,000 creates, then 100 watches on a page of the type run again', async () => {
+    creates();
+    await admin.watchesSettled();
+  }, { iterations: 20, time: 0, ...watching(100, () => () => engine.query('Note').limit(50).ids()) });
+  const page = () => engine.query('Task').limit(50).pickAll();
+  bench('1,000 page reads', () => {
+    for (let i = 0; i < 1000; i++) page();
+  }, { iterations: 10, time: 0 });
+  bench('1,000 page reads, tracked as a watch runs them', () => {
+    for (let i = 0; i < 1000; i++) kv.track(page);
+  }, { iterations: 10, time: 0 });
 });

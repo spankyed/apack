@@ -1,6 +1,5 @@
 // services.appData: reset, back up and restore the app's stored data
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin, RunNode } from '@apackdev/sdk/services';
-import type { EarsAdmin } from '@apackdev/ears';
 import type { RecordStore } from '@apackdev/ears';
 import type { LmdbStore } from '@apackdev/ears/lmdb';
 import { exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
@@ -13,15 +12,15 @@ import { runAppMigrations, runPackMigrations } from '../migrations/index.ts';
 import { createSettingsBackupValidator } from '../features/settings/be/backup.ts';
 
 /**
- * `onReplaced` runs after either operation has rebuilt the world, and after a failed one too: a failed import
- * has already cleared the engine and reloaded what it put back. What it does with that is the caller's —
- * replacing the data is this service's job, and telling the app is not.
+ * `onReplaced` runs after either operation has rebuilt the world, and after a failed one too: a failed import has
+ * already put back what was there. What it does with that is the caller's — replacing the data is this service's
+ * job, and telling the app is not.
  */
-export function createAppData({ store, history, engine, registry, settings, onReplaced }: {
+export function createAppData({ store, history, registry, settings, onReplaced }: {
   store: LmdbStore;
   /** The run history and its record store, which a backup copies and a reset empties with the database */
   history: { service: RunHistory; store: RecordStore<RunNode> };
-  engine: EarsAdmin; registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
+  registry: PackRegistry; settings: SettingsAdmin; onReplaced: () => void;
 }): AppDataService {
   const stores: BackupStores = { lmdb: store, runHistory: history.store };
   let replacing = false;
@@ -37,11 +36,6 @@ export function createAppData({ store, history, engine, registry, settings, onRe
     }
   }
 
-  async function reloadMemory(): Promise<void> {
-    engine.clear();
-    await store.hydrate();
-  }
-
   async function replaceData<T>(replace: () => Promise<T>): Promise<T> {
     try { return await settings.whileReplacingData(replace); }
     finally { onReplaced(); }
@@ -53,10 +47,10 @@ export function createAppData({ store, history, engine, registry, settings, onRe
     async reset() {
       await exclusive(() => replaceData(async () => {
         registry.runShutdownHooks();
-        engine.clear();
-        await store.reset();
+        // The engine reads the store, so emptying the store empties the engine, in one unit
+        store.reset();
         await history.store.reset();
-        // Stored API keys go too, with their data keys; after the database reopens, since the settings system hears of it
+        // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         startPacks(registry);
       }));
@@ -71,14 +65,11 @@ export function createAppData({ store, history, engine, registry, settings, onRe
           ...options, entityTypes, validate,
           withReplacement: replaceData,
           accept: async () => {
-            await reloadMemory();
             // What a restored history left running can't be running now
             history.service.stopActive();
             // Run declared versioned data changes after restore, before notifying consumers.
             if (runAppMigrations(registry)) runPackMigrations(registry.packMigrationTargets('pack'));
           },
-          // The data before the import, hydrated again
-          restored: () => reloadMemory(),
         });
       });
     },

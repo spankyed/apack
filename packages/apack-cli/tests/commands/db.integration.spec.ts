@@ -10,7 +10,7 @@ import { type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
 import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, openRunHistoryStore, readInstalledSchema } from '@apackdev/host/database';
 import { exportDatabase } from '@apackdev/host/backup';
-import { closeEnv, openEnvAt, LMDB_FORMAT_VERSION } from '@apackdev/ears/lmdb';
+import { openEnvironment, LMDB_FORMAT_VERSION } from '@apackdev/ears/lmdb';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -60,11 +60,9 @@ async function write(userDataDir: string, change: () => void): Promise<void> {
   const { store, engine } = openDatabaseStore({
     path: paths.lmdb,
     schema: readInstalledSchema(schemaContext(userDataDir)),
-    log: () => {},
   });
   _bindEars(engine);
   try {
-    await store.hydrate();
     change();
   } finally {
     _bindEars(undefined);
@@ -109,7 +107,6 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
     schema: readInstalledSchema(schemaContext(userDataDir)),
     // Read-only: LMDB copies a database whose files this user can't write just as well
     readOnly: true,
-    log: () => {},
   });
   const runHistory = fs.existsSync(paths.runHistory) ? openRunHistoryStore(paths.runHistory, { readOnly: true }) : undefined;
   try {
@@ -122,11 +119,11 @@ async function backupOf(userDataDir: string, { withMedia = false, databases }: {
 
 /** Records another storage format in a database's own files, as a newer apack would have written them */
 function writeStorageFormat(databaseDir: string, format: number): void {
-  const env = openEnvAt(databaseDir);
+  const { root } = openEnvironment(databaseDir);
   try {
-    env.root.openDB({ name: 'meta', encoding: 'json' }).putSync('format', format);
+    root.openDB({ name: 'meta', encoding: 'json' }).putSync('format', format);
   } finally {
-    closeEnv(env);
+    root.close();
   }
 }
 
@@ -444,27 +441,12 @@ describe('apack db exec', () => {
     expect(out).toBe('Alpha');
   });
 
-  it('fails when a write never reaches the files', async () => {
-    const dir = await appDataDir();
-    const { error } = await run(['exec', "write('Note-a').set('count', 1n)", '--data-dir', dir]);
-    // The value LMDB can't store, and the updatedAt the engine stamps in the same write
-    expect(error?.message).toMatch(/2 write\(s\) didn't reach the database/);
-  });
-
   it('keeps none of what the code wrote when it throws part way', async () => {
     const dir = await appDataDir();
     const { error } = await run(['exec', "write('Note-a').set('title', 'Written'); throw new Error('boom')", '--data-dir', dir]);
     expect(error?.message).toMatch(/^Transaction failed: boom[\s\S]*Nothing it wrote was kept/);
     const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
     expect(out).toBe('Alpha');
-  });
-
-  it('keeps a write it could not have stored out of the files too, when the code throws', async () => {
-    const dir = await appDataDir();
-    // A value LMDB can't store, written before the code throws: undone with the transaction, so it never reaches close
-    const { error } = await run(['exec', "write('Note-a').set('count', 1n); throw new Error('boom')", '--data-dir', dir]);
-    expect(error?.message).toMatch(/^Transaction failed: boom[\s\S]*Nothing it wrote was kept/);
-    expect(error?.message).not.toMatch(/failed to close/);
   });
 });
 
@@ -555,15 +537,6 @@ describe('apack db script', () => {
     const { out } = await ok(['script', file, '--data-dir', dir, '--', 'From a script']);
     expect(out.split('\n')).toEqual(['renaming on string', '2']);
     expect((await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir])).out).toBe('From a script');
-  });
-
-  it("reports the script's own error first when closing fails too", async () => {
-    const dir = await appDataDir();
-    // A script writes as it goes, outside any transaction: a value LMDB can't store, then a throw
-    const file = writeScript(dir, 'broken.mjs', "export default ({ db }) => { db.ears.write('Note-a').set('count', 1n); throw new Error('boom'); };");
-    const { error } = await run(['script', file, '--data-dir', dir]);
-    expect(error?.message).toMatch(/boom[\s\S]*failed to close: 1 write\(s\) didn't reach the database/);
-    expect((error as Error).cause).toBeInstanceOf(Error);
   });
 
   it('runs a plain module too, and writes what it returns to a file', async () => {

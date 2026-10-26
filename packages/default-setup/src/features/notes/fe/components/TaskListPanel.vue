@@ -148,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { NoteDTO } from '#generated/types.ts'
+import type { NoteSummary } from '#generated/types.ts'
 import { Copy, Plus, ListChecks, Eye, EyeOff, FilePlus, MoreHorizontal, Trash2 } from 'lucide-vue-next'
 import {
   DropdownMenuRoot,
@@ -164,8 +164,8 @@ import { useContextMenu, type MenuItem } from '@apackdev/ui/composables/useConte
 import { useTrackedMenuOpen } from '@apackdev/sdk/fe'
 
 const props = defineProps<{
-  tasks: NoteDTO[]
-  allNotes: NoteDTO[]
+  tasks: NoteSummary[]
+  allNotes: NoteSummary[]
   selectedTaskId: string | null
   expandedNodeIds: string[]
   currentNoteId: string | null

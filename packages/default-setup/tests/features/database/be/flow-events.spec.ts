@@ -22,14 +22,16 @@ it('pages a run\'s events newest first, each with what it ran, saying when there
   const app = await startApp({ systems: ['database'] })
   await app.connect()
 
-  await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 0, limit: 2 })
-  const one = await app.nextEmit('database', 'FLOW_EVENTS_RESULT') as unknown as EventsPage
+  // Asked as the surface asks: a fetch is answered to its asker, and nobody else
+  const asked = { sender: 'default-setup/database', client: 'c-main' }
+  const firstPage = await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 0, limit: 2 }, asked)
+  const one = await app.nextEmit('database', 'FLOW_EVENTS_RESULT', { answering: firstPage }) as unknown as EventsPage
   expect(one.events.map((event) => event.id)).toEqual([third, second])
   expect(one.events[0].children.map((child) => child.label)).toEqual(['third step'])
   expect(one.hasMore).toBe(true)
 
-  await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 2, limit: 2 })
-  const two = await app.nextEmit('database', 'FLOW_EVENTS_RESULT') as unknown as EventsPage
+  const secondPage = await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 2, limit: 2 }, asked)
+  const two = await app.nextEmit('database', 'FLOW_EVENTS_RESULT', { answering: secondPage }) as unknown as EventsPage
   expect(two.events.map((event) => event.id)).toEqual([first])
   expect(two.hasMore).toBe(false)
 })

@@ -1,16 +1,28 @@
-import { createActor } from 'xstate'
+import { createActor, fromCallback, type ActorRefFrom } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
 import { repository } from '#generated/repository.ts'
 import { readClaudeComposerPhase, commitClaudeComposerPhase } from '#features/threads/fe/chat/native-composer-phase.ts'
 import threadsState from '#features/threads/fe/state.ts'
 import { queueClaudeUiRetirement, takeClaudeUiRetirements } from '#features/threads/fe/chat/native-ui-retirement.ts'
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
+const silentView = <Input extends object | undefined>() => fromCallback<{ type: string }, Input>(() => {})
+type RecentOrder = Parameters<typeof repository.threadQueries.archivedThreads>[0]
+const nativeState = threadsState.provide({ actors: {
+  listView: silentView<undefined>(), archivedView: silentView<{ sortOrder: RecentOrder }>(),
+  recentView: silentView<{ limit: number; sortOrder: RecentOrder }>(), detailView: silentView<{ id: string }>(),
+  chatView: silentView<{ threadId: string; limit: number }>(), messageView: silentView<{ id: string }>(),
+  tabView: silentView<{ threadId: string }>(),
+} })
+function loadChat(actor: ActorRefFrom<typeof threadsState>, threadId: Parameters<typeof repository.chatQueries.chatPage>[0], overrides: { forcedMode?: string } = {}) {
+  actor.send({ type: 'OPEN_THREAD_CHAT', threadId, restore: true })
+  actor.send({ type: 'CHAT.READ', threadId, chat: { ...repository.chatQueries.chatPage(threadId,50)!, ...overrides } })
+}
 const sent = vi.fn()
 const resumeKey = '11111111-1111-4111-8111-111111111111'
 afterAll(startFeTestRuntime({ client: { send: sent } }))
 
 it('ignores another view/thread and late replies after unmount without reviving a closed slot', () => {
-  const actor = createActor(threadsState).start()
+  const actor = createActor(nativeState).start()
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, mountId: 'mounted', threadId: 'thread-one' })
   const state = { status: 'live' as const, tree: { kind: 'button' as const, label: 'Run', actionId: 'opaque' } }
   actor.send({ type: 'CLAUDE_UI_STATE', resumeKey, mountId: 'other', threadId: 'thread-one', state })
@@ -26,7 +38,7 @@ it('ignores another view/thread and late replies after unmount without reviving 
 
 
 it('correlates native draft replies with the latest edit in the mounted thread slot', () => {
-  const actor = createActor(threadsState).start()
+  const actor = createActor(nativeState).start()
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, mountId: 'mounted', threadId: 'thread-one' })
   const edit = { type: 'CLAUDE_PROMPT_EDIT' as const, mountId: 'mounted', threadId: 'thread-one', by: 'person' as const, text: 'draft', cursor: 5 }
   actor.send({ ...edit, revision: 1 }); actor.send({ ...edit, revision: 2 })
@@ -45,7 +57,7 @@ it('correlates native draft replies with the latest edit in the mounted thread s
 
 
 it('rejects completion replies from another view or an older edit and retires rows on edit/unmount', () => {
-  const actor = createActor(threadsState).start()
+  const actor = createActor(nativeState).start()
   const identity = { mountId: 'view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity, revision: 1, by: 'app', text: 'tok', cursor: 3 })
@@ -66,7 +78,7 @@ it('rejects completion replies from another view or an older edit and retires ro
 
 
 it('rejects foreign and superseded focus and clears a pending redirect when the person moves again', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   const focus = { type: 'CLAUDE_UI_FOCUS' as const, ...identity, revision: 1, isHeld: true, focusId: 'one', by: 'person' as const }
   actor.send(focus); actor.send({ ...focus, revision: 2, focusId: 'two' })
@@ -81,7 +93,7 @@ it('rejects foreign and superseded focus and clears a pending redirect when the 
 
 
 it('routes only the current prompt host response and retires requests when the owner disconnects', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   const request = { requestId: 'request', revision: 1, expiresAt: Date.now() + 3000, kind: 'read' as const }
   actor.send({ type: 'CLAUDE_PROMPT_HOST_REQUEST', ...identity, threadId: 'foreign', request })
@@ -97,7 +109,7 @@ it('routes only the current prompt host response and retires requests when the o
 })
 
 it('forwards an Agent input once for its mounted thread and refuses foreign or retired slots', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'agent-view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'agent-view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity, nativeView: { ownerId: 'owner', sessionId: 'session', revision: 2, taskId: 'agent' } })
   sent.mockClear()
   const input = { type: 'CLAUDE_UI_AGENT_INPUT' as const, ...identity, revision: 1, text: 'User reply' }
@@ -109,7 +121,7 @@ it('forwards an Agent input once for its mounted thread and refuses foreign or r
 })
 
 it('renews a native view using its issued credential and ignores an obsolete lease-expiry answer', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native-attachment', state: { status: 'live', tree: { kind: 'text', text: 'native' } } })
   sent.mockClear(); actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
@@ -122,18 +134,18 @@ it('renews a native view using its issued credential and ignores an obsolete lea
   actor.stop()
 })
 it('resumes active native UI and terminal views on subscription startup without losing mount context', () => {
-  const actor = createActor(threadsState).start(), mount = { type: 'CLAUDE_UI_MOUNT' as const, promptFocused: true, mountId: 'view', threadId: 'thread', messageIds: ['message'], userExpansion: { message: true } }
+  const actor = createActor(nativeState).start(), mount = { type: 'CLAUDE_UI_MOUNT' as const, promptFocused: true, mountId: 'view', threadId: 'thread', messageIds: ['message'], userExpansion: { message: true } }
   actor.send(mount); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' })
   actor.send({ type: 'CLAUDE_UI_STATE', mountId: 'view', threadId: 'thread', resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
   sent.mockClear()
-  actor.send({ type: 'THREAD_CONNECTED', data: { ...repository.threadQueries.connectedData(), settings: null } })
+  actor.send({ type: 'SURFACE_STARTED' })
   expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { ...mount, resumeKey } }))
   expect(sent).toHaveBeenCalledWith(expect.objectContaining({ event: { type: 'CLAUDE_TERMINAL_MOUNT', threadId: 'thread', mountId: 'terminal' } }))
   expect(actor.getSnapshot().context.nativeUiViews.view?.attachmentId).toBe('native')
   actor.stop()
 })
 it('carries the issued lease when a native view closes after its connection changes', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   actor.send({ type: 'CLAUDE_UI_STATE', ...identity, resumeKey, attachmentId: 'native', state: { status: 'live', tree: { kind: 'text', text: 'current' } } })
   sent.mockClear(); actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity })
@@ -145,9 +157,9 @@ it('defers replaced-actor cleanup to accepted startup data and drains it once', 
   takeClaudeUiRetirements(); sent.mockClear()
   const release = { threadId: 'thread-old', mountId: 'old-view', resumeKey }
   queueClaudeUiRetirement(release); queueClaudeUiRetirement(release)
-  const actor = createActor(threadsState).start()
+  const actor = createActor(nativeState).start()
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT')).toHaveLength(0)
-  const startup = { type: 'THREAD_CONNECTED' as const, data: { ...repository.threadQueries.connectedData(), settings: null } }
+  const startup = { type: 'SURFACE_STARTED' as const }
   actor.send(startup)
   expect(sent.mock.calls.filter(([message]) => message.event.type === 'CLAUDE_UI_UNMOUNT').map(([message]) => message.event)).toEqual([{ type: 'CLAUDE_UI_UNMOUNT', ...release }])
   actor.send(startup)
@@ -166,15 +178,15 @@ it('loads native permission phase on cold thread selection without overwriting a
   repository.threadCommands.update(edit.id,{context:{claudeCode:{sessionId:'saved-edit',permissionMode:'acceptEdits'}}})
   const plan = repository.threadCommands.create({topic:'Saved native plan',instructions:''})
   repository.threadCommands.update(plan.id,{context:{claudeCode:{sessionId:'saved-plan',permissionMode:'plan'}}})
-  const actor = createActor(threadsState).start()
-  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
+  const actor = createActor(nativeState).start()
+  loadChat(actor,edit.id)
   expect(actor.getSnapshot().context.phase).toBe('Edit')
   actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Plan'})
-  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(edit.id)!})
+  loadChat(actor,edit.id)
   expect(actor.getSnapshot().context.phase).toBe('Plan')
-  actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(plan.id)!})
+  loadChat(actor,plan.id)
   expect(actor.getSnapshot().context.phase).toBe('Plan')
-  actor.send({type:'LOAD_CHAT_THREAD',data:{...repository.chatQueries.threadData(edit.id)!,forcedMode:'Claude Code'}})
+  loadChat(actor,edit.id,{forcedMode:'Claude Code'})
   expect(actor.getSnapshot().context.phase).toBe('Plan')
   expect(actor.getSnapshot().context.phase).toBe('Plan')
   actor.send({type:'SET_PHASE',source:'native',threadId:edit.id,phase:'Edit'})
@@ -195,11 +207,11 @@ it('loads native permission phase on cold thread selection without overwriting a
 it('keeps a loaded native phase when startup hydration arrives later', () => {
   const thread = repository.threadCommands.create({topic:'Cold native',instructions:''})
   repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId:'saved',permissionMode:'default'}}})
-  const data={...repository.chatQueries.threadData(thread.id)!,forcedMode:'Claude Code'}
-  const actor=createActor(threadsState).start()
-  actor.send({type:'LOAD_CHAT_THREAD',data})
+  const data={...repository.chatQueries.chatPage(thread.id,50)!,forcedMode:'Claude Code'}
+  const actor=createActor(nativeState).start()
+  loadChat(actor,thread.id,{forcedMode:data.forcedMode})
   expect(actor.getSnapshot().context.phase).toBe('Edit')
-  actor.send({type:'AGENT_CONNECTED',data:{currentThread:data,threads:[],recentThreads:[],tabs:[]}})
+  actor.send({type:'CHAT_STARTED',data:{...repository.chatQueries.chatStart(),currentThreadId:thread.id,tabs:[]}})
   expect(actor.getSnapshot().context.phase).toBe('Edit')
   actor.stop()
 })
@@ -207,8 +219,8 @@ it('keeps a loaded native phase when startup hydration arrives later', () => {
 it('passes the selected phase to an explicit print Send and retires leftover native staging',()=>{
  const thread=repository.threadCommands.create({topic:'Return to print',instructions:''})
  repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId:'saved-plan',permissionMode:'plan'}}})
- const actor=createActor(threadsState).start()
- actor.send({type:'LOAD_CHAT_THREAD',data:repository.chatQueries.threadData(thread.id)!})
+ const actor=createActor(nativeState).start()
+ loadChat(actor,thread.id)
  actor.send({type:'STAGE_CLAUDE_PHASE',phase:'Edit'})
  expect(readClaudeComposerPhase(thread.id)?.phase).toBe('Edit')
  actor.send({type:'SET_MODE',mode:'Birth'});actor.send({type:'SET_MODE',mode:'Claude Code'})
@@ -219,7 +231,7 @@ it('passes the selected phase to an explicit print Send and retires leftover nat
 })
 
 it('keeps native key acknowledgements in their mounted thread and ignores older or retired replies', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'key-view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'key-view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: true, ...identity })
   const result = { type: 'CLAUDE_UI_KEY_RESULT' as const, ...identity, sequence: 2, handled: true }
   actor.send({ ...result, threadId: 'foreign' })
@@ -235,7 +247,7 @@ it('keeps native key acknowledgements in their mounted thread and ignores older 
 })
 
 it('retains native MCP form acknowledgments only in the live addressed terminal view', () => {
-  const actor = createActor(threadsState).start(), identity = { mountId: 'mcp-view', threadId: 'thread' }
+  const actor = createActor(nativeState).start(), identity = { mountId: 'mcp-view', threadId: 'thread' }
   actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity })
   const reply = { type: 'CLAUDE_TERMINAL_STATE' as const, ...identity, opening: false, output: [], mcpOperation: { sequence: 1, status: 'done' as const } }
   actor.send({ ...reply, threadId: 'foreign' })

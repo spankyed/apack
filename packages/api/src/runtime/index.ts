@@ -4,7 +4,7 @@ import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsEngine } from '@apackdev/ears';
 import type { RecordStore } from '@apackdev/ears';
-import type { LmdbStore, WriteFailure } from '@apackdev/ears/lmdb';
+import type { LmdbStore } from '@apackdev/ears/lmdb';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistoryStore, storedSettings } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -16,6 +16,7 @@ import {
 } from '@apackdev/host/features';
 import { createAppBus, createParticipantClaims, HOST } from '@apackdev/host/bus';
 import { createHostRuntime } from '@apackdev/host/services';
+import { createViewHost, type ViewHost } from '@apackdev/host/views';
 import { _settingsAdmin, type RunNode } from '@apackdev/sdk/services';
 import { compileSettingsCatalog, createSettingsAccess } from '@apackdev/host/settings';
 import { forwardSecretsChanges } from '@apackdev/host/secrets';
@@ -58,6 +59,8 @@ export interface AppStore {
 /** The app's registered packs, which openAppStore creates: the transport's procedures and dev reload work on them */
 export let appPacks: PackRegistry;
 export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
+/** The views windows are subscribed to, run on the app's engine over its registered packs (`views.watch`) */
+export let appViews: ViewHost;
 
 /**
  * The open store, so shutdown can flush it.
@@ -78,41 +81,21 @@ export let appRunHistory: RecordStore<RunNode> | undefined;
  * which `apack db` opens a data dir with too) with their entity types, the run history's store, and
  * `bindHost(createHostRuntime(...))` with the root event bus, whose log events are printed, the app version, the
  * registry (the SDK's lookups read it), the engine (packs get its operations, bound by the bind) and the host
- * services over the store and the engine's admin face. The caller hydrates the store once the packs are registered.
+ * services over the store and the engine's admin face.
  */
 /**
- * A write that did not reach the database.
- *
- * Every one is logged with the row it was for, which is what a diagnosis needs and what the old
- * `console.error` never carried. The user is told **once** per process: a production app dropped 3,187
- * writes in one session, and 3,187 toasts would be worse than none — so later drops only move the count,
- * which the message names so a second look says how bad it got.
+ * What the app holds at boot, once its packs are registered: the heap, and the database's size on disk. The engine
+ * reads the store rather than a copy of it, so neither grows with the other; this is the reading that says so
  */
-let droppedWrites = 0;
-function reportDroppedWrite({ op, key, error }: WriteFailure): void {
-  droppedWrites++;
-  logger.error(`A write didn't reach the database (${op} ${key})`, { error, dropped: droppedWrites });
-  if (droppedWrites > 1) return;
-  reportError({
-    error,
-    title: `Some changes aren't reaching the database (${op} ${key}). Recent edits may not have been saved.`,
-    source: 'database',
-  });
-}
-
-/** What hydrating took: its time, the heap it added and the heap after it, and the database's size on disk */
-function hydrationReading(ms: number, heapBefore: number): string {
+function bootReading(): string {
   const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MB`;
-  const { heapUsed } = process.memoryUsage();
   let onDisk: string;
   try {
     onDisk = mb(statSync(path.join(_getLmdbPath(), 'data.mdb')).size);
   } catch {
     onDisk = 'unknown';
   }
-  // A collection during hydration can leave less heap than before it
-  const added = heapUsed - heapBefore;
-  return `Hydrated in ${Math.round(ms)} ms: heap ${added < 0 ? '' : '+'}${mb(added)} (${mb(heapUsed)} in all), database ${onDisk} on disk`;
+  return `Database ${onDisk} on disk, heap ${mb(process.memoryUsage().heapUsed)}`;
 }
 
 export function openAppStore(): AppStore {
@@ -127,7 +110,8 @@ export function openAppStore(): AppStore {
   const { store, engine } = openDatabaseStore({
     path: _getLmdbPath(),
     schema: packs,
-    onWriteFailure: reportDroppedWrite,
+    // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
+    ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistoryStore(_getRunHistoryPath());
   runtime = createHostRuntime({ store, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
@@ -135,6 +119,7 @@ export function openAppStore(): AppStore {
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
+  appViews = createViewHost({ ears: () => engine, packs });
   appStore = store;
   appRunHistory = runHistory;
   return { store, runHistory, engine, packs };
@@ -158,8 +143,8 @@ export async function setupBackend(): Promise<void> {
   const appContext = resolveAppEnvironment();
   assertNoDatabaseWriter(appContext.userDataDir);
 
-  // The app's data: the engine persists to it from here on, and it's hydrated once the packs are registered
-  const { store, packs } = openAppStore();
+  // The app's data: the engine reads and writes it from here on
+  const { engine, packs } = openAppStore();
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The
@@ -184,7 +169,7 @@ export async function setupBackend(): Promise<void> {
     // nothing looks the same either way: on a fresh data dir both give an app with no surfaces
     console.warn('[packs] SHIPPED_PACKS_DIR is not set, so no pack the app ships is installed');
   } else {
-    const results = await installShippedPacks(shippedDir, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(store) });
+    const results = await installShippedPacks(shippedDir, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
     if (results.length === 0) console.warn(`[packs] ${shippedDir} holds no pack to install`);
     for (const result of results) {
       if (result.outcome === 'failed') console.error(`[packs] Could not install ${result.id}, which this app ships: ${result.error}`);
@@ -194,7 +179,7 @@ export async function setupBackend(): Promise<void> {
 
   // Static discovery and a direct stored-row read precede executable pack loading and hydration.
   packs.refreshCatalog(appContext.packsDir);
-  const settingsProblems = compileSettingsCatalog(packs.settingsCatalog()).inspect(storedSettings(store));
+  const settingsProblems = compileSettingsCatalog(packs.settingsCatalog()).inspect(storedSettings(engine));
   const recoveringSettings = settingsProblems.length > 0;
   if (recoveringSettings) {
     console.error('[settings] Preferences require an explicit reset before normal startup:', settingsProblems);
@@ -223,12 +208,7 @@ export async function setupBackend(): Promise<void> {
     }
   }
 
-  // ── Hydrate (the engine now knows every pack's entity types). What it cost is the boot's reading of the user's
-  // own data, which the bench's synthetic graph can't give
-  const heapBefore = process.memoryUsage().heapUsed;
-  const hydrateStarted = performance.now();
-  await store.hydrate();
-  logger.info(hydrationReading(performance.now() - hydrateStarted, heapBefore));
+  logger.info(bootReading());
 
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
   if (!recoveringSettings) startPacks(packs);

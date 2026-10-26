@@ -15,7 +15,7 @@ export default defineConfig({
     // Large (`SIZE_MS` × `DEADLINE_FACTOR`). Longer multi-build scenarios declare reviewed per-test budgets.
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    setupFiles: ['./tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', './tests/_support/turn-event-loop.ts', './tests/_support/compiler-store.ts'],
     globalSetup: ['./tests/_support/compiler-store-run.ts'],
     include: ['tests/**/*.integration.spec.ts'],
     exclude: ['**/node_modules/**'],

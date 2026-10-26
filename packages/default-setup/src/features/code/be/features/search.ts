@@ -1,11 +1,9 @@
-import { broadcastToSurface } from '#generated/events.ts';
+import { answer } from '../answer.ts'
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import type { SearchOptions } from '../types.ts'
-
-const surfaceId = 'code' as const
 
 // Incoming events from frontend
 
@@ -16,8 +14,8 @@ export interface CodeSearchSystemContext {
   activeSearchController?: AbortController
 }
 
-export type Event = 
-  | { type: 'search.SEARCH_FILES'; 
+export type Event =
+  | { type: 'search.SEARCH_FILES';
       query: string;
       path: string;
       includePattern?: string;
@@ -42,9 +40,9 @@ export const searchSystem = setup({
     input: {} as { baseDirectory: string | null },
   },
   actions: handlers.actions({
-    searchFiles: async ({ event, context, self }) => {
-      const ev = event as { 
-        type: 'search.SEARCH_FILES'; 
+    searchFiles: async ({ event, context, self, reply }) => {
+      const ev = event as {
+        type: 'search.SEARCH_FILES';
         query: string;
         path: string;
         includePattern?: string;
@@ -56,7 +54,7 @@ export const searchSystem = setup({
       }
 
       if (!context.repository) {
-        broadcastToSurface(surfaceId, {
+        answer(reply, {
           type: 'search.ERROR',
           data: { message: 'No directory selected. Please select a directory first.' }
         })
@@ -91,7 +89,7 @@ export const searchSystem = setup({
           // Progress callback
           (filesSearched, totalFiles, currentFile) => {
             if (!controller.signal.aborted) {
-              broadcastToSurface(surfaceId, {
+              answer(reply, {
                 type: 'search.PROGRESS',
                 data: { filesSearched, totalFiles, currentFile }
               })
@@ -101,7 +99,7 @@ export const searchSystem = setup({
           (result) => {
             if (!controller.signal.aborted) {
               totalMatches += result.matches.length
-              broadcastToSurface(surfaceId, {
+              answer(reply, {
                 type: 'search.RESULT',
                 data: result
               })
@@ -110,14 +108,14 @@ export const searchSystem = setup({
         )
 
         if (!controller.signal.aborted) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'search.COMPLETE',
             data: { results, totalMatches }
           })
         }
       } catch (error: any) {
         if (!controller.signal.aborted) {
-          broadcastToSurface(surfaceId, {
+          answer(reply, {
             type: 'search.ERROR',
             data: { message: error.message }
           })

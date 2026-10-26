@@ -12,7 +12,8 @@
  *   machine. Callers pass `TIMEOUT_MS[class]` (`scripts/lib/step-timeouts.ts`), which carries no machine. A
  *   bound longer than anyone will wait is the same as no bound, which keeps the ladder short.
  * - **The process group dies, not just the child.** `npm run x` is a shell that spawns node that spawns
- *   vitest that spawns workers. Killing the child alone orphans the rest, still running.
+ *   vitest that spawns workers. Killing the child alone orphans the rest, still running. And the group dies
+ *   when the child exits however it ends, a pass included: nothing a run started outlives it.
  */
 import { spawn } from 'node:child_process';
 
@@ -159,6 +160,10 @@ export function boundedSpawn(command: string, args: readonly string[], budgetMs:
       if (stream) console.error(error.message);
       closed = 1;
     });
+
+    // What is still in the group once its leader has exited was orphaned: a vitest that died on one worker's
+    // native abort leaves the others running, reparented to init. They hold the pipes, so 'close' waits on them.
+    child.on('exit', () => { killGroup('SIGKILL'); });
 
     child.on('close', (code) => {
       clearTimeout(budget);

@@ -55,7 +55,7 @@ describe('CC: Deny Tool', () => {
     } } } });
     const { artifactId } = repository.chatCommands.createArtifact({ threadId: id, artifactType: 'plan', title: 'Native plan',
       content: { status: 'draft', notes: '# Review this plan', steps: [] } });
-    mockService<Services, 'artifact'>('artifact', { updateAndNotify: vi.fn((artifact, options) => {
+    mockService<Services, 'artifact'>('artifact', { update: vi.fn((artifact, options) => {
       repository.chatCommands.updateArtifact(artifact, { content: options.content });
     }) });
     await expect(action({ threadId: id, requestId: 'current', response: { approved: false, reason: 'Revise the plan' } }, services)).resolves.toEqual({ success: true });

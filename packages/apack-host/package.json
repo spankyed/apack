@@ -48,7 +48,8 @@
     "./services": "./src/services/index.ts",
     "./testing": "./src/testing/pack-registry.ts",
     "./fe/testing": "./src/testing/frontend-registry.ts",
-    "./settings": "./src/features/settings/be/index.ts"
+    "./settings": "./src/features/settings/be/index.ts",
+    "./views": "./src/views/index.ts"
   },
   "dependencies": {
     "@apackdev/ears": "*",

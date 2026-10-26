@@ -11,7 +11,7 @@ function fixture(validate = vi.fn(async () => {})) {
   const create = vi.fn((opts: {topic:string;instructions:string})=>repository.threadCommands.create(opts));
   const notify = vi.fn(), open = vi.fn();
   mockService<Services,'cli'>('cli',{claudeCode:{validateResumeTarget:validate,closeIdleConversation:vi.fn(async()=>true),getHandle:vi.fn() } as never});
-  mockService<Services,'chat'>('chat',{createThreadAndNotify:create,sendBlockMessage:notify,openThreadChatAndRefreshRecent:open});
+  mockService<Services,'chat'>('chat',{createThread:create,sendBlockMessage:notify,showThread:open});
   return {id,create,notify,validate,open};
 }
 it('rejects unavailable native history before creating or copying a thread', async () => {

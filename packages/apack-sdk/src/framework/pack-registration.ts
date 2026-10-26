@@ -72,7 +72,7 @@ export interface PackFeatureSurface {
   receives: readonly string[];
 }
 
-/** One feature of a pack: whatever it has of a system, a surface, a role, services and settings */
+/** One feature of a pack: whatever it has of a system, a surface, a role, services, settings and views */
 export interface PackFeature {
   designation?: string;
   system?: PackFeatureSystem;
@@ -81,6 +81,8 @@ export interface PackFeature {
   services?: readonly string[];
   /** The feature's default settings (apack.json `features.<id>.settings`) */
   settings?: import('./settings-definition.ts').SettingsDefinition;
+  /** The feature's views (apack.json `features.<id>.views`), which the host runs for the windows subscribed to them */
+  views?: import('./views.ts').ViewDefinitions;
 }
 
 export interface PackRegistration {

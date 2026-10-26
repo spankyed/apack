@@ -11,6 +11,10 @@ import { broadcastToSurface } from '#generated/events.ts';
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingThreadsEvents } from './types.ts';
 
+/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
+export type ThreadsOutcomeType = 'SHOW_THREAD' | 'THREAD_CHAT_ERROR' | 'THREADS_EXPORT_FAILED' | 'THREADS_EXPORTED' | 'THREADS_IMPORT_FAILED' | 'THREADS_IMPORTED'
+export type ThreadsOutcome = Extract<OutgoingThreadsEvents, { type: ThreadsOutcomeType }>
+
 /**
  * Answers whoever asked, and tells every window when nobody did.
  *
@@ -22,7 +26,7 @@ import type { OutgoingThreadsEvents } from './types.ts';
  */
 export const answer = (
   reply: Reply<OutgoingThreadsEvents> | undefined,
-  event: OutgoingThreadsEvents,
+  event: ThreadsOutcome,
 ): void => (reply ? reply(event) : broadcastToSurface('threads', event));
 
 // Named `answer` to match the five sibling features' helpers, which `an-outcome-goes-to-whoever-asked.spec.ts`

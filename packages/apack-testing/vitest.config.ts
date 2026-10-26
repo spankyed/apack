@@ -9,6 +9,8 @@ export default defineConfig({
   resolve: { conditions },
   ssr: { resolve: { conditions } },
   test: {
+    // A worker exits when its vitest does, rather than running on orphaned
+    setupFiles: ['./src/vitest-exit-with-parent.ts'],
     // Small (`SIZE_MS` × `DEADLINE_FACTOR`, scripts/lib/unit-suites.ts). A budget belongs to the size, not to each
     // test that trips over vitest's 5s default.
     testTimeout: 30_000,
