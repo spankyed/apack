@@ -216,9 +216,9 @@ test('edits original Settings through desktop controls and retains composing', a
     for(const [width,height]of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height});await review()
       const body=editor.locator('[data-native-settings-editor-body]'),description=body.locator('p').first(),text=await description.innerText(),readings:any[]=[],captures:string[]=[]
-      expect(text).toContain("Send the CLAUDE.md, rules, output styles, and preferences")
-      expect(text).toContain('never sends hooks, environment variables, MCP servers, or plugins')
-      expect(text).toContain('encrypted at rest');expect(text).toContain('Yes and No are saved for this machine')
+      expect(text.replace(/\s+/g,' ')).toContain("Send the CLAUDE.md, rules, output styles, and preferences")
+      expect(text.replace(/\s+/g,' ')).toContain('never sends hooks, environment variables, MCP servers, or plugins')
+      expect(text.replace(/\s+/g,' ')).toContain('encrypted at rest');expect(text.replace(/\s+/g,' ')).toContain('Yes and No are saved for this machine')
       await expect(editor.locator('[data-native-settings-option="not_now"]')).toHaveAttribute('aria-pressed','true');await expect(editor.locator('[data-native-settings-option="not_now"]')).toBeFocused()
       const lines=await description.evaluate(element=>{
         const node=document.createTreeWalker(element,NodeFilter.SHOW_TEXT).nextNode()!,text=node.textContent!,lines:{start:number;end:number;top:number}[]=[]
