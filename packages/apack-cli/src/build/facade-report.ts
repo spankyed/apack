@@ -97,10 +97,10 @@ export interface FacadeReportComparison {
   readonly problem?: string;
 }
 
-/** TypeScript can reorder inferred object properties; their order is not part of a type's contract. */
+/** Apply the emitter's union rules and compare uniquely named inferred properties independent of order. */
 function comparableReport(report: string): string {
   return report.replace(/```ts\n([\s\S]*?)\n```/, (_block, declarations: string) => {
-    const file = ts.createSourceFile('facade.d.ts', declarations, ts.ScriptTarget.Latest, true);
+    const file = ts.createSourceFile('facade.d.ts', sortLiteralUnions(declarations, 'facade.d.ts'), ts.ScriptTarget.Latest, true);
     const result = ts.transform(file, [context => {
       const visit: ts.Visitor = node => {
         const visited = ts.visitEachChild(node, visit, context);

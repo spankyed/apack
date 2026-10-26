@@ -49,7 +49,7 @@ beforeAll(async () => {
     'package.json': packageJson(ID),
     'tsconfig.json': tsconfig,
     'apack.json': manifest('Memo'),
-    'src/types.ts': 'export interface MemoEntity { title: string }\nexport interface ReminderEntity { at: string }\n',
+    'src/types.ts': 'export interface MemoEntity { title: string; copyState?: "saved" | "pending" | "idle" | "error" | undefined }\nexport interface ReminderEntity { at: string }\n',
     'src/system.contract.ts': CONTRACT(),
     'src/system.ts': [
       "import { setup } from 'xstate';",
@@ -92,6 +92,7 @@ describe.skipIf(!PACKAGES_BUILT)('apack pack facade-report', () => {
     expect((await callCli(pack, 'facade-report', ['--update'])).code).toBe(0);
     expect(readReport()).toContain(`Facade types report for the "${ID}" pack`);
     expect(readReport()).toContain('NOTIFIED');
+    expect(readReport()).toContain('copyState?: "error" | "idle" | "pending" | "saved" | undefined;');
 
     const { code, output } = await callCli(pack, 'facade-report');
     expect(code, output).toBe(0);
