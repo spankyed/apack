@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import type { Editor } from '@tiptap/vue-3'
 import { PluginKey } from '@tiptap/pm/state'
@@ -40,6 +40,12 @@ const editorElement = props.editor.view.dom
 const ownerDocument = editorElement.ownerDocument
 const menuOptions = {
   placement: 'top' as const, offset: 8, strategy: 'fixed' as const, inline: true,
+  shift: { limiter: { fn: ({ x, y, rects }: { x: number; y: number; rects: { floating: { width: number } } }) => {
+    // Resolve at positioning time: EditorContent attaches its DOM asynchronously.
+    const boundary = editorElement.closest('form')?.getBoundingClientRect()
+    if (!boundary || boundary.width < rects.floating.width + 16) return { x, y }
+    return { x: Math.max(boundary.left + 8, Math.min(x, boundary.right - rects.floating.width - 8)), y }
+  } } },
 }
 
 // A private host preserves the menu's blur boundary while escaping editor scroll clipping.
@@ -60,15 +66,6 @@ function onMouseDown() { rightClicked = false }
 
 onMounted(() => {
   ownerDocument.body.appendChild(menuHost)
-  // BubbleMenu registers its plugin on nextTick; EditorContent must also have attached its DOM.
-  void nextTick(() => {
-    const boundary = editorElement.closest('form')
-    if (!boundary || props.editor.isDestroyed || !menuHost.isConnected) return
-    props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, {
-      type: 'updateOptions', options: { options: { shift: { boundary, padding: 8 }, flip: { boundary, padding: 8 } } },
-    }))
-  })
-
   ownerDocument.addEventListener('scroll', onAncestorScroll, true)
   const el = editorElement
   el.addEventListener('contextmenu', onContextMenu)
