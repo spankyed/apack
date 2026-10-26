@@ -8,7 +8,12 @@ Status: Steps 1–5 done, 2026-10-25: `engine.watch`, the read-set index and the
 pack rule decided against (`b9d9be8bb`). Then the last broadcasts carrying data, one change per feature: the
 run-history fetches answered to their asker alone (`2f9fd5723`), the flows model catalog asked for (`0061451ea`), the
 code surface's startup asked for and a git write announced as news (`da805a5d1`), and a flow's generated query and
-commit message answered to the window that asked (`ce5e05236`). No feature in default-setup broadcasts row data.
+commit message answered to the window that asked (`ce5e05236`). Then a broadcast typed to carry only news or a
+command's outcome, as the compiler checks (`53a715e41`). No feature in default-setup broadcasts row data. A failure the
+gate met on the way was fixed at its causes: worktrees in a `.noindex` directory, for Electron's shutdown held by
+Spotlight indexing a fresh install (`ecc4aa4bd`), and `useSurfaceDraft`, for the fixture's input lost when a
+reconnect remounted its surface (`c06a97a38`, with the E2E fixture naming an API restart under a failing test,
+`b43926dc0`).
 Step 1's readings and the decisions each step made are below.
 
 A view's data reaches the frontend as a live query: the backend declares a read, a window subscribes to it with its
