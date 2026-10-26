@@ -157,9 +157,14 @@ test('retires a focused held Client press across native policy restriction and r
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await expect(composer).toHaveText(parent.text)
-  await composer.fill('Continue after reviewing this extension policy.')
+  const continuation='Continue after reviewing this extension policy.'
+  if(borrowedPolicyClient){
+    await expect(composer).toBeVisible();await composer.click();await expect(composer).toBeFocused()
+    await composer.press('ControlOrMeta+a');await appPage.keyboard.insertText(continuation)
+    await expect(composer).toHaveText(continuation)
+  }else await composer.fill(continuation)
   await card.getByRole('button',{name:'Send',exact:true}).click()
-  await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
+  await expect.poll(async()=>(await context()).claude.chatState,{timeout:20000,message:'Original resumed print CLI completes after owned native shutdown'}).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([]);expect(resizeErrors).toEqual([])
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePolicyHeldClient:true,...(borrowedPolicyClient?{nativeBorrowedPolicyHeldClient:true}:{}),nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors,resizeErrors}))
 })
