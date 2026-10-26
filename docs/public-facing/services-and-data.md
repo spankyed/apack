@@ -251,7 +251,7 @@ Pack code never imports `@apackdev/host`, the app's private package: `apack pack
 
 ## EARS (Entity-Attribute-Relation Store)
 
-EARS is a lightweight in-memory graph database backed by LMDB. Packs declare entity types and relation kinds in the manifest, and use the repository pattern for data access.
+EARS is a graph database on elmdb, a Rust engine over LMDB, which keeps no copy of the data in memory. Packs declare entity types and relation kinds in the manifest, and use the repository pattern for data access.
 
 The engine is its own package, `@apackdev/ears`, which packs may depend on and import directly: the app shares one instance of it with every pack, as it does `@apackdev/sdk`. Import from:
 

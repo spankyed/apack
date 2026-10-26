@@ -461,7 +461,7 @@ export const ELMDB_RULES: { dirs: string[]; except?: string; forbidden?: RegExp;
   { dirs: PACK_CODE_DIRS, rule: 'elmdb-imports' },
 ];
 
-/** `file:line: specifier` for each import of LMDB or the LMDB store where `rules` forbid it */
+/** `file:line: specifier` for each import of elmdb or `@apackdev/ears/lmdb` where `rules` forbid it */
 export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[] {
   return rules.flatMap(({ dirs, except, forbidden, rule }) => {
     if (rule) return packRule(rule, dirs, root);

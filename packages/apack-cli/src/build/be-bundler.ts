@@ -319,7 +319,7 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$
 
 /**
  * Fails the bundle when pack code imports @apackdev/host, the app's private package, or an export only the
- * app loads (`APP_ONLY_EXPORTS`, the LMDB store): installed apack doesn't provide them to packs, so
+ * app loads (`APP_ONLY_EXPORTS`, the elmdb databases): installed apack doesn't provide them to packs, so
  * they would only fail later, at load. Packs use @apackdev/sdk.
  */
 export function rejectHostImportsPlugin(): import('esbuild').Plugin {

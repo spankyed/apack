@@ -73,7 +73,7 @@ export type BackupStores = { lmdb: BackupStore } & Partial<Record<Exclude<Databa
 
 /**
  * Copies the stores in `databases` (and the media folder `mediaPath`, with the database) into a new backup folder.
- * Each is copied by LMDB itself (`copyTo`), so a backup taken while the app is running holds each store as of one
+ * Each is copied by elmdb itself (`copyTo`, its compacted copy), so a backup taken while the app is running holds each store as of one
  * moment rather than whatever the files happened to say as they were read.
  */
 export async function exportDatabase(

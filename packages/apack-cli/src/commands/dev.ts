@@ -444,7 +444,7 @@ async function session(args: string[], hooks: SessionHooks, target: 'app' | 'pac
     console.log('  it has gone; starting yours\n');
   }
 
-  // An app already on this data dir is the one to use: a second Electron over the same LMDB store is not a
+  // An app already on this data dir is the one to use: a second Electron over the same database is not a
   // choice anyone wants. Only an app this command started is one it may close.
   if (readApiEndpoint(apiPortFile)) {
     verifyRunningSession();
