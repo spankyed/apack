@@ -12,6 +12,7 @@ test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('completes an everyday native review across Agent, approval, question and interruption recovery', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
+  const combinedAcceptance=process.env.CLAUDE_RESEARCH_COMBINED_ACCEPTANCE==='1'
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -20,20 +21,21 @@ test('completes an everyday native review across Agent, approval, question and i
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
   const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
-  await appPage.waitForTimeout(700)
+  await expect.poll(()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/code')?.getSnapshot().context.settings?.cliPaths?.['claude-code'])).toBe(launcher)
   await app.navigate('default-setup/threads')
   await appPage.evaluate(cwd => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase: 'Edit' }) }, workspace!)
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
-  await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
+  await expect.poll(async () => (await context()).turns,{timeout:20000}).toBe(1)
   const channelDialog=appPage.getByRole('dialog',{name:'Claude channels',exact:true})
   const channelWindow=await electronApp.browserWindow(appPage),channelCaptures:string[]=[]
   const openChannels=async()=>{const button=card.getByRole('button',{name:'Claude channels',exact:true});if(await button.isVisible())await button.click();else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude channels',exact:true}).click()}await expect(channelDialog).toBeVisible()}
   const selectedChannels=()=>appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.context?.claudeCode?.channelSelection)
   const captureChannels=async(label:string,width:number,height:number)=>{await appPage.setViewportSize({width,height});for(const control of [channelDialog.getByRole('textbox'),channelDialog.getByRole('button',{name:'Cancel',exact:true}),channelDialog.getByRole('button',{name:'Save channels',exact:true})])await expect(control).toBeInViewport({ratio:1});const png=await channelWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});const name='native-channels-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'));channelCaptures.push(name)}
+  if(!combinedAcceptance){
+  await card.locator('[contenteditable="true"]').fill('Help me review the release notes and checklist.')
   await openChannels();await channelDialog.getByRole('textbox').fill('server:');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click()
   await expect(channelDialog.getByRole('alert')).toContainText('server:<name>');await expect(channelDialog.getByRole('textbox')).toHaveValue('server:')
   for(const [width,height] of [[1100,900],[680,600]]){await appPage.setViewportSize({width,height});await expect(channelDialog.getByRole('alert')).toBeInViewport({ratio:1});await expect(channelDialog.locator('#claude-channel-help')).toBeInViewport({ratio:1});await captureChannels('invalid',width,height)}
@@ -42,6 +44,7 @@ test('completes an everyday native review across Agent, approval, question and i
   for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toHaveValue('server:review\nplugin:notes@owned');await captureChannels('saved',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
   await openChannels();await channelDialog.getByRole('textbox').fill('');await channelDialog.getByRole('button',{name:'Save channels',exact:true}).click();await expect.poll(selectedChannels).toEqual([])
   await expect(card.locator('[contenteditable="true"]')).toHaveText('Help me review the release notes and checklist.');await appPage.setViewportSize({width:1100,height:900})
+  }
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -91,9 +94,11 @@ test('completes an everyday native review across Agent, approval, question and i
   if (restriction) await expect(status).toHaveCount(0)
   else await expect(status).toContainText('Release review')
   const composer = card.locator('[contenteditable="true"]')
+  if(!combinedAcceptance){
   for(const [width,height] of [[1100,900],[680,600]]){await openChannels();await expect(channelDialog.getByRole('textbox')).toBeDisabled();await expect(channelDialog.getByRole('button',{name:'Save channels',exact:true})).toBeDisabled();await captureChannels('locked',width,height);await channelDialog.getByRole('button',{name:'Cancel',exact:true}).click()}
   await writeFile(join(workspace!,'native-channel-settings-app-proof.json'),JSON.stringify({savedSelection:['server:review','plugin:notes@owned'],invalidSelectorRefused:true,clearedBeforeLaunch:true,liveSelectionLocked:true,draftRetained:true,captures:channelCaptures}))
   await appPage.setViewportSize({width:1100,height:900})
+  }
   const checkpoint = expect.configure({ soft: true })
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capturePage(file:string,width:number,height:number){
@@ -108,22 +113,24 @@ test('completes an everyday native review across Agent, approval, question and i
     for (const [width, height] of [[1100, 900], [680, 600]] as const) {
       await appPage.setViewportSize({ width, height })
       const beforeFile = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '-before-check.png'
-      await capturePage(beforeFile,width,height)
+      if(!combinedAcceptance)await capturePage(beforeFile,width,height)
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined }))
       await checkpoint.poll(async () => {
         const rectangles = await Promise.all([editor, ...controls].map((control, index) => control.evaluate((element, primary) => { const r = element.getBoundingClientRect(); return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height, inside: r.top >= 0 && r.left >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.width > 0 && r.height > 0 && (primary || r.height >= 20) } }, index === 0)))
         return rectangles.every(rect => rect.inside)
       }, { timeout: 1500, intervals: [100, 250] }).toBe(true)
       if (reading) await checkpoint.poll(() => reading.evaluate(element => element.clientHeight), { timeout: 1500, intervals: [100, 250] }).toBeGreaterThanOrEqual(stage === 'approval' ? 48 : 80)
+      if(combinedAcceptance&&['composer','recovered'].includes(stage))await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()
       const file = 'apack-native-everyday-' + stage + '-' + width + '-' + height + '.png'
       await capturePage(file,width,height); screenshots.push(file)
-      geometry.push({ stage, width, height, readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
+      geometry.push({ stage, width, height, sessionId:(await context()).sessionId, nativePid:(await context()).native?.state?.nativePid, sendDisabled:await card.getByRole('button',{name:'Send',exact:true}).isDisabled(), readingHeight: reading ? await reading.evaluate(element => element.clientHeight) : undefined })
       await writeFile(join(workspace!, 'native-everyday-progress.json'), JSON.stringify({ geometry, screenshots }))
     }
   }
   const send = card.getByRole('button', { name: 'Send', exact: true })
   const mainDraft = 'Keep the release checklist wording unchanged.'
   const commandScreens: { stage: string; width: number; height: number; file: string }[] = []
+  if(!combinedAcceptance){
   const beforeCommands = await context()
   for (const [width, height] of [[1100, 900], [680, 600]] as const) {
     await appPage.setViewportSize({ width, height })
@@ -148,6 +155,7 @@ test('completes an everyday native review across Agent, approval, question and i
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
   await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, boundNativePid }))
   await appPage.setViewportSize({ width: 1100, height: 900 })
+  }
   await composer.fill('Review the release notes with a worker.')
   await send.click()
   await expect.poll(async () => (await context()).native.state.tasks.some((task: any) => task.status === 'running'), { timeout: 15000 }).toBe(true)
@@ -161,6 +169,7 @@ test('completes an everyday native review across Agent, approval, question and i
   const agentForm = focused.getByRole('form', { name: 'Agent message', exact: true })
   const agentEditor = agentForm.locator('[contenteditable="true"]')
   const agentDraft = 'Please also note the migration steps.'
+  if(!combinedAcceptance){
   for (const [width, height] of [[1100, 900], [680, 600]] as const) {
     await appPage.setViewportSize({ width, height })
     await agentEditor.fill('/cc-model haiku')
@@ -180,6 +189,7 @@ test('completes an everyday native review across Agent, approval, question and i
     commandScreens.push({ stage: 'agent', width, height, file })
   }
   await writeFile(join(workspace!, 'native-command-ui-verification.json'), JSON.stringify({ commandScreens, noSubmittedTurn: true, agentAppCommandsHeld: true, boundNativePid }))
+  }
   await agentEditor.fill(agentDraft)
   await capture('agent', agentEditor, [agentForm.getByRole('button', { name: 'Send to Agent', exact: true }), focused.getByRole('button', { name: 'Back to conversation', exact: true })], focused.getByRole('region', { name: 'Agent transcript', exact: true }))
   await focused.getByRole('button', { name: 'Back to conversation', exact: true }).click()
@@ -316,7 +326,8 @@ test('completes an everyday native review across Agent, approval, question and i
   }
   const nativeCost = (await ledger()).filter((row: any) => row.type === 'cost-state').at(-1)?.totalCostUSD
   expect(nativeCost).toBeGreaterThan(0); await expect.poll(async () => (await context()).claude.totalCostUsd).toBe(nativeCost)
-  await composer.fill('Continue the same release review after the interruption.')
+  await composer.click();await appPage.keyboard.press('ControlOrMeta+A');await appPage.keyboard.type('Continue the same release review after the interruption.')
+  await expect(composer).toHaveText('Continue the same release review after the interruption.')
   await send.click()
   await expect.poll(async () => (await context()).claude.chatState, { timeout: 15000 }).toBe('success')
   expect((await context()).sessionId).toBe(sessionId)
@@ -332,6 +343,6 @@ test('completes an everyday native review across Agent, approval, question and i
   await composer.fill('Ready for the next release-review step.')
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
-  await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots }))
+  await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots, combinedAcceptance, retainedParentDraft:mainDraft,retainedAgentDraft:agentDraft }))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativePauseOwnerRetained: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
 })
