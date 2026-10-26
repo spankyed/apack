@@ -1,6 +1,8 @@
 # EARS on elmdb
 
-Status: planned, 2026-10-24. Not started.
+**Status:** done, 2026-10-25. Built by elmdb's goal (`elmdb/docs/archive/goals/goal-elmdb.md`, its Outcome and
+`docs/evidence/`); apack runs on elmdb with lmdb-js removed (PR #276). **Successors:** `elmdb/docs/goals/goal-elmdb-next.md`,
+and the live queries' views (branch `live-queries`, `docs/plans/live-queries.md`; D30).
 
 EARS's engine moves out of JavaScript into elmdb, an embedded graph database written in Rust on LMDB, in its own
 repository (`elmdb`, checked out beside this one; design in its `docs/`). `@apackdev/ears` stays in apack and keeps
@@ -94,7 +96,7 @@ own worktree (`npm run session:new -- ears-on-elmdb`), against a local elmdb che
 
 ## What this supersedes
 
-- `docs/plans/ears-value-compression.md`: compression moves into elmdb's value format (`elmdb/docs/architecture/format.md`).
+- `ears-value-compression.md` (archived beside this one): compression moves into elmdb's value format (`elmdb/docs/architecture/format.md`).
 - kriszyp/lmdb-js#381 stops mattering to apack, though it is still worth landing upstream.
 - `ears-compaction`'s `COMPACT_COPIES`: elmdb's backup is compacted.
 
