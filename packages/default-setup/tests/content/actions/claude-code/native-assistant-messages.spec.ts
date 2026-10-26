@@ -31,3 +31,19 @@ it('does not project nested activity and does not invent missing native identiti
   expect(tracker.accept('', { text: 'No identity' })).toEqual({ text: 'No identity', rows: [] });
   expect(createClaudeNativeMessageTracker().accept('', { uuid: 'a', sessionId: 'session', text: 'Next' }).rows[0]?.start).toBe(0);
 });
+
+it('repairs a confirmed suffix without assigning ranges to conflicting text or another session', () => {
+ const tracker=createClaudeNativeMessageTracker({completePartial:true})
+ const a=tracker.accept('Part',{uuid:'a',sessionId:'s',apiMessageId:'api-a',text:'Partial'})
+ expect(a.text).toBe('Partial');expect(a.rows[0]).toMatchObject({apiMessageId:'api-a',start:0,end:7})
+ const b=tracker.accept(a.text+'\nWrong',{uuid:'b',sessionId:'s',apiMessageId:'api-b',text:'Right'})
+ expect(b.text).toBe('Partial\nWrong');expect(b.rows).toHaveLength(1)
+ expect(tracker.accept(b.text,{uuid:'c',sessionId:'other',text:'Foreign'})).toEqual(b)
+})
+
+it('does not repair or associate a late completed record with another active API message', () => {
+ const tracker=createClaudeNativeMessageTracker({completePartial:true})
+ const value=tracker.accept('Same',{uuid:'old',sessionId:'s',apiMessageId:'old-api',streamApiMessageId:'new-api',text:'Same expanded'})
+ expect(value).toEqual({text:'Same',rows:[]})
+ expect(tracker.accept('Same',{uuid:'new',sessionId:'s',apiMessageId:'new-api',streamApiMessageId:'new-api',text:'Same expanded'}).text).toBe('Same expanded')
+})

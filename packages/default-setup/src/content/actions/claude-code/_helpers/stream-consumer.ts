@@ -1,3 +1,4 @@
+import { createClaudeStreamReconciler } from './stream-reconciliation.ts';
 import { projectClaudeUiLog } from './native-ui-log.ts';
 import { presentMcpElicitation } from './mcp-elicitation.ts';
 import { createClaudeNativeMessageTracker } from './native-assistant-messages.ts';
@@ -137,7 +138,9 @@ export async function consumeStream(
   let thinking = initialWriters.thinking;
   let currentMessageHasCliUuid = false;
   let currentMessageCliUuid: string | undefined;
-  let nativeMessages = createClaudeNativeMessageTracker();
+  const reconciliation = createClaudeStreamReconciler();
+  let streamApiMessageId: string | undefined;
+  let nativeMessages = createClaudeNativeMessageTracker({ completePartial: true });
   let nativeSessionId = ctx.resumeSessionId;
   const nativeLogIds = new Set<string>();
   const activity = ctx.activity;
@@ -207,7 +210,17 @@ export async function consumeStream(
       eventCount++;
 
       if (eventCount <= 5 || eventCount % 20 === 0) {
-        log.debug('stream event', { n: eventCount, type: line?.type, line });
+        log.debug('stream event', { n: eventCount, type: typeof line?.type === 'string' ? line.type.slice(0,64) : 'unknown' });
+      }
+      if (line.type === 'stream_event' && !line.parent_tool_use_id && line.event?.type === 'message_start') streamApiMessageId = typeof line.event.message?.id === 'string' ? line.event.message.id : undefined;
+      if (line.type === 'conversation_reset') { reconciliation.clear(); streamApiMessageId = undefined; }
+      const mismatch = reconciliation.observe(line);
+      if (mismatch) {
+        log.warn('Claude stream reconciliation', { kind: mismatch.kind });
+        if (mismatch.kind === 'conflict') {
+          services.chat.updateMessageState(currentMessageId, {context:{claudeStreamReconciliation:{kind:'conflict',apiMessageId:mismatch.apiMessageId}}});
+          services.chat.sendSystemMessage({threadId,text:'Claude response display is inconsistent with its completed native message. Partial output is preserved; review the native transcript before relying on it.'});
+        }
       }
 
       // Split into a new message after approval/question answer — but only
@@ -217,7 +230,7 @@ export async function consumeStream(
       const isMessageStart = line.type === 'assistant' || (line.type === 'stream_event' && (line as any).event?.type === 'message_start');
       if (splitOnNextMessageStart && isMessageStart) {
         splitOnNextMessageStart = false;
-        nativeMessages = createClaudeNativeMessageTracker();
+        nativeMessages = createClaudeNativeMessageTracker({ completePartial: true });
         currentMessageCliUuid = undefined;
         ({ currentMessageId, writer, toolActivity, thinking, currentMessageHasCliUuid } = splitMessage());
       }
@@ -382,9 +395,14 @@ export async function consumeStream(
           uuid: line.uuid,
           sessionId: line.session_id || nativeSessionId,
           apiMessageId: line.message?.id,
+          streamApiMessageId,
           text: nativeText,
           parentToolUseId: line.parent_tool_use_id,
         });
+        const pendingNative = writer.text.slice(projected.rows.at(-2)?.end ?? 0);
+        if (nativeText && !projected.rows.some(row=>row.uuid===line.uuid) && projected.text === writer.text && !pendingNative.endsWith(nativeText)) {
+          services.chat.updateMessageState(currentMessageId, {context:{claudeStreamCompletedRecord:{sessionId:line.session_id || nativeSessionId,uuid:line.uuid,apiMessageId:line.message?.id,text:nativeText}}});
+        }
         if (projected.text.length > writer.text.length) writer.push(projected.text.slice(writer.text.length));
         if (currentMessageCliUuid || projected.rows.length) services.chat.updateMessageState(currentMessageId as any, {
           context: { ...(currentMessageCliUuid ? { cliUuid: currentMessageCliUuid } : {}), ...(projected.rows.length ? { claudeNativeMessages: projected.rows } : {}) },
