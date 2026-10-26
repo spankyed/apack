@@ -484,3 +484,22 @@ it('admits only current-policy native notifications and preserves the epoch acro
     expect(receive).toHaveBeenCalledTimes(2)
   }finally{unsubscribe()}
 })
+
+it('accepts billing only from its current native owner and clears stale observations on reset', async () => {
+ await create()
+ const event={sessionId:session,pid:process.pid,sequence:1,observedAt:10,info:{status:'allowed_warning',isUsingOverage:true}}
+ const listener=vi.fn(); bridge!.uiTransport.subscribe(listener)
+ expect((await request('/native-billing',{...event,pid:process.pid+1})).status).toBe(409)
+ expect((await request('/native-billing',event)).status).toBe(200)
+ expect(bridge!.billing?.info.isUsingOverage).toBe(true)
+ expect(listener).toHaveBeenCalledWith({type:'system',subtype:'apack_billing_changed'})
+ expect((await request('/native-billing',event)).status).toBe(409)
+ expect((await request('/native-billing',{...event,sequence:2,observedAt:9})).status).toBe(400)
+ const next='22222222-2222-2222-2222-222222222222'
+ expect((await request('/poll',{sessionId:next,agents:[]})).status).toBe(200)
+ expect(bridge!.billing).toBeUndefined()
+ expect((await request('/native-billing',{...event,sequence:3})).status).toBe(409)
+ expect((await request('/native-billing',{...event,sessionId:next,sequence:4})).status).toBe(400)
+ expect((await request('/native-billing',{...event,sessionId:next,sequence:5,observedAt:11})).status).toBe(200)
+ await bridge!.close(); expect(bridge!.billing).toBeUndefined()
+})

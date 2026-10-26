@@ -1,5 +1,5 @@
 <template>
-  <div ref="strip" v-if="nativeStatus || statusLine || hasContent || nativeUi?.status === 'error'" :style="{ minHeight: stripMinimumHeight }"
+  <div ref="strip" v-if="nativeStatus || statusLine || nativeUi || hasContent" :style="{ minHeight: stripMinimumHeight }"
     class="flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-3 text-xs text-neutral-400" :class="{ 'shrink-0': !toolsOpen, 'native-strip--open': toolsOpen, 'border-b border-white/[0.06]': toolsOpen || nativeUi?.status === 'error' }" data-testid="composer-session-strip" @keydown="handleStripKey" @keydown.esc="returnToComposer">
     <div class="flex shrink-0 min-w-0 items-center gap-3">
       <button v-if="statusLine" type="button" class="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 text-[11px] text-neutral-400 transition-colors hover:bg-white/[0.04] hover:text-neutral-300 focus-visible:outline focus-visible:outline-blue-400"
@@ -8,6 +8,7 @@
         <span>Session tools</span> <ChevronDown :size="12" aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': toolsOpen }" />
       </button>
     </div>
+    <p v-if="nativeUi" role="status" aria-label="Claude billing status" data-testid="claude-billing-status" class="mt-1 min-w-0 break-words text-[11px] leading-4" :class="nativeUi.billing?.info.isUsingOverage || nativeUi.billing?.info.status === 'rejected' ? 'text-amber-300' : 'text-neutral-400'" :title="nativeUi.billing ? 'Observed ' + new Date(nativeUi.billing.observedAt).toISOString() : undefined">{{ claudeBillingText(nativeUi.billing) }}</p>
     <div v-if="nativeStatus" role="status" aria-label="Claude session status" tabindex="0" data-testid="composer-native-status" class="mt-1 max-h-12 shrink-0 min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded focus-visible:outline focus-visible:outline-blue-400 text-[11px] leading-4 text-neutral-400"><NativeStatusText :text="nativeStatus" /></div>
     <div v-if="nativeUi?.status === 'live' && hasContent" v-show="toolsOpen" ref="nativeSite" @focusin="reportFocusIn" @focusout="reportFocusOut" @compositionstart="composing = true" @compositionend="composing = false" @keydown="handleSiteKey" class="native-extension-surface rounded-lg bg-transparent px-0 py-3 max-h-80 flex-1 min-h-0 min-w-0 overflow-y-auto text-[13px] leading-5 outline-none" tabindex="0" @focus="focusNativeUi" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave" :class="{ 'mt-2 pb-2': statusLine }">
       <div data-native-scroll-content><NativeUiNode :node="nativeUi.tree" @press="(actionId, href) => emit('press', actionId, href)" @field="emit('field', $event)" /></div>
@@ -18,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { claudeBillingText } from '#features/code/common/native-billing.ts'
 import { computed, provide, onBeforeUnmount, ref, watch } from 'vue'
 import { FolderOpen, ChevronDown } from 'lucide-vue-next'
 import type { ClaudeUiMountState, ClaudeUiNode, ClaudeUiFieldEvent } from '#generated/types.ts'

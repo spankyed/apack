@@ -50,6 +50,7 @@ export interface ClaudeNativeTerminalState {
   focus?: ClaudeNativeFocusProjection
   lastTurn?: { id: string; reason: 'answer' | 'aborted' | 'refusal' | 'error' }
   session?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeSessionMetadata
+  billing?: import('./native-billing.ts').ClaudeBillingObservation
   mainStatus?: string
   tasks: ClaudeNativeTerminalTask[]
   problem?: string

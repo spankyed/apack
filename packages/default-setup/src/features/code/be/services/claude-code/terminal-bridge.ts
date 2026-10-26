@@ -1,3 +1,4 @@
+import { createClaudeBillingState } from '../../../common/native-billing.ts'
 import { readClaudeUiActionKeys } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
 import { createClaudeTerminalUiTransport } from './terminal-ui.ts'
@@ -36,6 +37,8 @@ export async function createClaudeTerminalBridge(options: {
   const socketPath = join(directory, 'bridge.sock'), token = randomBytes(32).toString('hex')
   const projection = createClaudeTerminalStatus(options.sessionId)
   const session = createClaudeTerminalSession(options.sessionId)
+  const billing = createClaudeBillingState(); billing.reset(options.sessionId)
+  let billingSequence = 0
   const transcripts: ClaudeNativeTranscript[] = []
   let nativeViewSequence = 0
   let nativeView: import('../../../common/native-terminal.ts').ClaudeNativeTerminalView | undefined
@@ -82,6 +85,13 @@ export async function createClaudeTerminalBridge(options: {
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
+      }
+      if (request.url === '/native-billing') {
+        if (value.sessionId !== projection.sessionId || value.pid !== observerPid || !Number.isSafeInteger(value.sequence) || Number(value.sequence) <= billingSequence) return reply(409, {})
+        if (!billing.observe(value.sessionId, value.info, Number(value.observedAt))) return reply(400, {})
+        billingSequence = Number(value.sequence)
+        ui.receive({type: 'system', subtype: 'apack_billing_changed'})
+        options.changed(); return reply(200, {})
       }
       if (request.url === '/native-preview') {
         if (value.sessionId !== projection.sessionId || value.pid !== observerPid || !nativeView || value.viewRevision !== nativeView.revision) return reply(409, {})
@@ -157,7 +167,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
+        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -350,6 +360,7 @@ export async function createClaudeTerminalBridge(options: {
       get lastTurn() { return lastTurn },
       get ready() { return ready && !closed },
       get focus() { return focus },
+      get billing() { return closed ? undefined : billing.value },
       get preview() { return closed ? undefined : preview },
       get activity() { return activity },
       get busy() { return busy || !!pending },

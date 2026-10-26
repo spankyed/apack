@@ -62,6 +62,7 @@
       <div class="native-console">
         <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
       </div>
+      <p v-if="view?.state?.status === 'live'" role="status" aria-label="Claude billing status" class="px-4 py-2 text-xs text-neutral-400">{{ claudeBillingText(view.state.billing) }}</p>
       <footer v-if="view?.state?.mainStatus || view?.state?.tasks.length || view?.problem || view?.state?.problem" class="native-activity">
         <div v-if="view?.state?.mainStatus" class="native-summary">
           <span class="native-section-label">Session status</span>
@@ -83,6 +84,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { claudeBillingText } from '#features/code/common/native-billing.ts'
 import type { ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'

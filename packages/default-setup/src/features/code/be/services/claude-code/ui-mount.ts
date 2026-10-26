@@ -18,6 +18,7 @@ export interface ClaudeUiOwner {
   readonly question?: { ownerId: string; render: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['renderQuestionDialog']; hold: import('./terminal-owner.ts').ClaudeNativeTerminalOwner['holdQuestionDialog'] }
   readonly done: Promise<void>
   readonly sessionId?: string
+  readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
   subscribe(listener: (event: unknown) => void): () => void
   handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
@@ -108,7 +109,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, billing: current() ? owner.billing : undefined, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -211,6 +212,7 @@ export function mountClaudeUi(options: {
   publish({ status: 'connecting' })
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
+    if (current() && (line.type === 'rate_limit_event' || line.subtype === 'apack_billing_changed' || line.type === 'conversation_reset')) publish(lastState)
     notices.receive(line)
     messages.receive(line)
     question.receive(line)

@@ -558,6 +558,12 @@ interface ClaudeAgentHandback {
     warning?: string;
 }
 
+interface ClaudeBillingObservation {
+    sessionId: string;
+    observedAt: number;
+    info: Pick<ClaudeRateLimitInfo, 'isUsingOverage' | 'overageDisabledReason' | 'overageStatus' | 'rateLimitType' | 'resetsAt' | 'status'>;
+}
+
 type ClaudeContextUsage = z.infer<typeof ClaudeContextUsageSchema>;
 
 declare const ClaudeContextUsageSchema: z.ZodObject<{
@@ -785,6 +791,7 @@ declare const ClaudeContextUsageSchema: z.ZodObject<{
 }, z.ZodTypeAny, "passthrough">>;
 
 interface ClaudeConversation {
+    readonly billing?: ClaudeBillingObservation;
     readonly handle: QueryHandle;
     readonly busy: boolean;
     readonly closing: boolean;
@@ -3152,6 +3159,7 @@ interface ClaudeNativeTerminalState {
         reason: 'aborted' | 'answer' | 'error' | 'refusal';
     };
     session?: ClaudeNativeSessionMetadata;
+    billing?: ClaudeBillingObservation;
     mainStatus?: string;
     tasks: ClaudeNativeTerminalTask[];
     problem?: string;
@@ -3739,6 +3747,32 @@ declare const ClaudeQuestionPresentationSchema: z.ZodObject<{
     notice?: string | undefined;
 }>;
 
+type ClaudeRateLimitInfo = z.infer<typeof ClaudeRateLimitInfoSchema>;
+
+/** Native observations describe a completed request, never a promise about the next bill. */
+declare const ClaudeRateLimitInfoSchema: z.ZodObject<{
+    status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+    isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+    overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+    status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+    isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+    overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+    status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+    isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+    overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.ZodTypeAny, "passthrough">>;
+
 interface ClaudeSessionArtifactContent {
     /** Claude CLI session id (empty string until the first system/init event). */
     sessionId: string;
@@ -4162,6 +4196,7 @@ type ClaudeUiMountState = ({
     status: 'error';
     message: string;
 }) & {
+    billing?: ClaudeBillingObservation;
     actionKeys?: ClaudeUiActionKeyState;
     promptPalette?: Record<string, string>;
     agent?: ClaudeNativeTaskDetails;
@@ -8685,19 +8720,82 @@ declare const RateLimitLineSchema: z.ZodObject<{
     session_id: z.ZodOptional<z.ZodString>;
 } & {
     type: z.ZodLiteral<"rate_limit_event">;
-    rate_limit_info: z.ZodObject<{}, "passthrough", z.ZodTypeAny, z.objectOutputType<{}, z.ZodTypeAny, "passthrough">, z.objectInputType<{}, z.ZodTypeAny, "passthrough">>;
+    rate_limit_info: z.ZodObject<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">>;
 }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
     uuid: z.ZodOptional<z.ZodString>;
     session_id: z.ZodOptional<z.ZodString>;
 } & {
     type: z.ZodLiteral<"rate_limit_event">;
-    rate_limit_info: z.ZodObject<{}, "passthrough", z.ZodTypeAny, z.objectOutputType<{}, z.ZodTypeAny, "passthrough">, z.objectInputType<{}, z.ZodTypeAny, "passthrough">>;
+    rate_limit_info: z.ZodObject<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">>;
 }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
     uuid: z.ZodOptional<z.ZodString>;
     session_id: z.ZodOptional<z.ZodString>;
 } & {
     type: z.ZodLiteral<"rate_limit_event">;
-    rate_limit_info: z.ZodObject<{}, "passthrough", z.ZodTypeAny, z.objectOutputType<{}, z.ZodTypeAny, "passthrough">, z.objectInputType<{}, z.ZodTypeAny, "passthrough">>;
+    rate_limit_info: z.ZodObject<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, "passthrough", z.ZodTypeAny, z.objectOutputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">, z.objectInputType<{
+        status: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        rateLimitType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        resetsAt: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+        isUsingOverage: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+        overageStatus: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        overageDisabledReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.ZodTypeAny, "passthrough">>;
 }, z.ZodTypeAny, "passthrough">>;
 
 /** A note as the welcome page shows it, with when it last changed */
@@ -12409,7 +12507,7 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
 };
 
 /** Host-to-CLI requests are independent of CLI-to-host tool permission requests. */
-declare function createHostControls(write: (value: unknown) => boolean): {
+declare function createHostControls(write: (value: unknown) => boolean, pid?: number): {
     request(request: Record<string, unknown> & {
         subtype: string;
     }, timeoutMs?: number): Promise<unknown>;
