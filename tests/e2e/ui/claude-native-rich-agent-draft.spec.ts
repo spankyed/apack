@@ -12,7 +12,15 @@ const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'||ro
 const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test.afterEach(async({appPage},info)=>{if(!roundTripJourney||info.status===info.expectedStatus)return;await writeFile(join(workspace!,'native-rich-roundtrip-failure.txt'),await appPage.locator('body').innerText({timeout:2000}).catch(()=>'<page unavailable>'));await appPage.screenshot({caret:'initial',path:info.outputPath('native-rich-roundtrip-failure.png'),timeout:5000}).catch(()=>{});})
+test.afterEach(async({appPage,electronApp},info)=>{
+  if(!roundTripJourney||info.status===info.expectedStatus)return
+  await writeFile(join(workspace!,'native-rich-roundtrip-failure.txt'),await appPage.locator('body').innerText({timeout:2000}).catch(()=>'<page unavailable>'))
+  try{
+    const window=await electronApp.browserWindow(appPage),size=appPage.viewportSize()!
+    const image=await window.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+    await writeFile(info.outputPath('native-rich-roundtrip-failure.png'),Buffer.from(image,'base64'))
+  }catch(error){await writeFile(join(workspace!,'native-rich-roundtrip-capture-error.txt'),String(error))}
+})
 test('preserves rich parent and Agent drafts and selection through actual Agent remount', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(roundTripJourney?240000:90000)
   async function capture(file:string){
