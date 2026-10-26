@@ -2,10 +2,13 @@
 <Teleport to="body">
   <div
     v-if="stateConfig && pos && isAnchorVisible"
-    class="flex items-center gap-2 text-sm text-neutral-300 max-w-[80%] pointer-events-none"
+    role="status"
+    :title="`Conversation status: ${stateConfig.label}`"
+    class="flex items-center gap-2 text-sm text-neutral-300 max-w-[80%] pointer-events-auto"
     :class="$style['status-indicator']"
     :style="positionStyle"
   >
+    <span class="sr-only">Conversation status: {{ stateConfig.label }}</span>
     <span aria-hidden="true" class="block h-1.5 w-1.5 rounded-full transition-colors duration-300"
       :class="isAnimated ? 'mosaic-dot' : undefined" :style="!isAnimated ? { backgroundColor: stateConfig.color } : undefined" />
   </div>
