@@ -373,3 +373,57 @@ it('keeps the error presentation when the current press fails without a replacem
   expect(f.host.state[0].body.status).toBe('error')
   await f.host.dispose()
 })
+
+describe.each(['input', 'select'] as const)('%s callback failure ownership', kind => {
+  function setupField() {
+    const f = fixture()
+    if (kind === 'select') {
+      let handle = 0
+      f.ui.render.mockImplementation(async () => ({ tree: { type: 'Box', children: [
+        { type: 'Select', props: { key: 'choice', value: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }, press: { plugin: 'fixture', handle: ++handle } },
+      ] }, props: {}, hooked: true, rewritten: false }))
+    }
+    return { ...f, callback: kind === 'input' ? f.ui.input : f.ui.select, field() {
+      const node = f.nodes()[kind === 'input' ? 1 : 0]
+      if (node.kind !== 'input' && node.kind !== 'select') throw Error('field')
+      return node
+    }, event(revision: number) { return { actionId: this.field().actionId, revision, kind: kind === 'input' ? 'change' as const : 'select' as const, value: 'b' } } }
+  }
+
+  it('retains a fresh field when an earlier drawing callback rejects', async () => {
+    const f = setupField(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+    let reject!: (error: Error) => void
+    f.callback.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    const pending = f.host.field(f.event(1))
+    f.host.receive({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render' })
+    await vi.advanceTimersByTimeAsync(50)
+    reject(new Error('Retired native field'))
+    await expect(pending).resolves.toEqual({ handled: false })
+    expect(f.field().actionId).toBeTruthy()
+    await expect(f.host.field(f.event(2))).resolves.toEqual({ handled: true })
+    await f.host.dispose()
+  })
+
+  it('does not let an older edit failure destroy a newer pending edit', async () => {
+    const f = setupField(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+    let reject!: (error: Error) => void, resolve!: (result: { handled: boolean }) => void
+    f.callback.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    f.callback.mockImplementationOnce(() => new Promise(finish => { resolve = finish }))
+    const older = f.host.field(f.event(1)), newer = f.host.field(f.event(2))
+    reject(new Error('Old edit failed'))
+    await expect(older).resolves.toEqual({ handled: false })
+    expect(f.field().actionId).toBeTruthy()
+    resolve({ handled: true }); await expect(newer).resolves.toEqual({ handled: true })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(f.field().actionId).toBeTruthy()
+    await f.host.dispose()
+  })
+
+  it('keeps current field failures visible when no newer edit or drawing exists', async () => {
+    const f = setupField(); f.host.start(); await vi.advanceTimersByTimeAsync(50)
+    f.callback.mockRejectedValueOnce(new Error('Current edit failed'))
+    await expect(f.host.field(f.event(1))).resolves.toEqual({ handled: false })
+    expect(f.host.state[0].body.status).toBe('error')
+    await f.host.dispose()
+  })
+})

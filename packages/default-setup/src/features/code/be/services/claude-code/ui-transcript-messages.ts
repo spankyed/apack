@@ -260,7 +260,8 @@ export function createClaudeTranscriptMessageHost(options: {
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
       const entry = [...entries.values()].find(value => value.fields?.fields.has(event.actionId))
       if (!entry || !valid(entry) || !Number.isSafeInteger(event.revision) || event.revision <= (entry.revisions.get(event.actionId) ?? 0) || typeof event.value !== 'string' || event.value.length > 16384) return { handled: false }
-      const field = entry.fields!.fields.get(event.actionId)!
+      const fields = entry.fields!, epoch = entry.epoch
+      const field = fields.fields.get(event.actionId)!
       if (field.type === 'select' ? event.kind !== 'select' || !field.options?.includes(event.value) : event.kind !== 'change' && event.kind !== 'submit') return { handled: false }
       entry.revisions.set(event.actionId, event.revision)
       const identity = { ...options.client, plugin: field.plugin, handle: field.handle, key: field.key, component: entry.row.component, instance_id: entry.row.uuid, instance_revision: entry.instanceRevision, value: event.value }
@@ -268,7 +269,11 @@ export function createClaudeTranscriptMessageHost(options: {
         const result = field.type === 'select' ? await options.ui.select(identity) : await options.ui.input({ ...identity, kind: event.kind as 'change' | 'submit' })
         if (valid(entry) && entry.fields?.fields.has(event.actionId)) { entry.completed.set(event.actionId, Math.max(entry.completed.get(event.actionId) ?? 0, event.revision)); invalidate(entry) }
         return { handled: valid(entry) && result.handled }
-      } catch { fail(entry); return { handled: false } }
+      } catch {
+        // Late failures cannot erase a newer drawing or a later edit of this field.
+        if (entry.epoch === epoch && entry.fields === fields && entry.revisions.get(event.actionId) === event.revision) fail(entry)
+        return { handled: false }
+      }
     },
   }
 }
