@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" ref="root" role="group" aria-label="Claude suggestions" class="max-h-40 shrink-0 overflow-y-auto border-t border-white/10" @keydown="navigate">
+  <div v-if="visible" ref="root" role="group" aria-label="Claude suggestions" class="min-h-14 max-h-40 shrink overflow-y-auto border-t border-white/10" @keydown="navigate">
     <button v-for="(row, index) in rows" :key="row.offerId + ':' + index" type="button" class="block w-full px-4 py-2 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:bg-white/10 focus-visible:outline focus-visible:outline-blue-400" @mousedown.prevent @click="emit('select', index, row.offerId)">
       <span class="break-words">{{ row.label ?? row.text }}</span>
       <span v-if="row.description" class="mt-0.5 block break-words text-xs text-neutral-400">{{ row.description }}</span>
