@@ -1,14 +1,14 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind === 'lsp_recommendation' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'lsp_recommendation' ? 'no' : 'interrupt')">
+    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <h3>{{ view.state.notice.title }}</h3>
-        <template v-if="view.state.notice.kind === 'lsp_recommendation'">
+        <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
           <p class="native-notice__identity">{{ view.state.notice.pluginName }} · {{ view.state.notice.marketplaceName }}</p>
           <PopoverRoot :key="view.state.notice.revision">
             <PopoverTrigger as-child><button type="button" class="native-notice__details">About this plugin</button></PopoverTrigger>
             <PopoverPortal>
-              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" aria-label="LSP plugin details" class="claude-native-lsp-details">
+              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'LSP plugin details' : 'Plugin details'" class="claude-native-lsp-details">
                 <header><h3>About this plugin</h3><PopoverClose as-child><button type="button" aria-label="Close plugin details">Close</button></PopoverClose></header>
                 <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
               </PopoverContent>
@@ -22,7 +22,7 @@
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
       <div class="native-notice__actions">
-        <template v-if="view.state.notice.kind === 'lsp_recommendation'">
+        <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
           <button v-for="choice in view.state.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(choice.value)">{{ choice.label }}</button>
         </template>
         <template v-else>

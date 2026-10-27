@@ -9,7 +9,7 @@ function fixture() {
   const n = { runtime: { ey: () => binding }, questionOptions: { q: () => sessionId } }
   const helper = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf('function nativeBillingNotice('), claudeTerminalUiRuntime.indexOf('function nativeDialog('))
   const handlers = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_native_notice')"), claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_workflow_dialogs')"))
-  const run = vm.runInNewContext(helper + ';(async request=>{' + handlers + '})', { nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
+  const run = vm.runInNewContext(helper + ';(async request=>{' + handlers + '})', { nativePluginHint: () => ({}), nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
   return { run, open, item, payload, answer, sessionId }
 }
 it('preserves the original notice and exact continue/interrupt results without a tool permission envelope', async () => {
