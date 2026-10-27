@@ -89,7 +89,7 @@ test('uses original native completion rows with keyboard navigation in main and 
   async function exercise(container:typeof card,editor:typeof composer,owner:string,index:number){
     const beforeTurns=(await context()).turns,prefix='Review #release',labels=['Public release','Internal release','Release checklist'],descriptions=['Notes for customers','Notes for teammates','Checks before publishing']
     await replace(editor,prefix)
-    const list=container.getByRole('group',{name:'Claude suggestions',exact:true}),buttons=list.getByRole('button')
+    const list=appPage.getByRole('group',{name:'Claude suggestions',exact:true}),buttons=list.getByRole('button')
     await expect(buttons).toHaveCount(3)
     for(let row=0;row<3;row++){await expect(buttons.nth(row)).toContainText(labels[row]!);await expect(buttons.nth(row)).toContainText(descriptions[row]!)}
     const original=await snapshot(editor)

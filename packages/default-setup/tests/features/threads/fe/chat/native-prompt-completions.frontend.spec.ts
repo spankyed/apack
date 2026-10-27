@@ -17,7 +17,7 @@ async function mount() {
   const select = vi.fn(), dismiss = vi.fn()
   app = createApp({ render: () => h(NativePromptCompletions, { ...state, onSelect: select, onDismiss: dismiss }) }); app.mount(root); await nextTick()
   editor.view.dom.focus()
-  const buttons = () => Array.from(root.querySelectorAll('button'))
+  const buttons = () => Array.from(document.querySelectorAll('[aria-label="Claude suggestions"] button'))
   return { editor, root, state, select, dismiss, buttons }
 }
 const key = (target: HTMLElement, name: string, options: KeyboardEventInit = {}) => { const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options }); target.dispatchEvent(event); return event }
@@ -66,5 +66,5 @@ it('keeps Tab focus movement inside the list out of parent composer shortcuts', 
   const f = await mount(), parent = vi.fn(); f.root.addEventListener('keydown', parent)
   key(f.editor.view.dom, 'ArrowDown')
   const event = key(f.buttons()[0]!, 'Tab', { shiftKey: true })
-  expect(event.defaultPrevented).toBe(false); expect(parent).not.toHaveBeenCalled(); expect(f.select).not.toHaveBeenCalled()
+  expect(event.defaultPrevented).toBe(false); expect(parent).not.toHaveBeenCalled(); expect(f.select).not.toHaveBeenCalled(); expect(f.dismiss).toHaveBeenCalledOnce(); expect(document.activeElement).toBe(f.editor.view.dom)
 })

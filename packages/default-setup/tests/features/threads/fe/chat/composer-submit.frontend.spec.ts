@@ -153,7 +153,7 @@ it('draws native rows without autofocus, selects the exact token and never submi
   const request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native-word', label: '<script>Native</script>', description: 'Plugin description' }] } }
   await nextTick()
-  const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  const row = document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
   expect(row.textContent).toContain('<script>Native</script>')
   expect(f.root.querySelector('script')).toBeNull()
   expect(document.activeElement).not.toBe(row)
@@ -161,21 +161,21 @@ it('draws native rows without autofocus, selects the exact token and never submi
   expect(editor.state.doc.textContent).toBe('native-word')
   expect(f.prompt.mock.lastCall![0]).toMatchObject({ by: 'app', text: 'native-word', cursor: 11 })
   expect(f.send).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled()
-  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+  expect(document.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
 })
 
 it('keeps native row navigation inside its group and drops stale clicks after typing', async () => {
   const f = await nativeMount(), request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'one' }, { text: 'two' }] } }
   await nextTick()
-  const group = f.root.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
+  const group = document.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
   // Put the event after Vue's listener-attachment timestamp without waiting on wall time.
   vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + 1)
   buttons[0]!.focus(); buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
   expect(document.activeElement).toBe(buttons[1])
   editor.commands.insertContent('x'); await nextTick()
   buttons[0]!.click(); expect(editor.state.doc.textContent).toBe('firstx')
-  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+  expect(document.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
   expect(f.send).not.toHaveBeenCalled()
 })
 
@@ -184,13 +184,13 @@ it('dismisses native offers on Escape and leaves Shift+Tab to normal focus trave
   const f = await nativeMount(), request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native' }] } }
   await nextTick()
-  const row = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  const row = document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
   // Put the event after Vue's listener-attachment timestamp without waiting on wall time.
   vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + 1)
   const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
   row.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false)
   row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await nextTick()
-  expect(f.root.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
+  expect(document.querySelector('[aria-label="Claude suggestions"]')).toBeNull()
   row.click(); expect(editor.state.doc.textContent).toBe('first')
   expect(f.send).not.toHaveBeenCalled()
 })
@@ -200,14 +200,14 @@ it('refuses a detached old row click even after a newer offer occupies the same 
   const f = await nativeMount(), first = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: first.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'old' }] } }
   await nextTick()
-  const old = f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
+  const old = document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
   editor.commands.insertContent('x'); await nextTick()
   const edit = f.prompt.mock.lastCall![0]
   f.state.nativePrompt!.reply = { revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } }; await nextTick()
   const second = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: second.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'new' }] } }; await nextTick()
   old.click(); expect(editor.state.doc.textContent).toBe('firstx')
-  ;(f.root.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement).click()
+  ;(document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement).click()
   expect(editor.state.doc.textContent).toBe('new')
 })
 
