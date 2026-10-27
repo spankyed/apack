@@ -1,3 +1,5 @@
+import {claudeTerminalModelCreditRuntime} from './terminal-model-credit-runtime.ts'
+
 /** Present the original /model picker, confirmations and pending controls in its owned dialog. */
 export const claudeTerminalModelPanelRuntime = String.raw`
 const nativeModelPanelHashes={
@@ -23,6 +25,7 @@ function nativeModelPanelFrame(n,entry){
  if(owners.length!==1)throw Error('Native model panel is not uniquely mounted');
  return owners[0];
 }
+${claudeTerminalModelCreditRuntime}
 async function readNativeModelPanel(n,entry,signal){
  signal?.throwIfAborted();const owner=nativeModelPanelFrame(n,entry),fibers=nativeModelFibers(owner);
  const matches=[];
@@ -31,7 +34,7 @@ async function readNativeModelPanel(n,entry,signal){
  if(active.length!==1)throw Error('Native model controls are not ready or supported');
  const match=active[0],p=match.props;
  const text=async value=>{const output=await awaitNativeSettingsReading(nativeGenericPermissionText(n,value),signal);if(typeof output!=='string'||output.length>65536)throw Error('Native model text exceeded bound');return stripVTControlCharacters(output);};
- let editor,controls,modelControl,cancel,confirm,refreshPending=false;
+ let editor,controls,modelControl,cancel,confirm,credit,refreshPending=false;
  if(match.kind==='picker'){
   modelControl=nativeSettingsModelControl(match,true);controls=modelControl.controls;cancel=p.onCancel;
   const options=[],values=new Set();
@@ -40,6 +43,8 @@ async function readNativeModelPanel(n,entry,signal){
  }else if(match.kind==='pending'){
   if(typeof p.message!=='string'||typeof p.onCancel!=='function')throw Error('Native model pending control changed');
   cancel=p.onCancel;editor={kind:'information',title:'Model selection',description:await text(p.message)};refreshPending=true;
+ }else if(match.kind==='credits'){
+  credit=await readNativeModelCredits(n,entry,match,text,signal);({editor,controls,cancel,confirm,refreshPending}=credit);
  }else{
   let modal=match.fiber.child;
   for(let depth=0;modal&&depth<16&&!(typeof modal.memoizedProps?.title==='string'&&typeof modal.memoizedProps?.onCancel==='function');depth++)modal=modal.child;
@@ -52,27 +57,14 @@ async function readNativeModelPanel(n,entry,signal){
    if(!Array.isArray(body)||body.length!==2)throw Error('Native model confirmation disclosure changed');
    confirm=decision.onConfirm;cancel=decision.onCancel;
    editor={kind:'choice',title:modalProps.title,disabled:false,options:[{value:'cancel',label:decision.cancelLabel,disabled:false},{value:'confirm',label:decision.confirmLabel,disabled:false}],consent:{description:[await text(modalProps.subtitle),await text(body[0])].filter(Boolean).join('\n'),cancelLabel:decision.cancelLabel,defaultFocusValue:decision.focus}};
-  }else{
-   let hook=match.fiber.memoizedState;const hooks=new Set(),states=[];
-   while(hook){if(hooks.has(hook)||hooks.size>=512)throw Error('Native model credit state exceeded bound');hooks.add(hook);if(hook.memoizedState&&typeof hook.memoizedState==='object'&&typeof hook.memoizedState.s==='string')states.push(hook.memoizedState.s);hook=hook.next;}
-   if(states.some(state=>['buy','confirm-admin-request'].includes(state)))throw Error('Credit purchase and admin requests are not available here yet. Close this dialog to keep the current model.');
-   const choices=nativeModelFibers(match.fiber).filter(fiber=>nativeModelPanelHashes.choice.includes(nativeModelFunctionHash(fiber.type))&&Array.isArray(fiber.memoizedProps?.options)&&typeof fiber.memoizedProps.onChange==='function'&&fiber.memoizedProps.onCancel===cancel);
-   if(choices.length>1)throw Error('Native model credit choices are ambiguous');
-   if(!choices.length){editor={kind:'information',title:modalProps.title,description:await text(modalProps.children)};refreshPending=true;}
-   else{
-    const choice=choices[0];controls=choice.memoizedProps;
-    if(controls.options.length>256||typeof controls.defaultFocusValue!=='string')throw Error('Native model credit options changed');
-    let count=0;const withoutChoice=value=>{if(++count>4096)throw Error('Native model disclosure exceeded bound');if(Array.isArray(value))return value.map(withoutChoice);if(value&&typeof value==='object'&&value.props){if(value.type===choice.type&&value.props===controls)return null;if(Object.hasOwn(value.props,'children'))return {...value,props:{...value.props,children:withoutChoice(value.props.children)}};}return value;};
-    const options=[],values=new Set();for(const option of controls.options){if(typeof option.value!=='string'||option.value.length>16384||values.has(option.value))throw Error('Native model credit option changed');values.add(option.value);options.push({value:option.value,label:await text(option.label),disabled:option.disabled===true});}
-    if(!values.has(controls.defaultFocusValue))throw Error('Native model credit default focus changed');
-    editor={kind:'choice',title:modalProps.title,disabled:controls.isDisabled===true,options,consent:{description:await text(withoutChoice(modalProps.children)),cancelLabel:options.find(option=>option.value===controls.defaultFocusValue).label,defaultFocusValue:controls.defaultFocusValue}};
-   }
+
   }
  }
  signal?.throwIfAborted();const current=nativeModelPanelFrame(n,entry),live=currentNativeSettingsFiber(current,match.fiber);
  if(!sameNativeSettingsFiber(current,owner)||live.memoizedProps!==p)throw Error('Native model changed while reading');
- const revision=createHash('sha256').update(JSON.stringify({editor,refreshPending})).digest('hex');
- return {snapshot:{revision,rows:[],editor:{...editor,revision},...refreshPending?{refreshPending:true}:{}},owner,fiber:live,props:p,controls,modelControl,cancel,confirm};
+ credit?.current(current);
+ const revision=createHash('sha256').update(JSON.stringify({editor,refreshPending,...credit?{dismissible:credit.dismissible}:{}})).digest('hex');
+ return {snapshot:{revision,rows:[],editor:{...editor,revision},...refreshPending?{refreshPending:true}:{},...credit?{dismissible:credit.dismissible}:{}},owner,fiber:live,props:p,controls,modelControl,cancel,confirm,credit};
 }
 async function nativeModelPanel(n,entry,request,abort){
  if(request.operation==='read')return nativeModelPanelOperation(n,entry,request,abort);
@@ -86,19 +78,25 @@ async function nativeModelPanelOperation(n,entry,request,abort){
  if(request.operation==='read')return {snapshot:before.snapshot};
  if(request.operation!=='editor'||request.revision!==before.snapshot.revision||request.editor_revision!==before.snapshot.editor.revision)throw Error('Native model changed; refresh before editing');
  const command=request.command,editor=before.snapshot.editor;let callback,args=[];
- if(command?.action==='cancel')callback=before.cancel;
+ if(command?.action==='cancel'){if(before.credit?.refuseInput?.())throw Error('Claude Code is not accepting this model decision yet');callback=before.cancel;}
  else if(command?.action==='select'&&editor.kind==='choice'){
   const option=editor.options.find(option=>option.value===command.value);if(!option||option.disabled||editor.disabled)throw Error('Native model option is unavailable');
+  const refuse=before.credit?.refuseInput??before.controls?.refuseInput;if(typeof refuse==='function'&&refuse())throw Error('Claude Code is not accepting this model decision yet');
   if(before.confirm)callback=command.value==='confirm'?before.confirm:before.cancel;
-  else {if(typeof before.controls.refuseInput==='function'&&before.controls.refuseInput())throw Error('Claude Code is not accepting this model decision yet');callback=before.controls.onChange;args=[command.value];}
+  else {callback=before.controls.onChange;args=[command.value];}
  }else if(command?.action==='focusModel'&&before.modelControl){if(!editor.options.some(option=>option.value===command.value&&!option.disabled))throw Error('Native model details are unavailable');callback=before.modelControl.controls.onFocus;args=[command.value];}
  else if(command?.action==='adjustEffort'&&before.modelControl?.canAdjust&&['left','right'].includes(command.direction)){callback=before.modelControl.adjust;args=[command.direction];}
+ if(command?.action==='save'&&before.credit?.form)return saveNativeModelCreditForm(n,entry,before,command.values,abort.signal);
  if(typeof callback!=='function')throw Error('Native model action is unavailable');
  abort.signal.throwIfAborted();const owner=nativeModelPanelFrame(n,entry),live=currentNativeSettingsFiber(owner,before.fiber);
  if(!sameNativeSettingsFiber(owner,before.owner)||live.memoizedProps!==before.props)throw Error('Native model changed before the action');
+ before.credit?.current(owner);
  await awaitNativeSettingsReading(callback(...args),abort.signal);
+ return afterNativeModelAction(n,entry,before,abort.signal);
+}
+async function afterNativeModelAction(n,entry,before,signal){
  const deadline=Date.now()+500;
- while(!entry.closed){try{const after=await readNativeModelPanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
+ while(!entry.closed){try{const after=await readNativeModelPanel(n,entry,signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
  return {snapshot:before.snapshot};
 }
 `

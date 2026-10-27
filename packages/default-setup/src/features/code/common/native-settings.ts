@@ -41,6 +41,7 @@ export const claudeSettingsSnapshot = z.object({
   editor: claudeSettingsEditor.optional(),
   commitPending: z.boolean().optional(),
   refreshPending: z.boolean().optional(),
+  dismissible: z.boolean().optional(),
   revision: z.string().regex(/^[a-f0-9]{64}$/),
   rows: z.array(z.object({
     key: z.string().min(1).max(4096), label: z.string().max(16384), description: z.string().max(16384).optional(),

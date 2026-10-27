@@ -215,3 +215,15 @@ it('focuses native Not now and makes Escape cancel its editor while retaining Se
   document.activeElement!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}});expect(close).not.toHaveBeenCalled()
  }finally{app.unmount();root.remove()}
 })
+
+it('preserves native non-cancellable credit processing and routes admitted model Close through native cancellation',async()=>{
+ const state=reactive<{state:ClaudeSettingsView}>({state:{requestId:'credit',status:'ready',snapshot:{revision:'a'.repeat(64),rows:[],dismissible:false,refreshPending:true,editor:{kind:'information',revision:'b'.repeat(64),title:'Usage credits',description:'Processing payment…'}}}})
+ const operations:ClaudeSettingsOperation[]=[],close=vi.fn(),root=document.createElement('div');document.body.append(root)
+ const app=createApp({render:()=>h(NativeSettingsPanel,{subject:'model',state:state.state,onOperate:(action:ClaudeSettingsOperation)=>operations.push(action),onClose:close})});app.mount(root)
+ try{
+  await nextTick();const before=operations.length,button=root.querySelector<HTMLButtonElement>('header button')!
+  expect(button.disabled).toBe(true);button.click();root.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));expect(operations).toHaveLength(before);expect(close).not.toHaveBeenCalled()
+  state.state.snapshot!.dismissible=true;state.state.snapshot!.refreshPending=false;await nextTick()
+  expect(button.disabled).toBe(false);button.click();expect(operations.at(-1)).toEqual({kind:'editor',revision:'a'.repeat(64),editorRevision:'b'.repeat(64),command:{action:'cancel'}});expect(close).not.toHaveBeenCalled()
+ }finally{app.unmount();root.remove()}
+})

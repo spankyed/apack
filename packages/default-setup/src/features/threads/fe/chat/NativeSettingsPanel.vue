@@ -2,7 +2,7 @@
   <section role="dialog" :aria-label="panelTitle" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown="handleKeydown">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
       <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ subject === 'model' ? state?.snapshot?.editor?.title || panelTitle : panelTitle }}</h2><p v-if="subject !== 'model'" class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
-      <button type="button" class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400" @click="closePanel">{{ subject === 'model' ? state?.snapshot?.refreshPending ? 'Cancel model change' : 'Close model selection' : 'Close settings' }}</button>
+      <button type="button" :disabled="state?.snapshot?.dismissible === false" class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="closePanel">{{ closeLabel }}</button>
     </header>
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
@@ -78,6 +78,14 @@ import NativeSettingsEditor from './NativeSettingsEditor.vue'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
 const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' }>(), {subject:'settings'})
 const panelTitle = computed(() => props.subject === 'model' ? 'Claude Code model' : 'Claude Code settings')
+const closeLabel = computed(() => {
+  if(props.subject!=='model')return 'Close settings'
+  const snapshot=props.state?.snapshot,editor=snapshot?.editor
+  if(snapshot?.dismissible===false)return 'Close'
+  if(snapshot?.refreshPending)return 'Cancel model change'
+  if(editor?.kind==='form'||editor?.kind==='choice'&&editor.consent)return editor.consent?.cancelLabel||'Cancel'
+  return 'Close model selection'
+})
 const emit = defineEmits<{ operate: [action: ClaudeSettingsOperation]; close: [] }>()
 const search = ref(''), searchInput = ref<HTMLInputElement>(), drafts = ref<Record<string, string>>({})
 const frame = computed(() => props.state?.snapshot?.frame)
@@ -97,12 +105,14 @@ function editorCommand(command: Extract<ClaudeSettingsOperation,{kind:'editor'}>
   if (snapshot?.editor && (!pending.value || command.action === 'cancel')) emit('operate',{kind:'editor',revision:snapshot.revision,editorRevision:snapshot.editor.revision,command})
 }
 function closePanel() {
-  if (props.subject === 'model' && props.state?.snapshot?.refreshPending && props.state.snapshot.editor) editorCommand({action:'cancel'})
+  if(props.state?.snapshot?.dismissible===false)return
+  if (props.subject === 'model' && props.state?.snapshot?.editor) editorCommand({action:'cancel'})
   else emit('close')
 }
 function handleKeydown(event: KeyboardEvent) {
   if(event.key!=='Escape'||event.isComposing||event.keyCode===229)return
   event.preventDefault();event.stopPropagation()
+  if(props.state?.snapshot?.dismissible===false)return
   if(props.state?.snapshot?.editor)editorCommand({action:'cancel'})
   else emit('close')
 }
