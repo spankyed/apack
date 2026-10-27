@@ -2373,6 +2373,7 @@
           "getRelation": "typeof _dsl.getRelation",
           "findRelations": "typeof _dsl.findRelations",
           "getSchemaStats": "typeof _dsl.getSchemaStats",
+          "engineCalls": "typeof _dsl.engineCalls",
           "create": "typeof _dsl.create",
           "upsert": "typeof _dsl.upsert",
           "write": "typeof _dsl.write",
