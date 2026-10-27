@@ -102,6 +102,7 @@ test('opens direct selected-Agent Settings commands without changing parent owne
   const nativeWindow=await electronApp.browserWindow(appPage)
   const panel=focused.getByRole('dialog',{name:'Claude Code settings',exact:true})
   const routes:any[]=[],captures:string[]=[]
+  await expect.poll(async()=>{const view=(await context()).native.state.view;return view.kind==='agent'&&view.taskId===taskId}).toBe(true)
   const originalView=(await context()).native.state.view
   const workerMessages=await focused.locator('[data-native-agent-message]').count()
   await field.evaluate(element=>{(window as any).__agentRouteEditor=element})
