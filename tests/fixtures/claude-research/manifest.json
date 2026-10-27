@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "6ad6783a4ebc51a94de70663d3b0eb0db8c97317",
+  "researchCommit": "ad8a99cf802755664ffc889c6dbaf0dd3eb1bd33",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -210,7 +210,7 @@
     "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
     "src/protocol/native-mcp-renderer-inspector.mjs": "3f49da84d9b2861412f989b1b0a14c28a2aabbca1ace1af507dc6d6a34a49c29",
     "src/protocol/native-mcp-url-app-fixture.mjs": "fe08e89c73578735d7e481edc97573877e22a61e9532b1a1f0abb13ea01a4651",
-    "src/protocol/native-model-panel-fixture.mjs": "50d64f4f5954204378d9ebda33f2bc708206e228b2621732d7018be11075a87c",
+    "src/protocol/native-model-panel-fixture.mjs": "5185d96418319c323e22f0f9852a909c25b2d9368fa35ce7ef016d17bf2ce42e",
     "src/protocol/native-module-access.mjs": "1550dd126a3dd1b7130103729aa48d21ea3dc5efcda34d9480b717c98508bc5b",
     "src/protocol/native-notebook-edit-fixture.mjs": "c6c39f110d33287c7374b3cebf523d05316226bf79265023597afbabe0f000c1",
     "src/protocol/native-notify-fixture.mjs": "5b271ac8bffc13856593d2d34e2ead696425fb572369933dfdab2ac261007c01",
@@ -320,5 +320,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "03801b87eed89b7c27156f86a135de5e2065237fae8306f880fec654105b21b0"
+  "archiveSha256": "22ed3648e0ac53a4a30c88e25ef97bc6c773593e01b11ed037e47637aa08b510"
 }
