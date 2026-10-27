@@ -13,6 +13,8 @@ test('completes an everyday native review across Agent, approval, question and i
   test.setTimeout(150000)
   expect(process.env.HOME).toBe(workspace)
   const combinedAcceptance=process.env.CLAUDE_RESEARCH_COMBINED_ACCEPTANCE==='1'
+  const modelPolicyNotice = process.env.CLAUDE_RESEARCH_MODEL_POLICY_NOTICE === '1'
+  expect(!modelPolicyNotice || combinedAcceptance).toBe(true)
   const restriction = false
   async function replaceDraft(editor:import('@playwright/test').Locator,text:string){
     if(combinedAcceptance){await editor.click();await editor.press('ControlOrMeta+A');await appPage.keyboard.insertText(text);await expect(editor).toHaveText(text)}
@@ -177,7 +179,6 @@ test('completes an everyday native review across Agent, approval, question and i
     const beforeModels = await context()
     const settingsPath = join(workspace!, '.claude/settings.json')
     const settingsBefore = await readFile(settingsPath, 'utf8')
-    const modelPolicyNotice = process.env.CLAUDE_RESEARCH_MODEL_POLICY_NOTICE === '1'
     const retainedDraft = 'Keep my model-review draft while I read the complete notice.'
     const notices: {selection:string;text:string;screenshots:string[];reading:unknown[]}[] = []
     for(const selection of ['haiku','default']) {
@@ -445,5 +446,5 @@ test('completes an everyday native review across Agent, approval, question and i
   await capture('recovered', composer, [send], appPage.getByTestId('chat-transcript'))
   expect(errors).toEqual([])
   await writeFile(join(workspace!, 'native-everyday-app.json'), JSON.stringify({ taskId, sessionId, nativeCost, resumedCost, geometry, screenshots, combinedAcceptance, retainedParentDraft:mainDraft,retainedAgentDraft:agentDraft }))
-  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeAgentReturn: true, nativePausedWhileWorking: true, nativePauseOwnerRetained: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
+  await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeEverydayCombined: testInfo.errors.length === 0, nativeModelPolicyNotice: modelPolicyNotice, nativeAgentReturn: true, nativePausedWhileWorking: true, nativePauseOwnerRetained: true, nativeHistorySynchronized: true, nativeCostSynchronized: true, nativeRetainedDraft: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, nativeCost, resumedCost, browserErrors: errors }))
 })

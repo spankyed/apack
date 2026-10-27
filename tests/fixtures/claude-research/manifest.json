@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "18a1a7a659b820fd9cc951d0112dde3c118eb188",
+  "researchCommit": "774b7679436a73a6e2706edd06b3f99a9a97a8b6",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -88,7 +88,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "cd7465ec9b84d6a669ffdff4ff8117d4d2c3542b94a45afe5f7c2ca0828627ac",
+    "src/integration/apack-terminal-owner-app.mjs": "82697a3f7fccb0d3ef11919845745fe854a50daad4d2afb1289ce1d323cd286b",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -127,7 +127,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "8d49f38039c50a841f52810fa9fefdd9689c54fd9cd05ef32287ce1d3ab730d1",
+    "src/integration/run-apack-controls.mjs": "ce4aee44e9dc63678eca3262705169a5db8e2beb3bb88e96c49ed02e066a84b3",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -194,7 +194,7 @@
     "src/protocol/native-composer-sites.mjs": "99787cc74651e02feaf054ad63cf632cb3f65a946da30a6398dc3ed2c6ec7c34",
     "src/protocol/native-dialog-inspector.mjs": "bb9dc00fb2b3d6dc3b04de5a8907186d5dd01178fc4d2160c96ca4b741fed8f0",
     "src/protocol/native-document-media-probe.mjs": "863a39425518c1352d06944def45b9bdb49cfe0681bda38f44e00136c09b1708",
-    "src/protocol/native-everyday-proof.mjs": "2ab6d0f60100ba39af9abf93b050511536ef41759db04cc992dbd8ae303f4fc0",
+    "src/protocol/native-everyday-proof.mjs": "c94f614972a289f79540acdc7182a2d57026172d24222903728e3d5dde1aa184",
     "src/protocol/native-field-lifetime-fixture.mjs": "4419a71c3d905c9f17e8efcf7e5738a8ad793a3b7c3afe7e376b1afd9e038db5",
     "src/protocol/native-focus-context-fixture.mjs": "e984d97d0ba5e172bf03a6514d1505479c7af0690606f4f92e063af2bb032c4f",
     "src/protocol/native-generic-permission-fixture.mjs": "551f7b8404031be9da0ff3484a12411da8224ad1a825e5517565ecdd4ad1a205",
@@ -319,5 +319,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "30da4a0bf225b7f86bad6299d479b69d2b1dee281e12c4ba304ca9a9ceee4200"
+  "archiveSha256": "e2dd3f6cfa5f28be95a24620dcec4ca4af1f072e356deca849899fa5b23a7efb"
 }
