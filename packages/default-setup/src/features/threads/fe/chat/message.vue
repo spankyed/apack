@@ -183,7 +183,7 @@
         </template>
 
         <!-- Message content -->
-        <div class="leading-relaxed text-[15px]">
+        <div data-chat-message-content class="leading-relaxed text-[15px]">
           <template v-for="part in nativeParts" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
             <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />

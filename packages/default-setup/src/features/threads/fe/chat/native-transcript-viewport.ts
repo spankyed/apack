@@ -6,7 +6,10 @@ export function nativeTranscriptLatestTop(viewport: HTMLElement): number {
   const row = [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].reverse()
     .find(element => element.getBoundingClientRect().height > 0)
   if (!row || !viewport.clientHeight) return tail
-  const bounds = row.getBoundingClientRect(), top = viewport.scrollTop + bounds.top - viewport.getBoundingClientRect().top
+  const rowBounds = row.getBoundingClientRect()
+  const body = row.querySelector<HTMLElement>('[data-chat-message-content]')?.getBoundingClientRect()
+  const bounds = rowBounds.height > viewport.clientHeight && body && body.height > 0 ? body : rowBounds
+  const top = viewport.scrollTop + bounds.top - viewport.getBoundingClientRect().top
   if (top >= tail) return tail
   return Math.max(0, Math.min(tail, bounds.height <= viewport.clientHeight ? top : top + bounds.height - viewport.clientHeight))
 }

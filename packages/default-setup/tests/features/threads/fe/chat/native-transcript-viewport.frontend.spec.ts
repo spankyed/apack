@@ -11,6 +11,9 @@ it('keeps short replies readable ahead of trailing placements and ends long repl
   expect(nativeTranscriptLatestTop(viewport)).toBe(450)
   top = 520; expect(nativeTranscriptLatestTop(viewport)).toBe(500)
   top = 300; height = 250; expect(nativeTranscriptLatestTop(viewport)).toBe(450)
+  const body = document.createElement('div'); body.dataset.chatMessageContent = ''; row.append(body)
+  body.getBoundingClientRect = () => ({ top: 330 - viewport.scrollTop, height: 25 }) as DOMRect
+  expect(nativeTranscriptLatestTop(viewport)).toBe(320)
 })
 
 it('follows viewport resizing without stealing focus and retires queued work on reader intent or owner replacement', async () => {
