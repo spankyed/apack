@@ -10,6 +10,25 @@ Regenerate from the research checkout after committing its tools:
 python3 tools/export-ci-replay.py /absolute/path/to/apack/tests/fixtures/claude-research
 ```
 
+The runner also contains the current completion-navigation, managed-model precedence, document
+producer/paste and Workflow Resume/layout tooling. These profiles use the authored
+`probeApackControls` entry in `src/integration/run-apack-controls.mjs`; the named case list in the
+older launcher is not the complete profile catalog. For the latest Workflow journey, call that
+entry inside the prepared, locked Linux container with:
+
+- `CLAUDE_RESEARCH_PENDING_WORKFLOW=1`
+- `CLAUDE_RESEARCH_WORKFLOW_TASK_CONTROLS=1`
+- `CLAUDE_RESEARCH_WORKFLOW_RESUME=1`
+- `CLAUDE_RESEARCH_WORKFLOW_RESUME_ELIGIBILITY=1`
+- Kind `terminal-plan-app-task-controls`, the checkout and read-only pinned executable paths,
+  and new private workspace/output directories as its four other arguments.
+
+Use `CLAUDE_RESEARCH_COMPLETION_NAVIGATION=1` with kind `terminal-plan-app-theme` for the
+main/Agent completion journey. Execute only after verifying network isolation, the read-only
+Linux 2.1.302 binary, 6 GiB memory/equal swap and two-CPU limits; hold the owned app-run lock.
+These current delivery profiles use local Linux validation and do not dispatch CI. The scoped
+Workflow result captures and completion journeys do not establish all F1–F5 acceptance.
+
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
 feature gates unchanged. Its profile requires the owned offline-container receipt at
