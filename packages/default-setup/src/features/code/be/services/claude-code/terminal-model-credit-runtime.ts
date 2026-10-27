@@ -4,7 +4,7 @@ const nativeModelCreditHashes={"purchase":["0906db370d45290c9b4083fbd3e873f174a7
 function nativeModelCreditState(fiber){
  const seen=new Set(),states=[];let hook=fiber.memoizedState;
  while(hook){if(seen.has(hook)||seen.size>=512)throw Error('Native credit state exceeded bound');seen.add(hook);const state=hook.memoizedState;if(state&&typeof state==='object'&&typeof state.s==='string')states.push(state);hook=hook.next;}
- if(states.length!==1)throw Error('Native credit state changed');return states[0];
+ if(states.length!==1)throw Error('Native credit state changed (found '+states.length+' tagged states)');return states[0];
 }
 function nativeModelCreditCache(match,size){
  const caches=match.fiber.updateQueue?.memoCache?.data?.filter(cache=>Array.isArray(cache)&&cache.length===size);
@@ -121,7 +121,7 @@ async function readNativeModelCredits(n,entry,match,text,signal){
   if(state.s==='choose')await choice(match.fiber,modal.props,modal.props.children,'choose');
   else{const messages=nativeModelFibers(modal.fiber).filter(fiber=>typeof fiber.memoizedProps?.message==='string');if(messages.length===0)throw Error('Native credit progress message changed');track(messages[0]);editor={kind:'information',title:modal.props.title,description:await text(messages[0].memoizedProps.message)};refreshPending=true;}
  }else throw Error('Native model credit state is unsupported');
- return {editor,controls,cancel,confirm,form,refuseInput,refreshPending,dismissible:typeof cancel==='function',current(owner){if(nativeModelCreditState(match.fiber)!==state||state.s!==stateKind)throw Error('Native credit state changed while reading');for(const anchor of anchors){const live=currentNativeSettingsFiber(owner,anchor.fiber);if(live.memoizedProps!==anchor.props)throw Error('Native credit control changed while reading');}for(const check of checks)check();}};
+ return {editor,controls,cancel,confirm,form,refuseInput,refreshPending,dismissible:typeof cancel==='function',current(owner){if(nativeModelCreditState(currentNativeSettingsFiber(owner,match.fiber))!==state||state.s!==stateKind)throw Error('Native credit state changed while reading');for(const anchor of anchors){const live=currentNativeSettingsFiber(owner,anchor.fiber);if(live.memoizedProps!==anchor.props)throw Error('Native credit control changed while reading');}for(const check of checks)check();}};
 }
 async function changeNativeModelCreditDraft(n,entry,before,formId,key,value,signal){
  if(key!=='answer'||typeof value!=='string'||value.length>16384||before.credit?.form?.id!==formId)throw Error('Native credit form value is invalid');
