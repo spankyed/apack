@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "01a78ecdf7805ba4408a630c274812497068fbf5",
+  "researchCommit": "4d30ae5115b94881bface330a8840564c37f78f8",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -193,9 +193,9 @@
     "src/protocol/native-composer-adapter.mjs": "81d94e542ba1019d4233194800d38a5fa04d4abeedad256993392989241ca638",
     "src/protocol/native-composer-signatures.mjs": "574b30f1ca8a7348ec1113a3d848080b43c1853d01ebea99a48f7e7d956cc324",
     "src/protocol/native-composer-sites.mjs": "99787cc74651e02feaf054ad63cf632cb3f65a946da30a6398dc3ed2c6ec7c34",
-    "src/protocol/native-credit-account.mjs": "7b239edb4aa9541dd422ba673d5af14b7a42cfeb148a1ea4197a10d6f4735ea0",
-    "src/protocol/native-credit-billing.mjs": "3a0d1517de223a487748949473e65954bef97bba682e2b85f2fac1e2fb4f1227",
-    "src/protocol/native-credit-proof.mjs": "c3401f6ca56ec22fad3923c6940b4707f29dd55d1ae99e7fa9a2006dde13af41",
+    "src/protocol/native-credit-account.mjs": "824c980b52481362eb1c5d765d824ce6698ce36ebf31a7b322b0ef941eda2625",
+    "src/protocol/native-credit-billing.mjs": "4aa419b8af1c46e49f25f126ca463e03f026946abc154db4d4ab389ce736f0b4",
+    "src/protocol/native-credit-proof.mjs": "f1b7964b68823d90822ab19c786d93225fce3101570f7d29e8f2f4e854a98116",
     "src/protocol/native-dialog-inspector.mjs": "bb9dc00fb2b3d6dc3b04de5a8907186d5dd01178fc4d2160c96ca4b741fed8f0",
     "src/protocol/native-document-media-probe.mjs": "863a39425518c1352d06944def45b9bdb49cfe0681bda38f44e00136c09b1708",
     "src/protocol/native-everyday-proof.mjs": "c94f614972a289f79540acdc7182a2d57026172d24222903728e3d5dde1aa184",
@@ -324,5 +324,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "cbdcdb22808c30f747399a30108ac322045b96927a5e19d66125809a0fe75bf4"
+  "archiveSha256": "27803f6ba234539743ddfda39d60c290523a82deeec699990a92275842173567"
 }
