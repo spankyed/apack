@@ -140,14 +140,22 @@ test('opens original task management from the default composer and stops its bac
       await appPage.setViewportSize({width,height:width===680?600:900})
       await shell.getByRole('button',{name:'Stop command',exact:true}).scrollIntoViewIfNeeded()
       await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeInViewport({ratio:1})
+      await output.getByRole('button',{name:'Refresh output',exact:true}).scrollIntoViewIfNeeded()
       await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
       await output.getByRole('button',{name:'Refresh output',exact:true}).click()
       await expect(output).toContainText('Owned release review is waiting.')
       await output.getByText('Owned release review is waiting.',{exact:true}).scrollIntoViewIfNeeded()
       await expect(output.getByText('Owned release review is waiting.',{exact:true})).toBeInViewport({ratio:1})
+      try{
       await expect(composer).toBeInViewport({ratio:1})
       await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeInViewport({ratio:1})
       await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
+      }catch(error){
+        const size={width,height:width===680?600:900}
+        const frame=await nativeWindow.evaluate(async(win,size)=>(await win.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+        await writeFile(testInfo.outputPath('native-shell-idle-viewport-failure-'+width+'.png'),Buffer.from(frame,'base64'))
+        throw error
+      }
       expect((await context()).turns).toBe(before.turns)
       expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
       await capture('desktop-shell',width);managerScreens.push({width,text:await output.innerText()})
