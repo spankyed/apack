@@ -15,7 +15,7 @@
         </div>
       </dl>
       <div v-else class="space-y-2 text-sm leading-relaxed text-neutral-300"><p v-for="(text,index) in help?.paragraphs" :key="index" class="whitespace-pre-wrap break-words">{{ text }}</p></div>
-      <a v-for="url in help?.links" :key="url" :href="url" target="_blank" rel="noopener noreferrer" class="mt-4 block break-all text-sm text-blue-400 underline">{{ url }}</a>
+      <a v-for="url in help?.links" :key="url" :href="url" @click.prevent="openLink(url)" @auxclick.middle.prevent="openLink(url)" class="mt-4 block break-all text-sm text-blue-400 underline">{{ url }}</a>
     </div>
     <footer class="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-2 text-xs">
       <p v-if="state?.problem" role="alert" class="break-words text-amber-200">{{ state.problem }}</p><span v-else role="status" class="text-neutral-500">{{ pending ? 'Waiting for Claude Code…' : help?.selectedTab }}</span>
@@ -25,6 +25,7 @@
 </template>
 <script setup lang="ts">
 import {computed,onMounted} from 'vue'
+import {openLink} from '@apackdev/sdk/fe'
 import type {ClaudeSettingsOperation,ClaudeSettingsView} from '#features/code/common/native-settings.ts'
 const props=defineProps<{state?:ClaudeSettingsView;ownerLabel?:string}>()
 const emit=defineEmits<{operate:[action:ClaudeSettingsOperation];close:[]}>()
