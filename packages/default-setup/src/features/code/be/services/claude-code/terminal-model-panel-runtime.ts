@@ -86,6 +86,7 @@ async function nativeModelPanelOperation(n,entry,request,abort){
   else {callback=before.controls.onChange;args=[command.value];}
  }else if(command?.action==='focusModel'&&before.modelControl){if(!editor.options.some(option=>option.value===command.value&&!option.disabled))throw Error('Native model details are unavailable');callback=before.modelControl.controls.onFocus;args=[command.value];}
  else if(command?.action==='adjustEffort'&&before.modelControl?.canAdjust&&['left','right'].includes(command.direction)){callback=before.modelControl.adjust;args=[command.direction];}
+ if(command?.action==='change'&&before.credit?.form){const after=await changeNativeModelCreditDraft(n,entry,before,command.formId,command.key,command.value,abort.signal);return {snapshot:after.snapshot};}
  if(command?.action==='save'&&before.credit?.form)return saveNativeModelCreditForm(n,entry,before,command.values,abort.signal);
  if(typeof callback!=='function')throw Error('Native model action is unavailable');
  abort.signal.throwIfAborted();const owner=nativeModelPanelFrame(n,entry),live=currentNativeSettingsFiber(owner,before.fiber);

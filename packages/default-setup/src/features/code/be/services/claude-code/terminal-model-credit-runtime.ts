@@ -68,9 +68,13 @@ async function readNativeModelCredits(n,entry,match,text,signal){
   if(!p||typeof p.value!=='string'||p.value.length>16384||typeof p.onChange!=='function'||typeof p.onSubmit!=='function'||p.onExit!==expectedCancel||typeof expectedCancel!=='function'||modal?.props?.onCancel!==expectedCancel||p.onSubmit!==cache[kind==='charge'?13:14])throw Error('Native credit form callbacks changed');
   const inputs=nativeModelFibers(control.fiber).filter(fiber=>(fiber.type===input.type||fiber.elementType===input.type)&&fiber.memoizedProps===p);
   if(inputs.length!==1)throw Error('Native credit input is not uniquely mounted');track(inputs[0]);cancel=expectedCancel;
-  const disclosure=nativeModelCreditPrune(modal.props.children,node=>node.type===input.type&&node.props===p),problem=kind==='charge'?cache[11]?.props?.color==='error'?await text(cache[11]):undefined:cache[40]?await text(cache[40]):undefined;
-  editor={kind:'form',title:modal.props.title,description:await message(disclosure),submitLabel:kind==='charge'?'Confirm purchase':'Continue',fields:[{key:'answer',label:kind==='charge'?'Confirmation':'Amount',value:p.value}],consent:{cancelLabel:'Cancel',focusField:'answer',links:nativeModelCreditLinks(disclosure),...problem?{problem}:{}}};
-  form={fiber:control.fiber,input:p,kind};checks.push(()=>{if(!control.fiber.updateQueue?.memoCache?.data?.includes(cache)||cache[kind==='charge'?19:28]!==input||cache[kind==='charge'?29:50]!==modal)throw Error('Native credit form changed while reading');});
+  const feedbackNode=kind==='charge'?['error','success'].includes(cache[11]?.props?.color)?cache[11]:undefined:cache[40]||cache[38]||undefined;
+  const feedback=feedbackNode?{text:await text(feedbackNode),tone:kind==='charge'?feedbackNode.props.color:cache[40]?'error':'success'}:undefined;
+  const disclosure=nativeModelCreditPrune(modal.props.children,node=>node.type===input.type&&node.props===p||node===feedbackNode);
+  entry.creditFormIds??=new WeakMap();let formId=entry.creditFormIds.get(control.fiber)??(control.fiber.alternate&&entry.creditFormIds.get(control.fiber.alternate));
+  if(!formId){entry.creditFormSequence=(entry.creditFormSequence??0)+1;formId=String(entry.creditFormSequence);}entry.creditFormIds.set(control.fiber,formId);if(control.fiber.alternate)entry.creditFormIds.set(control.fiber.alternate,formId);
+  editor={kind:'form',live:{id:formId,...feedback?{feedback}:{}},title:modal.props.title,description:await message(disclosure),submitLabel:kind==='charge'?'Confirm purchase':'Continue',fields:[{key:'answer',label:kind==='charge'?'Confirmation':'Amount',value:p.value}],consent:{cancelLabel:'Cancel',focusField:'answer',links:nativeModelCreditLinks(disclosure)}};
+  form={id:formId,fiber:control.fiber,input:p,kind};checks.push(()=>{if(!control.fiber.updateQueue?.memoCache?.data?.includes(cache)||cache[kind==='charge'?19:28]!==input||cache[kind==='charge'?29:50]!==modal)throw Error('Native credit form changed while reading');});
  }
  if(state.s==='buy'){
   const purchase=find('purchaseState');if(purchase.props.initialStep!=='buy_select'||purchase.props.entryReason!=='fable')throw Error('Native model credit purchase entry changed');
@@ -119,24 +123,25 @@ async function readNativeModelCredits(n,entry,match,text,signal){
  }else throw Error('Native model credit state is unsupported');
  return {editor,controls,cancel,confirm,form,refuseInput,refreshPending,dismissible:typeof cancel==='function',current(owner){if(nativeModelCreditState(match.fiber)!==state||state.s!==stateKind)throw Error('Native credit state changed while reading');for(const anchor of anchors){const live=currentNativeSettingsFiber(owner,anchor.fiber);if(live.memoizedProps!==anchor.props)throw Error('Native credit control changed while reading');}for(const check of checks)check();}};
 }
+async function changeNativeModelCreditDraft(n,entry,before,formId,key,value,signal){
+ if(key!=='answer'||typeof value!=='string'||value.length>16384||before.credit?.form?.id!==formId)throw Error('Native credit form value is invalid');
+ signal.throwIfAborted();entry.current();const owner=nativeModelPanelFrame(n,entry);
+ if(!sameNativeSettingsFiber(owner,before.owner))throw Error('Native credit form owner changed');before.credit.current(owner);
+ const originalForm=before.credit.form;if(originalForm.input.value===value)return before;
+ await awaitNativeSettingsReading(originalForm.input.onChange(value),signal);const until=Date.now()+1500;
+ while(true){
+  signal.throwIfAborted();entry.current();const current=await readNativeModelPanel(n,entry,signal);
+  if(!sameNativeSettingsFiber(current.owner,before.owner)||current.credit?.form?.id!==formId||current.credit.form.kind!==originalForm.kind||!sameNativeSettingsFiber(current.credit.form.fiber,originalForm.fiber))throw Error('Native credit form replaced while editing');
+  if(current.credit.form.input.value===value)return current;
+  if(Date.now()>=until)throw Error('Native credit form did not acknowledge its draft');
+  await new Promise(resolve=>setTimeout(resolve,20));
+ }
+}
 async function saveNativeModelCreditForm(n,entry,before,values,signal){
  if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).length!==1||!Object.hasOwn(values,'answer')||typeof values.answer!=='string'||values.answer.length>16384)throw Error('Native credit form value is invalid');
- signal.throwIfAborted();entry.current();let current=before;
- const owner=nativeModelPanelFrame(n,entry);if(!sameNativeSettingsFiber(owner,before.owner))throw Error('Native credit form owner changed');before.credit.current(owner);
- const originalForm=before.credit.form,value=values.answer;
- if(originalForm.input.value!==value){
-  await awaitNativeSettingsReading(originalForm.input.onChange(value),signal);const until=Date.now()+1500;
-  while(true){
-   signal.throwIfAborted();entry.current();current=await readNativeModelPanel(n,entry,signal);
-   if(!sameNativeSettingsFiber(current.owner,before.owner)||!current.credit?.form||current.credit.form.kind!==originalForm.kind||!sameNativeSettingsFiber(current.credit.form.fiber,originalForm.fiber))throw Error('Native credit form replaced while editing');
-   if(current.credit.form.input.value===value)break;
-   if(Date.now()>=until)throw Error('Native credit form did not acknowledge its draft');
-   await new Promise(resolve=>setTimeout(resolve,20));
-  }
- }
+ const current=await changeNativeModelCreditDraft(n,entry,before,before.credit.form.id,'answer',values.answer,signal);
  signal.throwIfAborted();current.credit.current(nativeModelPanelFrame(n,entry));
- await awaitNativeSettingsReading(current.credit.form.input.onSubmit(value),signal);
+ await awaitNativeSettingsReading(current.credit.form.input.onSubmit(values.answer),signal);
  return afterNativeModelAction(n,entry,current,signal);
 }
-
 `

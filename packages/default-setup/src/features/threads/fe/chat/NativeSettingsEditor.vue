@@ -40,24 +40,27 @@
       <p v-if="editor.consent?.problem" role="alert" class="whitespace-pre-wrap break-words text-sm text-amber-200">{{ editor.consent.problem }}</p>
       <label v-for="field in editor.fields" :key="field.key" class="block text-xs text-neutral-300">
         <span class="mb-2 block break-words">{{ field.label }}</span>
-        <input v-model="drafts[field.key]" :data-native-setting-field="field.key" :disabled="pending" maxlength="16384" class="w-full min-w-0 rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" />
+        <input v-model="drafts[field.key]" :data-native-setting-field="field.key" :aria-invalid="editor.live?.feedback?.tone === 'error' && !previewDirty ? true : undefined" @input="changeField(field.key,$event)" @compositionstart="composing.add(field.key)" @compositionend="endComposition(field.key,$event)" :disabled="pending" maxlength="16384" class="w-full min-w-0 rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" />
       </label>
-      <button type="submit" :disabled="pending" class="rounded-lg bg-blue-600 px-4 py-2 text-xs text-white disabled:opacity-40">{{ editor.submitLabel }}</button>
+      <p v-if="editor.live && previewDirty" role="status" class="text-xs text-neutral-400">{{ previewProblem ? 'Preview could not update. Refresh to retry.' : 'Updating preview…' }}</p>
+      <p v-else-if="editor.live?.feedback" :role="editor.live.feedback.tone === 'error' ? 'alert' : 'status'" class="whitespace-pre-wrap break-words text-sm" :class="editor.live.feedback.tone === 'error' ? 'text-amber-200' : 'text-emerald-300'">{{ editor.live.feedback.text }}</p>
+      <button type="submit" :disabled="pending || submitDisabled" class="rounded-lg bg-blue-600 px-4 py-2 text-xs text-white disabled:opacity-40">{{ editor.submitLabel }}</button>
     </form>
   </section>
 </template>
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import NativeThemePreview from './NativeThemePreview.vue'
 import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
 import NativePermissionText from './NativePermissionText.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
-const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; hideHeader?: boolean }>()
-const emit = defineEmits<{ 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
-const drafts = ref<Record<string, string>>({})
+const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; hideHeader?: boolean; resetEpoch?: number; submitDisabled?: boolean; previewProblem?: boolean; previewPending?: boolean }>()
+const emit = defineEmits<{ change:[formId:string,key:string,value:string]; 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
+const drafts = ref<Record<string, string>>({}),dirty=reactive(new Set<string>()),composing=reactive(new Set<string>()),lastEmitted=new Map<string,string>()
+const previewDirty=computed(()=>dirty.size>0||composing.size>0)
 const editorRoot = ref<HTMLElement>()
 watch(() => props.editor.kind === 'choice' && props.editor.consent ? props.editor.revision : undefined, revision => { if(revision)void nextTick(() => { const value=props.editor.kind==='choice'?props.editor.consent?.defaultFocusValue:undefined;[...editorRoot.value?.querySelectorAll<HTMLButtonElement>('[data-native-settings-option]')??[]].find(button=>button.dataset.nativeSettingsOption===value)?.focus({preventScroll:true}) }) }, {immediate:true})
-watch(() => props.editor.kind === 'form' && props.editor.consent ? props.editor.revision : undefined, revision => { if(revision)void nextTick(() => { editorRoot.value?.querySelector<HTMLInputElement>('[data-native-setting-field="answer"]')?.focus({preventScroll:true}) }) }, {immediate:true})
+watch(() => props.editor.kind === 'form' && props.editor.consent ? props.editor.live ? props.editor.live.id+':'+(props.resetEpoch??0) : props.editor.revision : undefined, revision => { if(revision)void nextTick(() => { editorRoot.value?.querySelector<HTMLInputElement>('[data-native-setting-field="answer"]')?.focus({preventScroll:true}) }) }, {immediate:true})
 watch(() => props.editor.kind === 'choice' && !!props.editor.model, value => {
   if(value)void nextTick(() => {
     const focus=props.editor.kind==='choice'?props.editor.model?.focusValue:undefined
@@ -69,5 +72,21 @@ const modelDetails = ref<HTMLElement>()
 const modelLabel = computed(() => { const editor=props.editor; if(editor.kind!=='choice')return; const focus=editor.model?.focusValue; return editor.options.find(option=>option.value===focus)?.label })
 function showModelDetails(value: string) { emit('focus-model', value); void nextTick(() => { modelDetails.value?.scrollIntoView?.({ block: 'nearest' }); modelDetails.value?.focus({ preventScroll: true }) }) }
 function adjustModelEffort(direction: 'left' | 'right') { if(!props.pending && props.editor.kind==='choice' && props.editor.model?.canAdjustEffort)emit('adjust-effort', direction) }
-watch(() => props.editor.revision, () => { drafts.value = props.editor.kind === 'form' ? Object.fromEntries(props.editor.fields.map(field => [field.key, field.value])) : {} }, { immediate: true })
+let formIdentity:string|undefined,resetEpoch:number|undefined
+watch(() => [props.editor.revision,props.resetEpoch] as const, () => {
+  const editor=props.editor,identity=editor.kind==='form'?editor.live?.id:undefined
+  if(editor.kind!=='form'){drafts.value={};dirty.clear();composing.clear();lastEmitted.clear();formIdentity=undefined;return}
+  if(!identity||identity!==formIdentity||props.resetEpoch!==resetEpoch){drafts.value=Object.fromEntries(editor.fields.map(field=>[field.key,field.value]));dirty.clear();composing.clear();lastEmitted.clear()}
+  else for(const field of editor.fields){if(composing.has(field.key))continue;if(drafts.value[field.key]===field.value)dirty.delete(field.key);else if(!dirty.has(field.key))drafts.value[field.key]=field.value}
+  formIdentity=identity;resetEpoch=props.resetEpoch
+},{immediate:true})
+function changeField(key:string,event:Event){
+  const editor=props.editor,input=event.target as HTMLInputElement
+  if(editor.kind!=='form'||!editor.live||composing.has(key)||(event as InputEvent).isComposing||(input as HTMLInputElement&{composing?:boolean}).composing)return
+  drafts.value[key]=input.value
+  if(!props.previewPending&&editor.fields.find(field=>field.key===key)?.value===input.value)dirty.delete(key);else dirty.add(key)
+  if(lastEmitted.get(key)===input.value)return
+  lastEmitted.set(key,input.value);emit('change',editor.live.id,key,input.value)
+}
+function endComposition(key:string,event:Event){composing.delete(key);changeField(key,event)}
 </script>

@@ -7907,6 +7907,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
     revision: z.ZodString;
     editorRevision: z.ZodString;
     command: z.ZodDiscriminatedUnion<[z.ZodObject<{
+        action: z.ZodLiteral<"change">;
+        formId: z.ZodString;
+        key: z.ZodString;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
         action: z.ZodLiteral<"setGroup">;
         key: z.ZodString;
         value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString]>;
@@ -8115,6 +8120,16 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }, z.core.$strict>>;
     }, z.core.$strict>, z.ZodObject<{
         kind: z.ZodLiteral<"form">;
+        live: z.ZodOptional<z.ZodObject<{
+            id: z.ZodString;
+            feedback: z.ZodOptional<z.ZodObject<{
+                text: z.ZodString;
+                tone: z.ZodEnum<{
+                    error: "error";
+                    success: "success";
+                }>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>;
         consent: z.ZodOptional<z.ZodObject<{
             links: z.ZodOptional<z.ZodArray<z.ZodString>>;
             cancelLabel: z.ZodString;
@@ -8541,6 +8556,13 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     label: string;
                     value: string;
                 }[];
+                live?: {
+                    id: string;
+                    feedback?: {
+                        text: string;
+                        tone: "error" | "success";
+                    } | undefined;
+                } | undefined;
                 consent?: {
                     cancelLabel: string;
                     focusField: "answer";

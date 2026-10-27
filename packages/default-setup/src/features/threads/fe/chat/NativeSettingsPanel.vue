@@ -7,7 +7,7 @@
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
     </nav>
-    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="pending" :hide-header="subject === 'model'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
+    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="editorPending" :reset-epoch="liveForm.resetEpoch.value" :submit-disabled="!!(state.snapshot.editor.kind === 'form' && state.snapshot.editor.live) && !liveForm.canSubmit.value" :preview-problem="state.status === 'error'" :preview-pending="liveForm.busy.value" :hide-header="subject === 'model'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @change="(formId,key,value) => editorCommand({action:'change',formId,key,value})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
     <p v-else-if="subject === 'model'" role="status" class="min-h-0 flex-1 overflow-auto p-4 text-sm text-neutral-400">Loading model controls…</p>
     <template v-else-if="activeTab === 'Config'">
     <div class="shrink-0 border-b border-white/5 px-4 py-3">
@@ -75,6 +75,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import NativeSettingsStats from './NativeSettingsStats.vue'
 import NativeSettingsEditor from './NativeSettingsEditor.vue'
+import { useNativeSettingsForm } from './native-settings-form.ts'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
 const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' }>(), {subject:'settings'})
 const panelTitle = computed(() => props.subject === 'model' ? 'Claude Code model' : 'Claude Code settings')
@@ -95,12 +96,15 @@ function money(value: number) { return new Intl.NumberFormat(undefined,{style:'c
 function operate(action: {kind:'tab';tab:'Status'|'Config'|'Usage'|'Stats'} | {kind:'stats';action:'Overview'|'Models'|'cycleDates'|'copy'}) {
   if (!pending.value && props.state?.snapshot) emit('operate', {...action,revision:props.state.snapshot.revision})
 }
-const pending = computed(() => props.state?.status === 'pending' || props.state?.snapshot?.commitPending === true)
+const liveForm=useNativeSettingsForm(()=>props.state,action=>emit('operate',action))
+const pending = computed(() => props.state?.status === 'pending' || props.state?.snapshot?.commitPending === true || liveForm.busy.value)
+const editorPending=computed(()=>pending.value&&!liveForm.editing.value)
 const rows = computed(() => (props.state?.snapshot?.rows ?? []).filter(row => `${row.label} ${row.description ?? ''} ${row.key}`.toLowerCase().includes(search.value.toLowerCase())))
 function openEditor(key: string) {
   if (!pending.value && props.state?.snapshot) emit('operate',{kind:'open',revision:props.state.snapshot.revision,key})
 }
 function editorCommand(command: Extract<ClaudeSettingsOperation,{kind:'editor'}>['command']) {
+  if(liveForm.handle(command))return
   const snapshot=props.state?.snapshot
   if (snapshot?.editor && (!pending.value || command.action === 'cancel')) emit('operate',{kind:'editor',revision:snapshot.revision,editorRevision:snapshot.editor.revision,command})
 }
@@ -129,9 +133,9 @@ function save(key: string, value: ClaudeSettingValue) {
   if (!pending.value && props.state?.snapshot) emit('operate', {kind:'write',revision:props.state.snapshot.revision,key,value})
 }
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
-watch(() => [props.state?.status,activeTab.value,frame.value?.stats?.loading,frame.value?.stats?.copyState,props.state?.snapshot?.commitPending,props.state?.snapshot?.refreshPending] as const, ([status,tab,loading,copyState,commitPending,refreshPending]) => {
+watch(() => [props.state?.status,activeTab.value,frame.value?.stats?.loading,frame.value?.stats?.copyState,props.state?.snapshot?.commitPending,props.state?.snapshot?.refreshPending,liveForm.busy.value] as const, ([status,tab,loading,copyState,commitPending,refreshPending,liveBusy]) => {
   clearTimeout(refreshTimer)
-  if (status === 'ready' && (refreshPending || commitPending || tab === 'Stats' && (loading || copyState && copyState !== 'idle'))) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
+  if (!liveBusy && status === 'ready' && (refreshPending || commitPending || tab === 'Stats' && (loading || copyState && copyState !== 'idle'))) refreshTimer = setTimeout(() => emit('operate',{kind:'read'}),250)
 }, { immediate: true })
 onUnmounted(() => clearTimeout(refreshTimer))
 watch(() => props.state?.savedKey, key => { if (key) delete drafts.value[key] })

@@ -15,7 +15,8 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
  const props={onCancel:cancel,onBack:cancel},control:any={type:kind==='charge'?charge:amount,memoizedProps:props},cache:any[]=Array(kind==='charge'?30:51)
  control.updateQueue={memoCache:{data:[cache]}}
  function renderInput(){
-  const nativeInput={type:input,props:{value,onChange:change,onSubmit:submit,onExit:cancel}},body={props:{children:[{props:{children:'Original amount and consent disclosure'}},nativeInput]}}
+  const feedback={props:{color:'success',children:'Original preview: '+value}},nativeInput={type:input,props:{value,onChange:change,onSubmit:submit,onExit:cancel}},body={props:{children:[{props:{children:'Original amount and consent disclosure'}},nativeInput,feedback]}}
+  cache[kind==='charge'?11:38]=feedback
   const view={type:modal,props:{title:kind==='charge'?'Confirm amount':'Buy usage credits',onCancel:cancel,children:body}}
   cache[kind==='charge'?19:28]=nativeInput;cache[kind==='charge'?29:50]=view;cache[kind==='charge'?13:14]=submit
   control.child={type:modal,memoizedProps:view.props,child:{type:input,memoizedProps:nativeInput.props}}
@@ -92,4 +93,19 @@ it('rejects a credit branch replaced while rendering its disclosure',async()=>{
 it('preserves no focused option in the original accessible selector while retaining explicit choice admission',async()=>{
  const f=fixture('bundles',true),{snapshot}=await f.read();expect(claudeSettingsSnapshot.parse(snapshot).editor).toMatchObject({kind:'choice'});expect(snapshot.editor.consent.defaultFocusValue).toBeUndefined()
  await f.act(snapshot,{action:'select',value:'p0'});expect(f.select).toHaveBeenCalledExactlyOnceWith('p0')
+})
+
+it('updates original live amount feedback without submitting or charging',async()=>{
+ const f=fixture('amount'),{snapshot}=await f.read(),id=snapshot.editor.live.id
+ const after=await f.act(snapshot,{action:'change',formId:id,key:'answer',value:'100'})
+ expect(claudeSettingsSnapshot.parse(after.snapshot).editor).toMatchObject({kind:'form',live:{id,feedback:{text:'Original preview: 100',tone:'success'}},fields:[{key:'answer',value:'100'}]})
+ expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled();expect(f.confirm).not.toHaveBeenCalled()
+})
+it('never treats a valid typed charge draft as confirmation',async()=>{
+ const f=fixture('charge'),{snapshot}=await f.read();await f.act(snapshot,{action:'change',formId:snapshot.editor.live.id,key:'answer',value:'confirm'})
+ expect(f.submit).not.toHaveBeenCalled();expect(f.confirm).not.toHaveBeenCalled()
+})
+it('rejects a foreign live form identity before invoking any native field callback',async()=>{
+ const f=fixture('amount'),{snapshot}=await f.read();await expect(f.act(snapshot,{action:'change',formId:'foreign',key:'answer',value:'100'})).rejects.toThrow('invalid')
+ expect(f.change).not.toHaveBeenCalled();expect(f.submit).not.toHaveBeenCalled()
 })
