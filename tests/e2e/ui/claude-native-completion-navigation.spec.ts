@@ -126,7 +126,7 @@ test('uses original native completion rows with keyboard navigation in main and 
   const form=focused.getByRole('form',{name:'Agent message',exact:true}),agentEditor=form.locator('[contenteditable="true"]')
   const agentText=await exercise(form,agentEditor,'agent',2)
   await form.getByRole('button',{name:'Send to Agent',exact:true}).click();await expect(agentEditor).toHaveText('')
-  const agentRows=async()=>{const files=await readdir(join(workspace!,'.claude/projects'),{recursive:true}),path=files.find(file=>file.endsWith('/agent-'+taskId+'.jsonl'));if(!path)return [];return(await readFile(join(workspace!,'.claude/projects',path),'utf8')).trim().split('\n').map(JSON.parse)}
+  const agentRows=async()=>{const files=await readdir(join(workspace!,'.claude/projects'),{recursive:true}),path=files.find(file=>file.endsWith('/agent-'+taskId+'.jsonl'));if(!path)return [];return(await readFile(join(workspace!,'.claude/projects',path),'utf8')).trim().split('\n').map(line=>JSON.parse(line))}
   await expect.poll(async()=>(await agentRows()).filter(row=>row.type==='assistant').length,{timeout:15000}).toBe(2)
   const nativeAgentHuman=(await agentRows()).filter(row=>row.type==='user'&&row.origin?.kind==='human'&&typeof row.message?.content==='string'&&row.message.content.includes(agentText));expect(nativeAgentHuman).toHaveLength(1)
   await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(parentText);expect(await snapshot(composer)).toEqual(parent)
