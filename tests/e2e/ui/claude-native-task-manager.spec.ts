@@ -137,6 +137,7 @@ test('opens original task management from the default composer and stops its bac
     await expect(output).toContainText('Owned release review is waiting.')
     for(const width of [1100,680]){
       await appPage.setViewportSize({width,height:width===680?600:900})
+      await shell.getByRole('button',{name:'Stop command',exact:true}).scrollIntoViewIfNeeded()
       await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeInViewport({ratio:1})
       await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
       await output.getByRole('button',{name:'Refresh output',exact:true}).click()
@@ -144,6 +145,8 @@ test('opens original task management from the default composer and stops its bac
       await output.getByText('Owned release review is waiting.',{exact:true}).scrollIntoViewIfNeeded()
       await expect(output.getByText('Owned release review is waiting.',{exact:true})).toBeInViewport({ratio:1})
       await expect(composer).toBeInViewport({ratio:1})
+      await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeInViewport({ratio:1})
+      await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
       expect((await context()).turns).toBe(before.turns)
       expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
       await capture('desktop-shell',width);managerScreens.push({width,text:await output.innerText()})
