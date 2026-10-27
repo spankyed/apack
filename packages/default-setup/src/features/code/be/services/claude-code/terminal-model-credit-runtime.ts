@@ -69,9 +69,10 @@ async function readNativeModelCredits(n,entry,match,text,signal){
   const inputs=nativeModelFibers(control.fiber).filter(fiber=>(fiber.type===input.type||fiber.elementType===input.type)&&fiber.memoizedProps===p);
   if(inputs.length!==1)throw Error('Native credit input is not uniquely mounted');track(inputs[0]);cancel=expectedCancel;
   const feedbackNode=kind==='charge'?['error','success'].includes(cache[11]?.props?.color)?cache[11]:undefined:cache[40]||cache[38]||undefined;
-  const feedback=feedbackNode?{text:await text(feedbackNode),tone:kind==='charge'?feedbackNode.props.color:cache[40]?'error':'success'}:undefined;
   const inputBorder=kind==='charge'?cache[22]:undefined;
   if(kind==='charge'&&(inputBorder?.props?.children!==input||inputBorder.props.borderStyle!=='single'))throw Error('Native credit input decoration changed');
+  // Capture the input and its border together before formatting yields to native renders.
+  const feedback=feedbackNode?{text:await text(feedbackNode),tone:kind==='charge'?feedbackNode.props.color:cache[40]?'error':'success'}:undefined;
   const disclosure=nativeModelCreditPrune(modal.props.children,node=>node===inputBorder||node.type===input.type&&node.props===p||node===feedbackNode);
   entry.creditFormIds??=new WeakMap();let formId=entry.creditFormIds.get(control.fiber)??(control.fiber.alternate&&entry.creditFormIds.get(control.fiber.alternate));
   if(!formId){entry.creditFormSequence=(entry.creditFormSequence??0)+1;formId=String(entry.creditFormSequence);}entry.creditFormIds.set(control.fiber,formId);if(control.fiber.alternate)entry.creditFormIds.set(control.fiber.alternate,formId);

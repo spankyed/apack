@@ -123,8 +123,8 @@ it('rejects an alternate credit state whose mounted controls no longer match',as
  await expect(f.read()).rejects.toThrow('Native credit progress message changed');expect(f.change).not.toHaveBeenCalled();expect(f.submit).not.toHaveBeenCalled()
 })
 
-it('rereads a credit disclosure that rerenders during draft acknowledgement without repeating the callback',async()=>{
- const f=fixture('amount'),{snapshot}=await f.read();let committed=false
+it.each(['amount','charge'] as const)('rereads a %s credit disclosure that rerenders during draft acknowledgement without repeating the callback',async(kind)=>{
+ const f=fixture(kind),{snapshot}=await f.read();let committed=false
  f.afterChange(()=>f.beforeText(()=>{if(!committed){committed=true;f.renderInput()}}))
  const after=await f.act(snapshot,{action:'change',formId:snapshot.editor.live.id,key:'answer',value:'100'})
  expect(committed).toBe(true);expect(after.snapshot.editor.fields[0].value).toBe('100');expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled()

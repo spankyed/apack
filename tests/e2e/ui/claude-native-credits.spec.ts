@@ -138,6 +138,7 @@ test('uses original credit purchase previews, cancellation and typed consent', a
   await expect(confirmation).toBeVisible()
   const disclosure=await panel.innerText(),word=disclosure.match(/Type (\w+) to confirm[.]/)?.[1];expect(word).toBeTruthy()
   await confirmation.fill(word!);await expect(panel.locator('[aria-label="Claude Code setting editor"]').getByRole('status')).toHaveText(`Type ${word} to confirm.`)
+  await expect(panel.locator('[aria-label="Claude Code setting editor"]')).not.toContainText(/[┌┐└┘─│]/);await expect(panel.locator('[aria-label="Claude Code setting editor"]')).toContainText('Buy usage credits for $82.50.')
   await capture('typed-consent',confirmation,[panel.getByRole('button',{name:'Confirm purchase',exact:true})]);await record('typed-not-submitted');expect(receipts.at(-1).purchases).toBe(0)
   // Backing out of the typed challenge must not charge or enable usage credits.
   await panel.getByRole('button',{name:'Cancel',exact:true}).click();await expect(pay).toBeVisible();await record('cancel-charge');expect(receipts.at(-1).purchases).toBe(0);expect(receipts.at(-1).enabled).toBe(false)
