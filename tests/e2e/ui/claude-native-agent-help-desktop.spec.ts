@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
+import {readNativeHelpBody} from './native-help-reading.ts'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
@@ -99,7 +100,7 @@ test('reads original Help for the selected Agent and preserves both drafts', asy
   await composer.fill(parent);const before=await context()
   await row.getByRole('button',{name:'Open Agent',exact:true}).click()
   const focused=appPage.getByRole('region',{name:'Focused Agent conversation',exact:true}),form=focused.getByRole('form',{name:'Agent message',exact:true}),field=form.locator('[contenteditable="true"]')
-  const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[],samples:any[]=[]
+  const nativeWindow=await electronApp.browserWindow(appPage),captures:string[]=[],samples:any[]=[],readings:any[]=[]
   await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
   await field.focus();await field.press('Control+a');await field.pressSequentially('/help')
   await expect.poll(async()=>{const view=(await context()).native.state.view;return view.kind==='agent'&&view.taskId===taskId}).toBe(true)
@@ -113,12 +114,14 @@ test('reads original Help for the selected Agent and preserves both drafts', asy
     await expect(panel.getByRole('button',{name:tab,exact:true})).toHaveAttribute('aria-current','page')
     await expect(panel.getByRole('alert')).toHaveCount(0)
     if(tab==='General'){await expect(panel).toContainText('Claude understands your codebase');await expect(panel.locator('p').filter({hasText:/shift \+ tab.*auto-accept edits/})).toHaveCount(1)}
+    if(tab==='Custom commands'){await expect(panel.locator('dt').filter({hasText:/^\/review-release$/})).toHaveCount(1);await expect(panel).toContainText('Review the release checklist and report remaining risks.')}
     if(tab==='Commands'){await expect(panel.locator('dt').filter({hasText:/^\/help$/})).toHaveCount(1);await expect(panel.locator('dt')).not.toHaveCount(0)}
     for(const width of [1100,680]){
       const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
       await expect.poll(()=>panel.locator('div[tabindex="0"]').evaluate(element=>element.scrollWidth<=element.clientWidth+1)).toBe(true)
       await expect(panel.getByRole('button',{name:'Close help',exact:true})).toBeInViewport({ratio:1})
       await expect(panel.getByRole('button',{name:tab,exact:true})).toBeInViewport({ratio:1})
+      const reading=await readNativeHelpBody(appPage,panel.locator('div[tabindex="0"]'));readings.push({tab,width,...reading})
       const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
       const file='native-agent-help-'+tab.toLowerCase().replaceAll(' ','-')+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push(file)
       samples.push({tab,width,text:await panel.innerText()})
@@ -140,6 +143,6 @@ test('reads original Help for the selected Agent and preserves both drafts', asy
   await composer.focus();await composer.press('Control+a');await composer.pressSequentially('Continue the release review after reading worker Help.')
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-agent-help-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,originalView,baseline,after,final:await context(),samples,captures,parent,workerMessages},null,2))
+  await writeFile(join(workspace!,'native-agent-help-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,originalView,baseline,after,final:await context(),samples,captures,readings,parent,workerMessages},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeHelpDesktop:true,nativeAgentHelpDesktop:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
