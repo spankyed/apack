@@ -29,7 +29,7 @@ test('reviews original image-bearing notebook output and resumes its exact media
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
   await expect.poll(async () => (await context()).turns).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
-  const themed=!!process.env.CLAUDE_RESEARCH_PROMPT_THEME
+  const themed=true
   const statusLabel=themed?'Session ready':'AppNativeMain '+sessionId
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -86,11 +86,11 @@ test('reviews original image-bearing notebook output and resumes its exact media
   const cases=[{turn:3,name:'release-analysis.ipynb'}]
   for(const{turn,name}of cases){
     const id='native_media_'+turn
-    await composer.fill('ResearchMediaTurn'+turn+' Review '+name+' for release.');await card.getByRole('button',{name:'Send',exact:true}).click()
+    await composer.focus();await composer.press('Control+a');await composer.pressSequentially('ResearchMediaTurn'+turn+' Review '+name+' for release.');await card.getByRole('button',{name:'Send',exact:true}).click()
     const approval=appPage.getByTestId('native-read-approval')
     await expect(approval).toBeVisible({timeout:15000});await expect(approval.getByTestId('native-read-path')).toHaveText(join(workspace!,name));await approval.getByRole('button',{name:'Approve',exact:true}).click();await expect(approval).toBeHidden()
     await expect.poll(async()=>(await context()).turns).toBe(2);await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
-    const draft='Keep my release notes while reviewing '+name;await composer.fill(draft)
+    const draft='Keep my release notes while reviewing '+name;await composer.focus();await composer.press('Control+a');await composer.pressSequentially(draft)
     const tools=appPage.locator('[data-native-tool-activity][data-native-tool-ids~="'+id+'"]');await expect(tools).toHaveCount(1)
     const toggle=tools.getByRole('button').first();if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click()
     const result=tools.locator('[data-native-tool-result="'+id+'"] [data-native-tool-format]');await expect(result).toBeVisible();await expect(result).not.toContainText('controls unavailable')
@@ -106,7 +106,7 @@ test('reviews original image-bearing notebook output and resumes its exact media
   }
   const retained=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())
   await writeFile(join(workspace!,'native-media-app-proof.json'),JSON.stringify(receipts))
-  await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained);await composer.fill('Continue this saved notebook image review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(3);expect((await context()).sessionId).toBe(sessionId)
+  await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained);await composer.focus();await composer.press('Control+a');await composer.pressSequentially('Continue this saved notebook image review.');await expect(composer).toHaveText('Continue this saved notebook image review.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).turns).toBe(3);expect((await context()).sessionId).toBe(sessionId)
   expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeReadMedia:true,nativeNotebookImages:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
