@@ -177,7 +177,9 @@ test('completes an everyday native review across Agent, approval, question and i
     const beforeModels = await context()
     const settingsPath = join(workspace!, '.claude/settings.json')
     const settingsBefore = await readFile(settingsPath, 'utf8')
-    const notices: {selection:string;text:string;screenshots:string[]}[] = []
+    const modelPolicyNotice = process.env.CLAUDE_RESEARCH_MODEL_POLICY_NOTICE === '1'
+    const retainedDraft = 'Keep my model-review draft while I read the complete notice.'
+    const notices: {selection:string;text:string;screenshots:string[];reading:unknown[]}[] = []
     for(const selection of ['haiku','default']) {
       await replaceDraft(composer,'')
       await composer.pressSequentially('/cc-model')
@@ -194,19 +196,50 @@ test('completes an everyday native review across Agent, approval, question and i
       expect(current.native.state.nativePid).toBe(boundNativePid)
       const message = current.messages.findLast((message:any) => message.sender==='assistant' && message.text.includes(acknowledgement))
       expect(message.text).not.toContain('\u001b')
-      const files:string[] = []
+      if(modelPolicyNotice) {
+        expect(message.text).toContain('Managed settings pins')
+        expect(message.text).toContain('that applies on restart')
+      }
+      await replaceDraft(composer,retainedDraft)
+      const selectionBeforeReading = await composer.evaluate(element => {
+        const range = getSelection()
+        return range && element.contains(range.anchorNode) ? {anchor:range.anchorOffset,focus:range.focusOffset,text:range.toString()} : null
+      })
+      expect(selectionBeforeReading).not.toBeNull()
+      const files:string[] = [], reading:unknown[] = []
+      const bubble = appPage.locator(`[data-message-id="${message.id}"]`)
+      const viewport = appPage.getByTestId('chat-transcript').locator(':scope > div').first()
       for(const [width,height] of [[1100,900],[680,600]]) {
         await appPage.setViewportSize({width,height})
-        const notice = appPage.getByText('for this session only',{exact:false}).last()
-        await notice.scrollIntoViewIfNeeded()
-        await expect(notice).toBeInViewport()
+        await viewport.hover()
+        await appPage.mouse.wheel(0,1200)
+        const originalNotice = bubble.getByText('for this session only',{exact:false}).last()
+        const acknowledgementText = bubble.getByText(acknowledgement,{exact:false}).last()
+        await expect(originalNotice).toBeInViewport({ratio:1})
+        await expect(acknowledgementText).toBeInViewport({ratio:1})
+        if(modelPolicyNotice) await expect(bubble.getByText('that applies on restart',{exact:false}).last()).toBeInViewport({ratio:1})
+        await expect(composer).toHaveText(retainedDraft)
+        const selectionAfterReading = await composer.evaluate(element => {
+          const range = getSelection()
+          return range && element.contains(range.anchorNode) ? {anchor:range.anchorOffset,focus:range.focusOffset,text:range.toString()} : null
+        })
+        expect(selectionAfterReading).toEqual(selectionBeforeReading)
+        const geometry = await bubble.evaluate(element => {
+          const viewport = element.closest('[data-testid="chat-transcript"]')!.firstElementChild!.getBoundingClientRect()
+          const content = element.getBoundingClientRect()
+          return {top:content.top,bottom:content.bottom,viewportTop:viewport.top,viewportBottom:viewport.bottom}
+        })
+        expect(geometry.top).toBeGreaterThanOrEqual(geometry.viewportTop-1)
+        expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportBottom+1)
+        reading.push({width,height,geometry,selectionRetained:true,draftRetained:true})
+        await appPage.mouse.move(10,10)
         const file = `apack-native-model-${selection}-${width}-${height}.png`
         await capturePage(file,width,height);files.push(file)
       }
-      notices.push({selection,text:message.text,screenshots:files})
+      notices.push({selection,text:message.text,screenshots:files,reading})
     }
     expect(await readFile(settingsPath,'utf8')).toBe(settingsBefore)
-    await writeFile(join(workspace!,'native-model-notice-app.json'),JSON.stringify({sessionId:beforeModels.sessionId,nativePid:boundNativePid,turns:beforeModels.turns,settingsUnchanged:true,notices}))
+    await writeFile(join(workspace!,'native-model-notice-app.json'),JSON.stringify({sessionId:beforeModels.sessionId,nativePid:boundNativePid,turns:beforeModels.turns,settingsUnchanged:true,modelPolicyNotice,retainedDraft,notices}))
     await appPage.setViewportSize({width:1100,height:900})
   }
   await replaceDraft(composer,'Review the release notes with a worker.')

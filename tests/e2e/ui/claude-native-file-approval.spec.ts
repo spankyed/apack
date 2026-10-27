@@ -135,7 +135,27 @@ test('reviews native file creation, overwrite and edit before one-time decisions
       }
     }
     await panel.getByRole('button', { name: turn <= 3 ? 'Allow once' : turn === 7 ? 'Cancel' : 'Deny', exact: true }).click()
-    try{await expect(panel).toBeHidden()}catch(error){const snapshot=await context();const {open}=await import('lmdb');const db=open({path:join(workspace!,'app-data/apack/ears-db'),readOnly:true,maxDbs:8,compression:true});try{const attrs=db.openDB({name:'attrs',encoding:'json'});const ids=[snapshot.threadId,snapshot.claude.pendingControlRequest?.approvalMessageId];const rows=[...attrs.getRange()].filter(row=>ids.some(id=>id&&String(row.key).includes(id))&&/context|blockResponse|responseTimestamp/.test(String(row.key)));await writeFile(join(workspace!,'native-file-live-backend.json'),JSON.stringify({at:Date.now(),rows},null,2))}finally{await db.close()}await writeFile(join(workspace!,'native-file-socket-frames.json'),JSON.stringify(socketFrames));await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2));await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')});await appPage.evaluate(() => {const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'OPEN_THREAD_CHAT',threadId:actor.getSnapshot().context.currentThread.id})});await appPage.waitForTimeout(1200);await writeFile(join(workspace!,'native-file-decision-reloaded.json'),JSON.stringify({turn,context:await context()},null,2));throw error}
+    try {
+      await expect(panel).toBeHidden()
+    } catch(error) {
+      const snapshot = await context()
+      const {openDatabase} = await import('@apackdev/ears/lmdb')
+      const {createEarsEngine} = await import('@apackdev/ears')
+      const database = openDatabase({path:join(workspace!,'app-data/apack/ears-db'),readOnly:true})
+      try {
+        const ears = createEarsEngine({database})
+        const ids = [snapshot.threadId,snapshot.claude.pendingControlRequest?.approvalMessageId].filter(Boolean)
+        const rows = ids.map(id => ears.getRow(id)).filter(Boolean).map(row => ({id:row!.id,context:row!.context,blockResponse:row!.blockResponse,responseTimestamp:row!.responseTimestamp}))
+        await writeFile(join(workspace!,'native-file-live-backend.json'),JSON.stringify({at:Date.now(),rows},null,2))
+      } finally { database.close() }
+      await writeFile(join(workspace!,'native-file-socket-frames.json'),JSON.stringify(socketFrames))
+      await writeFile(join(workspace!,'native-file-decision-failure.json'),JSON.stringify({turn,context:await context()},null,2))
+      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-file-decision-failure.png')})
+      await appPage.evaluate(() => {const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'OPEN_THREAD_CHAT',threadId:actor.getSnapshot().context.currentThread.id})})
+      await appPage.waitForTimeout(1200)
+      await writeFile(join(workspace!,'native-file-decision-reloaded.json'),JSON.stringify({turn,context:await context()},null,2))
+      throw error
+    }
     if (turn === 7) await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
     else await expect.poll(async () => (await context()).native.state.busy).toBe(false)
     const expected = turn === 1 ? 'created\n' : turn === 2 ? 'overwrite\n' : 'edited\n'
