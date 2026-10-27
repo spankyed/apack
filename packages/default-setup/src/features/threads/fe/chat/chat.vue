@@ -38,12 +38,6 @@
             <NativeTaskControls :task="task" />
           </div>
         </section>
-        <section v-if="!nativeTerminalActive && shellTasks.length" aria-label="Background commands" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
-          <div v-for="task in shellTasks" :key="task.id" class="py-1" :data-native-shell-id="task.id">
-            <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
-            <NativeTaskControls :task="task" />
-          </div>
-        </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
@@ -101,6 +95,12 @@
                 <NativeDiagnosticAttachment v-for="diagnostic in (nativeUiDrawing?.diagnostics ?? []).filter(row => row.messageId === message.id)" :key="diagnostic.id" :diagnostic="diagnostic" />
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.transcriptMessages" component="TurnDuration" :message-id="message.id" @press="pressNativeUi" @field="editNativeUi" />
                 </template>
+        <section v-if="!nativeTerminalActive && shellTasks.length" aria-label="Background commands" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
+          <div v-for="task in shellTasks" :key="task.id" class="py-1" :data-native-shell-id="task.id">
+            <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
+            <NativeTaskControls :task="task" />
+          </div>
+        </section>
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>

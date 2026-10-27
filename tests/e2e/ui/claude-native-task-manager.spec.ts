@@ -141,6 +141,9 @@ test('opens original task management from the default composer and stops its bac
       await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
       await output.getByRole('button',{name:'Refresh output',exact:true}).click()
       await expect(output).toContainText('Owned release review is waiting.')
+      await output.getByText('Owned release review is waiting.',{exact:true}).scrollIntoViewIfNeeded()
+      await expect(output.getByText('Owned release review is waiting.',{exact:true})).toBeInViewport({ratio:1})
+      await expect(composer).toBeInViewport({ratio:1})
       expect((await context()).turns).toBe(before.turns)
       expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
       await capture('desktop-shell',width);managerScreens.push({width,text:await output.innerText()})
@@ -180,7 +183,13 @@ test('opens original task management from the default composer and stops its bac
   expect(await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())).toEqual(originalSelection)
   await capture('task-stopped',680)
   const after=await context();expect(after.sessionId).toBe(sessionId);expect(after.turns).toBe(before.turns)
-  await composer.fill('ResearchPermissionTurn1 Continue the release review after native Pause.')
+  async function replaceDraft(text:string){
+    if(!desktopShell){await composer.fill(text);return}
+    await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
+    await composer.focus();await composer.press('Control+a');await composer.pressSequentially(text)
+    await expect(composer).toHaveText(text)
+  }
+  await replaceDraft('ResearchPermissionTurn1 Continue the release review after native Pause.')
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).turns).toBeGreaterThan(after.turns)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
@@ -195,7 +204,7 @@ test('opens original task management from the default composer and stops its bac
   await expect.poll(async()=>(await context()).native.state.status).toMatch(/^(exited|error)$/)
   expect(await alive()).toBe(false);expect(await exists()).toBe(false)
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
-  await composer.fill('Continue this saved review after cancelling active execution.');await card.getByRole('button',{name:'Send',exact:true}).click()
+  await replaceDraft('Continue this saved review after cancelling active execution.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(await alive()).toBe(false);expect(await exists()).toBe(false);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-task-manager-proof.json'),JSON.stringify({desktopShell,sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,taskStoppedIndependently:true,managerScreens,managerStopKey,originalDocument,originalSelection,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))

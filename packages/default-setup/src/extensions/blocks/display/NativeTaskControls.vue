@@ -28,9 +28,12 @@
     </section>
     <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
       <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
+      <details class="mb-3">
+        <summary class="cursor-pointer text-neutral-400">Command details</summary>
       <p v-if="state.details.shell.cwd" class="mb-2 break-all text-neutral-500">{{ state.details.shell.cwd }}</p>
       <pre class="mb-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.command }}</pre>
       <p v-if="state.details.shell.commandTruncated" class="text-neutral-500">Command preview shortened.</p>
+      </details>
       <pre v-if="state.details.shell.output" class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ state.details.shell.output }}</pre>
       <p v-else class="text-neutral-500">No output yet.</p>
       <p v-if="state.details.shell.truncated" class="mt-2 text-neutral-500">Showing the latest output · {{ state.details.shell.totalBytes.toLocaleString() }} bytes total.</p>
