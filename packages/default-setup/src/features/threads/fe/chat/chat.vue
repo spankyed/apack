@@ -47,7 +47,7 @@
           <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
           <NativeMcpForm v-if="nativeComposerOwner?.mcpForm" :key="nativeComposerOwner.mcpForm.id + nativeComposerOwner.mcpForm.revision" :form="nativeComposerOwner.mcpForm" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpForm" @pending="mcpFormPending = $event" />
           <!-- Agent Chat Content -->
-          <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript" :class="$style.messagesWrapper">
+          <div v-show="!mainCommandView && !pendingNativeQuestion && !pendingNativePlan" class="relative flex flex-col flex-1 w-full overflow-hidden min-h-0" data-testid="chat-transcript">
             <div class="min-h-0 flex-1 overflow-y-auto" :class="$style.messagesContainer" ref="messagesContainer" @scroll="onScroll">
               <div v-if="allMessages.length === 0 && !currentThread?.instructions" class="flex items-center justify-center h-full">
                 <p class="text-neutral-700 text-center italic max-w-sm">{{ randomQuote }}</p>
@@ -1071,20 +1071,6 @@ watch(messagesContent, (el, _, onCleanup) => {
 </style>
 
 <style lang="scss" module>
-.messagesWrapper {
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 15px;
-    height: 12px;
-    background: linear-gradient(to bottom, transparent, rgb(28 28 28));
-    pointer-events: none;
-    z-index: 5;
-  }
-}
-
 .focused {
   border-radius: 0.5rem;
   box-shadow: 0 0 0 1px rgb(234 179 8 / 0.6);
