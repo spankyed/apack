@@ -10,8 +10,8 @@
     <div class="min-h-0 flex-1 overflow-auto overscroll-contain p-4" tabindex="0" :aria-label="help?.selectedTab || 'Help content'">
       <p v-if="!help && !state?.problem" role="status" class="text-sm text-neutral-400">Loading Claude Code help…</p>
       <dl v-if="help?.commands.length" class="divide-y divide-white/10">
-        <div v-for="command in help.commands" :key="command.name" class="grid gap-1 py-3 sm:grid-cols-[minmax(8rem,1fr)_3fr] sm:gap-4">
-          <dt class="break-words font-mono text-sm text-neutral-200">{{ command.label }}</dt><dd class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-400">{{ command.description }}</dd>
+        <div v-for="command in help.commands" :key="command.name" class="grid gap-1 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] sm:gap-4">
+          <dt class="min-w-0 break-words font-mono text-sm text-neutral-200">{{ command.label }}</dt><dd class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-400">{{ command.description }}</dd>
         </div>
       </dl>
       <div v-else class="space-y-2 text-sm leading-relaxed text-neutral-300"><p v-for="(text,index) in help?.paragraphs" :key="index" class="whitespace-pre-wrap break-words">{{ text }}</p></div>

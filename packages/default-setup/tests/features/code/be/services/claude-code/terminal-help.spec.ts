@@ -44,3 +44,8 @@ it('returns the original guarded dismissal callback and refuses a changed callba
  f.owner.updateQueue.memoCache.data[0][3]=undefined
  expect(()=>f.api.nativeHelpDismissCallback(f.n,f.entry)).toThrow('dismissal changed')
 })
+
+it('keeps original nested shortcut text together without duplicating adjacent rows',()=>{
+ const f=fixture();f.body.child={type:'ink-text',child:{tag:6,memoizedProps:'shift + tab',sibling:{tag:6,memoizedProps:' to ',sibling:{tag:6,memoizedProps:'auto-accept edits'}}},sibling:{type:'ink-text',child:{tag:6,memoizedProps:'Next shortcut'}}}
+ expect(f.read().snapshot.help.paragraphs).toEqual(['shift + tab to auto-accept edits','Next shortcut'])
+})

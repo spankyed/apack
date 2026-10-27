@@ -18,10 +18,16 @@ function nativeHelpFrame(n,entry){
  if(JSON.stringify(tabs.map(tab=>tab.title))!==JSON.stringify(['General','Commands','Custom commands'])||tabs.filter(tab=>tab.isCurrent).length!==1)throw Error('Native Help tab controls changed');
  const selected=tabs.find(tab=>tab.isCurrent).title,id={'General':'general','Commands':'commands','Custom commands':'custom'}[selected],body=bodies.filter(fiber=>fiber.memoizedProps.id===id&&fiber.child);
  if(body.length!==1)throw Error('Native Help active content changed');
- const paragraphs=[],links=[];visit(body[0].child,fiber=>{
-  if(fiber.tag===6&&typeof fiber.memoizedProps==='string')paragraphs.push(fiber.memoizedProps);
-  const p=fiber.memoizedProps;if(typeof p?.url==='string'&&/^https:\/\//.test(p.url)&&!links.includes(p.url))links.push(p.url);
- });
+ const paragraphs=[],links=[],textPending=[body[0].child],textSeen=new Set();
+ while(textPending.length){
+  const fiber=textPending.pop();if(!fiber||textSeen.has(fiber))continue;if(textSeen.size>=4096)throw Error('Native Help text exceeded bound');textSeen.add(fiber);
+  if(fiber.sibling)textPending.push(fiber.sibling);
+  if(fiber.type==='ink-text'){
+   const pieces=[];visit(fiber.child,child=>{if(child.tag===6&&typeof child.memoizedProps==='string')pieces.push(child.memoizedProps)});
+   if(pieces.length)paragraphs.push(pieces.join(''));
+  }else if(fiber.tag===6&&typeof fiber.memoizedProps==='string')paragraphs.push(fiber.memoizedProps);
+  else if(fiber.child)textPending.push(fiber.child);
+ }
  visit(owners[0].child,fiber=>{const p=fiber.memoizedProps;if(typeof p?.url==='string'&&/^https:\/\//.test(p.url)&&!links.includes(p.url))links.push(p.url)});
  const commands=[];
  if(lists.length>1)throw Error('Native Help command list is ambiguous');

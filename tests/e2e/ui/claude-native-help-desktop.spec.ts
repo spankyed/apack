@@ -90,10 +90,11 @@ test('reads original native Help through desktop tabs and returns to composing',
     if(tab!=='General')await panel.getByRole('button',{name:tab,exact:true}).click()
     await expect(panel.getByRole('button',{name:tab,exact:true})).toHaveAttribute('aria-current','page')
     await expect(panel.getByRole('alert')).toHaveCount(0)
-    if(tab==='General')await expect(panel).toContainText('Claude understands your codebase')
+    if(tab==='General'){await expect(panel).toContainText('Claude understands your codebase');await expect(panel.locator('p').filter({hasText:/shift \+ tab.*auto-accept edits/})).toHaveCount(1)}
     if(tab==='Commands'){await expect(panel.locator('dt').filter({hasText:/^\/help$/})).toHaveCount(1);await expect(panel.locator('dt')).not.toHaveCount(0)}
     for(const width of [1100,680]){
       const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
+      await expect.poll(()=>panel.locator('div[tabindex="0"]').evaluate(element=>element.scrollWidth<=element.clientWidth+1)).toBe(true)
       await expect(panel.getByRole('button',{name:'Close help',exact:true})).toBeInViewport({ratio:1})
       await expect(panel.getByRole('button',{name:tab,exact:true})).toBeInViewport({ratio:1})
       const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
