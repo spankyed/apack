@@ -37,7 +37,7 @@ function fixture(kind: 'picker' | 'confirm' | 'pending' = 'picker') {
   const stateRef={}
   const state=(value:unknown,next:unknown=null)=>({memoizedState:value,next})
   const hooks=state([adjust,[options,focusGetter,null,effortSetter]],state([effortSetter,[stateRef]],state([effortGetter,[stateRef]])))
-  const model={type:pickerType,memoizedProps:{onSelect:select,onSetDefault:vi.fn(),onCancel:cancel,isStandaloneCommand:true},memoizedState:hooks,child:{type:'div',memoizedProps:{onKeyDown:keyDown,children:[{props:{children:groups}}]}}}
+  const model={type:pickerType,memoizedProps:{onSelect:select,onSetDefault:vi.fn(),onCancel:cancel,isStandaloneCommand:true},memoizedState:hooks,child:{type:'div',memoizedProps:{color:'permission',children:{props:{onKeyDown:keyDown,children:[{props:{children:groups}}]}}}}}
   const choice={type:choiceType,memoizedProps:{confirmLabel:'Yes, switch to Haiku',cancelLabel:'No, go back',focus:'confirm',onConfirm:confirm,onCancel:cancel}}
   const modal={type:'div',memoizedProps:{title:'Switch model?',subtitle:'A PreModelSwitch hook asked you to confirm',onCancel:cancel,children:{props:{children:['Original reason',{props:choice.memoizedProps}]}}},child:choice}
   const confirmation={type:confirmType,memoizedProps:{kind:'model',model:'haiku',hookReason:'Original reason',onConfirm:confirm,onCancel:cancel},child:modal}
@@ -63,6 +63,10 @@ it('projects standalone model descriptions and calls the original selection call
   expect(claudeSettingsSnapshot.parse(snapshot).editor).toMatchObject({kind:'choice',model:{description:'Original model disclosure'}})
   await f.operate(snapshot,{action:'select',value:'haiku'})
   expect(f.select).toHaveBeenCalledExactlyOnceWith('haiku')
+})
+it('refuses an unwrapped or changed standalone model frame',async()=>{
+  const f=fixture();f.model.child.memoizedProps.color='unexpected'
+  await expect(f.read()).rejects.toThrow('Native Model root changed')
 })
 it('preserves the original confirmation focus and wrapped confirm callback',async()=>{
   const f=fixture('confirm'),{snapshot}=await f.read()

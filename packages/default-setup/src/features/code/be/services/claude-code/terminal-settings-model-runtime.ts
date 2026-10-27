@@ -1,7 +1,8 @@
 /** Project original Config Model controls; source callbacks retain admission and effort normalization. */
 export const claudeTerminalSettingsModelRuntime = String.raw`
 function nativeSettingsModelControl(match,standalone=false){
- const p=match.props,root=match.fiber.child?.memoizedProps;
+ const p=match.props,frame=match.fiber.child?.memoizedProps;
+ const root=standalone&&frame?.color==='permission'?frame.children?.props:standalone?undefined:frame;
  const hash=fn=>typeof fn==='function'?createHash('sha256').update(Function.prototype.toString.call(fn)).digest('hex'):undefined;
  if((standalone?(p.isStandaloneCommand!==true||typeof p.onSetDefault!=='function'):(p.isStandaloneCommand===true||p.onSetDefault!==undefined))||typeof p.onSelect!=='function'||typeof p.onCancel!=='function'||!root||!['b615d1c7963a03e0010d1ae45108ff0bf87bffadb4a8ec8639b809754e687b49','09e2e0734b5e0da805593b8a45464256b7760e84204a62141ca8ca70f62cb566'].includes(hash(root.onKeyDown)))throw Error('Native Model root changed');
  const groups=root.children?.[0]?.props?.children,picker=groups?.[1]?.props?.children?.[1]?.props?.children?.[0];

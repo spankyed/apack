@@ -52,7 +52,7 @@ import NativeThemePreview from './NativeThemePreview.vue'
 import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
 import NativePermissionText from './NativePermissionText.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
-const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; cancelWhilePending?: boolean }>()
+const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string }>()
 const emit = defineEmits<{ 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
 const drafts = ref<Record<string, string>>({})
 const editorRoot = ref<HTMLElement>()

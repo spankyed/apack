@@ -114,7 +114,8 @@ test('chooses models through original hooks, decisions and same-session recovery
     try { await expect(panel.getByRole('heading',{name:'Select model',exact:true})).toBeVisible() }
     catch(error) {
       await writeFile(join(workspace!,'native-model-panel-failure.json'),JSON.stringify({panel:await panel.innerText(),native:await context()}))
-      await appPage.screenshot({path:join(workspace!,'native-model-panel-failure.png')})
+      const image=await nativeWindow.evaluate(async win=>(await win.webContents.capturePage()).toPNG().toString('base64'))
+      await writeFile(join(workspace!,'native-model-panel-failure.png'),Buffer.from(image,'base64'))
       throw error
     }
     await expect(panel.locator('textarea.xterm-helper-textarea')).toHaveCount(0)
