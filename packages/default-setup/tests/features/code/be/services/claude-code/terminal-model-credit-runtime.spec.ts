@@ -15,7 +15,7 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
  const props={onCancel:cancel,onBack:cancel},control:any={type:kind==='charge'?charge:amount,memoizedProps:props},cache:any[]=Array(kind==='charge'?30:51)
  control.updateQueue={memoCache:{data:[cache]}}
  function renderInput(){
-  const feedback={props:{color:'success',children:'Original preview: '+value}},nativeInput={type:input,props:{value,onChange:change,onSubmit:submit,onExit:cancel}},body={props:{children:[{props:{children:'Original amount and consent disclosure'}},nativeInput,feedback]}}
+  const feedback={props:{color:'success',children:'Original preview: '+value}},nativeInput={type:input,props:{value,onChange:change,onSubmit:submit,onExit:cancel}},inputBody=kind==='charge'?{type:'native-input-border',props:{borderStyle:'single',children:nativeInput}}:nativeInput,body={props:{children:[{props:{children:'Original amount and consent disclosure'}},inputBody,feedback]}};if(kind==='charge')cache[22]=inputBody
   cache[kind==='charge'?11:38]=feedback
   const view={type:modal,props:{title:kind==='charge'?'Confirm amount':'Buy usage credits',onCancel:cancel,children:body}}
   cache[kind==='charge'?19:28]=nativeInput;cache[kind==='charge'?29:50]=view;cache[kind==='charge'?13:14]=submit
@@ -41,7 +41,7 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
   adminCache[41]={props:decision};adminCache[49]=view
   credit.child={type:admin,memoizedProps:{wouldTakeAnswer:()=>true},updateQueue:{memoCache:{data:[adminCache]}},child:kind==='admin-pending'?{type:'progress',memoizedProps:{message:'Sending request to your admin…'}}:{type:modal,memoizedProps:view.props}}
  }else credit.child=purchase
- const owner:any={type:root,memoizedProps:entry.originalProps,child:credit},render=(node:any):string=>node==null?'':Array.isArray(node)?node.map(render).join('\n'):typeof node==='object'?render(node.props?.children):String(node)
+ const owner:any={type:root,memoizedProps:entry.originalProps,child:credit},render=(node:any):string=>node==null?'':Array.isArray(node)?node.map(render).join('\n'):typeof node==='object'?(node.props?.borderStyle==='single'?'TERMINAL_INPUT_BORDER\n':'')+render(node.props?.children):String(node)
  const api=runInNewContext(claudeTerminalSettingsRuntime+';({nativeSettings})',{
   process:{stdout:{}},setTimeout,clearTimeout,AbortController,URL,agentCommandDialogs:new Map([[id,entry]]),stripVTControlCharacters:(value:string)=>value,
   createHash:()=>({value:'',update(value:string){this.value=value;return this},digest(){return known.get(this.value)??hash('sha256').update(this.value).digest('hex')}}),
@@ -57,7 +57,7 @@ it('acknowledges the original amount draft before native validation and never su
  expect(f.change).toHaveBeenCalledExactlyOnceWith('not a valid amount');expect(f.submit).toHaveBeenCalledExactlyOnceWith('not a valid amount');expect(f.confirm).not.toHaveBeenCalled();expect(after.snapshot.editor.fields[0].value).toBe('not a valid amount')
 })
 it('uses the original final typed confirmation and retires its action after completion',async()=>{
- const f=fixture('charge'),{snapshot}=await f.read();expect(snapshot.editor.title).toBe('Confirm amount')
+ const f=fixture('charge'),{snapshot}=await f.read();expect(snapshot.editor.title).toBe('Confirm amount');expect(snapshot.editor.description).toContain('Original amount and consent disclosure');expect(snapshot.editor.description).not.toContain('TERMINAL_INPUT_BORDER')
  await f.act(snapshot,{action:'save',values:{answer:'confirm'}});expect(f.submit).toHaveBeenCalledExactlyOnceWith('confirm');expect(f.confirm).toHaveBeenCalledOnce()
  await expect(f.act(snapshot,{action:'save',values:{answer:'confirm'}})).rejects.toThrow('expired');expect(f.confirm).toHaveBeenCalledOnce()
 })

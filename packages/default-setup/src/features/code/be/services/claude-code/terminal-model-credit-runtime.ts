@@ -70,11 +70,13 @@ async function readNativeModelCredits(n,entry,match,text,signal){
   if(inputs.length!==1)throw Error('Native credit input is not uniquely mounted');track(inputs[0]);cancel=expectedCancel;
   const feedbackNode=kind==='charge'?['error','success'].includes(cache[11]?.props?.color)?cache[11]:undefined:cache[40]||cache[38]||undefined;
   const feedback=feedbackNode?{text:await text(feedbackNode),tone:kind==='charge'?feedbackNode.props.color:cache[40]?'error':'success'}:undefined;
-  const disclosure=nativeModelCreditPrune(modal.props.children,node=>node.type===input.type&&node.props===p||node===feedbackNode);
+  const inputBorder=kind==='charge'?cache[22]:undefined;
+  if(kind==='charge'&&(inputBorder?.props?.children!==input||inputBorder.props.borderStyle!=='single'))throw Error('Native credit input decoration changed');
+  const disclosure=nativeModelCreditPrune(modal.props.children,node=>node===inputBorder||node.type===input.type&&node.props===p||node===feedbackNode);
   entry.creditFormIds??=new WeakMap();let formId=entry.creditFormIds.get(control.fiber)??(control.fiber.alternate&&entry.creditFormIds.get(control.fiber.alternate));
   if(!formId){entry.creditFormSequence=(entry.creditFormSequence??0)+1;formId=String(entry.creditFormSequence);}entry.creditFormIds.set(control.fiber,formId);if(control.fiber.alternate)entry.creditFormIds.set(control.fiber.alternate,formId);
   editor={kind:'form',live:{id:formId,...feedback?{feedback}:{}},title:modal.props.title,description:await message(disclosure),submitLabel:kind==='charge'?'Confirm purchase':'Continue',fields:[{key:'answer',label:kind==='charge'?'Confirmation':'Amount',value:p.value}],consent:{cancelLabel:'Cancel',focusField:'answer',links:nativeModelCreditLinks(disclosure)}};
-  form={id:formId,fiber:control.fiber,input:p,kind};checks.push(()=>{if(!control.fiber.updateQueue?.memoCache?.data?.includes(cache)||cache[kind==='charge'?19:28]!==input||cache[kind==='charge'?29:50]!==modal)throw Error('Native credit form changed while reading');});
+  form={id:formId,fiber:control.fiber,input:p,kind};checks.push(()=>{if(!control.fiber.updateQueue?.memoCache?.data?.includes(cache)||cache[kind==='charge'?19:28]!==input||cache[kind==='charge'?29:50]!==modal||kind==='charge'&&cache[22]!==inputBorder)throw Error('Native credit form changed while reading');});
  }
  if(state.s==='buy'){
   const purchase=find('purchaseState');if(purchase.props.initialStep!=='buy_select'||purchase.props.entryReason!=='fable')throw Error('Native model credit purchase entry changed');
