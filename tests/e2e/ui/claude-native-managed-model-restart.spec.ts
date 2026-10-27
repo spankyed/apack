@@ -105,7 +105,7 @@ test('keeps managed model defaults across session selection reset and process re
   const retained=await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))
   await capture('session-default');await stop()
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained.doc)
-  await section.getByRole('button',{name:'Use native interface',exact:true}).click();await settleNative()
+  await section.getByRole('button',{name:'Use native interface',exact:true}).click();await expect.poll(async()=>{const pid=(await context()).native.state.nativePid;return typeof pid==='number'&&pid!==boundNativePid}).toBe(true);await settleNative()
   const reopenedNativePid=(await context()).native.state.nativePid;expect(reopenedNativePid).not.toBe(boundNativePid)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click();expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained.doc)
   receipts.push({stage:'native-reopened',context:await context()})
