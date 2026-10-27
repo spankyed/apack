@@ -85,9 +85,10 @@ test('retires native Settings across broker loss and restores retained composing
   await composer.focus();await composer.press('Control+a');await composer.pressSequentially(draft)
   const retained=await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))
   const panel=appPage.getByRole('dialog',{name:'Claude Code settings',exact:true})
+  async function openSettings(){const direct=card.getByRole('button',{name:'Claude settings',exact:true});if(await direct.isVisible())await direct.click();else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude settings',exact:true}).click()}await expect(panel).toBeVisible()}
   const panelIdentity=()=>appPage.evaluate(()=>{const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const matches=Object.entries(state.nativeUiViews).filter(([,view]:any)=>view.threadId===state.currentThread.id&&view.state?.agentInput?.status==='panel');if(matches.length!==1)return;const [mountId,view]:any=matches[0];return {threadId:state.currentThread.id,mountId,input:view.state.agentInput}})
   const capture=async(label:string)=>{for(const width of [1100,680]){const size={width,height:width===680?600:900};await appPage.setViewportSize(size);if(label==='disconnected'){await expect(composer).toBeInViewport({ratio:1});await expect(section.getByRole('button',{name:'Use native interface',exact:true})).toBeInViewport({ratio:1})}else{await expect(panel.getByRole('button',{name:'Close settings',exact:true})).toBeInViewport({ratio:1});await expect(panel.getByRole('button',{name:'Config',exact:true})).toBeInViewport({ratio:1})}const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size);const file='native-settings-broker-'+label+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push(file)}}
-  await card.getByRole('button',{name:'Claude settings',exact:true}).click();await expect(panel).toBeVisible()
+  await openSettings()
   await expect(panel.getByRole('button',{name:'Config',exact:true})).toHaveAttribute('aria-current','page')
   await expect.poll(panelIdentity).toBeTruthy();const old=(await panelIdentity())!
   expect(old.input.settings.snapshot.revision).toBeTruthy();await capture('before-loss')
@@ -104,7 +105,7 @@ test('retires native Settings across broker loss and restores retained composing
   await expect.poll(async()=>{const native=(await context()).native,text=await section.innerText(),prompt=recognizeOnboardingPrompt(text,workspace);if(prompt==='workspace-trust'&&!navigation){navigation=true;selectedAt=Date.now();await input.press('ArrowDown')}else if(prompt==='workspace-trust-selected'&&!navigation){navigation=true;selectedAt=Date.now()}else if(prompt==='workspace-trust-selected'&&navigation&&!confirmed&&Date.now()-selectedAt>1200){confirmed=true;await input.press('Enter')}return native.state.status==='live'},{timeout:25000,intervals:[250]}).toBe(true)
   const freshPid=(await context()).native.state.nativePid;expect(freshPid).not.toBe(boundNativePid)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
-  await card.getByRole('button',{name:'Claude settings',exact:true}).click();await expect(panel).toBeVisible()
+  await openSettings()
   await expect(panel.getByRole('button',{name:'Config',exact:true})).toHaveAttribute('aria-current','page')
   const fresh=(await panelIdentity())!;expect(fresh.input.panel.id).not.toBe(old.input.panel.id)
   const staleRequests=[]
