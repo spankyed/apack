@@ -213,6 +213,14 @@ test('completes an everyday native review across Agent, approval, question and i
         await appPage.setViewportSize({width,height})
         await viewport.hover()
         await appPage.mouse.wheel(0,1200)
+        await expect.poll(() => viewport.evaluate(element => element.scrollHeight-element.scrollTop-element.clientHeight)).toBeLessThanOrEqual(1)
+        // Tail padding may put the first line above the viewport even when the message text fits.
+        const leadingClip = await bubble.evaluate(element => {
+          const viewport=element.closest('[data-testid="chat-transcript"]')!.firstElementChild!.getBoundingClientRect()
+          const first=element.querySelector('p')!.getBoundingClientRect()
+          return Math.max(0,viewport.top-first.top)
+        })
+        if(leadingClip>0) await appPage.mouse.wheel(0,-Math.ceil(leadingClip+8))
         const originalNotice = bubble.getByText('for this session only',{exact:false}).last()
         const acknowledgementText = bubble.getByText(acknowledgement,{exact:false}).last()
         await writeFile(join(workspace!,`native-model-reading-${selection}-${width}.json`),JSON.stringify(await bubble.evaluate(element => {
@@ -233,12 +241,12 @@ test('completes an everyday native review across Agent, approval, question and i
         expect(selectionAfterReading).toEqual(selectionBeforeReading)
         const geometry = await bubble.evaluate(element => {
           const viewport = element.closest('[data-testid="chat-transcript"]')!.firstElementChild!.getBoundingClientRect()
-          const content = element.getBoundingClientRect()
-          return {top:content.top,bottom:content.bottom,viewportTop:viewport.top,viewportBottom:viewport.bottom}
+          const paragraphs = Array.from(element.querySelectorAll('p')).map(p=>p.getBoundingClientRect())
+          return {top:Math.min(...paragraphs.map(p=>p.top)),bottom:Math.max(...paragraphs.map(p=>p.bottom)),viewportTop:viewport.top,viewportBottom:viewport.bottom}
         })
         expect(geometry.top).toBeGreaterThanOrEqual(geometry.viewportTop-1)
         expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportBottom+1)
-        reading.push({width,height,geometry,selectionRetained:true,draftRetained:true})
+        reading.push({width,height,geometry,leadingClip,physicalWheel:true,selectionRetained:true,draftRetained:true})
         await appPage.mouse.move(10,10)
         const file = `apack-native-model-${selection}-${width}-${height}.png`
         await capturePage(file,width,height);files.push(file)
