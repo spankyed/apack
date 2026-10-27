@@ -17,7 +17,7 @@ async function mount() {
   const select = vi.fn(), dismiss = vi.fn()
   app = createApp({ render: () => h(NativePromptCompletions, { ...state, onSelect: select, onDismiss: dismiss }) }); app.mount(root); await nextTick()
   editor.view.dom.focus()
-  const buttons = () => Array.from(document.querySelectorAll('[aria-label="Claude suggestions"] button'))
+  const buttons = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[aria-label="Claude suggestions"] button'))
   return { editor, root, state, select, dismiss, buttons }
 }
 const key = (target: HTMLElement, name: string, options: KeyboardEventInit = {}) => { const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...options }); target.dispatchEvent(event); return event }
