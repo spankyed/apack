@@ -101,8 +101,20 @@ test('retires native Settings across broker loss and restores retained composing
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained.doc)
   await capture('disconnected')
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  let navigation=false,confirmed=false,selectedAt=0
-  await expect.poll(async()=>{const native=(await context()).native,text=await section.innerText(),prompt=recognizeOnboardingPrompt(text,workspace);if(prompt==='workspace-trust'&&!navigation){navigation=true;selectedAt=Date.now();await input.press('ArrowDown')}else if(prompt==='workspace-trust-selected'&&!navigation){navigation=true;selectedAt=Date.now()}else if(prompt==='workspace-trust-selected'&&navigation&&!confirmed&&Date.now()-selectedAt>1200){confirmed=true;await input.press('Enter')}return native.state.status==='live'},{timeout:25000,intervals:[250]}).toBe(true)
+  await expect.poll(async()=>{const pid=(await context()).native.state.nativePid;return typeof pid==='number'&&pid!==boundNativePid}).toBe(true)
+  await expect.poll(resize).toBeTruthy();const freshDimensions=(await resize())!
+  terminalScreen?.dispose();terminalScreen=new Terminal({cols:freshDimensions.cols,rows:Math.max(2,freshDimensions.rows),allowProposedApi:true})
+  let navigation=false,confirmed=false,selectedAt=0,freshSequence=0
+  await expect.poll(async()=>{
+    const native=(await context()).native,chunks=native.output?.filter((chunk:any)=>chunk.sequence>freshSequence)??[]
+    if(chunks.length){await new Promise<void>(resolve=>terminalScreen!.write(chunks.map((chunk:any)=>chunk.text).join(''),resolve));freshSequence=chunks.at(-1).sequence}
+    const buffer=terminalScreen!.buffer.active,text=Array.from({length:terminalScreen!.rows},(_,row)=>buffer.getLine(buffer.baseY+row)?.translateToString(true)??'').join('\n'),prompt=recognizeOnboardingPrompt(text,workspace)
+    await writeFile(join(workspace!,'native-settings-broker-onboarding.json'),JSON.stringify({prompt,navigation,confirmed,text,freshDimensions,status:native.state.status}))
+    if(prompt==='workspace-trust'&&!navigation){navigation=true;selectedAt=Date.now();await input.press('ArrowDown')}
+    else if(prompt==='workspace-trust-selected'&&!navigation){navigation=true;selectedAt=Date.now()}
+    else if(prompt==='workspace-trust-selected'&&navigation&&!confirmed&&Date.now()-selectedAt>1200){confirmed=true;await input.press('Enter')}
+    return native.state.status==='live'
+  },{timeout:25000,intervals:[250]}).toBe(true)
   const freshPid=(await context()).native.state.nativePid;expect(freshPid).not.toBe(boundNativePid)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect(composer).toHaveText(draft)
   await openSettings()
