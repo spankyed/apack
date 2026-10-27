@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -96,7 +96,7 @@ test('uses original native completion rows with keyboard navigation in main and 
     await editor.press('ArrowDown');await expect(buttons.nth(0)).toBeFocused()
     await buttons.nth(0).press('End');await expect(buttons.nth(2)).toBeFocused()
     await buttons.nth(2).press('Home');await expect(buttons.nth(0)).toBeFocused()
-    await buttons.nth(0).press('Escape');await expect(list).toHaveCount(0);await expect(editor).toBeFocused();expect(await snapshot(editor)).toEqual(original)
+    await buttons.nth(0).press('Escape');await expect(list).toHaveCount(0);await expect(editor).toBeFocused();const dismissed=await snapshot(editor);expect(dismissed).toEqual(original)
     if(owner==='agent')await expect(focused).toBeVisible()
     await replace(editor,prefix);await expect(buttons).toHaveCount(3)
     await editor.press('ArrowUp');await expect(buttons.nth(2)).toBeFocused()
@@ -114,7 +114,7 @@ test('uses original native completion rows with keyboard navigation in main and 
     const text='Review '+['#release-public','#release-internal','#release-checklist'][index]
     await expect(editor).toHaveText(text);await expect(editor).toBeFocused();await expect(list).toHaveCount(0)
     expect((await context()).turns).toBe(beforeTurns)
-    interactions.push({owner,index,text,original,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
+    interactions.push({owner,index,text,original,dismissed,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
     return text
   }
   // The closure is used only after the Agent region is mounted below.
