@@ -29,6 +29,17 @@ Linux 2.1.302 binary, 6 GiB memory/equal swap and two-CPU limits; hold the owned
 These current delivery profiles use local Linux validation and do not dispatch CI. The scoped
 Workflow result captures and completion journeys do not establish all F1–F5 acceptance.
 
+The plugin-recommendation profile uses `CLAUDE_RESEARCH_PLUGIN_HINT` (`no`, `yes`, `disable`,
+`timeout`) with kind `terminal-plan-app-theme`. Prepare its genuine optional source input with
+`node src/artifacts/official-marketplace.mjs <snapshot-directory>` before entering the offline
+runner; set `CLAUDE_RESEARCH_PLUGIN_HINT_SNAPSHOT` to that directory inside the container.
+The tool pins official commit `dbd4588f9e1033efb41dad4bef2f7947c8993d44`, disables Git hooks and
+verifies complete objects/metadata. Native registration and any selected installation use only a
+private HOME and offline Git mirror. The original privacy/essential-traffic gate is preserved;
+ordinary fixture mode removes only the generic runner's injected suppression switch. Use
+`verifyNativePluginHintAppEvidence` from `src/protocol/native-plugin-hint-app-proof.mjs` on the
+exported data, captures and read-only database query. This is scoped app acceptance, not full parity.
+
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
 feature gates unchanged. Its profile requires the owned offline-container receipt at

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "ab9e5ecbf3b418514ca0c879299eab65230af443",
+  "researchCommit": "73a378baeff9e39cc073661fc6b2515ca17a267f",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -48,6 +48,7 @@
     "src/analysis/tool-gates.mjs": "aa5477ca43b2d634169fac16a653926f19ab672b42f8e4d3d029df8df771628f",
     "src/analysis/tool-registries.mjs": "f3f19a786c41898b3d3a4b1b236367c74534507c6eb1c4b65760748a010f3928",
     "src/analysis/user-dialogs.mjs": "b75afed2711d781f44c269e9b7582c31fc021c3a6d784532ef6eebf09cd1769a",
+    "src/artifacts/official-marketplace.mjs": "02642bf588cca8655fc07ea5d22f0f0920505b572bd8e87b2c83aa6e553b7ea2",
     "src/artifacts/runs.mjs": "46731ac2c86cd9f8c91490aae6f480b27e7733a0f459173d8257df7464da98e7",
     "src/artifacts/snapshot.mjs": "9e0a6578baca5e1e06d65c378a5332a3d785f94ffad60bfe1a46f4518dbeebcd",
     "src/cli.mjs": "6e5940f20c9382459e9e67d81cbe61b15305912ec4170926fbf3199f72765e80",
@@ -91,7 +92,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "44d52127c740297d3c3b9c1240c2c03e390567db868381b428b5fae9159b2e74",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "0f8c99e742ab8431a760c59043823d430df592d04fedede9f0d6265c1e8737a6",
+    "src/integration/apack-terminal-owner-app.mjs": "cd1233971a340c04a6dcc7923a5580ad5460e9447f3356f200886fc8417532d9",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -125,6 +126,7 @@
     "src/integration/native-main-document-paste.mjs": "bd6890a462acd43ce026cb6d763f8e89bd03576f3565d514ba04b4f843715f33",
     "src/integration/native-os-policy-discovery.mjs": "70766dd350e4041f020a069e221068758e209a4fd0c8998c48faa81f24eaba1a",
     "src/integration/native-platform-preload.mjs": "d877c2c3a67aab23a73fc56438ee87d8455afb0e7754a01efef16e15f734fd24",
+    "src/integration/native-plugin-hint.mjs": "23921560c8a62c5752963e951aca8bc06fe971fc14147c3189463f357c358cd3",
     "src/integration/owned-prompt-reply-hold.mjs": "8e1b4c3ea78568b428b87cec31fe6583102292471950f739ac26f4512154c158",
     "src/integration/permission-enforcement-app-driver.mjs": "02ebba021cf32856d0e4088afd7ffe6832862228eb378f34d9309c8f1333bebc",
     "src/integration/permission-enforcement-app.mjs": "2e62678f2edf1500c4309cd99b2325ca46d65f47e5fb9f932147c8247976fe2f",
@@ -134,7 +136,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "480909084e7f2ec7e4463c147e4f8f5143783cad06950d407e5d1762fcdccea3",
+    "src/integration/run-apack-controls.mjs": "014b07832aaffea29011d33d3a73248058dc24dbb8a722256c5f6b832fa8868e",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -235,6 +237,9 @@
     "src/protocol/native-notebook-image-proof.mjs": "2bb27c79059b087176e071df6724b171ce4ff2fa9f2bb862c135c9632e2237f4",
     "src/protocol/native-notify-fixture.mjs": "5b271ac8bffc13856593d2d34e2ead696425fb572369933dfdab2ac261007c01",
     "src/protocol/native-os-policy-files.mjs": "33e5d045d93f0270574828d94afe93c11c6dec7028c9e423f6b38733828d889e",
+    "src/protocol/native-plugin-hint-app-proof.mjs": "e5624c5dae503f7bfb4617134b80350d8dc78446ad326b3c267ff151be0306d0",
+    "src/protocol/native-plugin-hint-app.mjs": "1a70775d076a48cebbb28e46f5a6a6d68c3b6c003bc81a7ec66e09c8e9fb3a83",
+    "src/protocol/native-plugin-hint-proof.py": "ff87873b62b07d1bfc0e368278d938b1a29ec0a87684408f04e586237ec99c97",
     "src/protocol/native-policy-held-client-fixture.mjs": "dfe3be000242bf917860ef9aaaccaa47b442013fe3ff2c64f92c69da96d7806e",
     "src/protocol/native-print-client-fixture.mjs": "36b62f98a3ecb472f49510339b05c5906c3f80b2b1881258a514736ebbc07406",
     "src/protocol/native-print-client.mjs": "32b681f6bcb0de8c0a57fbd9d167bc2255c84230eec80a44b882d31092975bd9",
@@ -326,7 +331,7 @@
     "src/protocol/synthetic-mcp-health-server.mjs": "f99aff09240efb995e436a7bdda8f8b7fdbd63084460a80d7712b62fa837cc6e",
     "src/protocol/synthetic-mcp-resource-server.mjs": "c5a1b0162fec7b3a43c0c0cbca5d76e8c7067a9fcac850691271aff2a2089e67",
     "src/protocol/synthetic-mcp-server.mjs": "53a9ecdb3677535f0455769f8895bb015dac0c05c7c5f84d9cce39022cef511a",
-    "src/protocol/synthetic-model.mjs": "5186521eddc8fb376532c1a64d8148bbfe5d9d8d77e84a61d851b735a2afec36",
+    "src/protocol/synthetic-model.mjs": "cf6b94b5c584b5953edb2dc8c76c8df7859a229eeb8b251dfb104ab5248d4376",
     "src/protocol/synthetic-modern-elicitation-server.mjs": "0af57f03fa6138d71c51a62b0215a048b262b3b9646903cb288e6d1c7adbd0a1",
     "src/protocol/synthetic-multi-agent-model.mjs": "e2b34795b415328858eca88c1f0ec0766bfc51ee9a3f99627725254fb73848da",
     "src/protocol/synthetic-skill-once-model.mjs": "4f13fdccf16e1fce9d5464414f1d740a683c9b1bada18aab513bb3fe5329c8cc",
@@ -346,5 +351,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "6ff27c2d05a91c8145c9c05fb773b417b3e316e0b8a7f20fd003dc1d2028bfd3"
+  "archiveSha256": "3e0bcd6635aad776b812ca7d352b3761700d73a4ee6edebec3aa2c8219e2b098"
 }
