@@ -113,7 +113,10 @@ test('recovers the original failed bundle payment without credit or a model swit
   await expect(panel.locator('[data-native-settings-option="confirm"]')).toContainText('open https://')
   await record('payment-failed');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).paymentStatus).toBe('failed')
   await capture('error',failure,[cancel]);await cancel.click()
-  const keep=panel.locator('[data-native-settings-option="switch"]');await expect(keep).toHaveText('No, keep my current model');await keep.click()
+  const keep=panel.locator('[data-native-settings-option="switch"]');await expect(keep).toHaveText('No, keep my current model')
+  // The original kl/E0 input guard rejects decisions within 150ms of a credit-state transition.
+  // A desktop click is a fresh intent; let that native guard settle before submitting it.
+  await new Promise(resolve=>setTimeout(resolve,200));await keep.click()
   await expect(panel).toBeHidden();await expect(composer).toHaveText(draft);await expect.poll(selection).toEqual(savedSelection)
   const settings=JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'));expect(settings.model).toBeUndefined()
   await record('recovered');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).purchases).toBe(1);expect(receipts.at(-1).enabled).toBe(true);await capture('recovered',composer,[send])
