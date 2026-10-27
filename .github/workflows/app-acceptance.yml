@@ -44,6 +44,9 @@ jobs:
         with:
           node-version: 23.11.1
           cache: npm
+      # npm 10 crashes resolving vitest 4.1's peer dependencies, which a new pack's first install does
+      - name: npm 11
+        run: npm install -g npm@11.21.0
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb

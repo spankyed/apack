@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { renderTemplate } from '../templates.ts';
 import { toPascalCase } from './add/write';
 import * as readline from 'node:readline';
+import { spawnSync } from 'node:child_process';
 import semver from 'semver';
 import { resolveDeps } from './generate';
 import { generateEntries } from './generate-entries';
@@ -145,6 +146,21 @@ const VITEST_FLOOR = '3.0.0';
  * the same version and takes it as a peer dependency (^<version>, one minor before 1.0), so it gets the pack's SDK range.
  */
 const UNIT_TEST_DEV_DEPENDENCIES = (sdkRange: string) => ({ '@apackdev/testing': sdkRange, vitest: '^4.1.12' });
+
+/**
+ * The first npm that installs that vitest: every npm 10 release crashes resolving vitest 4.1's optional peer
+ * dependencies ("Cannot read properties of null (reading 'edgesOut')") before it reports anything else
+ */
+const NPM_FLOOR = 11;
+
+/** The command to run before `npm install` when the npm on PATH is older than NPM_FLOOR; undefined when it isn't or doesn't answer */
+export function npmUpgradeStep(): string | undefined {
+  // npm is a shell script on Windows, which spawn cannot launch without one
+  const windows = process.platform === 'win32';
+  const { stdout } = spawnSync(windows ? 'npm.cmd' : 'npm', ['--version'], { encoding: 'utf-8', shell: windows });
+  const version = semver.coerce(stdout ?? '');
+  return version && version.major < NPM_FLOOR ? `npm install -g npm@${NPM_FLOOR}   # npm ${version.version} can't install vitest 4.1` : undefined;
+}
 
 /** The files vitest loads its config from, in the order it looks for them */
 export const VITEST_CONFIG_FILES = ['vitest.config', 'vite.config'].flatMap((name) => ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `${name}.${ext}`));
@@ -298,6 +314,8 @@ export async function init(args: string[]) {
   console.log(`  import type { Services, Z } from '#generated/services.ts';`);
   console.log(`\nNext steps:`);
   console.log(`  cd ${name}`);
+  const upgrade = npmUpgradeStep();
+  if (upgrade) console.log(`  ${upgrade}`);
   console.log(`  npm install`);
   console.log(`  apack pack add feature <name> --description "What the feature does"`);
   console.log(`  apack pack build`);
