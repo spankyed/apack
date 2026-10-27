@@ -215,6 +215,13 @@ test('completes an everyday native review across Agent, approval, question and i
         await appPage.mouse.wheel(0,1200)
         const originalNotice = bubble.getByText('for this session only',{exact:false}).last()
         const acknowledgementText = bubble.getByText(acknowledgement,{exact:false}).last()
+        await writeFile(join(workspace!,`native-model-reading-${selection}-${width}.json`),JSON.stringify(await bubble.evaluate(element => {
+          const viewport=element.closest('[data-testid="chat-transcript"]')!.firstElementChild! as HTMLElement
+          const card=document.querySelector('[data-onboarding-id="agent-chat-input"]')!
+          const rect=(node:Element)=>{const b=node.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height}}
+          return {bubble:rect(element),viewport:rect(viewport),composer:rect(card),scrollTop:viewport.scrollTop,scrollHeight:viewport.scrollHeight,clientHeight:viewport.clientHeight,paragraphs:Array.from(element.querySelectorAll('p')).map(p=>({text:p.textContent,...rect(p)}))}
+        })))
+        if(width===680) await capturePage(`apack-native-model-${selection}-${width}-${height}-before-check.png`,width,height)
         await expect(originalNotice).toBeInViewport({ratio:1})
         await expect(acknowledgementText).toBeInViewport({ratio:1})
         if(modelPolicyNotice) await expect(bubble.getByText('that applies on restart',{exact:false}).last()).toBeInViewport({ratio:1})
