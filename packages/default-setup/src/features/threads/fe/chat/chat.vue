@@ -500,16 +500,20 @@ const quickPrompts = useSelector(actor, (state) => (state.context.chatSettings?.
 const quickPromptNumberKeyInserts = useSelector(actor, (state) => state.context.chatSettings?.quickPromptNumberKeyInserts ?? true)
 const quickPromptCursor = useSelector(actor, (state) => state.context.quickPromptCursor)
 const recordingLimitMinutes = useSelector(actor, (state) => state.context.settings?.recordingLimitMinutes ?? 3)
-// True if the current thread's *raw* chat state matches the one the user
+// The fallback uses the current thread's raw chat state: the one the user
 // marked as "busy" in settings. Intentionally ignores chatStateOverrides
 // (the short-lived flash used to surface terminal states like success/error):
 // pausing a transient visual flash is semantically wrong — we only want
 // Pause/Esc to act on active work. MCP input also retains an explicit stop action.
-const isBusy = useSelector(actor, ({ context }) => {
+const conversationBusy = useSelector(actor, ({ context }) => {
   const busyId = context.settings?.chatStates?.find(c => c.busy)?.id
   const threadId = context.currentThread?.id
   return !!context.currentThread?.context?.claudeCode?.pendingElicitation || !!busyId && !!threadId && context.chatStates[threadId] === busyId
 })
+// A live native owner knows whether foreground input is busy after Pause; stored chat state may still describe its background shell.
+const isBusy = computed(() => nativeComposerOwner.value
+  ? nativeComposerOwner.value.busy || !!currentThread.value?.context?.claudeCode?.pendingElicitation
+  : conversationBusy.value)
 const statusLineCwd = computed(() => {
   return currentThread.value?.context?.claudeCode?.cwd
 })

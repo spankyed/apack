@@ -124,6 +124,7 @@ test('opens original task management from the default composer and stops its bac
   const backgroundReceipt=await backgrounded();expect(await alive()).toBe(true);expect(await exists()).toBe(false)
   await expect.poll(async()=>(await context()).native.state.busy).toBe(false)
   expect((await context()).native.state.status).toBe('live');expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  if(desktopShell){await expect(card.getByTitle('Pause agent work',{exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()}
   const originalDocument=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON()),originalSelection=await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())
   await appPage.setViewportSize({width:1100,height:900})
   let managerScreens:any[]=[],managerStopKey:string
@@ -186,6 +187,7 @@ test('opens original task management from the default composer and stops its bac
   expect(await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())).toEqual(originalSelection)
   await capture('task-stopped',680)
   const after=await context();expect(after.sessionId).toBe(sessionId);expect(after.turns).toBe(before.turns)
+  if(desktopShell){await expect(card.getByTitle('Pause agent work',{exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeEnabled()}
   async function replaceDraft(text:string){
     if(!desktopShell){await composer.fill(text);return}
     await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
@@ -210,6 +212,6 @@ test('opens original task management from the default composer and stops its bac
   await replaceDraft('Continue this saved review after cancelling active execution.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(await alive()).toBe(false);expect(await exists()).toBe(false);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-task-manager-proof.json'),JSON.stringify({desktopShell,sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,taskStoppedIndependently:true,managerScreens,managerStopKey,originalDocument,originalSelection,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-task-manager-proof.json'),JSON.stringify({desktopShell,nativeIdlePauseRetired:desktopShell,sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,taskStoppedIndependently:true,managerScreens,managerStopKey,originalDocument,originalSelection,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeTaskManager:true,nativeShellDesktop:desktopShell,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
