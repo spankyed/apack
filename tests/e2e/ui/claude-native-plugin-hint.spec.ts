@@ -89,7 +89,16 @@ test('preserves original plugin recommendation choices and everyday composing', 
   const approval = appPage.getByTestId('native-bash-approval')
   await expect(approval).toBeVisible({ timeout: 15000 })
   await expect(approval.getByTestId('native-bash-command')).toContainText('document-skills@anthropic-agent-skills')
-  await approval.getByRole('button', { name: 'Allow once', exact: true }).click(); await expect(approval).toBeHidden()
+  if (process.env.CLAUDE_RESEARCH_BASH_ADMISSION_TRACE === '1') await writeFile(join(workspace!, 'native-bash-app-before.json'), JSON.stringify({ at: Date.now(), context: await context() }, null, 2))
+  await approval.getByRole('button', { name: 'Allow once', exact: true }).click()
+  try { await expect(approval).toBeHidden() }
+  catch (error) {
+    if (process.env.CLAUDE_RESEARCH_BASH_ADMISSION_TRACE === '1') {
+      await writeFile(join(workspace!, 'native-bash-app-after.json'), JSON.stringify({ at: Date.now(), context: await context(), approval: await approval.textContent() }, null, 2))
+      const image = await nativeWindow.evaluate(async window => (await window.capturePage()).toPNG().toString('base64')); await writeFile(join(workspace!, 'native-bash-admission-failure.png'), Buffer.from(image, 'base64'))
+    }
+    throw error
+  }
   const notice = section.getByRole('region', { name: 'Claude plugin recommendation', exact: true })
   await expect(notice).toBeVisible({ timeout: 15000 })
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
