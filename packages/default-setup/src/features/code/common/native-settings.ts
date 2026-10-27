@@ -36,7 +36,10 @@ export const claudeSettingsEditor = z.discriminatedUnion('kind', [
   z.object({kind:z.literal('form'),live:z.object({id:z.string().min(1).max(128),feedback:z.object({text:z.string().max(65536),tone:z.enum(['success','error'])}).strict().optional()}).strict().optional(),consent:z.object({links:z.array(z.string().url().max(4096)).max(16).optional(),cancelLabel:z.string().max(65536),focusField:z.literal('answer'),problem:z.string().max(65536).optional()}).strict().optional(),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536).optional(),submitLabel:z.string().max(65536),fields:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),value:z.string().max(16384)}).strict()).max(64)}).strict(),
 ])
 export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
+export const claudeHelpTab = z.enum(['General', 'Commands', 'Custom commands'])
+export const claudeHelpSnapshot = z.object({selectedTab:claudeHelpTab,tabs:z.array(claudeHelpTab).length(3),paragraphs:z.array(z.string().max(65536)).max(4096),commands:z.array(z.object({name:z.string().max(4096),label:z.string().max(4096),description:z.string().max(65536)}).strict()).max(2048),links:z.array(z.string().url().max(4096)).max(32)}).strict()
 export const claudeSettingsSnapshot = z.object({
+  help: claudeHelpSnapshot.optional(),
   frame: claudeSettingsFrame.optional(),
   editor: claudeSettingsEditor.optional(),
   commitPending: z.boolean().optional(),
@@ -66,6 +69,7 @@ export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
   z.object({action:z.literal('cancel')}).strict(),
 ])
 export const claudeSettingsOperation = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('helpTab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeHelpTab}).strict(),
   z.object({kind:z.literal('read')}).strict(),
   z.object({kind:z.literal('stats'),revision:z.string().regex(/^[a-f0-9]{64}$/),action:z.enum(['Overview','Models','cycleDates','copy'])}).strict(),
   z.object({kind:z.literal('tab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeSettingsTab}).strict(),

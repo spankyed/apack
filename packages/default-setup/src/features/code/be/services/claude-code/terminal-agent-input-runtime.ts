@@ -39,7 +39,7 @@ async function nativeAgentPanel(n,request){
  if(entry.closed||entry.answered)throw Error('Native command panel expired');
  const shown=entry.store.getState().open.some(item=>item.id===entry.dialogId&&item.kind==='local_jsx'&&item.payload?.nodeId===entry.nodeId);
  if(!shown)throw Error('Native command panel is no longer shown');
- if(request.operation==='close'){entry.answered=true;try{await entry.cancel();await entry.done;}catch(error){if(!entry.closed)entry.answered=false;throw error;}return {open:false};}
+ if(request.operation==='close'){const cancel=entry.commandName==='help'?nativeHelpDismissCallback(n,entry):entry.cancel;entry.answered=true;try{await cancel();await entry.done;}catch(error){if(!entry.closed)entry.answered=false;throw error;}return {open:false};}
  if(request.operation!=='input'||typeof request.text!=='string'||!request.text.length||request.text.length>4096)throw Error('Invalid native panel input');
  // Deliver synchronously to the original mounted terminal listeners after checking its live dialog.
  process.stdin.unshift(request.text);process.stdin.emit('readable');

@@ -7882,6 +7882,14 @@ declare const chatQueries: {
 };
 
 declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"helpTab">;
+    revision: z.ZodString;
+    tab: z.ZodEnum<{
+        General: "General";
+        Commands: "Commands";
+        "Custom commands": "Custom commands";
+    }>;
+}, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"read">;
 }, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"stats">;
@@ -7949,6 +7957,25 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strict>], "kind">;
 
 declare const claudeSettingsSnapshot: z.ZodObject<{
+    help: z.ZodOptional<z.ZodObject<{
+        selectedTab: z.ZodEnum<{
+            General: "General";
+            Commands: "Commands";
+            "Custom commands": "Custom commands";
+        }>;
+        tabs: z.ZodArray<z.ZodEnum<{
+            General: "General";
+            Commands: "Commands";
+            "Custom commands": "Custom commands";
+        }>>;
+        paragraphs: z.ZodArray<z.ZodString>;
+        commands: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            label: z.ZodString;
+            description: z.ZodString;
+        }, z.core.$strict>>;
+        links: z.ZodArray<z.ZodString>;
+    }, z.core.$strict>>;
     frame: z.ZodOptional<z.ZodObject<{
         selectedTab: z.ZodEnum<{
             Status: "Status";
@@ -8408,6 +8435,17 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 editorAvailable?: boolean | undefined;
                 lockReason?: string | undefined;
             }[];
+            help?: {
+                selectedTab: "Commands" | "Custom commands" | "General";
+                tabs: ("Commands" | "Custom commands" | "General")[];
+                paragraphs: string[];
+                commands: {
+                    name: string;
+                    label: string;
+                    description: string;
+                }[];
+                links: string[];
+            } | undefined;
             frame?: {
                 selectedTab: "Config" | "Stats" | "Status" | "Usage";
                 tabs: ("Config" | "Stats" | "Status" | "Usage")[];
