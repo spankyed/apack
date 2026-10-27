@@ -51,7 +51,7 @@ async function readNativeModelPanel(n,entry,signal){
    const decision=confirmations[0].memoizedProps,body=modalProps.children?.props?.children;
    if(!Array.isArray(body)||body.length!==2)throw Error('Native model confirmation disclosure changed');
    confirm=decision.onConfirm;cancel=decision.onCancel;
-   editor={kind:'choice',title:modalProps.title,disabled:false,options:[{value:'cancel',label:decision.cancelLabel,disabled:false},{value:'confirm',label:decision.confirmLabel,disabled:false}],consent:{description:await text([modalProps.subtitle,body[0]]),cancelLabel:decision.cancelLabel,defaultFocusValue:decision.focus}};
+   editor={kind:'choice',title:modalProps.title,disabled:false,options:[{value:'cancel',label:decision.cancelLabel,disabled:false},{value:'confirm',label:decision.confirmLabel,disabled:false}],consent:{description:[await text(modalProps.subtitle),await text(body[0])].filter(Boolean).join('\n'),cancelLabel:decision.cancelLabel,defaultFocusValue:decision.focus}};
   }else{
    let hook=match.fiber.memoizedState;const hooks=new Set(),states=[];
    while(hook){if(hooks.has(hook)||hooks.size>=512)throw Error('Native model credit state exceeded bound');hooks.add(hook);if(hook.memoizedState&&typeof hook.memoizedState==='object'&&typeof hook.memoizedState.s==='string')states.push(hook.memoizedState.s);hook=hook.next;}

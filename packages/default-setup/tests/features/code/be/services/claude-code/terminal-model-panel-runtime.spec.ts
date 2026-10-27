@@ -50,7 +50,7 @@ function fixture(kind: 'picker' | 'confirm' | 'pending' = 'picker') {
     agentCommandDialogs:new Map([[id,entry]]),
     createHash:()=>({value:'',update(value:string){this.value=value;return this},digest(){return known.get(this.value)??hash('sha256').update(this.value).digest('hex')}}),
     stripVTControlCharacters:(value:string)=>value,
-    nativeGenericPermissionText:async(_native:unknown,value:unknown)=>{await beforeText?.();return render(value)},
+    nativeGenericPermissionText:async(_native:unknown,value:unknown)=>{await beforeText?.();if(Array.isArray(value)&&value.some(item=>typeof item==='string'))throw Error('Raw text requires its own native Text component');return render(value)},
   }) as {nativeSettings(n:unknown,request:unknown,abort:AbortController):Promise<{snapshot:any}>}
   const native={gate:{_Jo:vi.fn(async()=>{})},themeRoots:{ai:()=>({get:()=>({container:{current:owner}})})}}
   const read=(client='owned')=>api.nativeSettings(native,{client_id:client,panel_id:id,operation:'read'},new AbortController())
