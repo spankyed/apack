@@ -98,7 +98,7 @@ const paneRoster = z.object({ panes: z.array(pane), shown_id: paneId.nullable(),
 const paneSelection = z.object({ client_id: clientId, surface, id: paneId }).strict()
 export type ClaudeUiPaneRoster = z.infer<typeof paneRoster>
 
-const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string(), z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
+const renderResult = z.object({ _apack_action_keys: actionKeys.optional().catch(undefined), native_hint:z.boolean().optional(), group_engine:z.boolean().optional(), tree: z.unknown(), props: z.record(z.string(), z.unknown()), rewritten: z.boolean(), hooked: z.boolean(), output_rewritten: z.boolean().optional(), output_in_native_process:z.boolean().optional(), engine_output: z.string().max(65536).optional(), drawn_by: z.array(z.string()).optional(), client_modules: z.record(z.string(), z.string()).optional() }).passthrough().refine(value => value.tree !== undefined, 'native UI response must contain a tree')
 
 export type ClaudeUiAttach = z.infer<typeof attach>
 export type ClaudeUiRender = z.infer<typeof render>

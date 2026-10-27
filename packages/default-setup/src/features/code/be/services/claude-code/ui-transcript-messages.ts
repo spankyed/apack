@@ -166,7 +166,7 @@ export function createClaudeTranscriptMessageHost(options: {
           entry.nativeHint = entry.row.component==='PromptHint' && result.native_hint===true
           entry.outputRewritten = entry.row.component === 'ToolResult' && result.output_rewritten === true
           entry.engineOutput = entry.row.component === 'ToolGroup' || composerRow(entry.row) || entry.row.component === 'ToolResult' || (entry.row.component === 'ToolUse' || entry.row.component === 'ToolProgress') ? result.engine_output : undefined
-          if (entry.outputRewritten) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
+          if (entry.outputRewritten && !result.output_in_native_process) entry.displayText = typeof result.props.output === 'string' ? result.props.output : JSON.stringify(result.props.output, null, 2) ?? ''
           entry.body = { status: 'live', tree: entry.pressing ? inert(drawing.tree) : drawing.tree }
           for (const id of entry.revisions.keys()) if (!drawing.fields.has(id)) { entry.revisions.delete(id); entry.completed.delete(id) }
           publish()

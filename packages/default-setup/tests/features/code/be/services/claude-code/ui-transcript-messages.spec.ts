@@ -163,6 +163,15 @@ it('retains structured result rewrites only in presentation and retires controls
   f.host.dispose()
 })
 
+it('uses the native drawing and formatted notice when a rewritten media payload stays in the native process', async () => {
+  const f = fixture()
+  f.setRows([{ component: 'ToolResult', messageId: 'app', uuid: 'image', sessionId: 'session', text: '', start: 0, end: 0, blockIndex: 1, assistantUuid: 'assistant', resultUuid: 'result', tool: 'Bash', isErrored: false }])
+  f.ui.render.mockResolvedValueOnce({ tree: { type: 'engine', ref: 1 }, props: { tool: 'Bash' }, rewritten: true, hooked: true, output_rewritten: true, output_in_native_process: true, engine_output: '[Image data detected and sent to Claude]' })
+  f.host.start(); await vi.advanceTimersByTimeAsync(50)
+  expect(f.host.state[0]).toMatchObject({ text: '', displayText: '', outputRewritten: true, engineOutput: '[Image data detected and sent to Claude]', body: { status: 'live' } })
+  await f.host.dispose()
+})
+
 it('releases closed native instances and uses a new revision when the same row is reopened', async () => {
   const f = fixture(); f.setRows([f.rows[0]!]); f.host.start(); await vi.advanceTimersByTimeAsync(50)
   f.setRows([]); f.host.refresh()

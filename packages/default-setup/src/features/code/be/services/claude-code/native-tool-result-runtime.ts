@@ -6,8 +6,14 @@ export const claudeNativeToolResultRuntime = String.raw`function nativeToolResul
  const {row,block}=results[0],call=calls[0],content=block.content;
  if(row.sourceToolAssistantUUID!==undefined&&row.sourceToolAssistantUUID!==assistantUuid)return;
  const text=typeof content==='string'?content:Array.isArray(content)?content.filter(item=>item.type==='text').map(item=>item.text).join('\n'):'';
- if(text.length>65536||JSON.stringify(row.toolUseResult??null).length>65536)return;
+ // Original media results carry base64; keep their bounded payload local, separate from drawing/text limits.
+ if(text.length>65536||JSON.stringify(row.toolUseResult??null).length>32*1024*1024)return;
  return {message:row,messages,block,props:{tool_use_id:id,tool:call.name,output:row.toolUseResult,isErrored:block.is_error===true},text,fingerprint:JSON.stringify([assistantUuid,call,row.uuid,block,row.toolUseResult])};
+}
+function nativeToolResultWireProps(props){
+ if(JSON.stringify(props.output??null).length<=65536)return {props};
+ const {output,...presentation}=props;
+ return {props:presentation,output_in_native_process:true};
 }
 function nativePrintToolRender(value,binding,sessionId){
  if(value.component!=='ToolResult'||!Object.hasOwn(value.props??{},'source_uuid'))return value;

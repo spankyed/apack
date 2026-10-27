@@ -9467,6 +9467,7 @@ declare const renderResult: z.ZodObject<{
     rewritten: z.ZodBoolean;
     hooked: z.ZodBoolean;
     output_rewritten: z.ZodOptional<z.ZodBoolean>;
+    output_in_native_process: z.ZodOptional<z.ZodBoolean>;
     engine_output: z.ZodOptional<z.ZodString>;
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString>>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;

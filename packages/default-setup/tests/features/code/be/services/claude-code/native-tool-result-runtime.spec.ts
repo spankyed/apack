@@ -5,7 +5,7 @@ function fixture(output: unknown = { new_source: 'reviewed', cell_id: 'analysis'
   const result = { uuid: 'result', type: 'user', sourceToolAssistantUUID: 'assistant', message: { content: [{ type: 'tool_result', tool_use_id: 'edit', content: 'Updated cell analysis', is_error: false }] }, toolUseResult: output }
   const rows = [{ uuid: 'assistant', type: 'assistant', message: { content: [call] } }, result]
   const value = { component: 'ToolResult', surface: 'desktop', requestId: 'edit', props: { session_id: 'session', source_uuid: 'result', assistant_uuid: 'assistant', tool: 'NotebookEdit', text: 'Updated cell analysis', isErrored: false } }
-  const api = vm.runInNewContext(claudeNativeToolResultRuntime + ';({nativePrintToolRender})')
+  const api = vm.runInNewContext(claudeNativeToolResultRuntime + ';({nativePrintToolRender,nativeToolResultWireProps})')
   return { api, rows, result, value, binding: { messages: () => rows } }
 }
 it('passes the original structured object to print hooks without JSON conversion or address markers', () => {
@@ -29,4 +29,20 @@ it.each(['session', 'result', 'assistant', 'text', 'duplicate'] as const)('refus
 it('leaves original native callers that carry public props untouched', () => {
   const f = fixture(), value = { component: 'ToolResult', props: { output: 'original public caller' } }
   expect(f.api.nativePrintToolRender(value, undefined, 'session')).toBe(value)
+})
+
+it('retains large native image props for original hooks while omitting payload from app wire props',()=>{
+ const output={stdout:'data:image/png;base64,'+'A'.repeat(700000),stderr:'',isImage:true},f=fixture(output)
+ const rendered=f.api.nativePrintToolRender(f.value,f.binding,'session')
+ expect(rendered.props.output).toBe(output)
+ const wire=f.api.nativeToolResultWireProps(rendered.props)
+ expect(wire.output_in_native_process).toBe(true);expect(wire.props).not.toHaveProperty('output')
+ expect(wire.props.tool_use_id).toBe('edit');expect(output.stdout.length).toBeGreaterThan(65536)
+ expect(rendered.props.output).toBe(output)
+})
+it('preserves small structured wire props and rejects original payloads above the local bound',()=>{
+ const f=fixture();const rendered=f.api.nativePrintToolRender(f.value,f.binding,'session')
+ expect(f.api.nativeToolResultWireProps(rendered.props).props).toBe(rendered.props)
+ const oversized=fixture({stdout:'A'.repeat(32*1024*1024),isImage:true})
+ expect(()=>oversized.api.nativePrintToolRender(oversized.value,oversized.binding,'session')).toThrow()
 })
