@@ -38,7 +38,10 @@ verifies complete objects/metadata. Native registration and any selected install
 private HOME and offline Git mirror. The original privacy/essential-traffic gate is preserved;
 ordinary fixture mode removes only the generic runner's injected suppression switch. Use
 `verifyNativePluginHintAppEvidence` from `src/protocol/native-plugin-hint-app-proof.mjs` on the
-exported data, captures and read-only database query. This is scoped app acceptance, not full parity.
+exported data, captures and read-only database query. Set `CLAUDE_RESEARCH_TRANSCRIPT_RESIZE=1`
+for the optional normal/compact latest-reply and top-of-history reading journey; verify it with
+`verifyNativeTranscriptViewportAppEvidence` from `src/protocol/native-transcript-viewport-app-proof.mjs`.
+Arbitrary reader anchors and whole-screen compact polish remain separate. This is scoped app acceptance, not full parity.
 
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
