@@ -20,7 +20,8 @@ test.afterEach(async ({appPage,electronApp},info) => {
 })
 test('recovers the original failed bundle payment without credit or a model switch', async ({app,appPage,electronApp},testInfo)=>{
   test.setTimeout(150000)
-  expect(process.env.CLAUDE_RESEARCH_NATIVE_CREDITS).toBe('1');expect(process.env.CLAUDE_RESEARCH_NATIVE_CREDIT_SCENARIO).toBe('payment-failed')
+  expect(process.env.CLAUDE_RESEARCH_NATIVE_CREDITS).toBe('1')
+  const scenario=process.env.CLAUDE_RESEARCH_NATIVE_CREDIT_SCENARIO!;expect(['payment-failed','payment-action','payment-http-error']).toContain(scenario);const pendingInvoice=scenario==='payment-failed'
   expect(process.env.HOME).toBe(workspace)
   const restriction=false
   async function replaceDraft(editor:import('@playwright/test').Locator,text:string){
@@ -105,13 +106,16 @@ test('recovers the original failed bundle payment without credit or a model swit
   const confirmation=panel.getByRole('textbox',{name:'Confirmation',exact:true});await expect(confirmation).toBeVisible();const word=(await editor.innerText()).match(/Type (\w+) to confirm[.]/)?.[1];expect(word).toBeTruthy()
   await confirmation.fill(word!);await expect(editor.getByRole('status')).toHaveText(`Type ${word} to confirm.`);await expect(editor).toContainText('Buy usage credits for $99.00.');await expect(editor).not.toContainText(/[┌┐└┘─│]/);await record('typed-not-submitted');expect(receipts.at(-1).purchases).toBe(0)
   await capture('typed-consent',confirmation,[panel.getByRole('button',{name:'Confirm purchase',exact:true})]);await panel.getByRole('button',{name:'Confirm purchase',exact:true}).click()
-  const pending=panel.getByText('Confirming payment… (may take a few seconds)',{exact:true});await expect(pending).toBeVisible();await expect(panel.getByRole('button',{name:'Close',exact:true})).toBeDisabled();await expect(panel.locator('[data-native-settings-option]')).toHaveCount(0)
-  await expect.poll(async()=>(await ledger()).requests.some((row:any)=>row.method==='GET'&&row.path.endsWith('/prepaid/commits/owned-purchase-1')&&row.waitingForRelease===true)).toBe(true);await record('payment-pending');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).purchases).toBe(1)
-  await capture('pending',pending,[panel.getByRole('button',{name:'Close',exact:true})]);await writeFile(join(workspace!,'native-credit-payment-release'),'release-owned-payment\n')
-  const failure=editor.getByText('Payment failed',{exact:true});await expect(failure).toBeVisible()
+  if(pendingInvoice){
+    const pending=panel.getByText('Confirming payment… (may take a few seconds)',{exact:true});await expect(pending).toBeVisible();await expect(panel.getByRole('button',{name:'Close',exact:true})).toBeDisabled();await expect(panel.locator('[data-native-settings-option]')).toHaveCount(0)
+    await expect.poll(async()=>(await ledger()).requests.some((row:any)=>row.method==='GET'&&row.path.endsWith('/prepaid/commits/owned-purchase-1')&&row.waitingForRelease===true)).toBe(true);await record('payment-pending');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).purchases).toBe(1)
+    await capture('pending',pending,[panel.getByRole('button',{name:'Close',exact:true})]);await writeFile(join(workspace!,'native-credit-payment-release'),'release-owned-payment\n')
+  }
+  const failure=editor.getByText(pendingInvoice?'Payment failed':scenario==='payment-action'?/^Your card requires additional verification — this purchase was not completed[.] Try again at https:\/\//:/^Purchase failed(?::|$)/,{exact:pendingInvoice});await expect(failure).toBeVisible()
+  const errorMessage=await failure.innerText()
   const cancel=panel.locator('[data-native-settings-option="cancel"]');await expect(cancel).toBeVisible();await expect(cancel).toBeFocused()
   await expect(panel.locator('[data-native-settings-option="confirm"]')).toContainText('open https://')
-  await record('payment-failed');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).paymentStatus).toBe('failed')
+  await record('payment-failed');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).paymentStatus).toBe(pendingInvoice?'failed':scenario==='payment-action'?'action_needed':'error')
   await capture('error',failure,[cancel]);await cancel.click()
   const keep=panel.locator('[data-native-settings-option="switch"]');await expect(keep).toHaveText('No, keep my current model')
   // The original kl/E0 input guard rejects decisions within 150ms of a credit-state transition.
@@ -131,6 +135,6 @@ test('recovers the original failed bundle payment without credit or a model swit
   let resumedCost=0
   await expect.poll(async()=>{const rows=(await readFile(join(workspace!,'native-print-results.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));const last=rows.at(-1);if(last?.sessionId!==sessionId||last.totalCostUsd<=nativeCost)return false;resumedCost=last.totalCostUsd;return (await context()).claude.totalCostUsd===resumedCost}).toBe(true)
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-credit-failure-app.json'),JSON.stringify({sessionId,nativePid:boundNativePid,receipts,captures}))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCreditForms:true,nativeCreditFailure:true,nativeCreditPendingPayment:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:(await context()).sessionId,boundNativePid,nativeCost,resumedCost,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-credit-failure-app.json'),JSON.stringify({scenario,errorMessage,sessionId,nativePid:boundNativePid,receipts,captures}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeCreditForms:true,nativeCreditFailure:true,nativeCreditPendingPayment:pendingInvoice,nativeCreditFailureScenario:scenario,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:(await context()).sessionId,boundNativePid,nativeCost,resumedCost,browserErrors:errors}))
 })
