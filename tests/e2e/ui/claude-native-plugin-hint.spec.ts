@@ -111,9 +111,10 @@ test('preserves original plugin recommendation choices and everyday composing', 
   const fullyReadable = async () => { const { reply, viewport, composer } = await replyGeometry(); return !!reply && !!viewport && !!composer && reply.y >= viewport.y - 1 && reply.y + reply.height <= Math.min(viewport.y + viewport.height, composer.y) + 1 }
   if (transcriptReading) {
     const latest = appPage.getByRole('button', { name: 'Scroll to latest message', exact: true })
-    if (await latest.isVisible()) await latest.click()
-    else { await transcript.hover(); await appPage.mouse.wheel(0, 1200) }
-    await expect.poll(fullyReadable).toBe(true)
+    if (!await latest.isVisible()) { await transcript.hover(); await appPage.mouse.wheel(0, -1200); await expect(latest).toBeVisible() }
+    await latest.click()
+    try { await expect.poll(fullyReadable).toBe(true) }
+    catch (error) { const size = appPage.viewportSize()!; await writeFile(join(workspace!, 'native-transcript-resize-failure.json'), JSON.stringify({ ...size, stage: 'latest-entry', geometry: await replyGeometry(), context: await context() }, null, 2)); await capture('reading-entry-failure', size.width, size.height); throw error }
   }
   for (const [width, height] of [[1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
