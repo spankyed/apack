@@ -66,8 +66,8 @@
     </div>
     <footer class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-3 text-xs">
       <p v-if="state?.problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ state.problem }}</p>
-      <p v-else role="status" class="text-neutral-400">{{ pending ? 'Waiting for Claude Code…' : state?.savedKey ? 'Saved by Claude Code' : subject === 'model' ? 'Choose a model' : activeTab === 'Config' ? `${rows.length} settings` : activeTab }}</p>
-      <button type="button" :disabled="pending" class="rounded-lg px-3 py-2 text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="emit('operate', { kind: 'read' })">Refresh</button>
+      <p v-else-if="footerStatus" role="status" class="text-neutral-400">{{ footerStatus }}</p>
+      <button type="button" :disabled="pending" class="ml-auto rounded-lg px-3 py-2 text-neutral-300 hover:bg-white/5 disabled:opacity-40" @click="emit('operate', { kind: 'read' })">Refresh</button>
     </footer>
   </section>
 </template>
@@ -99,6 +99,12 @@ function operate(action: {kind:'tab';tab:'Status'|'Config'|'Usage'|'Stats'} | {k
 const liveForm=useNativeSettingsForm(()=>props.state,action=>emit('operate',action))
 const pending = computed(() => props.state?.status === 'pending' || props.state?.snapshot?.commitPending === true || liveForm.busy.value)
 const editorPending=computed(()=>pending.value&&!liveForm.editing.value)
+const footerStatus=computed(()=>{
+  if(pending.value||props.state?.snapshot?.refreshPending)return 'Waiting for Claude Code…'
+  if(props.subject==='model'){const editor=props.state?.snapshot?.editor;return editor?.kind==='choice'&&editor.model?'Choose a model':undefined}
+  if(props.state?.savedKey)return 'Saved by Claude Code'
+  return activeTab.value==='Config'?`${rows.value.length} settings`:activeTab.value
+})
 const rows = computed(() => (props.state?.snapshot?.rows ?? []).filter(row => `${row.label} ${row.description ?? ''} ${row.key}`.toLowerCase().includes(search.value.toLowerCase())))
 function openEditor(key: string) {
   if (!pending.value && props.state?.snapshot) emit('operate',{kind:'open',revision:props.state.snapshot.revision,key})
