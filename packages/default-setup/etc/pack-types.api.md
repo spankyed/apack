@@ -8058,10 +8058,7 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             links: z.ZodOptional<z.ZodArray<z.ZodString>>;
             description: z.ZodString;
             cancelLabel: z.ZodString;
-            defaultFocusValue: z.ZodEnum<{
-                cancel: "cancel";
-                not_now: "not_now";
-            }>;
+            defaultFocusValue: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>>;
         revision: z.ZodString;
         title: z.ZodOptional<z.ZodString>;
@@ -8135,6 +8132,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
         }, z.core.$strict>>;
     }, z.core.$strict>], "kind">>;
     commitPending: z.ZodOptional<z.ZodBoolean>;
+    refreshPending: z.ZodOptional<z.ZodBoolean>;
+    dismissible: z.ZodOptional<z.ZodBoolean>;
     revision: z.ZodString;
     rows: z.ZodArray<z.ZodObject<{
         key: z.ZodString;
@@ -8488,8 +8487,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 consent?: {
                     description: string;
                     cancelLabel: string;
-                    defaultFocusValue: "cancel" | "not_now";
                     links?: string[] | undefined;
+                    defaultFocusValue?: string | undefined;
                 } | undefined;
                 title?: string | undefined;
                 value?: string | undefined;
@@ -8551,6 +8550,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                 description?: string | undefined;
             } | undefined;
             commitPending?: boolean | undefined;
+            refreshPending?: boolean | undefined;
+            dismissible?: boolean | undefined;
         };
         savedKey?: string | undefined;
         problem?: string | undefined;

@@ -4,10 +4,10 @@ import {claudeTerminalSettingsRuntime} from '#features/code/be/services/claude-c
 import {claudeSettingsSnapshot} from '#features/code/common/native-settings.ts'
 
 // Authored component doubles; recovered vendor functions are never executed in these unit tests.
-const hashes={"purchase":"0906db370d45290c9b4083fbd3e873f174a74a9e9e1bc6fbad7bdc8359b292fa","admin":"cab1f72231e70b850f08407699d300878d571c548e6b6029dc57e44323a032ab","purchaseState":"fbac9686170ff3ab8b9f9b8f20d83b38fbed7f8bfbeeace2e4efd7df731cb13d","error":"f3ff348f7d1a370b4536dc5ab296a22bdfd019bcc24667219dec9cb1fbf00a3a","bundles":"8a8a1d5a2ab3ff3bac0c0dc289085c45fe6f27719f3ace279d2f8eccb627c598","quote":"21606cc022bcb4b9922ddaf35717cc1fb5a6fbf72239548682238917e99a7352","custom":"006fc145844b84a7a194debf37f4b45cc2de16bf2a40f30f59ad51e73426d7c4","polling":"f59e60934afe94e192a16ea80e8c82af56ba0e4173c4ca6bb9a8af3e27e75063","success":"fcaf327cac916530a62ada2644520018e693463ed395d6a5a5904bb3ac710199","charge":"b996fe2d447d523db0d24dee7cf857be60744b76f5374313c29bf430a363170a","amount":"926846743b72ce0b0abee6a10cdd9267d02eb633952b2b97912a9b4b05ac5a04","selectState":"c56325760953719a87f1c8604b3c1e09832b32b94154c60d4fb82c7d2827be7f"}
-function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote'|'processing'){
- function root(){} function credits(){} function purchaseState(){} function amount(){} function charge(){} function admin(){} function bundles(){} function quote(){} function selectState(){} function selector(){} function input(){} function modal(){}
- const functions={purchaseState,amount,charge,admin,bundles,quote,selectState},known=new Map<string,string>([[String(root),'405f67fa75ab4e41349e4bafd0eca3af174269e4da6cbf7d885bcf7f9204e5a8'],[String(credits),'504f383e60d828a4e21a6d606ae63de22de7bee656f5ce384a7ba423d91f83cf'],[String(selector),'e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5']])
+const hashes={"purchase":"0906db370d45290c9b4083fbd3e873f174a74a9e9e1bc6fbad7bdc8359b292fa","admin":"cab1f72231e70b850f08407699d300878d571c548e6b6029dc57e44323a032ab","purchaseState":"fbac9686170ff3ab8b9f9b8f20d83b38fbed7f8bfbeeace2e4efd7df731cb13d","error":"f3ff348f7d1a370b4536dc5ab296a22bdfd019bcc24667219dec9cb1fbf00a3a","bundles":"8a8a1d5a2ab3ff3bac0c0dc289085c45fe6f27719f3ace279d2f8eccb627c598","quote":"21606cc022bcb4b9922ddaf35717cc1fb5a6fbf72239548682238917e99a7352","custom":"006fc145844b84a7a194debf37f4b45cc2de16bf2a40f30f59ad51e73426d7c4","polling":"f59e60934afe94e192a16ea80e8c82af56ba0e4173c4ca6bb9a8af3e27e75063","success":"fcaf327cac916530a62ada2644520018e693463ed395d6a5a5904bb3ac710199","charge":"b996fe2d447d523db0d24dee7cf857be60744b76f5374313c29bf430a363170a","amount":"926846743b72ce0b0abee6a10cdd9267d02eb633952b2b97912a9b4b05ac5a04","selectState":"c56325760953719a87f1c8604b3c1e09832b32b94154c60d4fb82c7d2827be7f","plainSelect":"e53297200fcc89a19d65b4d7f50123c6aed6f916c7cc94acf242348de025b8f9"}
+function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote'|'processing',accessible=false){
+ function root(){} function credits(){} function purchaseState(){} function amount(){} function charge(){} function admin(){} function bundles(){} function quote(){} function selectState(){} function plainSelect(){} function selector(){} function input(){} function modal(){}
+ const functions={purchaseState,amount,charge,admin,bundles,quote,selectState,plainSelect},known=new Map<string,string>([[String(root),'405f67fa75ab4e41349e4bafd0eca3af174269e4da6cbf7d885bcf7f9204e5a8'],[String(credits),'504f383e60d828a4e21a6d606ae63de22de7bee656f5ce384a7ba423d91f83cf'],[String(selector),'e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5']])
  for(const [name,fn]of Object.entries(functions))known.set(String(fn),hashes[name as keyof typeof hashes])
  let active=true,closed=false,value='75',refused=false,afterChange:(()=>void)|undefined,beforeText:(()=>void)|undefined
  const confirm=vi.fn(()=>{closed=true}),cancel=vi.fn(()=>{closed=true}),change=vi.fn((next:string)=>{queueMicrotask(()=>{value=next;renderInput();afterChange?.()})}),submit=vi.fn((_next:string)=>{if(value==='confirm'){closed=true;confirm()}}),select=vi.fn((_next:string)=>{closed=true})
@@ -24,7 +24,8 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
  const state={s:kind.startsWith('admin')?'confirm-admin-request':'buy'},credit:any={type:credits,memoizedProps:{},memoizedState:{memoizedState:state,next:null}}
  const purchase:any={type:purchaseState,memoizedProps:{initialStep:'buy_select',entryReason:'fable',step:{s:kind==='amount'?'buy_custom':kind==='processing'?'buy_purchasing':kind==='bundles'?'buy_select':'buy_confirm'}},child:control}
  const options=[{value:'p0',label:'Native bundle',description:'Save 10%',disabled:false},{value:'cancel',label:'Cancel',disabled:false}],selection={focusedValue:'cancel'},pickerProps={options,onChange:select,onCancel:cancel},selectorFiber:any={type:selector,memoizedProps:pickerProps},binding={options,state:selection},selectCache:any[]=Array(84);selectCache[15]={options};selectCache[36]=binding
- selectorFiber.child={type:selectState,memoizedProps:pickerProps,updateQueue:{memoCache:{data:[selectCache]}}}
+ const plainCache:any[]=Array(73);plainCache[47]=options;plainCache[44]=null
+ selectorFiber.child={type:accessible?plainSelect:selectState,memoizedProps:pickerProps,updateQueue:{memoCache:{data:[accessible?plainCache:selectCache]}}}
  const modalProps={title:'Buy usage credits',onCancel:cancel,children:{props:{children:[{props:{children:'Original purchase disclosure'}},{type:selector,props:pickerProps}]}}}
  if(kind==='bundles'){purchase.child={type:bundles,memoizedProps:props,child:{type:modal,memoizedProps:modalProps,child:selectorFiber}}}
  if(kind==='quote'){
@@ -86,4 +87,9 @@ it('does not add a cancellation callback while the original payment is processin
 })
 it('rejects a credit branch replaced while rendering its disclosure',async()=>{
  const f=fixture('admin');f.beforeText(()=>{f.state.s='loading'});await expect(f.read()).rejects.toThrow('state changed while reading');expect(f.confirm).not.toHaveBeenCalled()
+})
+
+it('preserves no focused option in the original accessible selector while retaining explicit choice admission',async()=>{
+ const f=fixture('bundles',true),{snapshot}=await f.read();expect(claudeSettingsSnapshot.parse(snapshot).editor).toMatchObject({kind:'choice'});expect(snapshot.editor.consent.defaultFocusValue).toBeUndefined()
+ await f.act(snapshot,{action:'select',value:'p0'});expect(f.select).toHaveBeenCalledExactlyOnceWith('p0')
 })
