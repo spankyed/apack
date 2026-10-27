@@ -198,7 +198,11 @@ test('preserves populated history and retires a held upload when resume imports 
     if(popout&&!popout.isClosed())await popout.close()
   }
   const freshText='Continue the imported review after cancelling the old image upload.'
-  await composer.fill(freshText);await card.getByRole('button',{name:'Send',exact:true}).click()
+  // Closing the popout returns focus asynchronously; replace through ordinary editor keys.
+  await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
+  await composer.focus();await composer.press('Control+a');await composer.pressSequentially(freshText)
+  await expect(composer).toHaveText(freshText)
+  await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   const replacement=await context();expect(replacement.sessionId).toBe(sessionId);expect(replacement.threadId).not.toBe(threadId)
   const humans=(await originalRows()).filter((row:any)=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true)
