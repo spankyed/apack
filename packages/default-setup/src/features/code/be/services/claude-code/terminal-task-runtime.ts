@@ -1,6 +1,7 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&settled&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
+function nativeShellTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_bash'&&!task.elsewhere&&task.isBackgrounded===true).slice(0,256).map(task=>({id:task.id,name:String(task.description??task.command??'Background command').slice(0,256),status:task.status,canStop:task.status==='running'}));}
 const workflowControllerIds=new WeakMap();
 function nativeWorkflowWorker(task,event){
  if(task.status!=='running'||!['start','progress'].includes(event?.state)||typeof event.agentId!=='string')return;
@@ -65,9 +66,20 @@ async function nativeTaskControl(n,binding,request,abort,current){
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};
  }
- const matches=Object.values(registry.all()).filter(task=>task.type==='local_workflow'?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
+ const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash'].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
+ if(task.type==='local_bash'){
+  if(task.elsewhere||task.isBackgrounded!==true)throw Error('This shell is not a background command of this session');
+  if(!['inspect','stop'].includes(request.operation))throw Error('Background commands support inspection and Stop only');
+  if(request.operation==='stop'){
+   if(task.status!=='running')throw Error('Background command is no longer running');
+   await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};
+  }
+  const output=await n.taskOutput.X8e(task.id);current();
+  if(registry.get(task.id)!==task)throw Error('Background command changed while reading output; refresh its details');
+  return {details:{taskId:task.id,name:String(task.description??task.command??'Background command').slice(0,256),status:task.status,canInput:false,canMessage:false,shell:{command:String(task.command??'').slice(0,16384),commandTruncated:(task.command?.length??0)>16384,cwd:typeof task.cwd==='string'?task.cwd.slice(0,4096):undefined,output:n.taskOutputText.stripVTControlCharacters(output.content),totalBytes:output.bytesTotal,truncated:output.bytesRead<output.bytesTotal},messages:[],truncated:false}};
+ }
  if(task.type==='local_workflow'){
   if(request.operation==='pause_workflow'){
    if(task.status!=='running'||n.workflowTasks.UAe(task.id,registry)!==true)throw Error('Native Workflow pause refused');

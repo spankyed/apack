@@ -1,6 +1,6 @@
 import type { ComputedRef, InjectionKey } from 'vue'
 import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
-export interface ClaudeTaskIdentity { kind?: 'workflow'; canPause?: boolean; canResume?: boolean; canStop?: boolean; settled?: boolean; id: string; ownerId: string; sessionId: string }
+export interface ClaudeTaskIdentity { kind?: 'workflow' | 'shell'; canPause?: boolean; canResume?: boolean; canStop?: boolean; settled?: boolean; id: string; ownerId: string; sessionId: string }
 export const claudeTaskControls: InjectionKey<{
   foregroundAvailable: ComputedRef<boolean>
   ownerId: ComputedRef<string | undefined>

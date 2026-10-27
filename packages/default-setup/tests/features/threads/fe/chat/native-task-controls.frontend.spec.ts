@@ -80,3 +80,21 @@ it('preserves the complete attributed handback and warning as inert Agent output
  expect(report.querySelector('script,img')).toBeNull()
  expect(report.textContent).toContain('From the delegated Agent')
 })
+
+it('offers shell output and Stop without Agent reply or foreground controls', async () => {
+  const task = { id: 'shell', kind: 'shell' as const, canStop: true, ownerId: 'owner', sessionId: 'session', status: 'running' }
+  const state = ref<ClaudeTerminalTaskState>({ ownerId: 'owner', taskId: 'shell', revision: 1, operation: 'inspect', status: 'done', details: { taskId: 'shell', name: 'Check', status: 'running', canInput: false, canMessage: false, messages: [], truncated: false, shell: { command: 'check --all', commandTruncated: false, cwd: '/owned/project', output: '<script>literal output</script>', totalBytes: 12000, truncated: true } } })
+  const operate = vi.fn(), root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() { provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate }); return () => h(NativeTaskControls, { task }) } }); app.mount(root)
+  const buttons = () => [...root.querySelectorAll<HTMLButtonElement>('button')]
+  expect(root.textContent).not.toContain('Agent')
+  buttons().find(button => button.textContent === 'View output')!.click(); await nextTick()
+  expect(operate).toHaveBeenLastCalledWith(task, 'inspect')
+  const output = root.querySelector('[aria-label="Background command output"]')!
+  expect(output.textContent).toContain('check --all'); expect(output.textContent).toContain('<script>literal output</script>')
+  expect(output.querySelector('script')).toBeNull(); expect(root.querySelector('textarea')).toBeNull()
+  buttons().find(button => button.textContent === 'Stop command')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task, 'stop')
+  state.value = { ...state.value, status: 'pending', operation: 'stop' }; await nextTick()
+  expect(buttons().every(button => button.disabled)).toBe(true)
+})

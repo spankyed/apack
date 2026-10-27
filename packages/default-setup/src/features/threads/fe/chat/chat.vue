@@ -38,6 +38,12 @@
             <NativeTaskControls :task="task" />
           </div>
         </section>
+        <section v-if="!nativeTerminalActive && shellTasks.length" aria-label="Background commands" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
+          <div v-for="task in shellTasks" :key="task.id" class="py-1" :data-native-shell-id="task.id">
+            <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
+            <NativeTaskControls :task="task" />
+          </div>
+        </section>
         <p v-if="agentSelection" role="status" class="px-4 py-3 text-sm text-neutral-400">Opening Agent conversation…</p>
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
@@ -509,6 +515,7 @@ const statusLineCwd = computed(() => {
 })
 const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const workflowTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'workflow').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
+const shellTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'shell').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const agentPending = ref(false), agentReturning = ref(false)
 const agentScrollPositions = ref<Record<string, ClaudeAgentScrollPosition>>({})
 function saveAgentScrollPosition(target: ClaudeNativeAgentUiTarget, position: ClaudeAgentScrollPosition) { agentScrollPositions.value[agentDraftKey(target)] = position }

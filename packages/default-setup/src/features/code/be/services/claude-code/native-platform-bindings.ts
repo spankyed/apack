@@ -340,6 +340,7 @@ export const claudeNativeLinuxBindings: {
         "Ui": "Bi"
       }
     },
+    "chunk-nbvvw59m.js": { "module": "chunk-g7aqpczc.js", "exports": { "X8e": "W9e" } },
     "chunk-nmzacz4p.js": {
       "module": "chunk-re8gp6ef.js",
       "exports": {
