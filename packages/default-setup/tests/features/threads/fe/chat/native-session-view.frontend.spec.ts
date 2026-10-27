@@ -114,3 +114,23 @@ it('shows all native LSP choices in ordinary chat, retires the card and sends no
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
   expect(f.root.querySelector('[aria-label="Claude LSP recommendation"]')).toBeNull()
 })
+
+
+it('shows original shell plugin choices in chat and uses defer for Escape without an LSP-only action', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'hint', revision: 'revision', sessionId: 'session', kind: 'plugin_hint' as const, pluginName: 'Review', marketplaceName: 'Official', sourceCommand: '/usr/bin/printf', title: 'Plugin recommendation', paragraphs: ['The command suggests installing a plugin.'], choices: (['yes', 'no', 'disable'] as const).map(value => ({ value, label: value })) }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude plugin recommendation"]')!
+  expect(card.textContent).toContain('Review · Official')
+  const buttons = [...card.querySelectorAll<HTMLButtonElement>('.native-notice__actions button')]
+  expect(buttons.map(button => button.textContent)).toEqual(['yes', 'no', 'disable'])
+  for (const button of buttons) {
+    button.click()
+    expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'hint', revision: 'revision', sessionId: 'session', decision: button.textContent })
+  }
+  buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('no')
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude plugin recommendation"]')).toBeNull()
+})
