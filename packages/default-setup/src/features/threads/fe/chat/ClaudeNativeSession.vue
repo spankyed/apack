@@ -1,6 +1,6 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <h3>{{ view.state.notice.title }}</h3>
         <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">

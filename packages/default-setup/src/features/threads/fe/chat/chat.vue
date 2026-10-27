@@ -1071,6 +1071,10 @@ useNativeTranscriptViewport({
 
 <style scoped>
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
+/* Keep pending native decisions beside useful conversation space in short windows. */
+@media (max-height: 720px) {
+  .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
+}
 .native-chat-shell:has([data-native-command-panel]),
 .native-chat-shell:has([data-testid="native-mcp-form"]),
 .native-chat-shell:has([data-testid="native-mcp-url"]) { min-height: calc(100vh - 3rem); }

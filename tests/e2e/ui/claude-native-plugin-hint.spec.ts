@@ -120,7 +120,11 @@ test('preserves original plugin recommendation choices and everyday composing', 
     if (transcriptReading) {
       try { await expect.poll(fullyReadable, { timeout: 3000 }).toBe(true) }
       catch (error) { await writeFile(join(workspace!, 'native-transcript-resize-failure.json'), JSON.stringify({ width, height, geometry: await replyGeometry(), retained, context: await context() }, null, 2)); await capture('reading-failure', width, height); throw error }
-      readingSamples.push({ width, height, geometry: await replyGeometry() })
+      if (width === 680) {
+        await expect.poll(async () => (await transcript.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(100)
+        await expect(transcript.locator('[data-native-placement-band="TurnDuration"]').last()).toBeInViewport({ ratio: 1 })
+      }
+      readingSamples.push({ width, height, geometry: await replyGeometry(), duration: await transcript.locator('[data-native-placement-band="TurnDuration"]').last().boundingBox() })
     }
     for (const choice of shown.choices) await expect(notice.getByRole('button', { name: choice.label, exact: true })).toBeInViewport({ ratio: 1 })
     await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 })
