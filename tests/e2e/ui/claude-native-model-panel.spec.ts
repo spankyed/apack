@@ -110,7 +110,13 @@ test('chooses models through original hooks, decisions and same-session recovery
     const direct=card.getByRole('button',{name:'Choose Claude model',exact:true})
     if(await direct.isVisible())await direct.click()
     else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Choose Claude model',exact:true}).click()}
-    await expect(panel).toBeVisible();await expect(panel.getByRole('heading',{name:'Select model',exact:true})).toBeVisible()
+    await expect(panel).toBeVisible()
+    try { await expect(panel.getByRole('heading',{name:'Select model',exact:true})).toBeVisible() }
+    catch(error) {
+      await writeFile(join(workspace!,'native-model-panel-failure.json'),JSON.stringify({panel:await panel.innerText(),native:await context()}))
+      await appPage.screenshot({path:join(workspace!,'native-model-panel-failure.png')})
+      throw error
+    }
     await expect(panel.locator('textarea.xterm-helper-textarea')).toHaveCount(0)
   }
   async function capture(stage:string,reading:()=>import('@playwright/test').Locator,controls:()=>import('@playwright/test').Locator[]){
