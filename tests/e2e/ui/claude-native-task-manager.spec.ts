@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const desktopShell=process.env.CLAUDE_RESEARCH_SHELL_DESKTOP==='1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
@@ -125,6 +126,28 @@ test('opens original task management from the default composer and stops its bac
   expect((await context()).native.state.status).toBe('live');expect((await context()).native.state.nativePid).toBe(boundNativePid)
   const originalDocument=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON()),originalSelection=await composer.evaluate(element=>(element as any).editor.state.selection.toJSON())
   await appPage.setViewportSize({width:1100,height:900})
+  let managerScreens:any[]=[],managerStopKey:string
+  if(desktopShell){
+    const region=appPage.getByRole('region',{name:'Background commands',exact:true})
+    const shell=region.locator('[data-native-shell-id="'+backgroundReceipt.toolUseResult.backgroundTaskId+'"]')
+    await expect(shell).toBeVisible()
+    await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeEnabled()
+    await shell.getByRole('button',{name:'View output',exact:true}).click()
+    const output=shell.getByRole('region',{name:'Background command output',exact:true})
+    await expect(output).toContainText('Owned release review is waiting.')
+    for(const width of [1100,680]){
+      await appPage.setViewportSize({width,height:width===680?600:900})
+      await expect(shell.getByRole('button',{name:'Stop command',exact:true})).toBeInViewport({ratio:1})
+      await expect(output.getByRole('button',{name:'Refresh output',exact:true})).toBeInViewport({ratio:1})
+      await output.getByRole('button',{name:'Refresh output',exact:true}).click()
+      await expect(output).toContainText('Owned release review is waiting.')
+      expect((await context()).turns).toBe(before.turns)
+      expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(originalDocument)
+      await capture('desktop-shell',width);managerScreens.push({width,text:await output.innerText()})
+    }
+    managerStopKey='desktop-stop'
+    await shell.getByRole('button',{name:'Stop command',exact:true}).click()
+  }else{
   const tasks=card.getByRole('button',{name:'Claude tasks',exact:true})
   if(await tasks.isVisible())await tasks.click()
   else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude tasks',exact:true}).click()}
@@ -138,7 +161,7 @@ test('opens original task management from the default composer and stops its bac
   }
   await expect.poll(taskScreen).toContain('Shell details')
   await expect.poll(taskScreen).toMatch(/native-bash-wait\.py|Write disposable synthetic fixture/)
-  const managerScreens:any[]=[]
+  managerScreens=[]
   for(const width of [1100,680]){await capture('manager',width);managerScreens.push({width,text:await taskScreen()})}
   const keyboard=taskPanel.locator('textarea.xterm-helper-textarea')
   const stopHint=/(?:\[)?(ctrl\+[ksx]|[ksx])(?:\])?\s+(?:to\s+)?(?:kill|stop)/i
@@ -147,7 +170,8 @@ test('opens original task management from the default composer and stops its bac
     await keyboard.press('Enter');await expect.poll(taskScreen).toMatch(stopHint);text=await taskScreen()
   }
   const stop=text.match(stopHint);expect(stop,'Original task manager must display its Stop binding: '+text).toBeTruthy()
-  const managerStopKey=stop![1].replace(/^ctrl/i,'Control');await keyboard.press(managerStopKey)
+  managerStopKey=stop![1].replace(/^ctrl/i,'Control');await keyboard.press(managerStopKey)
+  }
   await expect.poll(alive,{timeout:5000}).toBe(false);const childRetiredAt=Date.now()
   await writeFile(join(workspace!,'native-bash-release'),'released after original task-manager Stop');expect(await exists()).toBe(false)
   if(await taskPanel.isVisible())await taskPanel.getByRole('button',{name:'Close panel',exact:true}).click()
@@ -174,6 +198,6 @@ test('opens original task management from the default composer and stops its bac
   await composer.fill('Continue this saved review after cancelling active execution.');await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(await alive()).toBe(false);expect(await exists()).toBe(false);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-task-manager-proof.json'),JSON.stringify({sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,taskStoppedIndependently:true,managerScreens,managerStopKey,originalDocument,originalSelection,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeTaskManager:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-task-manager-proof.json'),JSON.stringify({desktopShell,sessionId,boundNativePid,child,draft,stoppedAt,childRetiredAt,childExited:true,sideEffectAbsent:true,ownerRetained:true,taskStoppedIndependently:true,managerScreens,managerStopKey,originalDocument,originalSelection,backgroundReceipt,continuedNativePid:continued.native.state.nativePid,continuedTurns:continued.turns,captures,beforeTurns:before.turns,afterStopTurns:after.turns},null,2))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeTaskManager:true,nativeShellDesktop:desktopShell,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })

@@ -1189,6 +1189,14 @@ interface ClaudeNativeSubmissionReceipt {
 }
 
 interface ClaudeNativeTaskDetails {
+    shell?: {
+        command: string;
+        commandTruncated: boolean;
+        cwd?: string;
+        output: string;
+        totalBytes: number;
+        truncated: boolean;
+    };
     handback?: ClaudeAgentHandback;
     workflow?: {
         settled: boolean;
@@ -1419,7 +1427,7 @@ interface ClaudeNativeTerminalState {
 
 /** Native task ids and terminal owners are independent of apack thread ids. */
 interface ClaudeNativeTerminalTask {
-    kind?: 'workflow';
+    kind?: 'shell' | 'workflow';
     settled?: boolean;
     canPause?: boolean;
     canResume?: boolean;
