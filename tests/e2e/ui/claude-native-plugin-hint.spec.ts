@@ -156,7 +156,8 @@ test('preserves original plugin recommendation choices and everyday composing', 
     await expect.poll(async () => Math.round(await transcript.evaluate(element => element.scrollTop))).toBe(0)
     readingAnchor = await anchor(); expect(readingAnchor).toBeTruthy()
     await appPage.setViewportSize({ width: 1100, height: 900 })
-    await expect.poll(anchor).toEqual(readingAnchor)
+    // At the scroll boundary, reflow above the first row cannot be offset by negative scrolling.
+    await expect.poll(async () => ({ id: (await anchor())?.id, top: await transcript.evaluate(element => element.scrollTop) })).toEqual({ id: readingAnchor!.id, top: 0 })
   }
   const selected = shown.choices.find((choice: any) => choice.value === decision)
   if (decision === 'timeout') { await notice.getByRole('button', { name: 'About this plugin', exact: true }).click(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toBeVisible(); await expect(notice).toBeHidden({ timeout: 40000 }) }
@@ -164,7 +165,7 @@ test('preserves original plugin recommendation choices and everyday composing', 
   else await notice.getByRole('button', { name: selected.label, exact: true }).click()
   await expect(notice).toBeHidden(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toHaveCount(0)
   if (decision === 'timeout') for (const [width, height] of [[1100, 900], [680, 600]]) { await appPage.setViewportSize({ width, height }); await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 }); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 }); await capture('expired', width, height) }
-  if (transcriptReading) { await expect.poll(anchor).toEqual(readingAnchor); await writeFile(join(workspace!, 'native-transcript-resize-app.json'), JSON.stringify({ readingSamples, readingAnchor, afterRetirement: await anchor(), retained, sessionId, boundNativePid }, null, 2)) }
+  if (transcriptReading) { await expect.poll(async () => ({ id: (await anchor())?.id, top: await transcript.evaluate(element => element.scrollTop) })).toEqual({ id: readingAnchor!.id, top: 0 }); await writeFile(join(workspace!, 'native-transcript-resize-app.json'), JSON.stringify({ readingSamples, readingAnchor, afterRetirement: await anchor(), retained, sessionId, boundNativePid }, null, 2)) }
   const settings = () => readFile(join(workspace!, '.claude/settings.json'), 'utf8').then(JSON.parse)
   if (decision === 'yes') await expect.poll(async () => (await settings()).enabledPlugins?.['document-skills@anthropic-agent-skills'], { timeout: 15000 }).toBe(true)
   await composer.focus()
