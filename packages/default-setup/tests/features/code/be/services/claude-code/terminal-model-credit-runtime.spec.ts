@@ -48,7 +48,7 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
   nativeGenericPermissionText:async(_n:unknown,node:unknown)=>{beforeText?.();return render(node)},
  }) as {nativeSettings(n:unknown,request:unknown,abort:AbortController):Promise<{snapshot:any}>}
  const n={gate:{_Jo:vi.fn(async()=>{})},themeRoots:{ai:()=>({get:()=>({container:{current:owner}})})}},read=()=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'read'},new AbortController()),act=(snapshot:any,command:unknown)=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'editor',revision:snapshot.revision,editor_revision:snapshot.editor.revision,command},new AbortController())
- return {read,act,confirm,cancel,change,submit,select,options,state,cache,control,rotateCredit:(replacement=state)=>{const previous=owner.child,current={...previous,memoizedState:{memoizedState:replacement,next:null},alternate:previous};previous.alternate=current;previous.memoizedState=null;owner.child=current},setRefused:(next:boolean)=>{refused=next},retire:()=>{active=false},afterChange:(fn:()=>void)=>{afterChange=fn},beforeText:(fn:()=>void)=>{beforeText=fn}}
+ return {read,act,confirm,cancel,change,submit,select,options,state,cache,control,renderInput,replaceForm:()=>{purchase.child={...control}},rotateCredit:(replacement=state)=>{const previous=owner.child,current={...previous,memoizedState:{memoizedState:replacement,next:null},alternate:previous};previous.alternate=current;previous.memoizedState=null;owner.child=current},setRefused:(next:boolean)=>{refused=next},retire:()=>{active=false},afterChange:(fn:()=>void)=>{afterChange=fn},beforeText:(fn:()=>void)=>{beforeText=fn}}
 }
 
 it('acknowledges the original amount draft before native validation and never substitutes a charge callback',async()=>{
@@ -86,8 +86,8 @@ it('does not add a cancellation callback while the original payment is processin
  const f=fixture('processing'),{snapshot}=await f.read();expect(snapshot).toMatchObject({dismissible:false,refreshPending:true,editor:{description:'Processing payment…'}})
  await expect(f.act(snapshot,{action:'cancel'})).rejects.toThrow('unavailable');expect(f.cancel).not.toHaveBeenCalled()
 })
-it('rejects a credit branch replaced while rendering its disclosure',async()=>{
- const f=fixture('admin');f.beforeText(()=>{f.state.s='loading'});await expect(f.read()).rejects.toThrow('state changed while reading');expect(f.confirm).not.toHaveBeenCalled()
+it('rejects a replacement credit branch without matching mounted controls',async()=>{
+ const f=fixture('admin');f.beforeText(()=>{f.state.s='loading'});await expect(f.read()).rejects.toThrow('Native credit progress message changed');expect(f.confirm).not.toHaveBeenCalled()
 })
 
 it('preserves no focused option in the original accessible selector while retaining explicit choice admission',async()=>{
@@ -117,8 +117,26 @@ it('follows the mounted credit parent after React commits its alternate during d
  const after=await f.act(snapshot,{action:'change',formId:snapshot.editor.live.id,key:'answer',value:'100'})
  expect(after.snapshot.editor.fields[0].value).toBe('100');expect(f.submit).not.toHaveBeenCalled()
 })
-it('rejects an alternate credit parent whose native state actually changed',async()=>{
+it('rejects an alternate credit state whose mounted controls no longer match',async()=>{
  const f=fixture('amount');let rotated=false
  f.beforeText(()=>{if(!rotated){rotated=true;f.rotateCredit({s:'loading'})}})
- await expect(f.read()).rejects.toThrow('state changed while reading');expect(f.change).not.toHaveBeenCalled();expect(f.submit).not.toHaveBeenCalled()
+ await expect(f.read()).rejects.toThrow('Native credit progress message changed');expect(f.change).not.toHaveBeenCalled();expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('rereads a credit disclosure that rerenders during draft acknowledgement without repeating the callback',async()=>{
+ const f=fixture('amount'),{snapshot}=await f.read();let committed=false
+ f.afterChange(()=>f.beforeText(()=>{if(!committed){committed=true;f.renderInput()}}))
+ const after=await f.act(snapshot,{action:'change',formId:snapshot.editor.live.id,key:'answer',value:'100'})
+ expect(committed).toBe(true);expect(after.snapshot.editor.fields[0].value).toBe('100');expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled()
+})
+
+it('bounds continuously changing credit disclosure reads and never repeats a draft or submits',async()=>{
+ const f=fixture('amount'),{snapshot}=await f.read();f.afterChange(()=>f.beforeText(f.renderInput))
+ await expect(f.act(snapshot,{action:'change',formId:snapshot.editor.live.id,key:'answer',value:'100'})).rejects.toThrow('changed while reading')
+ expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled()
+})
+it('refuses submission when the native form is replaced during draft acknowledgement',async()=>{
+ const f=fixture('amount'),{snapshot}=await f.read();f.afterChange(f.replaceForm)
+ await expect(f.act(snapshot,{action:'save',values:{answer:'100'}})).rejects.toThrow('form replaced')
+ expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled();expect(f.confirm).not.toHaveBeenCalled()
 })

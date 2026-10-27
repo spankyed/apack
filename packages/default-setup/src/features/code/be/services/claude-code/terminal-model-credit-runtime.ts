@@ -123,6 +123,9 @@ async function readNativeModelCredits(n,entry,match,text,signal){
  }else throw Error('Native model credit state is unsupported');
  return {editor,controls,cancel,confirm,form,refuseInput,refreshPending,dismissible:typeof cancel==='function',current(owner){if(nativeModelCreditState(currentNativeSettingsFiber(owner,match.fiber))!==state||state.s!==stateKind)throw Error('Native credit state changed while reading');for(const anchor of anchors){const live=currentNativeSettingsFiber(owner,anchor.fiber);if(live.memoizedProps!==anchor.props)throw Error('Native credit control changed while reading');}for(const check of checks)check();}};
 }
+function nativeModelReadRetryable(error){
+ return ['Native credit control changed while reading','Native credit state changed while reading','Native credit form changed while reading','Native credit focus changed while reading','Native accessible credit focus changed while reading','Native Settings editor changed while reading'].includes(error?.message);
+}
 async function changeNativeModelCreditDraft(n,entry,before,formId,key,value,signal){
  if(key!=='answer'||typeof value!=='string'||value.length>16384||before.credit?.form?.id!==formId)throw Error('Native credit form value is invalid');
  signal.throwIfAborted();entry.current();const owner=nativeModelPanelFrame(n,entry);
@@ -130,7 +133,8 @@ async function changeNativeModelCreditDraft(n,entry,before,formId,key,value,sign
  const originalForm=before.credit.form;if(originalForm.input.value===value)return before;
  await awaitNativeSettingsReading(originalForm.input.onChange(value),signal);const until=Date.now()+1500;
  while(true){
-  signal.throwIfAborted();entry.current();const current=await readNativeModelPanel(n,entry,signal);
+  signal.throwIfAborted();entry.current();let current;
+  try{current=await readNativeModelPanel(n,entry,signal);}catch(error){if(Date.now()>=until||!nativeModelReadRetryable(error))throw error;await new Promise(resolve=>setTimeout(resolve,20));continue;}
   if(!sameNativeSettingsFiber(current.owner,before.owner)||current.credit?.form?.id!==formId||current.credit.form.kind!==originalForm.kind||!sameNativeSettingsFiber(current.credit.form.fiber,originalForm.fiber))throw Error('Native credit form replaced while editing');
   if(current.credit.form.input.value===value)return current;
   if(Date.now()>=until)throw Error('Native credit form did not acknowledge its draft');

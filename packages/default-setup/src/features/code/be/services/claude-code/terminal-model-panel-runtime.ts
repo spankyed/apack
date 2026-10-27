@@ -74,7 +74,7 @@ async function nativeModelPanel(n,entry,request,abort){
 }
 async function nativeModelPanelOperation(n,entry,request,abort){
  let before;const mountedUntil=Date.now()+1500;
- while(!before){try{before=await readNativeModelPanel(n,entry,abort.signal);}catch(error){abort.signal.throwIfAborted();entry.current();if(entry.closed||Date.now()>=mountedUntil||!String(error.message).includes('not uniquely mounted')&&!String(error.message).includes('not ready or supported'))throw error;await new Promise(resolve=>setTimeout(resolve,20));}}
+ while(!before){try{before=await readNativeModelPanel(n,entry,abort.signal);}catch(error){abort.signal.throwIfAborted();entry.current();if(entry.closed||Date.now()>=mountedUntil||!String(error.message).includes('not uniquely mounted')&&!String(error.message).includes('not ready or supported')&&!nativeModelReadRetryable(error))throw error;await new Promise(resolve=>setTimeout(resolve,20));}}
  if(request.operation==='read')return {snapshot:before.snapshot};
  if(request.operation!=='editor'||request.revision!==before.snapshot.revision||request.editor_revision!==before.snapshot.editor.revision)throw Error('Native model changed; refresh before editing');
  const command=request.command,editor=before.snapshot.editor;let callback,args=[];
