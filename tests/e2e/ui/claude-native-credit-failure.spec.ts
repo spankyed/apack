@@ -111,8 +111,9 @@ test('recovers the original failed bundle payment without credit or a model swit
     await expect.poll(async()=>(await ledger()).requests.some((row:any)=>row.method==='GET'&&row.path.endsWith('/prepaid/commits/owned-purchase-1')&&row.waitingForRelease===true)).toBe(true);await record('payment-pending');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).purchases).toBe(1)
     await capture('pending',pending,[panel.getByRole('button',{name:'Close',exact:true})]);await writeFile(join(workspace!,'native-credit-payment-release'),'release-owned-payment\n')
   }
-  const failure=editor.getByText(pendingInvoice?'Payment failed':scenario==='payment-action'?/^Your card requires additional verification — this purchase was not completed[.] Try again at https:\/\//:/^Purchase failed(?::|$)/,{exact:pendingInvoice});await expect(failure).toBeVisible()
-  const errorMessage=await failure.innerText()
+  const failure=editor.locator('[data-native-settings-editor-body] > p').filter({hasText:pendingInvoice?/^Payment failed$/:scenario==='payment-action'?/^Your card requires additional verification — this purchase was not completed[.]/:/^Purchase failed(?::|$)/});await expect(failure).toBeVisible()
+  const errorMessage=(await failure.innerText()).replace(/\s+/g,' ').trim()
+  if(scenario==='payment-action')expect(errorMessage).toMatch(/^Your card requires additional verification — this purchase was not completed[.] Try again at https:\/\/claude[.]ai\/settings\/usage/)
   const cancel=panel.locator('[data-native-settings-option="cancel"]');await expect(cancel).toBeVisible();await expect(cancel).toBeFocused()
   await expect(panel.locator('[data-native-settings-option="confirm"]')).toContainText('open https://')
   await record('payment-failed');expect(receipts.at(-1).balance).toBe(0);expect(receipts.at(-1).paymentStatus).toBe(pendingInvoice?'failed':scenario==='payment-action'?'action_needed':'error')
