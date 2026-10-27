@@ -8,7 +8,16 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 let terminalScreen: import('@xterm/xterm').Terminal | undefined
-test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage,electronApp},info) => {
+  terminalScreen?.dispose(); terminalScreen=undefined
+  if(workspace && info.status!==info.expectedStatus) {
+    const state=await appPage.evaluate(()=>(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeUiViews)
+    await writeFile(join(workspace,'native-model-panel-final-failure.json'),JSON.stringify({text:await appPage.locator('body').innerText(),views:state}))
+    const win=await electronApp.browserWindow(appPage)
+    const image=await win.evaluate(async win=>(await win.webContents.capturePage()).toPNG().toString('base64'))
+    await writeFile(join(workspace,'native-model-panel-final-failure.png'),Buffer.from(image,'base64'))
+  }
+})
 test('chooses models through original hooks, decisions and same-session recovery', async ({app,appPage,electronApp},testInfo)=>{
   test.setTimeout(150000)
   expect(process.env.CLAUDE_RESEARCH_NATIVE_MODEL_PANEL).toBe('1')
