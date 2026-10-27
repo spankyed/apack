@@ -252,6 +252,7 @@ import ChatMessage from './message.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
+import { nativeTranscriptLatestTop, useNativeTranscriptViewport } from './native-transcript-viewport.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeMainCommand from './NativeMainCommand.vue'
 import NativeMcpForm from './NativeMcpForm.vue'
@@ -757,7 +758,7 @@ const dontAskAgain = ref(false)
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   const el = messagesContainer.value
   if (!el) return
-  el.scrollTo({ top: el.scrollHeight, behavior })
+  el.scrollTo({ top: currentThread.value?.context?.claudeCode ? nativeTranscriptLatestTop(el) : el.scrollHeight, behavior })
 }
 
 /** Instant scroll + double rAF to catch async content (Tiptap, images). */
@@ -1061,6 +1062,11 @@ watch(messagesContent, (el, _, onCleanup) => {
   observer.observe(el)
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
+useNativeTranscriptViewport({
+  viewport: messagesContainer, content: messagesContent,
+  owner: () => currentThread.value?.context?.claudeCode?.sessionId ? `${currentThread.value.id}:${currentThread.value.context.claudeCode.sessionId}` : undefined,
+  active: () => !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value && !mainCommandView.value && !pendingNativeQuestion.value && !pendingNativePlan.value,
+})
 </script>
 
 <style scoped>
