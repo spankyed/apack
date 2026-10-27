@@ -1,5 +1,5 @@
 <template>
-  <NativeSettingsPanel v-if="state?.status === 'panel' && state.panel && ['config','model'].includes(state.panel.commandName)" :key="state.panel.id" :subject="state.panel.commandName === 'model' ? 'model' : 'settings'" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
+  <NativeSettingsPanel v-if="state?.status === 'panel' && state.panel && ['config','model','status','usage'].includes(state.panel.commandName)" :key="state.panel.id" :subject="state.panel.commandName === 'model' ? 'model' : 'settings'" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
   <section v-else-if="state?.status === 'command_output' && state.output && !dismissed" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
