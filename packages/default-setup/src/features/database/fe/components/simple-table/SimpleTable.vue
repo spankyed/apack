@@ -25,6 +25,12 @@
           @delete="handleDeleteEntity"
         />
 
+        <!-- A query's explain(): its plan's stages -->
+        <ExplainDisplay
+          v-else-if="isExplanation(queryResult)"
+          :explanation="queryResult"
+        />
+
         <!-- Single Object -->
         <JsonDisplay
           v-else-if="resultType === 'object'"
@@ -61,6 +67,8 @@ import ResultStates from './components/ResultStates.vue';
 import PrimitivesTable from './components/PrimitivesTable.vue';
 import ObjectsTable from './components/ObjectsTable.vue';
 import JsonDisplay from './components/JsonDisplay.vue';
+import ExplainDisplay from './components/ExplainDisplay.vue';
+import { isExplanation } from './composables/explanation.ts';
 import PrimitiveDisplay from './components/PrimitiveDisplay.vue';
 import type { DatabaseState } from '../../state.ts'
 

@@ -16,6 +16,12 @@ export const queryExamples: QueryExample[] = [
     query: `return query(EARS.Entity.Thread).where('status', 'active').limit(5).pickAll();`
   },
 
+  {
+    title: 'Explain a Query',
+    description: 'How the database found a query\'s answer: the index each stage read, what it visited and kept',
+    query: `return query(EARS.Entity.Thread).where('pinned', true).limit(20).explain();`
+  },
+
   // Relation Queries
   {
     title: 'Thread Messages',
