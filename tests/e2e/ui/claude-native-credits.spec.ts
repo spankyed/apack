@@ -145,7 +145,7 @@ test('uses original credit purchase previews, cancellation and typed consent', a
   await expect.poll(async()=>(await ledger()).purchases.length).toBe(1)
   await expect.poll(async()=>(await ledger()).enabled).toBe(true)
   const switchModel=panel.getByRole('button',{name:/^Yes, switch to Fable/})
-  await expect(switchModel).toBeVisible();await expect(panel.getByText('Your next response will be slower and use more tokens',{exact:true})).toBeVisible()
+  await expect(switchModel).toBeVisible();await expect(panel.locator('[aria-label="Claude Code setting editor"]')).toContainText('Your next response will be slower and use more tokens')
   await capture('model-confirmation',switchModel,[switchModel]);await switchModel.click()
   await expect(panel).toBeHidden();await expect(composer).toHaveText(draft);await expect.poll(selection).toEqual(savedSelection)
   await record('purchased');expect(receipts.at(-1).balance).toBe(7500)
