@@ -81,7 +81,7 @@ test('preserves original plugin recommendation choices and everyday composing', 
 
 
   const { pluginHint: decision } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
-  expect(['yes', 'no', 'disable']).toContain(decision)
+  expect(['yes', 'no', 'disable', 'timeout']).toContain(decision)
   const nativeWindow = await electronApp.browserWindow(appPage), captures: string[] = []
   await nativeWindow.evaluate(window => { window.show(); window.focus() }); await appPage.bringToFront()
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially('Run the release check and report its result.')
@@ -134,15 +134,17 @@ test('preserves original plugin recommendation choices and everyday composing', 
     expect(await composer.evaluate(element => ({ document: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON() }))).toEqual(retained)
   }
   const selected = shown.choices.find((choice: any) => choice.value === decision)
-  if (decision === 'no') { const button = notice.getByRole('button', { name: selected.label, exact: true }); await button.focus(); await button.press('Escape') }
+  if (decision === 'timeout') { await notice.getByRole('button', { name: 'About this plugin', exact: true }).click(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toBeVisible(); await expect(notice).toBeHidden({ timeout: 40000 }) }
+  else if (decision === 'no') { const button = notice.getByRole('button', { name: selected.label, exact: true }); await button.focus(); await button.press('Escape') }
   else await notice.getByRole('button', { name: selected.label, exact: true }).click()
   await expect(notice).toBeHidden(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toHaveCount(0)
+  if (decision === 'timeout') for (const [width, height] of [[1100, 900], [680, 600]]) { await appPage.setViewportSize({ width, height }); await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 }); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 }); await capture('expired', width, height) }
   const settings = () => readFile(join(workspace!, '.claude/settings.json'), 'utf8').then(JSON.parse)
   if (decision === 'yes') await expect.poll(async () => (await settings()).enabledPlugins?.['document-skills@anthropic-agent-skills'], { timeout: 15000 }).toBe(true)
   await composer.focus()
   expect(await composer.evaluate(element => ({ document: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON() }))).toEqual(retained)
   expect((await context()).native.state.nativePid).toBe(boundNativePid); expect((await context()).sessionId).toBe(sessionId)
-  await writeFile(join(workspace!, 'native-plugin-hint-app.json'), JSON.stringify({ decision, shown, captures, retained, draftRetained: true, selectionRetained: true, sessionId, boundNativePid, originalEscapeDefer: decision === 'no' }, null, 2))
+  await writeFile(join(workspace!, 'native-plugin-hint-app.json'), JSON.stringify({ decision, shown, captures, retained, draftRetained: true, selectionRetained: true, sessionId, boundNativePid, originalEscapeDefer: decision === 'no', originalTimeout: decision === 'timeout' }, null, 2))
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   await section.getByRole('button', { name: 'Stop session', exact: true }).click()
   await expect.poll(async () => (await context()).native.state.status).toMatch(/^(exited|error)$/)
