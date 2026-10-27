@@ -2,8 +2,9 @@
   <PopoverRoot v-model:open="open" @update:open="opened">
     <PopoverTrigger as-child><button ref="trigger" type="button" :disabled="pending" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40">Workflow details</button></PopoverTrigger>
     <PopoverPortal>
-      <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" aria-label="Workflow details" @keydown.esc="escape" :style="{ maxHeight: previewHeight + 'px' }" class="z-50 w-[min(36rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-xl border border-white/15 bg-neutral-900 p-4 text-xs text-neutral-300 shadow-2xl outline-none">
-        <header class="sticky top-0 z-10 -mx-4 -mt-4 mb-3 border-b border-white/10 bg-neutral-900 px-4 py-3 flex items-start justify-between gap-4"><div><h3 class="m-0 text-sm font-medium text-neutral-100">{{ details?.name ?? 'Workflow' }}</h3><p class="mt-1 text-neutral-400">{{ details?.status === 'killed' ? 'Stopped' : details?.status ?? status }}</p></div><PopoverClose as-child><button type="button" aria-label="Close Workflow details" class="rounded px-2 py-1 text-neutral-400 hover:bg-white/5">Close</button></PopoverClose></header>
+      <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" aria-label="Workflow details" @keydown.esc="escape" :style="{ maxHeight: previewHeight + 'px' }" class="z-50 w-[min(36rem,calc(100vw-2rem))] flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/15 bg-neutral-900 text-xs text-neutral-300 shadow-2xl outline-none">
+        <header class="shrink-0 border-b border-white/10 bg-neutral-900 px-4 py-3 flex items-start justify-between gap-4"><div><h3 class="m-0 text-sm font-medium text-neutral-100">{{ details?.name ?? 'Workflow' }}</h3><p class="mt-1 text-neutral-400">{{ details?.status === 'killed' ? 'Stopped' : details?.status ?? status }}</p></div><PopoverClose as-child><button type="button" aria-label="Close Workflow details" class="rounded px-2 py-1 text-neutral-400 hover:bg-white/5">Close</button></PopoverClose></header>
+        <section aria-label="Workflow detail content" tabindex="0" class="min-h-0 overflow-y-auto overscroll-contain p-4">
         <p v-if="problem" role="alert" class="text-red-300">{{ problem }}</p>
         <p v-if="!details" role="status">Loading Workflow details…</p>
         <template v-else>
@@ -17,6 +18,7 @@
           <details class="mb-3 text-neutral-500"><summary>Run identity</summary><dl class="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1"><dt>Task</dt><dd class="m-0 break-all">{{ details.taskId }}</dd><dt>Workflow</dt><dd class="m-0 break-all">{{ details.workflow?.name }}</dd><dt>Run</dt><dd class="m-0 break-all">{{ details.workflow?.runId }}</dd></dl></details>
           <button type="button" :disabled="pending" class="text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="emit('inspect')">{{ pending ? 'Refreshing…' : 'Refresh details' }}</button>
         </template>
+        </section>
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>
