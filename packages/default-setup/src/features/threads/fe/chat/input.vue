@@ -64,11 +64,7 @@
             @pause="emit('pause')"
             @open-revert-menu="openRevertMenu"
           />
-          <div v-if="nativeCompletions.length && !hostPopupActive" role="group" aria-label="Claude suggestions" class="max-h-40 overflow-y-auto border-t border-neutral-700" @keydown="navigateNativeCompletions">
-            <button v-for="(row, index) in nativeCompletions" :key="index" type="button" class="block w-full px-3 py-1 text-left text-sm text-neutral-300 hover:bg-neutral-700 focus-visible:bg-neutral-700 focus-visible:outline focus-visible:outline-blue-400" @mousedown.prevent @click="promptEditor?.selectCompletion(index, row.offerId)">
-              <span>{{ row.label ?? row.text }}</span><span v-if="row.description" class="ml-2 text-xs text-neutral-500">{{ row.description }}</span>
-            </button>
-          </div>
+          <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
           <p v-if="submissionProblem || nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ submissionProblem || nativePromptProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
@@ -227,6 +223,7 @@ import StatusLine from './StatusLine.vue'
 import NativeComposerPlacements from './NativeComposerPlacements.vue'
 import NativeUiNotices from './NativeUiNotices.vue'
 import { setEditorCompletionOffer } from '@apackdev/sdk/fe'
+import NativePromptCompletions from './NativePromptCompletions.vue'
 import { referenceSuggestionKey } from '../../../../extensions/tiptap/reference-suggestion.ts'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
@@ -464,15 +461,6 @@ watch(() => props.nativePrompt?.hostRequest, request => {
 })
 watch(() => props.nativePrompt?.reply, reply => { if (reply) promptEditor?.receive(reply) })
 watch(() => props.nativePrompt?.completions, reply => { if (reply) promptEditor?.receiveCompletions(reply) })
-function navigateNativeCompletions(event: KeyboardEvent) {
-  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); promptEditor?.dismissCompletions(); tiptapRef.value?.editor?.view.focus(); return }
-  if (event.key === 'Tab') { event.stopPropagation(); return }
-  if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
-  const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll('button'))
-  const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-  event.preventDefault(); event.stopPropagation(); buttons[next]?.focus()
-}
 onUnmounted(() => promptEditor?.dispose())
 
 

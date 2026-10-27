@@ -34,7 +34,7 @@ vi.mock('#features/threads/fe/chat/ModePhaseSelector.vue', () => ({ default: { r
 vi.mock('#features/threads/fe/chat/FileBlock.vue', () => ({ default: { render: () => null } }))
 vi.mock('#features/threads/fe/chat/ImageThumbnail.vue', () => ({ default: { render: () => null } }))
 
-beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime({ application: { getSnapshot: surface.getSnapshot, system: { get: () => surface }, subscribe: () => ({ unsubscribe() {} }) } as never }); localStorage.clear() })
+beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime({ application: { getSnapshot: surface.getSnapshot, system: { get: () => surface }, subscribe: () => ({ unsubscribe() {} }) } as never }); localStorage.clear() })
 afterEach(() => { vi.useRealTimers(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })

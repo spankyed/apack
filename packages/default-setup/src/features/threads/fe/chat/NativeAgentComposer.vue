@@ -4,9 +4,7 @@
     <StatusLine class="shrink-0" @tools-expanded="toolsExpanded = $event" :native-status="statusText" :native-ui="ui" :native-focus="focus" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)" @scroll="emit('scroll', $event)" @focus-report="emit('focus-report', $event)" @return-focus="editorRef?.editor?.commands.focus()" />
     <div class="native-agent-draft-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain" data-native-agent-draft-viewport>
     <TiptapEditor class="shrink-0" ref="editorRef" mode="input" variant="chat" :disable-images="true" :model-value="draft" :disabled="disabled" placeholder="Message this Agent" editor-class="native-agent-editor min-h-20 px-4 py-3 text-sm leading-6 outline-none" @update:model-value="updateDraft" @submit="submit" />
-    <div v-if="offers.length" role="group" aria-label="Claude suggestions" class="max-h-32 overflow-y-auto border-t border-white/10">
-      <button v-for="(row, index) in offers" :key="index" type="button" class="block w-full px-4 py-2 text-left text-xs text-neutral-300 hover:bg-white/5" @mousedown.prevent @click="bridge?.selectCompletion(index, row.offerId)">{{ row.label ?? row.text }}</button>
-    </div>
+    <NativePromptCompletions :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
     <p v-if="problem || nativeProblem" role="alert" class="px-4 pb-2 text-xs text-red-300">{{ problem || nativeProblem }}</p>
     </div>
     </div>
@@ -25,6 +23,7 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { Settings2 } from 'lucide-vue-next'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import StatusLine from './StatusLine.vue'
+import NativePromptCompletions from './NativePromptCompletions.vue'
 import { claudePromptThemeStyle } from './native-ui-paint.ts'
 import { useClaudeUiSelection, replyClaudeUiSelection } from './native-ui-selection.ts'
 import { copyClaudeUiText } from './native-ui-clipboard.ts'
