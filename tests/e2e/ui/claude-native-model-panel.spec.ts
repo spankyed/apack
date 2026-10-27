@@ -132,6 +132,7 @@ test('chooses models through original hooks, decisions and same-session recovery
   async function capture(stage:string,reading:()=>import('@playwright/test').Locator,controls:()=>import('@playwright/test').Locator[]){
     for(const [width,height] of [[1100,900],[680,600]]){
       await appPage.setViewportSize({width,height})
+      if(stage==='picker')await reading().scrollIntoViewIfNeeded()
       await expect(reading()).toBeInViewport({ratio:1})
       for(const control of controls())await expect(control).toBeInViewport({ratio:1})
       if(stage==='recovered'){
@@ -157,7 +158,7 @@ test('chooses models through original hooks, decisions and same-session recovery
   expect((await context()).claude.modelOverride).toBe(modelBefore);expect((await settings()).model).toBe(savedBefore)
   await record('sdk-ask',{modelUnchanged:true,inputAcknowledged:true})
   await composeDraft();await open()
-  await capture('picker',()=>panel.getByRole('heading',{name:'Select model',exact:true}),()=>[panel.getByRole('button',{name:'Close model selection',exact:true}),panel.getByRole('button',{name:'Refresh',exact:true})])
+  await capture('picker',()=>choice('Haiku'),()=>[choice('Haiku'),panel.getByRole('button',{name:'Close model selection',exact:true}),panel.getByRole('button',{name:'Refresh',exact:true})])
   const haiku=await choice('Haiku').getAttribute('data-native-settings-option');expect(haiku).toBeTruthy()
   await choice('Haiku').click()
   await expect(panel.getByText('Confirm this model change before continuing.',{exact:false})).toBeVisible()
