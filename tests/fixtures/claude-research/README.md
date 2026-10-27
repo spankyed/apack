@@ -41,7 +41,9 @@ ordinary fixture mode removes only the generic runner's injected suppression swi
 exported data, captures and read-only database query. Set `CLAUDE_RESEARCH_TRANSCRIPT_RESIZE=1`
 for the optional normal/compact latest-reply and top-of-history reading journey; verify it with
 `verifyNativeTranscriptViewportAppEvidence` from `src/protocol/native-transcript-viewport-app-proof.mjs`.
-Arbitrary reader anchors and whole-screen compact polish remain separate. This is scoped app acceptance, not full parity.
+Use `verifyNativeRecommendationLayoutAppEvidence` from the same module for compact reply/footer
+space and original defer/expiry recovery. Other notice kinds, arbitrary reader anchors and whole-screen
+polish remain separate. This is scoped app acceptance, not full parity.
 
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
