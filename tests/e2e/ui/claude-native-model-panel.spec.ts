@@ -166,7 +166,7 @@ test('chooses models through original hooks, decisions and same-session recovery
   await expect(confirm()).toBeFocused()
   await capture('confirmation',()=>panel.getByText('Confirm this model change before continuing.',{exact:false}).last(),()=>[confirm(),panel.getByRole('button',{name:'No, go back',exact:true}).last()])
   await panel.getByRole('button',{name:'No, go back',exact:true}).last().click()
-  if(await panel.isVisible())await panel.getByRole('button',{name:'Cancel',exact:true}).click()
+  if(await panel.isVisible())await panel.getByRole('button',{name:'Close model selection',exact:true}).click()
   await restored('cancel-confirmation');expect((await context()).claude.modelOverride).toBe(modelBefore);expect((await settings()).model).toBe(savedBefore)
 
   await open();await choice('Haiku').click();await expect(confirm()).toBeVisible();await confirm().click()
