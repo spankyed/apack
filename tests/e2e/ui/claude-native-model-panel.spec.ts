@@ -147,7 +147,7 @@ test('chooses models through original hooks, decisions and same-session recovery
     }
   }
   const choice=(family:string)=>panel.locator('[data-native-settings-option]').filter({hasText:new RegExp(family,'i')}).first()
-  const output=()=>appPage.getByRole('region',{name:'Command result',exact:true})
+  const nativeNotice=(text:string)=>expect.poll(async()=>(await context()).messages.some((row:any)=>row.sender==='assistant'&&row.text.includes(text)))
   const modelBefore=(await context()).claude.modelOverride, savedBefore=(await settings()).model
 
   await mode('ask')
@@ -174,7 +174,7 @@ test('chooses models through original hooks, decisions and same-session recovery
   await expect.poll(async()=>(await settings()).model).toBe(haiku)
 
   await mode('deny');await open();await choice('Sonnet').click()
-  await expect(output()).toContainText('Keep the current model for the review.')
+  await nativeNotice('Keep the current model for the review.').toBe(true)
   await restored('deny');expect((await context()).claude.modelOverride).toBe(haiku);expect((await settings()).model).toBe(haiku)
 
   await mode('pending');await open();await choice('Opus').click()
@@ -187,7 +187,7 @@ test('chooses models through original hooks, decisions and same-session recovery
   expect((await context()).claude.modelOverride).toBe(haiku);expect((await settings()).model).toBe(haiku)
 
   await mode('timeout');await open();await choice('Sonnet').click()
-  await expect(output()).toContainText('did not respond before its timeout',{timeout:10000})
+  await nativeNotice('did not respond before its timeout').toBe(true)
   await restored('timeout');expect((await context()).claude.modelOverride).toBe(haiku);expect((await settings()).model).toBe(haiku)
   const timedOut=(await hooks()).filter(row=>row.mode==='timeout'&&row.phase==='start').at(-1);expect(timedOut?.pid).toBeGreaterThan(0)
   await expect.poll(()=>{try{process.kill(timedOut.pid,0);return false}catch(error:any){if(error.code!=='ESRCH')throw error;return true}}).toBe(true)
