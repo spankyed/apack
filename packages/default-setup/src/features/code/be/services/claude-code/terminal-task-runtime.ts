@@ -1,5 +1,5 @@
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
-export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&settled&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
+export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
 function nativeShellTasks(registry){return Object.values(registry.all()).filter(task=>task.type==='local_bash'&&!task.elsewhere&&task.isBackgrounded===true).slice(0,256).map(task=>({id:task.id,name:String(task.description??task.command??'Background command').slice(0,256),status:task.status,canStop:task.status==='running'}));}
 const workflowControllerIds=new WeakMap();
@@ -31,7 +31,7 @@ function nativeWorkflowProgress(n,task){
  return {progress,logs,...(output!==undefined?{output}:{}),outputUnavailable,truncated};
 }
 async function resumeNativeWorkflow(n,binding,task,abort,current){
- if(!nativeWorkflowTaskFlags(n,task).canResume)throw Error('Native Workflow is not paused and settled');
+ if(!nativeWorkflowTaskFlags(n,task).canResume)throw Error('Native Workflow is not paused or has no resume source');
  const candidates=[...clients].filter(clientId=>clientViewCurrent(n,clientId));
  if(candidates.length!==1||nativeViewFacts(n,binding,abort).view.kind!=='main')throw Error('Return to the app main conversation before resuming a Workflow');
  const command=n.engine.Rs('workflows',binding.commands());

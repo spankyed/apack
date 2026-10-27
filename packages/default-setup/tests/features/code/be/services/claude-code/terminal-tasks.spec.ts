@@ -236,17 +236,19 @@ it('uses native pause acknowledgement and original loop settlement for Workflow 
  const flags=vm.runInNewContext(claudeTerminalTaskRuntime+';nativeWorkflowTaskFlags'),task={id:'workflow-a',status:'completed',scriptPath:'/private/workflow.js',workflowRunId:'run-a'}
  let settled=false;const n={transcriptState:{AE:()=>settled}}
  expect(flags(n,task)).toMatchObject({settled:false,canStop:true,canResume:false})
- task.status='paused';expect(flags(n,task).canResume).toBe(false)
+ task.status='paused';expect(flags(n,task)).toMatchObject({settled:false,canStop:false,canResume:true})
+ task.scriptPath='';expect(flags(n,task).canResume).toBe(false);task.scriptPath='/private/workflow.js'
+ task.workflowRunId='';expect(flags(n,task).canResume).toBe(false);task.workflowRunId='run-a'
  settled=true;expect(flags(n,task)).toMatchObject({settled:true,canStop:false,canResume:true})
 })
-it('resumes a settled paused Workflow only through the original admitted command callback and meta request', async () => {
+it.each([false,true])('resumes an original paused Workflow through its admitted command callback with settled=%s', async settled => {
  const done=vi.fn(),cancel=vi.fn(),task={id:'workflow-a',status:'paused',scriptPath:'/private/workflow.js',workflowRunId:'run-a'},ticket:any={},panel:any={workflowDone:done,cancel,closed:false,done:Promise.resolve()},parentCommands=new Map([['ticket',ticket]]),agentCommandDialogs=new Map([['panel',panel]])
  const nativeParentCommand=vi.fn(async(_n:unknown,request:any)=>request.operation==='prepare'?{kind:'prepared',id:'ticket'}:request.operation==='start'?{kind:'running'}:{kind:'finished',result:{kind:'panel',id:'panel'}})
- const text='Original Bar resume request',command={type:'local-jsx'},n={transcriptState:{AE:()=>true},workflowTasks:{Bar:()=>text},workflowCommand:{default:command},engine:{Rs:()=>command}},binding={commands:()=>[command],toolContext:()=>({taskRegistry:{get:()=>task}})}
+ const text='Original Bar resume request',command={type:'local-jsx'},n={transcriptState:{AE:()=>settled},workflowTasks:{Bar:()=>text},workflowCommand:{default:command},engine:{Rs:()=>command}},binding={commands:()=>[command],toolContext:()=>({taskRegistry:{get:()=>task}})}
  const resume=vm.runInNewContext(claudeTerminalTaskRuntime+';resumeNativeWorkflow',{clients:new Set(['client']),clientViewCurrent:()=>true,nativeViewFacts:()=>({view:{kind:'main'}}),parentCommands,agentCommandDialogs,nativeParentCommand})
  expect(await resume(n,binding,task,new AbortController(),()=>{})).toEqual({resume:{taskId:'workflow-a',runId:'run-a',requested:true}})
  expect(ticket.workflowResumeTaskId).toBe('workflow-a');expect(done).toHaveBeenCalledExactlyOnceWith(text,{shouldQuery:true,display:'system',metaMessages:[text]});expect(cancel).not.toHaveBeenCalled()
- task.status='running';await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('not paused and settled')
+ task.status='running';await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('not paused or has no resume source')
  task.status='paused';panel.workflowDone=undefined;await expect(resume(n,binding,task,new AbortController(),()=>{})).rejects.toThrow('callback is unavailable');expect(cancel).toHaveBeenCalledTimes(1)
 })
 
