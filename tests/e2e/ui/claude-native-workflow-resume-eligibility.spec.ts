@@ -100,6 +100,8 @@ test('resumes a paused native Workflow through its original command without an a
   await resume.click();await expect(approval).toBeVisible({timeout:15000});await expect(approval.getByTestId('native-workflow-summary')).toContainText('CachedStageFixture');await approval.getByRole('button',{name:'Yes, run it',exact:true}).click()
   let resumed:any
   await expect.poll(async()=>{resumed=(await tasks()).find((task:any)=>task.id!==taskId&&task.workflowRunId===paused.workflowRunId);return !!resumed},{timeout:15000}).toBe(true)
+  await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===resumed.id)?.workflowProgress?.some((event:any)=>event.type==='workflow_agent'&&event.index===1&&event.cached===true)).toBe(true)
+  await writeFile(join(workspace!,'native-pending-duration-release'),'release')
   await expect.poll(async()=>(await tasks()).find((task:any)=>task.id===resumed.id)?.status,{timeout:20000}).toBe('completed')
   const completed=(await tasks()).find((task:any)=>task.id===resumed.id);expect(completed.workflowProgress.find((event:any)=>event.type==='workflow_agent'&&event.index===1).agentId).toBe(cachedWorker.agentId)
   expect(await snapshot()).toEqual(retained)
