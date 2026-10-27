@@ -104,8 +104,24 @@ test('preserves original plugin recommendation choices and everyday composing', 
     const image = await nativeWindow.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), { width, height })
     const file = testInfo.outputPath('native-plugin-hint-' + name + '-' + width + '.png'); await writeFile(file, Buffer.from(image, 'base64')); captures.push(file)
   }
+  const transcriptReading = process.env.CLAUDE_RESEARCH_TRANSCRIPT_RESIZE === '1', readingSamples: unknown[] = []
+  const transcript = appPage.getByTestId('chat-transcript').locator(':scope > div').first()
+  const latestReply = appPage.getByText('Fixture completed.', { exact: true }).last()
+  const replyGeometry = async () => ({ reply: await latestReply.boundingBox(), viewport: await transcript.boundingBox(), composer: await card.boundingBox() })
+  const fullyReadable = async () => { const { reply, viewport, composer } = await replyGeometry(); return !!reply && !!viewport && !!composer && reply.y >= viewport.y - 1 && reply.y + reply.height <= Math.min(viewport.y + viewport.height, composer.y) + 1 }
+  if (transcriptReading) {
+    const latest = appPage.getByRole('button', { name: 'Scroll to latest message', exact: true })
+    if (await latest.isVisible()) await latest.click()
+    else { await transcript.hover(); await appPage.mouse.wheel(0, 1200) }
+    await expect.poll(fullyReadable).toBe(true)
+  }
   for (const [width, height] of [[1100, 900], [680, 600]]) {
     await appPage.setViewportSize({ width, height })
+    if (transcriptReading) {
+      try { await expect.poll(fullyReadable, { timeout: 3000 }).toBe(true) }
+      catch (error) { await writeFile(join(workspace!, 'native-transcript-resize-failure.json'), JSON.stringify({ width, height, geometry: await replyGeometry(), retained, context: await context() }, null, 2)); await capture('reading-failure', width, height); throw error }
+      readingSamples.push({ width, height, geometry: await replyGeometry() })
+    }
     for (const choice of shown.choices) await expect(notice.getByRole('button', { name: choice.label, exact: true })).toBeInViewport({ ratio: 1 })
     await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 })
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
@@ -133,12 +149,22 @@ test('preserves original plugin recommendation choices and everyday composing', 
     await composer.focus()
     expect(await composer.evaluate(element => ({ document: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON() }))).toEqual(retained)
   }
+  let readingAnchor: { id: string; offset: number } | undefined
+  const anchor = () => transcript.evaluate(element => { const bounds = element.getBoundingClientRect(), row = [...element.querySelectorAll<HTMLElement>('[data-message-id]')].find(row => row.getBoundingClientRect().bottom > bounds.top); return row ? { id: row.dataset.messageId!, offset: row.getBoundingClientRect().top - bounds.top } : undefined })
+  if (transcriptReading) {
+    await transcript.hover(); await appPage.mouse.wheel(0, -1200)
+    await expect.poll(async () => Math.round(await transcript.evaluate(element => element.scrollTop))).toBe(0)
+    readingAnchor = await anchor(); expect(readingAnchor).toBeTruthy()
+    await appPage.setViewportSize({ width: 1100, height: 900 })
+    await expect.poll(anchor).toEqual(readingAnchor)
+  }
   const selected = shown.choices.find((choice: any) => choice.value === decision)
   if (decision === 'timeout') { await notice.getByRole('button', { name: 'About this plugin', exact: true }).click(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toBeVisible(); await expect(notice).toBeHidden({ timeout: 40000 }) }
   else if (decision === 'no') { const button = notice.getByRole('button', { name: selected.label, exact: true }); await button.focus(); await button.press('Escape') }
   else await notice.getByRole('button', { name: selected.label, exact: true }).click()
   await expect(notice).toBeHidden(); await expect(appPage.getByRole('dialog', { name: 'About this plugin', exact: true })).toHaveCount(0)
   if (decision === 'timeout') for (const [width, height] of [[1100, 900], [680, 600]]) { await appPage.setViewportSize({ width, height }); await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 }); await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 }); await capture('expired', width, height) }
+  if (transcriptReading) { await expect.poll(anchor).toEqual(readingAnchor); await writeFile(join(workspace!, 'native-transcript-resize-app.json'), JSON.stringify({ readingSamples, readingAnchor, afterRetirement: await anchor(), retained, sessionId, boundNativePid }, null, 2)) }
   const settings = () => readFile(join(workspace!, '.claude/settings.json'), 'utf8').then(JSON.parse)
   if (decision === 'yes') await expect.poll(async () => (await settings()).enabledPlugins?.['document-skills@anthropic-agent-skills'], { timeout: 15000 }).toBe(true)
   await composer.focus()
