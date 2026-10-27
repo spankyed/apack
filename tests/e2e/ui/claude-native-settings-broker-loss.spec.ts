@@ -138,5 +138,5 @@ test('retires native Settings across broker loss and restores retained composing
   await expect(composer).toHaveText(draft);await composer.focus();await composer.press('Control+a');await composer.pressSequentially('Continue the release review after reconnecting Settings.')
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-settings-broker-proof.json'),JSON.stringify({sessionId,boundNativePid,freshPid,failure,old,fresh,afterStale,staleRequests,draft,retained,beforeReturn,final:await context(),captures},null,2))
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativeSettingsBrokerLoss:true,nativeRetainedDraft:true,resumedPrintSameSession:true,reopenedNativePid:freshPid,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeSettingsBrokerLoss:true,nativeRetainedDraft:true,resumedPrintSameSession:true,reopenedNativePid:freshPid,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
