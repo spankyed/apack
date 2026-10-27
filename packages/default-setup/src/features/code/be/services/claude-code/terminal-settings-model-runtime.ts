@@ -1,9 +1,9 @@
 /** Project original Config Model controls; source callbacks retain admission and effort normalization. */
 export const claudeTerminalSettingsModelRuntime = String.raw`
-function nativeSettingsModelControl(match){
+function nativeSettingsModelControl(match,standalone=false){
  const p=match.props,root=match.fiber.child?.memoizedProps;
  const hash=fn=>typeof fn==='function'?createHash('sha256').update(Function.prototype.toString.call(fn)).digest('hex'):undefined;
- if(p.isStandaloneCommand===true||p.onSetDefault!==undefined||typeof p.onSelect!=='function'||typeof p.onCancel!=='function'||!root||!['b615d1c7963a03e0010d1ae45108ff0bf87bffadb4a8ec8639b809754e687b49','09e2e0734b5e0da805593b8a45464256b7760e84204a62141ca8ca70f62cb566'].includes(hash(root.onKeyDown)))throw Error('Native Model root changed');
+ if((standalone?(p.isStandaloneCommand!==true||typeof p.onSetDefault!=='function'):(p.isStandaloneCommand===true||p.onSetDefault!==undefined))||typeof p.onSelect!=='function'||typeof p.onCancel!=='function'||!root||!['b615d1c7963a03e0010d1ae45108ff0bf87bffadb4a8ec8639b809754e687b49','09e2e0734b5e0da805593b8a45464256b7760e84204a62141ca8ca70f62cb566'].includes(hash(root.onKeyDown)))throw Error('Native Model root changed');
  const groups=root.children?.[0]?.props?.children,picker=groups?.[1]?.props?.children?.[1]?.props?.children?.[0];
  if(!picker||!['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5','0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3'].includes(hash(picker.type)))throw Error('Native Model picker changed');
  const controls=picker.props;

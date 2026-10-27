@@ -1,3 +1,4 @@
+import { claudeTerminalModelPanelRuntime } from './terminal-model-panel-runtime.ts'
 import { claudeTerminalSettingsEditorRuntime } from './terminal-settings-editor-runtime.ts'
 import { claudeTerminalSettingsFrameRuntime } from './terminal-settings-frame-runtime.ts'
 
@@ -5,9 +6,10 @@ import { claudeTerminalSettingsFrameRuntime } from './terminal-settings-frame-ru
 export const claudeTerminalSettingsRuntime = String.raw`
 ${claudeTerminalSettingsFrameRuntime}
 ${claudeTerminalSettingsEditorRuntime}
+${claudeTerminalModelPanelRuntime}
 function nativeSettingsPanel(request){
  const entry=agentCommandDialogs.get(request.panel_id);
- if(!entry||entry.kind!=='panel'||entry.commandName!=='config'||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
+ if(!entry||entry.kind!=='panel'||!['config','model'].includes(entry.commandName)||entry.clientId!==request.client_id||entry.closed||entry.answered)throw Error('Native Settings panel expired');
  entry.current();
  if(!entry.store.getState().open.some(item=>item.id===entry.dialogId&&item.kind==='local_jsx'&&item.payload?.nodeId===entry.nodeId))throw Error('Native Settings panel replaced');
  return entry;
@@ -57,7 +59,9 @@ async function readNativeSettings(n,entry,signal){
 }
 async function nativeSettings(n,request,abort){
  await n.gate._Jo('desktop');
- const entry=nativeSettingsPanel(request),isEditorCancel=request.operation==='editor'&&request.command?.action==='cancel';
+ const entry=nativeSettingsPanel(request);
+ if(entry.commandName==='model')return nativeModelPanel(n,entry,request,abort);
+ const isEditorCancel=request.operation==='editor'&&request.command?.action==='cancel';
  let cancelledLease;
  if(entry.settingsEditorLease){
   const lease=entry.settingsEditorLease;

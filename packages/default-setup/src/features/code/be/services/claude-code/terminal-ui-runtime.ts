@@ -946,9 +946,9 @@ async function control(request,abort){
    current();
    const validation=await n.models.dRe(request.model,context.storageV5,context.credentials,{deadlineMs:2500});
    current();if(!validation.ok)throw Error(validation.message);
-   if(n.models.Ooe(validation.model))throw Error('This model requires native interactive consent; choose it with /model in the native interface');
+   if(n.models.Ooe(validation.model))throw Error('This model requires Claude Code consent. Use Choose Claude model in the composer actions to review it.');
    const hooks=await n.models.SC(context.session,context.getAppState,validation.model,'sdk',{signal:abort.signal});
-   current();if(hooks.decision!=='proceed')throw Error(n.models.BKe(hooks));
+   current();if(hooks.decision!=='proceed')throw Error(n.models.BKe(hooks)+(hooks.decision==='ask'?' Use Choose Claude model in the composer actions to review the original confirmation.':''));
    const notice=await n.models.jKe(context.session,validation.model,context.getAppState,context.setAppState,false,'sdk',validation.substitutedFrom,context.storageV5);
    const state=context.getAppState(),selection=state.mainLoopModelForSession??state.mainLoopModel??'default';
    return {selection,notice};

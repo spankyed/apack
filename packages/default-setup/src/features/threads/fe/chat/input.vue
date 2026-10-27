@@ -113,7 +113,7 @@
                     v-for="btn in leftButtons"
                     :key="btn.action"
                     @select="handleButtonClick(btn.action)"
-                    :disabled="(btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting"
+                    :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting"
                     class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
                     :class="btn.class"
                   >
@@ -132,7 +132,7 @@
                 class="hidden @lg:block p-2 transition-colors text-neutral-500"
                 :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
                 :aria-label="btn.label"
-                :disabled="disabled || ((btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting)"
+                :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting)"
                 :title="btn.label"
                 @click="handleButtonClick(btn.action)"
               >
@@ -219,7 +219,7 @@ import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, Plug, X } from 'lucide-vue-next'
+import { Mic, MicOff, PaperclipIcon, Sparkle, Hash, CornerDownLeft, EllipsisVertical, Settings2, ListTodo, Plug, Cpu, X } from 'lucide-vue-next'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
 import NativePanePanel from './NativePanePanel.vue'
@@ -742,6 +742,7 @@ const leftButtons = computed<ActionButton[]>(() => {
   ]
   if (props.nativeSubmit && props.nativePrompt) buttons.push(
     { icon: Settings2, label: 'Claude settings', action: 'native-settings' },
+    { icon: Cpu, label: 'Choose Claude model', action: 'native-model' },
     { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
     { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
   )
@@ -772,6 +773,7 @@ watch(() => props.currentThread?.id, () => {
 
 const handleButtonClick = (action: string) => {
   if(action === 'claude-channels'){channelsOpen.value=true;return}
+  if (action === 'native-model') { void openNativePanel('/model'); return }
   if (action === 'native-settings') { void openNativePanel('/config'); return }
   if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (action === 'native-mcp') { void openNativePanel('/mcp'); return }
@@ -851,8 +853,8 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   return refs
 }
 
-async function openNativePanel(command: '/config' | '/tasks' | '/mcp') {
-  const label = command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
+async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp') {
+  const label = command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision
