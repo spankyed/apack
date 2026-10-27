@@ -10,7 +10,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
-test('keeps managed model defaults across session selection reset and process restart', async ({ app, appPage, electronApp }, testInfo) => {
+test('preserves managed defaults and original resumed-session model precedence', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
   const restriction = false
@@ -109,10 +109,11 @@ test('keeps managed model defaults across session selection reset and process re
   const reopenedNativePid=(await context()).native.state.nativePid;expect(reopenedNativePid).not.toBe(boundNativePid)
   await section.getByRole('button',{name:'Back to conversation',exact:true}).click();expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained.doc)
   receipts.push({stage:'native-reopened',context:await context()})
-  await turn('Continue the release review after restarting Claude.',4,/sonnet/i)
+  // Original resume restores the last eligible assistant model before the next turn.
+  await turn('Continue the release review after restarting Claude.',4,/opus/i)
   await replace(draft);await capture('managed-restarted');await stop()
   expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(retained.doc)
-  await turn('Continue the saved release review after closing the native interface.',5,/sonnet/i)
+  await turn('Continue the saved release review after closing the native interface.',5,/opus/i)
   expect((await context()).sessionId).toBe(sessionId);expect(await readFile(settingsPath,'utf8')).toBe(settingsBefore)
   await replace(draft);await capture('print-return');expect(errors).toEqual([])
   await writeFile(join(workspace!,'native-managed-model-proof.json'),JSON.stringify({sessionId,boundNativePid,reopenedNativePid,receipts,retained,captures,settingsUnchanged:true,final:await context()},null,2))
