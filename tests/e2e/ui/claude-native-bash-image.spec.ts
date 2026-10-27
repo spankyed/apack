@@ -98,7 +98,8 @@ test('preserves original Bash image detection, notice and same-session continuat
   const retained=await composer.evaluate(element=>(element as any).editor.state.doc.toJSON()),notice=await result.innerText()
   for(const width of [1100,680]){
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
-    await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport({ratio:1});await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
+    await expect(async()=>{await expect(result).toContainText('[Image data detected and sent to Claude]');await result.scrollIntoViewIfNeeded();await expect(result).toBeInViewport({ratio:1})}).toPass({timeout:5000,intervals:[100,250]})
+    await expect(composer).toBeInViewport({ratio:1});await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:1})
     const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size);const file='native-bash-image-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push(file)
   }
   expect((await context()).native.state.nativePid).toBe(boundNativePid)
