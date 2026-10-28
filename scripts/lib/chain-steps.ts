@@ -431,7 +431,7 @@ export const WORKSPACE_PARTS = [
   'package.json', 'tsconfig.json', 'tsconfig.package.json',
   // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared
   ...Object.values(CONFIG_BY_HALF), 'vite.config.ts', 'vite.config.js',
-  'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'env.d.ts',
+  'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'tsup.config.ts', 'env.d.ts',
 ];
 const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `packages/${pkg}/${part}`);
 
@@ -638,7 +638,7 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-host': { packages: true, pack: true },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
-  api: { pack: true, inputs: ['package.json'] },
+  api: { pack: true, inputs: ['package.json', 'build/build-metadata.ts'] },
   // `pretest: ensure-packages-built`; `published-sdk-peers` reads the built `dist` and skips without it.
   // `repo`: six of its specs ask git what the repo holds — the chain's input coverage, spec placement,
   // the lint's scope, the import rules — so every one of them is about files this package does not own
