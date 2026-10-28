@@ -1,6 +1,7 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
+    <section v-if="!active && view?.state?.notice && view.state.notice.kind !== 'managed_settings_security'" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="view.state.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ view.state.notice.title }}</h3>
@@ -105,6 +106,7 @@ import { useSurface } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
+import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
@@ -114,6 +116,11 @@ const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
 const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
+function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+}
 function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || noticePending.value) return

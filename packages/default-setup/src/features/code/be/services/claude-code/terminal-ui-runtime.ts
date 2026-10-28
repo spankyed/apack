@@ -1,3 +1,4 @@
+import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
 import { claudeTerminalAutocompactOfferRuntime } from './terminal-autocompact-offer-runtime.ts'
 import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runtime.ts'
 import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
@@ -520,6 +521,7 @@ ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
 ${claudeTerminalGoalProposalRuntime}
+${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
 ${claudeTerminalRefusalRuntime}
 ${claudeTerminalSettingsRuntime}
@@ -778,6 +780,7 @@ async function control(request,abort){
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_native_notice'){
+  const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:nativeRefusalRetirements(n,policy.store)};
   const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
   const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
   const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
@@ -787,6 +790,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_answer_native_notice'){
   abort.signal.throwIfAborted();
+  if(['policy_approve','policy_reject'].includes(request.decision)){answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
   if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
