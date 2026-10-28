@@ -113,11 +113,6 @@ fi
 # Step 6: Package with electron-builder (signing + notarization via env vars)
 echo -e "${BLUE}[6/7]${NC} Packaging application..."
 
-# These bindings use Electron's V8 ABI; elmdb uses N-API and does not need a rebuild.
-TARGET_NATIVE_ARCH=x64
-if $IS_MAC; then TARGET_NATIVE_ARCH=arm64; fi
-npx electron-rebuild --only node-pty,better-sqlite3 --arch "$TARGET_NATIVE_ARCH"
-
 if $IS_MAC; then
   if [ -n "$APPLE_TEAM_ID" ]; then
     echo "  Code signing: enabled (Team ID: $APPLE_TEAM_ID)"
@@ -125,14 +120,20 @@ if $IS_MAC; then
   else
     echo "  Code signing: disabled (set APPLE_TEAM_ID to enable)"
   fi
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
+  npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --mac --arm64
   validate_api_package "dist/mac-arm64/${APP_NAME}.app/Contents/Resources/app"
 elif $IS_WIN; then
   echo "  Platform: Windows (unsigned)"
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
+  npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --win --x64
   validate_api_package "dist/win-unpacked/resources/app"
 else
   echo "  Platform: Linux"
+  # Selectively rebuild only node-pty against Electron (elmdb is N-API, which needs no rebuild)
+  npx electron-rebuild --only node-pty
   npx electron-builder build --config electron-builder.mjs --linux --x64
   validate_api_package "dist/linux-unpacked/resources/app"
 fi
