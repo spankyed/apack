@@ -287,10 +287,22 @@ and are not the pinned qualification cohorts. The harness now runs separate sync
 at 10k/100k; targets were recorded before those measurements in the storage plan. Current candidate files follow
 the format-one policy; use fresh/copied logical fixtures rather than treating previous SQLite trial files as stable.
 
-Next: record pinned three-trial 10k/100k admission cohorts, including foreground/watch and WAL/file budgets, then
-complete background text/vector admission and schema validation. The product preference for explicit “indexing”
+Pinned admission cohorts for `8220a11d70` are recorded in
+[the qualification report](../references/evidence/ears-sqlite-implementation-2026-10-28/value-index-admission-8220a11d70/README.md).
+All six sync-disabled 10k/100k trials pass their recorded correctness, foreground/watch and WAL/file budgets.
+The first durable/FULL 10k trial fails the 16 ms foreground-operation and timer-stall p99 targets (16.79/19.39 ms).
+The runner saved it and stopped; remaining durable trials were not run. Targets were not relaxed. The durable
+schedule/IO/checkpoint cause still needs diagnosis and a real fix or approved disposition before qualification.
+
+A deliberate survey found concurrent work merged into master at `98386b36a18d244c19ffb501830b990ed49f7653`, beyond
+the previously integrated `a1b6603e5a`: substring/regex query contracts and schemas, watch settlement/close fixes,
+a list-of-any coercion fix and native pin `6ab2f69fa13289ed4f02952253c58b4d41922c98`. No dirty files were copied.
+Next: combine that exact committed snapshot through a detached integration and disposable gates, reconcile its
+new contracts, then complete background text/vector admission, schema validation and durable-load qualification. The product preference for explicit “indexing”
 versus a potentially slow complete search fallback was asked asynchronously; value-index work does not depend on
-that answer. Strict run `40655434334` remains tied to typed checkpoint `5985709142`, not later implementation.
+that answer. Strict run `40655434334` on typed checkpoint `5985709142` was externally cancelled after producers,
+integration-1/2 and native-1 passed; app-and-rest/native-2 were cancelled. It is not a completed green gate and
+will not be restarted as acceptance for obsolete inputs. Run a fresh pinned gate for the integrated source.
 All phase 3–7 requirements remain where not explicitly evidenced, including useful search/realistic vectors,
 four host backup-format failures, complete app composition, operational/platform qualification and adoption budgets.
 Normal production still uses elmdb.
