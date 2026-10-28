@@ -38,7 +38,9 @@ function spellsProto(bytes: Uint8Array): boolean {
  * row, a field's value, an edge's info, an answer inside another — and straight to objects otherwise
  */
 function unpackAnswers(bytes: Uint8Array): Answer[] {
-  return (spellsProto(bytes) ? objectsOf(exact.unpack(bytes)) : unpackr.unpack(bytes)) as Answer[];
+  const answers = (spellsProto(bytes) ? objectsOf(exact.unpack(bytes)) : unpackr.unpack(bytes)) as Answer[];
+  for (const answer of answers) if (answer.kind === 'explained') answer.backend = 'elmdb';
+  return answers;
 }
 
 interface BinaryUnit extends Omit<EarsUnit, 'read' | 'write' | 'commit'> {

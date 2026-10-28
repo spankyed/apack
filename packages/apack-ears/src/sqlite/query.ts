@@ -1,6 +1,7 @@
 // SQL selection and traversal; explicit application fallbacks preserve ICU ordering and deep-value semantics.
 import type { SqliteDatabase } from "./database.ts";
 import { scalarKey } from "./database.ts";
+import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
 import { sameValue } from "../utils.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
@@ -10,12 +11,12 @@ const literal = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
 export function executeQuery(
   db: SqliteDatabase,
-  plan: Data,
+  plan: QueryPlan,
   countVisits = false
-): Data {
+): QueryAnswer {
   const schema = db.schemaForQueries(),
     scope = plan.scope ?? "live",
-    steps: Data[] = plan.steps ?? [];
+    steps: QueryStep[] = plan.steps ?? [];
   const reachable = (alias: string) =>
     scope === "withTrashed"
       ? "1"
@@ -130,7 +131,7 @@ export function executeQuery(
         for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
         const outward = step.step.endsWith("To"),
           negative = step.step.startsWith("unlinked");
-        const kind = step.kind;
+        const kind = step.step === "linkedWith" ? undefined : step.kind;
         const other = step.other;
         const args: any[] = [];
         const conditions: string[] = [];
@@ -391,7 +392,7 @@ export function executeQuery(
       default:
         fail(
           "UNSUPPORTED",
-          `SQLite query step ${step.step} is not implemented`
+          `SQLite query step ${String(step)} is not implemented`
         );
     }
   }
@@ -430,7 +431,7 @@ export function executeQuery(
     if (!searchHits) fail("NO_SEARCH", "No search in query");
     const hits = idsNow().map((id) => {
       const hit = searchHits!.get(id)!;
-      const result: Data = { id, score: hit.score, terms: hit.terms ?? [] };
+      const result: StoredHit = { id, score: hit.score, terms: hit.terms ?? [] };
       if (terminal.highlights) result.highlights = hit.highlights ?? {};
       if (terminal.fields) {
         const row = db.row(id)!;
@@ -450,7 +451,7 @@ export function executeQuery(
       __visited: visited ?? hits.length,
     };
   }
-  if (["rows", "firstRow", "hits"].includes(terminal.answer)) {
+  if ((terminal.answer === "rows" || terminal.answer === "firstRow")) {
     const chosen = db.all(
       `SELECT e.id,e.type FROM (${sql}) p JOIN entities e ON e.id=p.id ORDER BY p.major,p.ord${terminal.answer === "firstRow" ? " LIMIT 1" : ""}`,
       parameters
@@ -482,7 +483,7 @@ export function executeQuery(
     };
   if (terminal.answer === "exists")
     return {
-      kind: "boolean",
+      kind: "bool",
       value: !!db.get(ordered() + " LIMIT 1", parameters),
       __visited: visited ?? 0,
     };
@@ -502,7 +503,7 @@ export function executeQuery(
       if (group) group[1].push(id);
       else groups.push([value ?? null, [id]]);
     }
-    return { kind: "groups", groups, __visited: visited ?? ids.length };
+    return { kind: "groups", groups: terminal.counts ? groups.map(([value, ids]) => [value, ids.length]) : groups, __visited: visited ?? ids.length };
   }
   if (terminal.answer === "edges") {
     const groups: string[] = terminal.kinds;

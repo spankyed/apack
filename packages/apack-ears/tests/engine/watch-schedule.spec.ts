@@ -54,7 +54,11 @@ const commit = () => {
   connection.write([{ op: 'create', type: 'Row', id: `Row-${sequence}`, fields: { n: sequence } }]);
 };
 /** What every watch here reads: the rows, as ids */
-const rows = () => (connection.read([{ read: 'query', plan: { scope: 'live', start: { from: 'types', types: ['Row'] }, steps: [], terminal: { answer: 'ids' } } }])[0]!.ids as string[]);
+const rows = () => {
+  const answer = connection.read([{ read: 'query', plan: { scope: 'live', start: { from: 'types', types: ['Row'] }, steps: [], terminal: { answer: 'ids' } } }])[0]!;
+  if (answer.kind !== 'ids') throw new Error(`Expected ids, received ${answer.kind}`);
+  return answer.ids;
+};
 
 /** A watch of the rows whose every run costs `costMs`, counting its runs and keeping what it was handed */
 function watching(costMs: number, label = `costs ${costMs} ms`) {

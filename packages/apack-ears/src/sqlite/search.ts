@@ -190,7 +190,8 @@ export class SqliteSearch {
   pending(type: string, limit: number) {
     const [name, index] = this.vectorIndex(type);
     return {
-      kind: "pendingEmbeddings",
+      kind: "pending" as const,
+      index: name,
       model: index.model,
       dims: index.dims,
       count: this.db.get(
@@ -202,7 +203,7 @@ export class SqliteSearch {
           "SELECT entity_id id,chunk,hash,text FROM chunks WHERE type=? AND index_name=? AND embedding IS NULL ORDER BY entity_id,chunk LIMIT ?",
           [type, name, limit]
         )
-        .map((r) => ({ ...r })),
+        .map((r) => ({ id: String(r.id), chunk: Number(r.chunk), hash: String(r.hash), text: String(r.text) })),
     };
   }
   embed(op: Data) {

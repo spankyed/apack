@@ -2,10 +2,12 @@
 // instrumentation and commit delivery; each backend owns its transport and persistence representation.
 import { callSite, createCallTally, type CallCounting, type CallReport, type CallTally } from './calls.ts';
 import { EarsError, type EarsErrorCode } from './errors.ts';
+import type { Op, ReadOp, Load, Answer } from './storage.ts';
+export type { Op, ReadOp, Load, Answer } from './storage.ts';
 
 /** A synchronous read batch, optionally recording dependencies for one watch. */
 export interface ReadRequest {
-  readonly reads: ReadonlyArray<Record<string, unknown>>;
+  readonly reads: readonly ReadOp[];
   readonly track?: number;
 }
 
@@ -69,7 +71,7 @@ export interface EarsDatabase {
   /** Every entry replaced by another database's primary data, the derived data rebuilt under this one's schema */
   replaceWith(source: string): void;
   stats(): { types: Record<string, { live: number; trashed: number }>; relations: Record<string, number>; fileBytes: number };
-  bulkLoad(loads: ReadonlyArray<Record<string, unknown>>): void;
+  bulkLoad(loads: readonly Load[]): void;
   /** The last commit's sequence, or 0: a number that only increases for as long as the database exists */
   readonly sequence: number;
   /** Drops what the reads tracked under `token` touched (`{ reads, track: token }`) */
@@ -80,8 +82,6 @@ export interface EarsDatabase {
   close(): void;
 }
 
-/** A read answer, discriminated by `kind`. */
-export type Answer = { kind: string } & Record<string, unknown>;
 /** `value` and everything inside it, frozen */
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -168,8 +168,6 @@ export function runCommitted<T>(operation: () => T, notify: () => void): T {
   return result;
 }
 
-/** One batch operation, as elmdb's protocol takes it (`elmdb/protocol/Op.ts`) */
-export type Op = { op: string } & Record<string, unknown>;
 /** One answer of a batch */
 export type OpResult = { kind: 'done' } | { kind: 'entity'; id: string; shortCode: string | null; created: boolean }
   | { kind: 'relation'; id: string; linked: boolean } | { kind: 'label'; label: string } | { kind: 'stale' };
@@ -185,10 +183,10 @@ export interface Commit {
 
 /** The engine's crossing to its database: reads and writes, in the unit `transact` holds open or each its own */
 export interface Connection {
-  read(reads: ReadonlyArray<Record<string, unknown>>): Answer[];
+  read(reads: readonly ReadOp[]): Answer[];
   write(ops: readonly Op[], now?: number): OpResult[];
   /** Unchecked loads, one durable unit of their own (`Database.bulkLoad`); refused while a unit is open */
-  load(loads: ReadonlyArray<Record<string, unknown>>): void;
+  load(loads: readonly Load[]): void;
   transact<T>(fn: () => T, options?: UnitOptions): T;
   /** Whether `transact` holds a unit open */
   readonly inUnit: boolean;

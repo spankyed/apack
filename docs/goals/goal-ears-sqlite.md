@@ -194,7 +194,7 @@ copied. The committed integration input remains `a1b6603e5a`; the contract matri
 
 Strict run `40636458325` passed every shard on corrected integration `d93afe4190`. Run `40637723256` covers structured
 transport `9659ceb389`; its sole failed shard stopped during setup-node download before tests. Only that failed
-shard was retried, and attempt 2 is running. Neither proves acceptance of later SQLite changes; keep full validation
+shard was retried, and attempt 2 completed successfully across every shard. Neither proves acceptance of later SQLite changes; keep full validation
 on pinned source and poll exact existing handles rather than restarting them on observation timeouts.
 
 Implemented checkpoints: structured storage requests with native MessagePack confined to `src/lmdb/adapter.ts`;
@@ -245,8 +245,16 @@ are removed. The new constructor closes refused connections, and temporary facto
 The partial-write, unknown-type and undefined-normalization proofs remain in the implementation evidence. No new
 app performance claim is made, and the native-slot/inline limits remain provisional.
 
-Next: continue from the canonical checkout; refine structured operation/read types and record actual-facade
-comparisons including small updates
+`src/storage.ts` now owns explicit mutation, read, load, query-plan and result unions. Facade, connection, native
+adapter and SQLite query execution consume those types; native explanations receive their backend tag at the
+adapter. SQLite result tags and pending-index metadata now match the contract, including count-only groups.
+Disposable Linux passes EARS/SDK/host/CLI/testing typechecks, API checks and all five published trees. Both full
+backend suites pass (257 SQLite; 228 native plus 29 SQLite-only skips); an additional shared direct-port case passes
+on both drivers. Three disposable mutations prove weakening write requests, read requests or results fails the
+actual port type assertions. The first direct-port assertion incorrectly excluded an optional diagnostic field;
+its failure and corrected passing run are retained in the evidence directory.
+
+Next: record actual-facade comparisons including small updates
 beside large values. Open the draft PR with that working slice. Do not declare phase 2 complete from package wiring. All phase 3–7 requirements remain, including background
 index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.

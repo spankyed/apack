@@ -49,7 +49,9 @@ integration checkpoint. Original prototype test counts do not establish parity w
 
 Retain the existing EARS operation/query vocabulary as a typed internal contract; do not introduce another query
 language. A backend accepts structured read requests and write batches, returns structured answers/change sets,
-and owns snapshots, write units/savepoints and commit outcomes. Common connection code owns transaction nesting,
+and owns snapshots, write units/savepoints and commit outcomes. `src/storage.ts` owns the discriminated request/
+answer vocabulary, including query steps and terminals. Compile-time assertions exercise the actual database,
+unit and connection entries; direct-port shared cases check result tags as well as facade behavior. Common connection code owns transaction nesting,
 observers, frozen-result handling and call instrumentation.
 
 The elmdb adapter alone encodes/decodes its native protocol. SQLite executes structured operations directly.

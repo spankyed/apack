@@ -3,9 +3,9 @@ import { mkdtempSync, readdirSync, statSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createEarsEngine, type EARS } from "../../src/index.ts";
+import { createEarsEngine, type EARS, type EngineSchema } from "../../src/index.ts";
 import { openDatabase } from "../../src/lmdb/index.ts";
-import { toElmdbSchema } from "../../src/schema.ts";
+import { openDatabase as openSqlite } from "../../src/sqlite/index.ts";
 import { SqliteDatabase } from "../../src/sqlite/database.ts";
 const backend = process.argv[2],
   durable = process.argv.includes("--durable"),
@@ -20,6 +20,10 @@ const schema = {
       indexes: ["slug", "thread"],
       search: { fields: { text: 1 } },
     },
+    Large: {
+      required: [],
+      fields: { title: { type: 'string' }, counter: { type: 'number' }, body: { type: 'string' } },
+    },
     Vector: {
       required: [],
       embed: { from: ["text"], model: "fixture", dims: 256 },
@@ -27,19 +31,25 @@ const schema = {
   },
   relations: { in: {}, next: {} },
   roles: [],
-};
+} satisfies EngineSchema;
 const db =
   backend === "sqlite"
-    ? new SqliteDatabase({
-        path: dir,
-        schema: toElmdbSchema(schema),
-        syncs: durable,
-      })
+    ? openSqlite({ path: dir, schema, syncs: durable })
     : openDatabase({ path: dir, schema, syncs: durable });
 const e = createEarsEngine({ database: db });
 const id = (i: number) => `Message-${i}` as EARS.EntityId;
 const vector = (i: number) =>
   Array.from({ length: 256 }, (_, j) => Math.sin(i * 0.17 + j * 0.13));
+// Both repeated and deterministic high-entropy ASCII bodies: compression is part of the native baseline.
+let random = 0x71829;
+const variedBody = Array.from({ length: 256 * 1024 }, () => {
+  random ^= random << 13; random ^= random >>> 17; random ^= random << 5;
+  return String.fromCharCode(32 + (random >>> 0) % 95);
+}).join('');
+const repeatedBody = 'sample body '.repeat(Math.ceil(256 * 1024 / 12)).slice(0, 256 * 1024);
+const largeId = (i: number) => `Large-${i}` as EARS.EntityId;
+const bodies = [repeatedBody, variedBody];
+const streamBodies = Array.from({ length: 16 }, (_, i) => variedBody.slice(0, (i + 1) * 16 * 1024));
 const setup = performance.now();
 try {
   e.transact(
@@ -52,6 +62,7 @@ try {
           rank: i,
           text: `topic${i % 100} database ${"body ".repeat(100)}`,
         });
+      for (let i = 0; i < 64; i++) e.create('Large', { id: largeId(i), title: `large-${i}`, counter: 0, body: bodies[i % 2] });
       for (let i = 1; i < 300; i++) e.write(id(i - 1)).link("next", id(i));
       for (let i = 1; i <= 50; i++) e.write(id(0)).link("in", id(i));
       for (let i = 0; i < 1_000; i++)
@@ -80,6 +91,13 @@ try {
       iterations: 2000,
       fn: (i) => e.getAttr(id((i * 7919) % n), "text"),
     },
+    smallFieldLargeRow: { iterations: 1000, fn: i => e.getAttr(largeId(i % 64), 'counter') },
+    projectedLargePage: { iterations: 100, fn: () => e.query('Large').limit(50).pick(['title', 'counter']) },
+    updateSmallRepeatedBody: { iterations: durable ? 40 : 200, fn: i => e.transact(() => e.write(largeId(0)).set('counter', i), { durable }) },
+    updateSmallVariedBody: { iterations: durable ? 40 : 200, fn: i => e.transact(() => e.write(largeId(1)).set('counter', i), { durable }) },
+    streamBody16Chunks: { iterations: durable ? 2 : 4, fn: () => {
+      for (const body of streamBodies) e.transact(() => e.write(largeId(3)).set('body', body), { durable });
+    } },
     row: { iterations: 1000, fn: (i) => e.getRow(id((i * 7919) % n)) },
     unique: {
       iterations: 600,
@@ -172,7 +190,7 @@ try {
   await e.admin.watchesSettled();
   const start = performance.now();
   for (let i = 0; i < 50; i++) {
-    e.write(id(i % 20)).set("counter", i + 100_000);
+    e.transact(() => e.write(id(i % 20)).set("counter", i + 100_000), { durable });
     await e.admin.watchesSettled();
   }
   samples.watch20 = [((performance.now() - start) * 1000) / 50];
@@ -182,6 +200,36 @@ try {
     (sum, file) => sum + statSync(join(dir, file)).size,
     0
   );
+  // A separate instrumented diagnostic pass, excluded from the uninstrumented timing samples above.
+  // Driver spans include preparation/binding/native execution/result marshalling; the binding does not expose
+  // these individually. Remaining facade time includes JS plan construction, mapping, checks and instrumentation.
+  const diagnostics: Record<string, unknown> = {};
+  if (backend === 'sqlite') {
+    const sqlite = db as SqliteDatabase;
+    let driverMs = 0, codecMs = 0, driverCalls = 0, codecCalls = 0;
+    const all = sqlite.all.bind(sqlite), get = sqlite.get.bind(sqlite), run = sqlite.run.bind(sqlite);
+    const pack = sqlite.pack.bind(sqlite), unpack = sqlite.unpack.bind(sqlite);
+    const driver = <T>(call: () => T): T => { const start = performance.now(); try { return call(); } finally { driverCalls++; driverMs += performance.now() - start; } };
+    const codec = <T>(call: () => T): T => { const start = performance.now(); try { return call(); } finally { codecCalls++; codecMs += performance.now() - start; } };
+    sqlite.all = (sql, args) => driver(() => all(sql, args));
+    sqlite.get = (sql, args) => driver(() => get(sql, args));
+    sqlite.run = (sql, args) => driver(() => run(sql, args));
+    sqlite.pack = value => codec(() => pack(value));
+    sqlite.unpack = bytes => codec(() => unpack(bytes));
+    try {
+      for (const name of ['field', 'unique', 'page50', 'edges50', 'smallFieldLargeRow', 'projectedLargePage', 'updateSmallVariedBody']) {
+        driverMs = codecMs = driverCalls = codecCalls = 0;
+        const started = performance.now();
+        for (let i = 0; i < 10; i++) sink = tasks[name]!.fn(i);
+        const totalMs = performance.now() - started;
+        diagnostics[name] = { iterations: 10, totalMs, driverMs, codecMs, driverCalls, codecCalls,
+          remainingMs: totalMs - driverMs - codecMs };
+      }
+    } finally { sqlite.all = all; sqlite.get = get; sqlite.run = run; sqlite.pack = pack; sqlite.unpack = unpack; }
+    diagnostics.uniquePlan = e.query('Message').where('slug', 'slug-7').explain();
+    diagnostics.pagePlan = e.query('Message').where('thread', 'thread-7').limit(50).explain();
+    diagnostics.graphPlan = e.query.ids(id(0)).out('in', 'Message').explain();
+  }
   const versions =
     backend === "sqlite"
       ? (db as SqliteDatabase).get("SELECT sqlite_version() version")
@@ -196,7 +244,13 @@ try {
       setupMs,
       fileBytes,
       memory: process.memoryUsage(),
+      resourceUsage: process.resourceUsage(),
+      files: Object.fromEntries(readdirSync(dir).map(file => [file, statSync(join(dir, file)).size])),
       samples,
+      diagnostics,
+      largeFixture: { rows: 64, bodyBytes: 256 * 1024, streamChunks: 16, streamChunkBytes: 16 * 1024 },
+      timingUnit: "microseconds per task (stream task includes 16 commits)",
+      durabilityPolicy: durable ? "durable transaction acknowledgments; backend policies differ and need operational qualification" : "syncs disabled fixture; not a production durability comparison",
       consumed: sink !== undefined,
     })
   );

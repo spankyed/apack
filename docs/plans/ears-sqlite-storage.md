@@ -63,8 +63,8 @@ replacement copies logical values from one source snapshot instead of copying in
 Shared native/SQLite tests pin omitted undefined object properties and refused undefined list elements. Normalization
 is per changed value, preserving the structured transport. Undeclared primary types remain readable/filterable through
 all-entity or ID starts. The backend/query/search implementation is source-owned under `src/sqlite/`, with an app-only `./sqlite` entry
-and pinned workspace dependencies. Measured explain, refined operation/read types and actual-facade benchmarks
-remain phase-2 requirements.
+and pinned workspace dependencies. Measured backend-specific explain and discriminated operation/read/result
+types are implemented. Actual-facade benchmark evidence remains the next phase-2 requirement.
 
 ## Indexes and queries
 

@@ -205,7 +205,7 @@ export interface EarsDatabase {
     // (undocumented)
     begin(): EarsUnit;
     // (undocumented)
-    bulkLoad(loads: ReadonlyArray<Record<string, unknown>>): void;
+    bulkLoad(loads: readonly Load[]): void;
     // (undocumented)
     close(): void;
     // (undocumented)

@@ -20,7 +20,8 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Packr, Unpackr } from "msgpackr";
-import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult } from "../database.ts";
+import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult, Load, ReadOp } from "../database.ts";
+import type { QueryPlan, StoredRelation } from "../storage.ts";
 import type { SqliteStatement } from "../runtime.ts";
 import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
@@ -190,11 +191,11 @@ export class SqliteDatabase implements EarsDatabase {
     trace.statements.push({ sql, parameters: parameters.map(value => value instanceof Uint8Array ? Uint8Array.from(value) : value),
       returnedRows, ms, plan: [] });
   }
-  private explain(plan: Data): Data {
+  private explain(plan: QueryPlan): Extract<Answer, { kind: 'explained' }> {
     const previous = this.explaining, statements: SqliteStatement[] = [];
     const trace = { statements, count: 0 };
     this.explaining = trace;
-    let answer: Data;
+    let answer: import("../storage.ts").QueryAnswer;
     const started = performance.now();
     try { answer = executeQuery(this, plan); }
     finally { this.explaining = previous; }
@@ -325,11 +326,11 @@ export class SqliteDatabase implements EarsDatabase {
         FROM ${layout.table} v LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=${text(field)}`;
     }).join(' UNION ALL ') || 'SELECT NULL id,NULL kind,NULL value WHERE 0';
   }
-  relation(id: string): Data | undefined {
+  relation(id: string): StoredRelation | undefined {
     const r = this.get("SELECT * FROM relations WHERE id=?", [id]);
     return r ? this.decodeRelation(r) : undefined;
   }
-  decodeRelation(row: Data): Data {
+  decodeRelation(row: Data): StoredRelation {
     return {
       id: row.id, kind: row.kind, source: row.source, target: row.target,
       info: row.info === null ? null : this.unpack(row.info),
@@ -869,7 +870,7 @@ export class SqliteDatabase implements EarsDatabase {
   untrack(token: number) {
     this.tracks.delete(token);
   }
-  private answer(read: Data): Data {
+  private answer(read: ReadOp): Answer {
     switch (read.read) {
       case "row":
         this.trackKey(`entity:${read.id}`);
@@ -893,7 +894,7 @@ export class SqliteDatabase implements EarsDatabase {
       case "findRelations": {
         const terms: string[] = [],
           params: any[] = [];
-        for (const key of ["kind", "source", "target"])
+        for (const key of ["kind", "source", "target"] as const)
           if (read[key] !== undefined) {
             terms.push(`${key}=?`);
             params.push(read[key]);
@@ -917,7 +918,7 @@ export class SqliteDatabase implements EarsDatabase {
       case "wouldCreateCycle":
         for (const k of read.kinds) this.trackRange(`kind:${k}`);
         return {
-          kind: "boolean",
+          kind: "bool",
           value: this.wouldCycle(read.source, read.target, read.kinds),
         };
       case "pendingEmbeddings":
@@ -960,7 +961,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (snapshot) this.sql.exec("BEGIN");
     try {
       this.checkRevision();
-      const answer = request.reads.map((r: Data) => this.answer(r)) as Answer[];
+      const answer = request.reads.map((r) => this.answer(r)) as Answer[];
       if (snapshot) this.sql.exec("COMMIT");
       return answer;
     } catch (e) {
@@ -1140,10 +1141,10 @@ export class SqliteDatabase implements EarsDatabase {
       throw e;
     }
   }
-  bulkLoad(loads: ReadonlyArray<Record<string, unknown>>) {
+  bulkLoad(loads: readonly Load[]) {
     const unit = this.begin();
     try {
-      for (const load of loads as Data[]) {
+      for (const load of loads) {
         if (load.load === "entity") {
           let row = this.row(load.id);
           if (!row) {

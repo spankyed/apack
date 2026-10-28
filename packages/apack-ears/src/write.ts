@@ -5,6 +5,7 @@ import type { EARS } from './entities.ts';
 import { EarsError, RESERVED_ENTITY_TYPES, refuseReserved } from './errors.ts';
 import type { NameChecks } from './names.ts';
 import type { Op, OpResult } from './database.ts';
+import type { AttributeMutation } from './storage.ts';
 import type { LinkOptions, RowIdentity, WriteBuilder, WriteOptions, WriteTarget } from './runtime.ts';
 
 const LINK_OPTIONS: readonly string[] = ['info'] satisfies Array<keyof LinkOptions>;
@@ -60,7 +61,7 @@ export function createWrites({ write: send, exists, getRow, names, isEntityType 
    */
   function builder(id: EARS.EntityId, touch: boolean, changedAt?: number): WriteBuilder {
     let stampAt = changedAt;
-    const attribute = (op: Op) => {
+    const attribute = (op: AttributeMutation) => {
       stampAt ??= Date.now();
       one({ ...op, id, touch }, stampAt);
       return self;
@@ -140,10 +141,10 @@ export function createWrites({ write: send, exists, getRow, names, isEntityType 
   }
 
   /** A brought short code is a string, which is all the protocol carries; elmdb holds it to the type's form */
-  const refuseShortCode = (via: string, type: string, shortCode: unknown) => {
+  function refuseShortCode(via: string, type: string, shortCode: unknown): asserts shortCode is string | undefined {
     if (shortCode === undefined || typeof shortCode === 'string') return;
     throw new EarsError('INVALID_SHORT_CODE', `${via}(${JSON.stringify(type)}, { shortCode: ${JSON.stringify(shortCode)} }): a short code is a string, <prefix>-<n>`);
-  };
+  }
 
   /**
    * Refuses a name the schema doesn't declare, saying where an id goes when it is one. The engine's own types (a

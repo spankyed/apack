@@ -24,8 +24,8 @@ SQLite uses pinned `better-sqlite3` 13.0.3 and `sqlite-vec` 0.1.9 from the norma
 lives in `src/sqlite/` and its app-only entry is `@apackdev/ears/sqlite`; this directory now holds harnesses rather
 than another implementation. Packaged Electron/native loading still needs qualification.
 Ordinary tests select elmdb and skip SQLite-only cases. Targeted driver checks have run on macOS arm64 and
-Linux; this is not Electron/Windows qualification. The SQLite suite currently has the documented explain gap;
-do not report its remaining passing cases as a completely passing suite.
+Linux; this is not Electron/Windows qualification. The measured-explain checkpoint passes all 256 SQLite EARS
+cases; full app, operational and packaging qualification remains in the goal.
 
 From the repository root, run one expensive task at a time:
 
@@ -40,6 +40,14 @@ node --import tsx packages/apack-ears/bench/sqlite/explain.ts
 `run-bench.py` alternates backend order, uses fresh processes, and preserves every timing sample and stderr.
 `bench.ts` measures the actual EARS facade over the same synthetic fixture; SQLite transport is structured, while
 MessagePack remains at the native elmdb boundary. Rerun comparisons on pinned current source before making claims.
+The current benchmark also includes 64 large entities with 256 KiB repeated/high-entropy bodies, small counter
+updates beside each body, projected large-row pages and sixteen 16 KiB streaming updates. Each output retains raw
+samples, memory/resource and per-file sizes. Provenance records the commit, exact source/engine fingerprints and
+native binding hashes. A separate instrumented pass records driver calls/spans and lossless codec spans; driver
+time includes preparation, binding, SQL execution and result marshalling, which this binding does not time
+individually. The remaining facade time includes mapping/checks/allocation and measurement overhead, not a pure
+SQL compilation timer. Plans use the actual SQLite query diagnostics. Sync-disabled fixtures and durable-unit
+acknowledgments are separate trials; this is not group-commit or platform durability qualification.
 `primitive-bench.ts` is deliberately separate: native exact vector search without EARS overhead, not an application benchmark.
 `mutations.py` targets the original prototype and belongs to its preserved checkpoint; current safeguards have
 negative-proof evidence linked from the goal. The synthetic sine-generated vectors are low-rank; these timings do not establish ANN recall or real embedding quality.

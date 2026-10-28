@@ -1,9 +1,10 @@
 // The engine's queries: a builder chain compiled to one of elmdb's plans (`elmdb/docs/architecture/engine.md`, Reads: plans), which a
 // terminal sends and decodes the answer of.
 import type { EARS } from './entities.ts';
-import type { QueryBuilder, QueryStage, SqliteStatement, RelationEdge } from './runtime.ts';
+import type { QueryBuilder, RelationEdge } from './runtime.ts';
 import { EarsError } from './errors.ts';
-import type { Answer } from './database.ts';
+import type { Answer, ReadOp } from './database.ts';
+import type { QueryScope as Scope, QueryStart as Start, QueryStep as Step, QueryTerminal as Terminal, QueryPlan, SearchOptions, QueryAnswer, QueryAnswerFor, StoredRelation, ExplainedAnswer } from './storage.ts';
 import type { TypeName } from './write.ts';
 import type { NameChecks } from './names.ts';
 
@@ -46,12 +47,6 @@ export interface Query extends QueryEntries {
 /** How many rows an unindexed `where` filters before the engine's creator is told (`warn`) the field wants an index */
 export const UNINDEXED_WALK_WARNING = 2_000;
 
-/** Which entities a plan reaches (elmdb's `Scope`) */
-type Scope = 'live' | 'withTrashed' | 'trashed';
-type Start = { from: 'types'; types: string[] } | { from: 'ids'; ids: string[] } | { from: 'all' };
-type Step = { step: string } & Record<string, unknown>;
-type Terminal = { answer: string } & Record<string, unknown>;
-
 /**
  * A step not yet sent: one of elmdb's, or a `where` holding the caller's function, which can't cross. A plan holding
  * one is sent up to it, answering each entity's value of the field, and goes on from the ids the function admits
@@ -68,7 +63,7 @@ interface Recipe {
 
 export interface QueryScope {
   /** Answers reads, in the unit `transact` holds open or a snapshot of their own */
-  read(reads: ReadonlyArray<Record<string, unknown>>): Answer[];
+  read(reads: readonly ReadOp[]): Answer[];
   isEntityType(name: string): boolean;
   /** Whether a `where` on the type's field reads a value index */
   indexed(type: string, field: string): boolean;
@@ -77,7 +72,7 @@ export interface QueryScope {
 }
 
 /** A relation row as a read answers it: `info` is left out when the edge holds none */
-export function relationRow(row: Record<string, unknown>): RelationEdge {
+export function relationRow(row: StoredRelation): RelationEdge {
   const { info, ...rest } = row;
   return (info === null || info === undefined ? rest : { ...rest, info }) as unknown as RelationEdge;
 }
@@ -141,23 +136,23 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
    */
   const wanted = (rest: readonly Pending[], terminal: Terminal): number => {
     if (!rest.every((p) => 'step' in p && p.step.step === 'limit')) return Infinity;
-    const limits = rest.map((p) => ('step' in p ? p.step.n as number : Infinity));
+    const limits = rest.map((p) => ('step' in p && p.step.step === 'limit' ? p.step.n : Infinity));
     const first = FIRST.includes(terminal.answer) ? 1 : Infinity;
     return Math.min(first, ...limits);
   };
 
   /** Runs the recipe to its terminal: the plans before each caller's function, then the one after the last */
-  const run = (recipe: Recipe, terminal: Terminal): Answer => {
+  const run = <T extends Terminal>(recipe: Recipe, terminal: T): QueryAnswerFor<T> => {
     let { scope, start } = recipe;
     let steps: Step[] = [];
     // The first plan answers how many rows its walk reached, which says whether an unindexed `where` should be reported
     let visits = warn !== undefined && recipe.unindexed !== undefined;
-    const send = (plan: Record<string, unknown>): Answer => {
-      if (!visits) return read([{ read: 'query', plan }])[0]!;
+    const send = <S extends Terminal>(plan: QueryPlan & { terminal: S }): QueryAnswerFor<S> => {
+      if (!visits) return read([{ read: 'query', plan }])[0] as QueryAnswerFor<S>;
       visits = false;
-      const [{ answer, visited }] = read([{ read: 'query', plan, visits: true }]) as Array<Answer & { answer: Answer; visited: number }>;
+      const [{ answer, visited }] = read([{ read: 'query', plan, visits: true }]) as Array<Extract<Answer, { kind: 'visited' }>>;
       if (visited >= UNINDEXED_WALK_WARNING) unindexed(recipe.unindexed!.types.join('/'), recipe.unindexed!.field, visited, callSite());
-      return answer;
+      return answer as QueryAnswerFor<S>;
     };
     for (const [at, pending] of recipe.steps.entries()) {
       if ('step' in pending) {
@@ -177,8 +172,9 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
         const restSteps = rest.map((p) => (p as { step: Step }).step);
         for (const row of rows) {
           if (!passes(row)) continue;
-          const answer = send({ scope, start: { from: 'ids', ids: [row.id] }, steps: restSteps, terminal });
-          if (answer.id != null || answer.value === true || answer.row != null) return answer;
+          const answer = send({ scope, start: { from: 'ids', ids: [row.id as string] }, steps: restSteps, terminal });
+          const result = answer as QueryAnswer;
+          if ((result.kind === 'id' && result.id != null) || (result.kind === 'bool' && result.value) || (result.kind === 'row' && result.row != null)) return answer;
         }
         return send({ scope, start: { from: 'ids', ids: [] }, steps: restSteps, terminal });
       }
@@ -198,18 +194,18 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
       builder({ ...recipe, steps: [...recipe.steps, { step }], ...(unindexedWhere && { unindexed: unindexedWhere }) });
     const atStart = recipe.steps.length === 0 && recipe.start.from === 'types' ? recipe.start.types : undefined;
     const ids = () => run(recipe, { answer: 'ids' }).ids as EARS.EntityId[];
-    const walk = (via: string, step: string, kinds: MaybeArr<string>, type?: MaybeArr<string>) => {
+    const walk = (via: string, step: 'out' | 'in' | 'descendants' | 'ancestors', kinds: MaybeArr<string>, type?: MaybeArr<string>) => {
       names.relationKinds(kinds, via);
       return next({ step, kinds: asArr(kinds), ...(type !== undefined && { types: asArr(type) }) });
     };
-    const filterByLink = (step: string, kind: string, other?: EARS.EntityId) => {
+    const filterByLink = (step: 'linkedTo' | 'linkedFrom' | 'unlinkedTo' | 'unlinkedFrom', kind: string, other?: EARS.EntityId) => {
       names.relationKinds(kind, step);
       return next({ step, kind, ...(other !== undefined && { other }) });
     };
     const edges = (via: string, kinds: MaybeArr<string>, type: MaybeArr<string> | undefined, outward: boolean) => {
       names.relationKinds(kinds, via);
       const answer = run(recipe, { answer: 'edges', kinds: asArr(kinds), outward, ...(type !== undefined && { types: asArr(type) }) });
-      return (answer.relations as Record<string, unknown>[]).map(relationRow);
+      return answer.relations.map(relationRow);
     };
 
     const self = {
@@ -259,11 +255,11 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
       distinct: (field?: string) => next({ step: 'distinct', ...(field !== undefined && { field }) }),
       groupBy: (field: string) => new Map(run(recipe, { answer: 'groupBy', field }).groups as Array<[unknown, EARS.EntityId[]]>),
 
-      search: (text: string, options: Record<string, unknown> = {}) => next({ step: 'search', query: text, options }),
+      search: (text: string, options: SearchOptions = {}) => next({ step: 'search', query: text, options }),
       after: (id: EARS.EntityId) => next({ step: 'after', id }),
       near: (vector: readonly number[], { k = 10 }: { k?: number } = {}) => next({ step: 'near', vector: [...vector], k }),
       like: (id: EARS.EntityId, { k = 10 }: { k?: number } = {}) => next({ step: 'like', id, k }),
-      hybrid: (text: string, vector: readonly number[], { k = 10, ...options }: Record<string, unknown> & { k?: number } = {}) =>
+      hybrid: (text: string, vector: readonly number[], { k = 10, ...options }: SearchOptions & { k?: number } = {}) =>
         next({ step: 'hybrid', query: text, vector: [...vector], k, options }),
       hits: ({ fields, highlights = false }: { fields?: readonly string[]; highlights?: boolean } = {}) => {
         // The search must be in the plan the terminal ends, after every function a `where` was given
@@ -284,10 +280,10 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
         if (recipe.steps.some((p) => !('step' in p))) {
           throw new EarsError('NOT_EXPLAINABLE', 'explain() answers the plan the database runs, and a where(...) given a function runs outside it: explain the query up to that where');
         }
-        const plan = { scope: recipe.scope, start: recipe.start, steps: recipe.steps.map((p) => (p as { step: Step }).step), terminal: { answer: 'ids' } };
-        const [explained] = read([{ read: 'query', plan, explain: true }]) as Array<{
-          kind: 'explained'; answer: { ids: EARS.EntityId[] }; ms: number;
-        } & ({ backend: 'sqlite'; statementCount: number; statements: SqliteStatement[] } | { backend?: 'elmdb'; visited: number; stages: QueryStage[] })>;
+        const plan: QueryPlan = { scope: recipe.scope, start: recipe.start, steps: recipe.steps.map((p) => (p as { step: Step }).step), terminal: { answer: 'ids' } };
+        const [explained] = read([{ read: 'query', plan, explain: true }]) as Array<ExplainedAnswer & {
+          answer: { kind: 'ids'; ids: EARS.EntityId[] };
+        }>;
         if (explained!.backend === 'sqlite') return {
           backend: 'sqlite', statementCount: explained!.statementCount, ids: explained!.answer.ids, ms: explained!.ms, statements: explained!.statements,
         };
