@@ -174,9 +174,11 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
     await appPage.keyboard.type('!');await expect(composer).toHaveText(prompt+'!')
     await appPage.keyboard.press('Backspace');await expect(composer).toHaveText(prompt)
     await expect.poll(async()=>(await context()).messages.some((message:any)=>message.context?.claudeTerminalMessage?.sessionId===sessionId&&message.context?.cliUuid===originalHumanUuid)).toBe(false)
-    for(const [width,height] of [[1100,900],[680,600]]) {await appPage.setViewportSize({width,height});await expect(composer).toHaveText(prompt);await expect(composer).toBeInViewport({ratio:1});await capture('restored',width,height)}
+    for(const [width,height] of [[1100,900],[680,600]]) {await appPage.setViewportSize({width,height});await expect(composer).toHaveText(prompt);await expect(composer).toBeInViewport({ratio:1});await expect(card.getByText('Claude message controls unavailable',{exact:true})).toHaveCount(0);await capture('restored',width,height)}
   }
   else expect(await editor()).toEqual(retained)
+  await expect(card.getByText('Claude message controls unavailable',{exact:true})).toHaveCount(0)
+  const settledComposerFrames=await appPage.evaluate(()=>{const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id).flatMap((view:any)=>(view.state.composer??[]).map((frame:any)=>({component:frame.component,uuid:frame.uuid,status:frame.body.status,message:frame.body.message})))})
   const afterDecisionContext = await context()
   const afterDecision = await editor(), beforeContinue = (await context()).turns
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially('Summarize the accepted migration scope.')
@@ -210,7 +212,7 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
     expect(retiredScope.rewoundUserUuids).toContain(originalHumanUuid);expect(retiredScope.rewoundNoticeUuids).toContain(originalRefusalNoteUuid)
     expect((await context()).messages.some((message:any)=>message.context?.cliUuid===originalRefusalNoteUuid)).toBe(false)
   }
-  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, helpRoute, immediateKeyboardEditing:emptyDraft, originalRefusalNoteUuid, originalHumanUuid, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
+  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, helpRoute, settledComposerFrames, immediateKeyboardEditing:emptyDraft, originalRefusalNoteUuid, originalHumanUuid, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
   await writeFile(join(workspace!, 'native-refusal-recovery.json'), JSON.stringify(await context(), null, 2))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeRefusalNotice: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })
