@@ -186,20 +186,28 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) and remote `session/ears-sqlite`
-are at **`78eff952020f813d7a25642aa4740a394ed71a5e`**. Detached integration
-`monorepo-worktrees.noindex/integration-FyE9XZ` is clean at that commit. Its exact
-[strict run 40728583374](https://github.com/spankyed/apack/actions/runs/40728583374) is live; poll it rather
-than dispatching another run. The earlier 6794ab1d4a gate failed an installed-package layout assertion;
-78eff95202 fixes it with an exact runtime whitelist and installed matcher execution. No failure was waived.
+The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
+`session/ears-sqlite`. The next candidate includes verified recovery checkpoint **dc058cbada**, following
+**78eff952020f813d7a25642aa4740a394ed71a5e**. Record the exact newly pushed head and single strict-run ID in
+the PR, and inspect actual refs before continuing; a documentation descendant does not change the tested
+functional source. Before publication, detached integration is clean at 78eff95202 and the active worktree
+contains the recovery/diagnosis continuation.
+
+[Strict run 40728583374](https://github.com/spankyed/apack/actions/runs/40728583374) at 78eff95202 is terminal
+failure: producers' `typecheck:scripts` exceeded its 60-second budget, with no captured TypeScript diagnostic;
+consumers were skipped. The exact unchanged command passes in 38.6 seconds under the same 60-second budget
+in two-core Linux after normal package preparation. This does not establish the macOS timeout cause. Retain
+[diagnosis evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/ci78-producer-timeout/README.md),
+publish the newer recovery candidate and run its exact strict gate. Do not rerun superseded 78eff95202 or
+relax timeouts. The earlier 6794ab1d4a gate's installed-package assertion was fixed at 78eff95202 with an exact
+runtime whitelist and installed matcher execution; no failure was waived.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains clean at **`194c72c77c`**, the last exact
 all-six-job green gate ([40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)).
 Promote only an exact successful candidate through `/private/tmp/ears-promote-sqlite.py`, which verifies
 clean checkouts, remote tip, source/engine pins and strict success before a private fast-forward.
 Active implementation is `/private/tmp/ears-sqlite-diagnosis-evidence`; it has no installed dependencies,
-native build or captured runtime. Its verified recovery continuation remains a local checkpoint while the published gate runs.
-Commit progress here before advancing integration. Never copy dirty concurrent source or run compiler/full validation on the daily Mac.
+native build or captured runtime. The verified recovery checkpoint is ready for the next integration/push; advance only committed inputs. Never copy dirty concurrent source or run compiler/full validation on the daily Mac.
 
 The pinned integration combines app master **98386b36a18d244c19ffb501830b990ed49f7653** through merge
 4af1b513e3 and private native source **6ab2f69fa13289ed4f02952253c58b4d41922c98**, held immutable in
@@ -248,7 +256,7 @@ checks in disposable Linux. It covers missing tables/indexes/triggers/shadow tab
 rollback failures, healthy concurrent opens and selective hydration.
 [Recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-recovery/README.md)
 retains exact source/commands and the earlier refused destructive fixture. This continuation is not covered by
-78eff95202's CI and is not published until an explicit next draft checkpoint.
+78eff95202's CI; the newly published descendant requires its own strict gate.
 
 This repair is atomic and paged in memory, but still synchronous. It is an integrity correction, not completion
 of phase 3: yielding generations/readiness, bounded foreground work and retired search-table cleanup remain
