@@ -14,7 +14,8 @@
     "node": ">=22"
   },
   "files": [
-    "dist"
+    "dist",
+    "vendor/rregex"
   ],
   "scripts": {
     "build:package": "tsx ../../scripts/build-package.ts .",

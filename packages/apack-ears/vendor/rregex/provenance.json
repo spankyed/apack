@@ -1,0 +1,18 @@
+{
+  "upstream": "https://github.com/2fd/rregex",
+  "commit": "ffdc766d0ce78c2bad3eb9ce5f02229e5a47bd8a",
+  "packageVersion": "1.13.1",
+  "regexVersion": "1.13.1",
+  "rust": "1.99.1",
+  "wasmBindgen": "0.2.100",
+  "features": [
+    "console_error_panic_hook"
+  ],
+  "defaultFeatures": false,
+  "allocator": "Rust default",
+  "sha256": {
+    "rregex.cjs": "2aee1e45ea57c4dff83af261de39cddc3e2a4b3c2c33afaeb31e1e5635901157",
+    "rregex_bg.wasm": "d811bfd20cacbca239971303e4a28be40a1fcbf7f35dea2258b519bcd20b8c5d"
+  },
+  "recipe": "docs/references/evidence/ears-sqlite-implementation-2026-10-28/regex-allocator-control/build-and-probe.sh.txt"
+}

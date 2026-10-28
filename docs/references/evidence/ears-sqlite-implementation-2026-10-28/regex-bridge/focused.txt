@@ -1,0 +1,17 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/regex.spec.ts tests/sqlite/statement-cache.spec.ts tests/no-module-state.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 595ms
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 2193ms
+   ✓ SQLite statement cache resource policy > evicts old query shapes while retaining frequently reused statements  1807ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 296ms
+
+ Test Files  3 passed (3)
+      Tests  19 passed (19)
+   Start at  15:13:52
+   Duration  4.28s (transform 265ms, setup 15ms, collect 749ms, tests 3.08s, environment 0ms, prepare 158ms)
+

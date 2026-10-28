@@ -180,7 +180,7 @@ function bundled(pkg: string, ...copiedPaths: string[]): BuildUnit {
 
 /** The workspaces `npm run packages:build` builds. `tests/build/package-freshness.spec.ts` pins this list against it. */
 export const BUILD_UNITS: Record<string, BuildUnit> = {
-  '@apackdev/ears': compiled('apack-ears'),
+  '@apackdev/ears': compiled('apack-ears', pkgFile('apack-ears', 'vendor', 'rregex')),
   '@apackdev/sdk': compiled('apack-sdk'),
   '@apackdev/ui': compiled('apack-ui', pkgFile('apack-ui', 'tsdown.config.ts'), repoFile('scripts', 'build-ui-package.ts'),
     pkgFile('apack-ui', 'scripts', 'exports.ts')),

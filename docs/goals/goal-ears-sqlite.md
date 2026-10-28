@@ -186,9 +186,9 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-Canonical branch `session/ears-sqlite` is clean at **`683e1d5912`** in
+Canonical branch `session/ears-sqlite` is clean at **`194c72c77c`** in
 `monorepo-worktrees.noindex/sqlite-evaluation`, privately fast-forwarded only after exact strict run
-`40688661462` completed successfully (all six jobs, attempt 2). Its vendor link now uses the immutable private
+`40703362139` completed successfully (all six jobs, attempt 1). Its vendor link now uses the immutable private
 6ab2f69 engine. Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` combines the original
 `9c339d89a4` input with app master
 `98386b36a18d244c19ffb501830b990ed49f7653` through merge `4af1b513e3`. Native source is immutable private
@@ -320,8 +320,10 @@ The approved helper verified clean source, engine pin, remote head and exact str
 fast-forwarded canonical to `683e1d5912` and changed its vendor link to private 6ab2f69. No master merge, normal
 app adoption or daily-Mac native build occurred. The continuation was then published as **`194c72c77c`** on the existing draft branch; detached integration
 is clean at that commit. Its exact [strict run 40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)
-is confirmed in progress. The newer scalar sorting, limit pushdown and schema race fix require this gate before
-a further canonical fast-forward. PR #286 remains a draft at this source. Do not start a duplicate run.
+completed successfully with all six jobs. The approved helper has privately fast-forwarded canonical to this
+exact commit. [Green-gate evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/ci194-success/README.md)
+retains the authoritative run/job state. Later schema-validation, cache and matcher descendants still require
+their own exact gate. PR #286 remains a draft; no master merge or application adoption occurred.
 
 The next regex dependency screen tests rregex 1.13.1 in isolated Linux. Tested Rust syntax works, but repeated
 compile/free controls grow WASM memory through 3,000 instances even with explicit free and GC. The stock
@@ -336,10 +338,19 @@ retains source/provenance, build recipe and binary hashes. Controlled artifacts/
 narrowing with exact per-element verification. The three search failures remain open; this matcher screen does
 not establish full search, latency, packaging or application resource acceptance.
 
+The local matcher bridge now vendors the controlled default-allocator assets with provenance/license, loads
+lazily and synchronously, disposes compiled allocations and preserves loader/runtime versus syntax failures.
+EARS package staging and build fingerprints include the assets. Private Linux passes types, 19 focused cases,
+five safeguard mutations, five package builds, three unchanged APIs and real source/staged/npm-tarball loading.
+Final static checks pass 64 build-input cases, import/pack guards and root lint; full SQLite has 364 passes and
+the same three open query failures. [Bridge evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/regex-bridge/README.md)
+records the initial lint-ownership failure and corrected generated-vendor scope. The bridge is not yet connected
+to query filtering; Electron/CLI/platform and full search/index lifecycle qualification remain open.
+
 ### Next deliverables and full remaining scope
 
-Poll exact strict run `40703362139` at `194c72c77c`; preserve the canonical `683e1d5912` green checkpoint
-until it succeeds. The approved helper now expects that checkpoint as its starting base. Scalar-limit statement profiles reduce work but the earlier
+Publish the committed schema/cache/matcher continuation to the existing draft branch and run its exact strict
+gate; preserve canonical 194c72c77c until it succeeds. The helper's next starting base is this green checkpoint. Scalar-limit statement profiles reduce work but the earlier
 paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
 qualify live-pack/schema I/O failures and implement background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
