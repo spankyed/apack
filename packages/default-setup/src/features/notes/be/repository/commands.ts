@@ -132,7 +132,8 @@ export const noteCommands = {
     if (updates.content !== undefined) filteredUpdates.content = updates.content;
     if (updates.icon !== undefined) filteredUpdates.icon = updates.icon;
     if (updates.displayOrder !== undefined) filteredUpdates.displayOrder = updates.displayOrder;
-    if (updates.savedDisplayOrder !== undefined) filteredUpdates.savedDisplayOrder = updates.savedDisplayOrder;
+    // A cleared order is no order: the shape holds a number or nothing, so `null` removes the field
+    if (updates.savedDisplayOrder != null) filteredUpdates.savedDisplayOrder = updates.savedDisplayOrder;
     if (updates.lastSeen !== undefined) filteredUpdates.lastSeen = updates.lastSeen;
     if (updates.completed !== undefined) filteredUpdates.completed = updates.completed;
     if (updates.hideCompletedChildren !== undefined) filteredUpdates.hideCompletedChildren = updates.hideCompletedChildren;
@@ -141,6 +142,9 @@ export const noteCommands = {
 
     if (Object.keys(filteredUpdates).length > 0) {
       write(id, { touch: !skipTimestamp }).setMany(filteredUpdates);
+    }
+    if (updates.savedDisplayOrder === null && existing.savedDisplayOrder !== undefined) {
+      write(id, { touch: !skipTimestamp }).delete('savedDisplayOrder');
     }
 
     // Sync REFERENCES relations when content changes

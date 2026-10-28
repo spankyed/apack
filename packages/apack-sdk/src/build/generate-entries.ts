@@ -524,6 +524,17 @@ export async function generatePackFiles(
   function moduleReader(): ModuleExports {
     return moduleExports ??= createModuleExports(root, [...exportedFromFiles(), ...facadeSources.keys()], facadeSources);
   }
+  /**
+   * The reader of the shapes' field types. A shape names its ids' types through this pack's #generated/ears, which this
+   * run writes only after reading the shapes and which a clean checkout doesn't have, so this reader is handed the one
+   * this run will write: a field's type reads the same whatever the directory held before
+   */
+  let shapeReader: ModuleExports | undefined;
+  function shapeTypes(): ModuleExports {
+    if (shapeReader) return shapeReader;
+    const sources = new Map([...facadeSources, [resolve(root, 'src/__generated__/ears.ts'), generateEars(false)]]);
+    return shapeReader = createModuleExports(root, [...packShapes(false).map(({ file }) => file), ...sources.keys()], sources);
+  }
   function exportOf(file: string, name: string): ModuleExport | undefined {
     return moduleReader().exportOf(file, name);
   }
@@ -1211,9 +1222,10 @@ ${regProps.join('\n')}
     return mergeRegistries(manifest.id, manifest, depTypes, depProvenance);
   }
 
-  function generateEars(): string {
+  /** This pack's `#generated/ears`; `checkShapes: false` for the copy the module reader reads, which checks them itself */
+  function generateEars(checkShapes = true): string {
     const registry = packRegistry();
-    const { imports: shapeImports, entries: shapeEntries } = entityShapeEntries();
+    const { imports: shapeImports, entries: shapeEntries } = entityShapeEntries(checkShapes);
     const depShapes = depTypeImports('PackEntityShapes');
     // The type names rows carry (the values; apack.json requires each key to equal its value)
     const entityNames = [...registry.entities.values()].map(({ value }) => `'${value}'`);
@@ -2135,7 +2147,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const rules: Record<string, RowRules> = {};
     for (const { entity, exportName, source, file } of packShapes()) {
       shaped.add(entity);
-      const { required, declaresShortCode, fields } = moduleReader().rowRulesOf(file, exportName);
+      const { required, declaresShortCode, fields, types } = shapeTypes().rowRulesOf(file, exportName);
       const declared = prefixes.get(entity);
       // The engine writes a short code and #generated/ears types it, from the prefix the entry declares: a shape
       // declaring the field would be a second account of it, which could disagree with the first
@@ -2168,6 +2180,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       rules[entity] = {
         required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(Object.keys(types).length > 0 && { fields: types }),
       };
     }
     for (const { name: entity, shortCode, indexes, search, embed } of entities) {
@@ -2177,11 +2190,12 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     return dataLiteral(rules);
   }
 
-  /** This pack's own shaped entities, each shape checked to be a type its module exports */
-  function packShapes(): Array<{ entity: string; source: string; exportName: string; file: string }> {
+  /** This pack's own shaped entities, each shape checked to be a type its module exports unless `checked` is false */
+  function packShapes(checked = true): Array<{ entity: string; source: string; exportName: string; file: string }> {
     return _packEntities(manifest).flatMap(({ name: entity, shape }) => {
       if (shape === null) return [];
       const { source, exportName, file } = exportTarget(`Entity shape "${entity}"`, shape, TYPE_MODULE_EXTENSIONS);
+      if (!checked) return [{ entity, source, exportName, file }];
       try {
         if (!moduleReader().hasTypeExport(file, exportName)) {
           throw new Error(`${source} doesn't export a type named "${exportName}"`);
@@ -2194,11 +2208,11 @@ export type { ImportMode } from '@apackdev/sdk/utils';
   }
 
   /** Imports and map entries for this pack's own entity shapes. Dependencies' come from their facade types. */
-  function entityShapeEntries(): { imports: string[]; entries: string[] } {
+  function entityShapeEntries(checkShapes = true): { imports: string[]; entries: string[] } {
     const imports: string[] = [];
     const entries: string[] = [];
     const prefixes = new Map(_packEntities(manifest).flatMap(({ name, shortCode }) => (shortCode ? [[name, shortCode] as const] : [])));
-    for (const { entity, source, exportName: typeName } of packShapes()) {
+    for (const { entity, source, exportName: typeName } of packShapes(checkShapes)) {
       if ((SDK_SHAPED_ENTITIES as readonly string[]).includes(entity)) {
         throw new Error(`Entity shape "${entity}": the SDK declares this entity's shape; remove its entity declaration`);
       }
